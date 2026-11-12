@@ -3,7 +3,9 @@ import { hashOfferToken } from "./software-offers";
 import { sendAudioMessage } from "./audio-resend";
 import type { Agreement } from "./software-agreements";
 import { templateVersionLabel } from "./agreement-version-label";
+import type { StoredAgreementValues } from "./agreement-fields";
 
+// SAFETY: every caller passes an ArrayBuffer (arrayBuffer() or readBodyWithin output) or a Uint8Array view over one (new Uint8Array of arrayBuffer(), readFileSync, or TextEncoder output); the cast only narrows TypeScript's ArrayBufferLike to ArrayBuffer, and digest accepts any BufferSource at runtime.
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	[
 		...new Uint8Array(
@@ -13,27 +15,71 @@ export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 		.map((b) => b.toString(16).padStart(2, "0"))
 		.join("");
 
-export function canonicalJson(value: unknown): string {
+/** JSON-shaped values that canonicalJson serializes: stored rows, manifests and certificates. */
+export type CanonicalJson =
+	| string
+	| number
+	| boolean
+	| null
+	| undefined
+	| CanonicalJson[]
+	| { [key: string]: CanonicalJson };
+
+function isCanonicalObject(
+	value: CanonicalJson,
+): value is { [key: string]: CanonicalJson } {
+	return value !== null && typeof value === "object";
+}
+
+export function canonicalJson(value: CanonicalJson): string {
 	if (Array.isArray(value))
 		return "[" + value.map(canonicalJson).join(",") + "]";
 
-	if (value && typeof value === "object")
+	if (isCanonicalObject(value))
 		return (
 			"{" +
 			Object.keys(value)
 				.sort()
-				.map(
-					(k) =>
-						JSON.stringify(k) +
-						":" +
-						canonicalJson((value as Record<string, unknown>)[k]),
-				)
+				.map((k) => JSON.stringify(k) + ":" + canonicalJson(value[k]))
 				.join(",") +
 			"}"
 		);
 
 	return JSON.stringify(value);
 }
+
+/** A software_agreement_signatures row as the PDF reads it (its SQL column list in prepareAgreementArtifact). The owner preflight builds rows without consent_text and intent_text. */
+export type SignatureRecord = {
+	party: string;
+	typed_name?: string | null;
+	title?: string | null;
+	consent_version?: string | null;
+	consent_text?: string | null;
+	consent_at?: string | null;
+	signed_at?: string | null;
+	intent_text?: string | null;
+	verification_method?: string | null;
+	verified_email?: string | null;
+	verified_at?: string | null;
+	ip_address?: string | null;
+	user_agent?: string | null;
+	receipt_id?: string | null;
+};
+
+/** The signing certificate prepareAgreementArtifact writes per document (its canonical JSON is the record hashed into the packet). */
+export type SigningCertificate = {
+	document_id?: string;
+	document_sha256?: string | null;
+	effective_on?: string | null;
+	executed_at?: string | null;
+	versions?: { version_label?: string; offer?: string };
+	signatures?: SignatureRecord[];
+	attachments?: {
+		filename?: string | null;
+		version?: string | null;
+		sha256?: string | null;
+	}[];
+};
 
 export type AgreementArtifact = {
 	status: string;
@@ -44,8 +90,12 @@ export type AgreementArtifact = {
 	certificate_key: string | null;
 };
 
-export const newYorkTime = (value: unknown) =>
-	typeof value === "string"
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
+export const newYorkTime = (value: string | null | undefined) =>
+	isText(value)
 		? new Date(value).toLocaleString("en-US", {
 				month: "short",
 				day: "numeric",
@@ -59,12 +109,13 @@ export const newYorkTime = (value: unknown) =>
 
 // Each document's own label. Older stored values lack it, so the pinned template row supplies it.
 async function documentVersionLabel(db: D1Database, d: Agreement) {
-	const values = JSON.parse(d.values_json);
+	// SAFETY: values_json is written by agreementValues (agreement-fields.ts) with msa and sow objects that carry version_label when the row is new enough to have one.
+	const values: StoredAgreementValues = JSON.parse(d.values_json);
 
 	const stored =
 		d.kind === "msa" ? values.msa?.version_label : values.sow?.version_label;
 
-	if (stored) return stored as string;
+	if (stored) return stored;
 
 	const row = await db
 		.prepare(
@@ -78,12 +129,14 @@ async function documentVersionLabel(db: D1Database, d: Agreement) {
 
 // Each document prints its own template's source revision. Older stored SOW values lack it, so the pinned template row supplies it.
 async function documentSourceRevision(db: D1Database, d: Agreement) {
-	const values = JSON.parse(d.values_json);
+	// SAFETY: values_json is written by agreementValues (agreement-fields.ts) with msa and sow objects that carry source_revision when the row is new enough to have one.
+	const values: StoredAgreementValues = JSON.parse(d.values_json);
 
 	if (d.kind === "msa") return values.msa?.source_revision ?? "";
 
-	if (typeof values.sow?.source_revision === "string")
-		return values.sow.source_revision as string;
+	const sowRevision = values.sow?.source_revision;
+
+	if (isText(sowRevision)) return sowRevision;
 
 	const row = await db
 		.prepare(
@@ -102,7 +155,7 @@ export async function prepareAgreementArtifact(
 	render: (
 		env: Env,
 		documents: Agreement[],
-		certificates: unknown[],
+		certificates: SigningCertificate[],
 	) => Promise<Uint8Array>,
 ) {
 	const db = env.MUSIC_DB!;
@@ -174,7 +227,7 @@ export async function prepareAgreementArtifact(
 							"SELECT party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,owner_subject,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent FROM software_agreement_signatures WHERE agreement_id=? ORDER BY party",
 						)
 						.bind(d.id)
-						.all()
+						.all<SignatureRecord>()
 				).results,
 			})),
 		);

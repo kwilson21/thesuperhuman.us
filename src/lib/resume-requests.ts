@@ -48,6 +48,7 @@ export async function getResumeRequest(
 	if (!raw) return null;
 
 	try {
+		// SAFETY: createResumeRequest is the only writer of req:<id> keys, and it stores JSON.stringify of a StoredResumeRequest (ResumeRequest plus ts).
 		return JSON.parse(raw) as StoredResumeRequest;
 	} catch {
 		return null;

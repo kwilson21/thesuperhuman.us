@@ -10,29 +10,29 @@ type InvoiceResult = {
 type StripeInvoicingClient = {
 	customers: {
 		create(
-			params: object,
+			params: Stripe.CustomerCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 	};
 	invoices: {
 		create(
-			params: object,
+			params: Stripe.InvoiceCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 		finalizeInvoice(
 			id: string,
-			params: object,
+			params: Stripe.InvoiceFinalizeInvoiceParams,
 			options: { idempotencyKey: string },
 		): Promise<InvoiceResult>;
 		sendInvoice(
 			id: string,
-			params: object,
+			params: Stripe.InvoiceSendInvoiceParams,
 			options: { idempotencyKey: string },
 		): Promise<InvoiceResult>;
 	};
 	invoiceItems: {
 		create(
-			params: object,
+			params: Stripe.InvoiceItemCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 	};

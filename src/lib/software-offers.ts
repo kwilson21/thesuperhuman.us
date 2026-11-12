@@ -2,6 +2,10 @@ import { z } from "astro/zod";
 import type { OwnerRequest } from "./owner-model";
 import { softwarePathLabel, softwarePaths } from "./software-inquiry";
 
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 const text = (max: number, oneLine = false) =>
 	z
 		.string()
@@ -194,10 +198,7 @@ export function clientOffer(
 
 	return {
 		name: request.name,
-		company:
-			typeof request.details.company === "string"
-				? request.details.company
-				: "",
+		company: isText(request.details.company) ? request.details.company : "",
 		path: softwarePathLabel(request.serviceId) ?? softwarePaths.workflow,
 		version: offer.version,
 		replacesVersion: offers

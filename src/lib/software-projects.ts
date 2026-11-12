@@ -149,6 +149,14 @@ export type SoftwareUpdate = Omit<
 export const projectTerms = (project: { terms_json: string }) =>
 	offerTermsSchema.parse(JSON.parse(project.terms_json));
 
+function isNumber<T>(value: T): value is T & number {
+	return typeof value === "number";
+}
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 export function softwareVersionNumber(update: { artifact_version: string }) {
 	return (
 		update.artifact_version.match(/^(?:Delivery|Direction) v(\d+)$/i)?.[1] ??
@@ -269,11 +277,7 @@ export function deliveredIndexes(
 		return [
 			...new Set(
 				saved.map((item) =>
-					typeof item === "number"
-						? item
-						: typeof item === "string"
-							? planned.indexOf(item)
-							: -1,
+					isNumber(item) ? item : isText(item) ? planned.indexOf(item) : -1,
 				),
 			),
 		].filter(
@@ -632,7 +636,7 @@ export async function deliverSoftwareNotice(
 		.first();
 
 	if (!claimed) return;
-	let sent: { ok: boolean; uncertain?: boolean } = { ok: false };
+	let sent: Awaited<ReturnType<typeof sendAudioMessage>> = { ok: false };
 
 	try {
 		const recipient = await db

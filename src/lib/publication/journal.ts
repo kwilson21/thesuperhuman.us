@@ -67,6 +67,7 @@ export class D1PublicationJournal implements PublicationJournal {
 
 		const [insert, , receipt, tombstone] = await this.db.batch(statements);
 
+		// SAFETY: receipt is the third statement, SELECT revision,published_at,payload_hash FROM publication_events, so each of its rows has those three columns.
 		const row = receipt.results[0] as
 			| { revision: number; published_at: string; payload_hash: string }
 			| undefined;

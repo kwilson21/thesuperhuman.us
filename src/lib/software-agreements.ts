@@ -25,6 +25,7 @@ import casefold from "./agreement-casefold.json";
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
 		.map(
+			// SAFETY: agreement-casefold.json maps single characters to folded strings; a character it does not list reads undefined, which the ?? falls back from.
 			(c) => (casefold.mapping as Record<string, string>)[c] ?? c.toLowerCase(),
 		)
 		.join("");
@@ -218,12 +219,12 @@ export async function reviewAgreements(
 		},
 	);
 
-	const documents = [] as {
+	const documents: {
 		id: string;
 		kind: "msa" | "sow";
 		hash: string;
 		text: string;
-	}[];
+	}[] = [];
 
 	if (!reused) {
 		const text = renderAgreement("msa", msaTemplate.text, values);

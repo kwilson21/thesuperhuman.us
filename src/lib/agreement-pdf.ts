@@ -4,7 +4,13 @@ import interBase64 from "~/assets/agreement-fonts/Inter-400.base64?raw";
 // Headings use Libron, the site serif; scripts/build-agreement-heading-font.py builds this file.
 import libronBase64 from "~/assets/agreement-fonts/Libron-400.base64?raw";
 import type { Agreement } from "./software-agreements";
-import { canonicalJson, hashBytes, newYorkTime } from "./agreement-artifacts";
+import {
+	canonicalJson,
+	hashBytes,
+	newYorkTime,
+	type SignatureRecord,
+	type SigningCertificate,
+} from "./agreement-artifacts";
 import {
 	agreementValues,
 	type AgreementDetails,
@@ -70,11 +76,16 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
 	return lines;
 }
 
+/** A value the packet prints: a recorded field, or null or undefined when it was not recorded. */
+type CertificateValue = string | null | undefined;
+
 export async function renderAgreementPacket(
 	env: Env,
 	documents: Agreement[],
 	certificates: unknown[],
 ): Promise<Uint8Array> {
+	// SAFETY: prepareAgreementArtifact (agreement-artifacts.ts) and preflightAgreementPacket (this file) build each certificate with the fields SigningCertificate lists; tests pass partial certificates, which the packet tolerates through ?? and undefined reads.
+	const records = certificates as SigningCertificate[];
 	const pdf = await PDFDocument.create();
 	pdf.registerFontkit(fontkit);
 
@@ -167,17 +178,13 @@ export async function renderAgreementPacket(
 			y = 720;
 		}
 
-		const certificate = certificates[i] as Record<string, unknown>;
+		const certificate = records[i];
 
-		const signatures = (certificate.signatures ?? []) as Record<
-			string,
-			unknown
-		>[];
+		const signatures = certificate.signatures ?? [];
 
 		const title =
 			doc.kind === "msa" ? "Master Services Agreement" : "Statement of Work";
 
-		const versions = (certificate.versions ?? {}) as Record<string, unknown>;
 		const start = pdf.getPageCount() - 1;
 		// Retain the exact reviewed text. Only the signature-reference placeholders
 		// become the recorded signatures; canonical text and its hash stay unchanged.
@@ -204,9 +211,8 @@ export async function renderAgreementPacket(
 			add(line, line === title || /^\d+ [A-Z]|^Milestone \d+$/.test(line));
 
 		// Older certificates can lack a label; the header then shows the title alone.
-		const header = versions.version_label
-			? `${title} · ${versions.version_label}`
-			: title;
+		const versionLabel = certificate.versions?.version_label;
+		const header = versionLabel ? `${title} · ${versionLabel}` : title;
 
 		for (const p of pdf.getPages().slice(start))
 			p.drawText(header, {
@@ -225,7 +231,7 @@ export async function renderAgreementPacket(
 		);
 
 		// Unsupported browser characters are escaped only for display, never in evidence.
-		const display = (value: unknown) =>
+		const display = (value: CertificateValue) =>
 			[...String(value ?? "Not recorded")]
 				.map((char) =>
 					agreementCharacterSupported(char)
@@ -240,7 +246,7 @@ export async function renderAgreementPacket(
 				)
 				.join("");
 
-		const row = (label: string, value: unknown) => {
+		const row = (label: string, value: CertificateValue) => {
 			const lines = wrap(text(display(value)), inter, 10, 370);
 
 			if (y - lines.length * 15 < 57) {
@@ -291,7 +297,7 @@ export async function renderAgreementPacket(
 				["IP address", "ip_address"],
 				["Browser", "user_agent"],
 				["Receipt", "receipt_id"],
-			])
+			] as const)
 				row(
 					label,
 					key.endsWith("_at") ? newYorkTime(signer[key]) : signer[key],
@@ -300,7 +306,7 @@ export async function renderAgreementPacket(
 
 		add("Electronic consent and intent", true);
 
-		for (const key of ["consent_text", "intent_text"])
+		for (const key of ["consent_text", "intent_text"] as const)
 			for (const statement of new Set(
 				signatures.map((s) => s[key]).filter(Boolean),
 			))
@@ -309,27 +315,18 @@ export async function renderAgreementPacket(
 
 		for (let j = 0; j < documents.length; j++) {
 			const d = documents[j],
-				c = certificates[j] as Record<string, unknown>;
+				c = records[j];
 
 			row(
 				"Title",
 				d.kind === "msa" ? "Master Services Agreement" : "Statement of Work",
 			);
-			row(
-				"Agreement version",
-				(c.versions as Record<string, unknown> | undefined)?.version_label,
-			);
-			row(
-				"Offer version",
-				(c.versions as Record<string, unknown> | undefined)?.offer,
-			);
+			row("Agreement version", c.versions?.version_label);
+			row("Offer version", c.versions?.offer);
 			row("SHA-256", d.text_sha256 ?? c.document_sha256);
 		}
 
-		const attachments = (certificate.attachments ?? []) as Record<
-			string,
-			unknown
-		>[];
+		const attachments = certificate.attachments ?? [];
 
 		for (const attachment of attachments) {
 			row("Attachment", attachment.filename);
@@ -340,12 +337,10 @@ export async function renderAgreementPacket(
 
 	const renderedEnd = pdf.getPageCount();
 
-	const attachments = JSON.parse(
+	// SAFETY: attachment_manifest_json is JSON.stringify of the attachments that agreementDetailsSchema validated (software-agreements.ts), and every item there has a key and a sha256 string.
+	const attachments: { key: string; sha256: string }[] = JSON.parse(
 		documents[documents.length - 1].attachment_manifest_json,
-	) as {
-		key: string;
-		sha256: string;
-	}[];
+	);
 
 	for (const attachment of attachments) {
 		const object = await env.AUDIO.get(attachment.key);
@@ -371,7 +366,7 @@ export async function renderAgreementPacket(
 		});
 	});
 	await pdf.attach(
-		new TextEncoder().encode(canonicalJson(certificates)),
+		new TextEncoder().encode(canonicalJson(records)),
 		"signing-record.json",
 		{
 			mimeType: "application/json",
@@ -422,6 +417,7 @@ export async function preflightAgreementPacket(
 			sow_source_revision: sowTemplate.source_revision ?? "",
 		});
 
+		// SAFETY: these rows omit text_sha256 and the other Agreement columns; renderAgreementPacket reads id, kind, offer_id, canonical_text, text_sha256 and attachment_manifest_json, and prints Not recorded for the absent hash, as the preflight always has.
 		return {
 			id: "preflight",
 			kind: template.kind,

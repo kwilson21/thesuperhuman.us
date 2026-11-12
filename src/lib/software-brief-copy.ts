@@ -48,7 +48,7 @@ export async function deliverSoftwareBriefCopy(
 			...softwareBriefEmail(request.name, softwareBrief(request)),
 		};
 
-		let copy: { ok: boolean; uncertain?: boolean } = { ok: false };
+		let copy: Awaited<ReturnType<typeof sendAudioMessage>> = { ok: false };
 
 		if (env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL && env.CONTACT_TO_EMAIL) {
 			providerStarted = true;

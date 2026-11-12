@@ -139,6 +139,7 @@ export function nativeAgreementRoute(
 		)
 			return response;
 
+		// SAFETY: the agreement API routes answer through agreementJson (agreement-access.ts), so a JSON body here has optional string error and text fields; a non-JSON body reads as null.
 		const body = (await response
 			.clone()
 			.json()

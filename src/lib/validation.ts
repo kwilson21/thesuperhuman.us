@@ -12,32 +12,48 @@ export type ValidationResult =
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
+function isObject(value: unknown): value is object {
+	return value !== null && typeof value === "object";
+}
+
+function textField(
+	fields: Map<string, unknown>,
+	key: string,
+): string | undefined {
+	const value = fields.get(key);
+
+	return isText(value) ? value : undefined;
+}
+
 export function validateContactInput(input: unknown): ValidationResult {
 	const errors: Record<string, string> = {};
 
-	if (typeof input !== "object" || input === null) {
+	if (!isObject(input)) {
 		return { ok: false, errors: { _form: "Invalid request body." } };
 	}
 
-	const v = input as Record<string, unknown>;
+	const v = new Map<string, unknown>(Object.entries(input));
 
-	const name = typeof v.name === "string" ? v.name.trim() : "";
+	const name = textField(v, "name")?.trim() ?? "";
 
 	if (!name) errors.name = "Name is required.";
 	else if (name.length > 100) errors.name = "Name is too long.";
 
-	const email = typeof v.email === "string" ? v.email.trim() : "";
+	const email = textField(v, "email")?.trim() ?? "";
 
 	if (!email) errors.email = "Email is required.";
 	else if (email.length > 120 || !EMAIL_RE.test(email))
 		errors.email = "Invalid email.";
 
-	const company = typeof v.company === "string" ? v.company.trim() : "";
+	const company = textField(v, "company")?.trim() ?? "";
 
 	if (company.length > 120) errors.company = "Company is too long.";
 
-	const description =
-		typeof v.description === "string" ? v.description.trim() : "";
+	const description = textField(v, "description")?.trim() ?? "";
 
 	if (!description) {
 		errors.description = "Please enter a message.";
@@ -45,8 +61,7 @@ export function validateContactInput(input: unknown): ValidationResult {
 		errors.description = "Message is too long.";
 	}
 
-	const turnstileToken =
-		typeof v.turnstileToken === "string" ? v.turnstileToken : "";
+	const turnstileToken = textField(v, "turnstileToken") ?? "";
 
 	if (!turnstileToken) errors.turnstileToken = "Captcha missing.";
 
@@ -73,39 +88,38 @@ export function validateResumeRequestInput(
 ): ResumeRequestValidationResult {
 	const errors: Record<string, string> = {};
 
-	if (typeof input !== "object" || input === null) {
+	if (!isObject(input)) {
 		return { ok: false, errors: { _form: "Invalid request body." } };
 	}
 
-	const v = input as Record<string, unknown>;
+	const v = new Map<string, unknown>(Object.entries(input));
 
-	const name = typeof v.name === "string" ? v.name.trim() : "";
+	const name = textField(v, "name")?.trim() ?? "";
 
 	if (!name) errors.name = "Name is required.";
 	else if (name.length > 100) errors.name = "Name is too long.";
 
-	const email = typeof v.email === "string" ? v.email.trim() : "";
+	const email = textField(v, "email")?.trim() ?? "";
 
 	if (!email) errors.email = "Email is required.";
 	else if (email.length > 120 || !EMAIL_RE.test(email))
 		errors.email = "Invalid email.";
 
-	const company = typeof v.company === "string" ? v.company.trim() : "";
+	const company = textField(v, "company")?.trim() ?? "";
 
 	if (company.length > 120) errors.company = "Company is too long.";
 
-	const audienceRaw = typeof v.audience === "string" ? v.audience.trim() : "";
+	const audienceRaw = textField(v, "audience")?.trim() ?? "";
 
 	// New requests use the general resume; stored legacy requests remain fulfillable.
 	if (audienceRaw !== "general")
 		errors.audience = "Only the general resume is available.";
 
-	const note = typeof v.note === "string" ? v.note.trim() : "";
+	const note = textField(v, "note")?.trim() ?? "";
 
 	if (note.length > 1000) errors.note = "Note is too long.";
 
-	const turnstileToken =
-		typeof v.turnstileToken === "string" ? v.turnstileToken : "";
+	const turnstileToken = textField(v, "turnstileToken") ?? "";
 
 	if (!turnstileToken) errors.turnstileToken = "Captcha missing.";
 

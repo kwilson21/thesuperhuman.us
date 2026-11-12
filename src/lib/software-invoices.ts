@@ -1,3 +1,4 @@
+import type Stripe from "stripe";
 import type { OfferTerms } from "./software-offers";
 import {
 	projectTerms,
@@ -114,6 +115,8 @@ export function softwareInvoiceTerms(
 
 	const deposit = Math.floor(item.feeCents / 2);
 
+	const daysUntilDue = kind === "deposit" ? 7 : kind === "balance" ? 15 : 30;
+
 	return {
 		amountCents:
 			kind === "deposit"
@@ -121,10 +124,7 @@ export function softwareInvoiceTerms(
 				: kind === "balance"
 					? item.feeCents - deposit
 					: item.feeCents,
-		daysUntilDue: (kind === "deposit" ? 7 : kind === "balance" ? 15 : 30) as
-			| 7
-			| 15
-			| 30,
+		daysUntilDue,
 	};
 }
 
@@ -139,29 +139,29 @@ type InvoiceResult = {
 type SoftwareStripeClient = {
 	customers: {
 		create(
-			params: object,
+			params: Stripe.CustomerCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 	};
 	invoices: {
 		create(
-			params: object,
+			params: Stripe.InvoiceCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 		finalizeInvoice(
 			id: string,
-			params: object,
+			params: Stripe.InvoiceFinalizeInvoiceParams,
 			options: { idempotencyKey: string },
 		): Promise<InvoiceResult>;
 		sendInvoice(
 			id: string,
-			params: object,
+			params: Stripe.InvoiceSendInvoiceParams,
 			options: { idempotencyKey: string },
 		): Promise<InvoiceResult>;
 	};
 	invoiceItems: {
 		create(
-			params: object,
+			params: Stripe.InvoiceItemCreateParams,
 			options: { idempotencyKey: string },
 		): Promise<{ id: string }>;
 	};

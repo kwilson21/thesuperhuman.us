@@ -35,15 +35,22 @@ export type DeliveryResult =
 				| "pending";
 	  };
 
+function isObject<T>(value: T): value is T & object {
+	return value !== null && typeof value === "object";
+}
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 function validReceipt(receipt: Receipt, publication: Publication): boolean {
 	return (
-		receipt !== null &&
-		typeof receipt === "object" &&
+		isObject(receipt) &&
 		receipt.projectId === publication.projectId &&
 		receipt.eventId === publication.eventId &&
 		Number.isSafeInteger(receipt.revision) &&
 		receipt.revision > publication.expectedRevision &&
-		typeof receipt.publishedAt === "string" &&
+		isText(receipt.publishedAt) &&
 		/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(receipt.publishedAt) &&
 		Number.isFinite(Date.parse(receipt.publishedAt)) &&
 		new Date(receipt.publishedAt).toISOString() === receipt.publishedAt

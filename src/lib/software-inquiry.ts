@@ -29,14 +29,43 @@ export type StoredSoftwarePath =
 	| SoftwarePath
 	| keyof typeof legacySoftwarePaths;
 
-export function softwarePathLabel(path: unknown): string | undefined {
-	if (typeof path !== "string") return undefined;
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
 
-	if (Object.hasOwn(softwarePaths, path))
-		return softwarePaths[path as SoftwarePath];
+function hasKey<T extends object>(
+	record: T,
+	key: string,
+): key is Extract<keyof T, string> {
+	return Object.hasOwn(record, key);
+}
 
-	return Object.hasOwn(legacySoftwarePaths, path)
-		? legacySoftwarePaths[path as keyof typeof legacySoftwarePaths]
+function isObject(value: unknown): value is object {
+	return value !== null && typeof value === "object";
+}
+
+function labelOf<T extends Record<string, string>>(
+	labels: T,
+	value: string | undefined,
+): string | undefined {
+	return value !== undefined && hasKey(labels, value)
+		? labels[value]
+		: undefined;
+}
+
+function isSegmenter(value: unknown): value is typeof Intl.Segmenter {
+	return typeof value === "function";
+}
+
+export function softwarePathLabel(
+	path: string | null | undefined,
+): string | undefined {
+	if (!isText(path)) return undefined;
+
+	if (hasKey(softwarePaths, path)) return softwarePaths[path];
+
+	return hasKey(legacySoftwarePaths, path)
+		? legacySoftwarePaths[path]
 		: undefined;
 }
 
@@ -120,11 +149,7 @@ export const updateLabels = {
 } as const;
 
 export function currentSiteHref(value: unknown): string | null {
-	if (
-		typeof value !== "string" ||
-		!/^https?:\/\//i.test(value) ||
-		/\s/.test(value)
-	)
+	if (!isText(value) || !/^https?:\/\//i.test(value) || /\s/.test(value))
 		return null;
 
 	try {
@@ -255,16 +280,17 @@ export function validateSoftwareInquiry(
 	| { ok: false; errors: Record<string, string> } {
 	const lineErrors: Record<string, string> = {};
 
-	if (input && typeof input === "object") {
-		const raw = input as Record<string, unknown>;
+	if (isObject(input)) {
+		const raw = new Map<string, unknown>(Object.entries(input));
+		const timingDate = raw.get("timingDate");
 
 		if (
-			"timingDate" in raw &&
-			raw.timing === "date" &&
-			(typeof raw.timingDate !== "string" ||
-				!/^\d{4}-\d{2}-\d{2}$/.test(raw.timingDate) ||
-				!Number.isFinite(Date.parse(raw.timingDate)) ||
-				new Date(raw.timingDate).toISOString().slice(0, 10) !== raw.timingDate)
+			raw.has("timingDate") &&
+			raw.get("timing") === "date" &&
+			(!isText(timingDate) ||
+				!/^\d{4}-\d{2}-\d{2}$/.test(timingDate) ||
+				!Number.isFinite(Date.parse(timingDate)) ||
+				new Date(timingDate).toISOString().slice(0, 10) !== timingDate)
 		)
 			lineErrors.timingDate = "Add a valid date.";
 
@@ -275,28 +301,35 @@ export function validateSoftwareInquiry(
 			"timingReason",
 			"budgetNote",
 			"approverRole",
-		])
-			if (typeof raw[key] === "string" && /[\r\n]/.test(raw[key]))
+		]) {
+			const value = raw.get(key);
+
+			if (isText(value) && /[\r\n]/.test(value))
 				lineErrors[key] = "Use one line.";
+		}
+
+		const currentUrl = raw.get("currentUrl");
 
 		if (
-			raw.path === "website" &&
-			typeof raw.currentUrl === "string" &&
-			/[\r\n]/.test(raw.currentUrl)
+			raw.get("path") === "website" &&
+			isText(currentUrl) &&
+			/[\r\n]/.test(currentUrl)
 		)
 			lineErrors.currentUrl = "Use one line.";
 
+		const path = raw.get("path");
+
 		const questions =
-			typeof raw.path === "string" && Object.hasOwn(softwareQuestions, raw.path)
-				? softwareQuestions[raw.path as StoredSoftwarePath]
+			isText(path) && hasKey(softwareQuestions, path)
+				? softwareQuestions[path]
 				: [];
 
-		for (const key of [...questions, ...softwareDetailKeys])
-			if (
-				typeof raw[key] === "string" &&
-				/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(raw[key])
-			)
+		for (const key of [...questions, ...softwareDetailKeys]) {
+			const value = raw.get(key);
+
+			if (isText(value) && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value))
 				lineErrors[key] = "Remove control characters.";
+		}
 	}
 
 	const parsed = schema.safeParse(input, {
@@ -332,21 +365,20 @@ export function validateSoftwareInquiry(
 }
 
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-	const firstLine = String(
-		(input as Record<string, unknown>)[softwareQuestions[input.path][0]],
-	)
+	const fields = new Map<string, unknown>(Object.entries(input));
+
+	const firstLine = String(fields.get(softwareQuestions[input.path][0]))
 		.trim()
 		.replace(/\s+/g, " ")
 		.split(/(?<=[.!?])\s/, 1)[0];
 
-	const summaryCharacters =
-		typeof Intl.Segmenter === "function"
-			? [
-					...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
-						firstLine,
-					),
-				].map((part) => part.segment)
-			: Array.from(firstLine);
+	const summaryCharacters = isSegmenter(Intl.Segmenter)
+		? [
+				...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
+					firstLine,
+				),
+			].map((part) => part.segment)
+		: Array.from(firstLine);
 
 	return {
 		kind: "software",
@@ -362,7 +394,7 @@ export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
 				...softwareDetailKeys.filter(
 					(key) => key !== "name" && key !== "email",
 				),
-			].map((key) => [key, input[key as keyof SoftwareInput]]),
+			].map((key) => [key, fields.get(key)]),
 		),
 	};
 }
@@ -371,15 +403,15 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 	const details = request.details;
 
 	const path: StoredSoftwarePath =
-		typeof details.path === "string" &&
-		Object.hasOwn(softwareQuestions, details.path)
-			? (details.path as StoredSoftwarePath)
+		isText(details.path) && hasKey(softwareQuestions, details.path)
+			? details.path
 			: "workflow";
 
 	return Object.fromEntries(
-		["path", ...softwareQuestions[path], ...softwareDetailKeys]
-			.filter((key) => key !== "approverRole" || details.approver === "other")
-			.map((key) => {
+		["path", ...softwareQuestions[path], ...softwareDetailKeys].flatMap(
+			(key): [string, string][] => {
+				if (key === "approverRole" && details.approver !== "other") return [];
+
 				const value =
 					key === "name"
 						? request.name
@@ -387,21 +419,25 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 							? request.email
 							: details[key];
 
+				const text = isText(value) ? value : undefined;
+
 				const display =
 					key === "path"
-						? softwarePathLabel(value)
+						? softwarePathLabel(text)
 						: key === "timing"
-							? timingLabels[value as keyof typeof timingLabels]
+							? labelOf(timingLabels, text)
 							: key === "budgetStatus"
-								? budgetLabels[value as keyof typeof budgetLabels]
+								? labelOf(budgetLabels, text)
 								: key === "approver"
-									? approverLabels[value as keyof typeof approverLabels]
+									? labelOf(approverLabels, text)
 									: key === "updates"
-										? updateLabels[value as keyof typeof updateLabels]
+										? labelOf(updateLabels, text)
 										: value;
 
-				return [key, typeof display === "string" ? display : ""];
-			})
-			.filter(([, value]) => value),
+				const shown = isText(display) ? display : "";
+
+				return shown ? [[key, shown]] : [];
+			},
+		),
 	);
 }

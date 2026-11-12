@@ -15,15 +15,26 @@ export interface ProjectFeed {
 	history: PublicEntry[];
 }
 
-function entry(row: Record<string, unknown>): PublicEntry | null {
+/** The columns the feed queries select. Each query selects a subset of them. */
+type PublicationRow = {
+	revision?: number;
+	payload?: string | null;
+	published_at?: string;
+	origin?: string;
+	occurred_on?: string | null;
+};
+
+function entry(row: PublicationRow): PublicEntry | null {
 	if (row.payload === null) return null;
+	// SAFETY: payload is selected by the current and history queries (SELECT payload,...), and a null payload returned above, so the text is stored publication JSON.
 	const p = parsePublication(JSON.parse(row.payload as string));
 
 	if (!p || !p.story) throw new Error("Invalid stored publication");
 
+	// SAFETY: published_at is selected by both entry queries (SELECT payload,published_at,...), so it is always present.
 	return {
 		entryId: p.entryId,
-		occurredOn: (row.occurred_on as string | undefined) ?? p.occurredOn,
+		occurredOn: row.occurred_on ?? p.occurredOn,
 		publishedAt: row.published_at as string,
 		backfilled: row.origin === "backfill",
 		story: p.story,
@@ -35,7 +46,7 @@ export async function readProject(
 	db: D1Database,
 	projectId: string,
 ): Promise<ProjectFeed> {
-	const [version, current, history] = await db.batch<Record<string, unknown>>([
+	const [version, current, history] = await db.batch<PublicationRow>([
 		db
 			.prepare(
 				"SELECT COALESCE(MAX(revision),0) AS revision FROM publication_events WHERE project_id=?1",
@@ -59,6 +70,7 @@ export async function readProject(
 			.bind(projectId),
 	]);
 
+	// SAFETY: the first query is SELECT COALESCE(MAX(revision),0) AS revision, which always returns one numeric row.
 	return {
 		projectId,
 		revision: version.results[0].revision as number,

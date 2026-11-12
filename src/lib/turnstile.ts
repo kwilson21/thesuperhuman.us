@@ -1,5 +1,9 @@
 const ENDPOINT = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
+function hasSuccessFlag(value: unknown): value is { success: unknown } {
+	return typeof value === "object" && value !== null && "success" in value;
+}
+
 export async function verifyTurnstile(
 	token: string,
 	secret: string,
@@ -18,9 +22,9 @@ export async function verifyTurnstile(
 		});
 
 		if (!res.ok) return false;
-		const data = (await res.json()) as { success?: boolean };
+		const data: unknown = await res.json();
 
-		return data.success === true;
+		return hasSuccessFlag(data) && data.success === true;
 	} catch {
 		return false;
 	}

@@ -778,6 +778,14 @@ export async function applyStripeInvoiceEvent(
 	};
 }
 
+function isOfferId(value: string): value is keyof typeof audioOffers {
+	return Object.hasOwn(audioOffers, value);
+}
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 /**
  * Starting values for the Book the work form: the requested service and song title, and that
  * service's published starting price. The owner reviews both before confirming, and terms lock
@@ -786,18 +794,15 @@ export async function applyStripeInvoiceEvent(
 export function paymentDefaults(
 	serviceId: string | null | undefined,
 	details: Record<string, unknown>,
-): { approvedService: string; totalAmount: string } {
+) {
 	const offer =
-		serviceId && serviceId in audioOffers
-			? audioOffers[serviceId as keyof typeof audioOffers]
-			: null;
+		serviceId && isOfferId(serviceId) ? audioOffers[serviceId] : null;
 
 	if (!offer?.price) return { approvedService: "", totalAmount: "" };
 
-	const title =
-		typeof details.title === "string"
-			? details.title.trim().replace(/\s+/g, " ")
-			: "";
+	const title = isText(details.title)
+		? details.title.trim().replace(/\s+/g, " ")
+		: "";
 
 	return {
 		approvedService: (title ? `${offer.name}: ${title}` : offer.name).slice(
