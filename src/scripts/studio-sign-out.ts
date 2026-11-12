@@ -13,6 +13,7 @@ export function setupStudioSignOut() {
 					body: "{}",
 				});
 
+				// SAFETY: the sign-out endpoint answers with JSON; localSignedOut is optional and read only after the response.ok branch has returned.
 				const result = (await response.json()) as { localSignedOut?: boolean };
 
 				if (response.ok) {

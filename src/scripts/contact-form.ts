@@ -1,7 +1,7 @@
 import { setupFormSubmission } from "~/scripts/form-submission";
 
 export function setupContactForm() {
-	const form = document.getElementById("contact-form") as HTMLFormElement;
+	const form = document.querySelector<HTMLFormElement>("#contact-form")!;
 	setupFormSubmission({
 		form,
 		endpoint: "/api/contact",

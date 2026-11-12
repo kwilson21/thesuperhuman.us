@@ -38,6 +38,7 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 				return;
 			}
 
+			// SAFETY: the invitation endpoint answers with JSON; error is optional and used only as a message, with a fallback when it is absent.
 			const result = (await response.json()) as { error?: string };
 			status.textContent = result.error ?? failure;
 		} catch {

@@ -32,8 +32,11 @@ export function setupSoftwareComposer() {
 	let objectUrl: string | undefined,
 		busy = false;
 
-	const value = (key: string) =>
-		(form.elements.namedItem(key) as HTMLInputElement).value;
+	// SAFETY: field() receives names of controls that src/pages/owner/requests/[id]/update.astro renders with that name attribute: inputs (artifact_version, review_window_days, paid_confirmed, ...) and selects (kind, milestone_index, evidence_type). This file reads only value, disabled, required, placeholder, dataset and setCustomValidity from them, and every element has those.
+	const field = (name: string) =>
+		form.elements.namedItem(name) as HTMLInputElement;
+
+	const value = (key: string) => field(key).value;
 
 	const text = (selector: string, content: string) => {
 		const element = preview.querySelector(selector);
@@ -46,9 +49,7 @@ export function setupSoftwareComposer() {
 			delivery = kind === "delivery_review",
 			handoff = kind === "handoff";
 
-		const milestoneSelect = form.elements.namedItem(
-			"milestone_index",
-		) as HTMLInputElement;
+		const milestoneSelect = field("milestone_index");
 
 		const currentMilestone = Number(milestoneSelect.dataset.currentMilestone);
 		form
@@ -83,9 +84,6 @@ export function setupSoftwareComposer() {
 					: kind === "direction_review"
 						? "Ask the client to confirm this approach before the working milestone is reviewed."
 						: "Prepare a useful update for the client.";
-
-		const field = (name: string) =>
-			form.elements.namedItem(name) as HTMLInputElement;
 
 		form.querySelector<HTMLElement>("[data-kind-hint]")!.textContent =
 			kind === "direction_review"
@@ -199,6 +197,7 @@ export function setupSoftwareComposer() {
 		)!;
 
 		handoffFields.hidden = !handoff;
+		// SAFETY: data-accepted is JSON.stringify(accepted) from src/pages/owner/requests/[id]/update.astro (section data-handoff-fields), an array of booleans, one per milestone.
 		const accepted = JSON.parse(handoffFields.dataset.accepted!) as boolean[];
 		form.querySelector<HTMLOptionElement>(
 			"[name=kind] option[value=handoff]",
@@ -207,6 +206,7 @@ export function setupSoftwareComposer() {
 			!handoff || accepted[Number(milestone)];
 
 		const paymentBlocked =
+			// SAFETY: data-payment-blocked is JSON.stringify(paymentBlocked) from src/pages/owner/requests/[id]/update.astro (section data-handoff-fields), an array of booleans, one per milestone.
 			(JSON.parse(handoffFields.dataset.paymentBlocked ?? "[]") as boolean[])[
 				Number(milestone)
 			] ?? false;
@@ -332,17 +332,20 @@ export function setupSoftwareComposer() {
 
 		const deliveryReferences = [
 			...form.querySelectorAll<HTMLElement>("[data-delivery-reference]"),
-		]
-			.filter((row) => !row.hidden)
-			.map((row) => ({
+		].flatMap((row) => {
+			if (row.hidden) return [];
+
+			const reference = {
 				label: row
 					.querySelector<HTMLInputElement>("[name=link_label]")!
 					.value.trim(),
 				url: row
 					.querySelector<HTMLInputElement>("[name=link_url]")!
 					.value.trim(),
-			}))
-			.filter((reference) => reference.label && reference.url);
+			};
+
+			return reference.label && reference.url ? [reference] : [];
+		});
 
 		const deliveryLinks = preview.querySelector<HTMLElement>(
 			"[data-preview-delivery-links]",
@@ -386,6 +389,7 @@ export function setupSoftwareComposer() {
 			);
 		}
 
+		// SAFETY: the evidence_type select in src/pages/owner/requests/[id]/update.astro (line 247) is rendered from Object.entries(evidenceTypes), so its value is a key of evidenceTypes.
 		const evidence = value("evidence_type") as keyof typeof evidenceTypes;
 		text(
 			"[data-preview-kicker]",
@@ -581,9 +585,7 @@ export function setupSoftwareComposer() {
 	async function save(share: boolean) {
 		if (busy) return;
 
-		const milestoneSelect = form.elements.namedItem(
-			"milestone_index",
-		) as HTMLInputElement;
+		const milestoneSelect = field("milestone_index");
 
 		if (
 			value("kind") === "progress" &&
@@ -614,7 +616,7 @@ export function setupSoftwareComposer() {
 		if (
 			share &&
 			value("kind") === "handoff" &&
-			(form.elements.namedItem("paid_confirmed") as HTMLInputElement).disabled
+			field("paid_confirmed").disabled
 		) {
 			status.textContent = form.querySelector<HTMLElement>(
 				"[data-payment-reminder]",
@@ -643,8 +645,11 @@ export function setupSoftwareComposer() {
 			const labels = data.getAll("link_label"),
 				urls = data.getAll("link_url");
 
+			const fields = Object.fromEntries(data);
+			delete fields.visual;
+
 			const update = {
-				...Object.fromEntries(data),
+				...fields,
 				milestone_index: Number(value("milestone_index")),
 				email_client: email.checked,
 				criteria: data.getAll("criteria"),
@@ -658,8 +663,6 @@ export function setupSoftwareComposer() {
 					}))
 					.filter((link) => link.label || link.url),
 			};
-
-			delete (update as Record<string, unknown>).visual;
 
 			async function write(action: "draft" | "share") {
 				const response = await fetch(root!.dataset.endpoint!, {
@@ -675,6 +678,7 @@ export function setupSoftwareComposer() {
 					}),
 				});
 
+				// SAFETY: the updates endpoint (src/pages/api/owner/requests/[id]/updates.ts) answers with JSON; id, updatedAt and projectUpdatedAt are read only after the !response.ok throw below, and error is optional.
 				const result = (await response.json()) as {
 					id: string;
 					updatedAt: string;
@@ -705,6 +709,7 @@ export function setupSoftwareComposer() {
 					},
 				);
 
+				// SAFETY: the visual upload endpoint (under src/pages/api/owner/requests/[id]/) answers with JSON; updatedAt is read only after the !response.ok throw below, and error and cleanupPending are optional.
 				const result = (await response.json()) as {
 					updatedAt: string;
 					error?: string;

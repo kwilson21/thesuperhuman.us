@@ -1,9 +1,7 @@
 import { setupFormSubmission } from "~/scripts/form-submission";
 
 export function setupResumeRequestForm() {
-	const form = document.getElementById(
-		"resume-request-form",
-	) as HTMLFormElement;
+	const form = document.querySelector<HTMLFormElement>("#resume-request-form")!;
 
 	setupFormSubmission({
 		form,

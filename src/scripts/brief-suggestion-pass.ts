@@ -1,6 +1,19 @@
+// The options this file passes to Turnstile's render call.
+type TurnstileOptions = {
+	sitekey: string;
+	appearance: string;
+	"response-field": boolean;
+	retry: string;
+	"refresh-expired": string;
+	"before-interactive-callback": () => void;
+	"error-callback": () => void;
+	"unsupported-callback": () => void;
+	callback: (token: string) => void;
+};
+
 type Turnstile = {
 	ready(callback: () => void): void;
-	render(container: HTMLElement, options: Record<string, unknown>): string;
+	render(container: HTMLElement, options: TurnstileOptions): string;
 	remove(id: string): void;
 };
 
@@ -37,6 +50,7 @@ export function setupSuggestionPass(form: HTMLFormElement) {
 			container.setAttribute("aria-hidden", "true");
 			document.body.appendChild(container);
 
+			// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and callers use turnstile() with an optional check.
 			const turnstile = () =>
 				(window as Window & { turnstile?: Turnstile }).turnstile;
 
@@ -92,6 +106,7 @@ export function setupSuggestionPass(form: HTMLFormElement) {
 										signal: AbortSignal.timeout(6000),
 									});
 
+									// SAFETY: the pass endpoint answers with JSON; ok is optional and is compared with === true, so a missing or non-true value counts as not passed.
 									const result = (await response.json()) as { ok?: boolean };
 									finish(response.ok && result.ok === true);
 								} catch {

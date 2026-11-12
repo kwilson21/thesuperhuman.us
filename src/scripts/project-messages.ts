@@ -36,6 +36,7 @@ export function setupProjectMessages() {
 						body: JSON.stringify({ action: "send", body }),
 					});
 
+					// SAFETY: the message endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch returns first).
 					const result = (await response.json()) as { error?: string };
 
 					if (response.ok) {
@@ -61,6 +62,7 @@ export function setupProjectMessages() {
 					if (!entry.isIntersecting) continue;
 					observer.unobserve(entry.target);
 
+					// SAFETY: observed targets are the li rows that src/components/ProjectMessages.astro renders with data-unread-message, so they are HTMLElements.
 					const messageId = Number(
 						(entry.target as HTMLElement).dataset.unreadMessage,
 					);

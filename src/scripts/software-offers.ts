@@ -16,6 +16,10 @@ export const markRequestPageClean = () =>
 		section.dataset.dirty = "false";
 	});
 
+// Own-key lookup for a label or name table. Returns undefined for any other key.
+const ownValue = (table: Record<string, string>, key: string) =>
+	Object.hasOwn(table, key) ? table[key] : undefined;
+
 export function setupSoftwareOffers() {
 	const sessionValue = (key: string, value?: string | null) => {
 		try {
@@ -34,7 +38,10 @@ export function setupSoftwareOffers() {
 
 	class TransportError extends Error {}
 
-	const post = async (endpoint: string, body: unknown) => {
+	const post = async <T extends { action: string }>(
+		endpoint: string,
+		body: T,
+	) => {
 		let response: Response;
 
 		try {
@@ -61,6 +68,7 @@ export function setupSoftwareOffers() {
 			);
 		}
 
+		// SAFETY: parsed is JSON from the owner software API. Its error bodies carry message and errors (both optional here), and the required fields below are read only on success or after the !response.ok branch checks for updatedAt with "in".
 		const result = parsed as {
 			message?: string;
 			errors?: Record<string, string>;
@@ -78,7 +86,7 @@ export function setupSoftwareOffers() {
 		if (!response.ok) {
 			if (
 				response.status === 409 &&
-				(body as { action?: string }).action === "draft" &&
+				body.action === "draft" &&
 				"updatedAt" in result
 			) {
 				const editor = document.querySelector<HTMLElement>(
@@ -105,7 +113,7 @@ export function setupSoftwareOffers() {
 
 					const field = parts.at(-1)!;
 
-					const names: Record<string, string> = {
+					const names = {
 						name: "milestoneName",
 						feeCents: "fee",
 						label: "checkpointLabel",
@@ -130,7 +138,7 @@ export function setupSoftwareOffers() {
 							: parts[2]
 						: field;
 
-					const labels: Record<string, string> = {
+					const labels = {
 						outcome: "Outcome",
 						summary: "Summary",
 						milestones: "Milestones",
@@ -150,11 +158,11 @@ export function setupSoftwareOffers() {
 
 					scope
 						?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-							`[name="${names[key] ?? key}"]`,
+							`[name="${ownValue(names, key) ?? key}"]`,
 						)
 						.forEach((input) => input.setAttribute("aria-invalid", "true"));
 
-					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${labels[key] ?? "Offer"}: ${message}`;
+					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${ownValue(labels, key) ?? "Offer"}: ${message}`;
 				},
 			);
 
@@ -262,7 +270,8 @@ export function setupSoftwareOffers() {
 					if (form.dataset.revision === revision) form.dataset.dirty = "false";
 					reload(status, form);
 				} catch (error) {
-					status.textContent = (error as Error).message;
+					status.textContent =
+						error instanceof Error ? error.message : String(error);
 
 					if (
 						error instanceof TransportError &&
@@ -312,42 +321,41 @@ export function setupSoftwareOffers() {
 					"Clipboard unavailable. Select and copy the link in the Client link field.";
 			}
 		});
-	root
-		.querySelector<HTMLButtonElement>("[data-revoke-link]")!
-		.addEventListener("click", async (event) => {
-			if (!confirm("Revoke the client link? Anyone using it will lose access."))
-				return;
-			const button = event.currentTarget as HTMLButtonElement;
-			button.disabled = true;
-			root.setAttribute("inert", "");
-			root.setAttribute("aria-busy", "true");
-			root.dataset.busy = "true";
+	const button = root.querySelector<HTMLButtonElement>("[data-revoke-link]")!;
+	button.addEventListener("click", async () => {
+		if (!confirm("Revoke the client link? Anyone using it will lose access."))
+			return;
+		button.disabled = true;
+		root.setAttribute("inert", "");
+		root.setAttribute("aria-busy", "true");
+		root.dataset.busy = "true";
 
-			try {
-				await post(endpoint, {
-					action: "revoke",
-					expectedLinkCreatedAt: button.dataset.linkCreatedAt,
-				});
-				link = "";
-				root.dataset.revoked = "true";
-				linkInput.value = "";
-				root.querySelector<HTMLElement>("[data-client-link-field]")!.hidden =
-					true;
-				root.querySelector<HTMLElement>("[data-link-state]")!.textContent =
-					"Client link revoked.";
-				button.hidden = true;
-				status.textContent = "Client link revoked.";
-				updateControls();
-				reload(status);
-			} catch (error) {
-				status.textContent = (error as Error).message;
-			} finally {
-				button.disabled = root.dataset.revoked === "true";
-				root.removeAttribute("inert");
-				root.removeAttribute("aria-busy");
-				root.dataset.busy = "false";
-			}
-		});
+		try {
+			await post(endpoint, {
+				action: "revoke",
+				expectedLinkCreatedAt: button.dataset.linkCreatedAt,
+			});
+			link = "";
+			root.dataset.revoked = "true";
+			linkInput.value = "";
+			root.querySelector<HTMLElement>("[data-client-link-field]")!.hidden =
+				true;
+			root.querySelector<HTMLElement>("[data-link-state]")!.textContent =
+				"Client link revoked.";
+			button.hidden = true;
+			status.textContent = "Client link revoked.";
+			updateControls();
+			reload(status);
+		} catch (error) {
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
+		} finally {
+			button.disabled = root.dataset.revoked === "true";
+			root.removeAttribute("inert");
+			root.removeAttribute("aria-busy");
+			root.dataset.busy = "false";
+		}
+	});
 
 	if (!root.querySelector("[data-offer-form]")) return;
 
@@ -385,40 +393,45 @@ export function setupSoftwareOffers() {
 	const amount = (value: string) =>
 		value ? Math.round(Number(value) * 100) : NaN;
 
-	const terms = (): OfferTerms => ({
-		outcome: get(form, "outcome"),
-		summary: get(form, "summary"),
-		milestones: [...list.querySelectorAll<HTMLElement>("[data-milestone]")].map(
-			(row) => ({
-				name: get(row, "milestoneName"),
-				deliverables: lines(get(row, "deliverables")),
-				acceptance: lines(get(row, "acceptance")),
-				feeCents: amount(get(row, "fee")),
-				...(checked(row, "hasCheckpoint")
-					? {
-							checkpoint: {
-								label: get(row, "checkpointLabel"),
-								cancellationPercent: Number(get(row, "checkpointPercent")),
-							},
-						}
-					: {}),
+	const terms = (): OfferTerms => {
+		// SAFETY: the paymentMode radios in src/components/owner/SoftwareOfferEditor.astro (input name="paymentMode", line 102) render only the values "standard" and "invoice", the enum in src/lib/software-offers.ts.
+		const offer: OfferTerms = {
+			outcome: get(form, "outcome"),
+			summary: get(form, "summary"),
+			milestones: [
+				...list.querySelectorAll<HTMLElement>("[data-milestone]"),
+			].map((row) => {
+				const milestone: OfferTerms["milestones"][number] = {
+					name: get(row, "milestoneName"),
+					deliverables: lines(get(row, "deliverables")),
+					acceptance: lines(get(row, "acceptance")),
+					feeCents: amount(get(row, "fee")),
+				};
+
+				if (checked(row, "hasCheckpoint"))
+					milestone.checkpoint = {
+						label: get(row, "checkpointLabel"),
+						cancellationPercent: Number(get(row, "checkpointPercent")),
+					};
+
+				return milestone;
 			}),
-		),
-		clientInputs: get(form, "clientInputs"),
-		exclusions: get(form, "exclusions"),
-		timing: get(form, "timing"),
-		paymentMode: form.querySelector<HTMLInputElement>(
-			'[name="paymentMode"]:checked',
-		)!.value as OfferTerms["paymentMode"],
-		...(checked(form, "hasRange")
-			? {
-					projectRange: {
-						lowCents: amount(get(form, "rangeLow")),
-						highCents: amount(get(form, "rangeHigh")),
-					},
-				}
-			: {}),
-	});
+			clientInputs: get(form, "clientInputs"),
+			exclusions: get(form, "exclusions"),
+			timing: get(form, "timing"),
+			paymentMode: form.querySelector<HTMLInputElement>(
+				'[name="paymentMode"]:checked',
+			)!.value as OfferTerms["paymentMode"],
+		};
+
+		if (checked(form, "hasRange"))
+			offer.projectRange = {
+				lowCents: amount(get(form, "rangeLow")),
+				highCents: amount(get(form, "rangeHigh")),
+			};
+
+		return offer;
+	};
 
 	updateControls = () => {
 		root.dataset.dirty = String(changed);
@@ -470,7 +483,9 @@ export function setupSoftwareOffers() {
 	};
 
 	form.addEventListener("input", (event) => {
-		const input = event.target as HTMLInputElement;
+		// SAFETY: the editor forms render only input and textarea controls (src/components/owner/SoftwareOfferEditor.astro has no select), and both have name, type and removeAttribute, which the code below uses.
+		const input = event.target as HTMLInputElement | HTMLTextAreaElement;
+
 		input?.removeAttribute("aria-invalid");
 
 		if (input?.type === "radio")
@@ -492,9 +507,10 @@ export function setupSoftwareOffers() {
 		const agreementRows = form.querySelector("[data-agreement-milestones]");
 
 		if (agreementRows) {
-			const row = agreementRows.firstElementChild!.cloneNode(
-				true,
-			) as HTMLElement;
+			// SAFETY: the first child of [data-agreement-milestones] is a milestone row element that the owner template renders (src/components/owner/SoftwareAgreementDetails.astro, line 58), so the clone is an HTMLElement.
+			const row = agreementRows
+				.querySelector<HTMLElement>(":scope > *")!
+				.cloneNode(true) as HTMLElement;
 
 			const index = agreementRows.children.length;
 			row.dataset.agreementMilestone = String(index);
@@ -522,9 +538,8 @@ export function setupSoftwareOffers() {
 		status.textContent = `Milestone ${list.children.length} added.`;
 	});
 	list.addEventListener("click", (event) => {
-		const button = (event.target as HTMLElement).closest(
-			"[data-remove-milestone]",
-		);
+		// SAFETY: click events on the milestone list come from elements inside it, so event.target is an Element with closest().
+		const button = (event.target as Element).closest("[data-remove-milestone]");
 
 		if (!button || list.children.length <= 1) return;
 		const row = button.closest("[data-milestone]")!;
@@ -575,6 +590,7 @@ export function setupSoftwareOffers() {
 			});
 
 			if (attachmentBlock && !result.attachmentCleanupPending)
+				// SAFETY: dataset.removedKeys is written only as JSON.stringify of a string array (this file, in the setup for attachment removal and in setupAgreementAttachments), so parsing it yields string[].
 				attachmentBlock.dataset.removedKeys = JSON.stringify(
 					(
 						JSON.parse(attachmentBlock.dataset.removedKeys ?? "[]") as string[]
@@ -595,7 +611,8 @@ export function setupSoftwareOffers() {
 					: "Draft saved. Nothing has been sent.";
 			updateControls();
 		} catch (error) {
-			status.textContent = (error as Error).message;
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
 		} finally {
 			button.disabled = false;
 		}
@@ -702,7 +719,8 @@ export function setupSoftwareOffers() {
 			root.removeAttribute("aria-busy");
 			root.dataset.busy = "false";
 		} catch (error) {
-			status.textContent = (error as Error).message;
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
 			root.removeAttribute("inert");
 			root.removeAttribute("aria-busy");
 			root.dataset.busy = "false";
@@ -714,21 +732,26 @@ export function setupSoftwareOffers() {
 	updateControls();
 }
 
+// Agreement fields posted as a draft. The server validates them with agreementDetailsSchema (src/lib/agreement-fields.ts).
 function agreementDetails(form: HTMLFormElement) {
 	if (!form.querySelector("[data-agreement-details]")) return {};
-	const details: Record<string, unknown> = { milestones: [] };
+	const milestones: Partial<Record<string, string>>[] = [];
+
+	const details = new Map<
+		string,
+		string | number | boolean | null | Partial<Record<string, string>>[]
+	>([["milestones", milestones]]);
 
 	for (const [key, value] of new FormData(form)) {
 		if (!key.startsWith("agreement.")) continue;
 		const parts = key.slice(10).split(".");
 
 		if (parts[0] === "milestones") {
-			const milestones = details.milestones as Record<string, unknown>[];
 			const i = Number(parts[1]);
 			milestones[i] ??= {};
 			milestones[i][parts[2]] = String(value);
 		} else if (parts[0] === "attachments")
-			details.attachments = JSON.parse(String(value));
+			details.set("attachments", JSON.parse(String(value)));
 		else if (
 			[
 				"invoice_first_duration",
@@ -738,16 +761,17 @@ function agreementDetails(form: HTMLFormElement) {
 				"handoff_access_days",
 			].includes(parts[0])
 		)
-			details[parts[0]] = value === "" ? null : Number(value);
-		else details[parts[0]] = String(value);
+			details.set(parts[0], value === "" ? null : Number(value));
+		else details.set(parts[0], String(value));
 	}
 
-	details.longer_review_confirmed = new FormData(form).has(
-		"agreement.longer_review_confirmed",
+	details.set(
+		"longer_review_confirmed",
+		new FormData(form).has("agreement.longer_review_confirmed"),
 	);
 
 	return {
-		agreementDetails: details,
+		agreementDetails: Object.fromEntries(details),
 		reusedMsaId: new FormData(form).get("reusedMsaId") || null,
 		confirmMsaReuse: new FormData(form).has("confirmMsaReuse"),
 	};
@@ -755,7 +779,8 @@ function agreementDetails(form: HTMLFormElement) {
 
 export function setupAgreementAttachments(block: HTMLElement) {
 	block.addEventListener("click", (event) => {
-		const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
+		// SAFETY: click events on the attachment block come from elements inside it, so event.target is an Element with closest().
+		const button = (event.target as Element).closest<HTMLButtonElement>(
 			"[data-remove-attachment]",
 		);
 
@@ -816,6 +841,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 		upload.disabled = true;
 
 		try {
+			// SAFETY: the upload endpoint returns JSON with error (failures) or attachment (success). result.error is read only after the !response.ok throw, and result.attachment only after it too.
 			const query = new URLSearchParams({ filename: file.name, version, date }),
 				response = await fetch(`${block.dataset.uploadEndpoint}?${query}`, {
 					method: "PUT",
@@ -850,7 +876,7 @@ export function setupAgreementAttachments(block: HTMLElement) {
 			status.textContent =
 				"Attachment saved. Save the offer draft to include it.";
 		} catch (e) {
-			status.textContent = (e as Error).message;
+			status.textContent = e instanceof Error ? e.message : String(e);
 		} finally {
 			upload.disabled = false;
 		}

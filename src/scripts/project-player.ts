@@ -80,8 +80,8 @@ export function setupProjectPlayers() {
 			}
 
 			// AbortError only means a pause or reload interrupted this play; everything else is a real failure.
-			audio.play().catch((error: unknown) => {
-				if ((error as { name?: string })?.name !== "AbortError") unavailable();
+			audio.play().catch((error: { name?: string } | null | undefined) => {
+				if (error?.name !== "AbortError") unavailable();
 			});
 		});
 		audio.addEventListener("play", () => {

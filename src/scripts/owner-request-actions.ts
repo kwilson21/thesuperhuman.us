@@ -31,7 +31,7 @@ export function setupOwnerRequestActions() {
 
 	let updating = false;
 
-	async function update(payload: Record<string, unknown>) {
+	async function update<T extends { action?: string }>(payload: T) {
 		if (updating || root?.dataset.offerSending === "true") return;
 		updating = true;
 		root!.setAttribute("inert", "");
@@ -80,15 +80,18 @@ export function setupOwnerRequestActions() {
 		}
 	}
 
-	document
-		.querySelector<HTMLFormElement>("[data-request-note]")
-		?.addEventListener("submit", (event) => {
-			event.preventDefault();
+	const requestNote = document.querySelector<HTMLFormElement>(
+		"[data-request-note]",
+	);
 
-			if (!canDiscardChanges(event.currentTarget as HTMLFormElement)) return;
-			const data = new FormData(event.currentTarget as HTMLFormElement);
-			void update({ action: "note", note: data.get("note") });
-		});
+	requestNote?.addEventListener("submit", (event) => {
+		event.preventDefault();
+
+		if (!canDiscardChanges(requestNote)) return;
+
+		const data = new FormData(requestNote);
+		void update({ action: "note", note: data.get("note") });
+	});
 	// Scoped: project update forms also carry data-action, and must not post request status changes.
 	document
 		.querySelectorAll<HTMLButtonElement>(
