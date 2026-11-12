@@ -3,10 +3,7 @@ import { hashOfferToken } from "./software-offers";
 import { agreementEvent } from "./agreement-events";
 import { softwareGuard } from "./software-projects";
 import type { Agreement } from "./software-agreements";
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
+import { isText } from "./type-guards";
 
 export type RetentionManifest = {
 	version: 1;

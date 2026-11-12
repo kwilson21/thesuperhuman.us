@@ -2,6 +2,7 @@ import {
 	privateProjectObjectKey,
 	type ProjectFile,
 } from "./audio-project-files";
+import { isText } from "./type-guards";
 
 export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
@@ -233,10 +234,6 @@ export async function finishProjectUpload(
 		.run();
 
 	return "saved";
-}
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
 }
 
 /** R2 reports an upload it no longer has as error 10024, "The specified multipart upload does not exist." */

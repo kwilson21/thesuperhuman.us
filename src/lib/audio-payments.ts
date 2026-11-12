@@ -1,4 +1,5 @@
 import { audioOffers } from "./audio-intake";
+import { isText } from "./type-guards";
 
 export const invoiceStatuses = [
 	"not_created",
@@ -780,10 +781,6 @@ export async function applyStripeInvoiceEvent(
 
 function isOfferId(value: string): value is keyof typeof audioOffers {
 	return Object.hasOwn(audioOffers, value);
-}
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
 }
 
 /**

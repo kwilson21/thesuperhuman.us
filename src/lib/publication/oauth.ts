@@ -7,6 +7,7 @@ import {
 	type LoginEnv,
 } from "./oauth-login";
 import { publicationMcp, type PublicationIdentity } from "./mcp";
+import { isText } from "../type-guards";
 
 const paths = new Set([
 	publicationBase + "/mcp",
@@ -56,10 +57,6 @@ async function bounded(request: Request): Promise<Request | null> {
 	});
 }
 
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
-
 function isIdentity(value: unknown): value is PublicationIdentity {
 	return (
 		typeof value === "object" &&
@@ -72,6 +69,22 @@ function isIdentity(value: unknown): value is PublicationIdentity {
 	);
 }
 
+/**
+ * True when every binding and secret the publication login needs is set. LoginEnv also lists
+ * OAUTH_PROVIDER, which OAuthProvider.fetch adds to the env object before any handler reads it,
+ * so it is not checked here.
+ */
+function isConfigured(env: Env): env is LoginEnv {
+	return Boolean(
+		env.OAUTH_KV &&
+			env.PUBLICATION_DB &&
+			env.PUBLICATION_OWNER_ID &&
+			env.PUBLICATION_GITHUB_CLIENT_ID &&
+			env.PUBLICATION_GITHUB_CLIENT_SECRET &&
+			env.PUBLICATION_COOKIE_KEY,
+	);
+}
+
 export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 	const url = new URL(request.url);
 	const headers = { "Cache-Control": "no-store" };
@@ -80,14 +93,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 		return new Response("Not found", { status: 404, headers });
 	const env = locals.runtime.env;
 
-	if (
-		!env.OAUTH_KV ||
-		!env.PUBLICATION_DB ||
-		!env.PUBLICATION_OWNER_ID ||
-		!env.PUBLICATION_GITHUB_CLIENT_ID ||
-		!env.PUBLICATION_GITHUB_CLIENT_SECRET ||
-		!env.PUBLICATION_COOKIE_KEY
-	) {
+	if (!isConfigured(env)) {
 		return new Response("Publication connection is not configured.", {
 			status: 503,
 			headers,
@@ -151,11 +157,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			}),
 		});
 
-		const response = await provider.fetch(
-			limited,
-			env as unknown as LoginEnv,
-			locals.runtime.ctx,
-		);
+		const response = await provider.fetch(limited, env, locals.runtime.ctx);
 
 		const wrapped = new Response(response.body, response);
 		wrapped.headers.set("Cache-Control", "no-store");

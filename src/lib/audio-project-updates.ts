@@ -88,6 +88,17 @@ export async function getOwnerProjectState(db: D1Database, requestId: string) {
 		}>();
 }
 
+/** Runs the guard, update INSERT and audit INSERT batch; the update row is returned only when the guard changed a row. */
+async function saveUpdateBatch(
+	db: D1Database,
+	statements: [D1PreparedStatement, D1PreparedStatement, D1PreparedStatement],
+): Promise<ProjectUpdate | null> {
+	const [changed, update] = await db.batch(statements);
+
+	// SAFETY: statements[1] is always the audio_project_updates INSERT ... RETURNING ${columns} in the five callers, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
+	return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
+}
+
 export async function saveProjectUpdate(
 	db: D1Database,
 	requestId: string,
@@ -134,7 +145,7 @@ export async function saveProjectUpdate(
 		)
 			return null;
 
-		const [changed, update] = await db.batch([
+		return saveUpdateBatch(db, [
 			db
 				.prepare(`UPDATE audio_projects SET stage='accepted',original_due_at=?,current_due_at=?,updated_at=?
         WHERE request_id=? AND stage='files_under_review' AND updated_at=? AND revoked_at IS NULL
@@ -158,16 +169,13 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='accepted' AND updated_at=? AND original_due_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at, command.dueDate),
 		]);
-
-		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
-		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (command.action === "start_work") {
 		if (state.stage !== "accepted" || state.booking_status !== "paid")
 			return null;
 
-		const [changed, update] = await db.batch([
+		return saveUpdateBatch(db, [
 			db
 				.prepare(`UPDATE audio_projects SET stage='in_progress',updated_at=?
         WHERE request_id=? AND stage='accepted' AND updated_at=? AND revoked_at IS NULL
@@ -185,16 +193,13 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='in_progress' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
-
-		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
-		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (command.action === "begin_revision") {
 		if (state.stage !== "review_ready" || state.booking_status !== "paid")
 			return null;
 
-		const [changed, update] = await db.batch([
+		return saveUpdateBatch(db, [
 			db
 				.prepare(`UPDATE audio_projects SET stage='revision_in_progress',updated_at=?
         WHERE request_id=? AND stage='review_ready' AND updated_at=? AND revoked_at IS NULL
@@ -213,9 +218,6 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='revision_in_progress' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
-
-		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
-		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (command.action === "complete") {
@@ -227,7 +229,7 @@ export async function saveProjectUpdate(
 		)
 			return null;
 
-		const [changed, update] = await db.batch([
+		return saveUpdateBatch(db, [
 			db
 				.prepare(`UPDATE audio_projects SET stage='complete',completed_at=?,updated_at=?
         WHERE request_id=? AND stage='final_files_ready' AND updated_at=? AND revoked_at IS NULL
@@ -255,15 +257,12 @@ export async function saveProjectUpdate(
         WHERE request_id=? AND stage='complete' AND updated_at=? AND changes()=1`)
 				.bind(actor, at, requestId, at),
 		]);
-
-		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
-		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
 	if (!state.current_due_at || command.dueDate <= state.current_due_at)
 		return null;
 
-	const [changed, update] = await db.batch([
+	return saveUpdateBatch(db, [
 		db
 			.prepare(`UPDATE audio_projects SET current_due_at=?,updated_at=?
       WHERE request_id=? AND current_due_at=? AND updated_at=? AND stage<>'complete' AND revoked_at IS NULL
@@ -298,9 +297,6 @@ export async function saveProjectUpdate(
       WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1`)
 			.bind(actor, at, requestId, command.dueDate, at),
 	]);
-
-	// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
-	return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 }
 
 export async function deliverProjectUpdateNotice(

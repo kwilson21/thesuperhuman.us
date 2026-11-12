@@ -5,6 +5,7 @@ import {
 	type PublicationJournal,
 	type Receipt,
 } from "./contract";
+import { isText } from "../type-guards";
 
 /** Private durable storage. Both operations must be atomic and project-scoped. */
 export interface Outbox {
@@ -37,10 +38,6 @@ export type DeliveryResult =
 
 function isObject<T>(value: T): value is T & object {
 	return value !== null && typeof value === "object";
-}
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
 }
 
 function validReceipt(receipt: Receipt, publication: Publication): boolean {

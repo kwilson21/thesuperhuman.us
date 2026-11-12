@@ -1,8 +1,6 @@
-/** Canonical serialization for the version-1 object-only publication envelope. */
-function isObject(value: unknown): value is object {
-	return value !== null && typeof value === "object";
-}
+import { isObject } from "../type-guards";
 
+/** Canonical serialization for the version-1 object-only publication envelope. */
 export function canonicalPublication(value: unknown): string {
 	if (!isObject(value)) return JSON.stringify(value);
 	const fields = new Map<string, unknown>(Object.entries(value));

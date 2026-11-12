@@ -8,7 +8,6 @@ import {
 	canonicalJson,
 	hashBytes,
 	newYorkTime,
-	type SignatureRecord,
 	type SigningCertificate,
 } from "./agreement-artifacts";
 import {
@@ -76,16 +75,15 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
 	return lines;
 }
 
-/** A value the packet prints: a recorded field, or null or undefined when it was not recorded. */
-type CertificateValue = string | null | undefined;
+/** A value the packet prints (display converts it with String): a recorded field, or null or undefined when it was not recorded. */
+type CertificateValue = string | number | null | undefined;
 
 export async function renderAgreementPacket(
 	env: Env,
 	documents: Agreement[],
-	certificates: unknown[],
+	certificates: SigningCertificate[],
 ): Promise<Uint8Array> {
-	// SAFETY: prepareAgreementArtifact (agreement-artifacts.ts) and preflightAgreementPacket (this file) build each certificate with the fields SigningCertificate lists; tests pass partial certificates, which the packet tolerates through ?? and undefined reads.
-	const records = certificates as SigningCertificate[];
+	const records = certificates;
 	const pdf = await PDFDocument.create();
 	pdf.registerFontkit(fontkit);
 
@@ -337,7 +335,7 @@ export async function renderAgreementPacket(
 
 	const renderedEnd = pdf.getPageCount();
 
-	// SAFETY: attachment_manifest_json is JSON.stringify of the attachments that agreementDetailsSchema validated (software-agreements.ts), and every item there has a key and a sha256 string.
+	// SAFETY: attachment_manifest_json is JSON.stringify of the attachments that agreementDetailsSchema (agreement-fields.ts) validated; its writers are the software_agreements INSERT in software-agreements.ts and the preflightAgreementPacket row in this file, and every item has a key and a sha256 string.
 	const attachments: { key: string; sha256: string }[] = JSON.parse(
 		documents[documents.length - 1].attachment_manifest_json,
 	);

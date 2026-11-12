@@ -12,14 +12,6 @@ export type ValidationResult =
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
-
-function isObject(value: unknown): value is object {
-	return value !== null && typeof value === "object";
-}
-
 function textField(
 	fields: Map<string, unknown>,
 	key: string,
@@ -76,6 +68,7 @@ export function validateContactInput(input: unknown): ValidationResult {
 // --- Resume request validation ---
 
 import type { ResumeRequest } from "./resume-requests";
+import { isText, isObject } from "./type-guards";
 
 export type ResumeRequestInput = ResumeRequest & { turnstileToken: string };
 

@@ -130,6 +130,7 @@ export function ogSceneFor(
 ): { scene: OgScene; exact: boolean } | null {
 	let family: { scene: OgScene; length: number } | null = null;
 
+	// SAFETY: Object.entries types keys as string; BaseLayout uses the default OG_SCENES table, whose keys are all OgScene, and the only other caller (tests/lib/og-media.test.ts) passes its own table and only compares the returned key as a string.
 	for (const [scene, { routes }] of Object.entries(table) as [
 		OgScene,
 		{ routes: readonly string[] },

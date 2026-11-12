@@ -9,6 +9,7 @@ import { hashOfferToken } from "./software-offers";
 import { templateFields } from "./agreement-template-fields.mjs";
 import coverage from "../assets/agreement-fonts/Inter-coverage.json";
 import { lineDiff } from "./line-diff";
+import { isText } from "./type-guards";
 
 export { templateFields } from "./agreement-template-fields.mjs";
 
@@ -40,10 +41,6 @@ export type TemplateValue =
 
 /** The values renderAgreement fills, keyed by namespace (client, contractor, msa, sow, ...). */
 export type TemplateValues = { [namespace: string]: TemplateValue };
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
 
 function isTemplateGroup(
 	value: TemplateValue,
@@ -167,9 +164,8 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 			continue;
 		}
 
-		// SAFETY: templateFields[kind] is a readonly tuple of string literals, and this is an upcast to readonly string[], so includes sees every field name it held.
 		if (
-			(!(templateFields[kind] as readonly string[]).includes(field) &&
+			(!templateFields[kind].includes(field) &&
 				!optionalFields.includes(field)) ||
 			(field.startsWith("milestone.") && !loop)
 		)

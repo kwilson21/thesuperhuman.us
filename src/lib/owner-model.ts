@@ -1,3 +1,5 @@
+import { isText } from "./type-guards";
+
 export const ownerRequestKinds = [
 	"purchase",
 	"merchandise",
@@ -15,10 +17,6 @@ export const ownerRequestStatuses = [
 export type OwnerRequestKind = (typeof ownerRequestKinds)[number];
 
 export type OwnerRequestStatus = (typeof ownerRequestStatuses)[number];
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
 
 export function safeExternalUrl(value: unknown) {
 	if (!isText(value)) return null;
