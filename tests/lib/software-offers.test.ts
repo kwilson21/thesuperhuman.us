@@ -8,7 +8,7 @@ import {
 	type SoftwareOffer,
 } from "~/lib/software-offers";
 import type { OwnerRequest } from "~/lib/owner-model";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 
 export const terms = {
 	outcome: "Onboarding",
@@ -149,14 +149,14 @@ describe("software offer terms", () => {
 	});
 	it("projects only client identity, version, path and validated terms", () => {
 		const projection = clientOffer(
-			double<OwnerRequest & { privateNote: string; email: string }>({
+			partial<OwnerRequest & { privateNote: string; email: string }>({
 				name: "Alex",
 				privateNote: "SECRET",
 				email: "private@example.com",
 				details: { company: "Example", fit: "SECRET" },
 				serviceId: "workflow",
 			}),
-			double<SoftwareOffer & { sent_by: string }>({
+			partial<SoftwareOffer & { sent_by: string }>({
 				version: 2,
 				terms_json: JSON.stringify({ ...terms, privateNote: "SECRET" }),
 				sent_by: "private@example.com",
@@ -232,8 +232,8 @@ it.each([
 	["unknown", "Workflow automation"],
 ])("names the offer path for a %s brief", (serviceId, path) => {
 	const projection = clientOffer(
-		double<OwnerRequest>({ name: "Alex", details: {}, serviceId }),
-		double<SoftwareOffer>({
+		partial<OwnerRequest>({ name: "Alex", details: {}, serviceId }),
+		partial<SoftwareOffer>({
 			version: 1,
 			terms_json: JSON.stringify(terms),
 			status: "sent",

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 import {
 	createInvoiceWithClient,
 	stripeAvailable,
@@ -71,7 +71,7 @@ describe("Stripe invoicing", () => {
 	it("fails closed unless the explicit gate and both secrets are configured", () => {
 		expect(
 			stripeAvailable(
-				double<Env>({
+				partial<Env>({
 					STRIPE_PAYMENTS_ENABLED: "false",
 					STRIPE_SECRET_KEY: "sk_test_1",
 					STRIPE_WEBHOOK_SECRET: "whsec_1",
@@ -80,7 +80,7 @@ describe("Stripe invoicing", () => {
 		).toBe(false);
 		expect(
 			stripeAvailable(
-				double<Env>({
+				partial<Env>({
 					STRIPE_PAYMENTS_ENABLED: "true",
 					STRIPE_SECRET_KEY: "sk_test_1",
 				}),
@@ -88,7 +88,7 @@ describe("Stripe invoicing", () => {
 		).toBe(false);
 		expect(
 			stripeAvailable(
-				double<Env>({
+				partial<Env>({
 					STRIPE_PAYMENTS_ENABLED: "true",
 					STRIPE_SECRET_KEY: "sk_test_1",
 					STRIPE_WEBHOOK_SECRET: "whsec_1",
@@ -97,7 +97,7 @@ describe("Stripe invoicing", () => {
 		).toBe(true);
 		expect(
 			stripeWebhookAvailable(
-				double<Env>({
+				partial<Env>({
 					STRIPE_PAYMENTS_ENABLED: "false",
 					STRIPE_SECRET_KEY: "sk_test_1",
 					STRIPE_WEBHOOK_SECRET: "whsec_1",

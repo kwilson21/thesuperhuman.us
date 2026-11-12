@@ -6,8 +6,8 @@ import type * as LineDiff from "~/lib/line-diff";
 import { expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
-import { double, fakeD1 } from "../helpers/doubles";
-import { fakeLocals } from "../helpers/tests-other-fakes";
+import { double, partial, fakeD1 } from "../helpers/doubles";
+import { fakeLocals } from "../helpers/runtime";
 
 /** The event a fake element passes to a listener: a submit carries preventDefault and its submitter, a click carries neither. */
 type FakeEvent = { preventDefault?: () => void; submitter?: { value: string } };
@@ -109,7 +109,7 @@ const templateDb = (rows: TemplateRow[]) =>
 
 const endpoint = (db: D1Database) => (path: string, init: RequestInit) =>
 	POST(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request(`https://example.test${path}`, {
 				...init,
 				headers: { ...init.headers, origin: "https://example.test" },

@@ -1,5 +1,5 @@
 import { test } from "vitest";
-import type { SqliteRow } from "../helpers/tests-other-fakes";
+import type { SqliteRow } from "../helpers/sqlite-d1";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 

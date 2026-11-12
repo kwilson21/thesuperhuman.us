@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { websiteFeed } from "~/lib/publication/website";
 import { readProject } from "~/lib/publication/read";
-import { double } from "../helpers/doubles";
+import { double, partial } from "../helpers/doubles";
 
 vi.mock("~/lib/publication/read", () => ({ readProject: vi.fn() }));
 
-const env = double<Env>({
+const env = partial<Env>({
 	PUBLICATION_DB: double<D1Database>({}),
 	PUBLICATION_PROJECTS: "threadline, the-engineers-daily",
 });
@@ -28,7 +28,7 @@ describe("optional project feeds", () => {
 	it("does not query projects outside the allowlist or without a binding", async () => {
 		expect(await websiteFeed(env, "private-project")).toBeNull();
 		expect(
-			await websiteFeed(double<Env>({ PUBLICATION_PROJECTS: "threadline" })),
+			await websiteFeed(partial<Env>({ PUBLICATION_PROJECTS: "threadline" })),
 		).toBeNull();
 		expect(readProject).not.toHaveBeenCalled();
 	});

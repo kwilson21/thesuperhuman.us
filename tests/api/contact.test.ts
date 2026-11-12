@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { APIContext } from "astro";
 import { POST } from "~/pages/api/contact";
-import { double, fakeKv } from "../helpers/doubles";
-import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeKv } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson, type JsonObject } from "../helpers/json";
 
 type ContactBody = {
 	ok: boolean;
@@ -38,7 +37,7 @@ function makeContext(
 ) {
 	const kv = makeKv();
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/contact", {
 			method: "POST",
 			headers: {
@@ -48,9 +47,9 @@ function makeContext(
 			},
 			body: JSON.stringify(body),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					RESEND_API_KEY: "key",
 					TURNSTILE_SECRET_KEY: "secret",
 					CONTACT_TO_EMAIL: "kazon.wilson@thesuperhuman.us",
@@ -92,7 +91,7 @@ describe("POST /api/contact", () => {
 		const res = await POST(makeContext(validBody));
 		expect(res.status).toBe(200);
 
-		const json = await jsonBody<ContactBody>(res);
+		const json = await readJson<ContactBody>(res);
 
 		expect(json.ok).toBe(true);
 	});
@@ -101,7 +100,7 @@ describe("POST /api/contact", () => {
 		const res = await POST(makeContext({ ...validBody, email: "bad" }));
 		expect(res.status).toBe(400);
 
-		const json = await jsonBody<ContactBody>(res);
+		const json = await readJson<ContactBody>(res);
 
 		expect(json.ok).toBe(false);
 		expect(json.errors?.email).toBeDefined();

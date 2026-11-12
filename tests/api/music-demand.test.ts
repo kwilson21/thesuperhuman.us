@@ -3,10 +3,9 @@ import { POST as interest } from "~/pages/api/music-interest";
 import { POST as event } from "~/pages/api/music-event";
 import type { APIContext } from "astro";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
-import { double, fakeD1, fakeKv } from "../helpers/doubles";
-import type { JsonObject } from "../helpers/tests-api-json";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import type { JsonObject } from "../helpers/json";
 
 vi.mock("~/lib/music-content", () => ({
 	loadMusicCatalog: async () => ({
@@ -46,7 +45,7 @@ function context(
 						run: async <T>() => {
 							if (options.fail) throw new Error("unavailable");
 
-							return double<D1Result<T>>({ success: true });
+							return partial<D1Result<T>>({ success: true });
 						},
 						first: async () => null,
 					}),
@@ -58,7 +57,7 @@ function context(
 		},
 	});
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/music-interest", {
 			method: "POST",
 			headers: {
@@ -67,9 +66,9 @@ function context(
 			},
 			body: JSON.stringify(data),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					MUSIC_DB: options.db === false ? undefined : database,
 					MUSIC_EVENTS_ENABLED: options.eventsEnabled,
 					RATE_LIMIT: fakeKv({

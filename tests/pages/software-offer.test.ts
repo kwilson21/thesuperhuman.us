@@ -15,7 +15,8 @@ import {
 } from "~/lib/agreement-fields";
 import { projectToday } from "~/lib/audio-project-updates";
 import { double, fakeD1 } from "../helpers/doubles";
-import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
+import { fakeLocals } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let start: any, privacy: any;

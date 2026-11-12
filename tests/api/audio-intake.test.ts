@@ -1,8 +1,8 @@
 import type { APIContext } from "astro";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { double, fakeKv } from "../helpers/doubles";
-import type { JsonObject } from "../helpers/tests-api-json";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { double, partial, fakeKv } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/json";
+import type { TestRuntime } from "../helpers/runtime";
 import { POST } from "~/pages/api/audio-intake";
 import { saveOwnerRequest } from "~/lib/owner-requests";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
@@ -44,15 +44,15 @@ function context(
 ): APIContext {
 	rateLimitGet = vi.fn(async () => null);
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/audio-intake", {
 			method: "POST",
 			headers: { origin, "content-type": "application/json" },
 			body: JSON.stringify(body),
 		}),
 		locals: {
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					MUSIC_DB: double<D1Database>({}),
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "test@example.com",

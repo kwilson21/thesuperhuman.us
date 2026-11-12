@@ -2,14 +2,13 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, expect, it } from "vitest";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-api-d1";
-import type { JsonObject } from "../helpers/tests-api-json";
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import type { JsonObject } from "../helpers/json";
 import { POST } from "~/pages/api/owner/requests/[id]";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
 
@@ -26,7 +25,7 @@ beforeEach(() => {
 });
 
 function context(owner: boolean, body: JsonObject): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id: "request-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/requests/request-1",
@@ -38,8 +37,8 @@ function context(owner: boolean, body: JsonObject): APIContext {
 		),
 		locals: {
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({ MUSIC_DB: db }),
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({ MUSIC_DB: db }),
 			}),
 		},
 	});

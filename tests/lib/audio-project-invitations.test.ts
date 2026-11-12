@@ -6,9 +6,9 @@ import {
 	deliverProjectInvitation,
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
-import { fakeFirst } from "../helpers/tests-lib-a-bindings";
+import { double, partial } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { fakeFirst } from "../helpers/d1";
 
 vi.mock("~/lib/audio-resend", () => ({
 	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
@@ -42,7 +42,7 @@ describe("project invitations", () => {
 	it("sends one sign-in notice and records success", async () => {
 		const { sql, db } = fixture();
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
@@ -74,7 +74,7 @@ describe("project invitations", () => {
 	it("retains a failed invitation for an explicit retry", async () => {
 		const { sql, db } = fixture();
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
@@ -97,7 +97,7 @@ describe("project invitations", () => {
 	it("requires checking Resend before retrying an uncertain invitation", async () => {
 		const { sql, db } = fixture();
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
@@ -138,7 +138,7 @@ describe("project invitations", () => {
 	it("does not invite a withdrawn or revoked project", async () => {
 		const { sql, db } = fixture();
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
@@ -155,7 +155,7 @@ describe("project invitations", () => {
 	it("does not send an invitation when access closes after the delivery claim", async () => {
 		const { sql, db } = fixture();
 
-		const env = double<Env>({
+		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});

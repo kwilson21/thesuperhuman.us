@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { verifyOwnerAccess } from "~/lib/owner-access";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 
 const issuer = "https://owner-test.cloudflareaccess.com";
 const audience = "owner-application-audience";
@@ -41,7 +41,7 @@ async function signedRequest(
 	});
 }
 
-const env = double<Env>({
+const env = partial<Env>({
 	OWNER_ACCESS_TEAM_DOMAIN: issuer,
 	OWNER_ACCESS_AUD: audience,
 	OWNER_EMAIL: ownerEmail,

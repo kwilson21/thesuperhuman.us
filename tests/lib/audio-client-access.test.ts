@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import { describe, expect, it } from "vitest";
 import {
 	clientProjectForSession,

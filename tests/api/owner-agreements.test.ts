@@ -4,11 +4,10 @@ import { beforeEach, expect, it } from "vitest";
 import type { APIContext } from "astro";
 import { POST } from "~/pages/api/owner/agreements";
 import { templateFields } from "~/lib/agreement-templates";
-import { double } from "../helpers/doubles";
-import { jsonBody } from "../helpers/tests-api-json";
-import { sqliteD1 } from "../helpers/tests-api-d1";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson } from "../helpers/json";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 /** The scalar JSON fields a test sends to the agreements route. */
 type AgreementBody = Record<string, string | number | boolean | undefined>;
@@ -42,7 +41,7 @@ const revised = (kind: "msa" | "sow") =>
 
 function post(body: AgreementBody) {
 	return POST(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request("https://thesuperhuman.us/api/owner/agreements", {
 				method: "POST",
 				headers: {
@@ -53,8 +52,8 @@ function post(body: AgreementBody) {
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
-					env: double<TestRuntime["env"]>({ MUSIC_DB: db }),
+				runtime: partial<TestRuntime>({
+					env: partial<TestRuntime["env"]>({ MUSIC_DB: db }),
 				}),
 			},
 		}),
@@ -92,7 +91,7 @@ it("previews without a comparison before the first publication and with a line d
 	expect((await publish("msa", synthetic("msa"), 0, "v1")).status).toBe(200);
 	const lines = synthetic("msa").split("\n");
 
-	const changed = await jsonBody<{ compare: unknown }>(
+	const changed = await readJson<{ compare: unknown }>(
 		await post({
 			action: "preview",
 			kind: "msa",
@@ -112,7 +111,7 @@ it("previews without a comparison before the first publication and with a line d
 });
 
 it("previews the submitted version label where the template names the source revision", async () => {
-	const labelled = await jsonBody<{ text: string }>(
+	const labelled = await readJson<{ text: string }>(
 		await post({
 			action: "preview",
 			kind: "msa",
@@ -124,7 +123,7 @@ it("previews the submitted version label where the template names the source rev
 
 	expect(labelled.text).toContain("msa.source_revision: v2026-12-01");
 
-	const blank = await jsonBody<{ text: string }>(
+	const blank = await readJson<{ text: string }>(
 		await post({
 			action: "preview",
 			kind: "msa",
@@ -139,7 +138,7 @@ it("previews the submitted version label where the template names the source rev
 
 it("falls back to the sample label when a typed preview label would not publish", async () => {
 	for (const versionLabel of ["[draft]", "v{{x}}"]) {
-		const preview = await jsonBody<{ ok: boolean; text: string }>(
+		const preview = await readJson<{ ok: boolean; text: string }>(
 			await post({
 				action: "preview",
 				kind: "msa",

@@ -19,21 +19,16 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 
 		await page.route("**/api/music-interest", async (route) => {
 			const payload = route.request().postDataJSON();
+			const errors = {};
+
+			if (!payload.consent)
+				errors.consent =
+					"Check the box to confirm I may email you about your selection.";
+			errors.turnstileToken = "Complete the verification and try again.";
 			await route.fulfill({
 				status: 400,
 				contentType: "application/json",
-				body: JSON.stringify({
-					ok: false,
-					errors: {
-						...(payload.consent
-							? {}
-							: {
-									consent:
-										"Check the box to confirm I may email you about your selection.",
-								}),
-						turnstileToken: "Complete the verification and try again.",
-					},
-				}),
+				body: JSON.stringify({ ok: false, errors }),
 			});
 		});
 		await page.goto(new URL("/music/old-news", targetUrl).href, {

@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { APIContext } from "astro";
 import { GET } from "~/pages/api/resume-approve";
-import { double, fakeKv } from "../helpers/doubles";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeKv } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
 
 const sampleRequest = {
 	name: "Jane Doe",
@@ -39,12 +38,12 @@ function makeContext(id: string | null, kv: ReturnType<typeof makeBinaryKv>) {
 			? "https://thesuperhuman.us/api/resume-approve"
 			: `https://thesuperhuman.us/api/resume-approve?id=${id}`;
 
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request(url, { method: "GET" }),
 		url: new URL(url),
 		locals: {
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					RESEND_API_KEY: "key",
 					CONTACT_FROM_EMAIL: "noreply@thesuperhuman.us",
 					RATE_LIMIT: kv,

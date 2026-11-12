@@ -2,8 +2,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
-import { fakeBatch } from "../helpers/tests-lib-a-bindings";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { fakeBatch } from "../helpers/d1";
 import {
 	applyStripeInvoiceEvent,
 	approveAudioPayment,

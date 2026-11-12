@@ -1,7 +1,8 @@
 import type { APIContext } from "astro";
 import { beforeEach, afterEach, expect, it, vi, type Mock } from "vitest";
-import { double } from "../helpers/doubles";
-import { jsonBody, type JsonObject } from "../helpers/tests-api-json";
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { readJson, type JsonObject } from "../helpers/json";
 import {
 	createSuggestionPass,
 	suggestionVisitorHash,
@@ -16,8 +17,6 @@ import { POST } from "~/pages/api/software/brief/suggest";
 let db: any, database: any, run: ReturnType<typeof vi.fn>;
 let cookie: string;
 const secret = "existing-turnstile-secret-for-tests";
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 type Limiter = { limit: Mock };
 
@@ -35,7 +34,7 @@ function context(
 	env: Partial<TestRuntime["env"]> = {},
 ): APIContext {
 	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; the route calls it with a model name and inputs and reads only its response field, which the fake returns.
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",
 			headers: {
@@ -46,9 +45,9 @@ function context(
 			},
 			body: JSON.stringify(body),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					AI: double<Ai>({ run: run as Ai["run"] }),
 					MUSIC_DB: database,
 					BRIEF_SUGGEST_RATE_LIMIT: limiter,
@@ -332,7 +331,7 @@ it("caps a concurrent burst before invoking AI or daily counters", async () => {
 	);
 
 	const bodies = await Promise.all(
-		responses.map((response) => jsonBody<{ suggestion: string }>(response)),
+		responses.map((response) => readJson<{ suggestion: string }>(response)),
 	);
 
 	expect(bodies.filter((body) => body.suggestion)).toHaveLength(30);

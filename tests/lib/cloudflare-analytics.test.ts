@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { loadTrafficSummary } from "~/lib/cloudflare-analytics";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -10,7 +10,7 @@ const range = {
 };
 
 it("returns a safe fallback without analytics configuration", async () => {
-	const result = await loadTrafficSummary(double<Env>({}), range);
+	const result = await loadTrafficSummary(partial<Env>({}), range);
 	expect(result).toEqual({
 		status: "unavailable",
 		dashboardUrl: "https://dash.cloudflare.com/",
@@ -34,7 +34,7 @@ it("requests only eyeball traffic for the production hostname", async () => {
 	vi.stubGlobal("fetch", fetch);
 
 	const result = await loadTrafficSummary(
-		double<Env>({
+		partial<Env>({
 			CLOUDFLARE_ANALYTICS_TOKEN: "secret",
 			CLOUDFLARE_ZONE_ID: "zone",
 		}),
@@ -59,7 +59,7 @@ it("falls back on failed or malformed analytics responses", async () => {
 	);
 	await expect(
 		loadTrafficSummary(
-			double<Env>({
+			partial<Env>({
 				CLOUDFLARE_ANALYTICS_TOKEN: "secret",
 				CLOUDFLARE_ZONE_ID: "zone",
 			}),

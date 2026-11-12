@@ -2,9 +2,9 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-api-d1";
-import { testRuntime } from "../helpers/tests-api-runtime";
+import { partial } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { testRuntime } from "../helpers/runtime";
 
 const verify = vi.hoisted(() => vi.fn());
 
@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 function context(signature = "valid"): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/stripe/webhook", {
 			method: "POST",
 			headers: {

@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
-import { double } from "../helpers/doubles";
-import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { fakeR2Bucket } from "../helpers/r2";
 import * as invoiceLib from "~/lib/software-invoices";
 import { POST as invoicePost } from "~/pages/api/owner/requests/[id]/invoices";
 import { createRequire } from "node:module";
@@ -56,12 +57,10 @@ import {
 	getSoftwareProject,
 } from "~/lib/software-projects";
 import { softwareReviewEmail, softwareHandoffEmail } from "~/lib/client-emails";
-import { sqliteD1 } from "../helpers/tests-lib-b-d1";
-import { readJson } from "../helpers/tests-lib-b-json";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { readJson } from "../helpers/json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 type TestEnv = TestRuntime["env"];
 
@@ -144,7 +143,7 @@ beforeEach(() => {
 	bucket.put.mockReset();
 	bucket.get.mockReset();
 	bucket.delete.mockReset();
-	env = double<TestEnv>({
+	env = partial<TestEnv>({
 		MUSIC_DB: db,
 		AUDIO: fakeR2Bucket(bucket),
 		AUDIO_CLIENT_PORTAL_ENABLED: "true",
@@ -192,7 +191,7 @@ async function call(
 		};
 
 	return route(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id },
 			request: new Request(
 				`https://example.com/api/owner/requests/${id}/project`,
@@ -207,7 +206,7 @@ async function call(
 			),
 			locals: {
 				owner: owner ? { email: "owner@example.com" } : undefined,
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -360,7 +359,7 @@ async function decide(
 	id = "software",
 ) {
 	return reviewPost(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id, updateId },
 			request: new Request(
 				`https://example.com/api/studio/software/${id}/reviews/${updateId}`,
@@ -374,7 +373,7 @@ async function decide(
 					body: JSON.stringify(body),
 				},
 			),
-			locals: { runtime: double<TestRuntime>({ env }) },
+			locals: { runtime: partial<TestRuntime>({ env }) },
 		}),
 	);
 }
@@ -450,14 +449,14 @@ it("snapshots selected deliverables but blocks acceptance until the full milesto
 	});
 	const token = await session();
 
-	const partial = await decide(
+	const partialDecision = await decide(
 		id,
 		{ decision: "milestone_accepted", confirm: true },
 		token,
 	);
 
-	expect(partial.status).toBe(400);
-	expect((await readJson<{ error: string }>(partial)).error).toMatch(
+	expect(partialDecision.status).toBe(400);
+	expect((await readJson<{ error: string }>(partialDecision)).error).toMatch(
 		/only part of the milestone/i,
 	);
 
@@ -1779,7 +1778,7 @@ async function visualCall(
 	} = {},
 ) {
 	return route(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "software", updateId: id },
 			request: new Request("https://example.com/visual", {
 				method: route === uploadVisual ? "PUT" : "GET",
@@ -1797,7 +1796,7 @@ async function visualCall(
 			locals: {
 				owner:
 					options.owner === false ? undefined : { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -2164,7 +2163,7 @@ it("scopes the client message route to an active own session", async () => {
 
 	const send = (id: string, cookie = token) =>
 		messagesPost(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id },
 				request: new Request(
 					"https://example.com/api/studio/software/" + id + "/messages",
@@ -2178,7 +2177,7 @@ it("scopes the client message route to an active own session", async () => {
 						body: JSON.stringify({ action: "send", body: "Hello" }),
 					},
 				),
-				locals: { runtime: double<TestRuntime>({ env }) },
+				locals: { runtime: partial<TestRuntime>({ env }) },
 			}),
 		);
 
@@ -4229,7 +4228,7 @@ it("shows client revision events as sentences while preserving stored target par
 	).toBe("Release candidate");
 
 	const messages = [
-		double<ProjectMessage>({
+		partial<ProjectMessage>({
 			body,
 			decision: "changes_requested",
 			update_id: "v2",
@@ -4245,9 +4244,9 @@ it("shows client revision events as sentences while preserving stored target par
 		},
 	];
 
-	const terms = double<ProjectTerms>({
+	const terms = partial<ProjectTerms>({
 		milestones: [
-			double<ProjectTerms["milestones"][number]>({
+			partial<ProjectTerms["milestones"][number]>({
 				acceptance: ["Add a client"],
 				deliverables: ["Status view", "Sample import"],
 			}),

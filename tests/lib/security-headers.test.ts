@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { securityHeaders, withSecurityHeaders } from "~/lib/security-headers";
-import { double } from "../helpers/doubles";
+import { double, partial } from "../helpers/doubles";
 
 // Reads public/_headers the way wrangler does: trimmed, blank and # lines skipped, a path line starts a
 // rule (the last block for a path wins), and Name: value lines add headers (repeats joined with ", ").
@@ -107,7 +107,7 @@ describe("security headers", () => {
 	});
 
 	it("rethrows errors other than the immutable-headers TypeError", () => {
-		const response = double<Response>({
+		const response = partial<Response>({
 			headers: double<Headers>({
 				has() {
 					throw new RangeError("boom");

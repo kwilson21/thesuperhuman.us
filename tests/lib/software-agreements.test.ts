@@ -42,11 +42,10 @@ import {
 } from "~/lib/software-offers";
 import { projectToday } from "~/lib/audio-project-updates";
 import type { APIContext } from "astro";
-import { double, fakeD1 } from "../helpers/doubles";
-import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
-import { sqliteD1 } from "../helpers/tests-lib-b-d1";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial, fakeD1 } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { fakeR2Bucket } from "../helpers/r2";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 type TestEnv = TestRuntime["env"];
 
@@ -276,7 +275,7 @@ beforeEach(async () => {
 		}),
 	});
 
-	env = double<TestEnv>({
+	env = partial<TestEnv>({
 		MUSIC_DB: db,
 		AUDIO: bucket,
 		RESEND_API_KEY: "fake",
@@ -403,7 +402,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 		);
 
 		const response = await PUT(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				url: new URL(
 					"https://example.com/api/owner/requests/r/agreement-attachments?filename=Sample.pdf&version=v1&date=2026-10-01",
@@ -421,7 +420,7 @@ it("removes a just-uploaded PDF when its database row cannot be saved", async ()
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -1760,7 +1759,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 			};
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/project",
@@ -1775,7 +1774,7 @@ it.each(["client-signed", "pdf-failed", "copies-pending"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({
+						runtime: partial<TestRuntime>({
 							env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 						}),
 					},
@@ -1823,7 +1822,7 @@ it("abandons the complete pending signing action atomically and retains the sign
 
 	const call = (documents: { id: string; hash: string }[]) =>
 		POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/agreement",
@@ -1843,7 +1842,7 @@ it("abandons the complete pending signing action atomically and retains the sign
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -1915,7 +1914,7 @@ it.each(["executed", "abandoned"])(
 
 		const end = (ended_on: string) =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -1935,7 +1934,7 @@ it.each(["executed", "abandoned"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -2453,7 +2452,7 @@ it.each([true, false])(
 		const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/project",
@@ -2482,7 +2481,7 @@ it.each([true, false])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({
+					runtime: partial<TestRuntime>({
 						env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 					}),
 				},
@@ -2541,7 +2540,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request("https://example.com/api/owner/requests/r/project", {
 				method: "POST",
@@ -2567,7 +2566,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 				}),
 			},
@@ -2611,7 +2610,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 		expectedUpdatedAt: string,
 	) =>
 		POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -2631,7 +2630,7 @@ it("preserves omitted draft agreement details and reuse, and permits explicit cl
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -2822,7 +2821,7 @@ it.each(["draft-first", "retention-first"])(
 
 		const save = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/software",
@@ -2842,7 +2841,7 @@ it.each(["draft-first", "retention-first"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -3473,9 +3472,9 @@ it("returns field-linked validation messages without raw schema output", async (
 	const { POST } = await import("~/pages/api/offer/[token]/review");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { token },
-			locals: { runtime: double<TestRuntime>({ env }) },
+			locals: { runtime: partial<TestRuntime>({ env }) },
 			request: new Request(request().url, {
 				method: "POST",
 				headers: {
@@ -3566,7 +3565,7 @@ it("prevents external start if website signing commits after the initial read", 
 	const { POST } = await import("~/pages/api/owner/requests/[id]/project");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request("https://example.com/api/owner/requests/r/project", {
 				method: "POST",
@@ -3592,7 +3591,7 @@ it("prevents external start if website signing commits after the initial read", 
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AUDIO_CLIENT_PORTAL_ENABLED: "true" },
 				}),
 			},
@@ -3651,9 +3650,9 @@ it.each([
 					: await import("~/pages/api/offer/[token]/draft");
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { token },
-					locals: { runtime: double<TestRuntime>({ env }) },
+					locals: { runtime: partial<TestRuntime>({ env }) },
 					request: new Request(request().url, {
 						method: "POST",
 						headers: {
@@ -3901,8 +3900,8 @@ it("verifies the attachment bytes against the offer hash before client download"
 
 	const call = () =>
 		GET(
-			double<APIContext>({
-				locals: { runtime: double<TestRuntime>({ env }) },
+			partial<APIContext>({
+				locals: { runtime: partial<TestRuntime>({ env }) },
 				request: request(),
 				params: { id },
 			}),
@@ -3994,7 +3993,7 @@ it.each(["revoke", "replace"])(
 				: { action: "send", version: 2, expectedUpdatedAt: "now" };
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -4009,7 +4008,7 @@ it.each(["revoke", "replace"])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -4034,7 +4033,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 
 		const call = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -4054,7 +4053,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -4104,7 +4103,7 @@ it.each(["draft", "sent"])(
 
 		const call = () =>
 			POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -4124,7 +4123,7 @@ it.each(["draft", "sent"])(
 					),
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 				}),
 			);
@@ -4216,7 +4215,7 @@ it.each([false, true])(
 			);
 
 		const response = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				request: new Request(
 					"https://example.com/api/owner/requests/r/software",
@@ -4237,7 +4236,7 @@ it.each([false, true])(
 				),
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 			}),
 		);
@@ -4260,7 +4259,7 @@ it("saves a valid empty manifest after more than five cumulative attachment remo
 	const { POST } = await import("~/pages/api/owner/requests/[id]/software");
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request(
 				"https://example.com/api/owner/requests/r/software",
@@ -4284,7 +4283,7 @@ it("saves a valid empty manifest after more than five cumulative attachment remo
 			),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -4306,7 +4305,7 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 	};
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -4326,7 +4325,7 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 			),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 		}),
 	);
@@ -4915,7 +4914,7 @@ it("redirects a successful native retention apply to the owner agreements page",
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request("https://example.com/api/owner/agreements", {
 				method: "POST",
 				headers: {
@@ -4930,7 +4929,7 @@ it("redirects a successful native retention apply to the owner agreements page",
 			}),
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({
+				runtime: partial<TestRuntime>({
 					env: { ...env, AGREEMENT_RETENTION_BINDING_ID: "test-storage" },
 				}),
 			},
@@ -5083,11 +5082,11 @@ it("retries an executed copy instead of the failed waiting receipt", async () =>
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -5138,11 +5137,11 @@ it("retries genuinely failed current signing notices", async () => {
 	);
 
 	const response = await POST(
-		double<APIContext>({
+		partial<APIContext>({
 			params: { id: "r" },
 			locals: {
 				owner: { email: "owner@example.com" },
-				runtime: double<TestRuntime>({ env }),
+				runtime: partial<TestRuntime>({ env }),
 			},
 			request: new Request(
 				"https://example.com/api/owner/requests/r/agreement",
@@ -5218,11 +5217,11 @@ it.each(["executed", "abandoned"])(
 			);
 
 			const response = await POST(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "r" },
 					locals: {
 						owner: { email: "owner@example.com" },
-						runtime: double<TestRuntime>({ env }),
+						runtime: partial<TestRuntime>({ env }),
 					},
 					request: new Request(
 						"https://example.com/api/owner/requests/r/agreement",
@@ -5270,11 +5269,11 @@ it.each(["executed", "abandoned"])(
 		const { POST } = await import("~/pages/api/owner/requests/[id]/agreement");
 
 		const retry = await POST(
-			double<APIContext>({
+			partial<APIContext>({
 				params: { id: "r" },
 				locals: {
 					owner: { email: "owner@example.com" },
-					runtime: double<TestRuntime>({ env }),
+					runtime: partial<TestRuntime>({ env }),
 				},
 				request: new Request(
 					"https://example.com/api/owner/requests/r/agreement",

@@ -4,8 +4,8 @@ import { describe, it, expect } from "vitest";
 import { D1PublicationJournal } from "~/lib/publication/journal";
 import { readProject } from "~/lib/publication/read";
 import type { Publication } from "~/lib/publication/contract";
-import { double } from "../helpers/doubles";
-import { fakeBatch } from "../helpers/tests-lib-a-bindings";
+import { double, partial } from "../helpers/doubles";
+import { boundStatement, fakeBatch, preparedStatement } from "../helpers/d1";
 
 // Native loading avoids older Vite versions treating node:sqlite as a package.
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
@@ -47,38 +47,17 @@ function fixture() {
 	);
 	let fail = false;
 
-	const pending = new WeakMap<
-		D1PreparedStatement,
-		{ query: string; args: unknown[] }
-	>();
-
-	const statement = (
-		query: string,
-		args: unknown[] = [],
-	): D1PreparedStatement => {
-		const prepared = double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-		});
-
-		pending.set(prepared, { query, args });
-
-		return prepared;
-	};
-
 	const db = double<D1Database>({
-		prepare: (query: string) => statement(query),
+		prepare: (query: string) => preparedStatement(query),
 		batch: fakeBatch((statements) => {
 			sql.exec("BEGIN");
 
 			try {
 				const results = statements.map((item, i) => {
 					if (fail && i === 1) throw new Error("interrupted");
-					const info = pending.get(item);
+					const info = boundStatement(item);
 
-					if (!info)
-						throw new Error("Expected a statement prepared by this fake.");
-
-					return double<D1Result>({
+					return partial<D1Result>({
 						results: sql.prepare(info.query).all(numbered(info.args)),
 					});
 				});

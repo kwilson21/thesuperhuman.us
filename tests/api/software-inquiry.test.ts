@@ -19,14 +19,14 @@ import {
 import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
 import { expectSource } from "../helpers/source-text";
 import type { OwnerRequest } from "~/lib/owner-model";
-import { double, fakeD1, fakeKv } from "../helpers/doubles";
-import { boundQuery, sqliteD1 } from "../helpers/tests-api-d1";
-import { jsonBody } from "../helpers/tests-api-json";
+import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { boundQuery } from "../helpers/d1";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import { readJson } from "../helpers/json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const id = "00000000-0000-4000-8000-000000000001";
-
-type TestRuntime = APIContext["locals"]["runtime"];
 
 const base = {
 	path: "workflow",
@@ -80,7 +80,7 @@ function context(
 		rate?: KVNamespace | null;
 	} = {},
 ): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/software-inquiry", {
 			method: "POST",
 			headers: {
@@ -89,9 +89,9 @@ function context(
 			},
 			body: isText(input) ? input : JSON.stringify(input),
 		}),
-		locals: double<APIContext["locals"]>({
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
 					MUSIC_DB: options.db === undefined ? db : (options.db ?? undefined),
 					TURNSTILE_SECRET_KEY:
 						options.token === undefined ? "test" : (options.token ?? undefined),
@@ -130,7 +130,7 @@ beforeEach(() => {
 it("stores one verbatim software brief, audit, and no audio project, then returns a saved receipt", async () => {
 	const response = await POST(context());
 	expect(response.status).toBe(200);
-	expect((await jsonBody<{ brief: unknown }>(response)).brief).toMatchObject({
+	expect((await readJson<{ brief: unknown }>(response)).brief).toMatchObject({
 		today: "First line\nSecond line",
 		email: "alex@example.com",
 	});
@@ -180,7 +180,7 @@ it("stores and returns only the selected idea questions, including the optional 
 	const response = await POST(context(idea));
 	expect(response.status).toBe(200);
 
-	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
+	const brief = (await readJson<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
@@ -305,7 +305,7 @@ it("orders workflow questions in the saved brief", () => {
 	if (parsed.ok) {
 		const request = softwareRequest(parsed.value);
 		expect(
-			Object.keys(softwareBrief(double<OwnerRequest>(request))).slice(0, 4),
+			Object.keys(softwareBrief(partial<OwnerRequest>(request))).slice(0, 4),
 		).toEqual(["path", "today", "audience", "firstResult"]);
 	}
 });
@@ -314,13 +314,13 @@ it("deduplicates after rate limit, rejects another email without leaking the bri
 	const first = await POST(context({ ...base, email: "alex@example.com" }));
 	expect(first.status).toBe(200);
 
-	const firstBrief = (await jsonBody<{ brief: Record<string, string> }>(first))
+	const firstBrief = (await readJson<{ brief: Record<string, string> }>(first))
 		.brief;
 
 	const duplicate = await POST(context());
 	expect(duplicate.status).toBe(200);
 	expect(
-		(await jsonBody<{ brief: Record<string, string> }>(duplicate)).brief,
+		(await readJson<{ brief: Record<string, string> }>(duplicate)).brief,
 	).toEqual(firstBrief);
 	const conflict = await POST(context({ ...base, email: "other@example.com" }));
 	expect(conflict.status).toBe(409);
@@ -371,7 +371,7 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 	const response = await POST(context(base, { db: racing }));
 	expect(response.status).toBe(200);
 	expect(
-		(await jsonBody<{ brief: Record<string, string> }>(response)).brief.today,
+		(await readJson<{ brief: Record<string, string> }>(response)).brief.today,
 	).toBe("Stored answer");
 	expect(
 		vi
@@ -390,7 +390,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
-	expect((await jsonBody<{ error: string }>(response)).error).toContain(
+	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
 	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
@@ -533,7 +533,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(503);
-	expect((await jsonBody<{ error: string }>(response)).error).toContain(
+	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
 	expect(
@@ -655,7 +655,7 @@ it("uses plain exact messages for choices, line breaks, controls, and lone surro
 });
 
 it("renders saved script text and multiline answers verbatim for safe Astro text output", () => {
-	const request = double<OwnerRequest>({
+	const request = partial<OwnerRequest>({
 		name: "Alex",
 		email: "alex@example.com",
 		details: { ...base, today: "<script>alert(1)</script>\nSecond line" },
@@ -670,7 +670,7 @@ it("omits approver role from the API receipt when approver is self", async () =>
 	const response = await POST(context());
 	expect(response.status).toBe(200);
 	expect(
-		(await jsonBody<{ brief: Record<string, string> }>(response)).brief,
+		(await readJson<{ brief: Record<string, string> }>(response)).brief,
 	).not.toHaveProperty("approverRole");
 });
 
@@ -685,7 +685,7 @@ it("treats an oversized saved detail as a field error without an urgent alert", 
 	const response = await POST(context(base, { db: oversized }));
 	expect(response.status).toBe(400);
 	expect(
-		(await jsonBody<{ errors: Record<string, string> }>(response)).errors,
+		(await readJson<{ errors: Record<string, string> }>(response)).errors,
 	).toEqual({ _form: "Keep the brief shorter and try again." });
 	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
 	expect(
@@ -879,7 +879,7 @@ it("accepts and stores a short new brief without removed or optional answers", a
 
 	expect(response.status).toBe(200);
 
-	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
+	const brief = (await readJson<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(brief).not.toHaveProperty("audience");
@@ -1174,7 +1174,7 @@ it("stores a website brief under its own path and questions, and names it in the
 	const response = await POST(context(websiteInput));
 	expect(response.status).toBe(200);
 
-	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
+	const brief = (await readJson<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 5)).toEqual([
@@ -1219,7 +1219,7 @@ it("stores a web app brief under its own path and questions", async () => {
 	const response = await POST(context(app));
 	expect(response.status).toBe(200);
 
-	const brief = (await jsonBody<{ brief: Record<string, string> }>(response))
+	const brief = (await readJson<{ brief: Record<string, string> }>(response))
 		.brief;
 
 	expect(Object.keys(brief).slice(0, 3)).toEqual([
@@ -1542,7 +1542,7 @@ it("labels stored briefs by the path they were sent with", () => {
 	};
 
 	const idea = softwareBrief(
-		double<OwnerRequest>({
+		partial<OwnerRequest>({
 			...shared,
 			details: {
 				...shared,
@@ -1565,7 +1565,7 @@ it("labels stored briefs by the path they were sent with", () => {
 	expect(idea).not.toHaveProperty("today");
 
 	const workflow = softwareBrief(
-		double<OwnerRequest>({
+		partial<OwnerRequest>({
 			...shared,
 			details: {
 				...shared,
@@ -1586,7 +1586,7 @@ it("labels stored briefs by the path they were sent with", () => {
 	]);
 
 	const fallback = softwareBrief(
-		double<OwnerRequest>({
+		partial<OwnerRequest>({
 			...shared,
 			details: { ...shared, path: "toString", today: "Fallback" },
 		}),

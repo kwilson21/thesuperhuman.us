@@ -4,8 +4,8 @@ import { expect, it } from "vitest";
 import { listProjectUpdates } from "~/lib/audio-project-updates";
 import { privateProjectObjectKey } from "~/lib/audio-project-files";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
+import { double, partial } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -53,7 +53,7 @@ function fixture() {
 			);
 
 	const bucket = double<R2Bucket>({
-		head: async () => double<R2Object>({ size: 5 }),
+		head: async () => partial<R2Object>({ size: 5 }),
 	});
 
 	return { sql, db, addFile, bucket };

@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { double } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn() }));
 
@@ -26,7 +26,7 @@ it("measures each aligned playback window for both waveform and loudness", async
 			}),
 		);
 	vi.mocked(spawnSync).mockImplementation((_command, args) =>
-		double<ReturnType<typeof spawnSync>>({
+		partial<ReturnType<typeof spawnSync>>({
 			status: 0,
 			stdout: Buffer.alloc(640),
 			stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),

@@ -5,9 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { getPlatformProxy } from "wrangler";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-lib-a-sqlite";
-import {} from "../helpers/tests-lib-a-bindings";
+import { double, partial } from "../helpers/doubles";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	abortProjectUpload,
 	beginProjectUpload,
@@ -79,7 +78,7 @@ function fixture() {
 					const object = { size: uploadPartSize + 3 };
 					objects.set(key, object);
 
-					return double<R2Object>(object);
+					return partial<R2Object>(object);
 				},
 				abort: async () => {
 					uploads.delete(uploadId);
@@ -89,7 +88,7 @@ function fixture() {
 		head: async (key: string) => {
 			const object = objects.get(key);
 
-			return object ? double<R2Object>(object) : null;
+			return object ? partial<R2Object>(object) : null;
 		},
 		delete: async (key: string) => {
 			deleted.push(key);

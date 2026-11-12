@@ -1,9 +1,9 @@
 import type { APIContext } from "astro";
 import { it, expect, vi } from "vitest";
 import { publicationOAuthRoute } from "~/lib/publication/oauth";
-import { double, fakeKv } from "../helpers/doubles";
-import { jsonBody } from "../helpers/tests-api-json";
-import type { TestRuntime } from "../helpers/tests-api-runtime";
+import { double, partial, fakeKv } from "../helpers/doubles";
+import { readJson } from "../helpers/json";
+import type { TestRuntime } from "../helpers/runtime";
 
 /** A KV read names its value type either as a string or as an options object with a type member. */
 function isJsonOptions(
@@ -30,9 +30,8 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 		delete: async (key: string) => {
 			values.delete(key);
 		},
+		list: async () => ({ keys: [], list_complete: true }),
 	});
-
-	Object.assign(kv, { list: async () => ({ keys: [], list_complete: true }) });
 
 	const env: Partial<TestRuntime["env"]> = {
 		OAUTH_KV: kv,
@@ -46,11 +45,11 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 
 	const call = (path: string, init?: RequestInit) =>
 		publicationOAuthRoute(
-			double<APIContext>({
+			partial<APIContext>({
 				request: new Request("https://thesuperhuman.us" + path, init),
 				locals: {
-					runtime: double<TestRuntime>({
-						env: double<TestRuntime["env"]>(env),
+					runtime: partial<TestRuntime>({
+						env: partial<TestRuntime["env"]>(env),
 						ctx: double<ExecutionContext>({ waitUntil() {} }),
 					}),
 				},
@@ -62,12 +61,12 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 	);
 
 	expect(meta.status).toBe(200);
-	expect((await jsonBody<{ resource: string }>(meta)).resource).toBe(
+	expect((await readJson<{ resource: string }>(meta)).resource).toBe(
 		"https://thesuperhuman.us/api/publication/mcp",
 	);
 	const server = await call("/.well-known/oauth-authorization-server");
 	expect(
-		(await jsonBody<{ code_challenge_methods_supported: string[] }>(server))
+		(await readJson<{ code_challenge_methods_supported: string[] }>(server))
 			.code_challenge_methods_supported,
 	).toContain("S256");
 
@@ -83,7 +82,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 
 	expect(registration.status).toBe(201);
 
-	const clientId = (await jsonBody<{ client_id: string }>(registration))
+	const clientId = (await readJson<{ client_id: string }>(registration))
 		.client_id;
 
 	expect(clientId).toBeTruthy();
@@ -180,7 +179,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 	});
 
 	expect(tokens.status).toBe(200);
-	const token = await jsonBody<{ refresh_token: string }>(tokens);
+	const token = await readJson<{ refresh_token: string }>(tokens);
 
 	const refresh = await call("/api/publication/token", {
 		method: "POST",
@@ -195,7 +194,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 	});
 
 	expect(refresh.status).toBe(200);
-	const narrowed = await jsonBody<{ access_token: string }>(refresh);
+	const narrowed = await readJson<{ access_token: string }>(refresh);
 
 	const denied = await call("/api/publication/mcp", {
 		method: "POST",
@@ -217,7 +216,7 @@ it("serves discovery, registers clients, and rejects missing/invalid bearer toke
 
 	expect(denied.status).toBe(200);
 	expect(
-		(await jsonBody<{ result: { content: { text: string }[] } }>(denied)).result
+		(await readJson<{ result: { content: { text: string }[] } }>(denied)).result
 			.content[0].text,
 	).toContain("forbidden");
 });

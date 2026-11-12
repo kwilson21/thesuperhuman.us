@@ -2,11 +2,10 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, expect, it, vi } from "vitest";
-import { double } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/tests-api-d1";
-import type { JsonObject } from "../helpers/tests-api-json";
-
-type TestRuntime = APIContext["locals"]["runtime"];
+import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
+import type { JsonObject } from "../helpers/json";
 
 const invoiceMocks = vi.hoisted(() => ({
 	booking: vi.fn(),
@@ -66,7 +65,7 @@ function context(
 	owner = true,
 	env: Partial<Record<string, string>> = {},
 ): APIContext {
-	return double<APIContext>({
+	return partial<APIContext>({
 		params: { id: "request-1" },
 		request: new Request(
 			"https://thesuperhuman.us/api/owner/requests/request-1/payment",
@@ -76,10 +75,10 @@ function context(
 				body: JSON.stringify(body),
 			},
 		),
-		locals: double<APIContext["locals"]>({
+		locals: partial<APIContext["locals"]>({
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: double<TestRuntime>({
-				env: double<TestRuntime["env"]>({ MUSIC_DB: db, ...env }),
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({ MUSIC_DB: db, ...env }),
 			}),
 		}),
 	});

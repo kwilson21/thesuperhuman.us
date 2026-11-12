@@ -1,8 +1,8 @@
 import type { APIContext } from "astro";
 import { expect, it } from "vitest";
 import { ALL } from "~/pages/api/mcp-probe";
-import { double } from "../helpers/doubles";
-import { jsonBody, type JsonValue } from "../helpers/tests-api-json";
+import { partial } from "../helpers/doubles";
+import { readJson, type JsonValue } from "../helpers/json";
 
 /** The JSON-RPC reply fields these tests read. A reply without one fails the expect() that reads it. */
 type RpcReply = {
@@ -16,7 +16,7 @@ type RpcReply = {
 
 async function rpc(method: string, params: JsonValue = {}) {
 	const response = await ALL(
-		double<APIContext>({
+		partial<APIContext>({
 			request: new Request("https://thesuperhuman.us/api/mcp-probe", {
 				method: "POST",
 				headers: {
@@ -30,7 +30,7 @@ async function rpc(method: string, params: JsonValue = {}) {
 
 	expect(response.headers.get("cache-control")).toBe("no-store");
 
-	return jsonBody<RpcReply>(response);
+	return readJson<RpcReply>(response);
 }
 
 it("negotiates MCP and lists only the read-only probe", async () => {

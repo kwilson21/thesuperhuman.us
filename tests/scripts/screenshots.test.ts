@@ -31,8 +31,9 @@ import { createRequire } from "node:module";
 import { prepareWithDiagnostics } from "../../scripts/screenshots/prepare.mjs";
 import { POST as sendOffer } from "../../src/pages/api/owner/requests/[id]/software";
 import { contractorSchema } from "../../src/lib/agreement-fields";
-import { double } from "../helpers/doubles";
-import { fakeLocals, sqliteD1 } from "../helpers/tests-other-fakes";
+import { partial } from "../helpers/doubles";
+import { fakeLocals } from "../helpers/runtime";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	BARE_LINK_LANDINGS,
 	expectedResourceError,
@@ -161,7 +162,7 @@ it("seeds a completed send so missing details reach the real agreement validatio
 
 		const send = () =>
 			sendOffer(
-				double<APIContext>({
+				partial<APIContext>({
 					params: { id: "screenshot-signing" },
 					request: new Request(
 						"https://example.com/api/owner/requests/screenshot-signing/software",
