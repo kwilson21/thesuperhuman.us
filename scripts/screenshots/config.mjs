@@ -554,14 +554,17 @@ export function previewWrangler(config) {
 		compatibility_date: config.compatibility_date,
 		compatibility_flags: config.compatibility_flags ?? [],
 		vars: { ...config.vars, ...PREVIEW_OVERRIDES },
-		d1_databases: (config.d1_databases ?? []).map((database, index) => ({
-			binding: database.binding,
-			database_name: `screenshots-${database.binding.toLowerCase()}`,
-			database_id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
-			...(database.migrations_dir
-				? { migrations_dir: database.migrations_dir }
-				: {}),
-		})),
+		d1_databases: (config.d1_databases ?? []).map((database, index) => {
+			const d1 = {
+				binding: database.binding,
+				database_name: `screenshots-${database.binding.toLowerCase()}`,
+				database_id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
+			};
+
+			if (database.migrations_dir) d1.migrations_dir = database.migrations_dir;
+
+			return d1;
+		}),
 		kv_namespaces: (config.kv_namespaces ?? []).map(({ binding }) => ({
 			binding,
 			id: `screenshots-${binding.toLowerCase()}`,

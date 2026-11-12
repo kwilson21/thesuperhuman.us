@@ -1,10 +1,9 @@
 import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
-import type { CollectionEntry } from "astro:content";
 
 export const prerender = false;
 
-type RangeShape =
+type RangeRequest =
 	| { kind: "none" }
 	| { kind: "malformed" }
 	| { kind: "bytes"; start: number; endRaw: number | null };
@@ -15,7 +14,7 @@ type RangeParse =
 	| { kind: "unsatisfiable" }
 	| { kind: "ok"; offset: number; length: number };
 
-function parseRangeShape(header: string | null): RangeShape {
+function parseRangeRequest(header: string | null): RangeRequest {
 	if (!header) return { kind: "none" };
 	const match = /^bytes=(\d+)-(\d*)$/.exec(header);
 
@@ -29,9 +28,9 @@ function parseRangeShape(header: string | null): RangeShape {
 	return { kind: "bytes", start, endRaw };
 }
 
-function resolveRange(shape: RangeShape, size: number): RangeParse {
-	if (shape.kind !== "bytes") return shape as RangeParse;
-	const { start, endRaw } = shape;
+function resolveRange(request: RangeRequest, size: number): RangeParse {
+	if (request.kind !== "bytes") return request;
+	const { start, endRaw } = request;
 	const end = endRaw !== null ? endRaw : size - 1;
 
 	if (start > end || end >= size) return { kind: "unsatisfiable" };
@@ -42,30 +41,28 @@ function resolveRange(shape: RangeShape, size: number): RangeParse {
 export const GET: APIRoute = async (context) => {
 	const slug = context.params.slug;
 
-	if (typeof slug !== "string" || !/^[a-z0-9-]+$/.test(slug)) {
+	if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
 		return new Response("not found", { status: 404 });
 	}
 
 	const collection = await getCollection("audio-tracks");
 
-	const entry = collection.find((e) => e.id === slug) as
-		| CollectionEntry<"audio-tracks">
-		| undefined;
+	const entry = collection.find((e) => e.id === slug);
 
 	if (!entry) return new Response("not found", { status: 404 });
 
-	const env = (context.locals as any).runtime.env as Env;
+	const env = context.locals.runtime.env;
 	const key = entry.data.file;
 
 	if (key.startsWith("studio/") || key.startsWith("software/"))
 		return new Response("not found", { status: 404 });
 
 	const rangeHeader = context.request.headers.get("range");
-	const shape = parseRangeShape(rangeHeader);
+	const rangeRequest = parseRangeRequest(rangeHeader);
 
 	// For no Range or malformed Range, fetch the full file in a single R2 op.
 	// The object's .size property gives us the content-length without a prior head().
-	if (shape.kind === "none" || shape.kind === "malformed") {
+	if (rangeRequest.kind === "none" || rangeRequest.kind === "malformed") {
 		const full = await env.AUDIO.get(key);
 
 		if (!full) return new Response("not found", { status: 404 });
@@ -88,7 +85,7 @@ export const GET: APIRoute = async (context) => {
 	if (!head) return new Response("not found", { status: 404 });
 	const size = head.size;
 
-	const range = resolveRange(shape, size);
+	const range = resolveRange(rangeRequest, size);
 
 	if (range.kind === "unsatisfiable") {
 		return new Response(null, {

@@ -24,11 +24,15 @@ const available = Boolean(
 const requested = Astro.url.searchParams.get("path");
 
 // Old links keep working: ?path=idea opens Web app.
+function isSoftwarePath(value: string): value is SoftwarePath {
+	return Object.hasOwn(softwarePaths, value);
+}
+
 const selected =
 	requested === "idea"
 		? "webapp"
-		: requested && Object.hasOwn(softwarePaths, requested)
-			? (requested as SoftwarePath)
+		: requested && isSoftwarePath(requested)
+			? requested
 			: null;
 
 const count = selected === "website" ? 8 : 7;

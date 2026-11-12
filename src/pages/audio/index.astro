@@ -18,7 +18,7 @@ const entries = await getCollection("audio-tracks");
 
 const tracks: AudioTrack[] = entries.map((e) => ({
 	slug: e.id,
-	...(e.data as Omit<AudioTrack, "slug">),
+	...e.data,
 }));
 
 const groups = groupTracksByService(tracks);

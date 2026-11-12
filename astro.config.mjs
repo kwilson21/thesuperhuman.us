@@ -8,6 +8,12 @@ import {
 	shouldIncludeSitemapPage,
 } from "./scripts/sitemap-pages.mjs";
 
+/** @type {{ enabled: boolean; configPath?: string }} */
+const platformProxy = { enabled: true };
+
+if (process.env.MUSIC_PREVIEW_CONFIG)
+	platformProxy.configPath = process.env.MUSIC_PREVIEW_CONFIG;
+
 export default defineConfig({
 	site: "https://thesuperhuman.us",
 	devToolbar: { enabled: false },
@@ -16,12 +22,7 @@ export default defineConfig({
 	security: { checkOrigin: false },
 	adapter: cloudflare({
 		imageService: "compile",
-		platformProxy: {
-			enabled: true,
-			...(process.env.MUSIC_PREVIEW_CONFIG
-				? { configPath: process.env.MUSIC_PREVIEW_CONFIG }
-				: {}),
-		},
+		platformProxy,
 	}),
 	integrations: [
 		sitemap({

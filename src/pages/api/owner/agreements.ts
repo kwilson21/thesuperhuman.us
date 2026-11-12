@@ -119,6 +119,7 @@ const post: APIRoute = async ({ request, locals }) => {
 						env.AGREEMENT_RETENTION_BINDING_ID,
 					),
 				});
+			// SAFETY: c.manifest is unparsed input, but applyAgreementRetention throws before any delete unless the manifest's version, binding, age and array sizes pass and it matches a fresh scan.
 			await applyAgreementRetention(
 				db,
 				env.AUDIO,

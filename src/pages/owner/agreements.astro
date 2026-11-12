@@ -17,7 +17,7 @@ const db = Astro.locals.runtime.env.MUSIC_DB!;
 
 const enabled = await signingEnabled(db),
 	templates = await Promise.all(
-		["msa", "sow"].map((kind) => currentTemplate(db, kind as "msa" | "sow")),
+		(["msa", "sow"] as const).map((kind) => currentTemplate(db, kind)),
 	);
 
 const config = await db

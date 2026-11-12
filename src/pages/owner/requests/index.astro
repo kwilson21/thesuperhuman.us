@@ -16,16 +16,23 @@ const db = Astro.locals.runtime.env.MUSIC_DB;
 if (!db)
 	return new Response("Owner reporting is unavailable.", { status: 503 });
 
-const kind = ownerRequestKinds.includes(
-	Astro.url.searchParams.get("kind") as OwnerRequestKind,
-)
-	? (Astro.url.searchParams.get("kind") as OwnerRequestKind)
-	: undefined;
+function isOwnerRequestKind(value: string | null): value is OwnerRequestKind {
+	return ownerRequestKinds.some((kind) => kind === value);
+}
 
-const status = ownerRequestStatuses.includes(
-	Astro.url.searchParams.get("status") as OwnerRequestStatus,
-)
-	? (Astro.url.searchParams.get("status") as OwnerRequestStatus)
+function isOwnerRequestStatus(
+	value: string | null,
+): value is OwnerRequestStatus {
+	return ownerRequestStatuses.some((status) => status === value);
+}
+
+const requestedKind = Astro.url.searchParams.get("kind");
+const kind = isOwnerRequestKind(requestedKind) ? requestedKind : undefined;
+
+const requestedStatus = Astro.url.searchParams.get("status");
+
+const status = isOwnerRequestStatus(requestedStatus)
+	? requestedStatus
 	: undefined;
 
 const requests = await listOwnerRequests(db, { kind, status });

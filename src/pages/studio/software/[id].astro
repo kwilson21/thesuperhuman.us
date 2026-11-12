@@ -270,6 +270,7 @@ const agreementRecord = project
 			>()
 	: null;
 
+// SAFETY: values_json is stored only as JSON.stringify of the agreementValues(...) result (src/lib/software-agreements.ts), so it parses to that type.
 const agreementSnapshot = agreementRecord?.id
 	? (JSON.parse(agreementRecord.values_json) as ReturnType<
 			typeof agreementValues

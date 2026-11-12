@@ -46,8 +46,13 @@ export const GET: APIRoute = async ({ params, locals }) => {
 		: new Response(null, { status: 404, headers });
 };
 
+/** Whether a Content-Type header is one of the image types a software visual may use. */
+function isVisualType(type: string): type is keyof typeof softwareVisualTypes {
+	return Object.hasOwn(softwareVisualTypes, type);
+}
+
 export const PUT: APIRoute = async ({ params, request, locals }) => {
-	const json = (value: unknown, status = 200) =>
+	const json = <T>(value: T, status = 200) =>
 		Response.json(value, { status, headers });
 
 	if (!locals.owner) return json({ ok: false }, 403);
@@ -66,7 +71,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 		return json({ ok: false }, 403);
 
 	const type = request.headers.get("content-type") ?? "",
-		ext = softwareVisualTypes[type as keyof typeof softwareVisualTypes];
+		ext = isVisualType(type) ? softwareVisualTypes[type] : undefined;
 
 	if (!ext)
 		return json({ ok: false, error: "Choose a PNG, JPEG or WebP image." }, 415);

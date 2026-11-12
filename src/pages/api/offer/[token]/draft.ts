@@ -37,6 +37,7 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
 			},
 			401,
 		);
+	// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to draftSchema.safeParse, so neither is used unchecked.
 	const input = body as { csrf_nonce?: unknown; values?: unknown };
 
 	if (input.csrf_nonce !== session.csrf_nonce)

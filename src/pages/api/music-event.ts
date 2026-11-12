@@ -11,8 +11,13 @@ import { checkRateLimit } from "~/lib/rate-limit";
 
 export const prerender = false;
 
-function locationPart(value: unknown) {
-	return typeof value === "string" &&
+/** Cloudflare fills each cf location field with a string or leaves it undefined. */
+function isLocationText(value: string | undefined): value is string {
+	return typeof value === "string";
+}
+
+function locationPart(value: string | undefined) {
+	return isLocationText(value) &&
 		value.length <= 80 &&
 		!/[\u0000-\u001f]/.test(value)
 		? value
@@ -62,6 +67,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			return Response.json({ ok: false }, { status: 429 });
 		const tag = await resolveCampaignTag(env.MUSIC_DB, input);
 
+		// SAFETY: the Workers runtime sets cf on every incoming request, and the Request type here omits it; the fields read below are optional and read with ?.
 		const cf = (
 			request as Request & {
 				cf?: {

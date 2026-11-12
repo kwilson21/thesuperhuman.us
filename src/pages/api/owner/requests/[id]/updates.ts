@@ -25,8 +25,13 @@ import {
 
 export const prerender = false;
 
+/** A delivered deliverable is either an agreed milestone index or a deliverable title. */
+function isDeliverableIndex(item: number | string): item is number {
+	return typeof item === "number";
+}
+
 export const POST: APIRoute = async ({ params, request, locals }) => {
-	const json = (value: unknown, status = 200) =>
+	const json = <T>(value: T, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },
@@ -110,7 +115,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			projectTerms(project).milestones[value.milestone_index].deliverables;
 
 		const delivered = value.delivered_deliverables.map((item) =>
-			typeof item === "number"
+			isDeliverableIndex(item)
 				? item
 				: /^\d+$/.test(item)
 					? Number(item)
@@ -150,7 +155,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			"links_json",
 			"review_window_days",
 			"review_window_days_extended",
-		];
+		] as const;
 
 		const review = value.kind.endsWith("_review");
 
@@ -174,7 +179,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		const values = columns.map((key) =>
 			key === "next_update_on" || key === "preview_url"
 				? stored[key] || null
-				: stored[key as keyof typeof stored],
+				: stored[key],
 		);
 
 		async function sharedRetry() {
@@ -188,10 +193,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				.bind(command.updateId, id)
 				.first<SoftwareUpdate>();
 
-			return row &&
-				columns.every(
-					(key, index) => row[key as keyof SoftwareUpdate] === values[index],
-				)
+			return row && columns.every((key, index) => row[key] === values[index])
 				? json({
 						ok: true,
 						id: row.id,

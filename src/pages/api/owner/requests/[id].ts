@@ -10,6 +10,9 @@ import {
 
 export const prerender = false;
 
+/** A failed owner request action; message is set only for the known conflict messages. */
+type RequestFailure = { ok: false; message?: string };
+
 const commandSchema = z.discriminatedUnion("action", [
 	z.object({
 		action: z.enum(["review", "resolve", "reopen", "withdraw"]),
@@ -52,18 +55,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "";
 		const status = message === "Request not found." ? 404 : 409;
+		const failure: RequestFailure = { ok: false };
 
-		return Response.json(
-			{
-				ok: false,
-				...(message === offerSendingMessage ||
-				message === projectStartedMessage ||
-				message === projectIncompleteMessage ||
-				message === signedAgreementPendingMessage
-					? { message }
-					: {}),
-			},
-			{ status, headers: { "cache-control": "private, no-store" } },
-		);
+		if (
+			message === offerSendingMessage ||
+			message === projectStartedMessage ||
+			message === projectIncompleteMessage ||
+			message === signedAgreementPendingMessage
+		)
+			failure.message = message;
+
+		return Response.json(failure, {
+			status,
+			headers: { "cache-control": "private, no-store" },
+		});
 	}
 };

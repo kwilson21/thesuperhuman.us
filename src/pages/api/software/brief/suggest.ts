@@ -45,6 +45,15 @@ const empty = () =>
 		{ headers: { "cache-control": "no-store" } },
 	);
 
+/** Whether the model returned a response string; the timeout branch resolves to null. */
+function hasResponseText(
+	result: { response?: unknown } | null,
+): result is { response: string } {
+	return (
+		!!result && "response" in result && typeof result.response === "string"
+	);
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -155,10 +164,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			}),
 		]);
 
-		const raw =
-			result && "response" in result && typeof result.response === "string"
-				? result.response.trim()
-				: "";
+		const raw = hasResponseText(result) ? result.response.trim() : "";
 
 		if (!raw || /[\r\n"\x00-\x1f]/.test(raw) || raw.length > 100)
 			return empty();

@@ -123,6 +123,7 @@ const unmetRevisionChecks = unmetRevisionIndexes.map(
 const missingRevisionIndexes = revisionTargets.deliverables;
 const inaccessibleRevisionIndexes = revisionTargets.inaccessibleDeliverables;
 
+// SAFETY: criteria_json is written only as JSON.stringify of the validated criteria text list (src/pages/api/owner/requests/[id]/updates.ts), so it parses to string[].
 const revisionEvidence = revisionSource
 	? (JSON.parse(revisionSource.criteria_json ?? "[]") as string[])
 	: [];
@@ -143,6 +144,7 @@ const savedReferences = [
 			.filter((item) => item.status !== "draft")
 			.flatMap((item) => {
 				try {
+					// SAFETY: links_json is always set by the update writers, which store JSON.stringify of the validated links list (this page's update action and the updates API route).
 					return (
 						JSON.parse(item.links_json) as { label: string; url: string }[]
 					).filter((reference) => {

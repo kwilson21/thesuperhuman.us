@@ -6,7 +6,7 @@ import { readProject } from "~/lib/publication/read";
 export const prerender = false;
 const headers = { "cache-control": "no-store" };
 
-const reply = (body: unknown, status = 200) =>
+const reply = <T>(body: T, status = 200) =>
 	Response.json(body, { status, headers });
 
 function allowed(env: Env, project: string): boolean {

@@ -88,7 +88,7 @@ const schema = z.discriminatedUnion("action", [
 ]);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
-	const json = (value: unknown, status = 200) =>
+	const json = <T>(value: T, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },
