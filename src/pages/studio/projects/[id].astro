@@ -157,5 +157,15 @@ const moved =
     .studio-files :global(.player + .player) { border-top: 1px solid var(--rule); }
     @media (max-width: 45rem) { .studio-date { text-align: left; } }
   </style>
-  <script>import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectPlayers } from '~/scripts/project-player'; import { setupReviewResponse } from '~/scripts/review-response'; setupProjectMessages(); setupProjectPlayers(); setupReviewResponse();</script>
+  <script>
+  import { setupProjectMessages } from '~/scripts/project-messages';
+  import { setupProjectPlayers } from '~/scripts/project-player';
+  import { setupReviewResponse } from '~/scripts/review-response';
+
+  setupProjectMessages();
+
+  setupProjectPlayers();
+
+  setupReviewResponse();
+</script>
 </BaseLayout> : <StudioUnavailable />}

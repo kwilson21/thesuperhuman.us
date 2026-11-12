@@ -300,7 +300,11 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
       <p class="private-note">Private notes and fit review stay in the request.</p>
     </aside>
   </div>
-  <script>import { setupSoftwareComposer } from '~/scripts/software-composer'; setupSoftwareComposer();</script>
+  <script>
+  import { setupSoftwareComposer } from '~/scripts/software-composer';
+
+  setupSoftwareComposer();
+</script>
 </OwnerLayout>
 <style>
   .revision-context { display: grid; gap: .6rem; margin: 0 0 1.5rem; padding: 1rem 1.15rem; border-left: 3px solid var(--accent); background: var(--studio-soft); }

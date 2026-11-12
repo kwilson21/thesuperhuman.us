@@ -340,7 +340,36 @@ const serviceRow = (serviceId: string) =>
       </details>
     </aside>
   </div>
-  <script>import { setupSoftwareOffers } from '~/scripts/software-offers'; setupSoftwareOffers(); import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupProjectInvitation('[data-brief-copy]'); setupOwnerProjectFiles(); import { setupNextStep } from '~/scripts/next-step'; setupNextStep();</script>
+  <script>
+  import { setupSoftwareOffers } from '~/scripts/software-offers';
+
+  setupSoftwareOffers();
+
+  import { setupOwnerRequestActions } from '~/scripts/owner-request-actions';
+  import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions';
+  import { setupProjectMessages } from '~/scripts/project-messages';
+  import { setupProjectUpdates } from '~/scripts/project-updates';
+  import { setupProjectInvitation } from '~/scripts/project-invitation';
+  import { setupOwnerProjectFiles } from '~/scripts/owner-project-files';
+
+  setupOwnerRequestActions();
+
+  setupOwnerPaymentActions();
+
+  setupProjectMessages();
+
+  setupProjectUpdates();
+
+  setupProjectInvitation();
+
+  setupProjectInvitation('[data-brief-copy]');
+
+  setupOwnerProjectFiles();
+
+  import { setupNextStep } from '~/scripts/next-step';
+
+  setupNextStep();
+</script>
   <style>
     .request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
     .request-layout:not(.portal) { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
