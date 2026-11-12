@@ -54,15 +54,8 @@ const onHub = current === "/services";
   </details>
 </header>
 <script>
-  document.querySelectorAll<HTMLDetailsElement>('.mobile-menu').forEach(menu => {
-    menu.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && menu.open) {
-        menu.open = false;
-        menu.querySelector('summary')?.focus();
-      }
-    });
-    menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { menu.open = false; }));
-  });
+  import { setupSiteNav } from '~/scripts/site-nav';
+  setupSiteNav();
 </script>
 <style>
   .site-header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; position: relative; z-index: 5; }

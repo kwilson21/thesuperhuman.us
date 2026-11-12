@@ -129,17 +129,11 @@ details {
 </style>
 
 <script>
-  document.querySelectorAll<HTMLAnchorElement>('[data-agreement-review-link]').forEach(link => {
-    link.addEventListener('click', () => {
-      const review = document.getElementById(link.hash.slice(1));
-      if (review instanceof HTMLDetailsElement) review.open = true;
-    });
-  });
+  import { setupSoftwareAgreementReviewLinks } from '~/scripts/software-agreement-review-links';
+  setupSoftwareAgreementReviewLinks();
 </script>
 
 <script>
-for(const form of document.querySelectorAll<HTMLFormElement>('form:has([name="action"][value="countersign"])')) {
- const input=form.querySelector<HTMLInputElement>('[name="typed_name"]')!;
- input.addEventListener('input',()=>{form.querySelector<HTMLElement>('.owner-signature')!.textContent=input.value;form.querySelector<HTMLButtonElement>('.studio-button')!.textContent=`Countersign as ${input.value}`;});
-}
+  import { setupCountersignName } from '~/scripts/countersign-name';
+  setupCountersignName();
 </script>

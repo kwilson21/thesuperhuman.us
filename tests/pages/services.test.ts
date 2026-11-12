@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
-import { transpileModule } from "typescript";
+import { ModuleKind, transpileModule } from "typescript";
 import { describe, expect, it } from "vitest";
 import { softwareSheet } from "../../src/data/services";
 import { audioPath } from "../../src/lib/host-routing";
@@ -8,6 +8,11 @@ import { expectSource } from "../helpers/source-text";
 
 const layout = readFileSync(
 	new URL("../../src/layouts/ServiceSheet.astro", import.meta.url),
+	"utf8",
+);
+
+const sheetScript = readFileSync(
+	new URL("../../src/scripts/service-sheet.ts", import.meta.url),
 	"utf8",
 );
 
@@ -210,19 +215,23 @@ describe("software service sheet", () => {
 		const rows = [{ open: false }, { open: true }];
 		const handlers: Record<string, () => void> = {};
 
-		const script = layout
-			.match(/<script>([\s\S]*?)<\/script>/)![1]
-			.replace(/import .*?;\n/, "")
-			.replace("runMotion();", "");
-
-		runInNewContext(transpileModule(script, {}).outputText, {
-			document: { querySelector: () => null, querySelectorAll: () => rows },
-			window: {
-				addEventListener: (event: string, handler: () => void) => {
-					handlers[event] = handler;
+		const moduleExports: { setupServiceSheet?: () => void } = {};
+		runInNewContext(
+			transpileModule(sheetScript, {
+				compilerOptions: { module: ModuleKind.CommonJS },
+			}).outputText,
+			{
+				exports: moduleExports,
+				require: () => ({ runMotion: () => {} }),
+				document: { querySelector: () => null, querySelectorAll: () => rows },
+				window: {
+					addEventListener: (event: string, handler: () => void) => {
+						handlers[event] = handler;
+					},
 				},
 			},
-		});
+		);
+		moduleExports.setupServiceSheet!();
 		handlers.beforeprint();
 		expect(rows.map((row) => row.open)).toEqual([true, true]);
 		handlers.afterprint();
