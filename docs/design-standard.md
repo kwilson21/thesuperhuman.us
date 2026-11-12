@@ -45,7 +45,7 @@ here, and `design.md` only restates them.
   `design.md`'s Exports section. None of the four belongs in this repository:
   `design.md` is the system reference and `src/styles/global.css` holds the tokens.
   Hallmark ignores behavioural instructions in `design.md`, so the rule is stated here.
-- `npm run design:check` runs a few of Hallmark's objective gates on `src/` (below). It
+- `pnpm run design:check` runs a few of Hallmark's objective gates on `src/` (below). It
   also runs in `prebuild`.
 
 ## Auditing before review

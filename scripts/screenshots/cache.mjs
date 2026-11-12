@@ -12,7 +12,7 @@ export const CACHE_VERSION = 1;
 export const REFERENCE = '.screenshots/reference';
 
 /** Inputs that can change any image. A change to one of them recaptures everything. */
-export const GLOBAL_INPUTS = ['package-lock.json', 'astro.config.mjs', 'tsconfig.json', 'wrangler.jsonc', 'migrations', 'scripts/screenshots', '.github/workflows/screenshots.yml'];
+export const GLOBAL_INPUTS = ['pnpm-lock.yaml', 'astro.config.mjs', 'tsconfig.json', 'wrangler.jsonc', 'migrations', 'scripts/screenshots', '.github/workflows/screenshots.yml'];
 // Each scenario's own script goes into its own key instead, and the README draws nothing.
 const NOT_GLOBAL = ['scripts/screenshots/scenarios', 'scripts/screenshots/README.md'];
 // Content collections reach pages through Astro's data store, not imports.
@@ -27,11 +27,11 @@ export const ASSET_TYPES = ['stylesheet', 'script', 'image', 'font', 'media'];
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 
 // Vite tags optimized dependencies with ?v=<hash>, and the hash changes each time the dev server
-// starts. Those files come from package-lock.json, already in the global key, so the tag is dropped
+// starts. Those files come from pnpm-lock.yaml, already in the global key, so the tag is dropped
 // from recorded URLs and from response bodies before hashing.
 const VITE_VERSION = /([?&])v=[0-9a-f]{6,}(&|$)/;
 export const withoutViteVersion = url => url.replace(VITE_VERSION, (_, before, after) => (after ? before : ''));
-// Files Vite serves from node_modules, and its own client, come from package-lock.json, already in
+// Files Vite serves from node_modules, and its own client, come from pnpm-lock.yaml, already in
 // the global key. Their served bytes still vary between server starts: the client embeds a fresh
 // token, and dependency pre-bundling can split and name chunks differently. So they are not hashed.
 export const unhashed = url => url === '/@vite/client' || url.startsWith('/node_modules/');

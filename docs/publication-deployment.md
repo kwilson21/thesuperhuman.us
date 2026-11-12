@@ -22,9 +22,9 @@ do not rerun the SQL file directly against production.
 `PUBLICATION_TOKEN` is provisioned as an encrypted Worker secret, outside Git.
 
 For future migrations, authenticate Wrangler to the production account, inspect
-`npx wrangler d1 migrations list PUBLICATION_DB --remote`, and apply only the
+`pnpm exec wrangler d1 migrations list PUBLICATION_DB --remote`, and apply only the
 reviewed pending migrations with
-`npx wrangler d1 migrations apply PUBLICATION_DB --remote`. The initial migration
+`pnpm exec wrangler d1 migrations apply PUBLICATION_DB --remote`. The initial migration
 must not appear as pending. Stop and compare `sqlite_master` with the checked-in
 migration if the ledger is unexpectedly missing; never mark an unverified schema
 as migrated. Fresh databases should use `migrations apply` from the start, which

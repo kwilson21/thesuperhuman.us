@@ -3,14 +3,15 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@12.20.0",
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
-    "prebuild": "npm run assets:check && npm run copy:check && npm run design:check && npm run publicist:gate",
+    "prebuild": "pnpm run assets:check && pnpm run copy:check && pnpm run design:check && pnpm run publicist:gate",
     "assets:check": "node scripts/check-asset-qa.mjs",
     "copy:check": "node scripts/check-copy.mjs",
     "design:check": "node scripts/check-design.mjs",
@@ -52,13 +53,13 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@astrojs/compiler": "2.13.1",
     "@cloudflare/workers-types": "^5.20261010.1",
+    "esbuild": "0.27.7",
+    "parse5": "7.3.0",
     "playwright": "^1.63.0",
     "sharp": "^0.35.5",
     "vitest": "^5.0.3",
     "wrangler": "4.146.0"
-  },
-  "overrides": {
-    "vite": "^6.4.4"
   }
 }

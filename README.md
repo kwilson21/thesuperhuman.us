@@ -14,13 +14,15 @@ Personal site for Kazon Wilson · software engineer building useful software · 
 
 ## Development
 
+Use the Node version in `.nvmrc` (26) and the pnpm version in `package.json`'s `packageManager` field.
+
 ```bash
-npm install
-npm run dev       # local Astro dev server on http://localhost:4321
-npm test          # run Vitest unit tests
-npm run check     # Astro type-check
-npm run build     # production build into dist/
-npm run preview   # serve the built Worker locally after npm run build
+pnpm install
+pnpm run dev       # local Astro dev server on http://localhost:4321
+pnpm test          # run Vitest unit tests
+pnpm run check     # Astro type-check
+pnpm run build     # production build into dist/
+pnpm run preview   # serve the built Worker locally after pnpm run build
 ```
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
@@ -122,14 +124,14 @@ mkdir -p /secure/private/resume-backups
 BACKUP_DIR="$(mktemp -d /secure/private/resume-backups/resume.XXXXXX)"
 
 # Preserve the bytes currently served before overwriting the canonical key.
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
 # Wrangler may exit successfully when a key is missing; require a PDF backup.
 test "$(head -c 5 "$BACKUP_DIR/pdf-general.before.pdf")" = "%PDF-"
 shasum -a 256 "$BACKUP_DIR/pdf-general.before.pdf"
 
 # Upload the candidate, download the stored bytes, and require an exact match.
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
 cmp "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 shasum -a 256 "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 ```
@@ -139,8 +141,8 @@ If it does not match, restore the saved `*.before.pdf` to the same key, read it
 back again, and confirm the restored bytes with `cmp`:
 
 ```bash
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
 cmp "$BACKUP_DIR/pdf-general.before.pdf" "$BACKUP_DIR/pdf-general.restored.pdf"
 ```
 
@@ -183,13 +185,13 @@ Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remain
 Audio files are stored in the `superhuman-audio` R2 bucket, bound to the Worker as `AUDIO`. Create the bucket once:
 
 ```bash
-npx wrangler r2 bucket create superhuman-audio
+pnpm exec wrangler r2 bucket create superhuman-audio
 ```
 
 Upload a track (stores it at `tracks/<basename>` in the bucket):
 
 ```bash
-npm run audio:upload path/to/track.mp3
+pnpm run audio:upload path/to/track.mp3
 ```
 
 ### Audio tracks content collection
@@ -225,7 +227,7 @@ node scripts/og-video/render.mjs --sheet --at=0,2500 services  # also saves thos
 
 Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation, steps one clock at 30 fps and renders each scene in its own Chromium with the switches of Chromium's deterministic mode, so each frame finishes drawing before its screenshot and frames and posters repeat from run to run, even on a busy machine. MP4 bytes also depend on the ffmpeg build and the CPU, so a scene whose frames and encoder settings have not changed keeps its committed video. Chromium very rarely anti-aliases a few pixels differently, so when a scene's files and the encoder settings are unchanged but its frames differ, it is captured once more before its video is replaced. Render only the scenes you changed. Each manifest entry records the local files its scene loaded and a hash of them, and `tests/lib/og-media.test.ts` fails when a scene, the kit or an image changes without a new render. `tests/scripts/og-video-copy.test.ts` fails when any line of two or more words in a scene (statuses included), or a price in a scene or its alt text, no longer matches the site; a short list of composite labels in that test is exempt. The renderer refuses a scene whose fonts did not load, whose content overflows the frame, whose unwrapped text is wider than its box, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Posters are PNG; a photographic scene sets `data-poster="jpeg"` on `<html>` for a JPEG poster instead. Files are named by content hash (`public/og/<scene>-<hash>.png` or `.jpg`, and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
 
-Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`npm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
+Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`pnpm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
 
 After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and `curl -s -o /dev/null -D - -H 'Range: bytes=0-1' https://thesuperhuman.us/og/<file>.mp4` should give 206 with `content-range: bytes 0-1/<size>`. (A HEAD request ignores `Range`, so the second check needs GET.) Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
 
@@ -301,8 +303,8 @@ the required schema is applied.
 
 ### Agreement template labels
 
-Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `npm run owner:health -- --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
+Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `pnpm run owner:health -- --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
 
 ## Credits
 
-- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `npm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.
+- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `pnpm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.
