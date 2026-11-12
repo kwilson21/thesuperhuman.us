@@ -10,7 +10,7 @@ Rollback revision: `a96411f531ed6d99632d2056544242f093c997aa` (local `origin/mai
 
 ## Scope
 
-Oxlint 1.93.0 with the vendored dmmulroy/anti-slop rules and Biome 2.5.14 as the formatter, matching the sibling repository Tally. The repository is formatted (tabs, double quotes). Inline client `<script>` code from 21 `.astro` files moved into `src/scripts/` modules. Anti-slop findings were fixed from 7,374 to 66. Shared test helpers were added. No page copy, markup, style, route, migration, binding or secret change. The lint rules are NOT enforced in the build or in CI yet.
+Oxlint 1.93.0 with the vendored dmmulroy/anti-slop rules and Biome 2.5.14 as the formatter, matching the sibling repository Tally. The repository is formatted (tabs, double quotes). Inline client `<script>` code from 21 `.astro` files moved into `src/scripts/` modules. Anti-slop findings were fixed from 7,374 to 66. Shared test helpers were added. `music-playback.ts` no longer aliases `window`, and client scripts read route responses through small typed local readers or an inline cast under a `SAFETY` line that names the route; both changes are behavior-neutral. No page copy, markup, style, route, migration, binding or secret change. The lint rules are NOT enforced in the build or in CI yet.
 
 ## Owner decisions
 
@@ -27,12 +27,12 @@ Accepted behavior change (the only one): `src/pages/api/owner/requests/[id]/upda
 
 All runs are local on macOS arm64, Node 26.13.1, pnpm 12.20.0, in clean exported copies; no logs retained.
 
-At each of the six layer tips: `pnpm run check` 0 errors; `pnpm test` all passing (1,781, 1,781, 1,813, 1,818, 1,818 and 1,857 tests, in layer order); `pnpm run build` complete with all prebuild gates; publicist gate 84 entries.
+At each of the six layer tips: `pnpm run check` 0 errors; `pnpm test` all passing (1,781, 1,781, 1,813, 1,818, 1,818 and 1,873 tests, in layer order; the top layer, `claude/lint-6-review-fixes`, also skips 1); `pnpm run build` complete with all prebuild gates; publicist gate 84 entries.
 
-Final head (`claude/oxlint-anti-slop` at `a7febb12`, before this record was added):
+Final head (top of the stack, `claude/lint-6-review-fixes`. The six branches are the stack; the working branch `claude/oxlint-anti-slop` holds the final commits, including this record, and is to be fast-forwarded into the top branch):
 
-- `pnpm run format:check`: no fixes applied (521 files).
-- `pnpm run check`: 547 files, 0 errors, 0 warnings, 17 hints.
+- `pnpm run format:check`: no fixes applied (520 files).
+- `pnpm run check`: 546 files, 0 errors, 0 warnings, 17 hints.
 - `pnpm test`: 153 test files passed; 1,873 tests passed, 1 skipped.
 - `pnpm run build`: `Complete!`
 - `node scripts/publicist/gate.mjs`: `publicist-gate passed: 84 entries checked.`
@@ -41,7 +41,8 @@ Final head (`claude/oxlint-anti-slop` at `a7febb12`, before this record was adde
 Equivalence checks:
 
 - Format commit: 362 changed JS and TS files are AST-identical, with every string, template and regex literal unchanged. `.astro` markup and scripts are byte-identical. Prerendered pages are byte-identical.
-- Script move: the client chunk list is identical (190 and 190); 13 chunks differ only by a wrapper function and minified names; 11 inlined scripts are equivalent.
+- Script move (the `claude/lint-3-client-scripts` layer, commits up to `ffdb7fdf`, compared with the format layer before the move): the client chunk list is identical (190 and 190); 13 chunks differ only by a wrapper function and minified names; 11 inlined scripts are equivalent.
+- Final head against `7603f506` (before the shared response reader was added and removed again): `dist/_astro` holds 190 files and 35 `.js` chunks in both builds, the chunk names are identical once content hashes are removed, no `portal-response` or `sign-in.astro_astro_type_script` chunk exists, and the worker manifest lists the same 44 inline and 96 external script entries in both. The sign-in and sign-out scripts are inlined as before.
 - `src/lib` fixes: about 850 differential cases against the previous version, with differences only for non-plain objects that no caller can send. Agreement PDFs are byte-identical with a fixed clock. No SQL text changed.
 - Stripe webhook guard: 13 event types by 4 metadata shapes give identical responses and database state.
 
@@ -75,7 +76,7 @@ Pre-existing defect found, not changed here: a JSON `null` body to `src/pages/ap
 ### 4. Performance and resilience
 
 - N/A, 4.1 and 4.3: no image changed and no performance measurement applies to a refactor with identical chunk output.
-- PASS, 4.2 Client code against the built site: the client chunk list is identical (190 and 190), 13 chunks differ only by a wrapper function and minified names, and 11 inlined scripts are equivalent.
+- PASS, 4.2 Client code against the built site: for the script-move layer (up to `ffdb7fdf`, compared with the format layer before the move) the client chunk list is identical (190 and 190), 13 chunks differ only by a wrapper function and minified names, and 11 inlined scripts are equivalent. At the final head, compared with `7603f506`, `dist/_astro` has the same 190 files and 35 `.js` chunks with identical chunk names, and the worker manifest has the same 44 inline and 96 external script entries.
 - UNVERIFIED, 4.4 Async UI recovery from timeout, offline, malformed response and server error: the client scripts moved and were not exercised in a real browser.
 - N/A, 4.5 and 4.6 (missing audio, video and external resources; 404 and server-error pages): no page or resource changed.
 
