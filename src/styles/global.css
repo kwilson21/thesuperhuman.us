@@ -295,10 +295,6 @@
   .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
-  .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
-  .page-connect h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -.025em; }
-  .page-connect p:not(.page-kicker) { color: var(--muted); font-size: 1.125rem; margin-top: .6rem; }
-  .page-connect > .site-button { flex-shrink: 0; }
   .context-disclosure { margin-top: 1.75rem; }
   .context-disclosure > summary { display: inline-flex; align-items: baseline; gap: .8rem; border-bottom: 1px solid var(--accent); cursor: pointer; list-style: none; min-height: 32px; }
   .context-disclosure > summary::-webkit-details-marker { display: none; }
@@ -307,7 +303,6 @@
   .context-disclosure > div { padding-top: 1rem; }
   .context-disclosure > div > p + p { margin-top: 1rem; }
   .context-disclosure > div > .site-link { margin-top: 1rem; }
-  @media(max-width: 800px) { .page-connect { flex-direction: column; align-items: flex-start; } }
 }
 
 /* Shared form presentation for contact, resume and structured audio inquiries. */

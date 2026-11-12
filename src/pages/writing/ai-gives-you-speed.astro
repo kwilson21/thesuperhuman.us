@@ -34,12 +34,12 @@ const sections = headings.filter(heading => heading.depth === 2);
       <nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a><a class="site-link" href="/#contact">Get in touch <span aria-hidden="true">→</span></a></nav>
     </article>
   </div>
-  <Footer compact slot="footer" />
+  <Footer slot="footer" />
 </BaseLayout>
 <style>
   /* The rail fits the longest section title on one line (about 276px at .85rem). Below about 1130px
      the article narrows instead; its prose keeps about 50 to 70 characters a line down to 1000px. */
-  .essay-layout { display: grid; grid-template-columns: 19rem minmax(0, 760px); gap: clamp(2rem, 5vw, 4.5rem); padding-block: clamp(3rem, 6vw, 5rem) 2rem; }
+  .essay-layout { display: grid; grid-template-columns: 19rem minmax(0, 760px); gap: clamp(2rem, 5vw, 4.5rem); padding-block: clamp(3rem, 6vw, 5rem) 0; }
   .essay-contents nav { position: sticky; top: 2rem; }
   .essay-contents p { font-size: .9rem; margin-bottom: 1rem; }
   .essay-contents ol, .essay-mobile-contents ol { list-style: none; }

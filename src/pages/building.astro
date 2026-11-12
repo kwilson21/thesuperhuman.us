@@ -51,7 +51,7 @@ const prototypes = [
       <div class="prototype-list">{prototypes.map(project => <article><h3><a href={project.href}>{project.title}<span aria-hidden="true"> →</span></a></h3><p class="project-status">{project.status}</p><p>{project.description}</p></article>)}</div>
     </section>
     <p class="journal-note">The journals show what changed, what I tested and what I’m working on next.</p>
-  </div><Footer compact slot="footer" />
+  </div><Footer slot="footer" />
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';

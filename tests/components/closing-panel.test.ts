@@ -48,3 +48,32 @@ it('sizes the heading and line as specified', () => {
 it('keeps the global pill button used by the closing panel', () => {
   expect(global).toMatch(/\.site-button \{[^}]*border-radius: var\(--radius-button\);/);
 });
+
+const quiet = ['src/pages/index.astro', 'src/pages/privacy.astro', 'src/pages/404.astro', 'src/pages/software/start.astro', 'src/components/audio/AudioFooter.astro'];
+const invitation = ['src/pages/building.astro', 'src/pages/writing/index.astro', 'src/pages/writing/ai-gives-you-speed.astro', 'src/layouts/ProjectLayout.astro'];
+
+it('gives quiet pages the quiet panel', () => {
+  for (const path of quiet) expect(read(path), path).toMatch(/<Footer variant="quiet"( slot="footer")? \/>/);
+});
+
+it('gives invitation pages the default panel', () => {
+  for (const path of invitation) expect(read(path), path).toContain('<Footer slot="footer" />');
+});
+
+it('moves the Work and About endings into the panel, word for word', () => {
+  expect(read('src/pages/work.astro')).toContain('<Footer heading="Have a problem worth exploring?" line="I’d love to hear about it." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
+  expect(read('src/pages/about.astro')).toContain('<Footer id="contact" heading="Let’s talk." line="An idea, a shared interest, or an opportunity worth discussing." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
+});
+
+it('removes page-connect and the compact prop everywhere', () => {
+  expect(global).not.toContain('page-connect');
+  for (const path of [...quiet, ...invitation, 'src/pages/work.astro', 'src/pages/about.astro']) {
+    expect(read(path), path).not.toContain('page-connect');
+    expect(read(path), path).not.toMatch(/<Footer[^>]* compact/);
+  }
+});
+
+it('keeps Home’s contact section and About’s resume request', () => {
+  expect(read('src/pages/index.astro')).toContain('<section id="contact" class="site-section contact-section"');
+  expect(read('src/pages/about.astro')).toContain('<details id="resumes" class="resume-section context-disclosure">');
+});
