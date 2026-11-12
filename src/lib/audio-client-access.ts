@@ -217,6 +217,7 @@ export async function reserveStudioAllowance(
 			.bind(key, now.toISOString()),
 	]);
 
+	// SAFETY: counted is the upsert ... RETURNING uses,window_start (the batch's second statement), so each of its rows has a numeric uses and a string window_start.
 	const row = counted.results[0] as
 		| { uses: number; window_start: string }
 		| undefined;
@@ -419,10 +420,16 @@ export function groupStudioProjects<T extends ListedProject>(
 
 	return {
 		active: projects.filter((project) => !delivered(project)),
-		delivered: projects.filter(delivered).map((project) => ({
-			...project,
-			available: Date.parse(project.final_expires_at!) > now.getTime(),
-		})),
+		delivered: projects.flatMap((project) =>
+			delivered(project)
+				? [
+						{
+							...project,
+							available: Date.parse(project.final_expires_at!) > now.getTime(),
+						},
+					]
+				: [],
+		),
 	};
 }
 

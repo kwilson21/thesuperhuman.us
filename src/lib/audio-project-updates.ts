@@ -159,6 +159,7 @@ export async function saveProjectUpdate(
 				.bind(actor, at, requestId, at, command.dueDate),
 		]);
 
+		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
@@ -185,6 +186,7 @@ export async function saveProjectUpdate(
 				.bind(actor, at, requestId, at),
 		]);
 
+		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
@@ -212,6 +214,7 @@ export async function saveProjectUpdate(
 				.bind(actor, at, requestId, at),
 		]);
 
+		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
@@ -253,6 +256,7 @@ export async function saveProjectUpdate(
 				.bind(actor, at, requestId, at),
 		]);
 
+		// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
 		return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 	}
 
@@ -295,6 +299,7 @@ export async function saveProjectUpdate(
 			.bind(actor, at, requestId, command.dueDate, at),
 	]);
 
+	// SAFETY: update is the batch's second statement, the audio_project_updates INSERT ... RETURNING ${columns}, and columns lists every required ProjectUpdate field (file_version is optional and not selected).
 	return changed.results.length ? (update.results[0] as ProjectUpdate) : null;
 }
 
