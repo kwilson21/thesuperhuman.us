@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { APIContext } from "astro";
 import { GET } from "~/pages/api/resume-approve";
+import { double, fakeKv } from "../helpers/doubles";
+
+type TestRuntime = APIContext["locals"]["runtime"];
+
+const sampleRequest = {
+	name: "Jane Doe",
+	email: "jane@example.com",
+	company: "Acme",
+	audience: "dod" as const,
+	note: "",
+	ts: 1700000000000,
+};
 
 function makeBinaryKv(
 	pdfs: Partial<Record<string, ArrayBuffer>>,
-	storedRequests: Record<string, unknown> = {},
+	storedRequests: Partial<Record<string, typeof sampleRequest>> = {},
 ) {
-	return {
+	return fakeKv({
 		get: vi.fn(async (k: string, type?: string) => {
 			if (type === "arrayBuffer") {
 				return pdfs[k] ?? null;
@@ -17,7 +30,7 @@ function makeBinaryKv(
 		}),
 		put: vi.fn(),
 		delete: vi.fn(),
-	};
+	});
 }
 
 function makeContext(id: string | null, kv: ReturnType<typeof makeBinaryKv>) {
@@ -26,46 +39,37 @@ function makeContext(id: string | null, kv: ReturnType<typeof makeBinaryKv>) {
 			? "https://thesuperhuman.us/api/resume-approve"
 			: `https://thesuperhuman.us/api/resume-approve?id=${id}`;
 
-	return {
+	return double<APIContext>({
 		request: new Request(url, { method: "GET" }),
 		url: new URL(url),
 		locals: {
-			runtime: {
-				env: {
+			runtime: double<TestRuntime>({
+				env: double<TestRuntime["env"]>({
 					RESEND_API_KEY: "key",
 					CONTACT_FROM_EMAIL: "noreply@thesuperhuman.us",
 					RATE_LIMIT: kv,
 					RESUME_STORE: kv,
-				},
-			},
+				}),
+			}),
 		},
-	} as any;
+	});
 }
 
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
 beforeEach(() => {
-	vi.stubGlobal(
-		"fetch",
-		vi.fn(async (url: string) => {
-			if (url.includes("resend.com")) {
-				return {
-					ok: true,
-					json: async () => ({ id: "em_1" }),
-				} as unknown as Response;
-			}
+	fetchMock = vi.fn<typeof fetch>(async (url) => {
+		if (String(url).includes("resend.com")) {
+			return double<Response>({
+				ok: true,
+				json: async () => ({ id: "em_1" }),
+			});
+		}
 
-			return { ok: false, json: async () => ({}) } as unknown as Response;
-		}),
-	);
+		return double<Response>({ ok: false, json: async () => ({}) });
+	});
+	vi.stubGlobal("fetch", fetchMock);
 });
-
-const sampleRequest = {
-	name: "Jane Doe",
-	email: "jane@example.com",
-	company: "Acme",
-	audience: "dod" as const,
-	note: "",
-	ts: 1700000000000,
-};
 
 describe("GET /api/resume-approve", () => {
 	it("returns 400 HTML when id is missing", async () => {
@@ -104,14 +108,12 @@ describe("GET /api/resume-approve", () => {
 
 		expect(kv.delete).toHaveBeenCalledWith("req:abc");
 
-		const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-
-		const resendCall = fetchMock.mock.calls.find(
-			(c) => typeof c[0] === "string" && c[0].includes("resend.com"),
+		const resendCall = fetchMock.mock.calls.find(([input]) =>
+			String(input).includes("resend.com"),
 		);
 
 		expect(resendCall).toBeTruthy();
-		const body = JSON.parse((resendCall![1] as RequestInit).body as string);
+		const body = JSON.parse(String(resendCall?.[1]?.body));
 		expect(body.to).toEqual(["jane@example.com"]);
 		expect(body.attachments).toHaveLength(1);
 		expect(body.attachments[0].filename).toBe("kazon-wilson-resume-dod.pdf");
@@ -120,11 +122,13 @@ describe("GET /api/resume-approve", () => {
 	it("does not delete the request when send fails", async () => {
 		const pdf = new ArrayBuffer(4);
 		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": sampleRequest });
-		(fetch as any).mockResolvedValue({
-			ok: false,
-			status: 500,
-			json: async () => ({}),
-		});
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
 		const res = await GET(makeContext("abc", kv));
 		expect(res.status).toBe(500);
 		expect(kv.delete).not.toHaveBeenCalled();
