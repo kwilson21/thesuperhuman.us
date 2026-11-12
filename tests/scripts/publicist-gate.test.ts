@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
 	agentsBlock,
+	captureLabels,
 	captureProblems,
 	entriesNeedingNotes,
 	entryIds,
@@ -164,6 +165,25 @@ describe("text checks", () => {
 		expect(
 			captureProblems('artifact(a, "Home", "Caption.", "Browser capture")'),
 		).toHaveLength(1);
+	});
+	it("checks capture labels in the multi-line shape Biome writes", () => {
+		const call = (label: string) =>
+			`artifact(\n\t\t\t\ta,\n\t\t\t\t"Tally · Home",\n\t\t\t\t"Caption.",\n\t\t\t\t"${label}",\n\t\t\t),`;
+
+		expect(
+			captureProblems(call("Annotated screen capture, demo data")),
+		).toEqual([]);
+		expect(captureProblems(call("Annotated screen capture"))).toHaveLength(1);
+	});
+	it("reads every Tally capture label from the real source", () => {
+		const source = readFileSync("src/data/project-stories/tally.ts", "utf8");
+		const captureCalls = source
+			.split("artifact(")
+			.slice(1)
+			.filter((chunk) => /capture/i.test(chunk.split(/\n\s*\),?\n/)[0])).length;
+
+		expect(captureCalls).toBeGreaterThan(0);
+		expect(captureLabels(source).length).toBeGreaterThanOrEqual(captureCalls);
 	});
 	it("keeps URLs out of queued post text but allows the link field", () => {
 		const post = (body: string) =>

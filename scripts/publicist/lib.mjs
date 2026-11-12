@@ -148,15 +148,18 @@ export function queueBodyProblems(text) {
 		: [];
 }
 
-/** Tally captures must be labeled as demo data. */
-export function captureProblems(source) {
-	const kinds = [
+/** The capture labels the Tally check inspects: string literals that mention "capture" right before a closing paren, with an optional trailing comma (Biome's multi-line shape). */
+export function captureLabels(source) {
+	return [
 		...source.matchAll(
-			/(['"])((?:(?!\1)[^\\]|\\.)*capture(?:(?!\1)[^\\]|\\.)*)\1\s*\)/gi,
+			/(["'])((?:(?!\1)[^\\\n]|\\.)*capture(?:(?!\1)[^\\\n]|\\.)*)\1\s*,?\s*\)/gi,
 		),
 	].map((m) => m[2]);
+}
 
-	return kinds
+/** Tally captures must be labeled as demo data. */
+export function captureProblems(source) {
+	return captureLabels(source)
 		.filter((kind) => !/demo data/i.test(kind))
 		.map((kind) => `capture not labeled demo data: ${kind}`);
 }
