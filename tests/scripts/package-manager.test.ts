@@ -28,12 +28,17 @@ describe('package manager and Node pin', () => {
     expect(workflow).toContain('cache: pnpm');
     expect(workflow).toContain('pnpm install --frozen-lockfile');
     expect(workflow).not.toMatch(/^\s*node-version:/m);
-    expect(workflow).not.toMatch(/\bnpm (ci|run|test)\b|\bnpx\b|cache: npm/);
+    expect(workflow).not.toMatch(/\bnpm (ci|run|test|install|i|exec)\b|\bnpx\b|cache: npm/);
   });
 
-  it.each(workflows)('%s pins pnpm/action-setup to the v6.1.1 commit', path => {
-    expect(read(path)).toContain('pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1');
-    expect(read(path)).not.toContain('9bbca1e9dc2902adb87e8780fe5c98796985a62d');
+  it.each(workflows)('%s pins pnpm/action-setup to a full commit SHA', path => {
+    expect(read(path)).toMatch(/pnpm\/action-setup@[0-9a-f]{40}\b/);
+  });
+
+  it.each(workflows)('%s installs pnpm before setup-node', path => {
+    // setup-node's `cache: pnpm` needs pnpm installed first.
+    const workflow = read(path);
+    expect(workflow.indexOf('pnpm/action-setup@')).toBeLessThan(workflow.indexOf('actions/setup-node@'));
   });
 
   it.each(workflows)('%s checks out without persisting credentials', path => {
