@@ -144,7 +144,7 @@ const savedReferences = [
 			.filter((item) => item.status !== "draft")
 			.flatMap((item) => {
 				try {
-					// SAFETY: links_json is always set by the update writers, which store JSON.stringify of the validated links list (this page's update action and the updates API route).
+					// SAFETY: links_json is written by src/pages/api/owner/requests/[id]/updates.ts (JSON.stringify(value.links) on both UPDATE and INSERT) and otherwise takes the column default '[]' (migrations/music/0021_software_projects.sql), so it parses to a list of { label, url }. A value that fails to parse, or parses to something that is not a list, throws and is caught by the surrounding try, which returns [].
 					return (
 						JSON.parse(item.links_json) as { label: string; url: string }[]
 					).filter((reference) => {

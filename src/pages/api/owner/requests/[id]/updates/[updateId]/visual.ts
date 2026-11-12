@@ -46,7 +46,10 @@ export const GET: APIRoute = async ({ params, locals }) => {
 		: new Response(null, { status: 404, headers });
 };
 
-/** Whether a Content-Type header is one of the image types a software visual may use. */
+/**
+ * Whether a Content-Type header is one of the image types a software visual may use.
+ * Own keys only: an inherited name such as "constructor" now gets 415 before the body is read, where it previously got 400 after.
+ */
 function isVisualType(type: string): type is keyof typeof softwareVisualTypes {
 	return Object.hasOwn(softwareVisualTypes, type);
 }
