@@ -36,7 +36,7 @@ function htmlResponse(html: string, status: number): Response {
 
 export const GET: APIRoute = async (context) => {
 	const { request, locals } = context;
-	const env = (locals as any).runtime.env as Env;
+	const env = locals.runtime.env;
 
 	const url = new URL(request.url);
 	const id = url.searchParams.get("id");

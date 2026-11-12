@@ -63,7 +63,26 @@ const schema = z.discriminatedUnion("action", [
 
 const headers = { "cache-control": "private, no-store" };
 
-const json = (body: unknown, status = 200) =>
+/** A rejected Agreement details payload; errors maps each invalid field to its message. */
+type AgreementDetailsFailure = {
+	ok: false;
+	message: string;
+	errors?: Record<string, string>;
+};
+
+/** Attachment details as stored; attachments stay unparsed until agreementDetailsSchema checks them. */
+type StoredAttachmentSource = { attachments?: unknown } | null;
+
+function isRemovedKeyRow(row: unknown): row is { object_key: string } {
+	return (
+		typeof row === "object" &&
+		row !== null &&
+		"object_key" in row &&
+		typeof row.object_key === "string"
+	);
+}
+
+const json = <T>(body: T, status = 200) =>
 	Response.json(body, { status, headers });
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -171,12 +190,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			.bind(...values);
 
 	// Attachment acquisition and archive closure serialize in D1 before either side performs R2 work.
-	const attachmentGuards = (details: unknown) =>
+	const attachmentGuards = (details: StoredAttachmentSource) =>
 		agreementDetailsSchema
 			.innerType()
-			.shape.attachments.parse(
-				(details as { attachments?: unknown } | null)?.attachments,
-			)
+			.shape.attachments.parse(details?.attachments)
 			.map((attachment) =>
 				guard(
 					`SELECT 1 FROM software_agreement_attachments f WHERE f.request_id=? AND f.object_key=? AND f.sha256=? AND f.bytes=? AND f.filename=? AND f.version=? AND f.document_date=?
@@ -533,10 +550,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 			const removedKeys = saved
 				.flatMap((result) => result.results)
-				.filter(
-					(row): row is { object_key: string } =>
-						typeof (row as { object_key?: unknown }).object_key === "string",
-				)
+				.filter(isRemovedKeyRow)
 				.map((row) => row.object_key);
 
 			for (const attachment of removedMetadata.filter((row) =>
@@ -708,23 +722,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					email: record.email.trim().toLowerCase(),
 				};
 			} catch (error) {
-				return json(
-					{
-						ok: false,
-						message: "Complete and validate Agreement details before sending.",
-						...(error instanceof z.ZodError
-							? {
-									errors: Object.fromEntries(
-										error.issues.map((issue) => [
-											`agreement.${issue.path.join(".")}`,
-											issue.message,
-										]),
-									),
-								}
-							: {}),
-					},
-					400,
-				);
+				const failure: AgreementDetailsFailure = {
+					ok: false,
+					message: "Complete and validate Agreement details before sending.",
+				};
+
+				if (error instanceof z.ZodError) {
+					failure.errors = Object.fromEntries(
+						error.issues.map((issue) => [
+							`agreement.${issue.path.join(".")}`,
+							issue.message,
+						]),
+					);
+				}
+
+				return json(failure, 400);
 			}
 		}
 

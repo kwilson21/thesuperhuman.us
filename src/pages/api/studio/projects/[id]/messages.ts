@@ -31,6 +31,11 @@ const inputSchema = z.discriminatedUnion("action", [
 	}),
 ]);
 
+/** A respond body as the client sent it; validateProjectMessage checks the text. */
+function isTextBody(value: unknown): value is string {
+	return typeof value === "string";
+}
+
 const defaultText = {
 	approved: "I approve this mix.",
 	stopped: "I’m stopping the project here.",
@@ -87,7 +92,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			const { decision } = parsed.data;
 
 			const notes =
-				typeof parsed.data.body === "string" && parsed.data.body.trim()
+				isTextBody(parsed.data.body) && parsed.data.body.trim()
 					? validateProjectMessage(parsed.data.body)
 					: null;
 
@@ -100,11 +105,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					{ status: 400 },
 				);
 
-			if (
-				typeof parsed.data.body === "string" &&
-				parsed.data.body.trim() &&
-				!notes
-			)
+			if (isTextBody(parsed.data.body) && parsed.data.body.trim() && !notes)
 				return Response.json(
 					{
 						ok: false,
@@ -115,6 +116,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				);
 
 			// Stopping closes this project's access in the same write, so the review stops playing.
+			// SAFETY: notes is null here only if decision is not "changes" (the check above returns for changes without notes), so defaultText is read only for "approved" or "stopped", its two keys.
 			const saved = await postClientReviewDecision(
 				env.MUSIC_DB,
 				params.id,

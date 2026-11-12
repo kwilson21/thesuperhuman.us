@@ -13,7 +13,7 @@ import { musicRequest } from "~/lib/music-request";
 export const prerender = false;
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
-	const json = (body: unknown, status = 200) =>
+	const json = <T>(body: T, status = 200) =>
 		Response.json(body, {
 			status,
 			headers: { "cache-control": "private, no-store" },

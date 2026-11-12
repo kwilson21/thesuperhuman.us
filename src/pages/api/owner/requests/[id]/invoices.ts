@@ -24,7 +24,7 @@ const schema = z
 	.refine((value) => !(value.retry_id && value.replace_id));
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
-	const json = (value: unknown, status = 200) =>
+	const json = <T>(value: T, status = 200) =>
 		Response.json(value, {
 			status,
 			headers: { "cache-control": "private, no-store" },

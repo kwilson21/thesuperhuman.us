@@ -1,10 +1,12 @@
 import type { APIRoute } from "astro";
+import type Stripe from "stripe";
 import {
 	applyStripeInvoiceEvent,
 	getAudioPayment,
 	isKnownInvoiceAttempt,
 	recordUnmatchedStripeEvent,
 	recoverInvoiceFromWebhook,
+	type Installment,
 	type InvoiceStatus,
 } from "~/lib/audio-payments";
 import { applySoftwareInvoiceEvent } from "~/lib/software-invoices";
@@ -12,9 +14,8 @@ import { verifyStripeWebhook } from "~/lib/stripe-invoicing";
 
 export const prerender = false;
 
-const eventStatuses: Record<
-	string,
-	Exclude<InvoiceStatus, "not_created" | "draft">
+const eventStatuses: Partial<
+	Record<Stripe.Event.Type, Exclude<InvoiceStatus, "not_created" | "draft">>
 > = {
 	"invoice.sent": "open",
 	"invoice.paid": "paid",
@@ -22,6 +23,16 @@ const eventStatuses: Record<
 	"invoice.voided": "void",
 	"invoice.marked_uncollectible": "uncollectible",
 };
+
+function isInstallment(value: string | undefined): value is Installment {
+	return value === "booking" || value === "balance";
+}
+
+function isCustomerId(
+	customer: Stripe.Invoice["customer"],
+): customer is string {
+	return typeof customer === "string";
+}
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const signature = request.headers.get("stripe-signature");
@@ -43,23 +54,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	if (!status) return Response.json({ received: true });
 
-	const invoice = event.data.object as unknown as {
-		id?: string;
-		customer?: string | { id?: string } | null;
-		hosted_invoice_url?: string | null;
-		total?: number | null;
-		currency?: string | null;
-		due_date?: number | null;
-		metadata?: {
-			audio_request_id?: string;
-			installment?: string;
-			software_request_id?: string;
-			software_invoice_id?: string;
-			software_offer_id?: string;
-			milestone_index?: string;
-			kind?: string;
-		};
-	};
+	// SAFETY: status is set only for the five invoice.* event types in eventStatuses, and Stripe sends a Stripe.Invoice as data.object for each of them.
+	const invoice = event.data.object as Stripe.Invoice;
 
 	if (
 		!invoice.metadata?.audio_request_id &&
@@ -80,10 +76,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				occurredAt: new Date(event.created * 1000).toISOString(),
 				total: invoice.total ?? -1,
 				currency: invoice.currency ?? "",
-				customerId:
-					typeof invoice.customer === "string"
-						? invoice.customer
-						: (invoice.customer?.id ?? null),
+				customerId: isCustomerId(invoice.customer)
+					? invoice.customer
+					: (invoice.customer?.id ?? null),
 				hostedUrl: invoice.hosted_invoice_url ?? null,
 				dueAt: invoice.due_date
 					? new Date(invoice.due_date * 1000).toISOString()
@@ -99,11 +94,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	const requestId = invoice.metadata?.audio_request_id;
 	const installment = invoice.metadata?.installment;
 
-	if (
-		!invoice.id ||
-		!requestId ||
-		!["booking", "balance"].includes(installment ?? "")
-	) {
+	if (!invoice.id || !requestId || !isInstallment(installment)) {
 		return Response.json({ received: true });
 	}
 
@@ -121,7 +112,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				eventType: event.type,
 				invoiceId: invoice.id,
 				requestId,
-				installment: installment as "booking" | "balance",
+				installment: installment,
 				status,
 				occurredAt: new Date(event.created * 1000).toISOString(),
 				reason: "invoice-conflict",
@@ -130,16 +121,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			return Response.json({ received: true });
 		}
 
-		const customerId =
-			typeof invoice.customer === "string"
-				? invoice.customer
-				: (invoice.customer?.id ?? null);
+		const customerId = isCustomerId(invoice.customer)
+			? invoice.customer
+			: (invoice.customer?.id ?? null);
 
 		await recoverInvoiceFromWebhook(db, {
 			eventId: event.id,
 			eventType: event.type,
 			requestId,
-			installment: installment as "booking" | "balance",
+			installment: installment,
 			invoiceId: invoice.id,
 			stripeCustomerId: customerId,
 			hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,

@@ -25,7 +25,7 @@ function isAllowedOrigin(origin: string | null): boolean {
 
 export const POST: APIRoute = async (context) => {
 	const { request, locals } = context;
-	const env = (locals as any).runtime.env as Env;
+	const env = locals.runtime.env;
 
 	// Origin check
 	const origin = request.headers.get("origin");
