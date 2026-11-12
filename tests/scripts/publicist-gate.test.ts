@@ -177,6 +177,7 @@ describe("text checks", () => {
 	});
 	it("reads every Tally capture label from the real source", () => {
 		const source = readFileSync("src/data/project-stories/tally.ts", "utf8");
+
 		const captureCalls = source
 			.split("artifact(")
 			.slice(1)

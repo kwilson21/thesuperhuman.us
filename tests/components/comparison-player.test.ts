@@ -71,14 +71,17 @@ it("places compact playback beside the waveform and seeks from both the track an
 	expect(component).toContain(
 		'.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}',
 	);
+
 	const hide = sourceText(script).indexOf(
 		sourceText(
 			"media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });",
 		),
 	);
+
 	const initialized = sourceText(script).indexOf(
 		sourceText("root.dataset.initialized = 'true';"),
 	);
+
 	expect(hide).toBeGreaterThanOrEqual(0);
 	expect(initialized).toBeGreaterThanOrEqual(0);
 	expect(hide).toBeLessThan(initialized);
@@ -153,9 +156,11 @@ it("keeps the compact played fill above the unplayed bars by source order", () =
 	const unplayed = component.indexOf(
 		".comparison-player--compact .compact-waveform{",
 	);
+
 	const played = component.indexOf(
 		".comparison-player--compact .compact-waveform-played{",
 	);
+
 	expect(unplayed).toBeGreaterThanOrEqual(0);
 	expect(played).toBeGreaterThanOrEqual(0);
 	expect(unplayed).toBeLessThan(played);
@@ -180,13 +185,16 @@ it("seeks only when the target time changes, so pen pressure and clamped drags c
 	expect(script).toContain("const seconds = waveformSeekSeconds(");
 	expect(script).toContain("if (seconds === gesture.lastSeconds) return;");
 	expect(script).toContain("gesture.lastSeconds = seconds;");
+
 	const guard = sourceText(script).indexOf(
 		sourceText("if (seconds === gesture.lastSeconds) return;"),
 	);
+
 	const seek = sourceText(script).indexOf(
 		sourceText("seekTo(seconds);"),
 		guard,
 	);
+
 	expect(guard).toBeGreaterThanOrEqual(0);
 	expect(seek).toBeGreaterThanOrEqual(0);
 	expect(guard).toBeLessThan(seek);

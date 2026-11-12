@@ -1606,6 +1606,7 @@ describe("moved client modules", () => {
 			"website-brief",
 		].map((name) => ({ name, title: name, steps: [] })),
 	};
+
 	const OWNER_REQUEST_SCENARIOS = [
 		"owner-details",
 		"software-brief",
@@ -1613,6 +1614,7 @@ describe("moved client modules", () => {
 		"software-project",
 		"website-brief",
 	];
+
 	const PROJECT_UPDATE_PAGES = [
 		"building-personal-website",
 		"building-personal-website-story",
@@ -1621,15 +1623,18 @@ describe("moved client modules", () => {
 		"building-the-engineers-daily",
 		"owner-requests",
 	];
+
 	const PROJECT_UPDATE_SCENARIOS = [
 		"studio-client",
 		...OWNER_REQUEST_SCENARIOS,
 	];
+
 	const TIMELINE_PAGES = [
 		...PROJECT_UPDATE_PAGES,
 		"building-kaillera-next",
 		"building-tally",
 	];
+
 	const SHARED_SITE = ["home", "work", "audio", "services", "audio-services"];
 
 	const moved: [string, string[], string[]][] = [

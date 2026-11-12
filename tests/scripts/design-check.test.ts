@@ -722,10 +722,13 @@ describe("gates", () => {
 /** The object literal that starts at `start`, up to its matching closing brace. */
 function gateBlock(source: string, start: number): string | undefined {
 	let depth = 0;
+
 	for (let i = source.indexOf("{", start); i >= 0 && i < source.length; i++) {
 		if (source[i] === "{") depth++;
+
 		if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
 	}
+
 	return undefined;
 }
 
