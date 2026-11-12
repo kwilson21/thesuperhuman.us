@@ -27,12 +27,9 @@ const types = [...new Set(releases.map((release) => release.type))];
 <section class="collection-footer"><div>{releases.length === 1 && <p>One song. A beginning.</p>}<h2>The work behind the sound.</h2><a class="site-link" href={audioPath(host, '/portfolio')}>Audio portfolio →</a></div></section>
 </div><AudioFooter slot="footer" />
 <script>
-import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();
-const cards = [...document.querySelectorAll<HTMLElement>('[data-release-type]')];
-document.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach(button => button.addEventListener('click', () => {
- document.querySelectorAll('[data-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
- cards.forEach(card => {card.hidden = button.dataset.filter !== 'all' && card.dataset.releaseType !== button.dataset.filter; if(card.hidden) card.querySelector('audio')?.pause();});
- const count = cards.filter(card => !card.hidden).length; document.querySelector('[data-release-count]')!.textContent = `${count} ${count === 1 ? 'release' : 'releases'}`;
-}));
+  import { setupMusicPlayback } from '~/scripts/music-playback';
+  import { setupAudioReleasesFilter } from '~/scripts/audio-releases-filter';
+  setupMusicPlayback();
+  setupAudioReleasesFilter();
 </script>
 </BaseLayout>

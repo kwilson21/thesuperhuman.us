@@ -34,12 +34,11 @@ const host = Astro.request.headers.get("host") ?? Astro.url.host;
 <section class="hub-outro"><div><h2>Let’s work on your song.</h2><p>Careful listening. Purposeful choices.</p><a class="site-button" href={audioPath(host, '/start')}>Start your song</a></div></section>
 </div><AudioFooter slot="footer" />
 <script>
-import { setupMusicPlayback } from '~/scripts/music-playback'; import { setupComparisonPlayers } from '~/scripts/comparison-player'; setupMusicPlayback(); setupComparisonPlayers();
-const examples = [...document.querySelectorAll<HTMLElement>('[data-example-method]')];
-document.querySelectorAll<HTMLButtonElement>('[data-method]').forEach(button => button.addEventListener('click', () => {
- document.querySelectorAll('[data-method]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
- examples.forEach(example => {example.hidden = button.dataset.method !== 'all' && example.dataset.exampleMethod !== button.dataset.method; if(example.hidden) { example.querySelectorAll('audio').forEach(audio => audio.pause()); example.querySelector('[data-comparison]')?.dispatchEvent(new Event('music-pause')); }});
- document.querySelector<HTMLElement>('[data-no-examples]')!.hidden = button.dataset.method === 'all' || examples.some(example => !example.hidden);
-}));
+  import { setupMusicPlayback } from '~/scripts/music-playback';
+  import { setupComparisonPlayers } from '~/scripts/comparison-player';
+  import { setupAudioPortfolioFilter } from '~/scripts/audio-portfolio-filter';
+  setupMusicPlayback();
+  setupComparisonPlayers();
+  setupAudioPortfolioFilter();
 </script>
 </BaseLayout>

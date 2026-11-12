@@ -39,8 +39,12 @@ const anchors = {
 <p class="other-services">Need software or a website? <a href={mainSitePath(host, '/services')}>Work with me →</a></p>
 </div><AudioFooter slot="footer" />
 <script>
-import { setupMusicPlayback } from '~/scripts/music-playback'; import { setupComparisonPlayers } from '~/scripts/comparison-player'; setupMusicPlayback(); setupComparisonPlayers();
-function openService(){const target = document.getElementById(location.hash.slice(1));if(target instanceof HTMLDetailsElement)target.open=true;}openService();window.addEventListener('hashchange',openService);
+  import { setupMusicPlayback } from '~/scripts/music-playback';
+  import { setupComparisonPlayers } from '~/scripts/comparison-player';
+  import { setupAudioServicesLinks } from '~/scripts/audio-services-links';
+  setupMusicPlayback();
+  setupComparisonPlayers();
+  setupAudioServicesLinks();
 </script>
 </BaseLayout>
 <style>

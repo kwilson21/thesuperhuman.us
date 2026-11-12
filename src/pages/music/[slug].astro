@@ -84,9 +84,9 @@ const videoId = `video-${first.id}`;
   </div>
   <AudioFooter slot="footer" />
   <script>
-    import { setupMusicPlayback } from '~/scripts/music-playback'; setupMusicPlayback();
-    function openLinkedDetail() { const target = document.getElementById(location.hash.slice(1)); if (target instanceof HTMLDetailsElement) target.open = true; }
-    openLinkedDetail(); window.addEventListener('hashchange', openLinkedDetail);
-    document.querySelectorAll('a[href="#lyrics"],a[href="#credits"]').forEach(link => link.addEventListener('click', () => { const target = document.getElementById(link.getAttribute('href')!.slice(1)); if (target instanceof HTMLDetailsElement) target.open = true; }));
+    import { setupMusicPlayback } from '~/scripts/music-playback';
+    import { setupMusicDetailLinks } from '~/scripts/music-detail-links';
+    setupMusicPlayback();
+    setupMusicDetailLinks();
   </script>
 </BaseLayout>
