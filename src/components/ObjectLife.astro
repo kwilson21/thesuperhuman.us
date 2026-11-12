@@ -5,16 +5,26 @@
 // ancestor is half on screen (scroll-scenes.ts) and rests within five seconds. Used by About's
 // chapters and the Audio hero. Nothing is drawn in the resting frame: reduced motion,
 // no-JS and print show the untouched artwork.
-interface Props { kind: 'audio' | 'software' | 'play' | 'whats-next' }
+interface Props {
+	kind: "audio" | "software" | "play" | "whats-next";
+}
 const { kind } = Astro.props;
 // Top faces of the controller's four buttons, measured on controller-v1, in press order.
 const buttons = [
-  { x: 1128, y: 413, at: 0.5 }, { x: 1214, y: 489, at: 0.8 }, { x: 1097, y: 536, at: 1.1 },
-  { x: 1011, y: 459, at: 1.4 }, { x: 1128, y: 413, at: 2.05 }, { x: 1214, y: 489, at: 2.05 },
+	{ x: 1128, y: 413, at: 0.5 },
+	{ x: 1214, y: 489, at: 0.8 },
+	{ x: 1097, y: 536, at: 1.1 },
+	{ x: 1011, y: 459, at: 1.4 },
+	{ x: 1128, y: 413, at: 2.05 },
+	{ x: 1214, y: 489, at: 2.05 },
 ];
 // Covers over the laptop's "</>", one per character, measured on laptop-v1 ("<" 633-682,
 // "/" 693-731, ">" 743-790; all within y 373-480), lifted in typing order.
-const glyphCovers = [{ x: 630, width: 57, at: 0.9 }, { x: 687, width: 50, at: 1.2 }, { x: 737, width: 57, at: 1.5 }];
+const glyphCovers = [
+	{ x: 630, width: 57, at: 0.9 },
+	{ x: 687, width: 50, at: 1.2 },
+	{ x: 737, width: 57, at: 1.5 },
+];
 ---
 <svg class="chapter-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
   {kind === 'audio' && <g class="life-rings" transform="translate(700 585)">

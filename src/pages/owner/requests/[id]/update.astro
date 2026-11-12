@@ -1,56 +1,192 @@
 ---
 export const prerender = false;
-import OwnerLayout from '~/layouts/OwnerLayout.astro';
-import SoftwareAcceptanceChecks from '~/components/SoftwareAcceptanceChecks.astro';
-import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
-import { getOwnerRequest, listOwnerRequests } from '~/lib/owner-requests';
-import { clientPortalEnabled } from '~/lib/audio-client-access';
-import { clearUnmetRevisionEvidence, deliveredIndexes, getSoftwareProject, listSoftwareUpdates, projectTerms, projectAgreementDetails, evidenceTypes, softwareRevisionTargets, softwareRevisionHistoryBody, updateKinds, sharedSoftwareUpdates } from '~/lib/software-projects';
-import { listSoftwareInvoices, payableSoftwareInvoice, manualPaymentReminder } from '~/lib/software-invoices';
-import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-import '~/styles/studio.css';
-const env = Astro.locals.runtime.env, db = env.MUSIC_DB;
-if (!Astro.locals.owner) return new Response('Forbidden', { status: 403 });
-if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
-if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
-const id = Astro.params.id!, request = await getOwnerRequest(db, id), project = await getSoftwareProject(db, id);
-if (!request || request.kind !== 'software' || !project || project.revoked_at || project.content_deleted_at || request.status === 'withdrawn') return new Response('Project not found.', { status: 404 });
-if (project.state === 'complete') return Astro.redirect(`/owner/requests/${id}`);
-const terms = projectTerms(project), history = await listSoftwareUpdates(db,id), draft = history.find(update => update.status === 'draft');
-const shared = await sharedSoftwareUpdates(db,id);
-const requestedId = Astro.url.searchParams.get('respond');
-const latestDelivery = shared.find(item => item.kind==='delivery_review' && item.status==='shared' && item.milestone_index===project.milestone_index);
-const requestedDelivery = requestedId ? shared.find(item => item.id===requestedId && item.kind==='delivery_review' && item.status==='shared' && item.decision==='changes_requested') : null;
-const revisionCandidate = requestedId ? requestedDelivery : latestDelivery?.decision==='changes_requested' ? latestDelivery : null;
-const revisionSource = revisionCandidate && (!draft || (draft.kind==='delivery_review' && draft.milestone_index===revisionCandidate.milestone_index)) ? revisionCandidate : null;
+import OwnerLayout from "~/layouts/OwnerLayout.astro";
+import SoftwareAcceptanceChecks from "~/components/SoftwareAcceptanceChecks.astro";
+import SoftwareProjectUpdate from "~/components/SoftwareProjectUpdate.astro";
+import { getOwnerRequest, listOwnerRequests } from "~/lib/owner-requests";
+import { clientPortalEnabled } from "~/lib/audio-client-access";
+import {
+	clearUnmetRevisionEvidence,
+	deliveredIndexes,
+	getSoftwareProject,
+	listSoftwareUpdates,
+	projectTerms,
+	projectAgreementDetails,
+	evidenceTypes,
+	softwareRevisionTargets,
+	softwareRevisionHistoryBody,
+	updateKinds,
+	sharedSoftwareUpdates,
+} from "~/lib/software-projects";
+import {
+	listSoftwareInvoices,
+	payableSoftwareInvoice,
+	manualPaymentReminder,
+} from "~/lib/software-invoices";
+import type { ClientSoftwareUpdate } from "~/lib/software-projects";
+import "~/styles/studio.css";
+const env = Astro.locals.runtime.env,
+	db = env.MUSIC_DB;
+if (!Astro.locals.owner) return new Response("Forbidden", { status: 403 });
+if (!clientPortalEnabled(env))
+	return new Response("Not found", { status: 404 });
+if (!db)
+	return new Response("Owner reporting is unavailable.", { status: 503 });
+const id = Astro.params.id!,
+	request = await getOwnerRequest(db, id),
+	project = await getSoftwareProject(db, id);
+if (
+	!request ||
+	request.kind !== "software" ||
+	!project ||
+	project.revoked_at ||
+	project.content_deleted_at ||
+	request.status === "withdrawn"
+)
+	return new Response("Project not found.", { status: 404 });
+if (project.state === "complete")
+	return Astro.redirect(`/owner/requests/${id}`);
+const terms = projectTerms(project),
+	history = await listSoftwareUpdates(db, id),
+	draft = history.find((update) => update.status === "draft");
+const shared = await sharedSoftwareUpdates(db, id);
+const requestedId = Astro.url.searchParams.get("respond");
+const latestDelivery = shared.find(
+	(item) =>
+		item.kind === "delivery_review" &&
+		item.status === "shared" &&
+		item.milestone_index === project.milestone_index,
+);
+const requestedDelivery = requestedId
+	? shared.find(
+			(item) =>
+				item.id === requestedId &&
+				item.kind === "delivery_review" &&
+				item.status === "shared" &&
+				item.decision === "changes_requested",
+		)
+	: null;
+const revisionCandidate = requestedId
+	? requestedDelivery
+	: latestDelivery?.decision === "changes_requested"
+		? latestDelivery
+		: null;
+const revisionSource =
+	revisionCandidate &&
+	(!draft ||
+		(draft.kind === "delivery_review" &&
+			draft.milestone_index === revisionCandidate.milestone_index))
+		? revisionCandidate
+		: null;
 const staleRevision = Boolean(requestedId && !revisionSource);
 const seed = draft ?? revisionSource;
-const revisionChecks = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].acceptance : [];
-const revisionDeliverables = revisionSource ? terms.milestones[revisionSource.milestone_index ?? project.milestone_index].deliverables : [];
-const revisionTargets = revisionSource ? softwareRevisionTargets(revisionSource.decision_body,revisionChecks,revisionDeliverables) : {checks:[],deliverables:[],inaccessibleDeliverables:[]};
+const revisionChecks = revisionSource
+	? terms.milestones[revisionSource.milestone_index ?? project.milestone_index]
+			.acceptance
+	: [];
+const revisionDeliverables = revisionSource
+	? terms.milestones[revisionSource.milestone_index ?? project.milestone_index]
+			.deliverables
+	: [];
+const revisionTargets = revisionSource
+	? softwareRevisionTargets(
+			revisionSource.decision_body,
+			revisionChecks,
+			revisionDeliverables,
+		)
+	: { checks: [], deliverables: [], inaccessibleDeliverables: [] };
 const unmetRevisionIndexes = revisionTargets.checks;
-const unmetRevisionChecks = unmetRevisionIndexes.map(index=>revisionChecks[index]);
+const unmetRevisionChecks = unmetRevisionIndexes.map(
+	(index) => revisionChecks[index],
+);
 const missingRevisionIndexes = revisionTargets.deliverables;
 const inaccessibleRevisionIndexes = revisionTargets.inaccessibleDeliverables;
-const revisionEvidence = revisionSource ? JSON.parse(revisionSource.criteria_json ?? '[]') as string[] : [];
-const agreementDetails = await projectAgreementDetails(db,project);
-const agreedReviewDays = agreementDetails?.review_business_days ? Number(agreementDetails.review_business_days) : null;
-const links: {label:string;url:string}[] = seed ? JSON.parse(seed.links_json ?? '[]') : [];
-const savedReferences = [...new Map(history.filter(item=>item.status!=='draft').flatMap(item=>{
-  try { return (JSON.parse(item.links_json) as {label:string;url:string}[]).filter(reference=>{
-    try { const url=new URL(reference.url); return url.protocol==='https:' && !url.username && !url.password && Boolean(reference.label.trim()); } catch { return false; }
-  }); } catch { return []; }
-}).map(reference=>[reference.url,reference])).values()].slice(0,8);
-const update: ClientSoftwareUpdate = { id: draft?.id ?? '', title: seed?.title ?? '', artifact_version: draft?.artifact_version ?? '', evidence_type: seed?.evidence_type ?? 'concept', visual_alt: seed?.visual_alt ?? '', preview_url: seed?.preview_url ?? '', what_changed: draft?.what_changed ?? '', checks_limitations: seed?.checks_limitations ?? '', next_step: seed?.next_step ?? '', client_request: draft?.client_request ?? '', next_update_on: seed?.next_update_on ?? '', shared_at: null, has_visual: draft?.visual_key ? 1 : 0, kind: seed?.kind ?? 'progress', links_json: JSON.stringify(links) };
-const invoices = await listSoftwareInvoices(db,id,project.offer_id);
-const paymentBlocked = terms.milestones.map((_,index)=>payableSoftwareInvoice(invoices,index,['balance','milestone']));
-const newRequests = await listOwnerRequests(db, { status: 'new' });
-const firstName = request.name.trim().split(/\s+/)[0] || 'the client';
-const accepted = terms.milestones.map((_,index)=>shared.some(item=>item.kind==='delivery_review' && item.milestone_index===index && item.status==='shared' && item.decision==='milestone_accepted'));
-const savedCriteria: string[] = draft ? JSON.parse(draft.criteria_json) : revisionEvidence;
-const criteria = draft ? savedCriteria : revisionSource ? clearUnmetRevisionEvidence(savedCriteria,unmetRevisionIndexes) : [];
+const revisionEvidence = revisionSource
+	? (JSON.parse(revisionSource.criteria_json ?? "[]") as string[])
+	: [];
+const agreementDetails = await projectAgreementDetails(db, project);
+const agreedReviewDays = agreementDetails?.review_business_days
+	? Number(agreementDetails.review_business_days)
+	: null;
+const links: { label: string; url: string }[] = seed
+	? JSON.parse(seed.links_json ?? "[]")
+	: [];
+const savedReferences = [
+	...new Map(
+		history
+			.filter((item) => item.status !== "draft")
+			.flatMap((item) => {
+				try {
+					return (
+						JSON.parse(item.links_json) as { label: string; url: string }[]
+					).filter((reference) => {
+						try {
+							const url = new URL(reference.url);
+							return (
+								url.protocol === "https:" &&
+								!url.username &&
+								!url.password &&
+								Boolean(reference.label.trim())
+							);
+						} catch {
+							return false;
+						}
+					});
+				} catch {
+					return [];
+				}
+			})
+			.map((reference) => [reference.url, reference]),
+	).values(),
+].slice(0, 8);
+const update: ClientSoftwareUpdate = {
+	id: draft?.id ?? "",
+	title: seed?.title ?? "",
+	artifact_version: draft?.artifact_version ?? "",
+	evidence_type: seed?.evidence_type ?? "concept",
+	visual_alt: seed?.visual_alt ?? "",
+	preview_url: seed?.preview_url ?? "",
+	what_changed: draft?.what_changed ?? "",
+	checks_limitations: seed?.checks_limitations ?? "",
+	next_step: seed?.next_step ?? "",
+	client_request: draft?.client_request ?? "",
+	next_update_on: seed?.next_update_on ?? "",
+	shared_at: null,
+	has_visual: draft?.visual_key ? 1 : 0,
+	kind: seed?.kind ?? "progress",
+	links_json: JSON.stringify(links),
+};
+const invoices = await listSoftwareInvoices(db, id, project.offer_id);
+const paymentBlocked = terms.milestones.map((_, index) =>
+	payableSoftwareInvoice(invoices, index, ["balance", "milestone"]),
+);
+const newRequests = await listOwnerRequests(db, { status: "new" });
+const firstName = request.name.trim().split(/\s+/)[0] || "the client";
+const accepted = terms.milestones.map((_, index) =>
+	shared.some(
+		(item) =>
+			item.kind === "delivery_review" &&
+			item.milestone_index === index &&
+			item.status === "shared" &&
+			item.decision === "milestone_accepted",
+	),
+);
+const savedCriteria: string[] = draft
+	? JSON.parse(draft.criteria_json)
+	: revisionEvidence;
+const criteria = draft
+	? savedCriteria
+	: revisionSource
+		? clearUnmetRevisionEvidence(savedCriteria, unmetRevisionIndexes)
+		: [];
 const initialMilestone = seed?.milestone_index ?? project.milestone_index;
-const initialDeliverables: number[] = seed ? deliveredIndexes(seed, terms.milestones[seed.milestone_index ?? project.milestone_index].deliverables) : [];
+const initialDeliverables: number[] = seed
+	? deliveredIndexes(
+			seed,
+			terms.milestones[seed.milestone_index ?? project.milestone_index]
+				.deliverables,
+		)
+	: [];
 update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
 ---
 <OwnerLayout title={revisionSource ? "Respond to requested changes" : "New project update"} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner.email}>

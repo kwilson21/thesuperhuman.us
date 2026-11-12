@@ -1,17 +1,28 @@
 ---
 export const prerender = false;
-import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import preview from '~/assets/projects/daily-preview.webp';
-import ProjectUpdates from '~/components/ProjectUpdates.astro';
-import { websiteFeed } from '~/lib/publication/website';
-import story from '~/data/project-stories/the-engineers-daily.json';
+import ProjectLayout from "~/layouts/ProjectLayout.astro";
+import preview from "~/assets/projects/daily-preview.webp";
+import ProjectUpdates from "~/components/ProjectUpdates.astro";
+import { websiteFeed } from "~/lib/publication/website";
+import story from "~/data/project-stories/the-engineers-daily.json";
 const feed = await websiteFeed(Astro.locals.runtime.env, story.projectId);
 const asset = (file: string) => `/building/${story.projectId}/${file}`;
 const latest = story.stages.at(-1)!.artifacts[0];
 // This optimized copy belongs only to this captured lesson, not future milestones.
-const latestSrc = latest.file === 'lesson-prototype.png' ? preview.src : asset(latest.file);
-const entries = story.stages.map(stage => ({ id:stage.id, day:stage.day, title:stage.title, summary:stage.summary, detail:stage.decision, artifacts:stage.artifacts.map(image => ({ ...image, src:asset(image.file) })) }));
-Astro.response.headers.set('Cache-Control', 'no-store');
+const latestSrc =
+	latest.file === "lesson-prototype.png" ? preview.src : asset(latest.file);
+const entries = story.stages.map((stage) => ({
+	id: stage.id,
+	day: stage.day,
+	title: stage.title,
+	summary: stage.summary,
+	detail: stage.decision,
+	artifacts: stage.artifacts.map((image) => ({
+		...image,
+		src: asset(image.file),
+	})),
+}));
+Astro.response.headers.set("Cache-Control", "no-store");
 ---
 <ProjectLayout title={story.title} subtitle={story.subtitle} description="I’m designing a daily practice for people who already code: make a small change to an application through a story, then spend time with Scripture, prayer and reflection." status={story.status} journalHref="#the-engineers-daily-updates-title">
   <figure class="project-current">

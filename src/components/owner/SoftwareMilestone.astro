@@ -1,13 +1,37 @@
 ---
-import type { OfferTerms } from '~/lib/software-offers';
-interface Props { number?: number; milestone?: OfferTerms['milestones'][number]; path?: string }
+import type { OfferTerms } from "~/lib/software-offers";
+interface Props {
+	number?: number;
+	milestone?: OfferTerms["milestones"][number];
+	path?: string;
+}
 const { milestone, number = 1, path } = Astro.props;
 const examples = {
-  default: { name: 'Client onboarding tracker', deliverables: 'Shared tracker with status, next action and owner', acceptance: 'Add a client and see them in the list' },
-  websiteFirst: { name: 'Design direction', deliverables: 'Page list and navigation\nHomepage design at phone and computer widths\nOne round of design changes', acceptance: 'Open the homepage design on each approved device and approve it' },
-  websiteLater: { name: '', deliverables: 'Five pages built from the approved design\nContact form that emails you\nHandoff after final payment: site live on your domain, notes and a short editing walkthrough', acceptance: '' },
+	default: {
+		name: "Client onboarding tracker",
+		deliverables: "Shared tracker with status, next action and owner",
+		acceptance: "Add a client and see them in the list",
+	},
+	websiteFirst: {
+		name: "Design direction",
+		deliverables:
+			"Page list and navigation\nHomepage design at phone and computer widths\nOne round of design changes",
+		acceptance:
+			"Open the homepage design on each approved device and approve it",
+	},
+	websiteLater: {
+		name: "",
+		deliverables:
+			"Five pages built from the approved design\nContact form that emails you\nHandoff after final payment: site live on your domain, notes and a short editing walkthrough",
+		acceptance: "",
+	},
 };
-const placeholders = path !== 'website' ? examples.default : number === 1 ? examples.websiteFirst : examples.websiteLater;
+const placeholders =
+	path !== "website"
+		? examples.default
+		: number === 1
+			? examples.websiteFirst
+			: examples.websiteLater;
 ---
 <fieldset data-milestone class="software-milestone"><legend>Milestone {number}</legend>
   <div class="software-field"><label>Name<input class="studio-input" name="milestoneName" id={`milestone-${number}-milestoneName`} aria-describedby={`milestone-${number}-milestoneName-hint`} placeholder={placeholders.name} maxlength="80" required value={milestone?.name ?? ''} /></label><p id={`milestone-${number}-milestoneName-hint`} data-hint="milestoneName" class="rail-muted rail-caption">Up to 80 characters.</p></div>

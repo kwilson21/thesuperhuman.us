@@ -1,10 +1,33 @@
 ---
-import PersonalName from './PersonalName.astro';
-import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
-import '~/styles/global.css';
-import '~/styles/studio.css';
-interface Props { signed?: boolean; waiting?: boolean; projectUrl?:string; offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string; turnstileSiteKey?: string }
-const { signed=false, waiting=false, projectUrl, offer, preview = false, temporarilyUnavailable = false, signingUrl, turnstileSiteKey } = Astro.props;
+import PersonalName from "./PersonalName.astro";
+import {
+	formatUSD,
+	offerTotal,
+	paymentSchedules,
+	type ClientOffer,
+} from "~/lib/software-offers";
+import "~/styles/global.css";
+import "~/styles/studio.css";
+interface Props {
+	signed?: boolean;
+	waiting?: boolean;
+	projectUrl?: string;
+	offer?: ClientOffer | null;
+	preview?: boolean;
+	temporarilyUnavailable?: boolean;
+	signingUrl?: string;
+	turnstileSiteKey?: string;
+}
+const {
+	signed = false,
+	waiting = false,
+	projectUrl,
+	offer,
+	preview = false,
+	temporarilyUnavailable = false,
+	signingUrl,
+	turnstileSiteKey,
+} = Astro.props;
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>

@@ -1,14 +1,17 @@
 ---
 export const prerender = false;
-import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import ProjectUpdates from '~/components/ProjectUpdates.astro';
-import { websiteFeed } from '~/lib/publication/website';
-import { websiteStory, websiteMilestones } from '~/data/project-stories/personal-website';
-import { websitePages } from '~/data/project-stories/website-pages';
-import before from '~/assets/projects/website/home-before.png';
-import after from '~/assets/projects/website/home-after.png';
-const feed = await websiteFeed(Astro.locals.runtime.env, 'personal-website');
-Astro.response.headers.set('Cache-Control', 'no-store');
+import ProjectLayout from "~/layouts/ProjectLayout.astro";
+import ProjectUpdates from "~/components/ProjectUpdates.astro";
+import { websiteFeed } from "~/lib/publication/website";
+import {
+	websiteStory,
+	websiteMilestones,
+} from "~/data/project-stories/personal-website";
+import { websitePages } from "~/data/project-stories/website-pages";
+import before from "~/assets/projects/website/home-before.png";
+import after from "~/assets/projects/website/home-after.png";
+const feed = await websiteFeed(Astro.locals.runtime.env, "personal-website");
+Astro.response.headers.set("Cache-Control", "no-store");
 ---
 <ProjectLayout title={websiteStory.title} subtitle={websiteStory.subtitle} description={websiteStory.description} status={websiteStory.status} journalHref="#personal-website-updates-title">
   <section class="project-section" aria-labelledby="website-change">

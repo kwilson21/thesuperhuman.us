@@ -1,16 +1,25 @@
 ---
-import { mainSitePath, audioPath } from '~/lib/host-routing';
-import PersonalName from '~/components/PersonalName.astro';
-const host = Astro.isPrerendered ? Astro.url.host : Astro.request.headers.get('host') ?? Astro.url.host;
-const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
-const audioHref = Astro.isPrerendered ? new URL('/audio/', Astro.site).href : audioPath(host, '/');
-const hireHref = mainHref('/services');
-const privacyHref = mainHref('/privacy');
-const homeHref = mainHref('/');
+import { mainSitePath, audioPath } from "~/lib/host-routing";
+import PersonalName from "~/components/PersonalName.astro";
+const host = Astro.isPrerendered
+	? Astro.url.host
+	: (Astro.request.headers.get("host") ?? Astro.url.host);
+const mainHref = (path: string) =>
+	Astro.isPrerendered
+		? new URL(path, Astro.site).href
+		: mainSitePath(host, path);
+const audioHref = Astro.isPrerendered
+	? new URL("/audio/", Astro.site).href
+	: audioPath(host, "/");
+const hireHref = mainHref("/services");
+const privacyHref = mainHref("/privacy");
+const homeHref = mainHref("/");
 const year = new Date().getFullYear();
 // Every caller currently passes `compact`; kept accepted (but unused) for one release
 // rather than changing every call site in the same pull request.
-interface Props { compact?: boolean; }
+interface Props {
+	compact?: boolean;
+}
 ---
 <footer class="compact-footer site-shell">
   <div class="compact-footer-inner">

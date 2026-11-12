@@ -1,40 +1,87 @@
 ---
-import ProjectTimeline from './ProjectTimeline.astro';
-import MovedEntries from './MovedEntries.astro';
-import { journalMilestones, latestJournalMilestones, storyMilestones, archiveMilestones, journalSelection, type Milestone } from '~/lib/project-story';
-import type { ProjectFeed } from '~/lib/publication/read';
+import ProjectTimeline from "./ProjectTimeline.astro";
+import MovedEntries from "./MovedEntries.astro";
+import {
+	journalMilestones,
+	latestJournalMilestones,
+	storyMilestones,
+	archiveMilestones,
+	journalSelection,
+	type Milestone,
+} from "~/lib/project-story";
+import type { ProjectFeed } from "~/lib/publication/read";
 interface Props {
-  feed: ProjectFeed | null; projectId: string; title?: string; milestones?: Milestone[]; selectedId?: string;
-  /** Personal Website only. 'latest' bounds the default view to five, newest-first, non-story
-   * updates with links onward to the story and archive routes. 'story' and 'archive' render the
-   * matching projection, unbounded. Omitted, every other project keeps today's full merged feed. */
-  view?: 'latest' | 'story' | 'archive';
-  /** A short line rendered under the heading, always visible (with or without JavaScript). */
-  lead?: string;
+	feed: ProjectFeed | null;
+	projectId: string;
+	title?: string;
+	milestones?: Milestone[];
+	selectedId?: string;
+	/** Personal Website only. 'latest' bounds the default view to five, newest-first, non-story
+	 * updates with links onward to the story and archive routes. 'story' and 'archive' render the
+	 * matching projection, unbounded. Omitted, every other project keeps today's full merged feed. */
+	view?: "latest" | "story" | "archive";
+	/** A short line rendered under the heading, always visible (with or without JavaScript). */
+	lead?: string;
 }
-const { feed, projectId, title = 'Development journal', milestones = [], selectedId, view, lead } = Astro.props;
-const project = (entries: Milestone[]) => view === 'latest' ? latestJournalMilestones(entries)
-  : view === 'story' ? storyMilestones(entries)
-  : view === 'archive' ? archiveMilestones(entries)
-  : entries;
+const {
+	feed,
+	projectId,
+	title = "Development journal",
+	milestones = [],
+	selectedId,
+	view,
+	lead,
+} = Astro.props;
+const project = (entries: Milestone[]) =>
+	view === "latest"
+		? latestJournalMilestones(entries)
+		: view === "story"
+			? storyMilestones(entries)
+			: view === "archive"
+				? archiveMilestones(entries)
+				: entries;
 const merged = journalMilestones(feed, milestones);
 const visible = project(merged);
 const fallbackVisible = project(milestones);
-const bounded = view === 'latest';
+const bounded = view === "latest";
 // Keep the anchor stable for existing cross-page links to Personal Website's Latest work section.
-const domId = view === 'story' ? `${projectId}-story` : view === 'archive' ? `${projectId}-archive` : `${projectId}-updates`;
+const domId =
+	view === "story"
+		? `${projectId}-story`
+		: view === "archive"
+			? `${projectId}-archive`
+			: `${projectId}-updates`;
 const storyHref = bounded ? `/building/${projectId}/story` : undefined;
 const archiveHref = bounded ? `/building/${projectId}/archive` : undefined;
-const selectedIdForTimeline = journalSelection(view, visible, feed?.current?.entryId, selectedId);
+const selectedIdForTimeline = journalSelection(
+	view,
+	visible,
+	feed?.current?.entryId,
+	selectedId,
+);
 // Published entries never carry placement: 'story', so Story never needs the live-feed apparatus:
 // no correction or withdrawal can ever reach it.
-const showFeedNotices = view !== 'story';
+const showFeedNotices = view !== "story";
 // Latest work only: everything that no longer shows inline keeps a small "moved" anchor, rendered
 // inside [data-update-content] (and the curated-only fallback) so a live withdrawal or correction
 // replaces it along with the rest, instead of leaving a stale, duplicate-ID anchor behind.
-const movedEntry = (entry: Milestone) => ({ id: entry.id, title: entry.title, destination: (entry.placement === 'story' ? 'story' : 'archive') as 'story' | 'archive' });
-const moved = bounded ? merged.filter(entry => !visible.some(v => v.id === entry.id)).map(movedEntry) : [];
-const movedFallback = bounded ? milestones.filter(entry => !fallbackVisible.some(v => v.id === entry.id)).map(movedEntry) : [];
+const movedEntry = (entry: Milestone) => ({
+	id: entry.id,
+	title: entry.title,
+	destination: (entry.placement === "story" ? "story" : "archive") as
+		| "story"
+		| "archive",
+});
+const moved = bounded
+	? merged
+			.filter((entry) => !visible.some((v) => v.id === entry.id))
+			.map(movedEntry)
+	: [];
+const movedFallback = bounded
+	? milestones
+			.filter((entry) => !fallbackVisible.some((v) => v.id === entry.id))
+			.map(movedEntry)
+	: [];
 ---
 <div data-project-updates={showFeedNotices ? true : undefined} data-project={projectId} data-snapshot={showFeedNotices ? JSON.stringify(feed) : undefined}>
   {showFeedNotices && !feed && milestones.length > 0 && <p class="update-notice">Recent updates are temporarily unavailable. Earlier milestones are shown below.</p>}

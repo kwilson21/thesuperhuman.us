@@ -1,18 +1,18 @@
 ---
-import { personalName, type PersonalNameVariant } from '~/lib/personal-name';
+import { personalName, type PersonalNameVariant } from "~/lib/personal-name";
 
 interface Props {
-  variant?: PersonalNameVariant;
-  style?: 'text' | 'display' | 'inherit';
-  breakAfterFirst?: boolean;
-  class?: string;
+	variant?: PersonalNameVariant;
+	style?: "text" | "display" | "inherit";
+	breakAfterFirst?: boolean;
+	class?: string;
 }
 
 const {
-  variant = 'first',
-  style = 'text',
-  breakAfterFirst = false,
-  class: className,
+	variant = "first",
+	style = "text",
+	breakAfterFirst = false,
+	class: className,
 } = Astro.props;
 const value = personalName(variant);
 ---

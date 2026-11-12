@@ -1,75 +1,291 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import StudioUnavailable from '~/components/StudioUnavailable.astro';
-import SoftwareProjectUpdate from '~/components/SoftwareProjectUpdate.astro';
-import SoftwareAgreedTerms from '~/components/SoftwareAgreedTerms.astro';
-import type { Agreement } from '~/lib/software-agreements';
-import { validateAgreementDetails, type agreementValues } from '~/lib/agreement-fields';
-import ProjectMessages from '~/components/ProjectMessages.astro';
-import SoftwareReviewResponse from '~/components/SoftwareReviewResponse.astro';
-import { clientPortalEnabled, clientSoftwareProjectForSession, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { deliveredIndexes, projectTerms, projectAgreementDetails, sharedSoftwareUpdates, softwareStateSentence, softwareDate, milestonePayments, correctionPeriodEnd, softwareVersionLabel, softwareVersionNumber } from '~/lib/software-projects';
-import { clientSoftwareInvoices, softwareInvoiceKindLabels, softwareInvoiceStatusLabels, softwareInvoiceTerms } from '~/lib/software-invoices';
-import { formatUSD } from '~/lib/software-offers';
-import { addBusinessDays } from '~/lib/business-days';
-import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
-import '~/styles/studio.css';
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import StudioUnavailable from "~/components/StudioUnavailable.astro";
+import SoftwareProjectUpdate from "~/components/SoftwareProjectUpdate.astro";
+import SoftwareAgreedTerms from "~/components/SoftwareAgreedTerms.astro";
+import type { Agreement } from "~/lib/software-agreements";
+import {
+	validateAgreementDetails,
+	type agreementValues,
+} from "~/lib/agreement-fields";
+import ProjectMessages from "~/components/ProjectMessages.astro";
+import SoftwareReviewResponse from "~/components/SoftwareReviewResponse.astro";
+import {
+	clientPortalEnabled,
+	clientSoftwareProjectForSession,
+	studioSessionFromRequest,
+} from "~/lib/audio-client-access";
+import {
+	deliveredIndexes,
+	projectTerms,
+	projectAgreementDetails,
+	sharedSoftwareUpdates,
+	softwareStateSentence,
+	softwareDate,
+	milestonePayments,
+	correctionPeriodEnd,
+	softwareVersionLabel,
+	softwareVersionNumber,
+} from "~/lib/software-projects";
+import {
+	clientSoftwareInvoices,
+	softwareInvoiceKindLabels,
+	softwareInvoiceStatusLabels,
+	softwareInvoiceTerms,
+} from "~/lib/software-invoices";
+import { formatUSD } from "~/lib/software-offers";
+import { addBusinessDays } from "~/lib/business-days";
+import {
+	listSoftwareProjectMessages,
+	readableSoftwareProjectMessages,
+} from "~/lib/software-project-messages";
+import "~/styles/studio.css";
 const env = Astro.locals.runtime.env;
-if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
-if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+if (!clientPortalEnabled(env))
+	return new Response("Not found", { status: 404 });
+if (!env.MUSIC_DB)
+	return new Response("Studio is temporarily unavailable.", { status: 503 });
 const token = studioSessionFromRequest(Astro.request);
-if (!token) return Astro.redirect('/studio/sign-in?for=software');
-const project = await clientSoftwareProjectForSession(env.MUSIC_DB, token, Astro.params.id!);
+if (!token) return Astro.redirect("/studio/sign-in?for=software");
+const project = await clientSoftwareProjectForSession(
+	env.MUSIC_DB,
+	token,
+	Astro.params.id!,
+);
 if (!project) Astro.response.status = 404;
 const terms = project ? projectTerms(project) : null;
-const updates = project ? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id) : [];
-const messageRows = project ? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id) : [];
-const messages = project && terms ? readableSoftwareProjectMessages(messageRows, updates, terms, 'client') : [];
-const currentMilestone=project?.milestone_index ?? 0;
-const milestoneUpdates=updates.filter(update=>update.milestone_index===currentMilestone);
-const latest = milestoneUpdates.find(update=>update.status==='shared');
-const invoices=project ? await clientSoftwareInvoices(env.MUSIC_DB,project) : [];
-const payments=project ? await milestonePayments(env.MUSIC_DB,project.request_id) : [];
-const acceptedDeliveries=updates.filter(update=>update.kind==='delivery_review' && update.status==='shared' && update.decision==='milestone_accepted').sort((a,b)=>(b.milestone_index ?? 0)-(a.milestone_index ?? 0));
-const reviews=updates.filter(update=>update.kind?.endsWith('_review') && update.status==='shared');
-const undecidedReviews=reviews.filter(update=>!update.decision);
-const review=undecidedReviews.find(update=>update.milestone_index===currentMilestone && update.kind==='delivery_review') ?? undecidedReviews.find(update=>update.milestone_index===currentMilestone);
-const railReviews=undecidedReviews.slice().reverse();
-const accepted=acceptedDeliveries.find(update=>update.milestone_index===currentMilestone);
-const handoffs=updates.filter((update,index)=>update.kind==='handoff' && update.status==='shared'
-  && updates.findIndex(item=>item.kind==='handoff' && item.status==='shared' && item.milestone_index===update.milestone_index)===index
-  && updates.some(accepted=>accepted.kind==='delivery_review' && accepted.decision==='milestone_accepted' && accepted.milestone_index===update.milestone_index)
-  && !updates.some(accepted=>accepted.kind==='delivery_review' && accepted.decision==='milestone_accepted' && accepted.milestone_index===update.milestone_index && accepted.decided_at!>update.shared_at!));
-const handoff=handoffs.find(update=>update.milestone_index===currentMilestone);
-const currentUpdate=latest?.kind==='progress' && (!review || latest.shared_at!>review.shared_at!) ? latest : accepted && review?.kind==='direction_review' ? latest : review ?? latest;
-const decidedReview=currentUpdate?.kind?.endsWith('_review') && currentUpdate.decision ? currentUpdate : accepted;
-const currentReview=review?.id===currentUpdate?.id && !accepted ? review : undefined;
-const balanceFor=(milestone:number)=>invoices.find(invoice=>invoice.milestone_index===milestone && invoice.kind!=='deposit' && !invoice.refunded_at && ['open','payment_failed','uncollectible'].includes(invoice.status) && invoice.hosted_invoice_url);
-const balance=accepted && balanceFor(currentMilestone);
-const handedOff=Boolean(handoff);
-const today = new Date().toLocaleDateString('en-CA', {timeZone:'America/New_York'});
-const showNextUpdate = project?.next_update_on && project.next_update_on >= today && !(handedOff && currentUpdate?.id===handoff?.id);
-const paid=payments.some(payment=>payment.milestone_index===currentMilestone);
-const acceptedPaid=accepted && !handedOff && paid;
-const acceptedWaiting=accepted && !paid;
-const otherAccepted=acceptedDeliveries.filter((update,index)=>update.milestone_index!==currentMilestone && acceptedDeliveries.findIndex(item=>item.milestone_index===update.milestone_index)===index && !handoffs.some(handoff=>handoff.milestone_index===update.milestone_index)).sort((a,b)=>(a.milestone_index ?? 0)-(b.milestone_index ?? 0));
-const earlierVersions=updates.filter(update=>update.kind?.endsWith('_review') && update.id!==currentUpdate?.id && !undecidedReviews.includes(update) && update.id!==decidedReview?.id && !otherAccepted.includes(update));
-const earlierUpdates=updates.filter(update=>update.id!==currentUpdate?.id && !earlierVersions.includes(update) && !railReviews.includes(update) && update.id!==decidedReview?.id && !handoffs.includes(update) && !otherAccepted.includes(update));
-const timeline=updates.filter(update=>update.milestone_index===currentMilestone && update.kind?.endsWith('_review')).slice().reverse();
-const note=currentUpdate?.what_changed ?? '';
-const visual = (id: string) => `/api/studio/software/${project!.request_id}/updates/${id}/visual`;
-const conversationClosed = project?.state === 'complete';
-const agreementRecord=project ? await env.MUSIC_DB.prepare("SELECT p.agreement_id AS website_agreement_id,a.id,a.archive_closed_at,a.kind,a.msa_id,a.client_id,a.canonical_text,a.effective_on,a.text_sha256,a.values_json FROM software_projects p JOIN owner_requests r ON r.id=p.request_id LEFT JOIN software_agreements a ON a.id=p.agreement_id AND a.status='executed' AND EXISTS(SELECT 1 FROM software_agreement_clients c WHERE c.id=a.client_id AND c.recipient_email=r.email) WHERE p.request_id=?").bind(Astro.params.id).first<Pick<Agreement,'id'|'kind'|'msa_id'|'client_id'|'canonical_text'|'effective_on'|'text_sha256'|'values_json'> & {archive_closed_at:string|null;website_agreement_id:string|null}>() : null;
-const agreementSnapshot = agreementRecord?.id ? JSON.parse(agreementRecord.values_json) as ReturnType<typeof agreementValues> : null;
-const agreementDetails = project ? await projectAgreementDetails(env.MUSIC_DB,{...project,agreement_id:agreementRecord?.website_agreement_id}) : null;
-const correctionDeadline = (milestone: number | null | undefined) => softwareDate(correctionPeriodEnd(updates.filter(update=>update.milestone_index===milestone && update.decision==='milestone_accepted').map(update=>update.decided_at!).sort()[0],payments.find(payment=>payment.milestone_index===milestone)?.paid_recorded_at,Number(agreementDetails?.correction_calendar_days ?? 30)));
+const updates = project
+	? await sharedSoftwareUpdates(env.MUSIC_DB, project.request_id)
+	: [];
+const messageRows = project
+	? await listSoftwareProjectMessages(env.MUSIC_DB, project.request_id)
+	: [];
+const messages =
+	project && terms
+		? readableSoftwareProjectMessages(messageRows, updates, terms, "client")
+		: [];
+const currentMilestone = project?.milestone_index ?? 0;
+const milestoneUpdates = updates.filter(
+	(update) => update.milestone_index === currentMilestone,
+);
+const latest = milestoneUpdates.find((update) => update.status === "shared");
+const invoices = project
+	? await clientSoftwareInvoices(env.MUSIC_DB, project)
+	: [];
+const payments = project
+	? await milestonePayments(env.MUSIC_DB, project.request_id)
+	: [];
+const acceptedDeliveries = updates
+	.filter(
+		(update) =>
+			update.kind === "delivery_review" &&
+			update.status === "shared" &&
+			update.decision === "milestone_accepted",
+	)
+	.sort((a, b) => (b.milestone_index ?? 0) - (a.milestone_index ?? 0));
+const reviews = updates.filter(
+	(update) => update.kind?.endsWith("_review") && update.status === "shared",
+);
+const undecidedReviews = reviews.filter((update) => !update.decision);
+const review =
+	undecidedReviews.find(
+		(update) =>
+			update.milestone_index === currentMilestone &&
+			update.kind === "delivery_review",
+	) ??
+	undecidedReviews.find(
+		(update) => update.milestone_index === currentMilestone,
+	);
+const railReviews = undecidedReviews.slice().reverse();
+const accepted = acceptedDeliveries.find(
+	(update) => update.milestone_index === currentMilestone,
+);
+const handoffs = updates.filter(
+	(update, index) =>
+		update.kind === "handoff" &&
+		update.status === "shared" &&
+		updates.findIndex(
+			(item) =>
+				item.kind === "handoff" &&
+				item.status === "shared" &&
+				item.milestone_index === update.milestone_index,
+		) === index &&
+		updates.some(
+			(accepted) =>
+				accepted.kind === "delivery_review" &&
+				accepted.decision === "milestone_accepted" &&
+				accepted.milestone_index === update.milestone_index,
+		) &&
+		!updates.some(
+			(accepted) =>
+				accepted.kind === "delivery_review" &&
+				accepted.decision === "milestone_accepted" &&
+				accepted.milestone_index === update.milestone_index &&
+				accepted.decided_at! > update.shared_at!,
+		),
+);
+const handoff = handoffs.find(
+	(update) => update.milestone_index === currentMilestone,
+);
+const currentUpdate =
+	latest?.kind === "progress" &&
+	(!review || latest.shared_at! > review.shared_at!)
+		? latest
+		: accepted && review?.kind === "direction_review"
+			? latest
+			: (review ?? latest);
+const decidedReview =
+	currentUpdate?.kind?.endsWith("_review") && currentUpdate.decision
+		? currentUpdate
+		: accepted;
+const currentReview =
+	review?.id === currentUpdate?.id && !accepted ? review : undefined;
+const balanceFor = (milestone: number) =>
+	invoices.find(
+		(invoice) =>
+			invoice.milestone_index === milestone &&
+			invoice.kind !== "deposit" &&
+			!invoice.refunded_at &&
+			["open", "payment_failed", "uncollectible"].includes(invoice.status) &&
+			invoice.hosted_invoice_url,
+	);
+const balance = accepted && balanceFor(currentMilestone);
+const handedOff = Boolean(handoff);
+const today = new Date().toLocaleDateString("en-CA", {
+	timeZone: "America/New_York",
+});
+const showNextUpdate =
+	project?.next_update_on &&
+	project.next_update_on >= today &&
+	!(handedOff && currentUpdate?.id === handoff?.id);
+const paid = payments.some(
+	(payment) => payment.milestone_index === currentMilestone,
+);
+const acceptedPaid = accepted && !handedOff && paid;
+const acceptedWaiting = accepted && !paid;
+const otherAccepted = acceptedDeliveries
+	.filter(
+		(update, index) =>
+			update.milestone_index !== currentMilestone &&
+			acceptedDeliveries.findIndex(
+				(item) => item.milestone_index === update.milestone_index,
+			) === index &&
+			!handoffs.some(
+				(handoff) => handoff.milestone_index === update.milestone_index,
+			),
+	)
+	.sort((a, b) => (a.milestone_index ?? 0) - (b.milestone_index ?? 0));
+const earlierVersions = updates.filter(
+	(update) =>
+		update.kind?.endsWith("_review") &&
+		update.id !== currentUpdate?.id &&
+		!undecidedReviews.includes(update) &&
+		update.id !== decidedReview?.id &&
+		!otherAccepted.includes(update),
+);
+const earlierUpdates = updates.filter(
+	(update) =>
+		update.id !== currentUpdate?.id &&
+		!earlierVersions.includes(update) &&
+		!railReviews.includes(update) &&
+		update.id !== decidedReview?.id &&
+		!handoffs.includes(update) &&
+		!otherAccepted.includes(update),
+);
+const timeline = updates
+	.filter(
+		(update) =>
+			update.milestone_index === currentMilestone &&
+			update.kind?.endsWith("_review"),
+	)
+	.slice()
+	.reverse();
+const note = currentUpdate?.what_changed ?? "";
+const visual = (id: string) =>
+	`/api/studio/software/${project!.request_id}/updates/${id}/visual`;
+const conversationClosed = project?.state === "complete";
+const agreementRecord = project
+	? await env.MUSIC_DB.prepare(
+			"SELECT p.agreement_id AS website_agreement_id,a.id,a.archive_closed_at,a.kind,a.msa_id,a.client_id,a.canonical_text,a.effective_on,a.text_sha256,a.values_json FROM software_projects p JOIN owner_requests r ON r.id=p.request_id LEFT JOIN software_agreements a ON a.id=p.agreement_id AND a.status='executed' AND EXISTS(SELECT 1 FROM software_agreement_clients c WHERE c.id=a.client_id AND c.recipient_email=r.email) WHERE p.request_id=?",
+		)
+			.bind(Astro.params.id)
+			.first<
+				Pick<
+					Agreement,
+					| "id"
+					| "kind"
+					| "msa_id"
+					| "client_id"
+					| "canonical_text"
+					| "effective_on"
+					| "text_sha256"
+					| "values_json"
+				> & {
+					archive_closed_at: string | null;
+					website_agreement_id: string | null;
+				}
+			>()
+	: null;
+const agreementSnapshot = agreementRecord?.id
+	? (JSON.parse(agreementRecord.values_json) as ReturnType<
+			typeof agreementValues
+		>)
+	: null;
+const agreementDetails = project
+	? await projectAgreementDetails(env.MUSIC_DB, {
+			...project,
+			agreement_id: agreementRecord?.website_agreement_id,
+		})
+	: null;
+const correctionDeadline = (milestone: number | null | undefined) =>
+	softwareDate(
+		correctionPeriodEnd(
+			updates
+				.filter(
+					(update) =>
+						update.milestone_index === milestone &&
+						update.decision === "milestone_accepted",
+				)
+				.map((update) => update.decided_at!)
+				.sort()[0],
+			payments.find((payment) => payment.milestone_index === milestone)
+				?.paid_recorded_at,
+			Number(agreementDetails?.correction_calendar_days ?? 30),
+		),
+	);
 let externalAgreementDetails;
 if (!agreementRecord?.website_agreement_id && agreementDetails && terms) {
-  try { externalAgreementDetails=validateAgreementDetails(agreementDetails,terms); } catch { /* Older external projects may lack the full snapshot. */ }
+	try {
+		externalAgreementDetails = validateAgreementDetails(
+			agreementDetails,
+			terms,
+		);
+	} catch {
+		/* Older external projects may lack the full snapshot. */
+	}
 }
-const masterAgreement = agreementRecord?.msa_id && !agreementRecord.archive_closed_at ? await env.MUSIC_DB.prepare("SELECT id,kind,canonical_text,effective_on,text_sha256 FROM software_agreements WHERE id=? AND client_id=? AND kind='msa' AND status='executed' AND archive_closed_at IS NULL").bind(agreementRecord.msa_id,agreementRecord.client_id).first<Pick<Agreement,'id'|'kind'|'canonical_text'|'effective_on'|'text_sha256'>>() : null;
-const agreementDocuments = [masterAgreement, agreementRecord?.id && !agreementRecord.archive_closed_at ? agreementRecord : null].filter((document): document is NonNullable<typeof document> => Boolean(document));
+const masterAgreement =
+	agreementRecord?.msa_id && !agreementRecord.archive_closed_at
+		? await env.MUSIC_DB.prepare(
+				"SELECT id,kind,canonical_text,effective_on,text_sha256 FROM software_agreements WHERE id=? AND client_id=? AND kind='msa' AND status='executed' AND archive_closed_at IS NULL",
+			)
+				.bind(agreementRecord.msa_id, agreementRecord.client_id)
+				.first<
+					Pick<
+						Agreement,
+						"id" | "kind" | "canonical_text" | "effective_on" | "text_sha256"
+					>
+				>()
+		: null;
+const agreementDocuments = [
+	masterAgreement,
+	agreementRecord?.id && !agreementRecord.archive_closed_at
+		? agreementRecord
+		: null,
+].filter((document): document is NonNullable<typeof document> =>
+	Boolean(document),
+);
 ---
 {!project || !terms ? <StudioUnavailable audio={false} backLabel="Back to your projects" /> : <BaseLayout title={`${terms.outcome} · Private project`} description="Your private project." noindex>
   <article class="site-shell software-project">

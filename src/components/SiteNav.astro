@@ -1,27 +1,40 @@
 ---
-import { mainSitePath, audioPath } from '~/lib/host-routing';
-import PersonalName from '~/components/PersonalName.astro';
-const host = (Astro.isPrerendered ? null : Astro.request.headers.get('host')) ?? Astro.url.host;
-const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
-const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
-const audioHref = (path: string) => Astro.isPrerendered ? new URL(`/audio${path}`, Astro.site).href : audioPath(host, path);
+import { mainSitePath, audioPath } from "~/lib/host-routing";
+import PersonalName from "~/components/PersonalName.astro";
+const host =
+	(Astro.isPrerendered ? null : Astro.request.headers.get("host")) ??
+	Astro.url.host;
+const mainHref = (path: string) =>
+	Astro.isPrerendered
+		? new URL(path, Astro.site).href
+		: mainSitePath(host, path);
+const isAudio =
+	host.split(":")[0] === "audio.thesuperhuman.us" ||
+	Astro.url.pathname.startsWith("/audio");
+const audioHref = (path: string) =>
+	Astro.isPrerendered
+		? new URL(`/audio${path}`, Astro.site).href
+		: audioPath(host, path);
 const links = [
-  { href: '/work', label: 'Work' },
-  { href: '/building', label: 'Building' },
-  { href: '/writing', label: 'Writing' },
-  { href: '/audio/', label: 'Audio' },
-  { href: '/about', label: 'About' },
+	{ href: "/work", label: "Work" },
+	{ href: "/building", label: "Building" },
+	{ href: "/writing", label: "Writing" },
+	{ href: "/audio/", label: "Audio" },
+	{ href: "/about", label: "About" },
 ];
 // The phone menu's "Work with me" group: the hub's three offers and the contact form, one tap each.
 const hire = [
-  { href: audioHref('/services'), label: 'Mixing & mastering' },
-  { href: mainHref('/services#website'), label: 'Website design' },
-  { href: mainHref('/services#software'), label: 'Software engineering' },
-  { href: mainHref('/#contact'), label: 'Get in touch' },
+	{ href: audioHref("/services"), label: "Mixing & mastering" },
+	{ href: mainHref("/services#website"), label: "Website design" },
+	{ href: mainHref("/services#software"), label: "Software engineering" },
+	{ href: mainHref("/#contact"), label: "Get in touch" },
 ];
-const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
-const active = (href: string) => (isAudio && href === '/audio/') || current === href || current.startsWith(`${href}/`);
-const onHub = current === '/services';
+const current = isAudio ? "" : Astro.url.pathname.replace(/\/$/, "") || "/";
+const active = (href: string) =>
+	(isAudio && href === "/audio/") ||
+	current === href ||
+	current.startsWith(`${href}/`);
+const onHub = current === "/services";
 ---
 <header class="site-header site-shell">
   <a class="site-name" href={mainHref('/')}><PersonalName variant="full" /></a>

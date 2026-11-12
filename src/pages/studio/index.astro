@@ -1,21 +1,47 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import StageTrack from '~/components/StageTrack.astro';
-import { clientPortalEnabled, clientProjectsForSession, clientSoftwareProjectsForSession, groupStudioProjects, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { projectTerms, softwareStateSentence } from '~/lib/software-projects';
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import StageTrack from "~/components/StageTrack.astro";
+import {
+	clientPortalEnabled,
+	clientProjectsForSession,
+	clientSoftwareProjectsForSession,
+	groupStudioProjects,
+	studioSessionFromRequest,
+} from "~/lib/audio-client-access";
+import { projectTerms, softwareStateSentence } from "~/lib/software-projects";
 const env = Astro.locals.runtime?.env;
-if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
-if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+if (!clientPortalEnabled(env))
+	return new Response("Not found", { status: 404 });
+if (!env.MUSIC_DB)
+	return new Response("Studio is temporarily unavailable.", { status: 503 });
 const token = studioSessionFromRequest(Astro.request);
-const projects = token ? await clientProjectsForSession(env.MUSIC_DB, token) : null;
-if (!projects) return Astro.redirect('/studio/sign-in');
+const projects = token
+	? await clientProjectsForSession(env.MUSIC_DB, token)
+	: null;
+if (!projects) return Astro.redirect("/studio/sign-in");
 const software = await clientSoftwareProjectsForSession(env.MUSIC_DB, token!);
 const { active, delivered: done } = groupStudioProjects(projects);
-const stageName = (stage: string, bookingStatus: string | null) => stage === 'accepted' && bookingStatus === 'paid' ? 'Booking paid'
-  : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
-const longDate = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-const through = (project: { final_expires_at: string | null; available: boolean }) => project.available ? `Available through ${longDate(project.final_expires_at!)}` : `Final files expired ${longDate(project.final_expires_at!)}`;
+const stageName = (stage: string, bookingStatus: string | null) =>
+	stage === "accepted" && bookingStatus === "paid"
+		? "Booking paid"
+		: stage
+				.replaceAll("_", " ")
+				.replace(/^./, (letter) => letter.toUpperCase());
+const longDate = (value: string) =>
+	new Date(value).toLocaleDateString("en-US", {
+		month: "long",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
+const through = (project: {
+	final_expires_at: string | null;
+	available: boolean;
+}) =>
+	project.available
+		? `Available through ${longDate(project.final_expires_at!)}`
+		: `Final files expired ${longDate(project.final_expires_at!)}`;
 ---
 <BaseLayout title="Your studio · Kazon" description={software?.length ? 'Your private projects.' : 'Your private audio projects.'} noindex>
   <article class="site-shell studio-home">

@@ -1,40 +1,46 @@
 ---
 export const prerender = false;
 
-import { getCollection } from 'astro:content';
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import AudioHero from '~/components/audio/AudioHero.astro';
-import MusicNav from '~/components/audio/MusicNav.astro';
-import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
-import PersonalNameText from '~/components/PersonalNameText.astro';
-import AudioFooter from '~/components/audio/AudioFooter.astro';
-import ServiceIcon from '~/components/audio/ServiceIcon.astro';
-import { audioServices } from '~/data/audio';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import { groupTracksByService, type AudioTrack } from '~/lib/audio-tracks';
-import { loadMusicCatalog } from '~/lib/music-content';
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import AudioHero from "~/components/audio/AudioHero.astro";
+import MusicNav from "~/components/audio/MusicNav.astro";
+import ComparisonPlayer from "~/components/audio/ComparisonPlayer.astro";
+import PersonalNameText from "~/components/PersonalNameText.astro";
+import AudioFooter from "~/components/audio/AudioFooter.astro";
+import ServiceIcon from "~/components/audio/ServiceIcon.astro";
+import { audioServices } from "~/data/audio";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import { groupTracksByService, type AudioTrack } from "~/lib/audio-tracks";
+import { loadMusicCatalog } from "~/lib/music-content";
 
-const entries = await getCollection('audio-tracks');
+const entries = await getCollection("audio-tracks");
 const tracks: AudioTrack[] = entries.map((e) => ({
-  slug: e.id,
-  ...(e.data as Omit<AudioTrack, 'slug'>),
+	slug: e.id,
+	...(e.data as Omit<AudioTrack, "slug">),
 }));
 const groups = groupTracksByService(tracks);
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const audioHref = (path: string) => audioPath(host, path);
 
 const catalog = await loadMusicCatalog();
-const example = catalog.examples.find(example => example.service === 'mastering');
-const recording = example && catalog.recordings.find(track => track.id === example.recordingId);
-const release = recording && catalog.releases.find(release => release.tracks.includes(recording.id));
+const example = catalog.examples.find(
+	(example) => example.service === "mastering",
+);
+const recording =
+	example &&
+	catalog.recordings.find((track) => track.id === example.recordingId);
+const release =
+	recording &&
+	catalog.releases.find((release) => release.tracks.includes(recording.id));
 
 const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: 'Kazon Wilson',
-  jobTitle: 'Audio Engineer',
-  url: 'https://thesuperhuman.us/audio/',
-  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+	"@context": "https://schema.org",
+	"@type": "Person",
+	name: "Kazon Wilson",
+	jobTitle: "Audio Engineer",
+	url: "https://thesuperhuman.us/audio/",
+	worksFor: { "@type": "Organization", name: "The Superhuman Group LLC" },
 };
 ---
 <BaseLayout

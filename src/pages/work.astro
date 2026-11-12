@@ -1,10 +1,17 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
-import ExperienceRow from '~/components/ExperienceRow.astro';
-import WorkDiagram from '~/components/WorkDiagram.astro';
-import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPreference } from '~/data/profile';
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import ExperienceRow from "~/components/ExperienceRow.astro";
+import WorkDiagram from "~/components/WorkDiagram.astro";
+import {
+	personJsonLd,
+	experience,
+	lyftBonus,
+	lyftTeams,
+	skuposStages,
+	workingPreference,
+} from "~/data/profile";
 ---
 <BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="See how I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft.">
   <div class="site-shell primary-page work-page">

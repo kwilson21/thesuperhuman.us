@@ -1,8 +1,10 @@
 ---
-import PersonalName from '~/components/PersonalName.astro';
-import { personalNameSegments } from '~/lib/personal-name';
+import PersonalName from "~/components/PersonalName.astro";
+import { personalNameSegments } from "~/lib/personal-name";
 
-interface Props { text: string }
+interface Props {
+	text: string;
+}
 const { text } = Astro.props;
 ---
 {personalNameSegments(text).map(segment =>

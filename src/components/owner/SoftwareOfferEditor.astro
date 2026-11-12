@@ -1,20 +1,84 @@
 ---
-import SoftwareAgreementDetails from './SoftwareAgreementDetails.astro';
-import SoftwareMilestone from './SoftwareMilestone.astro';
-import { paymentSchedules, type SoftwareOffer, type OfferTerms } from '~/lib/software-offers';
-interface Props { requestId: string; email: string; offers: SoftwareOffer[]; revoked: boolean; linkCreatedAt?: string; resolved?: boolean; withdrawn?: boolean; startedVersion?: number; path?: string }
-const { requestId, email, offers, revoked, linkCreatedAt, resolved = false, withdrawn = false, startedVersion, path } = Astro.props;
+import SoftwareAgreementDetails from "./SoftwareAgreementDetails.astro";
+import SoftwareMilestone from "./SoftwareMilestone.astro";
+import {
+	paymentSchedules,
+	type SoftwareOffer,
+	type OfferTerms,
+} from "~/lib/software-offers";
+interface Props {
+	requestId: string;
+	email: string;
+	offers: SoftwareOffer[];
+	revoked: boolean;
+	linkCreatedAt?: string;
+	resolved?: boolean;
+	withdrawn?: boolean;
+	startedVersion?: number;
+	path?: string;
+}
+const {
+	requestId,
+	email,
+	offers,
+	revoked,
+	linkCreatedAt,
+	resolved = false,
+	withdrawn = false,
+	startedVersion,
+	path,
+} = Astro.props;
 const closed = resolved || withdrawn || Boolean(startedVersion);
-const website = path === 'website';
-const fields: [name: 'clientInputs' | 'exclusions' | 'timing', label: string, limit: number, hint: string, placeholder: string][] = [
-  ['clientInputs', 'What you need from them', 1000, 'Access, files or decisions, one per line.', website ? 'Logo, photos and page text\nAn invite to your domain settings (not a password)' : 'Sample export of current client list'],
-  ['exclusions', 'Outside this offer', 1000, website ? 'One per line. Name hosting fees and updates after handoff here if the offer doesn’t include them.' : 'One per line.', website ? 'Writing page text from scratch\nUpdates after handoff\nHosting and domain fees' : 'Live rollout to your team'],
-  ['timing', 'Timing', 500, 'Up to 500 characters.', website ? 'About 4 weeks from the start date, once page text is in.' : 'About 3 weeks from the start date.'],
+const website = path === "website";
+const fields: [
+	name: "clientInputs" | "exclusions" | "timing",
+	label: string,
+	limit: number,
+	hint: string,
+	placeholder: string,
+][] = [
+	[
+		"clientInputs",
+		"What you need from them",
+		1000,
+		"Access, files or decisions, one per line.",
+		website
+			? "Logo, photos and page text\nAn invite to your domain settings (not a password)"
+			: "Sample export of current client list",
+	],
+	[
+		"exclusions",
+		"Outside this offer",
+		1000,
+		website
+			? "One per line. Name hosting fees and updates after handoff here if the offer doesn’t include them."
+			: "One per line.",
+		website
+			? "Writing page text from scratch\nUpdates after handoff\nHosting and domain fees"
+			: "Live rollout to your team",
+	],
+	[
+		"timing",
+		"Timing",
+		500,
+		"Up to 500 characters.",
+		website
+			? "About 4 weeks from the start date, once page text is in."
+			: "About 3 weeks from the start date.",
+	],
 ];
-const draft = offers.find(offer => offer.status === 'draft'), sent = offers.find(offer => offer.status === 'sent');
+const draft = offers.find((offer) => offer.status === "draft"),
+	sent = offers.find((offer) => offer.status === "sent");
 const current = draft ?? sent;
-const terms: OfferTerms | null = current ? JSON.parse(current.terms_json) : null;
-const date = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
+const terms: OfferTerms | null = current
+	? JSON.parse(current.terms_json)
+	: null;
+const date = (value: string) =>
+	new Date(value).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		timeZone: "America/New_York",
+	});
 ---
 <section class="rail-section wide software-offer-editor" data-software-editor={startedVersion ? undefined : true} data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`} data-preview={`/owner/requests/${encodeURIComponent(requestId)}/offer`} data-email={email} data-updated={draft?.updated_at ?? ''} data-version={draft?.version ?? ''} data-sent-updated={sent?.updated_at ?? ''} data-sent-version={sent?.version ?? ''} data-sent-date={sent?.sent_at ? date(sent.sent_at) : ''} data-revoked={String(revoked)}>
   {startedVersion ? <p>The project started from offer v{startedVersion}.</p> : <><h2>Offer</h2><p class="rail-muted rail-caption" data-offer-state>{withdrawn ? 'This request is withdrawn.' : resolved ? 'This request is resolved. Reopen it to make a new offer.' : sent ? `v${sent.version} sent ${date(sent.sent_at!)} · ${draft ? `Draft v${draft.version} in progress` : 'no changes since'}` : `Draft v${draft?.version ?? ((offers[0]?.version ?? 0) + 1)} · Not sent`}</p>

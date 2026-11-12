@@ -1,10 +1,10 @@
 ---
-import headphones from '~/assets/site/headphones-v1.webp';
-import { audioPath } from '~/lib/host-routing';
-import { audioOffers } from '~/lib/audio-intake';
-import ObjectLife from '~/components/ObjectLife.astro';
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
-const prices = `From $${audioOffers['vocal-mix'].price} per song for two-track vocal mixing. From $${audioOffers.mastering.price} for mastering. From $${audioOffers.bundle.price} for both. Custom work is quoted after review.`;
+import headphones from "~/assets/site/headphones-v1.webp";
+import { audioPath } from "~/lib/host-routing";
+import { audioOffers } from "~/lib/audio-intake";
+import ObjectLife from "~/components/ObjectLife.astro";
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
+const prices = `From $${audioOffers["vocal-mix"].price} per song for two-track vocal mixing. From $${audioOffers.mastering.price} for mastering. From $${audioOffers.bundle.price} for both. Custom work is quoted after review.`;
 ---
 <header class="audio-hero">
   <div><p class="page-kicker">Audio</p><h1 class="page-title">Mixing and<br />mastering.</h1><p class="page-lede">{prices}</p><div class="site-links"><a class="site-button" href={audioPath(host, '/start')}>Start your song</a><a class="site-button site-button-outline" href={audioPath(host, '/services')}>Prices and scope</a></div></div>

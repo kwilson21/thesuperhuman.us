@@ -1,41 +1,54 @@
 ---
 export const prerender = false;
-import { getEntry } from 'astro:content';
-import { lyftBonus } from '~/data/profile';
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Hero from '~/components/Hero.astro';
-import Footer from '~/components/Footer.astro';
-import ContactForm from '~/components/ContactForm.astro';
-import WorkWithMe from '~/components/WorkWithMe.astro';
-import PersonalNameText from '~/components/PersonalNameText.astro';
-import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
-import CodeField from '~/components/home/CodeField.astro';
-import SignalEdge from '~/components/home/SignalEdge.astro';
-import notebook from '~/assets/site/notebook-v1.webp';
-import tallyTransactions from '~/assets/projects/tally/transactions-demo-2026-09-26.webp';
-import kailleraLanding from '~/assets/projects/kaillera-next/landing-2026-09-26.webp';
-import { tallyStory } from '~/data/project-stories/tally';
-import { kailleraStory } from '~/data/project-stories/kaillera-next';
-import { capacityCells, parseFigure } from '~/lib/home-motion';
-import { loadMusicCatalog } from '~/lib/music-content';
-import { audioPath } from '~/lib/host-routing';
+import { getEntry } from "astro:content";
+import { lyftBonus } from "~/data/profile";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Hero from "~/components/Hero.astro";
+import Footer from "~/components/Footer.astro";
+import ContactForm from "~/components/ContactForm.astro";
+import WorkWithMe from "~/components/WorkWithMe.astro";
+import PersonalNameText from "~/components/PersonalNameText.astro";
+import ComparisonPlayer from "~/components/audio/ComparisonPlayer.astro";
+import CodeField from "~/components/home/CodeField.astro";
+import SignalEdge from "~/components/home/SignalEdge.astro";
+import notebook from "~/assets/site/notebook-v1.webp";
+import tallyTransactions from "~/assets/projects/tally/transactions-demo-2026-09-26.webp";
+import kailleraLanding from "~/assets/projects/kaillera-next/landing-2026-09-26.webp";
+import { tallyStory } from "~/data/project-stories/tally";
+import { kailleraStory } from "~/data/project-stories/kaillera-next";
+import { capacityCells, parseFigure } from "~/lib/home-motion";
+import { loadMusicCatalog } from "~/lib/music-content";
+import { audioPath } from "~/lib/host-routing";
 const musicCatalog = await loadMusicCatalog();
-const oldNewsExample = musicCatalog.examples.find(example => example.id === 'old-news-mastering');
-const oldNewsRecording = oldNewsExample && musicCatalog.recordings.find(recording => recording.id === oldNewsExample.recordingId);
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
-const essay = await getEntry('pages', 'ai-gives-you-speed');
-if (!essay) throw new Error('AI essay content missing');
+const oldNewsExample = musicCatalog.examples.find(
+	(example) => example.id === "old-news-mastering",
+);
+const oldNewsRecording =
+	oldNewsExample &&
+	musicCatalog.recordings.find(
+		(recording) => recording.id === oldNewsExample.recordingId,
+	);
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
+const essay = await getEntry("pages", "ai-gives-you-speed");
+if (!essay) throw new Error("AI essay content missing");
 // The pen stroke underlines the word the essay argues for; the title's words are unchanged.
-const penWord = 'Direction';
+const penWord = "Direction";
 const penAt = essay.data.title.lastIndexOf(penWord);
 const before = parseFigure(lyftBonus.before);
 const after = parseFigure(lyftBonus.after);
 const cells = before && after ? capacityCells(before, after) : 0;
 const jsonLd = {
-  '@context': 'https://schema.org', '@type': 'Person', name: 'Kazon Wilson',
-  jobTitle: 'Software Engineer', url: 'https://thesuperhuman.us',
-  sameAs: ['https://github.com/kwilson21', 'https://www.linkedin.com/in/kazonwilson/', 'https://ko-fi.com/kazonwilson'],
-  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+	"@context": "https://schema.org",
+	"@type": "Person",
+	name: "Kazon Wilson",
+	jobTitle: "Software Engineer",
+	url: "https://thesuperhuman.us",
+	sameAs: [
+		"https://github.com/kwilson21",
+		"https://www.linkedin.com/in/kazonwilson/",
+		"https://ko-fi.com/kazonwilson",
+	],
+	worksFor: { "@type": "Organization", name: "The Superhuman Group LLC" },
 };
 ---
 <BaseLayout title="Kazon Wilson · Software, sound, and things worth exploring" description="I build software, design websites, and mix and master music. Explore my projects, engineering work and writing." jsonLd={jsonLd}>

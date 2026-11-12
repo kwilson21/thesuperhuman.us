@@ -1,26 +1,35 @@
 ---
-import BaseLayout from './BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
-import '~/styles/project-journal.css';
+import BaseLayout from "./BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import "~/styles/project-journal.css";
 interface Props {
-  title: string;
-  subtitle: string;
-  description: string;
-  status: string;
-  journalHref: string;
-  ogImage?: string;
-  /** Overrides the browser tab title (and og:title) only; the visible <h1> always uses `title`.
-   * Falls back to "`${title} · Project journal · Kazon Wilson`" when omitted. Lets a project's
-   * separate routes (for example a story or archive view) carry their own tab title. */
-  pageTitle?: string;
-  /** When set, the title segment of the breadcrumb links here instead of being plain text. Used
-   * by a project's subpages (for example a story or archive view) to link back to its main page;
-   * omitted on that main page itself, where the segment names the current page. */
-  crumbHref?: string;
+	title: string;
+	subtitle: string;
+	description: string;
+	status: string;
+	journalHref: string;
+	ogImage?: string;
+	/** Overrides the browser tab title (and og:title) only; the visible <h1> always uses `title`.
+	 * Falls back to "`${title} · Project journal · Kazon Wilson`" when omitted. Lets a project's
+	 * separate routes (for example a story or archive view) carry their own tab title. */
+	pageTitle?: string;
+	/** When set, the title segment of the breadcrumb links here instead of being plain text. Used
+	 * by a project's subpages (for example a story or archive view) to link back to its main page;
+	 * omitted on that main page itself, where the segment names the current page. */
+	crumbHref?: string;
 }
-const { title, subtitle, description, status, journalHref, ogImage, pageTitle, crumbHref } = Astro.props;
+const {
+	title,
+	subtitle,
+	description,
+	status,
+	journalHref,
+	ogImage,
+	pageTitle,
+	crumbHref,
+} = Astro.props;
 // A same-page jump gets a down arrow; a link to another page gets a forward arrow.
-const journalArrow = journalHref.startsWith('#') ? '↓' : '→';
+const journalArrow = journalHref.startsWith("#") ? "↓" : "→";
 ---
 <BaseLayout title={pageTitle ?? `${title} · Project journal · Kazon Wilson`} description={description} ogImage={ogImage}>
   <div class="site-shell project-shell">

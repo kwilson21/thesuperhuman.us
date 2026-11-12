@@ -1,45 +1,103 @@
 ---
-import type { ProjectUpdate } from '~/lib/audio-project-updates';
-import { projectToday } from '~/lib/audio-project-updates';
-import type { NextStep } from '~/lib/audio-project-next-step';
-import '~/styles/studio.css';
+import type { ProjectUpdate } from "~/lib/audio-project-updates";
+import { projectToday } from "~/lib/audio-project-updates";
+import type { NextStep } from "~/lib/audio-project-next-step";
+import "~/styles/studio.css";
 
 type Props = {
-  updates: ProjectUpdate[];
-  currentDueAt: string | null;
-  stage: string;
-  requestStatus?: string;
-  bookingPaid?: boolean;
-  revoked?: boolean;
-  endpoint?: string;
-  /** The Accept form's starting first update. */
-  firstUpdate?: string;
-  /** The owner's next step, shown above the actions. */
-  nextStep?: NextStep | null;
+	updates: ProjectUpdate[];
+	currentDueAt: string | null;
+	stage: string;
+	requestStatus?: string;
+	bookingPaid?: boolean;
+	revoked?: boolean;
+	endpoint?: string;
+	/** The Accept form's starting first update. */
+	firstUpdate?: string;
+	/** The owner's next step, shown above the actions. */
+	nextStep?: NextStep | null;
 };
-const { updates, currentDueAt, stage, requestStatus, bookingPaid = false, revoked = false, endpoint, firstUpdate = '', nextStep = null } = Astro.props;
+const {
+	updates,
+	currentDueAt,
+	stage,
+	requestStatus,
+	bookingPaid = false,
+	revoked = false,
+	endpoint,
+	firstUpdate = "",
+	nextStep = null,
+} = Astro.props;
 const owner = Boolean(endpoint);
-const active = stage !== 'complete' && requestStatus !== 'withdrawn' && !revoked;
+const active =
+	stage !== "complete" && requestStatus !== "withdrawn" && !revoked;
 const reasonLabels = {
-  protect_song: 'More time to protect the song',
-  client_clarification: 'Waiting on client clarification',
-  schedule_conflict: 'Scheduling conflict',
+	protect_song: "More time to protect the song",
+	client_clarification: "Waiting on client clarification",
+	schedule_conflict: "Scheduling conflict",
 };
-const shortDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-const dateLabel = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+const shortDate = (value: string) =>
+	new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+	});
+const dateLabel = (value: string) =>
+	new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
+		month: "long",
+		day: "numeric",
+		year: "numeric",
+	});
 const today = projectToday();
-const nextDay = currentDueAt ? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : today;
+const nextDay = currentDueAt
+	? new Date(Date.parse(`${currentDueAt}T12:00:00Z`) + 86_400_000)
+			.toISOString()
+			.slice(0, 10)
+	: today;
 const laterDate = nextDay > today ? nextDay : today;
 // Each kind of event gets its own node shape, so the line reads at a glance.
-const node = (update: ProjectUpdate) => update.file_version === 'final' ? 'final' : update.file_version === 'review' ? 'review'
-  : update.kind === 'date_changed' ? 'date' : update.milestone === 'completed' ? 'complete'
-  : update.kind === 'accepted' || update.kind === 'work_started' || update.milestone ? 'milestone' : 'note';
-const title = (update: ProjectUpdate) => update.file_version === 'review' ? 'Review ready' : update.file_version === 'final' ? 'Final files ready'
-  : update.milestone === 'revision_started' ? 'Revision started' : update.milestone === 'completed' ? 'Project complete'
-  : update.kind === 'accepted' ? 'Project accepted' : update.kind === 'work_started' ? 'Work started' : update.kind === 'date_changed' ? 'Date moved' : 'Studio update';
+const node = (update: ProjectUpdate) =>
+	update.file_version === "final"
+		? "final"
+		: update.file_version === "review"
+			? "review"
+			: update.kind === "date_changed"
+				? "date"
+				: update.milestone === "completed"
+					? "complete"
+					: update.kind === "accepted" ||
+							update.kind === "work_started" ||
+							update.milestone
+						? "milestone"
+						: "note";
+const title = (update: ProjectUpdate) =>
+	update.file_version === "review"
+		? "Review ready"
+		: update.file_version === "final"
+			? "Final files ready"
+			: update.milestone === "revision_started"
+				? "Revision started"
+				: update.milestone === "completed"
+					? "Project complete"
+					: update.kind === "accepted"
+						? "Project accepted"
+						: update.kind === "work_started"
+							? "Work started"
+							: update.kind === "date_changed"
+								? "Date moved"
+								: "Studio update";
 // After the final delivery, the date that matters is the file's availability, not the due date.
-const upcoming = active && currentDueAt && stage !== 'final_files_ready' ? currentDueAt : null;
-const stamp = (value: string) => new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+const upcoming =
+	active && currentDueAt && stage !== "final_files_ready" ? currentDueAt : null;
+const stamp = (value: string) =>
+	new Date(value).toLocaleString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		timeZone: "America/New_York",
+		timeZoneName: "short",
+	});
 ---
 <section class:list={['project-updates', { owner }]} data-audio-project-updates data-endpoint={endpoint} aria-labelledby="project-updates-heading">
   <div class="project-updates-heading"><p class="project-updates-kicker">Progress</p><h2 id="project-updates-heading">{owner ? 'Timeline' : 'Your song’s timeline'}</h2></div>

@@ -1,22 +1,30 @@
 ---
-import '~/styles/studio.css';
+import "~/styles/studio.css";
 
-type Props = { stage: string; bookingPaid?: boolean; size?: 'full' | 'mini' };
-const { stage, bookingPaid = false, size = 'full' } = Astro.props;
+type Props = { stage: string; bookingPaid?: boolean; size?: "full" | "mini" };
+const { stage, bookingPaid = false, size = "full" } = Astro.props;
 // "Booking paid" is derived from Stripe while the stored stage stays Accepted.
 const stages = [
-  ['files_under_review', 'Files under review'],
-  ['accepted', 'Accepted'],
-  ['booking_paid', 'Booking paid'],
-  ['in_progress', 'In progress'],
-  ['review_ready', 'Review ready'],
-  ['revision_in_progress', 'Revision in progress'],
-  ['final_files_ready', 'Final files ready'],
-  ['complete', 'Complete'],
+	["files_under_review", "Files under review"],
+	["accepted", "Accepted"],
+	["booking_paid", "Booking paid"],
+	["in_progress", "In progress"],
+	["review_ready", "Review ready"],
+	["revision_in_progress", "Revision in progress"],
+	["final_files_ready", "Final files ready"],
+	["complete", "Complete"],
 ] as const;
-const shown = stage === 'accepted' && bookingPaid ? 'booking_paid' : stage;
-const current = Math.max(0, stages.findIndex(([key]) => key === shown));
-const state = (index: number) => index < current || shown === 'complete' ? 'done' : index === current ? 'current' : 'upcoming';
+const shown = stage === "accepted" && bookingPaid ? "booking_paid" : stage;
+const current = Math.max(
+	0,
+	stages.findIndex(([key]) => key === shown),
+);
+const state = (index: number) =>
+	index < current || shown === "complete"
+		? "done"
+		: index === current
+			? "current"
+			: "upcoming";
 ---
 <div class:list={['stage-track', size]}>
   <ol aria-label={`Stage ${current + 1} of ${stages.length}: ${stages[current][1]}`}>

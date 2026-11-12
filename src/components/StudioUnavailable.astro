@@ -1,6 +1,10 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro';
-const { backLabel = 'Back to your songs', backHref = '/studio', audio = true } = Astro.props;
+import BaseLayout from "~/layouts/BaseLayout.astro";
+const {
+	backLabel = "Back to your songs",
+	backHref = "/studio",
+	audio = true,
+} = Astro.props;
 ---
 <BaseLayout title="Project unavailable · Studio" description="This studio project isn’t available." noindex>
   <article class="site-shell studio-unavailable">

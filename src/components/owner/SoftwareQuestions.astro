@@ -1,8 +1,13 @@
 ---
-interface Props { requestId: string; path?: string }
+interface Props {
+	requestId: string;
+	path?: string;
+}
 const { requestId, path } = Astro.props;
-const website = path === 'website';
-const questionPlaceholder = website ? 'Could you send the page text and photos you have so far?' : 'Could you share an example of the export you use today?';
+const website = path === "website";
+const questionPlaceholder = website
+	? "Could you send the page text and photos you have so far?"
+	: "Could you share an example of the export you use today?";
 ---
 {(['question','decline'] as const).map(action => <section class="rail-section software-rail"><h2>{action === 'question' ? 'Ask a question' : 'Decline'}</h2>
   <form data-software-action={action} data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>

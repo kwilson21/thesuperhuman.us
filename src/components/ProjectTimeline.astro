@@ -1,25 +1,51 @@
 ---
-import PayloadReviewIllustration from './PayloadReviewIllustration.astro';
-import PersonalName from './PersonalName.astro';
-import { personalNameSegments } from '~/lib/personal-name';
-import type { Milestone } from '~/lib/project-story';
+import PayloadReviewIllustration from "./PayloadReviewIllustration.astro";
+import PersonalName from "./PersonalName.astro";
+import { personalNameSegments } from "~/lib/personal-name";
+import type { Milestone } from "~/lib/project-story";
 interface Props {
-  id: string; title: string; entries: Milestone[]; selectedId?: string; unavailable?: boolean;
-  /** Personal Website's reading mode: one active panel, no "Show all entries", and a next-path
-   * nav to the project story and archive in place of it. Every other project page omits this. */
-  bounded?: boolean; storyHref?: string; archiveHref?: string;
-  /** A short line rendered under the heading, always visible (with or without JavaScript). */
-  lead?: string;
-  /** Keep the order given (the project story reads oldest first). Otherwise entries are shown newest first. */
-  chronological?: boolean;
-  /** How many milestones the picker lists at once; the rest are reached by paging. */
-  pageSize?: number;
+	id: string;
+	title: string;
+	entries: Milestone[];
+	selectedId?: string;
+	unavailable?: boolean;
+	/** Personal Website's reading mode: one active panel, no "Show all entries", and a next-path
+	 * nav to the project story and archive in place of it. Every other project page omits this. */
+	bounded?: boolean;
+	storyHref?: string;
+	archiveHref?: string;
+	/** A short line rendered under the heading, always visible (with or without JavaScript). */
+	lead?: string;
+	/** Keep the order given (the project story reads oldest first). Otherwise entries are shown newest first. */
+	chronological?: boolean;
+	/** How many milestones the picker lists at once; the rest are reached by paging. */
+	pageSize?: number;
 }
-const { id, title, entries: given, selectedId, unavailable = false, bounded = false, storyHref, archiveHref, lead, chronological = false, pageSize = 6 } = Astro.props;
-const entries = chronological ? given : given.slice().sort((a, b) => b.day.localeCompare(a.day));
+const {
+	id,
+	title,
+	entries: given,
+	selectedId,
+	unavailable = false,
+	bounded = false,
+	storyHref,
+	archiveHref,
+	lead,
+	chronological = false,
+	pageSize = 6,
+} = Astro.props;
+const entries = chronological
+	? given
+	: given.slice().sort((a, b) => b.day.localeCompare(a.day));
 const pageCount = Math.ceil(entries.length / pageSize);
-const hasHighlights = Astro.slots.has('highlights');
-const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const hasHighlights = Astro.slots.has("highlights");
+const date = (day: string) =>
+	new Date(day + "T12:00:00Z").toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
 ---
 <section class="project-timeline" data-timeline data-selected-id={selectedId} data-page-size={pageSize} data-order={chronological ? 'oldest' : 'newest'} aria-labelledby={`${id}-title`}>
   <div class="site-section-heading"><h2 id={`${id}-title`}>{title}</h2></div>

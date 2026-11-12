@@ -2,226 +2,394 @@
 
 /** Every public page. tests/scripts/screenshots.test.ts fails when a page file is missing here. */
 export const PAGES = [
-  { name: 'home', path: '/' },
-  { name: 'work', path: '/work' },
-  { name: 'building', path: '/building' },
-  { name: 'building-personal-website', path: '/building/personal-website' },
-  { name: 'building-personal-website-story', path: '/building/personal-website/story' },
-  { name: 'building-personal-website-archive', path: '/building/personal-website/archive' },
-  { name: 'building-kaillera-next', path: '/building/kaillera-next' },
-  { name: 'building-tally', path: '/building/tally' },
-  { name: 'building-threadline', path: '/building/threadline' },
-  { name: 'building-the-engineers-daily', path: '/building/the-engineers-daily' },
-  { name: 'writing', path: '/writing' },
-  { name: 'writing-ai-gives-you-speed', path: '/writing/ai-gives-you-speed' },
-  { name: 'about', path: '/about' },
-  { name: 'services', path: '/services' },
-  { name: 'privacy', path: '/privacy' },
-  { name: 'audio', path: '/audio' },
-  { name: 'audio-portfolio', path: '/audio/portfolio' },
-  { name: 'audio-releases', path: '/audio/releases' },
-  { name: 'audio-services', path: '/audio/services' },
-  { name: 'audio-start', path: '/audio/start' },
-  { name: 'software-start', path: '/software/start' },
-  { name: 'music-old-news', path: '/music/old-news' },
-  { name: 'studio-sign-in', path: '/studio/sign-in' },
-  { name: 'not-found', path: '/this-page-does-not-exist', status: 404 },
-  { name: 'owner-today', path: '/owner', owner: true },
-  { name: 'owner-requests', path: '/owner/requests', owner: true },
-  { name: 'owner-campaigns', path: '/owner/campaigns', owner: true },
+	{ name: "home", path: "/" },
+	{ name: "work", path: "/work" },
+	{ name: "building", path: "/building" },
+	{ name: "building-personal-website", path: "/building/personal-website" },
+	{
+		name: "building-personal-website-story",
+		path: "/building/personal-website/story",
+	},
+	{
+		name: "building-personal-website-archive",
+		path: "/building/personal-website/archive",
+	},
+	{ name: "building-kaillera-next", path: "/building/kaillera-next" },
+	{ name: "building-tally", path: "/building/tally" },
+	{ name: "building-threadline", path: "/building/threadline" },
+	{
+		name: "building-the-engineers-daily",
+		path: "/building/the-engineers-daily",
+	},
+	{ name: "writing", path: "/writing" },
+	{ name: "writing-ai-gives-you-speed", path: "/writing/ai-gives-you-speed" },
+	{ name: "about", path: "/about" },
+	{ name: "services", path: "/services" },
+	{ name: "privacy", path: "/privacy" },
+	{ name: "audio", path: "/audio" },
+	{ name: "audio-portfolio", path: "/audio/portfolio" },
+	{ name: "audio-releases", path: "/audio/releases" },
+	{ name: "audio-services", path: "/audio/services" },
+	{ name: "audio-start", path: "/audio/start" },
+	{ name: "software-start", path: "/software/start" },
+	{ name: "music-old-news", path: "/music/old-news" },
+	{ name: "studio-sign-in", path: "/studio/sign-in" },
+	{ name: "not-found", path: "/this-page-does-not-exist", status: 404 },
+	{ name: "owner-today", path: "/owner", owner: true },
+	{ name: "owner-requests", path: "/owner/requests", owner: true },
+	{ name: "owner-campaigns", path: "/owner/campaigns", owner: true },
 ];
 
 /** Page files that are covered another way. */
 export const NOT_PAGES = {
-  'src/pages/404.astro': 'Captured through not-found.',
-  'src/pages/music/[slug].astro': 'Captured through music-old-news.',
+	"src/pages/404.astro": "Captured through not-found.",
+	"src/pages/music/[slug].astro": "Captured through music-old-news.",
 };
 
 /** Bare one-time links must refuse access, including a seeded offer with no email key. */
 export const BARE_LINK_LANDINGS = [
-  { name: 'archive-expired-link', path: '/agreements/verify', status: 401 },
-  { name: 'link-landing', path: `/offer/${'g'.repeat(43)}/verify`, status: 401 },
+	{ name: "archive-expired-link", path: "/agreements/verify", status: 401 },
+	{
+		name: "link-landing",
+		path: `/offer/${"g".repeat(43)}/verify`,
+		status: 401,
+	},
 ];
 
 /** Page files that only redirect. Capture checks each one answers with this status and location. */
 export const REDIRECTS = {
-  'src/pages/services.html.astro': { from: '/services.html', to: '/services', status: 301 },
-  'src/pages/audio/about.astro': { from: '/audio/about', to: '/audio/services', status: 301 },
+	"src/pages/services.html.astro": {
+		from: "/services.html",
+		to: "/services",
+		status: 301,
+	},
+	"src/pages/audio/about.astro": {
+		from: "/audio/about",
+		to: "/audio/services",
+		status: 301,
+	},
 };
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
-  'src/pages/agreements.astro': {scenario:'software-signing',route:'/agreements'},
-  'src/pages/owner/agreements.astro': {scenario:'software-signing',route:'/owner/agreements'},
-  'src/pages/offer/[token]/verify.astro': {scenario:'software-signing',route:'/offer/'},
-  'src/pages/agreements/verify.astro': {scenario:'software-signing',route:'/agreements/verify'},
-  'src/pages/offer/[token]/sign.astro': {scenario:'software-signing',route:'/offer/'},
-  'src/pages/studio/software/[id].astro': { scenario: 'software-project', route: '/studio/software/' },
-  'src/pages/owner/requests/[id]/update.astro': { scenario: 'software-project', route: '/owner/requests/screenshot-software-project/update' },
-  'src/pages/offer/[token].astro': { scenario: 'software-offer', route: '/offer/' },
-  'src/pages/owner/requests/[id]/offer.astro': { scenario: 'software-offer', route: '/owner/requests/screenshot-offer/offer' },
-  'src/pages/software/start.astro': { scenario: 'software-brief', route: '/software/start' },
-  'src/pages/owner/requests/[id].astro': { scenario: 'owner-details', route: '/owner/requests/' },
-  'src/pages/owner/campaigns/[id].astro': { scenario: 'owner-details', route: '/owner/campaigns/' },
-  'src/pages/studio/index.astro': { scenario: 'studio-client', route: '/studio' },
-  'src/pages/studio/projects/[id].astro': { scenario: 'studio-client', route: '/studio/projects/' },
+	"src/pages/agreements.astro": {
+		scenario: "software-signing",
+		route: "/agreements",
+	},
+	"src/pages/owner/agreements.astro": {
+		scenario: "software-signing",
+		route: "/owner/agreements",
+	},
+	"src/pages/offer/[token]/verify.astro": {
+		scenario: "software-signing",
+		route: "/offer/",
+	},
+	"src/pages/agreements/verify.astro": {
+		scenario: "software-signing",
+		route: "/agreements/verify",
+	},
+	"src/pages/offer/[token]/sign.astro": {
+		scenario: "software-signing",
+		route: "/offer/",
+	},
+	"src/pages/studio/software/[id].astro": {
+		scenario: "software-project",
+		route: "/studio/software/",
+	},
+	"src/pages/owner/requests/[id]/update.astro": {
+		scenario: "software-project",
+		route: "/owner/requests/screenshot-software-project/update",
+	},
+	"src/pages/offer/[token].astro": {
+		scenario: "software-offer",
+		route: "/offer/",
+	},
+	"src/pages/owner/requests/[id]/offer.astro": {
+		scenario: "software-offer",
+		route: "/owner/requests/screenshot-offer/offer",
+	},
+	"src/pages/software/start.astro": {
+		scenario: "software-brief",
+		route: "/software/start",
+	},
+	"src/pages/owner/requests/[id].astro": {
+		scenario: "owner-details",
+		route: "/owner/requests/",
+	},
+	"src/pages/owner/campaigns/[id].astro": {
+		scenario: "owner-details",
+		route: "/owner/campaigns/",
+	},
+	"src/pages/studio/index.astro": {
+		scenario: "studio-client",
+		route: "/studio",
+	},
+	"src/pages/studio/projects/[id].astro": {
+		scenario: "studio-client",
+		route: "/studio/projects/",
+	},
 };
 
 // Show representative routes when shared UI changes, and focused routes for content changes.
 // The full capture still runs in CI; this only selects which validated captures appear in the PR.
-const SHARED_SITE_PAGES = ['home', 'work', 'audio', 'services', 'audio-services'];
-const AUDIO_SHELL_PAGES = ['audio', 'audio-portfolio', 'audio-releases', 'audio-services', 'audio-start', 'music-old-news'];
-const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(name => name !== 'audio-start');
-const MUSIC_CATALOG_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'];
-const MUSIC_HUB_PAGES = ['audio-portfolio', 'audio-releases', 'audio-services'];
+const SHARED_SITE_PAGES = [
+	"home",
+	"work",
+	"audio",
+	"services",
+	"audio-services",
+];
+const AUDIO_SHELL_PAGES = [
+	"audio",
+	"audio-portfolio",
+	"audio-releases",
+	"audio-services",
+	"audio-start",
+	"music-old-news",
+];
+const AUDIO_NAV_PAGES = AUDIO_SHELL_PAGES.filter(
+	(name) => name !== "audio-start",
+);
+const MUSIC_CATALOG_PAGES = [
+	"audio-portfolio",
+	"audio-releases",
+	"audio-services",
+	"music-old-news",
+];
+const MUSIC_HUB_PAGES = ["audio-portfolio", "audio-releases", "audio-services"];
 // The homepage shows the compact A/B player; the audio pages show the full one.
-const COMPARISON_PAGES = ['home', 'audio', 'audio-portfolio', 'audio-services'];
-const PROJECT_STORY_PAGES = ['building-personal-website', 'building-personal-website-story', 'building-personal-website-archive', 'building-kaillera-next', 'building-tally', 'building-threadline', 'building-the-engineers-daily'];
-const OWNER_PAGES = ['owner-today', 'owner-requests', 'owner-campaigns'];
+const COMPARISON_PAGES = ["home", "audio", "audio-portfolio", "audio-services"];
+const PROJECT_STORY_PAGES = [
+	"building-personal-website",
+	"building-personal-website-story",
+	"building-personal-website-archive",
+	"building-kaillera-next",
+	"building-tally",
+	"building-threadline",
+	"building-the-engineers-daily",
+];
+const OWNER_PAGES = ["owner-today", "owner-requests", "owner-campaigns"];
 const PAGE_NAMES_BY_FILE = {
-  'src/components/SiteNav.astro': SHARED_SITE_PAGES,
-  'src/components/Footer.astro': SHARED_SITE_PAGES,
-  'src/layouts/BaseLayout.astro': SHARED_SITE_PAGES,
-  'src/components/ExperienceRow.astro': ['work'],
-  'src/components/Hero.astro': ['home'],
-  'src/components/WorkWithMe.astro': ['home', 'services'],
-  'src/data/work-with-me.ts': ['home', 'services'],
-  'src/layouts/ServiceSheet.astro': ['services'],
-  'src/content/pages/about.md': ['about'],
-  'src/data/profile.ts': ['home', 'work', 'about', 'services'],
-  'src/data/audio.ts': ['audio'],
-  'src/data/services.ts': ['services'],
-  'src/data/project-stories/tally.ts': ['building-tally', 'services'],
-  'src/data/project-stories/kaillera-next.ts': ['building-kaillera-next', 'services'],
-  'src/components/WorkDiagram.astro': ['work', 'services'],
-  'src/assets/site/tally-transactions.webp': ['services'],
-  'src/assets/site/work-with-me-website.webp': ['home', 'services'],
-  'src/styles/service-pages.css': ['services', 'audio-services'],
-  'src/styles/global.css': SHARED_SITE_PAGES,
-  'src/styles/audio-intake.css': ['audio-start', 'software-start', 'services'],
-  'src/styles/software-intake.css': ['software-start'],
-  'src/scripts/brief-autocomplete.ts': ['software-start'],
-  'src/pages/api/software/brief/suggest.ts': ['software-start'],
-  'src/scripts/software-inquiry.ts': ['software-start'],
-  'src/lib/software-inquiry.ts': ['software-start', 'services'],
-  'src/styles/music.css': MUSIC_CATALOG_PAGES,
-  'src/styles/music-hubs.css': MUSIC_HUB_PAGES,
-  'src/styles/music-premiere.css': ['music-old-news'],
-  'src/styles/project-journal.css': PROJECT_STORY_PAGES,
-  'src/styles/owner.css': OWNER_PAGES,
-  'src/styles/studio.css': ['studio-sign-in', 'owner-today'],
-  'src/content/pages/ai-gives-you-speed.md': ['writing-ai-gives-you-speed'],
-  'src/components/audio/AudioHero.astro': ['audio'],
-  'src/components/audio/AudioFooter.astro': AUDIO_SHELL_PAGES,
-  'src/components/audio/MusicNav.astro': AUDIO_NAV_PAGES,
-  'src/components/audio/ServiceIcon.astro': ['audio', 'audio-portfolio'],
-  'src/components/audio/ComparisonPlayer.astro': COMPARISON_PAGES,
-  'src/scripts/comparison-player.ts': COMPARISON_PAGES,
-  'src/lib/waveform.ts': COMPARISON_PAGES,
-  'src/components/audio/PlayIcon.astro': ['audio-portfolio', 'audio-releases', 'audio-services', 'music-old-news'],
-  'src/components/audio/LyricVideo.astro': ['music-old-news'],
-  'src/components/audio/ReleaseInterest.astro': ['music-old-news'],
-  'src/components/audio/AudioPlayer.astro': ['audio-releases', 'music-old-news'],
+	"src/components/SiteNav.astro": SHARED_SITE_PAGES,
+	"src/components/Footer.astro": SHARED_SITE_PAGES,
+	"src/layouts/BaseLayout.astro": SHARED_SITE_PAGES,
+	"src/components/ExperienceRow.astro": ["work"],
+	"src/components/Hero.astro": ["home"],
+	"src/components/WorkWithMe.astro": ["home", "services"],
+	"src/data/work-with-me.ts": ["home", "services"],
+	"src/layouts/ServiceSheet.astro": ["services"],
+	"src/content/pages/about.md": ["about"],
+	"src/data/profile.ts": ["home", "work", "about", "services"],
+	"src/data/audio.ts": ["audio"],
+	"src/data/services.ts": ["services"],
+	"src/data/project-stories/tally.ts": ["building-tally", "services"],
+	"src/data/project-stories/kaillera-next.ts": [
+		"building-kaillera-next",
+		"services",
+	],
+	"src/components/WorkDiagram.astro": ["work", "services"],
+	"src/assets/site/tally-transactions.webp": ["services"],
+	"src/assets/site/work-with-me-website.webp": ["home", "services"],
+	"src/styles/service-pages.css": ["services", "audio-services"],
+	"src/styles/global.css": SHARED_SITE_PAGES,
+	"src/styles/audio-intake.css": ["audio-start", "software-start", "services"],
+	"src/styles/software-intake.css": ["software-start"],
+	"src/scripts/brief-autocomplete.ts": ["software-start"],
+	"src/pages/api/software/brief/suggest.ts": ["software-start"],
+	"src/scripts/software-inquiry.ts": ["software-start"],
+	"src/lib/software-inquiry.ts": ["software-start", "services"],
+	"src/styles/music.css": MUSIC_CATALOG_PAGES,
+	"src/styles/music-hubs.css": MUSIC_HUB_PAGES,
+	"src/styles/music-premiere.css": ["music-old-news"],
+	"src/styles/project-journal.css": PROJECT_STORY_PAGES,
+	"src/styles/owner.css": OWNER_PAGES,
+	"src/styles/studio.css": ["studio-sign-in", "owner-today"],
+	"src/content/pages/ai-gives-you-speed.md": ["writing-ai-gives-you-speed"],
+	"src/components/audio/AudioHero.astro": ["audio"],
+	"src/components/audio/AudioFooter.astro": AUDIO_SHELL_PAGES,
+	"src/components/audio/MusicNav.astro": AUDIO_NAV_PAGES,
+	"src/components/audio/ServiceIcon.astro": ["audio", "audio-portfolio"],
+	"src/components/audio/ComparisonPlayer.astro": COMPARISON_PAGES,
+	"src/scripts/comparison-player.ts": COMPARISON_PAGES,
+	"src/lib/waveform.ts": COMPARISON_PAGES,
+	"src/components/audio/PlayIcon.astro": [
+		"audio-portfolio",
+		"audio-releases",
+		"audio-services",
+		"music-old-news",
+	],
+	"src/components/audio/LyricVideo.astro": ["music-old-news"],
+	"src/components/audio/ReleaseInterest.astro": ["music-old-news"],
+	"src/components/audio/AudioPlayer.astro": [
+		"audio-releases",
+		"music-old-news",
+	],
 };
 const SCENARIO_NAMES_BY_FILE = {
-  'src/data/work-with-me.ts': ['services-print'],
-  'src/data/project-stories/tally.ts': ['services-print'],
-  'src/data/project-stories/kaillera-next.ts': ['services-print'],
-  'src/components/SoftwareOffer.astro': ['software-offer'],
-  'src/components/owner/SoftwareOfferEditor.astro': ['software-offer', 'website-brief'],
-  'src/components/owner/SoftwareMilestone.astro': ['software-offer', 'website-brief'],
-  'src/components/owner/SoftwareFitReview.astro': ['software-offer', 'website-brief'],
-  'src/components/owner/SoftwareQuestions.astro': ['software-offer', 'website-brief'],
-  'src/pages/software/start.astro': ['website-brief'],
-  'src/components/SoftwareProjectUpdate.astro': ['software-project'],
-  'src/components/SoftwareReviewResponse.astro': ['software-project'],
-  'src/scripts/software-review.ts': ['software-project'],
-  'src/pages/api/studio/software/[id]/reviews/[updateId].ts': ['software-project'],
-  'src/components/SoftwareStepTrack.astro': ['software-project'],
-  'src/components/owner/SoftwareProjectPanel.astro': ['software-project'],
-  'src/scripts/software-project.ts': ['software-project'],
-  'src/scripts/software-composer.ts': ['software-project'],
-  'src/lib/software-projects.ts': ['software-project'],
-  'src/lib/software-project-messages.ts': ['software-project'],
-  'src/lib/software-visuals.ts': ['software-project'],
-  'src/pages/api/owner/requests/[id]/project.ts': ['software-project'],
-  'src/pages/api/owner/requests/[id]/updates.ts': ['software-project'],
-  'src/pages/api/owner/requests/[id]/messages.ts': ['software-project'],
-  'src/pages/api/owner/requests/[id]/updates/[updateId]/visual.ts': ['software-project'],
-  'src/pages/api/studio/software/[id]/messages.ts': ['software-project'],
-  'src/pages/api/studio/software/[id]/updates/[updateId]/visual.ts': ['software-project'],
-  'src/scripts/software-offers.ts': ['software-offer'],
-  'src/lib/audio-client-access.ts': ['studio-client', 'software-project'],
-  'src/lib/client-emails.ts': ['studio-client', 'software-project'],
-  'src/pages/studio/sign-in.astro': ['software-project'],
-  'src/pages/studio/index.astro': ['studio-client', 'software-project'],
-  'src/components/StudioUnavailable.astro': ['studio-client', 'software-project'],
-  'src/lib/software-offers.ts': ['software-offer'],
-  'src/pages/api/owner/requests/[id]/software.ts': ['software-offer'],
-  'src/styles/service-pages.css': ['services-print'],
-  'src/styles/audio-intake.css': ['services-print'],
-  'src/data/profile.ts': ['services-print'],
-  'src/layouts/ServiceSheet.astro': ['services-print'],
-  'src/data/services.ts': ['services-print'],
-  'src/components/owner/OwnerProjectFiles.astro': ['studio-client'],
-  'src/styles/owner.css': ['owner-details', 'software-brief', 'software-offer', 'software-project', 'website-brief'],
-  'src/lib/software-inquiry.ts': ['software-brief', 'services-print', 'website-brief'],
-  'src/scripts/brief-autocomplete.ts': ['software-brief', 'website-brief'],
-  'src/pages/api/software/brief/suggest.ts': ['software-brief'],
-  'src/scripts/software-inquiry.ts': ['software-brief', 'website-brief'],
-  'src/pages/api/software-inquiry.ts': ['software-brief', 'website-brief'],
-  'src/styles/software-intake.css': ['software-brief', 'website-brief'],
-  'src/pages/owner/requests/[id].astro': ['software-brief', 'software-offer', 'software-project', 'website-brief'],
-  'src/pages/owner/requests/index.astro': ['software-brief', 'website-brief'],
-  'src/components/owner/RequestList.astro': ['software-brief', 'website-brief'],
-  'src/styles/studio.css': ['studio-client', 'owner-details', 'software-project'],
+	"src/data/work-with-me.ts": ["services-print"],
+	"src/data/project-stories/tally.ts": ["services-print"],
+	"src/data/project-stories/kaillera-next.ts": ["services-print"],
+	"src/components/SoftwareOffer.astro": ["software-offer"],
+	"src/components/owner/SoftwareOfferEditor.astro": [
+		"software-offer",
+		"website-brief",
+	],
+	"src/components/owner/SoftwareMilestone.astro": [
+		"software-offer",
+		"website-brief",
+	],
+	"src/components/owner/SoftwareFitReview.astro": [
+		"software-offer",
+		"website-brief",
+	],
+	"src/components/owner/SoftwareQuestions.astro": [
+		"software-offer",
+		"website-brief",
+	],
+	"src/pages/software/start.astro": ["website-brief"],
+	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
+	"src/components/SoftwareReviewResponse.astro": ["software-project"],
+	"src/scripts/software-review.ts": ["software-project"],
+	"src/pages/api/studio/software/[id]/reviews/[updateId].ts": [
+		"software-project",
+	],
+	"src/components/SoftwareStepTrack.astro": ["software-project"],
+	"src/components/owner/SoftwareProjectPanel.astro": ["software-project"],
+	"src/scripts/software-project.ts": ["software-project"],
+	"src/scripts/software-composer.ts": ["software-project"],
+	"src/lib/software-projects.ts": ["software-project"],
+	"src/lib/software-project-messages.ts": ["software-project"],
+	"src/lib/software-visuals.ts": ["software-project"],
+	"src/pages/api/owner/requests/[id]/project.ts": ["software-project"],
+	"src/pages/api/owner/requests/[id]/updates.ts": ["software-project"],
+	"src/pages/api/owner/requests/[id]/messages.ts": ["software-project"],
+	"src/pages/api/owner/requests/[id]/updates/[updateId]/visual.ts": [
+		"software-project",
+	],
+	"src/pages/api/studio/software/[id]/messages.ts": ["software-project"],
+	"src/pages/api/studio/software/[id]/updates/[updateId]/visual.ts": [
+		"software-project",
+	],
+	"src/scripts/software-offers.ts": ["software-offer"],
+	"src/lib/audio-client-access.ts": ["studio-client", "software-project"],
+	"src/lib/client-emails.ts": ["studio-client", "software-project"],
+	"src/pages/studio/sign-in.astro": ["software-project"],
+	"src/pages/studio/index.astro": ["studio-client", "software-project"],
+	"src/components/StudioUnavailable.astro": [
+		"studio-client",
+		"software-project",
+	],
+	"src/lib/software-offers.ts": ["software-offer"],
+	"src/pages/api/owner/requests/[id]/software.ts": ["software-offer"],
+	"src/styles/service-pages.css": ["services-print"],
+	"src/styles/audio-intake.css": ["services-print"],
+	"src/data/profile.ts": ["services-print"],
+	"src/layouts/ServiceSheet.astro": ["services-print"],
+	"src/data/services.ts": ["services-print"],
+	"src/components/owner/OwnerProjectFiles.astro": ["studio-client"],
+	"src/styles/owner.css": [
+		"owner-details",
+		"software-brief",
+		"software-offer",
+		"software-project",
+		"website-brief",
+	],
+	"src/lib/software-inquiry.ts": [
+		"software-brief",
+		"services-print",
+		"website-brief",
+	],
+	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
+	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
+	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/pages/owner/requests/[id].astro": [
+		"software-brief",
+		"software-offer",
+		"software-project",
+		"website-brief",
+	],
+	"src/pages/owner/requests/index.astro": ["software-brief", "website-brief"],
+	"src/components/owner/RequestList.astro": ["software-brief", "website-brief"],
+	"src/styles/studio.css": [
+		"studio-client",
+		"owner-details",
+		"software-project",
+	],
 };
 
 function routeForPageFile(file) {
-  if (file === 'src/pages/404.astro') return '/this-page-does-not-exist';
-  if (!file.startsWith('src/pages/') || !file.endsWith('.astro')) return null;
-  const route = file.replace(/^src\/pages/, '').replace(/\.astro$/, '').replace(/\/index$/, '');
-  return route || '/';
+	if (file === "src/pages/404.astro") return "/this-page-does-not-exist";
+	if (!file.startsWith("src/pages/") || !file.endsWith(".astro")) return null;
+	const route = file
+		.replace(/^src\/pages/, "")
+		.replace(/\.astro$/, "")
+		.replace(/\/index$/, "");
+	return route || "/";
 }
 
 /** Select a small set of validated captures that represent files changed by the PR. */
 export function relevantScreenshots(manifest, changedFiles) {
-  const pageNames = new Set();
-  const scenarioNames = new Set();
-  const files = Array.isArray(changedFiles) ? changedFiles.filter(file => typeof file === 'string') : [];
+	const pageNames = new Set();
+	const scenarioNames = new Set();
+	const files = Array.isArray(changedFiles)
+		? changedFiles.filter((file) => typeof file === "string")
+		: [];
 
-  for (const file of files) {
-    for (const name of (Object.hasOwn(PAGE_NAMES_BY_FILE, file) ? PAGE_NAMES_BY_FILE[file] : [])) pageNames.add(name);
-    for (const name of (Object.hasOwn(SCENARIO_NAMES_BY_FILE, file) ? SCENARIO_NAMES_BY_FILE[file] : [])) scenarioNames.add(name);
+	for (const file of files) {
+		for (const name of Object.hasOwn(PAGE_NAMES_BY_FILE, file)
+			? PAGE_NAMES_BY_FILE[file]
+			: [])
+			pageNames.add(name);
+		for (const name of Object.hasOwn(SCENARIO_NAMES_BY_FILE, file)
+			? SCENARIO_NAMES_BY_FILE[file]
+			: [])
+			scenarioNames.add(name);
 
-    const scenario = Object.hasOwn(SCENARIO_PAGES, file) ? SCENARIO_PAGES[file] : null;
-    if (scenario) scenarioNames.add(scenario.scenario);
+		const scenario = Object.hasOwn(SCENARIO_PAGES, file)
+			? SCENARIO_PAGES[file]
+			: null;
+		if (scenario) scenarioNames.add(scenario.scenario);
 
-    const route = routeForPageFile(file);
-    if (route) {
-      const dynamicPrefix = route.replace(/\[[^\]]+\]/g, '');
-      for (const page of manifest.pages) {
-        if (page.path === route || (dynamicPrefix !== route
-          && (page.path === dynamicPrefix.replace(/\/$/, '') || page.path.startsWith(dynamicPrefix)))) pageNames.add(page.name);
-      }
-    }
+		const route = routeForPageFile(file);
+		if (route) {
+			const dynamicPrefix = route.replace(/\[[^\]]+\]/g, "");
+			for (const page of manifest.pages) {
+				if (
+					page.path === route ||
+					(dynamicPrefix !== route &&
+						(page.path === dynamicPrefix.replace(/\/$/, "") ||
+							page.path.startsWith(dynamicPrefix)))
+				)
+					pageNames.add(page.name);
+			}
+		}
 
-    if (file.startsWith('src/content/releases/')) {
-      for (const name of ['audio-portfolio', 'audio-releases', 'music-old-news']) pageNames.add(name);
-    }
-    if (file.startsWith('src/content/audio-tracks/')) pageNames.add('audio');
-    if (file.startsWith('src/content/recordings/')) {
-      for (const name of MUSIC_CATALOG_PAGES) pageNames.add(name);
-    }
-    if (file.startsWith('src/content/audio-examples/')) {
-      for (const name of ['audio-portfolio', 'audio-services']) pageNames.add(name);
-    }
-  }
+		if (file.startsWith("src/content/releases/")) {
+			for (const name of [
+				"audio-portfolio",
+				"audio-releases",
+				"music-old-news",
+			])
+				pageNames.add(name);
+		}
+		if (file.startsWith("src/content/audio-tracks/")) pageNames.add("audio");
+		if (file.startsWith("src/content/recordings/")) {
+			for (const name of MUSIC_CATALOG_PAGES) pageNames.add(name);
+		}
+		if (file.startsWith("src/content/audio-examples/")) {
+			for (const name of ["audio-portfolio", "audio-services"])
+				pageNames.add(name);
+		}
+	}
 
-  return {
-    pages: manifest.pages.filter(page => pageNames.has(page.name)),
-    scenarios: manifest.scenarios.filter(scenario => scenarioNames.has(scenario.name)),
-  };
+	return {
+		pages: manifest.pages.filter((page) => pageNames.has(page.name)),
+		scenarios: manifest.scenarios.filter((scenario) =>
+			scenarioNames.has(scenario.name),
+		),
+	};
 }
 
 /**
@@ -230,60 +398,70 @@ export function relevantScreenshots(manifest, changedFiles) {
  * `captured` lists `{ scenario, path }` for every capture that returned its expected status.
  */
 export function missingScenarioRoutes(scenarioPages, captured) {
-  return Object.entries(scenarioPages).filter(([, { scenario, route }]) =>
-    !captured.some(item => item.scenario === scenario && (route.endsWith('/')
-      ? item.path.startsWith(route) && item.path.length > route.length : item.path === route)))
-    .map(([file]) => file);
+	return Object.entries(scenarioPages)
+		.filter(
+			([, { scenario, route }]) =>
+				!captured.some(
+					(item) =>
+						item.scenario === scenario &&
+						(route.endsWith("/")
+							? item.path.startsWith(route) && item.path.length > route.length
+							: item.path === route),
+				),
+		)
+		.map(([file]) => file);
 }
 
 export const VIEWPORTS = [
-  { name: 'desktop', width: 1280, height: 800 },
-  { name: 'phone', width: 390, height: 844 },
+	{ name: "desktop", width: 1280, height: 800 },
+	{ name: "phone", width: 390, height: 844 },
 ];
 
-export const OUT = 'screenshots';
-export const OWNER_EMAIL = 'owner@example.com';
-export const ACCESS_ISSUER = 'http://127.0.0.1:9911';
-export const ACCESS_AUDIENCE = 'screenshots';
+export const OUT = "screenshots";
+export const OWNER_EMAIL = "owner@example.com";
+export const ACCESS_ISSUER = "http://127.0.0.1:9911";
+export const ACCESS_AUDIENCE = "screenshots";
 
 /**
  * Settings the preview deliberately changes from wrangler.jsonc. Every other var is mirrored,
  * so a feature flag flipped there shows up in the screenshots.
  */
 export const PREVIEW_OVERRIDES = {
-  SITE_ORIGIN: 'http://127.0.0.1:4321',
-  // Turnstile's always-pass test keys: the production site key rejects localhost.
-  PUBLIC_TURNSTILE_SITE_KEY: '1x00000000000000000000AA',
-  TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
-  // A throwaway Access issuer run by capture.mjs, so owner pages go through the real JWT check.
-  OWNER_ACCESS_TEAM_DOMAIN: ACCESS_ISSUER,
-  OWNER_ACCESS_AUD: ACCESS_AUDIENCE,
-  OWNER_EMAIL,
-  // Production keeps this secret; the preview needs some key to issue studio codes.
-  AGREEMENT_RETENTION_BINDING_ID: 'AUDIO:screenshots-audio',
-  AUDIO_CLIENT_CODE_KEY: 'screenshots-only-code-key-0123456789abcdef',
-  // Gated pages stay reviewable in PRs before launch.
-  AUDIO_CLIENT_PORTAL_ENABLED: 'true',
+	SITE_ORIGIN: "http://127.0.0.1:4321",
+	// Turnstile's always-pass test keys: the production site key rejects localhost.
+	PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+	TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+	// A throwaway Access issuer run by capture.mjs, so owner pages go through the real JWT check.
+	OWNER_ACCESS_TEAM_DOMAIN: ACCESS_ISSUER,
+	OWNER_ACCESS_AUD: ACCESS_AUDIENCE,
+	OWNER_EMAIL,
+	// Production keeps this secret; the preview needs some key to issue studio codes.
+	AGREEMENT_RETENTION_BINDING_ID: "AUDIO:screenshots-audio",
+	AUDIO_CLIENT_CODE_KEY: "screenshots-only-code-key-0123456789abcdef",
+	// Gated pages stay reviewable in PRs before launch.
+	AUDIO_CLIENT_PORTAL_ENABLED: "true",
 };
 
 /** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */
 export function parseJsonc(text) {
-  let out = '';
-  for (let i = 0; i < text.length; i++) {
-    const character = text[i];
-    if (character === '"') {
-      const start = i;
-      for (i++; i < text.length && text[i] !== '"'; i++) if (text[i] === '\\') i++;
-      out += text.slice(start, i + 1);
-    } else if (character === '/' && text[i + 1] === '/') {
-      while (i < text.length && text[i] !== '\n') i++;
-      out += '\n';
-    } else if (character === '/' && text[i + 1] === '*') {
-      const end = text.indexOf('*/', i + 2);
-      i = end === -1 ? text.length : end + 1;
-    } else if (character !== ',' || !/^\s*[}\]]/.test(text.slice(i + 1))) out += character;
-  }
-  return JSON.parse(out);
+	let out = "";
+	for (let i = 0; i < text.length; i++) {
+		const character = text[i];
+		if (character === '"') {
+			const start = i;
+			for (i++; i < text.length && text[i] !== '"'; i++)
+				if (text[i] === "\\") i++;
+			out += text.slice(start, i + 1);
+		} else if (character === "/" && text[i + 1] === "/") {
+			while (i < text.length && text[i] !== "\n") i++;
+			out += "\n";
+		} else if (character === "/" && text[i + 1] === "*") {
+			const end = text.indexOf("*/", i + 2);
+			i = end === -1 ? text.length : end + 1;
+		} else if (character !== "," || !/^\s*[}\]]/.test(text.slice(i + 1)))
+			out += character;
+	}
+	return JSON.parse(out);
 }
 
 /**
@@ -291,33 +469,50 @@ export function parseJsonc(text) {
  * with local storage in place of every production resource and PREVIEW_OVERRIDES applied.
  */
 export function previewWrangler(config) {
-  return {
-    name: 'screenshots-preview',
-    compatibility_date: config.compatibility_date,
-    compatibility_flags: config.compatibility_flags ?? [],
-    vars: { ...config.vars, ...PREVIEW_OVERRIDES },
-    d1_databases: (config.d1_databases ?? []).map((database, index) => ({ binding: database.binding,
-      database_name: `screenshots-${database.binding.toLowerCase()}`,
-      database_id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
-      ...(database.migrations_dir ? { migrations_dir: database.migrations_dir } : {}) })),
-    kv_namespaces: (config.kv_namespaces ?? []).map(({ binding }) => ({ binding, id: `screenshots-${binding.toLowerCase()}` })),
-    r2_buckets: (config.r2_buckets ?? []).map(({ binding }) => ({ binding, bucket_name: `screenshots-${binding.toLowerCase()}` })),
-  };
+	return {
+		name: "screenshots-preview",
+		compatibility_date: config.compatibility_date,
+		compatibility_flags: config.compatibility_flags ?? [],
+		vars: { ...config.vars, ...PREVIEW_OVERRIDES },
+		d1_databases: (config.d1_databases ?? []).map((database, index) => ({
+			binding: database.binding,
+			database_name: `screenshots-${database.binding.toLowerCase()}`,
+			database_id: `00000000-0000-0000-0000-${String(index + 1).padStart(12, "0")}`,
+			...(database.migrations_dir
+				? { migrations_dir: database.migrations_dir }
+				: {}),
+		})),
+		kv_namespaces: (config.kv_namespaces ?? []).map(({ binding }) => ({
+			binding,
+			id: `screenshots-${binding.toLowerCase()}`,
+		})),
+		r2_buckets: (config.r2_buckets ?? []).map(({ binding }) => ({
+			binding,
+			bucket_name: `screenshots-${binding.toLowerCase()}`,
+		})),
+	};
 }
 
-const START = '<!-- screenshots:start -->';
-const END = '<!-- screenshots:end -->';
+const START = "<!-- screenshots:start -->";
+const END = "<!-- screenshots:end -->";
 
 /** Puts the screenshot section into a PR description, replacing an earlier one. */
 export function withScreenshots(body, section) {
-  const text = body ?? '';
-  const start = text.indexOf(START);
-  const end = text.indexOf(END);
-  if (start !== -1 && end > start) return text.slice(0, start) + section + text.slice(end + END.length);
-  return text ? `${text}\n\n${section}` : section;
+	const text = body ?? "";
+	const start = text.indexOf(START);
+	const end = text.indexOf(END);
+	if (start !== -1 && end > start)
+		return text.slice(0, start) + section + text.slice(end + END.length);
+	return text ? `${text}\n\n${section}` : section;
 }
 
-const escape = value => String(value).replace(/[&<>"'`|\\*_[\]#]/g, character => `&#${character.charCodeAt(0)};`).slice(0, 200);
+const escape = (value) =>
+	String(value)
+		.replace(
+			/[&<>"'`|\\*_[\]#]/g,
+			(character) => `&#${character.charCodeAt(0)};`,
+		)
+		.slice(0, 200);
 const imageName = /^[a-z0-9-]{1,100}\.png$/;
 
 /**
@@ -325,44 +520,97 @@ const imageName = /^[a-z0-9-]{1,100}\.png$/;
  * validation, escape every piece of text, and cap the lengths.
  */
 export function sanitizeManifest(manifest, images) {
-  const available = new Set(images.filter(name => imageName.test(name)));
-  const has = file => typeof file === 'string' && available.has(file);
-  const pages = (Array.isArray(manifest?.pages) ? manifest.pages : []).slice(0, 100)
-    .filter(page => typeof page?.name === 'string' && has(`${page.name}-desktop.png`) && has(`${page.name}-phone.png`))
-    .map(page => ({ name: page.name, path: escape(page.path ?? '') }));
-  const scenarios = (Array.isArray(manifest?.scenarios) ? manifest.scenarios : []).slice(0, 20).map(scenario => ({
-    name: /^[a-z0-9-]{1,100}$/.test(scenario?.name ?? '') ? scenario.name : '',
-    title: escape(scenario?.title ?? 'Scenario'),
-    steps: (Array.isArray(scenario?.steps) ? scenario.steps : []).slice(0, 40).map(step => ({
-      title: escape(step?.title ?? ''),
-      images: (Array.isArray(step?.images) ? step.images : []).slice(0, 8).filter(image => has(image?.file))
-        .map(image => ({ file: image.file, caption: escape(image.caption ?? '') })),
-    })).filter(step => step.images.length),
-  })).filter(scenario => scenario.steps.length);
-  return { pages, scenarios };
+	const available = new Set(images.filter((name) => imageName.test(name)));
+	const has = (file) => typeof file === "string" && available.has(file);
+	const pages = (Array.isArray(manifest?.pages) ? manifest.pages : [])
+		.slice(0, 100)
+		.filter(
+			(page) =>
+				typeof page?.name === "string" &&
+				has(`${page.name}-desktop.png`) &&
+				has(`${page.name}-phone.png`),
+		)
+		.map((page) => ({ name: page.name, path: escape(page.path ?? "") }));
+	const scenarios = (
+		Array.isArray(manifest?.scenarios) ? manifest.scenarios : []
+	)
+		.slice(0, 20)
+		.map((scenario) => ({
+			name: /^[a-z0-9-]{1,100}$/.test(scenario?.name ?? "")
+				? scenario.name
+				: "",
+			title: escape(scenario?.title ?? "Scenario"),
+			steps: (Array.isArray(scenario?.steps) ? scenario.steps : [])
+				.slice(0, 40)
+				.map((step) => ({
+					title: escape(step?.title ?? ""),
+					images: (Array.isArray(step?.images) ? step.images : [])
+						.slice(0, 8)
+						.filter((image) => has(image?.file))
+						.map((image) => ({
+							file: image.file,
+							caption: escape(image.caption ?? ""),
+						})),
+				}))
+				.filter((step) => step.images.length),
+		}))
+		.filter((scenario) => scenario.steps.length);
+	return { pages, scenarios };
 }
 
 /** Builds the PR description section from a sanitized capture manifest. */
 export function screenshotSection(manifest, rawBase, sha) {
-  const [desktop, phone] = VIEWPORTS;
-  const img = (file, alt, width) => `<img src="${rawBase}/${file}" width="${width}" alt="${alt.replaceAll('"', '&quot;')}">`;
-  const lines = [START, '## Relevant screenshots',
-    `_Captured by CI at ${sha.slice(0, 7)} on a local preview. Desktop ${desktop.width}×${desktop.height}, phone ${phone.width}×${phone.height}._`, ''];
-  for (const scenario of manifest.scenarios) {
-    lines.push(`### ${scenario.title}`, '');
-    scenario.steps.forEach((step, index) => {
-      lines.push(`**${index + 1}. ${step.title}**`, '', step.images.map(image => img(image.file, image.caption, image.file.includes('-phone') ? 180 : 420)).join(' '), '');
-    });
-  }
-  if (manifest.pages.length) lines.push('| Page | Desktop | Phone |', '|---|---|---|',
-    ...manifest.pages.map(page => `| \`${page.path}\` | ${img(`${page.name}-desktop.png`, `${page.name}, desktop`, 420)} | ${img(`${page.name}-phone.png`, `${page.name}, phone`, 160)} |`));
-  if (!manifest.pages.length && !manifest.scenarios.length) lines.push('_No captured page matched the changed files._');
-  lines.push(END);
-  return lines.join('\n');
+	const [desktop, phone] = VIEWPORTS;
+	const img = (file, alt, width) =>
+		`<img src="${rawBase}/${file}" width="${width}" alt="${alt.replaceAll('"', "&quot;")}">`;
+	const lines = [
+		START,
+		"## Relevant screenshots",
+		`_Captured by CI at ${sha.slice(0, 7)} on a local preview. Desktop ${desktop.width}×${desktop.height}, phone ${phone.width}×${phone.height}._`,
+		"",
+	];
+	for (const scenario of manifest.scenarios) {
+		lines.push(`### ${scenario.title}`, "");
+		scenario.steps.forEach((step, index) => {
+			lines.push(
+				`**${index + 1}. ${step.title}**`,
+				"",
+				step.images
+					.map((image) =>
+						img(
+							image.file,
+							image.caption,
+							image.file.includes("-phone") ? 180 : 420,
+						),
+					)
+					.join(" "),
+				"",
+			);
+		});
+	}
+	if (manifest.pages.length)
+		lines.push(
+			"| Page | Desktop | Phone |",
+			"|---|---|---|",
+			...manifest.pages.map(
+				(page) =>
+					`| \`${page.path}\` | ${img(`${page.name}-desktop.png`, `${page.name}, desktop`, 420)} | ${img(`${page.name}-phone.png`, `${page.name}, phone`, 160)} |`,
+			),
+		);
+	if (!manifest.pages.length && !manifest.scenarios.length)
+		lines.push("_No captured page matched the changed files._");
+	lines.push(END);
+	return lines.join("\n");
 }
 
 /** Chromium's failed-resource console message must match both the URL and status. */
 export function expectedResourceError(message, resources) {
-  return resources.some(({ url, status }) => status !== 200 && message.location().url === url
-    && new RegExp(`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`).test(message.text()));
+	return resources.some(
+		({ url, status }) =>
+			status !== 200 &&
+			message.location().url === url &&
+			new RegExp(
+				`^Failed to load resource: the server responded with a status of ${status} \\([A-Za-z ]*\\)$`,
+			).test(message.text()),
+	);
 }

@@ -1,61 +1,61 @@
 /// <reference path="../.astro/types.d.ts" />
 
-type Runtime = import('@astrojs/cloudflare').Runtime<Env>;
+type Runtime = import("@astrojs/cloudflare").Runtime<Env>;
 
 declare namespace App {
-  interface Locals extends Runtime {
-    runtime: Runtime['runtime'] & { ctx: ExecutionContext };
-    owner?: { email: string };
-  }
+	interface Locals extends Runtime {
+		runtime: Runtime["runtime"] & { ctx: ExecutionContext };
+		owner?: { email: string };
+	}
 }
 
 interface Env {
-  ASSETS: Fetcher;
-  AGREEMENT_RETENTION_BINDING_ID?: string;
+	ASSETS: Fetcher;
+	AGREEMENT_RETENTION_BINDING_ID?: string;
 
-  AI?: Ai;
-  BRIEF_SUGGEST_RATE_LIMIT?: RateLimit;
-  BRIEF_SUGGEST_SITE_LIMIT?: RateLimit;
-  SOFTWARE_SUGGESTIONS_ENABLED?: string;
-  // Deployment-controlled email origin. Never populated from request headers.
-  SITE_ORIGIN?: string;
-  MUSIC_DB?: D1Database;
-  MUSIC_EVENTS_ENABLED?: string;
-  OWNER_ACCESS_TEAM_DOMAIN?: string;
-  OWNER_ACCESS_AUD?: string;
-  OWNER_EMAIL?: string;
-  CLOUDFLARE_ANALYTICS_TOKEN?: string;
-  CLOUDFLARE_ZONE_ID?: string;
-  STRIPE_PAYMENTS_ENABLED?: string;
-  STRIPE_SECRET_KEY?: string;
-  STRIPE_WEBHOOK_SECRET?: string;
-  AUDIO_CLIENT_PORTAL_ENABLED?: string;
-  AUDIO_CLIENT_CODE_KEY?: string;
-  PUBLICATION_OWNER_ID?: string;
-  OAUTH_KV?: KVNamespace;
-  PUBLICATION_GITHUB_CLIENT_ID?: string;
-  PUBLICATION_GITHUB_CLIENT_SECRET?: string;
-  PUBLICATION_COOKIE_KEY?: string;
-  PUBLICATION_DB?: D1Database;
-  PUBLICATION_PROJECTS?: string;
-  PUBLICATION_TOKEN?: string;
-  RESEND_API_KEY: string;
-  PUBLIC_TURNSTILE_SITE_KEY?: string;
-  TURNSTILE_SECRET_KEY: string;
-  CONTACT_TO_EMAIL: string;
-  CONTACT_FROM_EMAIL: string;
-  RATE_LIMIT: KVNamespace;
-  // KV namespace holding short-lived resume-request approval tokens (req:<id>)
-  // and the binary resume PDFs (pdf:general | pdf:dod).
-  // Can point at the same physical KV namespace as RATE_LIMIT; key
-  // prefixes keep the data isolated.
-  RESUME_STORE: KVNamespace;
-  AUDIO: R2Bucket;
+	AI?: Ai;
+	BRIEF_SUGGEST_RATE_LIMIT?: RateLimit;
+	BRIEF_SUGGEST_SITE_LIMIT?: RateLimit;
+	SOFTWARE_SUGGESTIONS_ENABLED?: string;
+	// Deployment-controlled email origin. Never populated from request headers.
+	SITE_ORIGIN?: string;
+	MUSIC_DB?: D1Database;
+	MUSIC_EVENTS_ENABLED?: string;
+	OWNER_ACCESS_TEAM_DOMAIN?: string;
+	OWNER_ACCESS_AUD?: string;
+	OWNER_EMAIL?: string;
+	CLOUDFLARE_ANALYTICS_TOKEN?: string;
+	CLOUDFLARE_ZONE_ID?: string;
+	STRIPE_PAYMENTS_ENABLED?: string;
+	STRIPE_SECRET_KEY?: string;
+	STRIPE_WEBHOOK_SECRET?: string;
+	AUDIO_CLIENT_PORTAL_ENABLED?: string;
+	AUDIO_CLIENT_CODE_KEY?: string;
+	PUBLICATION_OWNER_ID?: string;
+	OAUTH_KV?: KVNamespace;
+	PUBLICATION_GITHUB_CLIENT_ID?: string;
+	PUBLICATION_GITHUB_CLIENT_SECRET?: string;
+	PUBLICATION_COOKIE_KEY?: string;
+	PUBLICATION_DB?: D1Database;
+	PUBLICATION_PROJECTS?: string;
+	PUBLICATION_TOKEN?: string;
+	RESEND_API_KEY: string;
+	PUBLIC_TURNSTILE_SITE_KEY?: string;
+	TURNSTILE_SECRET_KEY: string;
+	CONTACT_TO_EMAIL: string;
+	CONTACT_FROM_EMAIL: string;
+	RATE_LIMIT: KVNamespace;
+	// KV namespace holding short-lived resume-request approval tokens (req:<id>)
+	// and the binary resume PDFs (pdf:general | pdf:dod).
+	// Can point at the same physical KV namespace as RATE_LIMIT; key
+	// prefixes keep the data isolated.
+	RESUME_STORE: KVNamespace;
+	AUDIO: R2Bucket;
 }
 
 interface ImportMetaEnv {
-  readonly PUBLIC_TURNSTILE_SITE_KEY: string;
+	readonly PUBLIC_TURNSTILE_SITE_KEY: string;
 }
 interface ImportMeta {
-  readonly env: ImportMetaEnv;
+	readonly env: ImportMetaEnv;
 }

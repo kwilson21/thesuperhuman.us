@@ -1,17 +1,29 @@
-import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
-import { expect, it } from 'vitest';
-import { applyOwnerRetention, previewOwnerRetention } from '../../scripts/owner-retention.mjs';
-import { applyStudioRetention, previewStudioRetention } from '../../scripts/studio-retention.mjs';
-import { lifetimeOwnerPlayback } from '../../scripts/music-analytics.mjs';
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { expect, it } from "vitest";
+import {
+	applyOwnerRetention,
+	previewOwnerRetention,
+} from "../../scripts/owner-retention.mjs";
+import {
+	applyStudioRetention,
+	previewStudioRetention,
+} from "../../scripts/studio-retention.mjs";
+import { lifetimeOwnerPlayback } from "../../scripts/music-analytics.mjs";
 
-const storage = { accountId: null, databaseId: 'local-music', bucket: 'local-audio', jurisdiction: null };
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
-const now = new Date('2026-09-19T12:00:00Z');
+const storage = {
+	accountId: null,
+	databaseId: "local-music",
+	bucket: "local-audio",
+	jurisdiction: null,
+};
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+const now = new Date("2026-09-19T12:00:00Z");
 
 function fixture() {
-  const db = new DatabaseSync(':memory:'); db.exec(readFileSync(new URL('../../db/music.sql', import.meta.url), 'utf8'));
-  db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at) VALUES
+	const db = new DatabaseSync(":memory:");
+	db.exec(readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"));
+	db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at) VALUES
     ('old-request','purchase','Fan','fan@example.com','Nashville','Purchase','{"format":"digital"}','resolved','reply sent','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
     ('recent-request','service','Artist','artist@example.com','','Mastering','{}','resolved','','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');
     INSERT INTO owner_request_audit(request_id,action,actor,note,occurred_at) VALUES ('old-request','created','system','','2026-01-01T00:00:00Z');
@@ -20,181 +32,472 @@ function fixture() {
     VALUES ('old-request','Mastering',7500,3750,3750,'2026-01-01T00:00:00Z','cus_private','in_old','https://invoice.stripe.com/private','paid','in_balance','https://invoice.stripe.com/balance','paid','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');
     INSERT INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
     VALUES ('in_old','old-request','booking','2026-01-01T00:00:00Z');`);
-  const event = db.prepare(`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
-  for (let index=0; index<3; index++) event.run(`event-${index}`,'old-news-single','old-news-recording',`session-${index}`,`play-${index}`,1,'audio',index ? 'listen30' : 'start',index ? 30 : 0,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
-  event.run('automated','old-news-single','old-news-recording','bot-session','bot-play',1,'audio','listen30',30,180,'campaign','crawler','preview','automated','US','Virginia','Ashburn','2026-01-01T00:00:00Z');
-  event.run('complete-only','old-news-single','old-news-recording','session-1','complete-play',1,'audio','complete',180,180,'campaign','instagram','story','human','US','Tennessee','Nashville','2026-01-01T00:00:00Z');
-  event.run('recent','old-news-single','old-news-recording','recent-session','recent-play',1,'audio','start',0,180,null,null,null,'human','US','','','2026-09-18T00:00:00Z');
-  const database = { db, query: async (sql: string) => db.prepare(sql).all().map((row: Record<string, unknown>) => ({ ...row })),
-    batch: async (statements: string[]) => { db.exec('BEGIN'); try { const results = statements.map(sql => db.prepare(sql).all()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } } };
-  return database;
+	const event = db.prepare(
+		`INSERT INTO music_playback_events(id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,campaign_id,channel,creative,traffic_class,country,region,city,occurred_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	);
+	for (let index = 0; index < 3; index++)
+		event.run(
+			`event-${index}`,
+			"old-news-single",
+			"old-news-recording",
+			`session-${index}`,
+			`play-${index}`,
+			1,
+			"audio",
+			index ? "listen30" : "start",
+			index ? 30 : 0,
+			180,
+			"campaign",
+			"instagram",
+			"story",
+			"human",
+			"US",
+			"Tennessee",
+			"Nashville",
+			"2026-01-01T00:00:00Z",
+		);
+	event.run(
+		"automated",
+		"old-news-single",
+		"old-news-recording",
+		"bot-session",
+		"bot-play",
+		1,
+		"audio",
+		"listen30",
+		30,
+		180,
+		"campaign",
+		"crawler",
+		"preview",
+		"automated",
+		"US",
+		"Virginia",
+		"Ashburn",
+		"2026-01-01T00:00:00Z",
+	);
+	event.run(
+		"complete-only",
+		"old-news-single",
+		"old-news-recording",
+		"session-1",
+		"complete-play",
+		1,
+		"audio",
+		"complete",
+		180,
+		180,
+		"campaign",
+		"instagram",
+		"story",
+		"human",
+		"US",
+		"Tennessee",
+		"Nashville",
+		"2026-01-01T00:00:00Z",
+	);
+	event.run(
+		"recent",
+		"old-news-single",
+		"old-news-recording",
+		"recent-session",
+		"recent-play",
+		1,
+		"audio",
+		"start",
+		0,
+		180,
+		null,
+		null,
+		null,
+		"human",
+		"US",
+		"",
+		"",
+		"2026-09-18T00:00:00Z",
+	);
+	const database = {
+		db,
+		query: async (sql: string) =>
+			db
+				.prepare(sql)
+				.all()
+				.map((row: Record<string, unknown>) => ({ ...row })),
+		batch: async (statements: string[]) => {
+			db.exec("BEGIN");
+			try {
+				const results = statements.map((sql) => db.prepare(sql).all());
+				db.exec("COMMIT");
+				return results;
+			} catch (error) {
+				db.exec("ROLLBACK");
+				throw error;
+			}
+		},
+	};
+	return database;
 }
 
-it('preview is read-only and apply preserves aggregates while deleting eligible personal detail', async () => {
-  const database = fixture();
-  const totals = `SELECT event,SUM(count) AS count FROM (${lifetimeOwnerPlayback}) GROUP BY event ORDER BY event`;
-  const before = await database.query(totals);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1); expect(review.rawPlayback).toBe(5); expect(review.remainingPlayback).toBe(0);
-  expect(JSON.stringify(review)).not.toContain('fan@example.com');
-  expect((await database.query('SELECT count(*) AS total FROM music_playback_events'))[0].total).toBe(6);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect(await database.query(totals)).toEqual(before);
-  expect((await database.query('SELECT sum(count) AS total FROM music_playback_daily'))[0].total).toBe(4);
-  expect(await database.query('SELECT city,count FROM music_playback_geography_daily')).toEqual([{ city: '', count: 2 }]);
-  expect(await database.query('SELECT DISTINCT city FROM music_playback_daily')).toEqual([{ city: '' }]);
-  expect((await database.query("SELECT name,email,city_region,details_json,private_note,status FROM owner_requests WHERE id='old-request'"))[0])
-    .toEqual({ name: '', email: '', city_region: '', details_json: '{}', private_note: '', status: 'resolved' });
-  expect((await database.query("SELECT action,actor FROM owner_request_audit WHERE request_id='old-request' ORDER BY id DESC LIMIT 1"))[0])
-    .toEqual({ action: 'personal-data-deleted', actor: 'retention' });
-  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id,booking_invoice_url,external_refs_deleted_at FROM audio_payments WHERE request_id='old-request'"))[0])
-    .toEqual({ stripe_customer_id: null, booking_invoice_id: null, booking_invoice_url: null, external_refs_deleted_at: now.toISOString() });
-  expect((await database.query("SELECT COUNT(*) AS total FROM stripe_invoice_attempts WHERE request_id='old-request'"))[0])
-    .toEqual({ total: 0 });
-  expect((await database.query('SELECT environment,playback_rows,request_contacts FROM owner_retention_runs'))[0])
-    .toEqual({ environment: 'Local test data', playback_rows: 5, request_contacts: 1 });
+it("preview is read-only and apply preserves aggregates while deleting eligible personal detail", async () => {
+	const database = fixture();
+	const totals = `SELECT event,SUM(count) AS count FROM (${lifetimeOwnerPlayback}) GROUP BY event ORDER BY event`;
+	const before = await database.query(totals);
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	expect(review.rawPlayback).toBe(5);
+	expect(review.remainingPlayback).toBe(0);
+	expect(JSON.stringify(review)).not.toContain("fan@example.com");
+	expect(
+		(
+			await database.query(
+				"SELECT count(*) AS total FROM music_playback_events",
+			)
+		)[0].total,
+	).toBe(6);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(await database.query(totals)).toEqual(before);
+	expect(
+		(
+			await database.query(
+				"SELECT sum(count) AS total FROM music_playback_daily",
+			)
+		)[0].total,
+	).toBe(4);
+	expect(
+		await database.query(
+			"SELECT city,count FROM music_playback_geography_daily",
+		),
+	).toEqual([{ city: "", count: 2 }]);
+	expect(
+		await database.query("SELECT DISTINCT city FROM music_playback_daily"),
+	).toEqual([{ city: "" }]);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email,city_region,details_json,private_note,status FROM owner_requests WHERE id='old-request'",
+			)
+		)[0],
+	).toEqual({
+		name: "",
+		email: "",
+		city_region: "",
+		details_json: "{}",
+		private_note: "",
+		status: "resolved",
+	});
+	expect(
+		(
+			await database.query(
+				"SELECT action,actor FROM owner_request_audit WHERE request_id='old-request' ORDER BY id DESC LIMIT 1",
+			)
+		)[0],
+	).toEqual({ action: "personal-data-deleted", actor: "retention" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,booking_invoice_id,booking_invoice_url,external_refs_deleted_at FROM audio_payments WHERE request_id='old-request'",
+			)
+		)[0],
+	).toEqual({
+		stripe_customer_id: null,
+		booking_invoice_id: null,
+		booking_invoice_url: null,
+		external_refs_deleted_at: now.toISOString(),
+	});
+	expect(
+		(
+			await database.query(
+				"SELECT COUNT(*) AS total FROM stripe_invoice_attempts WHERE request_id='old-request'",
+			)
+		)[0],
+	).toEqual({ total: 0 });
+	expect(
+		(
+			await database.query(
+				"SELECT environment,playback_rows,request_contacts FROM owner_retention_runs",
+			)
+		)[0],
+	).toEqual({
+		environment: "Local test data",
+		playback_rows: 5,
+		request_contacts: 1,
+	});
 });
 
-it('selects resolved software contact details after 90 days but keeps newer details', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
+it("selects resolved software contact details after 90 days but keeps newer details", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
     ('old-software','software','Old Client','old@example.com','Tool','resolved','2026-01-01T00:00:00Z','2026-01-02T00:00:00Z','2026-01-02T00:00:00Z'),
     ('new-software','software','New Client','new@example.com','Tool','resolved','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-02T00:00:00Z');`);
-  database.db.exec("PRAGMA foreign_keys=ON; INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-draft-offer','old-software',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_drafts VALUES('old-draft-offer','old@example.com','{\"legal_name\":\"Private draft\"}','2026-01-01');");
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(2);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0]).toEqual({ email: '' });
-  expect((await database.query('SELECT count(*) n FROM software_agreement_drafts'))[0]).toEqual({n:0});
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='new-software'"))[0]).toEqual({ email: 'new@example.com' });
+	database.db.exec(
+		"PRAGMA foreign_keys=ON; INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-draft-offer','old-software',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_drafts VALUES('old-draft-offer','old@example.com','{\"legal_name\":\"Private draft\"}','2026-01-01');",
+	);
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(2);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT email FROM owner_requests WHERE id='old-software'",
+			)
+		)[0],
+	).toEqual({ email: "" });
+	expect(
+		(
+			await database.query("SELECT count(*) n FROM software_agreement_drafts")
+		)[0],
+	).toEqual({ n: 0 });
+	expect(
+		(
+			await database.query(
+				"SELECT email FROM owner_requests WHERE id='new-software'",
+			)
+		)[0],
+	).toEqual({ email: "new@example.com" });
 });
 
-it('rolls back every retention mutation when an atomic batch statement fails', async () => {
-  const database = fixture(); const review = await previewOwnerRetention(database, 'Local test data', now);
-  const interrupted = { ...database, batch: async (statements: string[]) => {
-    database.db.exec('BEGIN');
-    try { database.db.prepare(statements[0]).all(); database.db.prepare(statements[1]).all(); throw new Error('simulated failure'); }
-    catch (error) { database.db.exec('ROLLBACK'); throw error; }
-  } };
-  await expect(applyOwnerRetention(interrupted, review, 'Local test data', now)).rejects.toThrow('simulated failure');
-  expect((await database.query('SELECT count(*) AS total FROM music_playback_events'))[0].total).toBe(6);
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='old-request'"))[0].email).toBe('fan@example.com');
-  expect((await database.query('SELECT count(*) AS total FROM owner_retention_runs'))[0].total).toBe(0);
+it("rolls back every retention mutation when an atomic batch statement fails", async () => {
+	const database = fixture();
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	const interrupted = {
+		...database,
+		batch: async (statements: string[]) => {
+			database.db.exec("BEGIN");
+			try {
+				database.db.prepare(statements[0]).all();
+				database.db.prepare(statements[1]).all();
+				throw new Error("simulated failure");
+			} catch (error) {
+				database.db.exec("ROLLBACK");
+				throw error;
+			}
+		},
+	};
+	await expect(
+		applyOwnerRetention(interrupted, review, "Local test data", now),
+	).rejects.toThrow("simulated failure");
+	expect(
+		(
+			await database.query(
+				"SELECT count(*) AS total FROM music_playback_events",
+			)
+		)[0].total,
+	).toBe(6);
+	expect(
+		(
+			await database.query(
+				"SELECT email FROM owner_requests WHERE id='old-request'",
+			)
+		)[0].email,
+	).toBe("fan@example.com");
+	expect(
+		(
+			await database.query("SELECT count(*) AS total FROM owner_retention_runs")
+		)[0].total,
+	).toBe(0);
 });
 
-it('rejects changed sources, wrong environments and a second application', async () => {
-  const database = fixture(); const review = await previewOwnerRetention(database, 'Local test data', now);
-  await expect(applyOwnerRetention(database, review, 'Production', now)).rejects.toThrow('environment');
-  database.db.exec("UPDATE owner_requests SET updated_at='changed' WHERE id='old-request'");
-  await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('changed');
-  const fresh = await previewOwnerRetention(database, 'Local test data', now); await applyOwnerRetention(database, fresh, 'Local test data', now);
-  await expect(applyOwnerRetention(database, fresh, 'Local test data', now)).rejects.toThrow(/changed|applied/);
+it("rejects changed sources, wrong environments and a second application", async () => {
+	const database = fixture();
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	await expect(
+		applyOwnerRetention(database, review, "Production", now),
+	).rejects.toThrow("environment");
+	database.db.exec(
+		"UPDATE owner_requests SET updated_at='changed' WHERE id='old-request'",
+	);
+	await expect(
+		applyOwnerRetention(database, review, "Local test data", now),
+	).rejects.toThrow("changed");
+	const fresh = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, fresh, "Local test data", now);
+	await expect(
+		applyOwnerRetention(database, fresh, "Local test data", now),
+	).rejects.toThrow(/changed|applied/);
 });
 
-it('refuses payment cleanup when the reconciliation migration is incomplete', async () => {
-  const database = fixture();
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  database.db.exec('DROP TABLE stripe_unmatched_events');
-  await expect(applyOwnerRetention(database, review, 'Local test data', now)).rejects.toThrow('migration 0004');
+it("refuses payment cleanup when the reconciliation migration is incomplete", async () => {
+	const database = fixture();
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	database.db.exec("DROP TABLE stripe_unmatched_events");
+	await expect(
+		applyOwnerRetention(database, review, "Local test data", now),
+	).rejects.toThrow("migration 0004");
 });
 
-it('keeps an unfinished service request intact until both invoices are terminal', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+it("keeps an unfinished service request intact until both invoices are terminal", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
     VALUES ('active-service','service','Active Artist','active@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
     VALUES ('active-service','Mix',10000,5000,5000,'2026-01-01T00:00:00Z','cus_active','in_active','https://invoice.stripe.com/active','open','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='active-service'"))[0])
-    .toEqual({ name: 'Active Artist', email: 'active@example.com' });
-  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='active-service'"))[0])
-    .toEqual({ stripe_customer_id: 'cus_active', booking_invoice_id: 'in_active' });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email FROM owner_requests WHERE id='active-service'",
+			)
+		)[0],
+	).toEqual({ name: "Active Artist", email: "active@example.com" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='active-service'",
+			)
+		)[0],
+	).toEqual({
+		stripe_customer_id: "cus_active",
+		booking_invoice_id: "in_active",
+	});
 });
 
-it('keeps an uncollectible service invoice available for Stripe reconciliation', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
+it("keeps an uncollectible service invoice available for Stripe reconciliation", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at)
     VALUES ('uncollectible-service','service','Artist','artist@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,stripe_customer_id,booking_status,balance_invoice_id,balance_invoice_url,balance_status,created_at,updated_at)
     VALUES ('uncollectible-service','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_uncollectible','paid','in_uncollectible','https://invoice.stripe.com/uncollectible','uncollectible','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='uncollectible-service'"))[0])
-    .toEqual({ name: 'Artist', email: 'artist@example.com' });
-  expect((await database.query("SELECT stripe_customer_id,balance_invoice_id,balance_invoice_url FROM audio_payments WHERE request_id='uncollectible-service'"))[0])
-    .toEqual({ stripe_customer_id: 'cus_uncollectible', balance_invoice_id: 'in_uncollectible', balance_invoice_url: 'https://invoice.stripe.com/uncollectible' });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email FROM owner_requests WHERE id='uncollectible-service'",
+			)
+		)[0],
+	).toEqual({ name: "Artist", email: "artist@example.com" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,balance_invoice_id,balance_invoice_url FROM audio_payments WHERE request_id='uncollectible-service'",
+			)
+		)[0],
+	).toEqual({
+		stripe_customer_id: "cus_uncollectible",
+		balance_invoice_id: "in_uncollectible",
+		balance_invoice_url: "https://invoice.stripe.com/uncollectible",
+	});
 });
 
-it('keeps withdrawn service contact until studio content has completed its 30-day cleanup', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+it("keeps withdrawn service contact until studio content has completed its 30-day cleanup", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
     VALUES ('withdrawn-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,created_at,updated_at)
     VALUES ('withdrawn-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='withdrawn-service'"))[0])
-    .toEqual({ name: 'Artist', email: 'artist@example.com' });
-  expect((await database.query("SELECT external_refs_deleted_at FROM audio_payments WHERE request_id='withdrawn-service'"))[0])
-    .toEqual({ external_refs_deleted_at: null });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email FROM owner_requests WHERE id='withdrawn-service'",
+			)
+		)[0],
+	).toEqual({ name: "Artist", email: "artist@example.com" });
+	expect(
+		(
+			await database.query(
+				"SELECT external_refs_deleted_at FROM audio_payments WHERE request_id='withdrawn-service'",
+			)
+		)[0],
+	).toEqual({ external_refs_deleted_at: null });
 });
 
-it('clears request contact and summary after studio cleanup has removed withdrawn project content', async () => {
-  const database = fixture();
-  const later = new Date('2026-10-10T12:00:00Z');
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+it("clears request contact and summary after studio cleanup has removed withdrawn project content", async () => {
+	const database = fixture();
+	const later = new Date("2026-10-10T12:00:00Z");
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
     VALUES ('studio-withdrawn','service','Artist','artist@example.com','Private song details','withdrawn','2026-09-01','2026-09-02');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,created_at,updated_at)
     VALUES ('studio-withdrawn','Mix',10000,5000,5000,'2026-09-01','2026-09-01','2026-09-01');`);
-  const studioReview = await previewStudioRetention(database, 'Local test data', storage, later);
-  await applyStudioRetention(database, studioReview, 'Local test data', storage, async () => {}, later);
-  const ownerReview = await previewOwnerRetention(database, 'Local test data', later);
-  await applyOwnerRetention(database, ownerReview, 'Local test data', later);
-  expect((await database.query("SELECT name,email,summary FROM owner_requests WHERE id='studio-withdrawn'"))[0])
-    .toEqual({ name: '', email: '', summary: '' });
+	const studioReview = await previewStudioRetention(
+		database,
+		"Local test data",
+		storage,
+		later,
+	);
+	await applyStudioRetention(
+		database,
+		studioReview,
+		"Local test data",
+		storage,
+		async () => {},
+		later,
+	);
+	const ownerReview = await previewOwnerRetention(
+		database,
+		"Local test data",
+		later,
+	);
+	await applyOwnerRetention(database, ownerReview, "Local test data", later);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email,summary FROM owner_requests WHERE id='studio-withdrawn'",
+			)
+		)[0],
+	).toEqual({ name: "", email: "", summary: "" });
 });
 
-it('keeps a withdrawn service request while an invoice creation is reserved', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+it("keeps a withdrawn service request while an invoice creation is reserved", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
     VALUES ('reserved-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,booking_creation_started_at,created_at,updated_at)
     VALUES ('reserved-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','2026-09-02T00:00:00Z','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='reserved-service'"))[0])
-    .toEqual({ name: 'Artist', email: 'artist@example.com' });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email FROM owner_requests WHERE id='reserved-service'",
+			)
+		)[0],
+	).toEqual({ name: "Artist", email: "artist@example.com" });
 });
 
-it('keeps a withdrawn service request while its paid booking still permits a balance invoice', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
+it("keeps a withdrawn service request while its paid booking still permits a balance invoice", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at)
     VALUES ('balance-due-service','service','Artist','artist@example.com','Mix','withdrawn','2026-09-01T00:00:00Z','2026-09-02T00:00:00Z');
     INSERT INTO audio_payments(request_id,approved_service,total_amount_cents,booking_amount_cents,balance_amount_cents,
       offer_accepted_at,stripe_customer_id,booking_invoice_id,booking_invoice_url,booking_status,created_at,updated_at)
     VALUES ('balance-due-service','Mix',10000,5000,5000,'2026-09-01T00:00:00Z','cus_balance_due','in_booking','https://invoice.stripe.com/booking','paid','2026-09-01T00:00:00Z','2026-09-01T00:00:00Z');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT name,email FROM owner_requests WHERE id='balance-due-service'"))[0])
-    .toEqual({ name: 'Artist', email: 'artist@example.com' });
-  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='balance-due-service'"))[0])
-    .toEqual({ stripe_customer_id: 'cus_balance_due', booking_invoice_id: 'in_booking' });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT name,email FROM owner_requests WHERE id='balance-due-service'",
+			)
+		)[0],
+	).toEqual({ name: "Artist", email: "artist@example.com" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='balance-due-service'",
+			)
+		)[0],
+	).toEqual({
+		stripe_customer_id: "cus_balance_due",
+		booking_invoice_id: "in_booking",
+	});
 });
 
-it('treats a stopped project’s unstarted balance as finished, and only for that request', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
+it("treats a stopped project’s unstarted balance as finished, and only for that request", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES
       ('stopped','service','Stopped Artist','stopped@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z'),
       ('owed','service','Owed Artist','owed@example.com','Mix','resolved','2025-01-01T00:00:00Z','2025-01-02T00:00:00Z','2025-01-02T00:00:00Z');
     UPDATE audio_projects SET content_deleted_at='2025-03-01T00:00:00Z' WHERE request_id IN ('stopped','owed');
@@ -204,111 +507,245 @@ it('treats a stopped project’s unstarted balance as finished, and only for tha
       ('owed','Mix',10000,5000,5000,'2025-01-01T00:00:00Z','cus_owed','in_owed','https://invoice.stripe.com/owed','paid','2025-01-01T00:00:00Z','2025-01-01T00:00:00Z');
     INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at,review_decision)
       VALUES ('stopped','client','session','I’m stopping the project here.','2025-01-01T12:00:00Z','stopped');`);
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='stopped'"))[0]).toEqual({ email: '' });
-  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='stopped'"))[0])
-    .toEqual({ stripe_customer_id: null, booking_invoice_id: null });
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='owed'"))[0]).toEqual({ email: 'owed@example.com' });
-  expect((await database.query("SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='owed'"))[0])
-    .toEqual({ stripe_customer_id: 'cus_owed', booking_invoice_id: 'in_owed' });
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT email FROM owner_requests WHERE id='stopped'",
+			)
+		)[0],
+	).toEqual({ email: "" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='stopped'",
+			)
+		)[0],
+	).toEqual({ stripe_customer_id: null, booking_invoice_id: null });
+	expect(
+		(
+			await database.query("SELECT email FROM owner_requests WHERE id='owed'")
+		)[0],
+	).toEqual({ email: "owed@example.com" });
+	expect(
+		(
+			await database.query(
+				"SELECT stripe_customer_id,booking_invoice_id FROM audio_payments WHERE request_id='owed'",
+			)
+		)[0],
+	).toEqual({ stripe_customer_id: "cus_owed", booking_invoice_id: "in_owed" });
 });
 
-it('clears fit notes, offer terms and links with eligible software contact data', async () => {
-  const database = fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at)
+it("clears fit notes, offer terms and links with eligible software contact data", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at)
     VALUES ('old-software','software','client@example.com','Private client','resolved','2026-01-01','2026-01-02','2026-01-02');
     INSERT INTO software_fit_reviews VALUES ('old-software','potential-fit','Private client context','now','owner');
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('old-offer','old-software',1,'sent','{"outcome":"Private client"}','now','now');
     INSERT INTO software_offer_links VALUES ('old-software','hash','now',NULL);
     INSERT INTO software_agreement_links(id,purpose,offer_id,recipient_email,token_hash,issued_at,expires_at) VALUES('link','agreement','old-offer','client@example.com','hash','2020-01-01','2020-01-02');
     INSERT INTO software_agreement_sessions(token_hash,purpose,offer_id,recipient_email,link_id,verified_at,expires_at,csrf_nonce) VALUES('session','agreement','old-offer','client@example.com','link','2020-01-01','2020-01-02','csrf');`);
-  database.db.exec('PRAGMA foreign_keys=ON');
-  const review = await previewOwnerRetention(database, 'Local test data', now);
-  await applyOwnerRetention(database, review, 'Local test data', now);
-  for (const table of ['software_fit_reviews','software_offers','software_offer_links','software_agreement_sessions','software_agreement_links']) expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
-  expect((await database.query("SELECT email FROM owner_requests WHERE id='old-software'"))[0].email).toBe('');
+	database.db.exec("PRAGMA foreign_keys=ON");
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	for (const table of [
+		"software_fit_reviews",
+		"software_offers",
+		"software_offer_links",
+		"software_agreement_sessions",
+		"software_agreement_links",
+	])
+		expect(await database.query(`SELECT * FROM ${table}`)).toEqual([]);
+	expect(
+		(
+			await database.query(
+				"SELECT email FROM owner_requests WHERE id='old-software'",
+			)
+		)[0].email,
+	).toBe("");
 });
 
-it('holds software request contact data until project content is deleted, then cleans without breaking the offer FK', async () => {
-  const database=fixture(); database.db.exec('PRAGMA foreign_keys=ON');
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-project','software','Alex','alex@example.com','Tool','resolved','2020-01-01','2020-01-01','2020-01-01');
+it("holds software request contact data until project content is deleted, then cleans without breaking the offer FK", async () => {
+	const database = fixture();
+	database.db.exec("PRAGMA foreign_keys=ON");
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-project','software','Alex','alex@example.com','Tool','resolved','2020-01-01','2020-01-01','2020-01-01');
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('snapshot-offer','software-project',1,'sent','{"outcome":"Private outcome"}','now','now','now','owner');
     INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) VALUES ('software-project','snapshot-offer','{"outcome":"Private outcome"}','standard','now','now','now','owner','now','now');
     INSERT INTO software_milestone_payments VALUES ('software-project',0,'now','owner')`);
-  let review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
-  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:'alex@example.com'});
-  database.db.exec("UPDATE software_projects SET revoked_at='2020-01-01',content_deleted_at='2021-01-01'; UPDATE software_offers SET recipient_email_snapshot='alex@example.com',agreement_details_json='{}'");
-  review=await previewOwnerRetention(database,'Local test data',now); await applyOwnerRetention(database,review,'Local test data',now);
-  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-project'").get()).toEqual({email:''});
-  expect(database.db.prepare("SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='snapshot-offer'").get()).toEqual({recipient_email_snapshot:null,agreement_details_json:null});
-  expect(database.db.prepare('SELECT terms_json,offer_id FROM software_projects').get()).toEqual({terms_json:'{}',offer_id:'snapshot-offer'});
-  expect(database.db.prepare('SELECT status,sent_at FROM software_offers').get()).toEqual({status:'withdrawn',sent_at:null});
-  expect(database.db.prepare('SELECT * FROM software_milestone_payments').all()).toEqual([]);
-  expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+	let review = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		database.db
+			.prepare("SELECT email FROM owner_requests WHERE id='software-project'")
+			.get(),
+	).toEqual({ email: "alex@example.com" });
+	database.db.exec(
+		"UPDATE software_projects SET revoked_at='2020-01-01',content_deleted_at='2021-01-01'; UPDATE software_offers SET recipient_email_snapshot='alex@example.com',agreement_details_json='{}'",
+	);
+	review = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		database.db
+			.prepare("SELECT email FROM owner_requests WHERE id='software-project'")
+			.get(),
+	).toEqual({ email: "" });
+	expect(
+		database.db
+			.prepare(
+				"SELECT recipient_email_snapshot,agreement_details_json FROM software_offers WHERE id='snapshot-offer'",
+			)
+			.get(),
+	).toEqual({ recipient_email_snapshot: null, agreement_details_json: null });
+	expect(
+		database.db
+			.prepare("SELECT terms_json,offer_id FROM software_projects")
+			.get(),
+	).toEqual({ terms_json: "{}", offer_id: "snapshot-offer" });
+	expect(
+		database.db.prepare("SELECT status,sent_at FROM software_offers").get(),
+	).toEqual({ status: "withdrawn", sent_at: null });
+	expect(
+		database.db.prepare("SELECT * FROM software_milestone_payments").all(),
+	).toEqual([]);
+	expect(database.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-it('previews two-year software brief cleanup after project content cleanup and preserves the signed record', async () => {
-  const database=fixture();
-  database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at)
+it("previews two-year software brief cleanup after project content cleanup and preserves the signed record", async () => {
+	const database = fixture();
+	database.db.exec(`INSERT INTO owner_requests(id,kind,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at,resolved_at)
     VALUES ('signed-software','software','Client Name','client@example.com','Example City','Private brief','{"scope":"private"}','resolved','Private note','2020-01-01','2020-01-01','2020-01-01');
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer-signed','signed-software',1,'sent','{"scope":"contract"}','2024-01-01','2024-01-01');
-    INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('template','sow',1,'Template','${'c'.repeat(64)}','2024-01-01','owner');
+    INSERT INTO software_agreement_templates(id,kind,version,text,sha256,published_at,published_by) VALUES ('template','sow',1,'Template','${"c".repeat(64)}','2024-01-01','owner');
     INSERT INTO software_agreement_clients(id,recipient_email,legal_name,legal_name_key,entity_type,jurisdiction,business_address,notice_email,created_at)
     VALUES ('client','client@example.com','Client LLC','client llc','LLC','Example','1 Example Way','client@example.com','2024-01-01');
     INSERT INTO software_agreements(id,kind,offer_id,request_id,client_id,template_id,status,canonical_text,text_sha256,values_json,created_at,effective_on,ended_at,retain_until,review_session_hash)
-    VALUES ('agreement-signed','sow','offer-signed','signed-software','client','template','executed','Signed agreement text','${'a'.repeat(64)}','{}','2024-01-01','2024-01-01','2024-01-01','2034-01-01','session');
+    VALUES ('agreement-signed','sow','offer-signed','signed-software','client','template','executed','Signed agreement text','${"a".repeat(64)}','{}','2024-01-01','2024-01-01','2024-01-01','2034-01-01','session');
     INSERT INTO software_projects(request_id,offer_id,agreement_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at,completed_at,content_deleted_at)
     VALUES ('signed-software','offer-signed','agreement-signed','{"scope":"contract"}','standard','2024-01-01','2024-01-01','2024-01-01','owner','2024-01-01','2024-01-01','2024-01-01','2025-01-01');
     INSERT INTO software_agreement_signatures(id,agreement_id,party,typed_name,title,consent_text,consent_version,consent_at,signed_at,document_sha256,verified_email,verified_at,verification_method,intent_text,document_list_json,receipt_id,ip_address,user_agent)
-    VALUES ('signature-signed','agreement-signed','client','Client Name','Director','Consent','v1','2024-01-01','2024-01-01','${'b'.repeat(64)}','client@example.com','2024-01-01','verified by one-time email link','Intent','[]','receipt','192.0.2.10','Synthetic browser');`);
-  const preview=await previewOwnerRetention(database,'Local test data',now);
-  expect(preview.softwareIntakeContacts).toBe(1);
-  expect(JSON.stringify(preview)).not.toContain('client@example.com');
-  expect(JSON.stringify(preview)).not.toContain('Private brief');
-  const batch=database.batch.bind(database); let scrubStatement='';
-  database.batch=async statements=>{scrubStatement=statements.find(statement=>statement.startsWith("UPDATE owner_requests SET name=''")&&statement.includes("'signed-software'"))??'';return batch(statements);};
-  await applyOwnerRetention(database,preview,'Local test data',now);
-  expect(scrubStatement).toContain("WHERE id IN ('signed-software')");
-  expect(database.db.prepare("SELECT name,email,city_region,summary,details_json,private_note FROM owner_requests WHERE id='signed-software'").get())
-    .toEqual({name:'',email:'',city_region:'',summary:'',details_json:'{}',private_note:''});
-  expect(database.db.prepare("SELECT canonical_text,status,retain_until FROM software_agreements WHERE id='agreement-signed'").get())
-    .toEqual({canonical_text:'Signed agreement text',status:'executed',retain_until:'2034-01-01'});
-  expect(database.db.prepare("SELECT typed_name,verified_email,ip_address FROM software_agreement_signatures WHERE id='signature-signed'").get())
-    .toEqual({typed_name:'Client Name',verified_email:'client@example.com',ip_address:'192.0.2.10'});
+    VALUES ('signature-signed','agreement-signed','client','Client Name','Director','Consent','v1','2024-01-01','2024-01-01','${"b".repeat(64)}','client@example.com','2024-01-01','verified by one-time email link','Intent','[]','receipt','192.0.2.10','Synthetic browser');`);
+	const preview = await previewOwnerRetention(database, "Local test data", now);
+	expect(preview.softwareIntakeContacts).toBe(1);
+	expect(JSON.stringify(preview)).not.toContain("client@example.com");
+	expect(JSON.stringify(preview)).not.toContain("Private brief");
+	const batch = database.batch.bind(database);
+	let scrubStatement = "";
+	database.batch = async (statements) => {
+		scrubStatement =
+			statements.find(
+				(statement) =>
+					statement.startsWith("UPDATE owner_requests SET name=''") &&
+					statement.includes("'signed-software'"),
+			) ?? "";
+		return batch(statements);
+	};
+	await applyOwnerRetention(database, preview, "Local test data", now);
+	expect(scrubStatement).toContain("WHERE id IN ('signed-software')");
+	expect(
+		database.db
+			.prepare(
+				"SELECT name,email,city_region,summary,details_json,private_note FROM owner_requests WHERE id='signed-software'",
+			)
+			.get(),
+	).toEqual({
+		name: "",
+		email: "",
+		city_region: "",
+		summary: "",
+		details_json: "{}",
+		private_note: "",
+	});
+	expect(
+		database.db
+			.prepare(
+				"SELECT canonical_text,status,retain_until FROM software_agreements WHERE id='agreement-signed'",
+			)
+			.get(),
+	).toEqual({
+		canonical_text: "Signed agreement text",
+		status: "executed",
+		retain_until: "2034-01-01",
+	});
+	expect(
+		database.db
+			.prepare(
+				"SELECT typed_name,verified_email,ip_address FROM software_agreement_signatures WHERE id='signature-signed'",
+			)
+			.get(),
+	).toEqual({
+		typed_name: "Client Name",
+		verified_email: "client@example.com",
+		ip_address: "192.0.2.10",
+	});
 });
 
-it('holds withdrawn software contact until revoked project content is deleted', async () => {
-  const database = fixture();
-  database.db.exec("INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,contact_delete_after) VALUES ('software-held','software','Client','client@example.com','Tool','withdrawn','2026-01-01','2026-01-02','2026-01-03'); INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('held-offer','software-held',1,'sent','{}','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,state,step,milestone_index,waiting_for,started_at,started_by,updated_at,revoked_at,signatures_recorded_at,first_payment_recorded_at,created_at) VALUES ('software-held','held-offer','{}','standard','preparing','direction',0,'','now','owner','now','2026-01-02','now','now','now');");
-  const review = await previewOwnerRetention(database,'Local test data',now);
-  await applyOwnerRetention(database,review,'Local test data',now);
-  expect(await database.query("SELECT name,email FROM owner_requests WHERE id='software-held'")).toEqual([{name:'Client',email:'client@example.com'}]);
+it("holds withdrawn software contact until revoked project content is deleted", async () => {
+	const database = fixture();
+	database.db.exec(
+		"INSERT INTO owner_requests(id,kind,name,email,summary,status,created_at,updated_at,contact_delete_after) VALUES ('software-held','software','Client','client@example.com','Tool','withdrawn','2026-01-01','2026-01-02','2026-01-03'); INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('held-offer','software-held',1,'sent','{}','now','now'); INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,state,step,milestone_index,waiting_for,started_at,started_by,updated_at,revoked_at,signatures_recorded_at,first_payment_recorded_at,created_at) VALUES ('software-held','held-offer','{}','standard','preparing','direction',0,'','now','owner','now','2026-01-02','now','now','now');",
+	);
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		await database.query(
+			"SELECT name,email FROM owner_requests WHERE id='software-held'",
+		),
+	).toEqual([{ name: "Client", email: "client@example.com" }]);
 });
 
-it('holds unstarted request contacts for invoices younger than two years, then removes invoices before offer cleanup',async()=>{
-  const database=fixture();database.db.exec('PRAGMA foreign_keys=ON');
-  database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-invoice','software','client@example.com','Tool','resolved','2024-01-01','2024-01-01','2024-01-01');
+it("holds unstarted request contacts for invoices younger than two years, then removes invoices before offer cleanup", async () => {
+	const database = fixture();
+	database.db.exec("PRAGMA foreign_keys=ON");
+	database.db.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at,resolved_at) VALUES ('software-invoice','software','client@example.com','Tool','resolved','2024-01-01','2024-01-01','2024-01-01');
     INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('invoice-offer','software-invoice',1,'sent','{}','2024-01-01','2024-01-01');
     INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,stripe_invoice_id,status,created_by,created_at,updated_at)
       VALUES ('deposit','software-invoice','invoice-offer',0,'deposit',100,7,'in_accounting','paid','owner','2026-01-01','2026-01-01')`);
-  const review=await previewOwnerRetention(database,'Local test data',now);
-  expect(review.requestContacts).toBe(1);
-  await applyOwnerRetention(database,review,'Local test data',now);
-  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'").get().email).toBe('client@example.com');
-  expect(database.db.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:1});
-  const later=new Date('2028-01-02T12:00:00Z');
-  const expired=await previewOwnerRetention(database,'Local test data',later);
-  await applyOwnerRetention(database,expired,'Local test data',later);
-  expect(database.db.prepare('SELECT count(*) AS n FROM software_invoices').get()).toEqual({n:0});
-  expect(database.db.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'").get().email).toBe('');
-  expect(database.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+	const review = await previewOwnerRetention(database, "Local test data", now);
+	expect(review.requestContacts).toBe(1);
+	await applyOwnerRetention(database, review, "Local test data", now);
+	expect(
+		database.db
+			.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'")
+			.get().email,
+	).toBe("client@example.com");
+	expect(
+		database.db.prepare("SELECT count(*) AS n FROM software_invoices").get(),
+	).toEqual({ n: 1 });
+	const later = new Date("2028-01-02T12:00:00Z");
+	const expired = await previewOwnerRetention(
+		database,
+		"Local test data",
+		later,
+	);
+	await applyOwnerRetention(database, expired, "Local test data", later);
+	expect(
+		database.db.prepare("SELECT count(*) AS n FROM software_invoices").get(),
+	).toEqual({ n: 0 });
+	expect(
+		database.db
+			.prepare("SELECT email FROM owner_requests WHERE id='software-invoice'")
+			.get().email,
+	).toBe("");
+	expect(database.db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
-it('deletes offer-scoped events when owner retention deletes the offer',async()=>{
-  const database=fixture();
-  database.db.exec("INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-offer','old-request',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_events VALUES('old-event',NULL,'old-offer','link-issued','actor','2026-01-01','{}')");
-  const manifest=await previewOwnerRetention(database,'Local test data',now);
-  await applyOwnerRetention(database,manifest,'Local test data',now);
-  expect((await database.query("SELECT count(*) n FROM software_agreement_events WHERE offer_id='old-offer'"))[0].n).toBe(0);
+it("deletes offer-scoped events when owner retention deletes the offer", async () => {
+	const database = fixture();
+	database.db.exec(
+		"INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES('old-offer','old-request',1,'withdrawn','{}','2026-01-01','2026-01-01'); INSERT INTO software_agreement_events VALUES('old-event',NULL,'old-offer','link-issued','actor','2026-01-01','{}')",
+	);
+	const manifest = await previewOwnerRetention(
+		database,
+		"Local test data",
+		now,
+	);
+	await applyOwnerRetention(database, manifest, "Local test data", now);
+	expect(
+		(
+			await database.query(
+				"SELECT count(*) n FROM software_agreement_events WHERE offer_id='old-offer'",
+			)
+		)[0].n,
+	).toBe(0);
 });

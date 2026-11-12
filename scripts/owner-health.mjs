@@ -1,190 +1,533 @@
 #!/usr/bin/env node
-import { siteOrigin } from '../src/lib/site-origin.mjs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { openMusicDatabase } from './music-analytics.mjs';
-import { renderMusicReport } from './music-report-view.mjs';
-import { parseJsonc } from './screenshots/config.mjs';
-import { studioRetentionProjectPredicate, softwareRetentionProjectPredicate } from './studio-retention.mjs';
+import { siteOrigin } from "../src/lib/site-origin.mjs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { openMusicDatabase } from "./music-analytics.mjs";
+import { renderMusicReport } from "./music-report-view.mjs";
+import { parseJsonc } from "./screenshots/config.mjs";
+import {
+	studioRetentionProjectPredicate,
+	softwareRetentionProjectPredicate,
+} from "./studio-retention.mjs";
 
-const requiredConfiguration = ['MUSIC_DB', 'AUDIO', 'AGREEMENT_RETENTION_BINDING_ID', 'OWNER_ACCESS_TEAM_DOMAIN', 'OWNER_ACCESS_AUD', 'OWNER_EMAIL'];
-const requiredSchema = ['brief_suggestion_budget', 'owner_campaigns', 'owner_requests', 'owner_request_audit', 'music_playback_events', 'music_playback_daily', 'music_playback_geography_daily', 'owner_retention_runs', 'audio_payments', 'stripe_webhook_events', 'stripe_invoice_attempts', 'stripe_unmatched_events',
-  'audio_projects', 'audio_client_codes', 'audio_client_sessions', 'audio_client_access_audit', 'audio_project_messages', 'audio_project_updates', 'audio_project_files', 'audio_project_uploads', 'owner_requests_audit_personal_delete', 'audio_project_after_service_request', 'audio_project_close_declined_request', 'owner_requests_submission_id', 'software_fit_reviews', 'software_offers', 'software_offer_links', 'software_offers_one_draft', 'software_offers_one_sent',
-  'software_projects', 'software_project_updates', 'software_project_updates_one_draft', 'software_project_updates_shared', 'software_project_messages', 'software_project_messages_request', 'software_project_messages_one_decision', 'software_project_audit', 'software_project_audit_request', 'software_milestone_payments', 'software_invoices', 'software_invoices_one_active', 'software_invoices_request', 'software_stripe_unmatched_events', 'software_milestone_deposits', 'software_signing_settings', 'software_contractor_config', 'software_agreement_templates', 'software_agreement_clients', 'software_agreements', 'software_agreements_sow_offer', 'software_agreements_pending_msa', 'software_agreement_signatures', 'software_agreement_links', 'software_agreement_links_scope', 'software_agreement_drafts', 'software_agreement_sessions', 'software_agreement_artifacts', 'software_agreement_deliveries', 'software_agreement_events', 'software_agreement_templates_immutable', 'software_agreement_templates_label', 'software_contractor_config_immutable', 'software_agreement_signatures_immutable', 'software_agreements_signed_immutable', 'software_agreement_attachments', 'software_agreement_clients_immutable', 'software_agreement_retention_receipts', 'software_agreement_cleanup_lock', 'software_agreement_notices', 'software_agreement_notices_immutable', 'software_agreement_notifications'];
-const attention = (id, summary, next) => ({ id, status: 'attention', summary, next });
-const pass = (id, summary) => ({ id, status: 'pass', summary, next: '' });
+const requiredConfiguration = [
+	"MUSIC_DB",
+	"AUDIO",
+	"AGREEMENT_RETENTION_BINDING_ID",
+	"OWNER_ACCESS_TEAM_DOMAIN",
+	"OWNER_ACCESS_AUD",
+	"OWNER_EMAIL",
+];
+const requiredSchema = [
+	"brief_suggestion_budget",
+	"owner_campaigns",
+	"owner_requests",
+	"owner_request_audit",
+	"music_playback_events",
+	"music_playback_daily",
+	"music_playback_geography_daily",
+	"owner_retention_runs",
+	"audio_payments",
+	"stripe_webhook_events",
+	"stripe_invoice_attempts",
+	"stripe_unmatched_events",
+	"audio_projects",
+	"audio_client_codes",
+	"audio_client_sessions",
+	"audio_client_access_audit",
+	"audio_project_messages",
+	"audio_project_updates",
+	"audio_project_files",
+	"audio_project_uploads",
+	"owner_requests_audit_personal_delete",
+	"audio_project_after_service_request",
+	"audio_project_close_declined_request",
+	"owner_requests_submission_id",
+	"software_fit_reviews",
+	"software_offers",
+	"software_offer_links",
+	"software_offers_one_draft",
+	"software_offers_one_sent",
+	"software_projects",
+	"software_project_updates",
+	"software_project_updates_one_draft",
+	"software_project_updates_shared",
+	"software_project_messages",
+	"software_project_messages_request",
+	"software_project_messages_one_decision",
+	"software_project_audit",
+	"software_project_audit_request",
+	"software_milestone_payments",
+	"software_invoices",
+	"software_invoices_one_active",
+	"software_invoices_request",
+	"software_stripe_unmatched_events",
+	"software_milestone_deposits",
+	"software_signing_settings",
+	"software_contractor_config",
+	"software_agreement_templates",
+	"software_agreement_clients",
+	"software_agreements",
+	"software_agreements_sow_offer",
+	"software_agreements_pending_msa",
+	"software_agreement_signatures",
+	"software_agreement_links",
+	"software_agreement_links_scope",
+	"software_agreement_drafts",
+	"software_agreement_sessions",
+	"software_agreement_artifacts",
+	"software_agreement_deliveries",
+	"software_agreement_events",
+	"software_agreement_templates_immutable",
+	"software_agreement_templates_label",
+	"software_contractor_config_immutable",
+	"software_agreement_signatures_immutable",
+	"software_agreements_signed_immutable",
+	"software_agreement_attachments",
+	"software_agreement_clients_immutable",
+	"software_agreement_retention_receipts",
+	"software_agreement_cleanup_lock",
+	"software_agreement_notices",
+	"software_agreement_notices_immutable",
+	"software_agreement_notifications",
+];
+const attention = (id, summary, next) => ({
+	id,
+	status: "attention",
+	summary,
+	next,
+});
+const pass = (id, summary) => ({ id, status: "pass", summary, next: "" });
 
 export function wranglerSecretListArguments() {
-  return ['node_modules/wrangler/bin/wrangler.js', 'secret', 'list', '--format', 'json'];
+	return [
+		"node_modules/wrangler/bin/wrangler.js",
+		"secret",
+		"list",
+		"--format",
+		"json",
+	];
 }
 
-export async function ownerHealth({ now = new Date(), configuredNames, query, media, head, remote = false, postDeploy = false, verify = head, siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined) }) {
-  const checks = [];
-  try {
-    const origin=siteOrigin(configuredOrigin);
-    checks.push(pass('signing-origin', `Effective signing origin: ${origin}.`));
-    if(remote && postDeploy) {
-      try {
-        const result=await verify(`${origin}/agreements/verify`);
-        checks.push(result.status===401 ? pass('signing-route','The deployed agreement verification route returned the expected bare-visit 401.')
-          : attention('signing-route',`The deployed agreement verification route returned ${result.status}; expected 401.`,'Confirm the signing routes are deployed at the configured origin.'));
-      } catch { checks.push(attention('signing-route','The deployed agreement verification route could not be reached.','Confirm the configured origin and deployment.')); }
-    }
-  } catch {
-    checks.push(attention('signing-origin', 'The signing origin is invalid.', 'Set SITE_ORIGIN to the canonical website origin.'));
-  }
-  const missingConfiguration = requiredConfiguration.filter(name => !configuredNames.has(name));
-  checks.push(missingConfiguration.length
-    ? attention('configuration', `Missing required configuration: ${missingConfiguration.join(', ')}.`, 'Configure the named owner access or storage setting, then run health again.')
-    : pass('configuration', 'Required owner access and storage configuration names are present.'));
+export async function ownerHealth({
+	now = new Date(),
+	configuredNames,
+	query,
+	media,
+	head,
+	remote = false,
+	postDeploy = false,
+	verify = head,
+	siteOrigin: configuredOrigin = /** @type {string | undefined} */ (undefined),
+}) {
+	const checks = [];
+	try {
+		const origin = siteOrigin(configuredOrigin);
+		checks.push(pass("signing-origin", `Effective signing origin: ${origin}.`));
+		if (remote && postDeploy) {
+			try {
+				const result = await verify(`${origin}/agreements/verify`);
+				checks.push(
+					result.status === 401
+						? pass(
+								"signing-route",
+								"The deployed agreement verification route returned the expected bare-visit 401.",
+							)
+						: attention(
+								"signing-route",
+								`The deployed agreement verification route returned ${result.status}; expected 401.`,
+								"Confirm the signing routes are deployed at the configured origin.",
+							),
+				);
+			} catch {
+				checks.push(
+					attention(
+						"signing-route",
+						"The deployed agreement verification route could not be reached.",
+						"Confirm the configured origin and deployment.",
+					),
+				);
+			}
+		}
+	} catch {
+		checks.push(
+			attention(
+				"signing-origin",
+				"The signing origin is invalid.",
+				"Set SITE_ORIGIN to the canonical website origin.",
+			),
+		);
+	}
+	const missingConfiguration = requiredConfiguration.filter(
+		(name) => !configuredNames.has(name),
+	);
+	checks.push(
+		missingConfiguration.length
+			? attention(
+					"configuration",
+					`Missing required configuration: ${missingConfiguration.join(", ")}.`,
+					"Configure the named owner access or storage setting, then run health again.",
+				)
+			: pass(
+					"configuration",
+					"Required owner access and storage configuration names are present.",
+				),
+	);
 
-  let availableSchema = new Set();
-  try {
-    availableSchema = new Set((await query(`SELECT name FROM sqlite_master WHERE type IN ('table','trigger','index') ORDER BY name`)).map(row => row.name));
-  } catch {
-    checks.push(attention('schema', 'The music database schema could not be read.', 'Confirm the MUSIC_DB binding and migration state.'));
-  }
-  if (availableSchema.size) {
-    const missing = requiredSchema.filter(name => !availableSchema.has(name));
-    for (const [table, migration, requiredColumns] of [
-      ['software_offers', '0023', ['agreement_details_json', 'msa_template_id', 'sow_template_id', 'contractor_snapshot_json', 'recipient_email_snapshot', 'reused_msa_id']],
-      ['software_projects', '0023', ['agreement_id', 'signature_source', 'external_signature_details_json', 'start_details_json']],
-      ['software_agreements', '0023', ['archive_closed_at']],
-      ['software_project_updates', '0024', ['delivered_deliverables_json', 'review_window_days_extended']],
-      ['software_agreement_templates', '0026', ['version_label', 'source_revision']],
-    ]) {
-      try {
-        const columns = new Set((await query(`SELECT name FROM pragma_table_info('${table}')`)).map(row => row.name));
-        for (const column of requiredColumns)
-          if (!columns.has(column)) missing.push(`${table}.${column} (migration ${migration})`);
-      } catch { missing.push(`${table} columns (migration ${migration})`); }
-    }
-    checks.push(missing.length
-      ? attention('schema', `Required owner schema is missing: ${missing.join(', ')}.`, 'Reconcile the database migration ledger before applying any migration.')
-      : pass('schema', 'Required owner data objects and listed migration columns are present.'));
-  }
+	let availableSchema = new Set();
+	try {
+		availableSchema = new Set(
+			(
+				await query(
+					`SELECT name FROM sqlite_master WHERE type IN ('table','trigger','index') ORDER BY name`,
+				)
+			).map((row) => row.name),
+		);
+	} catch {
+		checks.push(
+			attention(
+				"schema",
+				"The music database schema could not be read.",
+				"Confirm the MUSIC_DB binding and migration state.",
+			),
+		);
+	}
+	if (availableSchema.size) {
+		const missing = requiredSchema.filter((name) => !availableSchema.has(name));
+		for (const [table, migration, requiredColumns] of [
+			[
+				"software_offers",
+				"0023",
+				[
+					"agreement_details_json",
+					"msa_template_id",
+					"sow_template_id",
+					"contractor_snapshot_json",
+					"recipient_email_snapshot",
+					"reused_msa_id",
+				],
+			],
+			[
+				"software_projects",
+				"0023",
+				[
+					"agreement_id",
+					"signature_source",
+					"external_signature_details_json",
+					"start_details_json",
+				],
+			],
+			["software_agreements", "0023", ["archive_closed_at"]],
+			[
+				"software_project_updates",
+				"0024",
+				["delivered_deliverables_json", "review_window_days_extended"],
+			],
+			[
+				"software_agreement_templates",
+				"0026",
+				["version_label", "source_revision"],
+			],
+		]) {
+			try {
+				const columns = new Set(
+					(await query(`SELECT name FROM pragma_table_info('${table}')`)).map(
+						(row) => row.name,
+					),
+				);
+				for (const column of requiredColumns)
+					if (!columns.has(column))
+						missing.push(`${table}.${column} (migration ${migration})`);
+			} catch {
+				missing.push(`${table} columns (migration ${migration})`);
+			}
+		}
+		checks.push(
+			missing.length
+				? attention(
+						"schema",
+						`Required owner schema is missing: ${missing.join(", ")}.`,
+						"Reconcile the database migration ledger before applying any migration.",
+					)
+				: pass(
+						"schema",
+						"Required owner data objects and listed migration columns are present.",
+					),
+		);
+	}
 
-  let mediaFailures = 0;
-  for (const asset of media) {
-    try {
-      const result = await head(asset.url);
-      if (!result.ok || !result.contentType.startsWith(asset.type)) mediaFailures += 1;
-    } catch { mediaFailures += 1; }
-  }
-  checks.push(mediaFailures
-    ? attention('release-media', `${mediaFailures} of ${media.length} public Old News media checks failed.`, 'Keep the release hidden and verify its private bucket objects and streaming routes.')
-    : pass('release-media', `All ${media.length} public Old News media checks passed.`));
+	let mediaFailures = 0;
+	for (const asset of media) {
+		try {
+			const result = await head(asset.url);
+			if (!result.ok || !result.contentType.startsWith(asset.type))
+				mediaFailures += 1;
+		} catch {
+			mediaFailures += 1;
+		}
+	}
+	checks.push(
+		mediaFailures
+			? attention(
+					"release-media",
+					`${mediaFailures} of ${media.length} public Old News media checks failed.`,
+					"Keep the release hidden and verify its private bucket objects and streaming routes.",
+				)
+			: pass(
+					"release-media",
+					`All ${media.length} public Old News media checks passed.`,
+				),
+	);
 
-  try {
-    const rows = await query("SELECT COUNT(*) AS total FROM owner_requests WHERE status='new'");
-    if (rows.length !== 1 || !Number.isFinite(Number(rows[0].total))) throw new Error('invalid summary');
-    checks.push(pass('request-storage', 'The bounded owner request summary query passed.'));
-  } catch {
-    checks.push(attention('request-storage', 'The owner request summary could not be read.', 'Check MUSIC_DB availability and the owner_requests schema.'));
-  }
+	try {
+		const rows = await query(
+			"SELECT COUNT(*) AS total FROM owner_requests WHERE status='new'",
+		);
+		if (rows.length !== 1 || !Number.isFinite(Number(rows[0].total)))
+			throw new Error("invalid summary");
+		checks.push(
+			pass(
+				"request-storage",
+				"The bounded owner request summary query passed.",
+			),
+		);
+	} catch {
+		checks.push(
+			attention(
+				"request-storage",
+				"The owner request summary could not be read.",
+				"Check MUSIC_DB availability and the owner_requests schema.",
+			),
+		);
+	}
 
-  try {
-    const rows = await query('SELECT (SELECT COUNT(*) FROM stripe_unmatched_events WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM software_stripe_unmatched_events WHERE resolved_at IS NULL) AS total');
-    const total = Number(rows[0]?.total);
-    if (!Number.isFinite(total)) throw new Error('invalid summary');
-    checks.push(total > 0
-      ? attention('stripe-unmatched', `${total} Stripe invoice event${total === 1 ? '' : 's'} need reconciliation.`, 'Compare the request and invoice in Stripe before creating or releasing files.')
-      : pass('stripe-unmatched', 'No unmatched Stripe invoice events are waiting.'));
-  } catch {
-    checks.push(attention('stripe-unmatched', 'Unmatched Stripe invoice events could not be read.', 'Confirm the payment migration and database availability.'));
-  }
+	try {
+		const rows = await query(
+			"SELECT (SELECT COUNT(*) FROM stripe_unmatched_events WHERE resolved_at IS NULL) + (SELECT COUNT(*) FROM software_stripe_unmatched_events WHERE resolved_at IS NULL) AS total",
+		);
+		const total = Number(rows[0]?.total);
+		if (!Number.isFinite(total)) throw new Error("invalid summary");
+		checks.push(
+			total > 0
+				? attention(
+						"stripe-unmatched",
+						`${total} Stripe invoice event${total === 1 ? "" : "s"} need reconciliation.`,
+						"Compare the request and invoice in Stripe before creating or releasing files.",
+					)
+				: pass(
+						"stripe-unmatched",
+						"No unmatched Stripe invoice events are waiting.",
+					),
+		);
+	} catch {
+		checks.push(
+			attention(
+				"stripe-unmatched",
+				"Unmatched Stripe invoice events could not be read.",
+				"Confirm the payment migration and database availability.",
+			),
+		);
+	}
 
-  try {
-    const rows = await query('SELECT completed_at FROM owner_retention_runs ORDER BY completed_at DESC LIMIT 1');
-    const completed = rows[0]?.completed_at ? Date.parse(String(rows[0].completed_at)) : Number.NaN;
-    const ageDays = (now.getTime() - completed) / 86400000;
-    checks.push(Number.isFinite(completed) && ageDays >= 0 && ageDays <= 100
-      ? pass('retention', `Retention completed ${Math.floor(ageDays)} day${Math.floor(ageDays) === 1 ? '' : 's'} ago.`)
-      : attention('retention', 'No successful retention run was recorded in the last 100 days.', 'Preview retention, preserve important aggregate observations, then apply the exact reviewed manifest.'));
-  } catch {
-    checks.push(attention('retention', 'Retention history could not be read.', 'Confirm the retention migration and run the preview again.'));
-  }
+	try {
+		const rows = await query(
+			"SELECT completed_at FROM owner_retention_runs ORDER BY completed_at DESC LIMIT 1",
+		);
+		const completed = rows[0]?.completed_at
+			? Date.parse(String(rows[0].completed_at))
+			: Number.NaN;
+		const ageDays = (now.getTime() - completed) / 86400000;
+		checks.push(
+			Number.isFinite(completed) && ageDays >= 0 && ageDays <= 100
+				? pass(
+						"retention",
+						`Retention completed ${Math.floor(ageDays)} day${Math.floor(ageDays) === 1 ? "" : "s"} ago.`,
+					)
+				: attention(
+						"retention",
+						"No successful retention run was recorded in the last 100 days.",
+						"Preview retention, preserve important aggregate observations, then apply the exact reviewed manifest.",
+					),
+		);
+	} catch {
+		checks.push(
+			attention(
+				"retention",
+				"Retention history could not be read.",
+				"Confirm the retention migration and run the preview again.",
+			),
+		);
+	}
 
-  try {
-    const old = new Date(now.getTime() - 30 * 86400000).toISOString();
-    const rows = await query(`SELECT
+	try {
+		const old = new Date(now.getTime() - 30 * 86400000).toISOString();
+		const rows = await query(`SELECT
       (SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
       +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
         WHERE ${studioRetentionProjectPredicate(now)})
       +(SELECT COUNT(*) FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)}) AS total,
       (SELECT COUNT(*) FROM software_projects p WHERE p.content_deleted_at IS NULL
-        AND (p.completed_at<='${new Date(now.getTime()-365*86400000).toISOString()}' OR p.revoked_at<='${new Date(now.getTime()-365*86400000).toISOString()}')
+        AND (p.completed_at<='${new Date(now.getTime() - 365 * 86400000).toISOString()}' OR p.revoked_at<='${new Date(now.getTime() - 365 * 86400000).toISOString()}')
         AND EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=p.request_id AND i.status IN ('creating','open','payment_failed','uncollectible'))) AS blocked`);
-    const total = Number(rows[0]?.total);
-    if (!Number.isFinite(total)) throw new Error('invalid summary');
-    const blocked = Number(rows[0]?.blocked ?? 0);
-    checks.push(blocked > 0 ? attention('studio-retention', `${blocked} software project${blocked === 1 ? '' : 's'} awaiting invoice reconciliation before retention.`, 'Reconcile or void payable invoices in Stripe before cleanup.') : total > 0
-      ? attention('studio-retention', `${total} studio retention item${total === 1 ? '' : 's'} need review.`,
-        'Preview studio retention, resolve pending uploads or payments, then apply the exact reviewed manifest.')
-      : pass('studio-retention', 'No overdue studio retention items were found.'));
-  } catch {
-    checks.push(attention('studio-retention', 'Studio retention could not be checked.', 'Confirm migrations 0014 and 0022 and the music database, then run the studio retention preview.'));
-  }
+		const total = Number(rows[0]?.total);
+		if (!Number.isFinite(total)) throw new Error("invalid summary");
+		const blocked = Number(rows[0]?.blocked ?? 0);
+		checks.push(
+			blocked > 0
+				? attention(
+						"studio-retention",
+						`${blocked} software project${blocked === 1 ? "" : "s"} awaiting invoice reconciliation before retention.`,
+						"Reconcile or void payable invoices in Stripe before cleanup.",
+					)
+				: total > 0
+					? attention(
+							"studio-retention",
+							`${total} studio retention item${total === 1 ? "" : "s"} need review.`,
+							"Preview studio retention, resolve pending uploads or payments, then apply the exact reviewed manifest.",
+						)
+					: pass(
+							"studio-retention",
+							"No overdue studio retention items were found.",
+						),
+		);
+	} catch {
+		checks.push(
+			attention(
+				"studio-retention",
+				"Studio retention could not be checked.",
+				"Confirm migrations 0014 and 0022 and the music database, then run the studio retention preview.",
+			),
+		);
+	}
 
-  return { status: checks.every(check => check.status === 'pass') ? 'healthy' : 'attention', checkedAt: now.toISOString(), checks };
+	return {
+		status: checks.every((check) => check.status === "pass")
+			? "healthy"
+			: "attention",
+		checkedAt: now.toISOString(),
+		checks,
+	};
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  if (args.some(arg => !['--remote','--post-deploy'].includes(arg))) throw new Error('Usage: node scripts/owner-health.mjs [--remote] [--post-deploy]');
-  const remote = args.includes('--remote');
-  const postDeploy = args.includes('--post-deploy');
-  const recording = JSON.parse(await readFile(new URL('../src/content/recordings/old-news-recording.json', import.meta.url), 'utf8'));
-  const baseUrl = process.env.OWNER_HEALTH_BASE_URL || 'https://thesuperhuman.us';
-  const configuredNames = new Set(['MUSIC_DB', 'AUDIO', ...requiredConfiguration.filter(name => process.env[name])]);
-  const config=parseJsonc(await readFile(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
-  for(const [name,value] of Object.entries(config.vars ?? {})) if(value) configuredNames.add(name);
-  if (remote) {
-    const secretList = spawnSync(process.execPath, wranglerSecretListArguments(), {
-      encoding: 'utf8',
-      env: { ...process.env, WRANGLER_LOG_PATH: resolve('.private/wrangler-owner-health.log') },
-    });
-    if (secretList.status === 0) {
-      for (const secret of JSON.parse(secretList.stdout)) if (typeof secret.name === 'string') configuredNames.add(secret.name);
-    }
-  }
-  const media = Object.entries(recording.versions).map(([version, asset]) => ({
-    label: `Old News ${version}`,
-    url: `${baseUrl}/music/file/${recording.id}/${version}`,
-    type: asset.type.split('/')[0],
-  }));
-  const database = await openMusicDatabase(remote);
-  try {
-    const report = await ownerHealth({
-      configuredNames,
-      siteOrigin: config.vars?.SITE_ORIGIN,
-      remote,
-      postDeploy,
-      verify: async url => {
-        const response=await fetch(url,{redirect:'manual',signal:AbortSignal.timeout(10_000)});
-        await response.body?.cancel();
-        return {status:response.status};
-      },
-      query: sql => database.query(sql),
-      media,
-      head: async url => {
-        const response = await fetch(url, { headers: { Range: 'bytes=0-0' }, signal: AbortSignal.timeout(10_000) });
-        await response.body?.cancel();
-        return { ok: response.ok, status: response.status, contentType: response.headers.get('content-type') ?? '' };
-      },
-    });
-    await mkdir('.private', { recursive: true });
-    await writeFile('.private/owner-health.json', JSON.stringify(report, null, 2), { mode: 0o600 });
-    await writeFile('.private/owner-health.html', renderMusicReport('Owner center health', `${remote ? 'Production' : 'Local test data'} · ${report.checkedAt}`, report.status === 'healthy' ? 'All owner center health checks passed.' : 'One or more checks need attention before deployment.', { Checks: report.checks }), { mode: 0o600 });
-    for (const check of report.checks) console.log(`${check.status.toUpperCase()} ${check.id}: ${check.summary}${check.next ? ` Next: ${check.next}` : ''}`);
-    if (report.status !== 'healthy') process.exitCode = 1;
-  } finally { await database.close(); }
+	const args = process.argv.slice(2);
+	if (args.some((arg) => !["--remote", "--post-deploy"].includes(arg)))
+		throw new Error(
+			"Usage: node scripts/owner-health.mjs [--remote] [--post-deploy]",
+		);
+	const remote = args.includes("--remote");
+	const postDeploy = args.includes("--post-deploy");
+	const recording = JSON.parse(
+		await readFile(
+			new URL(
+				"../src/content/recordings/old-news-recording.json",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
+	const baseUrl =
+		process.env.OWNER_HEALTH_BASE_URL || "https://thesuperhuman.us";
+	const configuredNames = new Set([
+		"MUSIC_DB",
+		"AUDIO",
+		...requiredConfiguration.filter((name) => process.env[name]),
+	]);
+	const config = parseJsonc(
+		await readFile(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+	);
+	for (const [name, value] of Object.entries(config.vars ?? {}))
+		if (value) configuredNames.add(name);
+	if (remote) {
+		const secretList = spawnSync(
+			process.execPath,
+			wranglerSecretListArguments(),
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					WRANGLER_LOG_PATH: resolve(".private/wrangler-owner-health.log"),
+				},
+			},
+		);
+		if (secretList.status === 0) {
+			for (const secret of JSON.parse(secretList.stdout))
+				if (typeof secret.name === "string") configuredNames.add(secret.name);
+		}
+	}
+	const media = Object.entries(recording.versions).map(([version, asset]) => ({
+		label: `Old News ${version}`,
+		url: `${baseUrl}/music/file/${recording.id}/${version}`,
+		type: asset.type.split("/")[0],
+	}));
+	const database = await openMusicDatabase(remote);
+	try {
+		const report = await ownerHealth({
+			configuredNames,
+			siteOrigin: config.vars?.SITE_ORIGIN,
+			remote,
+			postDeploy,
+			verify: async (url) => {
+				const response = await fetch(url, {
+					redirect: "manual",
+					signal: AbortSignal.timeout(10_000),
+				});
+				await response.body?.cancel();
+				return { status: response.status };
+			},
+			query: (sql) => database.query(sql),
+			media,
+			head: async (url) => {
+				const response = await fetch(url, {
+					headers: { Range: "bytes=0-0" },
+					signal: AbortSignal.timeout(10_000),
+				});
+				await response.body?.cancel();
+				return {
+					ok: response.ok,
+					status: response.status,
+					contentType: response.headers.get("content-type") ?? "",
+				};
+			},
+		});
+		await mkdir(".private", { recursive: true });
+		await writeFile(
+			".private/owner-health.json",
+			JSON.stringify(report, null, 2),
+			{ mode: 0o600 },
+		);
+		await writeFile(
+			".private/owner-health.html",
+			renderMusicReport(
+				"Owner center health",
+				`${remote ? "Production" : "Local test data"} · ${report.checkedAt}`,
+				report.status === "healthy"
+					? "All owner center health checks passed."
+					: "One or more checks need attention before deployment.",
+				{ Checks: report.checks },
+			),
+			{ mode: 0o600 },
+		);
+		for (const check of report.checks)
+			console.log(
+				`${check.status.toUpperCase()} ${check.id}: ${check.summary}${check.next ? ` Next: ${check.next}` : ""}`,
+			);
+		if (report.status !== "healthy") process.exitCode = 1;
+	} finally {
+		await database.close();
+	}
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch(() => {
-  console.error('Owner health could not complete. Check local authentication and bindings.');
-  process.exitCode = 1;
-});
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+)
+	main().catch(() => {
+		console.error(
+			"Owner health could not complete. Check local authentication and bindings.",
+		);
+		process.exitCode = 1;
+	});

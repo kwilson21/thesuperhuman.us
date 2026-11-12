@@ -1,15 +1,17 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import WorkWithMe from '~/components/WorkWithMe.astro';
-import PersonalName from '~/components/PersonalName.astro';
-import WorkDiagram from '~/components/WorkDiagram.astro';
-import '~/styles/service-pages.css';
-import '~/styles/audio-intake.css';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import type { ServiceSheet } from '~/data/services';
-interface Props { sheet: ServiceSheet; }
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import WorkWithMe from "~/components/WorkWithMe.astro";
+import PersonalName from "~/components/PersonalName.astro";
+import WorkDiagram from "~/components/WorkDiagram.astro";
+import "~/styles/service-pages.css";
+import "~/styles/audio-intake.css";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import type { ServiceSheet } from "~/data/services";
+interface Props {
+	sheet: ServiceSheet;
+}
 const { sheet } = Astro.props;
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const href = (path: string) => mainSitePath(host, path);
 const lyft = sheet.hero;
 ---

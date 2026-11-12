@@ -1,73 +1,88 @@
 ---
 import { softwareDate } from "~/lib/software-projects";
-import { currentSigningNotification, newYorkTime } from "~/lib/agreement-artifacts";
-import { offerAgreements } from '~/lib/software-agreements';
-import { consentText, intentText } from '~/lib/agreement-fields';
+import {
+	currentSigningNotification,
+	newYorkTime,
+} from "~/lib/agreement-artifacts";
+import { offerAgreements } from "~/lib/software-agreements";
+import { consentText, intentText } from "~/lib/agreement-fields";
 interface Props {
-  requestId: string;
-  offerId?: string;
+	requestId: string;
+	offerId?: string;
 }
 const { requestId, offerId } = Astro.props,
-  db = Astro.locals.runtime.env.MUSIC_DB!;
+	db = Astro.locals.runtime.env.MUSIC_DB!;
 const docs = offerId ? await offerAgreements(db, offerId) : [],
-  sow = docs.find((d) => d.kind === 'sow'),
-  pending = docs.filter((d) => d.status === 'client_signed');
+	sow = docs.find((d) => d.kind === "sow"),
+	pending = docs.filter((d) => d.status === "client_signed");
 const artifact = sow
-  ? await db
-      .prepare('SELECT status,attempt_id FROM software_agreement_artifacts WHERE agreement_id=?')
-      .bind(sow.id)
-      .first<{ status: string; attempt_id: string | null }>()
-  : null;
+	? await db
+			.prepare(
+				"SELECT status,attempt_id FROM software_agreement_artifacts WHERE agreement_id=?",
+			)
+			.bind(sow.id)
+			.first<{ status: string; attempt_id: string | null }>()
+	: null;
 const deliveries = sow
-  ? (
-      await db
-        .prepare(
-          'SELECT recipient_role,status,alternate_delivered_at FROM software_agreement_deliveries WHERE agreement_id=?',
-        )
-        .bind(sow.id)
-        .all<{ recipient_role: string; status: string; alternate_delivered_at: string | null }>()
-    ).results
-  : [];
+	? (
+			await db
+				.prepare(
+					"SELECT recipient_role,status,alternate_delivered_at FROM software_agreement_deliveries WHERE agreement_id=?",
+				)
+				.bind(sow.id)
+				.all<{
+					recipient_role: string;
+					status: string;
+					alternate_delivered_at: string | null;
+				}>()
+		).results
+	: [];
 const notifications = sow
-  ? (
-      await db
-        .prepare(`SELECT kind,status,${currentSigningNotification} AS retryable FROM software_agreement_notifications WHERE agreement_id=?`)
-        .bind(sow.id)
-        .all<{ kind: string; status: string; retryable: number }>()
-    ).results
-  : [];
-const retryCount = notifications.filter(n => n.retryable && n.status !== 'sent').length +
-  (sow?.status === 'executed' ? deliveries.filter(d => d.status !== 'sent' && !d.alternate_delivered_at).length : 0);
+	? (
+			await db
+				.prepare(
+					`SELECT kind,status,${currentSigningNotification} AS retryable FROM software_agreement_notifications WHERE agreement_id=?`,
+				)
+				.bind(sow.id)
+				.all<{ kind: string; status: string; retryable: number }>()
+		).results
+	: [];
+const retryCount =
+	notifications.filter((n) => n.retryable && n.status !== "sent").length +
+	(sow?.status === "executed"
+		? deliveries.filter((d) => d.status !== "sent" && !d.alternate_delivered_at)
+				.length
+		: 0);
 const values = sow ? JSON.parse(sow.values_json) : null,
-  endpoint = `/api/owner/requests/${requestId}/agreement`;
+	endpoint = `/api/owner/requests/${requestId}/agreement`;
 const signatures = (
-  await db
-    .prepare(
-      "SELECT s.agreement_id,s.typed_name,s.title,s.verified_email,s.signed_at FROM software_agreement_signatures s JOIN software_agreements a ON a.id=s.agreement_id WHERE a.request_id=? AND s.party='client'",
-    )
-    .bind(requestId)
-    .all<{
-      agreement_id: string;
-      typed_name: string;
-      title: string;
-      verified_email: string;
-      signed_at: string;
-    }>()
+	await db
+		.prepare(
+			"SELECT s.agreement_id,s.typed_name,s.title,s.verified_email,s.signed_at FROM software_agreement_signatures s JOIN software_agreements a ON a.id=s.agreement_id WHERE a.request_id=? AND s.party='client'",
+		)
+		.bind(requestId)
+		.all<{
+			agreement_id: string;
+			typed_name: string;
+			title: string;
+			verified_email: string;
+			signed_at: string;
+		}>()
 ).results;
 const abandoned = (
-  await db
-    .prepare(
-      "SELECT a.id,a.kind,a.canonical_text,a.abandoned_reason,a.legal_hold,EXISTS(SELECT 1 FROM software_agreement_signatures s WHERE s.agreement_id=a.id) AS has_signature FROM software_agreements a WHERE a.request_id=? AND a.status='abandoned' ORDER BY a.kind",
-    )
-    .bind(requestId)
-    .all<{
-      id: string;
-      kind: string;
-      canonical_text: string;
-      abandoned_reason: string;
-      legal_hold: number;
-      has_signature: number;
-    }>()
+	await db
+		.prepare(
+			"SELECT a.id,a.kind,a.canonical_text,a.abandoned_reason,a.legal_hold,EXISTS(SELECT 1 FROM software_agreement_signatures s WHERE s.agreement_id=a.id) AS has_signature FROM software_agreements a WHERE a.request_id=? AND a.status='abandoned' ORDER BY a.kind",
+		)
+		.bind(requestId)
+		.all<{
+			id: string;
+			kind: string;
+			canonical_text: string;
+			abandoned_reason: string;
+			legal_hold: number;
+			has_signature: number;
+		}>()
 ).results;
 ---
 {sow&&<section class="rail-section wide owner-agreement"><h2 class:list={{"page-title":pending.length>0}}>{pending.length>0?'Countersign the agreement.':'Agreement'}</h2><p>{sow.status==='client_signed'?'Client signature saved. Review before countersigning.':sow.status==='executed'?artifact?.status==='ready'?'Signed copy ready.':'Signed by both parties. Copy preparation needs attention.':'Client is reviewing.'}</p>

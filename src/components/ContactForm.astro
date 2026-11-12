@@ -1,5 +1,8 @@
 ---
-const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const turnstileSiteKey =
+	Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	"";
 ---
 <form id="contact-form" class="site-form" data-available={Boolean(turnstileSiteKey)} novalidate>
   <p class="form-hint">All fields required unless marked optional.</p>

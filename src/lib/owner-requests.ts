@@ -1,177 +1,363 @@
-import { retireRequestSigning } from './software-agreements';
-import { depositOfferBlock, depositOfferGuard } from './software-invoices';
-import { getSoftwareProject, softwareAccessRevocation, softwareGuard } from './software-projects';
-import { offerSendingGuard, offerIsSending, offerSendingMessage } from './software-offers';
+import { retireRequestSigning } from "./software-agreements";
+import { depositOfferBlock, depositOfferGuard } from "./software-invoices";
 import {
-  ownerRequestFromRow,
-  ownerRequestKinds,
-  ownerRequestStatuses,
-  type OwnerRequest,
-  type OwnerRequestKind,
-  type OwnerRequestRow,
-  type OwnerRequestStatus,
-} from './owner-model';
+	getSoftwareProject,
+	softwareAccessRevocation,
+	softwareGuard,
+} from "./software-projects";
+import {
+	offerSendingGuard,
+	offerIsSending,
+	offerSendingMessage,
+} from "./software-offers";
+import {
+	ownerRequestFromRow,
+	ownerRequestKinds,
+	ownerRequestStatuses,
+	type OwnerRequest,
+	type OwnerRequestKind,
+	type OwnerRequestRow,
+	type OwnerRequestStatus,
+} from "./owner-model";
 
 export type NewOwnerRequest = {
-  kind: OwnerRequestKind;
-  releaseId?: string;
-  serviceId?: string;
-  campaignId?: string;
-  name?: string;
-  email: string;
-  cityRegion?: string;
-  summary: string;
-  details?: Record<string, unknown>;
-  submissionId?: string;
+	kind: OwnerRequestKind;
+	releaseId?: string;
+	serviceId?: string;
+	campaignId?: string;
+	name?: string;
+	email: string;
+	cityRegion?: string;
+	summary: string;
+	details?: Record<string, unknown>;
+	submissionId?: string;
 };
 
 export type RequestCommand = { expectedUpdatedAt?: string } & (
-  | { id: string; action: 'review' | 'resolve' | 'reopen' | 'withdraw'; actor: string }
-  | { id: string; action: 'note'; actor: string; note: string });
+	| {
+			id: string;
+			action: "review" | "resolve" | "reopen" | "withdraw";
+			actor: string;
+	  }
+	| { id: string; action: "note"; actor: string; note: string }
+);
 
-export type OwnerRequestAudit = { id: number; action: string; actor: string; note: string; occurredAt: string };
+export type OwnerRequestAudit = {
+	id: number;
+	action: string;
+	actor: string;
+	note: string;
+	occurredAt: string;
+};
 
-export const signedAgreementPendingMessage = 'Countersign or abandon the signed agreement first.';
-export const projectIncompleteMessage = 'Mark the project complete first.';
+export const signedAgreementPendingMessage =
+	"Countersign or abandon the signed agreement first.";
+export const projectIncompleteMessage = "Mark the project complete first.";
 
-export const projectStartedMessage = 'This project has started. Use the project controls.';
+export const projectStartedMessage =
+	"This project has started. Use the project controls.";
 
 export class RequestDetailsTooLargeError extends Error {
-  constructor() { super('Request details are too large.'); }
+	constructor() {
+		super("Request details are too large.");
+	}
 }
 
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
 function validActor(actor: string) {
-  const value = actor.trim().toLowerCase();
-  if (!value || value.length > 320) throw new Error('Invalid request actor.');
-  return value;
+	const value = actor.trim().toLowerCase();
+	if (!value || value.length > 320) throw new Error("Invalid request actor.");
+	return value;
 }
 
-export async function saveOwnerRequest(db: D1Database, input: NewOwnerRequest, actor = 'system'): Promise<OwnerRequest> {
-  if (!ownerRequestKinds.includes(input.kind)) throw new Error('Invalid request kind.');
-  const details = JSON.stringify(input.details ?? {});
-  if (details.length > 16_000) throw new RequestDetailsTooLargeError();
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db.batch([
-    db.prepare(`INSERT INTO owner_requests
-      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at${input.submissionId ? ',submission_id' : ''})
-      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?${input.submissionId ? ',?' : ''})`)
-      .bind(id, input.kind, input.releaseId ?? null, input.serviceId ?? null, input.campaignId ?? null,
-        input.name?.trim() ?? '', input.email.trim().toLowerCase(), input.cityRegion?.trim() ?? '',
-        input.summary.trim(), details, now, now, ...(input.submissionId ? [input.submissionId] : [])),
-    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-      VALUES (?,'created',?,'',?)`).bind(id, validActor(actor), now),
-  ]);
-  return (await getOwnerRequest(db, id))!;
+export async function saveOwnerRequest(
+	db: D1Database,
+	input: NewOwnerRequest,
+	actor = "system",
+): Promise<OwnerRequest> {
+	if (!ownerRequestKinds.includes(input.kind))
+		throw new Error("Invalid request kind.");
+	const details = JSON.stringify(input.details ?? {});
+	if (details.length > 16_000) throw new RequestDetailsTooLargeError();
+	const id = crypto.randomUUID();
+	const now = new Date().toISOString();
+	await db.batch([
+		db
+			.prepare(`INSERT INTO owner_requests
+      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at${input.submissionId ? ",submission_id" : ""})
+      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?${input.submissionId ? ",?" : ""})`)
+			.bind(
+				id,
+				input.kind,
+				input.releaseId ?? null,
+				input.serviceId ?? null,
+				input.campaignId ?? null,
+				input.name?.trim() ?? "",
+				input.email.trim().toLowerCase(),
+				input.cityRegion?.trim() ?? "",
+				input.summary.trim(),
+				details,
+				now,
+				now,
+				...(input.submissionId ? [input.submissionId] : []),
+			),
+		db
+			.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      VALUES (?,'created',?,'',?)`)
+			.bind(id, validActor(actor), now),
+	]);
+	return (await getOwnerRequest(db, id))!;
 }
 
-export async function getOwnerRequest(db: D1Database, id: string): Promise<OwnerRequest | null> {
-  const row = await db.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`).bind(id).first<OwnerRequestRow>();
-  return row ? ownerRequestFromRow(row) : null;
+export async function getOwnerRequest(
+	db: D1Database,
+	id: string,
+): Promise<OwnerRequest | null> {
+	const row = await db
+		.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`)
+		.bind(id)
+		.first<OwnerRequestRow>();
+	return row ? ownerRequestFromRow(row) : null;
 }
 
-export async function listOwnerRequestAudit(db: D1Database, id: string): Promise<OwnerRequestAudit[]> {
-  const result = await db.prepare(`SELECT id,action,actor,note,occurred_at FROM owner_request_audit WHERE request_id=? ORDER BY id DESC`)
-    .bind(id).all<{ id: number; action: string; actor: string; note: string; occurred_at: string }>();
-  return result.results.map(row => ({ id: row.id, action: row.action, actor: row.actor, note: row.note, occurredAt: row.occurred_at }));
+export async function listOwnerRequestAudit(
+	db: D1Database,
+	id: string,
+): Promise<OwnerRequestAudit[]> {
+	const result = await db
+		.prepare(
+			`SELECT id,action,actor,note,occurred_at FROM owner_request_audit WHERE request_id=? ORDER BY id DESC`,
+		)
+		.bind(id)
+		.all<{
+			id: number;
+			action: string;
+			actor: string;
+			note: string;
+			occurred_at: string;
+		}>();
+	return result.results.map((row) => ({
+		id: row.id,
+		action: row.action,
+		actor: row.actor,
+		note: row.note,
+		occurredAt: row.occurred_at,
+	}));
 }
 
-export async function listOwnerRequests(db: D1Database, filter: { kind?: OwnerRequestKind; status?: OwnerRequestStatus } = {}) {
-  if (filter.kind && !ownerRequestKinds.includes(filter.kind)) throw new Error('Invalid request kind.');
-  if (filter.status && !ownerRequestStatuses.includes(filter.status)) throw new Error('Invalid request status.');
-  const clauses: string[] = [];
-  const values: string[] = [];
-  if (filter.kind) { clauses.push('kind=?'); values.push(filter.kind); }
-  if (filter.status) { clauses.push('status=?'); values.push(filter.status); }
-  const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
-  const result = await db.prepare(`SELECT ${requestColumns} FROM owner_requests${where} ORDER BY created_at DESC`)
-    .bind(...values).all<OwnerRequestRow>();
-  return result.results.map(ownerRequestFromRow);
+export async function listOwnerRequests(
+	db: D1Database,
+	filter: { kind?: OwnerRequestKind; status?: OwnerRequestStatus } = {},
+) {
+	if (filter.kind && !ownerRequestKinds.includes(filter.kind))
+		throw new Error("Invalid request kind.");
+	if (filter.status && !ownerRequestStatuses.includes(filter.status))
+		throw new Error("Invalid request status.");
+	const clauses: string[] = [];
+	const values: string[] = [];
+	if (filter.kind) {
+		clauses.push("kind=?");
+		values.push(filter.kind);
+	}
+	if (filter.status) {
+		clauses.push("status=?");
+		values.push(filter.status);
+	}
+	const where = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
+	const result = await db
+		.prepare(
+			`SELECT ${requestColumns} FROM owner_requests${where} ORDER BY created_at DESC`,
+		)
+		.bind(...values)
+		.all<OwnerRequestRow>();
+	return result.results.map(ownerRequestFromRow);
 }
 
-export async function changeOwnerRequest(db: D1Database, command: RequestCommand): Promise<OwnerRequest> {
-  const current = await getOwnerRequest(db, command.id);
-  if (!current) throw new Error('Request not found.');
-  if (command.expectedUpdatedAt !== undefined && command.expectedUpdatedAt !== current.updatedAt) throw new Error('Request changed while it was being updated.');
-  const actor = validActor(command.actor);
-  const now = new Date().toISOString();
-  if (command.action === 'note') {
-    const note = command.note.trim();
-    if (note.length > 1000) throw new Error('Private note must be 1,000 characters or fewer.');
-    const [update] = await db.batch([
-      db.prepare(`UPDATE owner_requests SET private_note=?,updated_at=? WHERE id=? AND updated_at=? RETURNING ${requestColumns}`)
-        .bind(note, now, command.id, current.updatedAt),
-      db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+export async function changeOwnerRequest(
+	db: D1Database,
+	command: RequestCommand,
+): Promise<OwnerRequest> {
+	const current = await getOwnerRequest(db, command.id);
+	if (!current) throw new Error("Request not found.");
+	if (
+		command.expectedUpdatedAt !== undefined &&
+		command.expectedUpdatedAt !== current.updatedAt
+	)
+		throw new Error("Request changed while it was being updated.");
+	const actor = validActor(command.actor);
+	const now = new Date().toISOString();
+	if (command.action === "note") {
+		const note = command.note.trim();
+		if (note.length > 1000)
+			throw new Error("Private note must be 1,000 characters or fewer.");
+		const [update] = await db.batch([
+			db
+				.prepare(
+					`UPDATE owner_requests SET private_note=?,updated_at=? WHERE id=? AND updated_at=? RETURNING ${requestColumns}`,
+				)
+				.bind(note, now, command.id, current.updatedAt),
+			db
+				.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
         SELECT ?,'note-updated',?,'',? WHERE EXISTS
           (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND private_note=?)`)
-        .bind(command.id, actor, now, command.id, now, note),
-    ]);
-    const row = update.results[0] as OwnerRequestRow | undefined;
-    if (!row) throw new Error('Request changed while it was being updated.');
-    return ownerRequestFromRow(row);
-  }
+				.bind(command.id, actor, now, command.id, now, note),
+		]);
+		const row = update.results[0] as OwnerRequestRow | undefined;
+		if (!row) throw new Error("Request changed while it was being updated.");
+		return ownerRequestFromRow(row);
+	}
 
-  const transitions = {
-    review: { from: ['new'], to: 'reviewed', audit: 'reviewed' },
-    resolve: { from: ['new', 'reviewed'], to: 'resolved', audit: 'resolved' },
-    reopen: { from: ['reviewed', 'resolved'], to: 'new', audit: 'reopened' },
-    withdraw: { from: ['new', 'reviewed', 'resolved'], to: 'withdrawn', audit: 'withdrawn' },
-  } as const;
-  const transition = transitions[command.action];
-  if (!(transition.from as readonly OwnerRequestStatus[]).includes(current.status)) throw new Error('Invalid request transition.');
-  const placeholders = transition.from.map(() => '?').join(',');
-  const resolvedAt = transition.to === 'resolved' ? now : null;
-  const closingSoftware = current.kind === 'software' && command.action === 'withdraw';
-  const resolvingSoftware = current.kind === 'software' && command.action === 'resolve';
-  const reopeningSoftware = current.kind === 'software' && command.action === 'reopen';
-  if (closingSoftware) {
-    const block = await depositOfferBlock(db, command.id, true);
-    if (block) throw new Error(block);
-  }
-  const awaitingCountersign = () => db.prepare("SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'").bind(command.id).first();
-  if ((closingSoftware || resolvingSoftware) && await awaitingCountersign()) throw new Error(signedAgreementPendingMessage);
-  let results: D1Result[];
-  try { results = await db.batch([
-    ...(closingSoftware || resolvingSoftware ? [softwareGuard(db, "SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed')", [command.id])] : []),
-    ...(closingSoftware ? [offerSendingGuard(db, command.id), depositOfferGuard(db, command.id, true)] : []),
-    ...(resolvingSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=? AND completed_at IS NULL AND revoked_at IS NULL)', [command.id])] : []),
-    ...(reopeningSoftware ? [softwareGuard(db, 'SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)', [command.id])] : []),
-    db.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
+	const transitions = {
+		review: { from: ["new"], to: "reviewed", audit: "reviewed" },
+		resolve: { from: ["new", "reviewed"], to: "resolved", audit: "resolved" },
+		reopen: { from: ["reviewed", "resolved"], to: "new", audit: "reopened" },
+		withdraw: {
+			from: ["new", "reviewed", "resolved"],
+			to: "withdrawn",
+			audit: "withdrawn",
+		},
+	} as const;
+	const transition = transitions[command.action];
+	if (
+		!(transition.from as readonly OwnerRequestStatus[]).includes(current.status)
+	)
+		throw new Error("Invalid request transition.");
+	const placeholders = transition.from.map(() => "?").join(",");
+	const resolvedAt = transition.to === "resolved" ? now : null;
+	const closingSoftware =
+		current.kind === "software" && command.action === "withdraw";
+	const resolvingSoftware =
+		current.kind === "software" && command.action === "resolve";
+	const reopeningSoftware =
+		current.kind === "software" && command.action === "reopen";
+	if (closingSoftware) {
+		const block = await depositOfferBlock(db, command.id, true);
+		if (block) throw new Error(block);
+	}
+	const awaitingCountersign = () =>
+		db
+			.prepare(
+				"SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'",
+			)
+			.bind(command.id)
+			.first();
+	if ((closingSoftware || resolvingSoftware) && (await awaitingCountersign()))
+		throw new Error(signedAgreementPendingMessage);
+	let results: D1Result[];
+	try {
+		results = await db.batch([
+			...(closingSoftware || resolvingSoftware
+				? [
+						softwareGuard(
+							db,
+							"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed')",
+							[command.id],
+						),
+					]
+				: []),
+			...(closingSoftware
+				? [
+						offerSendingGuard(db, command.id),
+						depositOfferGuard(db, command.id, true),
+					]
+				: []),
+			...(resolvingSoftware
+				? [
+						softwareGuard(
+							db,
+							"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=? AND completed_at IS NULL AND revoked_at IS NULL)",
+							[command.id],
+						),
+					]
+				: []),
+			...(reopeningSoftware
+				? [
+						softwareGuard(
+							db,
+							"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",
+							[command.id],
+						),
+					]
+				: []),
+			db
+				.prepare(`UPDATE owner_requests SET status=?,resolved_at=?,updated_at=?
       WHERE id=? AND updated_at=? AND status IN (${placeholders}) RETURNING ${requestColumns}`)
-      .bind(transition.to, resolvedAt, now, command.id, current.updatedAt, ...transition.from),
-    db.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+				.bind(
+					transition.to,
+					resolvedAt,
+					now,
+					command.id,
+					current.updatedAt,
+					...transition.from,
+				),
+			db
+				.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
       SELECT ?,? ,?,'',? WHERE EXISTS
         (SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?)`)
-      .bind(command.id, transition.audit, actor, now, command.id, now, transition.to),
-    ...(closingSoftware || resolvingSoftware ? [
-      softwareGuard(db, 'SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?', [command.id,now,transition.to]),
-      ...retireRequestSigning(db,command.id,now),
-      db.prepare('UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL').bind(now,command.id),
-    ] : []),
-    ...(current.kind === 'software' && command.action === 'withdraw' ? [
-      softwareGuard(db, "SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status='withdrawn'", [command.id, now]),
-      ...softwareAccessRevocation(db, command.id, actor, now),
-    ] : []),
-  ]);
-  } catch (error) {
-    if ((closingSoftware || resolvingSoftware) && await awaitingCountersign()) throw new Error(signedAgreementPendingMessage);
-    if (resolvingSoftware) {
-      const project = await getSoftwareProject(db, command.id);
-      if (project && project.completed_at === null && project.revoked_at === null) throw new Error(projectIncompleteMessage);
-    }
-    if (reopeningSoftware && await getSoftwareProject(db, command.id)) throw new Error(projectStartedMessage);
-    if (closingSoftware) {
-      const block = await depositOfferBlock(db, command.id, true);
-      if (block) throw new Error(block);
-    }
-    if (closingSoftware && await offerIsSending(db, command.id)) throw new Error(offerSendingMessage);
-    throw error;
-  }
-  const update = results[closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0];
-  const row = update.results[0] as OwnerRequestRow | undefined;
-  if (!row) throw new Error('Request changed while it was being updated.');
-  return ownerRequestFromRow(row);
+				.bind(
+					command.id,
+					transition.audit,
+					actor,
+					now,
+					command.id,
+					now,
+					transition.to,
+				),
+			...(closingSoftware || resolvingSoftware
+				? [
+						softwareGuard(
+							db,
+							"SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status=?",
+							[command.id, now, transition.to],
+						),
+						...retireRequestSigning(db, command.id, now),
+						db
+							.prepare(
+								"UPDATE software_offer_links SET revoked_at=? WHERE request_id=? AND revoked_at IS NULL",
+							)
+							.bind(now, command.id),
+					]
+				: []),
+			...(current.kind === "software" && command.action === "withdraw"
+				? [
+						softwareGuard(
+							db,
+							"SELECT 1 FROM owner_requests WHERE id=? AND updated_at=? AND status='withdrawn'",
+							[command.id, now],
+						),
+						...softwareAccessRevocation(db, command.id, actor, now),
+					]
+				: []),
+		]);
+	} catch (error) {
+		if ((closingSoftware || resolvingSoftware) && (await awaitingCountersign()))
+			throw new Error(signedAgreementPendingMessage);
+		if (resolvingSoftware) {
+			const project = await getSoftwareProject(db, command.id);
+			if (
+				project &&
+				project.completed_at === null &&
+				project.revoked_at === null
+			)
+				throw new Error(projectIncompleteMessage);
+		}
+		if (reopeningSoftware && (await getSoftwareProject(db, command.id)))
+			throw new Error(projectStartedMessage);
+		if (closingSoftware) {
+			const block = await depositOfferBlock(db, command.id, true);
+			if (block) throw new Error(block);
+		}
+		if (closingSoftware && (await offerIsSending(db, command.id)))
+			throw new Error(offerSendingMessage);
+		throw error;
+	}
+	const update =
+		results[
+			closingSoftware ? 3 : resolvingSoftware ? 2 : reopeningSoftware ? 1 : 0
+		];
+	const row = update.results[0] as OwnerRequestRow | undefined;
+	if (!row) throw new Error("Request changed while it was being updated.");
+	return ownerRequestFromRow(row);
 }

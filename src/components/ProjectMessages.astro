@@ -1,32 +1,44 @@
 ---
-import type { ProjectMessage } from '~/lib/audio-project-messages';
-import type { SoftwareProjectMessage } from '~/lib/software-project-messages';
-import { safeExternalUrl } from '~/lib/owner-model';
-import '~/styles/studio.css';
+import type { ProjectMessage } from "~/lib/audio-project-messages";
+import type { SoftwareProjectMessage } from "~/lib/software-project-messages";
+import { safeExternalUrl } from "~/lib/owner-model";
+import "~/styles/studio.css";
 
 type Props = {
-  messages: (ProjectMessage | SoftwareProjectMessage)[];
-  endpoint: string;
-  reader: 'owner' | 'client';
-  closed: boolean;
-  heading?: string; placeholder?: string; hint?: string;
+	messages: (ProjectMessage | SoftwareProjectMessage)[];
+	endpoint: string;
+	reader: "owner" | "client";
+	closed: boolean;
+	heading?: string;
+	placeholder?: string;
+	hint?: string;
 };
-const { messages, endpoint, reader, closed, heading = "Stay in the loop", placeholder = "Write a message…", hint = "Questions, direction, or an updated HTTPS link to your files. Files stay in your Drive, Dropbox, or WeTransfer account." } = Astro.props;
-const unread = messages.some(message => message.actor !== reader && !message.read_at);
+const {
+	messages,
+	endpoint,
+	reader,
+	closed,
+	heading = "Stay in the loop",
+	placeholder = "Write a message…",
+	hint = "Questions, direction, or an updated HTTPS link to your files. Files stay in your Drive, Dropbox, or WeTransfer account.",
+} = Astro.props;
+const unread = messages.some(
+	(message) => message.actor !== reader && !message.read_at,
+);
 function parts(body: string) {
-  const result: { text: string; href?: string }[] = [];
-  const links = /https:\/\/[^\s<>"']+/gi;
-  let cursor = 0;
-  for (const match of body.matchAll(links)) {
-    const start = match.index ?? 0;
-    if (start > cursor) result.push({ text: body.slice(cursor, start) });
-    const link = match[0].replace(/[.,!?;:)\]]+$/, '');
-    const href = safeExternalUrl(link);
-    result.push(href ? { text: link, href } : { text: link });
-    cursor = start + link.length;
-  }
-  if (cursor < body.length) result.push({ text: body.slice(cursor) });
-  return result;
+	const result: { text: string; href?: string }[] = [];
+	const links = /https:\/\/[^\s<>"']+/gi;
+	let cursor = 0;
+	for (const match of body.matchAll(links)) {
+		const start = match.index ?? 0;
+		if (start > cursor) result.push({ text: body.slice(cursor, start) });
+		const link = match[0].replace(/[.,!?;:)\]]+$/, "");
+		const href = safeExternalUrl(link);
+		result.push(href ? { text: link, href } : { text: link });
+		cursor = start + link.length;
+	}
+	if (cursor < body.length) result.push({ text: body.slice(cursor) });
+	return result;
 }
 ---
 <section class="project-messages" data-project-messages data-endpoint={endpoint} data-unread={unread ? 'true' : 'false'} aria-labelledby="project-messages-heading">
