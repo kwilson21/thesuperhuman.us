@@ -19,12 +19,27 @@ interface YoutubePlayer {
 	getIframe(): HTMLIFrameElement;
 }
 
+// The options this file passes to the YouTube IFrame API constructor.
+interface YoutubePlayerOptions {
+	videoId?: string;
+	host: string;
+	playerVars: { playsinline: number; origin: string };
+	events: {
+		onReady: () => void;
+		onStateChange: (event: { data: number }) => void;
+		onError: () => void;
+	};
+}
+
 interface YoutubeAPI {
 	Player: new (
 		element: HTMLElement,
-		options: Record<string, unknown>,
+		options: YoutubePlayerOptions,
 	) => YoutubePlayer;
 }
+
+// Anything registered for single playback: the page's own players and the YouTube player.
+type PlaybackKey = HTMLElement | YoutubePlayer;
 
 type PlaybackMedium = "audio" | "video";
 
@@ -171,17 +186,17 @@ export function createPlaybackTracker(options: PlaybackTrackerOptions) {
 	};
 }
 
-const players = new Map<object, Playable>();
+const players = new Map<PlaybackKey, Playable>();
 let initialized = false;
 let youtubeReady: Promise<YoutubeAPI> | undefined;
 
-function pauseOthers(active: object) {
+function pauseOthers(active: PlaybackKey) {
 	players.forEach((player, key) => {
 		if (key !== active) player.pause();
 	});
 }
 
-export function registerMusicPlayer(key: object, player: Playable) {
+export function registerMusicPlayer(key: PlaybackKey, player: Playable) {
 	players.set(key, player);
 
 	return () => pauseOthers(key);
@@ -207,23 +222,23 @@ const engagementTrackers = new Map<
 	ReturnType<typeof createPlaybackTracker>
 >();
 
+type Attribution = { campaignId?: string; channel?: string; creative?: string };
+
 function attribution() {
-	const result: { campaignId?: string; channel?: string; creative?: string } =
-		{};
+	const result: Attribution = {};
 
 	const params = new URLSearchParams(location.search);
 
-	const fields = {
-		campaignId: "campaign",
-		channel: "channel",
-		creative: "creative",
-	} as const;
+	const fields: [keyof Attribution, string][] = [
+		["campaignId", "campaign"],
+		["channel", "channel"],
+		["creative", "creative"],
+	];
 
-	Object.entries(fields).forEach(([field, parameter]) => {
+	fields.forEach(([field, parameter]) => {
 		const value = params.get(parameter);
 
-		if (value && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value))
-			result[field as keyof typeof result] = value;
+		if (value && /^[a-z0-9][a-z0-9-]{0,79}$/.test(value)) result[field] = value;
 	});
 
 	return result;
@@ -295,6 +310,7 @@ function engagement(element: HTMLElement, medium: PlaybackMedium) {
 function youtubeAPI(): Promise<YoutubeAPI> {
 	if (youtubeReady) return youtubeReady;
 
+	// SAFETY: adds the optional YT and onYouTubeIframeAPIReady properties that the YouTube IFrame API script sets on window. Both are optional in this type, and the loader below checks for YT before use.
 	const win = window as Window & {
 		YT?: YoutubeAPI;
 		onYouTubeIframeAPIReady?: () => void;

@@ -13,8 +13,8 @@ export function setupStudioSignIn() {
 
 		if (!requestForm || !verifyForm || !status) return;
 
-		const email = (requestForm.elements.namedItem("email") as HTMLInputElement)
-			.value;
+		const email =
+			requestForm.querySelector<HTMLInputElement>('[name="email"]')!.value;
 
 		const turnstileToken =
 			requestForm.querySelector<HTMLInputElement>(
@@ -34,6 +34,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, turnstileToken }),
 			});
 
+			// SAFETY: the code endpoint answers with JSON carrying message or error. Both fields are optional here and read with ??, so either shape is handled.
 			const result = (await response.json()) as {
 				message?: string;
 				error?: string;
@@ -50,6 +51,7 @@ export function setupStudioSignIn() {
 			status.textContent = "Could not reach the studio. Please try again.";
 		} finally {
 			if (button) button.disabled = false;
+			// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and the optional call handles the script not having loaded.
 			(
 				window as Window & { turnstile?: { reset: () => void } }
 			).turnstile?.reset();
@@ -110,8 +112,8 @@ export function setupStudioSignIn() {
 
 		if (!requestForm || !verifyForm || !status) return;
 
-		const email = (requestForm.elements.namedItem("email") as HTMLInputElement)
-			.value;
+		const email =
+			requestForm.querySelector<HTMLInputElement>('[name="email"]')!.value;
 
 		const code = boxes.map((box) => box.value).join("");
 
@@ -122,7 +124,7 @@ export function setupStudioSignIn() {
 			return;
 		}
 
-		(verifyForm.elements.namedItem("code") as HTMLInputElement).value = code;
+		verifyForm.querySelector<HTMLInputElement>('[name="code"]')!.value = code;
 
 		const button = verifyForm.querySelector<HTMLButtonElement>(
 			'button[type="submit"]',
@@ -137,6 +139,7 @@ export function setupStudioSignIn() {
 				body: JSON.stringify({ email, code }),
 			});
 
+			// SAFETY: the session endpoint answers with JSON; error is optional and read only when response.ok is false (the success branch returns first).
 			const result = (await response.json()) as { error?: string };
 
 			if (response.ok) {

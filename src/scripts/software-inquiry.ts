@@ -24,7 +24,7 @@ const pathFields = {
 	workflow: ["today", "firstResult"],
 } as const;
 
-const questionLimits: Record<string, number> = {
+const questionLimits = {
 	today: 2000,
 	firstResult: 2000,
 	purpose: 2000,
@@ -32,16 +32,34 @@ const questionLimits: Record<string, number> = {
 	firstVersion: 1000,
 };
 
+function isSoftwarePath(value: unknown): value is SoftwarePath {
+	return typeof value === "string" && Object.hasOwn(softwarePaths, value);
+}
+
+function isString(value: unknown): value is string {
+	return typeof value === "string";
+}
+
+// The API sends back the brief it built from the form (a flat string record). This only rules out non-objects and arrays.
+function isBriefRecord(value: unknown): value is Record<string, string> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// A saved draft's answers object. Values are read back through isString before use.
+function isDraftAnswers(value: unknown): value is Record<string, string> {
+	return typeof value === "object" && value !== null;
+}
+
+// Own-key lookup for a label table. Returns undefined for any other key.
+function ownLabel(table: Record<string, string>, key: string) {
+	return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 export function renderSoftwareReceipt(
-	result: Record<string, unknown>,
+	result: { brief?: unknown; clientCopyStatus?: unknown },
 	path?: string,
 ) {
-	const brief =
-		result.brief &&
-		typeof result.brief === "object" &&
-		!Array.isArray(result.brief)
-			? (result.brief as Record<string, string>)
-			: {};
+	const brief = isBriefRecord(result.brief) ? result.brief : {};
 
 	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
@@ -87,19 +105,13 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	const sentNotice =
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
 
-	let step =
-			typeof requestedPath === "string" &&
-			Object.hasOwn(softwarePaths, requestedPath)
-				? 1
-				: 0,
+	let step = isSoftwarePath(requestedPath) ? 1 : 0,
 		submissionId = crypto.randomUUID();
 
 	const path = (): SoftwarePath => {
 		const value = new FormData(form).get("path");
 
-		return typeof value === "string" && Object.hasOwn(softwarePaths, value)
-			? (value as SoftwarePath)
-			: "workflow";
+		return isSoftwarePath(value) ? value : "workflow";
 	};
 
 	const plan = (): readonly number[] => plans[path()];
@@ -267,22 +279,22 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 	try {
 		const saved = JSON.parse(localStorage.getItem(storageKey) ?? "null");
 
-		if (saved && saved.answers && typeof saved.answers === "object") {
-			const stored: Record<string, unknown> = { ...saved.answers };
+		if (saved && saved.answers && isDraftAnswers(saved.answers)) {
+			const stored = { ...saved.answers };
 
 			// Drafts from before the named paths used one "idea" path, which is now the web app brief. Its idea text is the app goal on any path.
 			if (stored.path === "idea") stored.path = "webapp";
 
-			if (typeof stored.idea === "string" && typeof stored.appGoal !== "string")
+			if (isString(stored.idea) && !isString(stored.appGoal))
 				stored.appGoal = stored.idea;
 
-			const validPath =
-				typeof stored.path === "string" &&
-				Object.hasOwn(softwarePaths, stored.path);
+			const validPath = isSoftwarePath(stored.path);
 
-			for (const [key, max] of Object.entries(questionLimits))
-				if (typeof stored[key] === "string")
-					answers[key] = (stored[key] as string).slice(0, max);
+			for (const [key, max] of Object.entries(questionLimits)) {
+				const value = stored[key];
+
+				if (isString(value)) answers[key] = value.slice(0, max);
+			}
 
 			for (const name of ["path", "timing", "updates"])
 				form
@@ -304,7 +316,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				if (
 					(control instanceof HTMLInputElement ||
 						control instanceof HTMLTextAreaElement) &&
-					typeof value === "string"
+					isString(value)
 				)
 					control.value = value.slice(
 						0,
@@ -322,7 +334,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				step = saved.step;
 
 			if (
-				typeof saved.submissionId === "string" &&
+				isString(saved.submissionId) &&
 				/^[a-f0-9-]{36}$/i.test(saved.submissionId)
 			)
 				submissionId = saved.submissionId;
@@ -347,7 +359,7 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 		list.replaceChildren();
 		const values = payload();
 
-		const labels: Record<string, string> = {
+		const labels = {
 			budgetNote: "Budget",
 			firstResult: "First result",
 			firstVersion: "First version",
@@ -365,14 +377,14 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 				dd = document.createElement("dd"),
 				edit = document.createElement("button");
 
-			dt.textContent = labels[key] ?? clientSoftwareLabels[key];
+			dt.textContent = ownLabel(labels, key) ?? clientSoftwareLabels[key];
 			dd.textContent =
 				key === "path"
-					? softwarePaths[value as SoftwarePath]
+					? (ownLabel(softwarePaths, value) ?? value)
 					: key === "timing"
-						? timingLabels[value as keyof typeof timingLabels]
+						? (ownLabel(timingLabels, value) ?? value)
 						: key === "updates"
-							? updateLabels[value as keyof typeof updateLabels]
+							? (ownLabel(updateLabels, value) ?? value)
 							: value;
 			edit.type = "button";
 			edit.textContent = "Edit";
@@ -443,8 +455,11 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 
 			for (const key of keys) {
 				const control = [...form.elements].find(
-					(node) => node.getAttribute("name") === key,
-				) as HTMLInputElement | HTMLTextAreaElement | undefined;
+					(node): node is HTMLInputElement | HTMLTextAreaElement =>
+						(node instanceof HTMLInputElement ||
+							node instanceof HTMLTextAreaElement) &&
+						node.getAttribute("name") === key,
+				);
 
 				const message =
 					errors[key] ||
@@ -493,9 +508,10 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 		pointerChoice = false;
 	});
 	form.addEventListener("change", (event) => {
-		const control = event.target as HTMLInputElement;
+		const control =
+			event.target instanceof HTMLInputElement ? event.target : null;
 
-		if (control.name === "path") {
+		if (control?.name === "path") {
 			steps.slice(1, 3).forEach((section) => {
 				const box = section.querySelector<HTMLTextAreaElement>("textarea")!;
 
@@ -525,14 +541,17 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 			pointerChoice = false;
 		}
 
-		if (control.name === "timing") {
+		if (control?.name === "timing") {
 			form.querySelector<HTMLElement>("[data-date-field]")!.hidden =
 				control.value !== "date";
 
 			if (control.value !== "date") {
-				const date = form.elements.namedItem("timingDate") as HTMLInputElement;
-				date.value = "";
-				date.removeAttribute("aria-invalid");
+				const date = form.elements.namedItem("timingDate");
+
+				if (date instanceof HTMLInputElement) {
+					date.value = "";
+					date.removeAttribute("aria-invalid");
+				}
 
 				const error = form.querySelector<HTMLElement>(
 					'[data-form-error="timingDate"]',
@@ -642,7 +661,9 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 
 	const observer = new MutationObserver((records) => {
 		const target = records
-			.map((record) => record.target as HTMLElement)
+			.flatMap((record) =>
+				record.target instanceof HTMLElement ? [record.target] : [],
+			)
 			.find(
 				(node) =>
 					node.getAttribute("aria-invalid") === "true" &&

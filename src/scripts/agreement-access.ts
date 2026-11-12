@@ -47,6 +47,7 @@ export function setupAgreementAccess() {
 					}),
 				});
 
+				// SAFETY: the intake request answers with JSON; error is read only in the !response.ok branch below, so a successful response is never read through it.
 				const result = (await response.json()) as {
 					error: string;
 					errors?: Record<string, string>;
@@ -57,8 +58,11 @@ export function setupAgreementAccess() {
 				location.href =
 					form.dataset.afterLink ?? location.pathname + "?email=sent";
 			} catch (error) {
-				if (status) status.textContent = (error as Error).message;
+				if (status)
+					status.textContent =
+						error instanceof Error ? error.message : String(error);
 			} finally {
+				// SAFETY: adds the optional turnstile property that Cloudflare's Turnstile script sets on window. The type marks it optional, and turnstile?.reset() below handles the script not having loaded.
 				const turnstile = (
 					window as Window & { turnstile?: { reset: () => void } }
 				).turnstile;
@@ -182,13 +186,14 @@ export function setupAgreementAccess() {
 		if (focus && Object.keys(fields).length) summary.focus();
 	}
 
-	async function post(action: string, body: unknown) {
+	async function post<T>(action: string, body: T) {
 		const response = await fetch(`/api/offer/${token}/${action}`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
 		});
 
+		// SAFETY: the offer endpoints answer with JSON; error is read only in the !response.ok branch below, and documents is returned to callers only after that check passes.
 		const result = (await response.json()) as {
 			error: string;
 			errors?: Record<string, string>;
@@ -319,7 +324,8 @@ export function setupAgreementAccess() {
 					: saveAndReview(expected, data),
 			)
 			.catch((error) => {
-				status.textContent = (error as Error).message;
+				status.textContent =
+					error instanceof Error ? error.message : String(error);
 			});
 
 		return queue;
@@ -393,7 +399,8 @@ export function setupAgreementAccess() {
 			});
 			location.reload();
 		} catch (error) {
-			status.textContent = (error as Error).message;
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
 			status.focus();
 		} finally {
 			signButton.disabled = false;

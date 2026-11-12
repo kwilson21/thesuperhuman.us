@@ -87,6 +87,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
+								// SAFETY: The revoke request (action revoke, with note) answers with JSON; error is optional and read only after the !response.ok check below.
 								const result = (await response.json()) as { error?: string };
 
 								if (!response.ok)
@@ -147,6 +148,7 @@ export function setupOwnerProjectFiles() {
 									},
 								);
 
+								// SAFETY: The publish request (action publish) answers with JSON; error is optional and read only after the !response.ok check below.
 								const result = (await response.json()) as { error?: string };
 
 								if (!response.ok)
@@ -184,6 +186,7 @@ export function setupOwnerProjectFiles() {
 								}),
 							});
 
+							// SAFETY: The request for this upload button (uploadId from its dataset) answers with JSON; error is optional and read only after the !response.ok check below.
 							const result = (await response.json()) as { error?: string };
 
 							if (!response.ok)
@@ -236,6 +239,7 @@ export function setupOwnerProjectFiles() {
 					form.querySelector<HTMLInputElement>('input[name="file"]')
 						?.files?.[0];
 
+				// SAFETY: version is the select the upload form renders with name="version". namedItem returns it, or null when it is absent, and the optional chain handles null.
 				const version = (
 					form.elements.namedItem("version") as HTMLSelectElement | null
 				)?.value;
@@ -292,6 +296,7 @@ export function setupOwnerProjectFiles() {
 						}),
 					});
 
+					// SAFETY: the start request (action start) answers with JSON. uploadId, partSize and error are all optional in this type, and the throw on the next statement checks uploadId and partSize before they are used.
 					const start = (await begin.json()) as {
 						uploadId?: string;
 						partSize?: number;
@@ -334,6 +339,7 @@ export function setupOwnerProjectFiles() {
 								});
 
 								if (response.ok)
+									// SAFETY: src/pages/api/owner/projects/[id]/uploads.ts answers a successful part upload with Response.json({ ok, part }), so with response.ok set (checked on the line above) part is present; a failed response leaves part null.
 									part = ((await response.json()) as { part: UploadPart }).part;
 							} catch {
 								/* A part can be retried without restarting the whole file. */
@@ -352,17 +358,17 @@ export function setupOwnerProjectFiles() {
 
 					status.textContent = "Finishing the upload…";
 
+					const completion = { action: "complete", uploadId, parts };
+
+					if (peaks) Object.assign(completion, { peaks });
+
 					const finish = await fetch(endpoint, {
 						method: "POST",
 						headers: { "content-type": "application/json" },
-						body: JSON.stringify({
-							action: "complete",
-							uploadId,
-							parts,
-							...(peaks ? { peaks } : {}),
-						}),
+						body: JSON.stringify(completion),
 					});
 
+					// SAFETY: the complete request (action complete) answers with JSON; error is optional and read only after the !finish.ok check below.
 					const result = (await finish.json()) as { error?: string };
 
 					if (!finish.ok)
@@ -412,6 +418,7 @@ export function setupOwnerProjectFiles() {
 						body: JSON.stringify({ action: "revoke" }),
 					});
 
+					// SAFETY: The revoke request (action revoke) answers with JSON; error is optional and read only after the !response.ok check below.
 					const result = (await response.json()) as { error?: string };
 
 					if (!response.ok)
