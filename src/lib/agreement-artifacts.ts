@@ -4,8 +4,9 @@ import { sendAudioMessage } from "./audio-resend";
 import type { Agreement } from "./software-agreements";
 import { templateVersionLabel } from "./agreement-version-label";
 import type { StoredAgreementValues } from "./agreement-fields";
+import { isText } from "./type-guards";
 
-// SAFETY: every caller passes an ArrayBuffer (arrayBuffer() or readBodyWithin output) or a Uint8Array view over one (new Uint8Array of arrayBuffer(), readFileSync, or TextEncoder output); the cast only narrows TypeScript's ArrayBufferLike to ArrayBuffer, and digest accepts any BufferSource at runtime.
+// SAFETY: digest accepts any ArrayBuffer or view at runtime; the cast only removes SharedArrayBuffer from TypeScript's ArrayBufferLike, and the callers pass R2 arrayBuffer() results, Uint8Array copies of them, or pdf-lib save() output from render, none of which is shared memory.
 export const hashBytes = async (bytes: ArrayBuffer | Uint8Array) =>
 	[
 		...new Uint8Array(
@@ -50,7 +51,7 @@ export function canonicalJson(value: CanonicalJson): string {
 
 /** A software_agreement_signatures row as the PDF reads it (its SQL column list in prepareAgreementArtifact). The owner preflight builds rows without consent_text and intent_text. */
 export type SignatureRecord = {
-	party: string;
+	party?: string;
 	typed_name?: string | null;
 	title?: string | null;
 	consent_version?: string | null;
@@ -72,7 +73,7 @@ export type SigningCertificate = {
 	document_sha256?: string | null;
 	effective_on?: string | null;
 	executed_at?: string | null;
-	versions?: { version_label?: string; offer?: string };
+	versions?: { version_label?: string; offer?: string | number };
 	signatures?: SignatureRecord[];
 	attachments?: {
 		filename?: string | null;
@@ -89,10 +90,6 @@ export type AgreementArtifact = {
 	bytes: number | null;
 	certificate_key: string | null;
 };
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
-}
 
 export const newYorkTime = (value: string | null | undefined) =>
 	isText(value)

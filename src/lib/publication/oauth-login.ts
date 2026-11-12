@@ -274,7 +274,7 @@ export async function publicationLogin(
 				signal: AbortSignal.timeout(10000),
 			});
 
-			// SAFETY: only id is read, and it is compared as a string with the owner ID, so a missing or non-numeric id fails the comparison below.
+			// SAFETY: only id is read, then stringified and compared with the configured owner ID, so a missing id becomes "undefined" and cannot match; the body is GitHub's API response over TLS.
 			const user = (await userResponse.json()) as { id?: number };
 
 			if (

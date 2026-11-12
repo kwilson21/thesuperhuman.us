@@ -8,6 +8,7 @@ import {
 	softwareReviewEmail,
 	softwareHandoffEmail,
 } from "./client-emails";
+import { isText } from "./type-guards";
 
 export const projectStates = {
 	preparing: "Preparing",
@@ -151,10 +152,6 @@ export const projectTerms = (project: { terms_json: string }) =>
 
 function isNumber<T>(value: T): value is T & number {
 	return typeof value === "number";
-}
-
-function isText<T>(value: T): value is T & string {
-	return typeof value === "string";
 }
 
 export function softwareVersionNumber(update: { artifact_version: string }) {
@@ -791,6 +788,7 @@ export async function projectAgreementDetails(
 				.bind(project.offer_id)
 				.first<{ details: string | null }>();
 
+	// SAFETY: the send action (pages/api/owner/requests/[id]/software.ts) pins JSON.stringify of validateAgreementDetails output into software_offers.agreement_details_json, and agreementValues (agreement-fields.ts) stores the same object as values_json $.owner with review_business_days and correction_calendar_days stringified; the schema defaults make all three fields present.
 	return row?.details
 		? (JSON.parse(row.details) as {
 				review_business_days?: string | number;
