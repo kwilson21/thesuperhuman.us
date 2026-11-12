@@ -1,3 +1,6 @@
+import type { APIContext } from "astro";
+import { double } from "../helpers/doubles";
+import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
 import * as invoiceLib from "~/lib/software-invoices";
 import { POST as invoicePost } from "~/pages/api/owner/requests/[id]/invoices";
 import { createRequire } from "node:module";
@@ -53,9 +56,12 @@ import {
 	getSoftwareProject,
 } from "~/lib/software-projects";
 import { softwareReviewEmail, softwareHandoffEmail } from "~/lib/client-emails";
+import { sqliteD1 } from "../helpers/tests-lib-b-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
-let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: Env;
+type TestRuntime = APIContext["locals"]["runtime"];
+type TestEnv = TestRuntime["env"];
+let sql: InstanceType<typeof DatabaseSync>, db: D1Database, env: TestEnv;
 
 const terms = {
 	outcome: "Onboarding tool",
@@ -78,43 +84,7 @@ const termsJson = JSON.stringify(terms, null, 2),
 	secret = "studio-code-key-for-tests-32-characters";
 
 const visualBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]);
-const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn() };
-
-function adapter(database: InstanceType<typeof DatabaseSync>) {
-	const statement = (query: string, args: unknown[] = []) => ({
-		query,
-		args,
-		bind: (...values: unknown[]) => statement(query, values),
-		first: async () => database.prepare(query).get(...args) ?? null,
-		all: async () => ({ results: database.prepare(query).all(...args) }),
-		run: async () => ({
-			results: [],
-			meta: database.prepare(query).run(...args),
-		}),
-	});
-
-	return {
-		prepare: (query: string) => statement(query),
-		batch: async (items: ReturnType<typeof statement>[]) => {
-			database.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => ({
-					results: /RETURNING|^SELECT/i.test(item.query)
-						? database.prepare(item.query).all(...item.args)
-						: (database.prepare(item.query).run(...item.args), []),
-				}));
-
-				database.exec("COMMIT");
-
-				return result;
-			} catch (error) {
-				database.exec("ROLLBACK");
-				throw error;
-			}
-		},
-	} as unknown as D1Database;
-}
+const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn(), list: vi.fn() };
 
 function request(
 	id = "software",
@@ -148,20 +118,20 @@ beforeEach(() => {
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
 	);
-	db = adapter(sql);
+	db = sqliteD1(sql);
 	request();
 	offer();
 	bucket.put.mockReset();
 	bucket.get.mockReset();
 	bucket.delete.mockReset();
-	env = {
+	env = double<TestEnv>({
 		MUSIC_DB: db,
-		AUDIO: bucket,
+		AUDIO: fakeR2Bucket(bucket),
 		AUDIO_CLIENT_PORTAL_ENABLED: "true",
 		RESEND_API_KEY: "test",
 		CONTACT_FROM_EMAIL: "studio@example.com",
 		SITE_ORIGIN: "https://preview.example.com",
-	} as unknown as Env;
+	});
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => new Response("{}", { status: 200 })),
@@ -216,7 +186,7 @@ async function call(
 		),
 		locals: {
 			owner: owner ? { email: "owner@example.com" } : undefined,
-			runtime: { env },
+			runtime: double<TestRuntime>({ env }),
 		},
 	} as never);
 }
@@ -381,7 +351,7 @@ async function decide(
 				body: JSON.stringify(body),
 			},
 		),
-		locals: { runtime: { env } },
+		locals: { runtime: double<TestRuntime>({ env }) },
 	} as never);
 }
 
@@ -1801,7 +1771,7 @@ async function visualCall(
 		locals: {
 			owner:
 				options.owner === false ? undefined : { email: "owner@example.com" },
-			runtime: { env },
+			runtime: double<TestRuntime>({ env }),
 		},
 	} as never);
 }
@@ -2180,7 +2150,7 @@ it("scopes the client message route to an active own session", async () => {
 					body: JSON.stringify({ action: "send", body: "Hello" }),
 				},
 			),
-			locals: { runtime: { env } },
+			locals: { runtime: double<TestRuntime>({ env }) },
 		} as never);
 
 	expect((await send("software", "")).status).toBe(401);

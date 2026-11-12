@@ -44,6 +44,7 @@ import { projectToday } from "~/lib/audio-project-updates";
 import type { APIContext } from "astro";
 import { double, fakeD1 } from "../helpers/doubles";
 import { fakeR2Bucket } from "../helpers/tests-lib-b-r2";
+import { sqliteD1 } from "../helpers/tests-lib-b-d1";
 
 type TestRuntime = APIContext["locals"]["runtime"];
 
@@ -148,72 +149,11 @@ const isObject = (value: unknown): value is object =>
 const bucketData = new Map<string, Uint8Array>();
 const bucketUploaded = new Map<string, Date>();
 
-function adapter(database: InstanceType<typeof DatabaseSync>): D1Database {
-	const statements = new WeakMap<
-		D1PreparedStatement,
-		{ query: string; args: unknown[] }
-	>();
-
-	const statement = (
-		query: string,
-		args: unknown[] = [],
-	): D1PreparedStatement => {
-		const prepared = double<D1PreparedStatement>({
-			bind: (...values: unknown[]) => statement(query, values),
-			first: async () => database.prepare(query).get(...args) ?? null,
-			all: async () => ({
-				success: true as const,
-				meta: double<D1Response["meta"]>({}),
-				results: database.prepare(query).all(...args),
-			}),
-			run: async () => ({
-				success: true as const,
-				meta: database.prepare(query).run(...args),
-				results: [],
-			}),
-		});
-
-		statements.set(prepared, { query, args });
-
-		return prepared;
-	};
-
-	return fakeD1({
-		prepare: (query: string) => statement(query),
-		batch: async (items: D1PreparedStatement[]) => {
-			database.exec("BEGIN");
-
-			try {
-				const result = items.map((item) => {
-					const queued = statements.get(item);
-
-					if (!queued) throw new Error("Unknown statement in batch.");
-
-					return {
-						success: true as const,
-						meta: double<D1Response["meta"]>({}),
-						results: /^SELECT|RETURNING/.test(queued.query)
-							? database.prepare(queued.query).all(...queued.args)
-							: (database.prepare(queued.query).run(...queued.args), []),
-					};
-				});
-
-				database.exec("COMMIT");
-
-				return result;
-			} catch (e) {
-				database.exec("ROLLBACK");
-				throw e;
-			}
-		},
-	});
-}
-
 beforeEach(async () => {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(readFileSync("db/music.sql", "utf8"));
-	db = adapter(sql);
+	db = sqliteD1(sql);
 	bucketData.clear();
 	bucketUploaded.clear();
 	sql.exec(
