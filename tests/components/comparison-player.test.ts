@@ -72,20 +72,14 @@ it("places compact playback beside the waveform and seeks from both the track an
 		'.comparison-player--compact[data-initialized="true"]:not([data-audio-fallback="true"]) .compact-waveform-stage{display:grid}',
 	);
 
-	// The same statement also runs in the audio-fallback branch, so anchor to the last one: the init-time hide.
-	const hide = sourceText(script).lastIndexOf(
-		sourceText(
-			"media.forEach(audio => { audio.pause(); audio.controls = false; audio.hidden = true; });",
-		),
-	);
-
-	const initialized = sourceText(script).indexOf(
-		sourceText("root.dataset.initialized = 'true';"),
-	);
-
-	expect(hide).toBeGreaterThanOrEqual(0);
-	expect(initialized).toBeGreaterThanOrEqual(0);
-	expect(hide).toBeLessThan(initialized);
+	// The same pause-and-hide statement also runs in the audio-fallback branch, so assert it together with the
+	// statement that marks the player initialized: the init-time hide, which must come before it.
+	expectSource(script).toContain(`media.forEach((audio) => {
+			audio.pause();
+			audio.controls = false;
+			audio.hidden = true;
+		});
+		root.dataset.initialized = "true";`);
 	expect(component).toContain(
 		".comparison-player--compact .comparison-switch span{display:inline}",
 	);
@@ -246,7 +240,7 @@ it("draws the unplayed bars and both seek tracks at 3:1 or better against paper 
 			/var\(--wave-unplayed\) var\(--fill,var\(--position,0%\)\) 100%/g,
 		),
 	).toHaveLength(2);
-	expect(component).not.toMatch(/var\(--rule\)var\(--position/);
+	expect(component).not.toMatch(/var\(--rule\)\s*var\(--position/);
 });
 
 it("sets every player control in Libron at 14px or more (type board D4.4-B)", () => {

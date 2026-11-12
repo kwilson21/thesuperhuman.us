@@ -61,6 +61,10 @@ function makeContext(
 	});
 }
 
+/** A fetch input given as a URL string, not a Request or a URL object. */
+const isUrlString = (input: RequestInfo | URL): input is string =>
+	!(input instanceof Request) && !(input instanceof URL);
+
 beforeEach(() => {
 	vi.stubGlobal(
 		"fetch",
@@ -195,14 +199,16 @@ describe("POST /api/resume-request", () => {
 		);
 
 		const reqEntries = Array.from(kv.put.mock.calls).filter((c) =>
-			String(c[0]).startsWith("req:"),
+			c[0].startsWith("req:"),
 		);
 
 		expect(reqEntries.length).toBe(1);
 
 		const resendCall = vi
 			.mocked(fetch)
-			.mock.calls.find(([input]) => String(input).includes("resend.com"));
+			.mock.calls.find(
+				([input]) => isUrlString(input) && input.includes("resend.com"),
+			);
 
 		expect(resendCall).toBeTruthy();
 		const body = JSON.parse(String(resendCall?.[1]?.body));

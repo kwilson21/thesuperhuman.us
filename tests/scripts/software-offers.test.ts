@@ -79,12 +79,29 @@ function element<E extends object>(extra: E): FakeElement & E {
 	return el;
 }
 
+/** The listeners the code under test adds to the stubbed window, in the order it adds them. */
+const windowListeners: ((event: FakeEvent) => void)[] = [];
+
+/** Stubs window with an addEventListener that records its listeners. */
+function stubWindow() {
+	windowListeners.length = 0;
+	vi.stubGlobal("window", {
+		addEventListener: vi.fn(
+			(_name: string, listener: (event: FakeEvent) => void) => {
+				windowListeners.push(listener);
+			},
+		),
+	});
+}
+
 /** The unload listener setupSoftwareOffers registers on window, the first window listener it adds. */
 function unloadHandler(): (event: FakeEvent) => void {
-	// SAFETY: setupSoftwareOffers adds its beforeunload listener as the first window listener, and that listener takes the event, so mock.calls[0][1] is the function these tests call.
-	return vi.mocked(window.addEventListener).mock.calls[0][1] as (
-		event: FakeEvent,
-	) => void;
+	const [listener] = windowListeners;
+
+	if (!listener)
+		throw new Error("setupSoftwareOffers added no window listener.");
+
+	return listener;
 }
 
 // Small DOM stand-in for the two async editor races; actual routes render in page tests.
@@ -276,7 +293,7 @@ function fixture(action = "fit") {
 		"confirm",
 		vi.fn(() => true),
 	);
-	vi.stubGlobal("window", { addEventListener: vi.fn() });
+	stubWindow();
 	setupSoftwareOffers();
 
 	return {
@@ -459,7 +476,7 @@ it("reloads after decline with unsaved offer edits only after confirmed discard"
 		"fetch",
 		vi.fn(async () => Response.json({ ok: true, copySent: true })),
 	);
-	vi.stubGlobal("window", { addEventListener: vi.fn() });
+	stubWindow();
 	setupSoftwareOffers();
 	await submit({ preventDefault: vi.fn() });
 	expect(location.reload).toHaveBeenCalledOnce();
@@ -488,7 +505,7 @@ it("reports confirmed offer email rejection", async () => {
 it("keeps revoke working when the resolved editor form is absent", async () => {
 	const { root, targets } = fixture();
 	targets.delete("[data-offer-form]");
-	vi.stubGlobal("window", { addEventListener: vi.fn() });
+	stubWindow();
 	setupSoftwareOffers();
 	vi.stubGlobal(
 		"fetch",
@@ -986,7 +1003,7 @@ it("drops a removed attachment from the manifest and queues its key for draft cl
 				: { addEventListener: vi.fn() },
 	};
 
-	// SAFETY: setupAgreementAttachments reads from block only dataset, addEventListener and querySelector, all supplied above; the test drives only the listener it registers, so the plain object stands in for the element.
+	// SAFETY: setupAgreementAttachments reads from block only dataset, addEventListener and querySelector, all supplied above; the test drives only the listener it registers; querySelector is generic over the element type, so the plain object cannot be typed as an HTMLElement.
 	setupAgreementAttachments(block as never);
 	remove({ target: { closest: () => button } });
 	expect(JSON.parse(field.value)).toEqual([

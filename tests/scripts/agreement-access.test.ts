@@ -111,13 +111,10 @@ function fixture() {
 				yield* Object.entries(values);
 			}
 			has(key: string) {
-				return key in values;
+				return Object.hasOwn(values, key);
 			}
 			get(key: string) {
-				if (!(key in values)) return null;
-
-				// SAFETY: key in values is checked on the line above, so key names one of the keys of values.
-				return values[key as keyof typeof values];
+				return new Map(Object.entries(values)).get(key) ?? null;
 			}
 		},
 	);

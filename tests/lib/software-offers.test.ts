@@ -27,8 +27,10 @@ export const terms = {
 	paymentMode: "standard",
 };
 
-/** Validates any object as offer terms; the validator, not the type, decides which fields are wrong. */
-const errors = <T extends object>(value: T) => {
+/** What validateOfferTerms takes: the owner's submitted terms, unparsed. The validator, not the type, decides which fields are wrong. */
+type SubmittedTerms = Parameters<typeof validateOfferTerms>[0];
+
+const errors = (value: SubmittedTerms) => {
 	const result = validateOfferTerms(value);
 	expect(result.ok).toBe(false);
 

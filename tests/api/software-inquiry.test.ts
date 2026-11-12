@@ -216,7 +216,7 @@ it("gives the updates choice a plain message without an error map, which some zo
 	expectSource(lib).toContain(
 		"updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })",
 	);
-	expect(lib).not.toMatch(/updates:z\.enum\([^)]*errorMap/);
+	expect(lib).not.toMatch(/updates:\s*z\.enum\([^)]*errorMap/);
 
 	const site = {
 		...base,
@@ -1056,21 +1056,22 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 
 	const ctx = context();
 
+	/** A new request for each call, because a request body can be read once. */
+	const retryRequest = () =>
+		new Request("https://thesuperhuman.us/api/owner/requests/r/brief-copy", {
+			method: "POST",
+			headers: {
+				origin: "https://thesuperhuman.us",
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({ action: "send" }),
+		});
+
 	const retryContext = {
 		...ctx,
 		params: { id: sql.prepare("SELECT id FROM owner_requests").get().id },
 		locals: { ...ctx.locals, owner: { email: "owner@example.com" } },
-		request: new Request(
-			"https://thesuperhuman.us/api/owner/requests/r/brief-copy",
-			{
-				method: "POST",
-				headers: {
-					origin: "https://thesuperhuman.us",
-					"content-type": "application/json",
-				},
-				body: JSON.stringify({ action: "send" }),
-			},
-		),
+		request: retryRequest(),
 	};
 
 	expect(
@@ -1083,21 +1084,19 @@ it("recovers an unrecorded first claim failure through the guarded owner retry",
 			)
 		).status,
 	).toBe(403);
-	// SAFETY: clone() returns the same workers Request; only its cf-metadata type parameter differs, and the route reads only the URL, method, headers and body of the request.
 	expect(
 		(
 			await retry({
 				...retryContext,
-				request: retryContext.request.clone() as Request,
+				request: retryRequest(),
 			})
 		).status,
 	).toBe(200);
-	// SAFETY: clone() returns the same workers Request; only its cf-metadata type parameter differs, and the route reads only the URL, method, headers and body of the request.
 	expect(
 		(
 			await retry({
 				...retryContext,
-				request: retryContext.request.clone() as Request,
+				request: retryRequest(),
 			})
 		).status,
 	).toBe(409);

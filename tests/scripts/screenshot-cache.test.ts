@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
+import { keysOf } from "../helpers/keys";
 import {
 	hashBody,
 	hashFiles,
@@ -139,14 +140,14 @@ describe("sourceClosure", () => {
 });
 
 describe("scenarioPlanner", () => {
-	const names = ["a-writer", "b-reader", "c-writer", "d-reader"];
-
 	const reference = {
 		"a-writer": { writer: true },
 		"b-reader": { writer: false },
 		"c-writer": { writer: true },
 		"d-reader": { writer: false },
 	};
+
+	const names = keysOf(reference);
 
 	const run = (changed: string[], wrote: Record<string, boolean> = {}) => {
 		const planner = scenarioPlanner(names, new Set(changed), reference);
@@ -155,11 +156,7 @@ describe("scenarioPlanner", () => {
 		for (const name of names) {
 			if (!planner.shouldRun(name)) continue;
 			ran.push(name);
-			// SAFETY: names is the list of keys of reference above, so reference[name] is one of its writer entries.
-			planner.ran(
-				name,
-				wrote[name] ?? reference[name as keyof typeof reference].writer,
-			);
+			planner.ran(name, wrote[name] ?? reference[name].writer);
 		}
 
 		return ran;

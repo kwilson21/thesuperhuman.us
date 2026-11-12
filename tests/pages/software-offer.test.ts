@@ -29,6 +29,7 @@ import {
 } from "../helpers/html";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+
 /** A compiled Astro page or component, as the container renders it. */
 type Component = Parameters<AstroContainer["renderToResponse"]>[0];
 
@@ -3279,11 +3280,13 @@ it("renders the approved receipt and keeps booking reassurance only on the send 
 	const steps = findElement(receipt, (element) =>
 		(attrOf(element, "class") ?? "").split(" ").includes("intake-next-steps"),
 	);
+
 	expect(steps?.tagName).toBe("ol");
 
 	const items = (steps ? childrenOf(steps) : []).filter(
 		(node) => node.nodeName === "li",
 	);
+
 	expect(items).toHaveLength(3);
 	expect(
 		items.filter((node) => hasAttr(node, "data-receipt-first-step")),
@@ -4307,6 +4310,7 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 			element.tagName === "section" &&
 			["1", "2"].includes(attrOf(element, "data-step") ?? ""),
 	);
+
 	expect(sections).toHaveLength(2);
 
 	for (const section of sections) {

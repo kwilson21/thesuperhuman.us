@@ -171,7 +171,7 @@ describe("transactional publication journal", () => {
 	it("returns the same receipt for reordered exact retries but conflicts on changed content", async () => {
 		const { journal } = fixture();
 		const first = await journal.commit(base);
-		// SAFETY: reversing the entries of base keeps each Publication property with its value, so the object has the Publication shape; only the key order changes, and the journal reads properties by name.
+		// SAFETY: reversing the entries of base keeps each Publication property with its value, so the object has the Publication shape; only the key order changes, and the journal canonicalizes by sorting keys, which is what this test checks.
 		expect(
 			await journal.commit(
 				Object.fromEntries(Object.entries(base).reverse()) as Publication,

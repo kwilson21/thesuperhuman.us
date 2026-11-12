@@ -16,20 +16,19 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 		dispatchEvent: vi.fn(),
 	};
 
-	const nodes = {
-		"[data-upload-attachment]": upload,
-		'[name="agreement.attachments"]': field,
-		"[data-attachment-file]": { files: [{ name: "sample.pdf" }] },
-		"[data-attachment-version]": { value: "v1" },
-		"[data-attachment-date]": { value: "2026-10-10" },
-		"[data-attachment-list]": { appendChild: vi.fn() },
-	};
+	const nodes = new Map<string, object>([
+		["[data-upload-attachment]", upload],
+		['[name="agreement.attachments"]', field],
+		["[data-attachment-file]", { files: [{ name: "sample.pdf" }] }],
+		["[data-attachment-version]", { value: "v1" }],
+		["[data-attachment-date]", { value: "2026-10-10" }],
+		["[data-attachment-list]", { appendChild: vi.fn() }],
+	]);
 
-	// SAFETY: the selectors this test queries are the keys of nodes, so the keyof cast holds; a missing key returns undefined, as a missing element does in the DOM.
 	const block = {
 		dataset: { uploadEndpoint: "/upload" },
 		addEventListener: vi.fn(),
-		querySelector: (s: string) => nodes[s as keyof typeof nodes],
+		querySelector: (s: string) => nodes.get(s) ?? null,
 		closest: () => ({ querySelector: () => ({ textContent: "" }) }),
 	};
 
@@ -45,7 +44,7 @@ it("blocks overlapping uploads and merges into the current attachment manifest",
 				}),
 		),
 	);
-	// SAFETY: setupAgreementAttachments reads only dataset, addEventListener, querySelector and closest from block, all supplied above, and it queries only the keys of nodes.
+	// SAFETY: setupAgreementAttachments reads only dataset, addEventListener and querySelector from block, all supplied above, and it queries only selectors that nodes holds; querySelector is generic over the element type, so the fake's object-or-null return cannot be typed as an HTMLElement.
 	setupAgreementAttachments(block as never);
 	const pending = click();
 	expect(upload.disabled).toBe(true);

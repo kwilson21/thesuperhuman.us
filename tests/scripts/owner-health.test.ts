@@ -84,11 +84,10 @@ type NameRow = { name: string };
 
 /** Runs a schema query against db. The caller's SQL selects name, so each row is a NameRow. */
 function nameRows(
-	db: { prepare(sql: string): { all(): unknown[] } },
+	db: { prepare(sql: string): { all(): NameRow[] } },
 	sql: string,
 ): NameRow[] {
-	// SAFETY: the sqlite_master and pragma_table_info queries in scripts/owner-health.mjs select a name column, so each row has name.
-	return db.prepare(sql).all() as NameRow[];
+	return db.prepare(sql).all();
 }
 
 function healthyFixture() {

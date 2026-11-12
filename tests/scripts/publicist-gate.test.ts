@@ -184,7 +184,7 @@ describe("text checks", () => {
 			.filter((chunk) => /capture/i.test(chunk.split(/\n\s*\),?\n/)[0])).length;
 
 		expect(captureCalls).toBeGreaterThan(0);
-		expect(captureLabels(source).length).toBeGreaterThanOrEqual(captureCalls);
+		expect(captureLabels(source).length).toBe(captureCalls);
 	});
 	it("keeps URLs out of queued post text but allows the link field", () => {
 		const post = (body: string) =>

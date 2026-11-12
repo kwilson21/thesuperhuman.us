@@ -2,6 +2,7 @@ import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { SQLOutputValue } from "node:sqlite";
 import { createRequire } from "node:module";
+import { z } from "zod";
 import {
 	validateTemplate,
 	renderAgreement,
@@ -33,6 +34,7 @@ import {
 	prepareAgreementArtifact,
 	deliverAgreementCopies,
 	hashBytes,
+	type SigningCertificate,
 } from "~/lib/agreement-artifacts";
 import { agreementDownload } from "~/lib/agreement-download";
 import {
@@ -44,6 +46,7 @@ import { projectToday } from "~/lib/audio-project-updates";
 import type { APIContext } from "astro";
 import { double, partial, fakeD1 } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
+import { readJson } from "../helpers/json";
 import { fakeR2Bucket } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 
@@ -310,17 +313,14 @@ const offer = () =>
 		.first<SoftwareOffer>();
 
 /** The certificates prepareAgreementArtifact hands its PDF renderer for agreement `id`, one per document. */
-async function renderedCertificates(
-	id: string,
-): Promise<{ versions: unknown }[]> {
-	let certificates: { versions: unknown }[] = [];
+async function renderedCertificates(id: string): Promise<SigningCertificate[]> {
+	let certificates: SigningCertificate[] = [];
 
 	await prepareAgreementArtifact(
 		env,
 		id,
 		async (_env, _documents, received) => {
-			// SAFETY: src/lib/agreement-artifacts.ts builds each certificate with a versions field and passes displayCertificates, which spreads each certificate, so every object the renderer receives keeps its versions field; this test reads only versions.
-			certificates = received as { versions: unknown }[];
+			certificates = received;
 
 			return new TextEncoder().encode("%PDF-synthetic");
 		},
@@ -356,9 +356,9 @@ async function signed() {
 it("removes an unused former client identity when replacing an unsigned review", async () => {
 	await review();
 
-	// SAFETY: review() above inserts the former client row, and the query selects only its id, a TEXT PRIMARY KEY in db/music.sql.
-	const former = sql.prepare("SELECT id FROM software_agreement_clients").get()
-		.id as string;
+	const former: string = sql
+		.prepare("SELECT id FROM software_agreement_clients")
+		.get().id;
 
 	await reviewAgreements(
 		db,
@@ -1165,13 +1165,13 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 		new TextEncoder().encode("%PDF-original"),
 	);
 
-	// SAFETY: the query selects only pdf_key from software_agreement_artifacts, so the row, when present, has that one column.
-	const artifact = sql
+	const artifact: { pdf_key: string | null } = sql
 		.prepare(
 			"SELECT pdf_key FROM software_agreement_artifacts WHERE agreement_id=?",
 		)
-		.get(id) as { pdf_key: string };
+		.get(id);
 
+	if (!artifact.pdf_key) throw new Error("The agreement has no stored PDF.");
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
 	const response = await agreementDownload(env, request(), id, true);
 	expect(response.status).toBe(503);
@@ -1183,11 +1183,9 @@ it("runs private source templates through one, two and three milestones in both 
 
 	if (!path) return;
 
-	// SAFETY: AGREEMENT_PRIVATE_TEMPLATES names the owner's private template export, which holds the msa and sow text this test reads; the test returns early when the variable is unset.
-	const templates = JSON.parse(readFileSync(path, "utf8")) as {
-		msa: string;
-		sow: string;
-	};
+	const templates = z
+		.object({ msa: z.string(), sow: z.string() })
+		.parse(JSON.parse(readFileSync(path, "utf8")));
 
 	const { agreementValues } = await import("~/lib/agreement-fields");
 
@@ -1291,21 +1289,19 @@ it("normalizes native Turnstile form submissions and enforces Origin", async () 
 	);
 
 	expect(body).toMatchObject({ turnstileToken: "completed" });
-	// SAFETY: this request has a form content type and a foreign origin, so agreementRequest takes its 403 branch and returns the Response from agreementJson; the test reads only its status.
-	expect(
-		(
-			(await agreementRequest(
-				new Request("https://example.com/api/agreements/link", {
-					method: "POST",
-					headers: {
-						origin: "https://other.example",
-						"content-type": "application/x-www-form-urlencoded",
-					},
-					body: "cf-turnstile-response=completed",
-				}),
-			)) as Response
-		).status,
-	).toBe(403);
+
+	const refused = await agreementRequest(
+		new Request("https://example.com/api/agreements/link", {
+			method: "POST",
+			headers: {
+				origin: "https://other.example",
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			body: "cf-turnstile-response=completed",
+		}),
+	);
+
+	expect(refused instanceof Response ? refused.status : undefined).toBe(403);
 });
 
 it("excludes open, held and in-use MSAs from the separate retention preview", async () => {
@@ -2574,8 +2570,7 @@ it("rejects an outside-site signature dated after today without starting the pro
 	);
 
 	expect(response.status).toBe(400);
-	// SAFETY: a 400 from the project route for a future signed date is the { ok, error } body built in src/pages/api/owner/requests/[id]/project.ts, which always carries error.
-	expect(((await response.json()) as { error: string }).error).toMatch(
+	expect((await readJson<{ error: string }>(response)).error).toMatch(
 		/cannot be in the future/i,
 	);
 	expect(
@@ -3489,11 +3484,10 @@ it("returns field-linked validation messages without raw schema output", async (
 
 	expect(response.status).toBe(400);
 
-	// SAFETY: the offer review route answers a 400 for highlighted client-detail errors with { ok, error, errors }, where errors maps each field to its message (src/pages/api/offer/[token]/review.ts).
-	const body = (await response.json()) as {
+	const body = await readJson<{
 		error: string;
 		errors: Record<string, string>;
-	};
+	}>(response);
 
 	expect(body.errors.signer_title).toBe("Add your title");
 	expect(body.errors.portfolio_choice).toBe("Choose a portfolio option");

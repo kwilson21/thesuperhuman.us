@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { POST } from "~/pages/api/software/brief/suggest";
 
 let db: SqliteDatabase;
-let database: { prepare: Mock };
+let database: FakeDatabase;
 let run: ReturnType<typeof vi.fn>;
 
 /** A D1 prepare() over the node:sqlite database: first() reads a row or null, and run() writes. */
@@ -28,10 +28,14 @@ const realPrepare = (sql: string) => ({
 		},
 	}),
 });
+
 let cookie: string;
 const secret = "existing-turnstile-secret-for-tests";
 
 type Limiter = { limit: Mock };
+
+/** The D1 binding the route sees: its prepare() is a mock that the tests inspect and replace. */
+type FakeDatabase = { prepare: Mock };
 
 let siteLimiter: Limiter;
 let limiter: Limiter;
@@ -46,7 +50,7 @@ function context(
 	body: JsonObject = input,
 	env: Partial<TestRuntime["env"]> = {},
 ): APIContext {
-	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; the route calls it with a model name and inputs and reads only its response field, which the fake returns.
+	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; Ai["run"] is overloaded and generic, so a Mock cannot be typed as it, and the route calls it with a model name and inputs and reads only its response field.
 	return partial<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",

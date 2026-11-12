@@ -63,10 +63,34 @@ type Capture = {
 };
 
 /** A route handler registered on the fake page. */
+/** The window the stub script runs against: the onload callback it calls, and the API it installs. */
+type FakeWindow = { loaded: Mock; turnstile?: TurnstileApi };
+
+/** The globals the held-request script runs against. */
+type Sandbox = {
+	window: { fetch: Mock };
+	location: { href: string };
+	URL: typeof URL;
+	Request: typeof Request;
+};
+
+/** What a page event handler receives: a console message, a request or a response, each with the members the scenario reads. */
+type PageEvent = {
+	type?: () => string;
+	text?: () => string;
+	url?: () => string;
+	method?: () => string;
+	status?: () => number;
+	request?: () => PageEvent;
+};
+
+/** The element the scenario's stub script renders a Turnstile widget into. */
+type TurnstileContainer = { appendChild?: Mock };
+
 /** The Turnstile API that the scenario's stub script puts on window. */
 type TurnstileApi = {
 	render(
-		container: object,
+		container: TurnstileContainer,
 		options: { "response-field": boolean; callback: Mock },
 	): string;
 	getResponse(id: string): string;
@@ -80,8 +104,11 @@ type RouteHandler = (route: {
 	fulfill: (response: never) => void;
 }) => Promise<void>;
 
+/** What a page's addInitScript takes: a script's source text or a function to run in the page. */
+type InitScript = string | ((...args: never[]) => void);
+
 /** A function the code under test passed to the fake page, as opposed to a string or a selector. */
-const isFunction = (value: unknown): value is (...args: never[]) => void =>
+const isFunction = (value: InitScript): value is (...args: never[]) => void =>
 	value instanceof Function;
 
 function pageFiles(directory: string): string[] {
@@ -279,13 +306,16 @@ it("prepares attachment captures with visible Remove controls and a shrinking li
 					})),
 			};
 
-			const locator: FakePage = {
-				locator: (selector: string) =>
-					selector === "[data-remove-attachment]" ? remove : locator,
+			const locator = {
+				locator(selector: string) {
+					return selector === "[data-remove-attachment]" ? remove : this;
+				},
 				setInputFiles: async () => {},
 				fill: async () => {},
 				click: async () => {},
-				filter: () => locator,
+				filter() {
+					return this;
+				},
 				waitFor: async () => {},
 			};
 
@@ -1276,7 +1306,7 @@ it("serves a scenario-local Turnstile API for silent and receipt widgets", async
 		return handler;
 	};
 
-	const window: { loaded: Mock; turnstile?: TurnstileApi } = { loaded: onload };
+	const window: FakeWindow = { loaded: onload };
 
 	const document = {
 		createElement: () => ({ remove: vi.fn() }),
@@ -1383,7 +1413,7 @@ it.each(["reload", "API wait", "ghost wait"])(
 							waitForFunction: async () => {
 								if (stage === "API wait") throw failure;
 							},
-							on: (event: string, handler: (message: object) => void) => {
+							on: (event: string, handler: (event: PageEvent) => void) => {
 								if (event === "console")
 									handler({
 										type: () => "warning",
@@ -1484,7 +1514,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 		route: async () => {},
 		reload: async () => {},
 		waitForFunction: async () => {},
-		addInitScript: async (fn: unknown) => {
+		addInitScript: async (fn: InitScript) => {
 			if (isFunction(fn) && fn.toString().includes("/api/software-inquiry"))
 				script = fn.toString();
 		},
@@ -1516,12 +1546,7 @@ it("holds the sending request whether fetch gets a string, a URL, a Request or a
 
 	const passed: string[] = [];
 
-	const sandbox: {
-		window: { fetch: Mock };
-		location: { href: string };
-		URL: typeof URL;
-		Request: typeof Request;
-	} = {
+	const sandbox: Sandbox = {
 		window: {
 			fetch: vi.fn(async (input: RequestInfo | URL) => {
 				passed.push(String(input));
@@ -1659,6 +1684,7 @@ describe("moved client modules", () => {
 	const manifest = {
 		pages: PAGES.map(({ name, path }) => ({ name, path })),
 		scenarios: [
+			"journal-pagination",
 			"owner-details",
 			"services-print",
 			"software-brief",
@@ -1712,7 +1738,7 @@ describe("moved client modules", () => {
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
 		["payload-review-illustration", TIMELINE_PAGES, []],
-		["project-timeline", TIMELINE_PAGES, []],
+		["project-timeline", TIMELINE_PAGES, ["journal-pagination"]],
 		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],
 		["resume-request-form", ["about"], []],
@@ -1728,6 +1754,19 @@ describe("moved client modules", () => {
 		["studio-sign-out", [], ["studio-client", "software-project"]],
 		["work-experience", ["work"], []],
 	];
+
+	it("selects the journal pagination scenario for the timeline component, on the pages that render it", () => {
+		const selected = relevantScreenshots(manifest, [
+			"src/components/ProjectTimeline.astro",
+		]);
+
+		expect(
+			selected.pages.map((page: { name: string }) => page.name).sort(),
+		).toEqual([...TIMELINE_PAGES].sort());
+		expect(
+			selected.scenarios.map((scenario: { name: string }) => scenario.name),
+		).toEqual(["journal-pagination"]);
+	});
 
 	it.each(moved)(
 		"selects the screenshots that render src/scripts/%s.ts",
