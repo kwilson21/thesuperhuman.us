@@ -17,7 +17,7 @@ it("loads the Contact Turnstile SDK only after the collapsed disclosure opens", 
 		'src="https://challenges.cloudflare.com/turnstile/v0/api.js"',
 	);
 	expectSource(home).toContain("message.addEventListener('toggle'");
-	expectSource(home).toContain(
+	expect(home).toContain(
 		"https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
 	);
 });

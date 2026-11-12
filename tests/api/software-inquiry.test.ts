@@ -231,7 +231,7 @@ it("gives the updates choice a plain message without an error map, which some zo
 	expectSource(lib).toContain(
 		"updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })",
 	);
-	expectSource(lib).not.toMatch(/updates:z\.enum\([^)]*errorMap/);
+	expect(lib).not.toMatch(/updates:z\.enum\([^)]*errorMap/);
 
 	const site = {
 		...base,

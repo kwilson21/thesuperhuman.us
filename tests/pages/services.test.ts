@@ -4,7 +4,6 @@ import { ModuleKind, transpileModule } from "typescript";
 import { describe, expect, it } from "vitest";
 import { softwareSheet } from "../../src/data/services";
 import { audioPath } from "../../src/lib/host-routing";
-import { expectSource } from "../helpers/source-text";
 
 const layout = readFileSync(
 	new URL("../../src/layouts/ServiceSheet.astro", import.meta.url),
@@ -130,15 +129,15 @@ describe("software service sheet", () => {
 			"utf8",
 		);
 
-		expectSource(nav).toContain("mainHref('/services#website')");
-		expectSource(nav).not.toContain("door-website");
+		expect(nav).toContain('mainHref("/services#website")');
+		expect(nav).not.toContain("door-website");
 
 		const workWithMe = readFileSync(
 			new URL("../../src/components/WorkWithMe.astro", import.meta.url),
 			"utf8",
 		);
 
-		expectSource(workWithMe).toContain("id={`door-${door.id}`}");
+		expect(workWithMe).toContain("id={`door-${door.id}`}");
 		expect(doors.map((door) => door.id)).toContain("website");
 
 		const data = readFileSync(
@@ -156,7 +155,7 @@ describe("software service sheet", () => {
 			"Make a workflow easier",
 			"Tell me what happens today or what you want people to try.",
 		])
-			expectSource(data).not.toContain(removed);
+			expect(data).not.toContain(removed);
 	});
 
 	it("describes the website row picture as the Home page, not the Work with me doors", () => {
@@ -181,23 +180,23 @@ describe("software service sheet", () => {
 	});
 
 	it("renders each row from the rows list with the shared anatomy, open by default", () => {
-		expectSource(layout).toContain("sheet.rows.map(");
+		expect(layout).toContain("sheet.rows.map(");
 		expect(
 			layout.match(/<details class="service-offer" id=\{row\.id\} open>/g),
 		).toHaveLength(1);
-		expectSource(layout).not.toContain("sheet.workflow");
-		expectSource(layout).not.toContain("sheet.idea");
-		expectSource(layout).toContain('class="row-visual"');
-		expectSource(layout).toContain('class="site-button row-button"');
-		expectSource(layout).toContain('<WorkDiagram kind="bonus" />');
-		expectSource(layout).toContain("lyft.figure.before");
-		expectSource(layout).toContain("lyft.figure.after");
-		expectSource(layout).toContain('<WorkDiagram kind="analyst" />');
-		expectSource(layout).toContain("row.diagram === 'analyst'");
-		expectSource(layout).toContain('role="list"');
-		expectSource(layout).not.toContain("tally-visual");
-		expectSource(layout).not.toContain("idea-");
-		expectSource(layout).not.toContain("workflow-");
+		expect(layout).not.toContain("sheet.workflow");
+		expect(layout).not.toContain("sheet.idea");
+		expect(layout).toContain('class="row-visual"');
+		expect(layout).toContain('class="site-button row-button"');
+		expect(layout).toContain('<WorkDiagram kind="bonus" />');
+		expect(layout).toContain("lyft.figure.before");
+		expect(layout).toContain("lyft.figure.after");
+		expect(layout).toContain('<WorkDiagram kind="analyst" />');
+		expect(layout).toContain("row.diagram === 'analyst'");
+		expect(layout).toContain('role="list"');
+		expect(layout).not.toContain("tally-visual");
+		expect(layout).not.toContain("idea-");
+		expect(layout).not.toContain("workflow-");
 
 		for (const source of [
 			layout,
@@ -206,8 +205,8 @@ describe("software service sheet", () => {
 				"utf8",
 			),
 		]) {
-			expectSource(source).toContain("import '~/styles/service-pages.css'");
-			expectSource(source).toContain("services-page");
+			expect(source).toContain('import "~/styles/service-pages.css";');
+			expect(source).toContain("services-page");
 		}
 	});
 
@@ -240,23 +239,23 @@ describe("software service sheet", () => {
 
 	it("hides software links and illustrations in print and keeps expanded text", () => {
 		const print = layout.slice(layout.indexOf("@media print"));
-		expectSource(print).toContain(".sheet-software a");
-		expectSource(print).toContain(".sheet-software :global(.work-diagram)");
-		expectSource(print).toContain("content-visibility: visible");
-		expectSource(print).toContain("display: grid !important");
-		expectSource(print).toContain("font-size: 10.5pt");
-		expectSource(print).toContain(".path-evidence .row-detail");
-		expectSource(print).toContain("font-size: 9pt; margin-top: 4pt");
-		expectSource(print).toContain("font-size: 8pt; margin-top: 4pt");
-		expectSource(print).toContain(
+		expect(print).toContain(".sheet-software a");
+		expect(print).toContain(".sheet-software :global(.work-diagram)");
+		expect(print).toContain("content-visibility: visible");
+		expect(print).toContain("display: grid !important");
+		expect(print).toContain("font-size: 10.5pt");
+		expect(print).toContain(".path-evidence .row-detail");
+		expect(print).toContain("font-size: 9pt; margin-top: 4pt");
+		expect(print).toContain("font-size: 8pt; margin-top: 4pt");
+		expect(print).toContain(
 			".sheet-software .service-offer > summary { grid-template-columns: 1fr 1fr; gap: 8pt; padding: 2pt 0; }",
 		);
-		expectSource(print).not.toMatch(/font-size:[0-7](\.\d+)?pt/);
+		expect(print).not.toMatch(/font-size:[0-7](\.\d+)?pt/);
 		expect(print.match(/\.sheet-address \{/g)).toHaveLength(1);
 	});
 
 	it("tells screen-reader users that external evidence links open a new tab", () => {
-		expectSource(layout).toContain(
+		expect(layout).toContain(
 			'<a class="site-link" href={link.url} target="_blank" rel="noopener">{link.label} <span class="sr-only">(opens in a new tab)</span> <span aria-hidden="true">↗</span></a>',
 		);
 	});
@@ -282,7 +281,7 @@ describe("software service sheet", () => {
 			"sheet-steps",
 			"A clear first step.",
 		]) {
-			expectSource(layout).not.toContain(old);
+			expect(layout).not.toContain(old);
 		}
 
 		expect(
@@ -291,6 +290,6 @@ describe("software service sheet", () => {
 				"utf8",
 			),
 		).not.toContain("7+ years in software engineering");
-		expectSource(layout).toContain('<section id="software"');
+		expect(layout).toContain('<section id="software"');
 	});
 });

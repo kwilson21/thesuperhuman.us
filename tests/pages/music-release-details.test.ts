@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { expectSource } from "../helpers/source-text";
 
 const page = readFileSync(
 	new URL("../../src/pages/music/[slug].astro", import.meta.url),
@@ -8,18 +7,18 @@ const page = readFileSync(
 );
 
 it("only offers the lyrics anchor when the release has lyrics to reveal", () => {
-	expectSource(page).toContain(
+	expect(page).toContain(
 		'{first.lyrics && <a class="site-link" href="#lyrics">',
 	);
 });
 
 it("renders supplied YouTube and SoundCloud actions for a release", () => {
-	expectSource(page).toContain("first.youtubeUrl");
-	expectSource(page).toContain("Watch on YouTube");
-	expectSource(page).toContain("first.soundcloudUrl");
-	expectSource(page).toContain("Listen on SoundCloud");
-	expectSource(page).toContain("track.youtubeUrl");
-	expectSource(page).toContain("track.soundcloudUrl");
+	expect(page).toContain("first.youtubeUrl");
+	expect(page).toContain("Watch on YouTube");
+	expect(page).toContain("first.soundcloudUrl");
+	expect(page).toContain("Listen on SoundCloud");
+	expect(page).toContain("track.youtubeUrl");
+	expect(page).toContain("track.soundcloudUrl");
 });
 
 const css = readFileSync(
@@ -28,10 +27,10 @@ const css = readFileSync(
 );
 
 it("sets the all-caps masthead in Libron Bold, sized so its longest word fits the column, keeping the approved line-height", () => {
-	expectSource(page).toContain(
-		"const longestWord = Math.max(...mainTitle.split(/\\s+/).map(word => word.length));",
+	expect(page).toContain(
+		"const longestWord = Math.max(\n\t...mainTitle.split(/\\s+/).map((word) => word.length),\n);",
 	);
-	expectSource(page).toContain("style={`--masthead-word:${longestWord}`}");
+	expect(page).toContain("style={`--masthead-word:${longestWord}`}");
 	expect(css).toContain(
 		".premiere-masthead{text-align:center;container-type:inline-size}",
 	);
