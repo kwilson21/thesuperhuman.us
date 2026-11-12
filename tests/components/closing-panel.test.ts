@@ -20,12 +20,29 @@ it('defaults to the invitation with the approved copy and target', () => {
   expect(footer).not.toMatch(/compact\?: boolean/);
 });
 
-it('shows the heading, line and large pill only in the invitation', () => {
-  expect(footer).toMatch(/variant === 'invitation' && [\s\S]*<h2 class="closing-heading">\{heading\}<\/h2>[\s\S]*<p class="closing-line">\{line\}<\/p>[\s\S]*<a class="site-button site-button-large" href=\{mainHref\(buttonPath\)\}>\{buttonLabel\} <span aria-hidden="true">→<\/span><\/a>/);
+it('shows the heading, line and large pill only in the invitation, before the nav', () => {
+  const start = footer.indexOf("{variant === 'invitation' && <>");
+  const end = footer.indexOf('</>}', start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const gated = footer.slice(start, end + '</>}'.length);
+  expect(gated).toContain('<h2 class="closing-heading">{heading}</h2>');
+  expect(gated).toContain('<p class="closing-line">{line}</p>');
+  expect(gated).toContain('<a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a>');
+  expect(gated).not.toContain('<nav');
+  expect(start).toBeLessThan(footer.indexOf('<nav aria-label="Elsewhere">'));
+});
+
+it('puts the legal line after the nav', () => {
+  expect(footer.indexOf('<p class="closing-legal">')).toBeGreaterThan(footer.indexOf('<nav aria-label="Elsewhere">'));
 });
 
 it('keeps Work with me in the links only when there is no button', () => {
   expect(footer).toMatch(/variant === 'quiet' && <a href=\{hireHref\}>Work with me<\/a>/);
+});
+
+it('mutes the footer nav links', () => {
+  expect(footer).toMatch(/\.compact-footer nav a \{[^}]*color: var\(--muted\);/);
 });
 
 it('draws the panel from tokens with no border, shadow or motion', () => {

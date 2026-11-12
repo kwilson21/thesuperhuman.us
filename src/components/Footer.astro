@@ -52,6 +52,9 @@ const year = new Date().getFullYear();
   .closing-line { margin: 0 0 1.9rem; font-size: 1.125rem; color: var(--muted); max-width: 28rem; }
   nav { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(44px - 1lh) var(--space-6); margin-top: 3.25rem; color: var(--muted); font-size: .875rem; }
   .closing-panel--quiet nav { margin-top: 0; }
+  /* Global a rules sit in @layer base, so these unlayered rules win over them. The hover rule is repeated here for that reason. */
+  .compact-footer nav a { color: var(--muted); }
+  @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--accent); } }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; }
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem 1.25rem 1.75rem; } }
 </style>
