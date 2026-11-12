@@ -28,13 +28,16 @@ export async function sendAudioMessage({
 	idempotencyKey?: string;
 }): Promise<{ ok: boolean; uncertain?: boolean }> {
 	try {
+		const baseHeaders = {
+			Authorization: `Bearer ${apiKey}`,
+			"Content-Type": "application/json",
+		};
+
 		const res = await fetch(ENDPOINT, {
 			method: "POST",
-			headers: {
-				Authorization: `Bearer ${apiKey}`,
-				"Content-Type": "application/json",
-				...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
-			},
+			headers: idempotencyKey
+				? { ...baseHeaders, "Idempotency-Key": idempotencyKey }
+				: baseHeaders,
 			body: JSON.stringify(payload),
 			signal: AbortSignal.timeout(10_000),
 		});

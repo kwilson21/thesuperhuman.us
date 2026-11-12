@@ -192,7 +192,7 @@ export async function finishProjectUpload(
 			parts.some(
 				(part, index) =>
 					part.partNumber !== index + 1 ||
-					typeof part.etag !== "string" ||
+					!isText(part.etag) ||
 					!part.etag.length ||
 					part.etag.length > maxPartEtagLength,
 			)
@@ -233,6 +233,10 @@ export async function finishProjectUpload(
 		.run();
 
 	return "saved";
+}
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
 }
 
 /** R2 reports an upload it no longer has as error 10024, "The specified multipart upload does not exist." */

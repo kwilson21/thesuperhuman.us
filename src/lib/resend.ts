@@ -16,6 +16,16 @@ interface Attachment {
 	content: string; // base64
 }
 
+type ResendPayload = {
+	from: string;
+	to: string[];
+	subject: string;
+	text: string;
+	html?: string;
+	reply_to?: string;
+	attachments?: Attachment[];
+};
+
 function primaryBody(input: ContactInput): string {
 	return [
 		`Name: ${input.name}`,
@@ -39,7 +49,7 @@ async function sendOne(args: {
 	replyTo?: string;
 	attachments?: Attachment[];
 }): Promise<boolean> {
-	const payload: Record<string, unknown> = {
+	const payload: ResendPayload = {
 		from: args.from,
 		to: [args.to],
 		subject: args.subject,

@@ -102,6 +102,7 @@ export async function revokeProjectFile(
 
 	if (!results[0].results.length) return null;
 
+	// SAFETY: results[3] is the audio_project_updates INSERT ... RETURNING id pushed last into statements above, so its first row is { id: number }.
 	const update =
 		file.status === "published"
 			? (results[3].results[0] as { id: number })

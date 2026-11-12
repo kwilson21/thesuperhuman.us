@@ -14,6 +14,10 @@ const query = `query OwnerTraffic($zoneTag: string!, $filter: ZoneHttpRequestsAd
   } }
 }`;
 
+function isCount(value: unknown): value is number {
+	return typeof value === "number";
+}
+
 export async function loadTrafficSummary(
 	env: Env,
 	range: TrafficRange,
@@ -57,6 +61,7 @@ export async function loadTrafficSummary(
 
 		if (!response.ok) return { status: "unavailable", dashboardUrl };
 
+		// SAFETY: every level is read with optional chaining, and the count and visits values are checked with isCount before use; a null body throws inside this try and reads as unavailable.
 		const body = (await response.json()) as {
 			data?: {
 				viewer?: {
@@ -72,8 +77,8 @@ export async function loadTrafficSummary(
 
 		if (
 			body.errors?.length ||
-			typeof total?.count !== "number" ||
-			typeof total.sum?.visits !== "number"
+			!isCount(total?.count) ||
+			!isCount(total.sum?.visits)
 		)
 			return { status: "unavailable", dashboardUrl };
 

@@ -262,6 +262,19 @@ async function requests(
 	return rows.map(ownerRequestFromRow);
 }
 
+function isStringList(value: unknown): value is string[] {
+	return (
+		Array.isArray(value) && value.every((item) => typeof item === "string")
+	);
+}
+
+/** The stored signals are a JSON list of strings; anything else reads as an empty list. */
+function signalList(text: string): string[] {
+	const parsed = JSON.parse(text);
+
+	return isStringList(parsed) ? parsed : [];
+}
+
 function campaignSummary(row: CampaignRow): CampaignSummary {
 	return {
 		id: row.id,
@@ -329,7 +342,7 @@ export async function loadCampaignDesk(
 		subjectType: row.subject_type,
 		subjectId: row.subject_id,
 		status: row.status,
-		secondarySignals: JSON.parse(row.secondary_signals) as string[],
+		secondarySignals: signalList(row.secondary_signals),
 		approvedPlan: row.approved_plan,
 		retrospective: row.retrospective,
 		nextLesson: row.next_lesson,

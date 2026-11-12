@@ -50,16 +50,13 @@ const font = (
 	lineHeight: number | string,
 	family: string,
 ) =>
-	`font-family:${family};font-size:${size}px;line-height:${typeof lineHeight === "number" ? `${lineHeight}` : lineHeight};font-weight:${weight};`;
+	`font-family:${family};font-size:${size}px;line-height:${lineHeight};font-weight:${weight};`;
 
 /** Groups an 8-digit code as "1234 5678" so it is easy to read and type. */
 const spacedCode = (code: string) =>
 	code.length === 8 ? `${code.slice(0, 4)} ${code.slice(4)}` : code;
 
-export function renderEmail(content: EmailContent): {
-	html: string;
-	text: string;
-} {
+export function renderEmail(content: EmailContent) {
 	const e = escapeHtml;
 
 	const paragraphs = content.paragraphs

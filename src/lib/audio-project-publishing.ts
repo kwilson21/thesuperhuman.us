@@ -83,6 +83,7 @@ export async function publishProjectFile(
 			.bind(body, actor, at, fileId, publicationId),
 	]);
 
+	// SAFETY: update is the batch's fourth statement, the audio_project_updates INSERT ... RETURNING id, so its first row is { id: number }.
 	return changed.results.length
 		? Number((update.results[0] as { id: number }).id)
 		: null;

@@ -19,8 +19,12 @@ const messageColumns = "id,actor,body,created_at,read_at,review_decision";
 const CLIENT_MESSAGE_WINDOW_MS = 300_000;
 const CLIENT_MESSAGE_LIMIT = 12;
 
+function isText(value: unknown): value is string {
+	return typeof value === "string";
+}
+
 export function validateProjectMessage(value: unknown): string | null {
-	if (typeof value !== "string") return null;
+	if (!isText(value)) return null;
 	const body = value.trim();
 
 	if (
@@ -193,6 +197,7 @@ export async function postClientReviewDecision(
 			.bind(at, requestId, at, requestId, at),
 	]);
 
+	// SAFETY: saved is the first batch statement, the audio_project_messages INSERT ... RETURNING messageColumns, and messageColumns lists the ProjectMessage fields.
 	return (saved.results[0] as ProjectMessage | undefined) ?? null;
 }
 

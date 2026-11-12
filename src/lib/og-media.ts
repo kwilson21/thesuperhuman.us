@@ -126,10 +126,11 @@ const renderedScenes: Record<string, Rendered | undefined> = rendered;
 /** The scene for a canonical path: an exact route, otherwise the longest matching `/*` family. */
 export function ogSceneFor(
 	pathname: string,
-	table: Record<string, { routes: readonly string[] }> = OG_SCENES,
+	table: Record<OgScene, { routes: readonly string[] }> = OG_SCENES,
 ): { scene: OgScene; exact: boolean } | null {
 	let family: { scene: OgScene; length: number } | null = null;
 
+	// SAFETY: table is Record<OgScene, ...>, so its own keys are exactly the OgScene names that Object.entries returns.
 	for (const [scene, { routes }] of Object.entries(table) as [
 		OgScene,
 		{ routes: readonly string[] },

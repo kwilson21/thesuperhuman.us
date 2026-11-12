@@ -1,7 +1,16 @@
+/** Any value JSON.parse can return. Callers check the shape before they use it. */
+export type JsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| JsonValue[]
+	| { [key: string]: JsonValue };
+
 export async function musicRequest(
 	request: Request,
 	maxBytes = 8192,
-): Promise<unknown | Response> {
+): Promise<JsonValue | Response> {
 	if (request.headers.get("origin") !== new URL(request.url).origin)
 		return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 

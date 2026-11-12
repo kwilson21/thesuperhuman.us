@@ -15,6 +15,10 @@ function keySet(issuer: string) {
 	return current;
 }
 
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
 export async function verifyOwnerAccess(
 	request: Request,
 	env: Env,
@@ -33,8 +37,7 @@ export async function verifyOwnerAccess(
 			algorithms: ["RS256"],
 		});
 
-		const email =
-			typeof payload.email === "string" ? payload.email.toLowerCase() : "";
+		const email = isText(payload.email) ? payload.email.toLowerCase() : "";
 
 		return email === ownerEmail.toLowerCase() ? { email } : null;
 	} catch {

@@ -54,13 +54,13 @@ export function publicationMilestones(feed: ProjectFeed | null): Milestone[] {
 				.match(/^(?:.*?[.!?](?:\s|$)){1,2}/)?.[0]
 				.trim();
 
+			const storyFields = new Map<string, unknown>(Object.entries(entry.story));
 			const reviewed =
 				feed.projectId === approvedReview.projectId &&
 				entry.entryId === approvedReview.entryId &&
 				entry.occurredOn === approvedReview.occurredOn &&
 				Object.entries(approvedReview.story).every(
-					([key, value]) =>
-						entry.story[key as keyof typeof entry.story] === value,
+					([key, value]) => storyFields.get(key) === value,
 				);
 
 			return {
