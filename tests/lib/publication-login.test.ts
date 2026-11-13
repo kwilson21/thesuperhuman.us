@@ -295,6 +295,7 @@ const buttonRule = (css: string) =>
 describe("publication consent style matches the site's global.css", () => {
 	it("uses only the site's colour tokens, as literals", async () => {
 		const css = styleOf((await consentPage()).html);
+
 		const allowed = new Set([
 			site.paper,
 			site.ink,
@@ -302,11 +303,13 @@ describe("publication consent style matches the site's global.css", () => {
 			site.rule,
 			site.accent,
 		]);
+
 		const used = (css.match(/#[0-9A-Fa-f]{6}\b/g) ?? []).map((h) =>
 			h.toUpperCase(),
 		);
 
 		expect(used.length).toBeGreaterThan(0);
+
 		for (const colour of used) expect(allowed.has(colour)).toBe(true);
 	});
 
@@ -413,6 +416,7 @@ describe("publication consent page styling", () => {
 		expect(html).not.toContain("@import");
 		const urls = css.match(/url\([^)]*\)/g) ?? [];
 		expect(urls.length).toBeGreaterThan(0);
+
 		for (const url of urls)
 			expect(url).toMatch(
 				/^url\('\/fonts\/libron-v0\.25\/Libron-(Regular|Bold)\.woff2'\)$/,
@@ -421,11 +425,13 @@ describe("publication consent page styling", () => {
 
 	it("loads Libron, the site's serif, from its own font files with the site's descriptors", async () => {
 		const css = styleOf((await consentPage()).html);
+
 		const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map(
 			(m) => m[1],
 		);
 
 		expect(faces).toHaveLength(2);
+
 		for (const face of faces) {
 			expect(face).toMatch(/font-family:\s*'Libron'/);
 			expect(face).toMatch(/font-display:\s*swap/);
@@ -438,6 +444,7 @@ describe("publication consent page styling", () => {
 				true,
 			);
 		}
+
 		expect(faces.some((f) => /font-weight:\s*400/.test(f))).toBe(true);
 		expect(faces.some((f) => /font-weight:\s*700/.test(f))).toBe(true);
 	});
