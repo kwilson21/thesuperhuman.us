@@ -55,7 +55,11 @@ export function classifyFailure<T>(error: T): Failure {
 const LOG_LIMIT = 300;
 
 // A parser or validator message can quote the input it read ("... \"not json\" is not valid JSON"), so it is not logged.
-const QUOTES_INPUT = /Syntax|Zod|Schema|Parse|Refused/i;
+const QUOTES_INPUT = /Syntax|Zod|Schema|Parse|Refused|Stripe/i;
+
+// A message that names a credential (a Stripe error quotes the start or end of the key it was given) is not logged either.
+const NAMES_SECRET =
+	/\b[sr]k_|API key|bearer|token|password|secret|authorization/i;
 
 const CONTROLS = new RegExp(
 	"[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+",
@@ -66,14 +70,15 @@ const CONTROLS = new RegExp(
  * Logs a fault of the site: the route, the error's name and its message with control characters removed and cut to 300
  * characters. D1 and R2 messages name the failing constraint, table or operation ("UNIQUE constraint failed:
  * software_invoices.request_id", "no such table", "FOREIGN KEY constraint failed", a timeout) and never a bound value,
- * a request body, a token, a cookie or an address; the messages of the parser and validator errors that do quote input
- * are left out.
+ * a request body, a token, a cookie or an address; the messages of parser, validator and Stripe errors, and any message that names a credential, are left out.
  */
 export function logUnexpected<T>(route: string, error: T) {
 	const name = error instanceof Error ? error.name : "UnknownError";
 
 	const message =
-		error instanceof Error && !QUOTES_INPUT.test(error.name)
+		error instanceof Error &&
+		!QUOTES_INPUT.test(error.name) &&
+		!NAMES_SECRET.test(error.message)
 			? error.message.replace(CONTROLS, " ").trim().slice(0, LOG_LIMIT)
 			: "";
 

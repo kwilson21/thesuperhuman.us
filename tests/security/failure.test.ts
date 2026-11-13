@@ -63,6 +63,10 @@ it("logs the route, the name and a clean, cut message, and leaves out a message 
 			"Unexpected token 'o', \"ada@example.com\" is not valid JSON",
 		),
 	);
+	logUnexpected(
+		"Software invoice",
+		new Error("Invalid API Key provided: sk_live_****abcd"),
+	);
 	logUnexpected("Agreement review", "not an error");
 
 	expect(logged).toEqual([
@@ -73,6 +77,7 @@ it("logs the route, the name and a clean, cut message, and leaves out a message 
 		],
 		["Agreement review failed unexpectedly:", "Error", "x".repeat(300)],
 		["Agreement review failed unexpectedly:", "SyntaxError", ""],
+		["Software invoice failed unexpectedly:", "Error", ""],
 		["Agreement review failed unexpectedly:", "UnknownError", ""],
 	]);
 });
