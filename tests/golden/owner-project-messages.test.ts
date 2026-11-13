@@ -44,7 +44,7 @@ import {
 //   400 "Write up to 4,000 ..."        "send": not text (number, null, boolean, array, object), empty, spaces only, 4001
 //                                       characters, a NUL or other control character, http://, www., ftp://, a javascript://
 //                                       link, a link with credentials, "https://" with no host, a link in capitals, and a
-//                                       javascript:, vbscript:, data:, mailto:, file: or blob: address with no "//" (in any case,
+//                                       javascript: or vbscript: address, or data: with a media type or ;base64, (in any case,
 //                                       or split by a tab or newline)
 //   200 {ok:true,message}               "send": plain text, 4000 characters, trimmed, unicode, markup, https links (with
 //                                       trailing punctuation), "Data: " followed by a space (prose), tab and newline, from
