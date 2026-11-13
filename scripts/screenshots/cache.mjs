@@ -14,8 +14,11 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-/** Bump to discard every stored reference after changing what a key covers. */
-export const CACHE_VERSION = 1;
+/**
+ * Bump to discard every stored reference after changing what a key covers.
+ * 2: scenario inputs no longer include a date.
+ */
+export const CACHE_VERSION = 2;
 export const REFERENCE = ".screenshots/reference";
 
 /** Inputs that can change any image. A change to one of them recaptures everything. */
@@ -255,11 +258,12 @@ export function sourceClosure(graph, roots, root = process.cwd()) {
 }
 
 /**
- * A scenario's inputs: the day, its script, each source file behind its routes, and its replayed
- * assets (`[url, accept, result]`). A scenario is reused only when every input matches.
+ * A scenario's inputs: its script, each source file behind its routes, and its replayed assets
+ * (`[url, accept, result]`). A scenario is reused only when every input matches. The clock is not an
+ * input: it is pinned to CLOCK_BASE, and changing that recaptures everything (scripts/screenshots is global).
  */
 export async function scenarioInputs(
-	{ day, script, files, content, assets },
+	{ script, files, content, assets },
 	root = process.cwd(),
 ) {
 	const sources = content
@@ -267,7 +271,6 @@ export async function scenarioInputs(
 		: files;
 
 	return {
-		day,
 		script: await hashFiles([script], root),
 		sources: await fileHashes(sources, root),
 		assets,
@@ -276,8 +279,7 @@ export async function scenarioInputs(
 
 /** Why two input sets differ, for the log: the first changed part, file or response. */
 export function inputsChange(before, after) {
-	for (const part of ["day", "script"])
-		if (before?.[part] !== after[part]) return part;
+	if (before?.script !== after.script) return "script";
 
 	const files = Object.keys({ ...before?.sources, ...after.sources }).filter(
 		(file) => before?.sources?.[file] !== after.sources[file],

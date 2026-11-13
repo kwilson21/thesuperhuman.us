@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { keysOf } from "../helpers/keys";
 import {
@@ -12,6 +12,7 @@ import {
 	responsesChange,
 	routeFiles,
 	routePattern,
+	scenarioInputs,
 	scenarioPlanner,
 	sourceClosure,
 	stateHash,
@@ -296,9 +297,44 @@ describe("Vite's dependency version tag", () => {
 	});
 });
 
+describe("a scenario's inputs do not depend on the date", () => {
+	const script = "scripts/screenshots/scenarios/studio-client.mjs";
+
+	const inputs = () =>
+		scenarioInputs({
+			script,
+			files: ["src/components/Footer.astro"],
+			content: false,
+			assets: [],
+		});
+
+	it.each([
+		["UTC midnight", "2026-11-12T23:59:30.000Z", "2026-11-13T00:00:30.000Z"],
+		[
+			"New York midnight",
+			"2026-11-13T04:59:30.000Z",
+			"2026-11-13T05:00:30.000Z",
+		],
+	])("gives identical inputs either side of %s", async (_, before, after) => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+
+		try {
+			vi.setSystemTime(new Date(before));
+			const first = await inputs();
+			vi.setSystemTime(new Date(after));
+			const second = await inputs();
+
+			expect(first).not.toHaveProperty("day");
+			expect(second).toEqual(first);
+			expect(inputsChange(first, second)).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
 describe("explaining a miss", () => {
 	const inputs = {
-		day: "2026-10-21",
 		script: "s",
 		sources: { "src/a.ts": "1", "src/b.ts": "2" },
 		assets: [["/x.css", "*/*", "200 h1"]] satisfies [string, string, string][],
@@ -309,7 +345,6 @@ describe("explaining a miss", () => {
 	});
 
 	it.each([
-		[{ day: "2026-10-22" }, "day"],
 		[{ script: "t" }, "script"],
 		[{ sources: { "src/a.ts": "1", "src/b.ts": "3" } }, "source src/b.ts"],
 		[

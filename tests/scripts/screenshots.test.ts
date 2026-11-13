@@ -1782,3 +1782,57 @@ describe("moved client modules", () => {
 		},
 	);
 });
+
+describe("screenshot workflow triggers and concurrency", () => {
+	const workflow = readFileSync(".github/workflows/screenshots.yml", "utf8");
+
+	const publish = readFileSync(
+		".github/workflows/screenshots-publish.yml",
+		"utf8",
+	);
+
+	it("lets a newer push wait for a capture in progress instead of cancelling it", () => {
+		expect(workflow).toMatch(/^ {2}cancel-in-progress: false$/m);
+
+		expect(workflow).not.toContain("cancel-in-progress: true");
+	});
+
+	it("keeps the label-aware concurrency group and the skip condition for other labels", () => {
+		expect(workflow).toContain(
+			"group: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-screenshots' && format('screenshots-label-{0}', github.run_id) || format('screenshots-{0}', github.event.pull_request.number || github.ref) }}",
+		);
+		expect(workflow).toContain(
+			"if: github.event.action != 'labeled' || github.event.label.name == 'full-screenshots'",
+		);
+	});
+
+	it("runs every three days on a schedule, under on: and before permissions:", () => {
+		const on = workflow.indexOf("\non:");
+
+		const schedule = workflow.indexOf(
+			"\n  schedule:\n    - cron: '17 6 */3 * *'\n",
+		);
+
+		const permissions = workflow.indexOf("\npermissions:");
+
+		expect(on).toBeGreaterThan(-1);
+		expect(schedule).toBeGreaterThan(on);
+		expect(schedule).toBeLessThan(permissions);
+	});
+
+	it("can be started by hand", () => {
+		expect(workflow).toMatch(/\n {2}workflow_dispatch:\n/);
+	});
+
+	it("reads the full-screenshots label as off for a scheduled or manual run", () => {
+		expect(workflow).toContain(
+			"SCREENSHOTS_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'full-screenshots') && '1' || '' }}",
+		);
+	});
+
+	it("publishes screenshots only for pull request runs", () => {
+		expect(publish).toContain(
+			"github.event.workflow_run.event == 'pull_request'",
+		);
+	});
+});
