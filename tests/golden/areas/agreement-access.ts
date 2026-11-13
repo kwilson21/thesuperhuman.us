@@ -357,14 +357,19 @@ export const verify: Handler = (context) =>
 /** A step that follows the emailed link of the n-th email, as GET (preview) or POST (consume). */
 export const follow = (
 	method: "GET" | "POST",
-	options: { mail?: number; archive?: boolean; key?: string } = {},
+	options: {
+		mail?: number;
+		archive?: boolean;
+		key?: string;
+		token?: string;
+	} = {},
 	extra: Partial<Step> = {},
 ): Step => ({
 	handler: verify,
 	method,
 	path: (prior) =>
-		`${options.archive ? "/agreements" : `/offer/${TOKEN}`}/verify?key=${options.key ?? issuedKey(prior, options.mail ?? 0)}`,
-	params: options.archive ? {} : { token: TOKEN },
+		`${options.archive ? "/agreements" : `/offer/${options.token ?? TOKEN}`}/verify?key=${options.key ?? issuedKey(prior, options.mail ?? 0)}`,
+	params: options.archive ? {} : { token: options.token ?? TOKEN },
 	headers: SAME_ORIGIN,
 	dump: { music: ["software_agreement_links", "software_agreement_sessions"] },
 	...extra,
@@ -478,3 +483,28 @@ export function bothWires(
 		...build(maker(wire, base), wire),
 	}));
 }
+
+/** A second sent offer (request r2, token OTHER_TOKEN) for the same client, to show a link does not cross offers. */
+export const secondOffer = (): Seed => ({
+	owner_requests: [
+		rows.softwareRequest("r2", { email: GRACE, status: "reviewed" }),
+	],
+	software_offers: [
+		rows.softwareOffer("o-r2", "r2", {
+			terms_json: JSON.stringify(terms),
+			agreement_details_json: JSON.stringify(details),
+			msa_template_id: "tpl-msa",
+			sow_template_id: "tpl-sow",
+			contractor_snapshot_json: JSON.stringify(contractor),
+			recipient_email_snapshot: GRACE,
+		}),
+	],
+	software_offer_links: [
+		rows.offerLink("r2", { token_hash: OTHER_TOKEN_HASH }),
+	],
+});
+
+/** The project that exists once the owner starts the work: it ends signing for the offer. */
+export const startedProject = (): Seed => ({
+	software_projects: [rows.softwareProject("r1", "o-r1")],
+});
