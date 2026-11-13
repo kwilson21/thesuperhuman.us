@@ -44,10 +44,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -77,11 +74,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -121,9 +114,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -202,10 +193,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -235,11 +223,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -279,9 +263,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -360,10 +342,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -393,11 +372,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -437,9 +412,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -518,10 +491,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -551,11 +521,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -595,9 +561,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -676,10 +640,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -709,11 +670,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -753,9 +710,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -834,10 +789,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -867,11 +819,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -911,9 +859,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -992,10 +938,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1025,11 +968,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1069,9 +1008,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1150,10 +1087,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1183,11 +1117,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1227,9 +1157,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1308,10 +1236,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1341,11 +1266,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1385,9 +1306,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1466,10 +1385,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1499,11 +1415,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1543,9 +1455,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1624,10 +1534,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1657,11 +1564,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1701,9 +1604,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1782,10 +1683,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1815,11 +1713,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -1859,9 +1753,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -1940,10 +1832,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -1973,11 +1862,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2017,9 +1902,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2098,10 +1981,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2131,11 +2011,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2175,9 +2051,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2256,10 +2130,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2289,11 +2160,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2333,9 +2200,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2414,10 +2279,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2447,11 +2309,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2491,9 +2349,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2572,10 +2428,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2605,11 +2458,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2649,9 +2498,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2730,10 +2577,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2763,11 +2607,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2807,9 +2647,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -2888,10 +2726,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -2921,11 +2756,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -2965,9 +2796,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -3046,10 +2875,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -3079,11 +2905,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -3123,9 +2945,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -3204,10 +3024,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -3237,11 +3054,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -3281,9 +3094,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -3362,10 +3173,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -3395,11 +3203,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -3439,9 +3243,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -4750,10 +4552,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -4783,11 +4582,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -4827,9 +4622,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -5238,10 +5031,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -5271,11 +5061,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -5315,9 +5101,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -5396,10 +5180,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -5429,11 +5210,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -5473,9 +5250,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -5644,10 +5419,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -5677,11 +5449,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -5721,9 +5489,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -5927,10 +5693,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -5996,10 +5759,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6029,11 +5789,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6125,10 +5881,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6211,10 +5964,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6244,11 +5994,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6288,9 +6034,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -6369,10 +6113,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6402,11 +6143,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6446,9 +6183,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -6537,10 +6272,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6570,11 +6302,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6614,9 +6342,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -6700,10 +6426,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6733,11 +6456,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6777,9 +6496,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 2
@@ -6863,10 +6580,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -6896,11 +6610,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -6934,9 +6644,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 1
@@ -7007,10 +6715,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -7040,11 +6745,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -7141,10 +6842,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7174,11 +6872,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -7218,9 +6912,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"threw": "d1 down"
 				},
@@ -7303,10 +6995,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"threw": "d1 down"
 				},
@@ -7365,10 +7054,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7444,10 +7130,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7477,11 +7160,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"threw": "d1 down"
 				},
@@ -7546,10 +7225,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7585,11 +7261,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7699,10 +7371,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7732,11 +7401,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -7776,9 +7441,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -7857,10 +7520,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -7890,11 +7550,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -7934,9 +7590,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8015,10 +7669,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8048,11 +7699,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8092,9 +7739,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8173,10 +7818,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8206,11 +7848,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8250,9 +7888,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8331,10 +7967,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8364,11 +7997,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8408,9 +8037,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8489,10 +8116,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8522,11 +8146,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8566,9 +8186,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8647,10 +8265,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8680,11 +8295,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8724,9 +8335,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8805,10 +8414,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8838,11 +8444,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -8882,9 +8484,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -8963,10 +8563,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -8996,11 +8593,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9040,9 +8633,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9121,10 +8712,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9154,11 +8742,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9198,9 +8782,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9279,10 +8861,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9312,11 +8891,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9356,9 +8931,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9437,10 +9010,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9470,11 +9040,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9514,9 +9080,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9595,10 +9159,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9628,11 +9189,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9672,9 +9229,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9753,10 +9308,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9786,11 +9338,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9830,9 +9378,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -9911,10 +9457,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -9944,11 +9487,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -9988,9 +9527,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -10069,10 +9606,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -10102,11 +9636,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10146,9 +9676,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -10265,10 +9793,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -10298,11 +9823,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10342,9 +9863,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -10381,10 +9900,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10414,11 +9930,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10468,10 +9980,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10501,11 +10010,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10635,10 +10140,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -10668,11 +10170,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10712,9 +10210,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -10751,10 +10247,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10784,11 +10277,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10838,10 +10327,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -10967,10 +10453,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11000,11 +10483,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11054,10 +10533,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11087,11 +10563,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11141,10 +10613,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11239,10 +10708,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11294,10 +10760,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-14",
-					"site"
-				],
+				"args": ["2026-11-14", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -11327,11 +10790,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-14",
-					"site",
-					10000
-				],
+				"args": ["2026-11-14", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11371,9 +10830,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-13"
-				],
+				"args": ["2026-11-13"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -11481,10 +10938,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 0,
 					"changes": null
@@ -11514,11 +10968,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11558,9 +11008,7 @@
 				"db": "MUSIC_DB",
 				"via": "run",
 				"sql": "DELETE FROM brief_suggestion_budget WHERE rowid IN (\n          SELECT rowid FROM brief_suggestion_budget WHERE day < ? LIMIT 1000\n        )",
-				"args": [
-					"2026-11-12"
-				],
+				"args": ["2026-11-12"],
 				"outcome": {
 					"rows": 0,
 					"changes": 0
@@ -11597,10 +11045,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?",
-				"args": [
-					"2026-11-13",
-					"site"
-				],
+				"args": ["2026-11-13", "site"],
 				"outcome": {
 					"rows": 1,
 					"changes": null
@@ -11630,11 +11075,7 @@
 				"db": "MUSIC_DB",
 				"via": "first",
 				"sql": "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES (?, ?, 1)\n        ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count",
-				"args": [
-					"2026-11-13",
-					"site",
-					10000
-				],
+				"args": ["2026-11-13", "site", 10000],
 				"outcome": {
 					"rows": 1,
 					"changes": null
