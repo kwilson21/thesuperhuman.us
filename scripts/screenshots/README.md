@@ -47,7 +47,7 @@ After a page loads, `settle.mjs` decides when it is ready to photograph. A reque
 
 ## Scenario seeds
 
-`sql` in a scenario writes straight to the local D1 file under `.wrangler/state` with `node:sqlite` (`local-d1.mjs`), not through a `wrangler d1 execute` process per statement. The file is the one whose `d1_migrations` table lists the first file in `migrations/music`. `sql` returns nothing, so a scenario must not read its result.
+`sql` in a scenario runs through `wrangler d1 execute` against the local D1 database, one process per statement. A direct write to the local D1 file with `node:sqlite` was tried (commit 39eae575) and did not behave the same as D1: in CI the software-offer seed row was missing when the server looked for it (HTTP 404). The cause was not found: the same statements inserted the row, and the server read it back, on a local run, so the direct write was reverted.
 
 ## Timings
 

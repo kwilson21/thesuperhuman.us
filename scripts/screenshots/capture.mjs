@@ -5,6 +5,7 @@
 // cache.mjs); SCREENSHOTS_FULL=1 captures everything.
 // The clock is pinned first, before anything here reads the time (see clock.mjs).
 import { clock } from "./clock-install.mjs";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import {
@@ -38,7 +39,6 @@ import {
 	withoutViteVersion,
 } from "./cache.mjs";
 import { browserClockScript } from "./clock.mjs";
-import { openLocalD1 } from "./local-d1.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
@@ -276,21 +276,30 @@ async function capture({
 	return file;
 }
 
-// Opened on the first sql() call and closed when the run ends. The dev server has the same file open; the
-// database runs in WAL mode and the connection waits for any lock (see local-d1.mjs).
-let localD1;
-
-// Synchronous on purpose: scenarios call sql() without await. They never read its result, so it returns nothing.
+// Synchronous on purpose: scenarios call sql() without await and use its return value.
 const sql = (command) => {
 	const scope = scopeName();
 	const started = timings.now();
 
 	try {
-		localD1 ??= openLocalD1({
-			stateDirectory: resolve(".wrangler/state"),
-			migrationsDirectory: resolve("migrations/music"),
-		});
-		localD1.exec(command);
+		return execFileSync(
+			process.execPath,
+			[
+				resolve("node_modules/wrangler/bin/wrangler.js"),
+				"d1",
+				"execute",
+				"MUSIC_DB",
+				"--local",
+				"--config",
+				resolve(".screenshots/wrangler.json"),
+				"--persist-to",
+				resolve(".wrangler/state"),
+				"--json",
+				"--command",
+				command,
+			],
+			{ encoding: "utf8", env: { ...process.env, CI: "1" } },
+		);
 	} finally {
 		timings.add(scope, "sql", timings.now() - started);
 		timings.count(scope, "sql");
@@ -695,7 +704,6 @@ try {
 	await writeFile(`${OUT}/cache.json`, JSON.stringify(cache));
 } finally {
 	printTimings();
-	localD1?.close();
 	await browser.close();
 	issuer.close();
 }
