@@ -9,6 +9,8 @@ import {
 	equivalents,
 	exhaustive,
 	mutants,
+	signinCurrent,
+	signinMutants,
 } from "../../scripts/lib/quint-mutants.mjs";
 
 // Outputs captured from `quint run` 0.33.1.
@@ -152,5 +154,34 @@ describe("the mutants of verification/invoice-events.qnt", () => {
 
 		for (const { property } of Object.values<{ property: string }>(mutants))
 			expect(properties).toContain(property);
+	});
+});
+
+describe("the mutants of verification/signin-codes.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/signin-codes.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(7);
+		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
+
+		for (const { property } of Object.values<{ property: string }>(
+			signinMutants,
+		))
+			expect(properties).toContain(property);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import signinCodes/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(signinMutants), ...signinCurrent].sort(),
+		);
 	});
 });

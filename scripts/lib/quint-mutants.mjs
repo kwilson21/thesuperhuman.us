@@ -34,3 +34,20 @@ export const equivalents = [
 
 // The same two models with fewer handler runs, for the manual Apalache search (scripts/verify-quint.mjs exhaustive).
 export const exhaustive = ["audioExhaustive", "softwareExhaustive"];
+
+// verification/signin-codes.qnt: the pass run, and each mutant with the property its change must break.
+export const signinCurrent = ["signin"];
+
+export const signinMutants = {
+	signinSingleRow: { property: "clientNeverLockedOut" },
+	signinEvictOldest: { property: "clientNeverLockedOut" },
+	signinSweepLive: { property: "clientNeverLockedOut" },
+	signinCookieNotRequired: { property: "cookieRequired" },
+	signinAddressAttempts: { property: "othersUntouched" },
+	signinReplaceLive: { property: "othersUntouched" },
+	signinNoAttemptCap: { property: "attemptsBounded" },
+	signinNoAllowance: { property: "emailsBounded" },
+	signinIgnoreExpiry: { property: "deadCodeNeverSignsIn" },
+	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
+	signinNoRowCap: { property: "liveRowsBounded" },
+};

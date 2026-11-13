@@ -2,14 +2,20 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { equivalents, exhaustive, mutants } from "./lib/quint-mutants.mjs";
+import {
+	equivalents,
+	exhaustive,
+	mutants,
+	signinCurrent,
+	signinMutants,
+} from "./lib/quint-mutants.mjs";
 import {
 	classifyRun,
 	propertiesOf,
 	propertiesWithoutMutant,
 } from "./lib/quint-run.mjs";
 
-// Runs the Quint model in verification/invoice-events.qnt (docs/verification.md).
+// Runs the Quint models in verification/invoice-events.qnt and verification/signin-codes.qnt (docs/verification.md).
 //   node scripts/verify-quint.mjs              the current rule keeps every property, for both domains
 //   node scripts/verify-quint.mjs mutants      each mutant breaks the property named for it, every equivalent mutant keeps
 //                                              them all, and every property has a mutant
@@ -19,9 +25,12 @@ import {
 // so they go in parallel, up to the number of CPUs.
 
 const MODEL = "verification/invoice-events.qnt";
+const SIGNIN_MODEL = "verification/signin-codes.qnt";
 const SEED = "0x1";
 const STEPS = "20";
 const SAMPLES = "100000";
+// The sign-in model has a larger state, so it runs fewer samples (about 10 s for the pass run).
+const SIGNIN_SAMPLES = "30000";
 
 const current = ["audio", "software"];
 
@@ -41,10 +50,10 @@ function quint(args) {
 	});
 }
 
-const simulate = (main, invariant) =>
+const simulate = (main, invariant, model) =>
 	quint([
 		"run",
-		MODEL,
+		model,
 		"--main",
 		main,
 		"--init",
@@ -56,7 +65,7 @@ const simulate = (main, invariant) =>
 		"--max-steps",
 		STEPS,
 		"--max-samples",
-		SAMPLES,
+		model === SIGNIN_MODEL ? SIGNIN_SAMPLES : SAMPLES,
 		"--seed",
 		SEED,
 	]);
@@ -93,7 +102,8 @@ function report(ok, line, result) {
 }
 
 /** One check: run the model `main` against `invariant` and expect `kind` ("pass" or "violation"). */
-const check = (main, invariant, kind, describe) => ({
+const check = (main, invariant, kind, describe, model = MODEL) => ({
+	model,
 	main,
 	invariant,
 	kind,
@@ -103,9 +113,9 @@ const check = (main, invariant, kind, describe) => ({
 async function runChecks(checks) {
 	const results = await runAll(
 		checks.map(
-			({ main, invariant }) =>
+			({ main, invariant, model }) =>
 				() =>
-					simulate(main, invariant),
+					simulate(main, invariant, model),
 		),
 		availableParallelism(),
 	);
@@ -130,6 +140,17 @@ if (mode === "mutants") {
 			stderr: "",
 		});
 
+	const signinProperties = propertiesOf(readFileSync(SIGNIN_MODEL, "utf8"));
+
+	for (const property of propertiesWithoutMutant(
+		signinProperties,
+		signinMutants,
+	))
+		report(false, `no sign-in mutant is expected to break ${property}`, {
+			stdout: "",
+			stderr: "",
+		});
+
 	await runChecks([
 		...Object.entries(mutants).map(([main, { property }]) =>
 			check(
@@ -137,6 +158,15 @@ if (mode === "mutants") {
 				property,
 				"violation",
 				`${main} breaks ${property}, as it must`,
+			),
+		),
+		...Object.entries(signinMutants).map(([main, { property }]) =>
+			check(
+				main,
+				property,
+				"violation",
+				`${main} breaks ${property}, as it must`,
+				SIGNIN_MODEL,
 			),
 		),
 		...equivalents.map((main) =>
@@ -176,11 +206,20 @@ if (mode === "mutants") {
 		);
 	}
 } else {
-	await runChecks(
-		current.map((main) =>
+	await runChecks([
+		...current.map((main) =>
 			check(main, "allProperties", "pass", `${main} keeps every property`),
 		),
-	);
+		...signinCurrent.map((main) =>
+			check(
+				main,
+				"allProperties",
+				"pass",
+				`${main} keeps every property`,
+				SIGNIN_MODEL,
+			),
+		),
+	]);
 }
 
 process.exit(failed ? 1 : 0);
