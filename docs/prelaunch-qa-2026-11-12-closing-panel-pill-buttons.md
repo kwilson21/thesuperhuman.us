@@ -2,11 +2,11 @@
 
 Date: November 12, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Branch: `claude/design-inspiration-portfolio-b75d50`, from `main` at `a96411f5`
+Branch: `claude/design-inspiration-portfolio-b75d50`, from `main` at `a96411f5`, with `main` at `54c7627e` merged in
 Pull request: [#233](https://github.com/kwilson21/thesuperhuman.us/pull/233)
 Target: production `https://thesuperhuman.us` after merge, including the audio pages on `audio.thesuperhuman.us`, which share the footer and stylesheets.
 Reviewer: Claude Haiku 5.5 subagents built, tests first (one fix commit, `2c29391f`, was written by Codex at a subagent's request). Independent Claude Opus and Sonnet subagents reviewed. The coordinating Claude session checked the pages in a browser and collected this evidence for owner Kazon Wilson. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: `a96411f531ed6d99632d2056544242f093c997aa` (`origin/main` when this record was written). The PR adds no migration and writes no stored data.
+Rollback revision: `54c7627e` (`origin/main` after the lint and format stack, #239, merged; this branch merged that `main` in at `115f0bf2`). The PR adds no migration and writes no stored data.
 
 ## Scope
 
@@ -30,11 +30,21 @@ All in conversation on November 12, 2026.
 - On where the pinned button appears: "Phones only".
 - After seeing screenshots of the built panel and pinned button on a local copy: "Looks right".
 - On the essay's "Get in touch" text link sitting directly above the panel's button: "Yes, remove it". Removed in `e89e9d09`; the essay keeps "Back to Writing".
+- On the owner "Confirm terms" button: "Can you quickly fix the confirm terms pill button? The arrow seems to have a ton of extra space on it's left". Fixed in `115f0bf2`: `.owner-primary-action` centres its label and arrow with a `.6rem` gap.
 - Merge authorization: asked "Do you authorize merging PR #233 once CI and the reviews are clean?", the owner answered "Yes, merge it". Merging to `main` deploys production.
 
 Changes made during review that depart from the approved brief are listed in the brief under "Amendments from review". The owner has seen the list and has not objected; none has been explicitly accepted.
 
 ## Evidence and limits
+
+After `main` (the Biome and Oxlint stack) was merged in at `115f0bf2`, on that head:
+
+- `pnpm test`: 156 files, 1,923 passed, 1 skipped.
+- `pnpm run format:check`: no fixes needed, 524 files.
+- `pnpm run check`: 0 errors. `pnpm run design:check`, `pnpm run copy:check` and `pnpm run build`: passed (builder's run).
+- `pnpm run lint`: 66 findings, the deferred set recorded in `docs/prelaunch-qa-2026-11-12-lint-format-stack.md`. None is in code this branch added; one, `src/pages/owner/requests/[id].astro:181`, is in a file where this branch changed CSS only. Lint is not a CI check.
+- The merge conflicted in `src/components/Footer.astro` only (main reformatted its frontmatter); the branch's version was kept and formatted.
+- The pages were not re-checked in a browser after the merge. The earlier runs below are from before it.
 
 Local runs on macOS arm64, Node 26.13.1, pnpm 12.20.0:
 
@@ -109,7 +119,7 @@ Limits:
 - **PASS · Type, test, asset and build checks.** See Evidence.
 - **PASS · Diff review.** 27 files against `main`: the footer, its callers, five stylesheets, one script, tests and docs. No secrets, no dependency changes, no generated files. `docs/handoffs/` and `.jolli/` are untracked and not in the PR.
 - **N/A · Bindings, secrets, migrations.** None change.
-- **PASS · Rollback version.** `a96411f5`.
+- **PASS · Rollback version.** `54c7627e`.
 - **UNVERIFIED · Production verification after deploy.** To be done after an authorized merge: the panel on an invitation page and a quiet page, the pinned button on a phone-width screen, the 404, and the audio host.
 - **PASS · Receipt and evidence.** This record. Status: implemented and verified locally; not deployed; not verified live.
 
