@@ -40,7 +40,7 @@ import {
 //   429 attempt limit                   10 attempts per address, a stored count that is not a number
 //   403 Turnstile                       refused, 5xx, network down, malformed answer, success as text
 //   429 request limit                   second send from one address; the attempt counter still rose
-//   503 storage failed                  insert batch throws, read-back throws (row stays stored), details too large;
+//   503 storage failed                  insert batch throws, read-back throws (row stays stored);
 //                                       the request counter is cleared; the urgent alert goes out (200, 5xx, network
 //                                       down, no key, no sender, no owner address) or the delete throws first
 //   503 "temporarily unavailable"       the outer catch: KV read, KV write or KV delete throws
@@ -430,12 +430,41 @@ const cases: Case[] = [
 		good,
 		fails(/SELECT id,kind,release_id,service_id/),
 	),
-	single("details too large after escaping", {
+	// Control characters swell a stored request six times (each is "\u0001" in JSON). They are refused where the form is
+	// checked, so they never reach storage and never raise the urgent alert.
+	single(
+		"control characters that would make the details too large are refused",
+		{
+			...good,
+			title: "\u0001".repeat(100),
+			preserve: "\u0001".repeat(1200),
+			referenceNote: "\u0001".repeat(2000),
+			direction: "specific",
+		},
+	),
+	single(
+		"the longest answers made of characters that double in JSON are stored",
+		{
+			...good,
+			title: '"'.repeat(120),
+			name: "\\".repeat(100),
+			preserve: '"'.repeat(1200),
+			referenceNote: "\\".repeat(2000),
+			direction: "specific",
+		},
+	),
+	single("a control character in the name is refused", {
 		...good,
-		title: "\u0001".repeat(100),
-		preserve: "\u0001".repeat(1200),
-		referenceNote: "\u0001".repeat(2000),
-		direction: "specific",
+		name: "Ada\u0007 Lovelace",
+	}),
+	single("a control character in a link is refused", {
+		...good,
+		fileLink: "https://example.com/a\u0001b",
+	}),
+	single("line breaks and tabs are kept in the two free-text answers", {
+		...good,
+		preserve: "keep the vocal\n\tdry",
+		referenceNote: "line one\r\nline two",
 	}),
 
 	// --- the owner email (the first Resend call) and the studio invitation (the second)
