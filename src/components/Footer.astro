@@ -64,7 +64,7 @@ const year = new Date().getFullYear();
   .compact-footer nav a { color: var(--muted); }
   @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--ink); } }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
-  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem 1.25rem 1.75rem; } }
+  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
     .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) var(--site-gutter) calc(var(--space-4) + env(safe-area-inset-bottom)); background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); pointer-events: none; }

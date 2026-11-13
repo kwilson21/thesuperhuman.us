@@ -33,8 +33,13 @@ const { kind } = Astro.props;
   .responsibility > div + div { border-top: 1px solid var(--diagram-rule); margin-top: 1.5rem; padding-top: 1.5rem; }
   .responsibility p { font-size: .9rem; color: var(--muted); }
   .responsibility strong { font-weight: 500; color: var(--ink); }
-  .diagram-flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr); gap: .75rem; align-items: center; margin-top: 1rem; font-size: 1.125rem; }
-  .diagram-flow > span:not([aria-hidden]) { border: 1px solid var(--diagram-edge); border-radius: 3px; min-height: 64px; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: .5rem; min-width: 0; overflow-wrap: break-word; }
+  .diagram-flow { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin-top: 1rem; font-size: 1.125rem; }
+  /* Parts split the row 1 : 1.2 and wrap by content: a part keeps its longest word and stacks when the row cannot hold it.
+     Each flex base is the part's own padding and border (.5rem a side plus 1px), times its share, so the split is exact. */
+  .diagram-flow > :first-child { flex: 1 1 calc(1rem + 2px); }
+  .diagram-flow > :last-child { flex: 1.2 1 calc(1.2 * (1rem + 2px)); }
+  .diagram-flow > [aria-hidden] { flex: 0 0 auto; }
+  .diagram-flow > span:not([aria-hidden]) { border: 1px solid var(--diagram-edge); border-radius: 3px; min-height: 64px; display: flex; flex-direction: column; justify-content: center; text-align: center; padding: .5rem; overflow-wrap: break-word; }
   .diagram-flow > .self-serve { border-color: var(--accent) !important; color: var(--ink); }
   .diagram-flow [aria-hidden] { color: var(--accent); }
   .timeline { list-style: none; margin: 0; padding: 0 0 0 1.625rem; }
