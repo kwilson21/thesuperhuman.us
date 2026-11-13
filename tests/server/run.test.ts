@@ -2,19 +2,29 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import { runRoute } from "../../src/server/run";
-import { RateLimit } from "../../src/server/services";
-import { fakeKv } from "../helpers/doubles";
-import { fakeLocals } from "../helpers/runtime";
+import { RateLimit, bindingsOrUnavailable } from "../../src/server/services";
+import { double, fakeKv } from "../helpers/doubles";
 
 class Refused extends Data.TaggedError("Refused") {
 	readonly say = "Not allowed.";
 }
 
-const locals = () =>
-	fakeLocals({ RATE_LIMIT: fakeKv({ get: async () => "5" }) });
+/** The services a route gets when its one binding is there. */
+const services = (value: string) => {
+	const found = bindingsOrUnavailable(
+		double<Env>({ RATE_LIMIT: fakeKv({ get: async () => value }) }),
+		["RATE_LIMIT"],
+	);
+
+	if (!found.ok) throw new Error("the binding is there");
+
+	return found.services;
+};
+
+const locals = () => services("5");
 
 describe("runRoute", () => {
-	it("provides the live services and runs the program to a Response", async () => {
+	it("runs the program with the services it is given and answers the program to a Response", async () => {
 		const response = await runRoute(
 			locals(),
 			Effect.gen(function* () {
@@ -53,11 +63,11 @@ describe("runRoute", () => {
 		).rejects.toThrow("broken");
 	});
 
-	it("reads the bindings from the request's own env, and nothing else", async () => {
-		const first = fakeLocals({ RATE_LIMIT: fakeKv({ get: async () => "a" }) });
-		const second = fakeLocals({ RATE_LIMIT: fakeKv({ get: async () => "b" }) });
+	it("uses the services of its own request, and nothing else", async () => {
+		const first = services("a");
+		const second = services("b");
 
-		const read = (target: App.Locals) =>
+		const read = (target: ReturnType<typeof services>) =>
 			runRoute(
 				target,
 				RateLimit.use((limit) =>
