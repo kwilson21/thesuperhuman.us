@@ -135,7 +135,7 @@ const consentStyle = `
 html { background: #FBF8F2; color: #0E0E0E; color-scheme: light; }
 body { margin: 0; min-height: 100vh; min-height: 100svh; background: #FBF8F2; color: #0E0E0E; font: 400 1rem/1.6 'Libron', 'Iowan Old Style', Georgia, serif; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
 main { box-sizing: border-box; max-width: 34rem; margin: 0 auto; padding: max(3rem, 12vh) 1.5rem 3rem; overflow-wrap: break-word; }
-h1 { font: 400 clamp(1.5rem, 8.2vw, 2.5rem)/1.2 'Libron', 'Iowan Old Style', Georgia, serif; letter-spacing: -0.01em; color: #0E0E0E; margin: 0 0 1.5rem; text-wrap: balance; }
+h1 { font: 400 clamp(1.25rem, 8.2vw, 2.5rem)/1.2 'Libron', 'Iowan Old Style', Georgia, serif; letter-spacing: -0.01em; color: #0E0E0E; margin: 0 0 1.5rem; text-wrap: balance; }
 p { margin: 0 0 1rem; color: #4A4A4A; text-wrap: pretty; }
 strong { color: #0E0E0E; font-weight: 700; }
 .return-address { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #E8E3DA; }

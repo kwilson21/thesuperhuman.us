@@ -332,7 +332,24 @@ describe("publication consent style matches the site's global.css", () => {
 		);
 	});
 
-	it("uses the site's serif stack, and the site's sans stack without the self-hosted-only Inter", async () => {
+	it("draws the rule, the button outline and the hover fill from the site's tokens", async () => {
+		const css = styleOf((await consentPage()).html);
+
+		expect(css).toMatch(
+			new RegExp(
+				`\\.return-address\\s*\\{[^}]*border-top:\\s*1px solid ${site.rule}`,
+				"i",
+			),
+		);
+		expect(buttonRule(css)).toMatch(
+			new RegExp(`border:\\s*1px solid ${site.accent}`, "i"),
+		);
+		expect(css).toMatch(
+			new RegExp(`button:hover\\s*\\{[^}]*background:\\s*${site.ink}`, "i"),
+		);
+	});
+
+	it("uses the site's serif stack, and the site's sans stack without Inter, which this page cannot load", async () => {
 		const css = styleOf((await consentPage()).html);
 		// Inter is not self-hosted and this policy admits no font host, so the cancel note keeps the system part of --font-sans.
 		const sans = site.sans.replace(/^'Inter',\s*/, "");
@@ -456,7 +473,7 @@ describe("publication consent page styling", () => {
 			/body\s*\{[^}]*font:\s*400 1rem\/1\.6 'Libron', 'Iowan Old Style', Georgia, serif/,
 		);
 		expect(css).toMatch(
-			/h1\s*\{[^}]*font:\s*400 clamp\(1\.5rem, 8\.2vw, 2\.5rem\)\/1\.2 'Libron', 'Iowan Old Style', Georgia, serif/,
+			/h1\s*\{[^}]*font:\s*400 clamp\(1\.25rem, 8\.2vw, 2\.5rem\)\/1\.2 'Libron', 'Iowan Old Style', Georgia, serif/,
 		);
 		expect(css).toMatch(/strong\s*\{[^}]*font-weight:\s*700/);
 		expect(css).not.toMatch(/font-weight:\s*600/);
