@@ -629,7 +629,7 @@ const invalidCases: Case[] = [
 	rej("expectedRevision null", pub({ expectedRevision: null })),
 	rej(
 		"expectedRevision above the safe integers",
-		pub({ expectedRevision: 9007199254740992 }),
+		pub({ expectedRevision: Number.MAX_SAFE_INTEGER + 1 }),
 	),
 	rejRaw(
 		"expectedRevision too large for a number",

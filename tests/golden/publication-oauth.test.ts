@@ -1,6 +1,5 @@
 import { ALL } from "~/pages/api/publication/[...path]";
 import {
-	auth,
 	CHALLENGE,
 	connection,
 	Flow,
@@ -164,7 +163,7 @@ const configuration: Case[] = [
 	),
 	oc(
 		"config: PUBLICATION_PROJECTS unset leaves no scopes to grant",
-		run((f, c) => [c.register(), c.authorize()]),
+		run((_f, c) => [c.register(), c.authorize()]),
 		{ omit: ["PUBLICATION_PROJECTS"] },
 	),
 ];
@@ -244,11 +243,11 @@ const size: Case[] = [
 const registration: Case[] = [
 	oc(
 		"register: a client",
-		run((f, c) => [c.register()]),
+		run((_f, c) => [c.register()]),
 	),
 	oc(
 		"register: two clients get different ids",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({}, false),
 			c.register({ client_name: "second" }),
 		]),
@@ -263,29 +262,29 @@ const registration: Case[] = [
 	]),
 	oc(
 		"register: no redirect_uris",
-		run((f, c) => [c.register({ redirect_uris: null })]),
+		run((_f, c) => [c.register({ redirect_uris: null })]),
 	),
 	oc(
 		"register: an empty redirect_uris list",
-		run((f, c) => [c.register({ redirect_uris: [] })]),
+		run((_f, c) => [c.register({ redirect_uris: [] })]),
 	),
 	oc(
 		"register: a javascript: redirect",
-		run((f, c) => [c.register({ redirect_uris: ["javascript:alert(1)"] })]),
+		run((_f, c) => [c.register({ redirect_uris: ["javascript:alert(1)"] })]),
 	),
 	oc(
 		"register: a plain http redirect to a remote host",
-		run((f, c) => [c.register({ redirect_uris: ["http://evil.test/cb"] })]),
+		run((_f, c) => [c.register({ redirect_uris: ["http://evil.test/cb"] })]),
 	),
 	oc(
 		"register: a localhost redirect",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({ redirect_uris: ["http://localhost:8080/cb"] }),
 		]),
 	),
 	oc(
 		"register: several redirects",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({
 				redirect_uris: [REDIRECT, "https://claude.ai/api/mcp/auth_callback"],
 			}),
@@ -293,37 +292,37 @@ const registration: Case[] = [
 	),
 	oc(
 		"register: a client secret method",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({ token_endpoint_auth_method: "client_secret_post" }),
 		]),
 	),
 	oc(
 		"register: an unknown auth method",
-		run((f, c) => [c.register({ token_endpoint_auth_method: "magic" })]),
+		run((_f, c) => [c.register({ token_endpoint_auth_method: "magic" })]),
 	),
 	oc(
 		"register: markup and quotes in the client name are stored as given",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({ client_name: `<script>alert(1)</script> & "q" 'x'` }),
 		]),
 	),
 	oc(
 		"register: a very long client name",
-		run((f, c) => [c.register({ client_name: "n".repeat(2000) })]),
+		run((_f, c) => [c.register({ client_name: "n".repeat(2000) })]),
 	),
 	oc(
 		"register: unicode client name",
-		run((f, c) => [c.register({ client_name: "café 中文 🚀" })]),
+		run((_f, c) => [c.register({ client_name: "café 中文 🚀" })]),
 	),
 	oc("register: a GET", [{ method: "GET", path: "/api/publication/register" }]),
 	oc(
 		"register: the KV write fails",
-		run((f, c) => [c.register({}, false)]),
+		run((_f, c) => [c.register({}, false)]),
 		{ kv: { OAUTH_KV: { fails: ["put"] } } },
 	),
 	oc(
 		"register: grant types given",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({
 				grant_types: ["authorization_code", "refresh_token"],
 				response_types: ["code"],
@@ -337,33 +336,33 @@ const registration: Case[] = [
 const authorizeCases: Case[] = [
 	oc(
 		"authorize: the consent page",
-		run((f, c) => [c.register(), c.authorize()]),
+		run((_f, c) => [c.register(), c.authorize()]),
 	),
 	oc(
 		"authorize: markup in the client name is escaped on the page",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({ client_name: `<script>alert(1)</script> & "q" 'x'` }),
 			c.authorize(),
 		]),
 	),
 	oc(
 		"authorize: a client with no name shows its id",
-		run((f, c) => [c.register({ client_name: null }), c.authorize()]),
+		run((_f, c) => [c.register({ client_name: null }), c.authorize()]),
 	),
 	oc(
 		"authorize: one project scope",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ scope: "publication:threadline" }),
 		]),
 	),
 	oc(
 		"authorize: the other project's scope",
-		run((f, c) => [c.register(), c.authorize({ scope: "publication:other" })]),
+		run((_f, c) => [c.register(), c.authorize({ scope: "publication:other" })]),
 	),
 	oc(
 		"authorize: the page names the return address origin only",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({
 				redirect_uris: ["https://claude.ai/api/mcp/auth_callback?x=1"],
 			}),
@@ -374,63 +373,66 @@ const authorizeCases: Case[] = [
 	),
 	oc(
 		"authorize: response_type token",
-		run((f, c) => [c.register(), c.authorize({ response_type: "token" })]),
+		run((_f, c) => [c.register(), c.authorize({ response_type: "token" })]),
 	),
 	oc(
 		"authorize: no code_challenge",
-		run((f, c) => [c.register(), c.authorize({ code_challenge: null })]),
+		run((_f, c) => [c.register(), c.authorize({ code_challenge: null })]),
 	),
 	oc(
 		"authorize: code_challenge_method plain",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ code_challenge_method: "plain" }),
 		]),
 	),
 	oc(
 		"authorize: no code_challenge_method",
-		run((f, c) => [c.register(), c.authorize({ code_challenge_method: null })]),
+		run((_f, c) => [
+			c.register(),
+			c.authorize({ code_challenge_method: null }),
+		]),
 	),
 	oc(
 		"authorize: no scope",
-		run((f, c) => [c.register(), c.authorize({ scope: null })]),
+		run((_f, c) => [c.register(), c.authorize({ scope: null })]),
 	),
 	oc(
 		"authorize: a scope that is not a project",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ scope: "publication:stranger" }),
 		]),
 	),
 	oc(
 		"authorize: one good scope and one stranger",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ scope: "publication:threadline publication:stranger" }),
 		]),
 	),
 	oc(
 		"authorize: an unrelated scope",
-		run((f, c) => [c.register(), c.authorize({ scope: "openid" })]),
+		run((_f, c) => [c.register(), c.authorize({ scope: "openid" })]),
 	),
 	oc(
 		"authorize: no resource",
-		run((f, c) => [c.register(), c.authorize({ resource: null })]),
+		run((_f, c) => [c.register(), c.authorize({ resource: null })]),
 	),
 	oc(
 		"authorize: the wrong resource",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ resource: "https://thesuperhuman.us/api/other" }),
 		]),
 	),
 	oc(
 		"authorize: the resource with a trailing slash",
-		run((f, c) => [c.register(), c.authorize({ resource: `${RESOURCE}/` })]),
+		run((_f, c) => [c.register(), c.authorize({ resource: `${RESOURCE}/` })]),
 	),
 	oc(
 		"authorize: an unknown client id",
-		run((f, c) => [
+		run((f, _c) => [
 			f.step({
 				path: `/api/publication/authorize?${new URLSearchParams({ response_type: "code", client_id: "nobody", redirect_uri: REDIRECT, scope: SCOPES, resource: RESOURCE, code_challenge: CHALLENGE, code_challenge_method: "S256" })}`,
 			}),
@@ -438,35 +440,35 @@ const authorizeCases: Case[] = [
 	),
 	oc(
 		"authorize: no client id",
-		run((f, c) => [c.register(), c.authorize({ client_id: null })]),
+		run((_f, c) => [c.register(), c.authorize({ client_id: null })]),
 	),
 	oc(
 		"authorize: a redirect that is not registered",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize({ redirect_uri: "https://evil.test/cb" }),
 		]),
 	),
 	oc(
 		"authorize: no redirect",
-		run((f, c) => [c.register(), c.authorize({ redirect_uri: null })]),
+		run((_f, c) => [c.register(), c.authorize({ redirect_uri: null })]),
 	),
 	oc(
 		"authorize: a state too long to fit in the cookie",
-		run((f, c) => [c.register(), c.authorize({ state: "s".repeat(3000) })]),
+		run((_f, c) => [c.register(), c.authorize({ state: "s".repeat(3000) })]),
 	),
 	oc(
 		"authorize: a state of 1000 characters",
-		run((f, c) => [c.register(), c.authorize({ state: "s".repeat(1000) })]),
+		run((_f, c) => [c.register(), c.authorize({ state: "s".repeat(1000) })]),
 	),
 	oc(
 		"authorize: the cookie key has the wrong length",
-		run((f, c) => [c.register(), c.authorize()]),
+		run((_f, c) => [c.register(), c.authorize()]),
 		{ env: { PUBLICATION_COOKIE_KEY: btoa("short") } },
 	),
 	oc(
 		"authorize: the cookie key is not base64",
-		run((f, c) => [c.register(), c.authorize()]),
+		run((_f, c) => [c.register(), c.authorize()]),
 		{ env: { PUBLICATION_COOKIE_KEY: "***" } },
 	),
 	oc(
@@ -512,7 +514,7 @@ const consentWith = (cookie: string | null, origin: string | null = SITE) => {
 	return { headers: Object.fromEntries(headers) };
 };
 
-const page = (f: Flow, c: ReturnType<typeof connection>) => [
+const page = (_f: Flow, c: ReturnType<typeof connection>) => [
 	c.register(),
 	c.authorize(),
 ];
@@ -657,11 +659,11 @@ const consentCases: Case[] = [
 const callbackCases: Case[] = [
 	oc(
 		"callback: the owner signs in and the client gets a code",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 	),
 	oc(
 		"callback: the same approved cookie used twice issues two codes",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -671,7 +673,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: no cookie",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -680,7 +682,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: the page cookie that was never approved",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -689,7 +691,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: the wrong state",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -700,7 +702,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: no state",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -709,7 +711,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: no code",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -718,7 +720,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: an empty code",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -727,7 +729,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: a code of 512 characters is sent to GitHub",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -738,7 +740,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: a code of 513 characters is refused",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -749,7 +751,7 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: GitHub reports an error and no code",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),
@@ -760,29 +762,29 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: GitHub answers the code exchange with an error body",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{
 			fetches: github({ token: json(200, { error: "bad_verification_code" }) }),
 		},
 	),
 	oc(
 		"callback: GitHub answers the code exchange with 500",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ token: json(500, { access_token: "x" }) }) },
 	),
 	oc(
 		"callback: GitHub answers the code exchange with no token",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ token: json(200, {}) }) },
 	),
 	oc(
 		"callback: GitHub answers the code exchange with HTML",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ token: text(200, "<html>oops</html>") }) },
 	),
 	oc(
 		"callback: the code exchange cannot reach GitHub",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{
 			fetches: github({
 				token: networkDown("getaddrinfo ENOTFOUND github.com"),
@@ -791,42 +793,42 @@ const callbackCases: Case[] = [
 	),
 	oc(
 		"callback: GitHub's user lookup is refused",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: json(401, { message: "Bad credentials" }) }) },
 	),
 	oc(
 		"callback: GitHub's user lookup cannot be reached",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: networkDown() }) },
 	),
 	oc(
 		"callback: GitHub's user lookup answers with HTML",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: text(200, "<html></html>") }) },
 	),
 	oc(
 		"callback: a different GitHub user",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: json(200, { id: 42 }) }) },
 	),
 	oc(
 		"callback: a user answer with no id",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: json(200, { login: "kwilson21" }) }) },
 	),
 	oc(
 		"callback: the owner id returned as text still matches",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: json(200, { id: "10987837" }) }) },
 	),
 	oc(
 		"callback: a user answer of null",
-		run((f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{ fetches: github({ user: text(200, "null") }) },
 	),
 	oc(
 		"callback: after the ten minute expiry",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register(),
 			c.authorize(),
 			c.consent(),

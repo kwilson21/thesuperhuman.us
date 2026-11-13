@@ -648,7 +648,7 @@ export function oauthKit(route: Handler) {
 
 	/** Register, authorize, consent, GitHub callback and token: a connected client with an access token. */
 	const connect = (
-		f: Flow,
+		_f: Flow,
 		c: ReturnType<typeof connection>,
 		scope = SCOPES,
 	) => [

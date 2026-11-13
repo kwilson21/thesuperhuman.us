@@ -11,7 +11,7 @@ import {
 	withdraw,
 	oauthKit,
 } from "./areas/publication";
-import { defineCorpus, json, text, type Case } from "./harness";
+import { defineCorpus, type Case } from "./harness";
 
 // The golden corpus for the MCP endpoint behind the OAuth login of /api/publication/[...path] (src/lib/publication/mcp.ts):
 // the bearer token check by the library, the owner check, the transport's own answers, get_project_progress and

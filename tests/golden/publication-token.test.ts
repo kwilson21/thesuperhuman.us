@@ -1,14 +1,13 @@
 import { ALL } from "~/pages/api/publication/[...path]";
 import {
 	fromJson,
-	form,
 	REDIRECT,
 	SCOPES,
 	toolCall,
 	VERIFIER,
 	oauthKit,
 } from "./areas/publication";
-import { defineCorpus, json, type Case } from "./harness";
+import { defineCorpus, type Case } from "./harness";
 
 // The golden corpus for the token endpoint of /api/publication/[...path]: the authorization code exchanged for tokens
 // (each rule the library enforces: verifier, redirect, resource, client, grant type, replay) and the refresh token
@@ -202,7 +201,7 @@ const tokenCases: Case[] = [
 	),
 	oc(
 		"token: a client authenticated by secret",
-		run((f, c) => [
+		run((_f, c) => [
 			c.register({ token_endpoint_auth_method: "client_secret_post" }),
 			c.authorize(),
 			c.consent(),
