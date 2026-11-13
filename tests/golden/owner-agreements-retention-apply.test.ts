@@ -9,7 +9,6 @@ import {
 	rows,
 	type Case,
 	type Seed,
-	type SeedRow,
 	type Step,
 } from "./harness";
 import {
@@ -30,7 +29,6 @@ import {
 	merge,
 	msaAgreement,
 	objectsOf,
-	one,
 	PDF,
 	PDF_SHA,
 	projectSql,
@@ -775,6 +773,17 @@ const cases: Case[] = [
 		name: "an attachment whose recorded digest is not its bytes",
 		...withAttachment("att1", "a".repeat(64)),
 		steps: [preview(), apply()],
+		final: RETENTION_DUMP,
+	},
+	{
+		name: "a retry after the digest mismatch fails the same way and the agreement stays closed",
+		...withAttachment("att1", "a".repeat(64)),
+		steps: [
+			preview(),
+			apply(),
+			preview({ advanceMs: 1000 }),
+			apply(undefined, { advanceMs: 1000 }, 2),
+		],
 		final: RETENTION_DUMP,
 	},
 

@@ -574,6 +574,32 @@ const settingCases: Case[] = [
 		),
 	),
 
+	settingScene(
+		"switching off when it is already off still moves updated_at",
+		setting({ enabled: false, confirmed: true }),
+	),
+	settingScene(
+		"a form with extra fields is accepted",
+		settingForm({ enabled: "on", confirmed: "true", note: "x", kind: "msa" }),
+	),
+	settingScene("a form switching on then a JSON switching off", [
+		settingForm({ enabled: "on", confirmed: "true" }),
+		setting({ enabled: false, confirmed: true }, { advanceMs: 1000 }),
+	]),
+	settingScene(
+		"an owner address with a plus tag is recorded as given",
+		setting(
+			{ enabled: true, confirmed: true },
+			{
+				as: asOwner("kazon+admin@example.test"),
+			},
+		),
+	),
+	settingScene(
+		"enabled true with a long note field ignored",
+		setting({ enabled: true, confirmed: true, note: "n".repeat(50_000) }),
+	),
+
 	// the setting is read by the attachment route
 	{
 		name: "switching on lets an attachment in, switching off turns it away",
