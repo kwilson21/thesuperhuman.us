@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import { getResumeRequest, deleteResumeRequest } from "~/lib/resume-requests";
 import { loadResume, RESUME_FILENAMES } from "~/lib/resumes";
 import { sendResumeDelivery } from "~/lib/resend";
+import { escapeHtml } from "~/lib/email-template";
 
 export const prerender = false;
 
@@ -69,7 +70,7 @@ export const GET: APIRoute = async (context) => {
 		return htmlResponse(
 			htmlPage(
 				"Resume PDF not configured",
-				`<h1>Resume not in storage</h1><p>The KV key <code>pdf:${stored.audience}</code> is empty. Upload the PDF with <code>wrangler kv key put</code> and click the approval link again. The request is still saved.</p>`,
+				`<h1>Resume not in storage</h1><p>The KV key <code>pdf:${escapeHtml(stored.audience)}</code> is empty. Upload the PDF with <code>wrangler kv key put</code> and click the approval link again. The request is still saved.</p>`,
 			),
 			500,
 		);
@@ -89,7 +90,7 @@ export const GET: APIRoute = async (context) => {
 		return htmlResponse(
 			htmlPage(
 				"Send failed",
-				`<h1>Resume not sent</h1><p>The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for ${stored.name} (${stored.email}).</p>`,
+				`<h1>Resume not sent</h1><p>The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for ${escapeHtml(stored.name)} (${escapeHtml(stored.email)}).</p>`,
 			),
 			500,
 		);
@@ -101,7 +102,7 @@ export const GET: APIRoute = async (context) => {
 	return htmlResponse(
 		htmlPage(
 			"Resume sent",
-			`<h1>Resume sent</h1><p>Delivered the <strong>${stored.audience}</strong> resume to <strong>${stored.email}</strong>. The approval link is now consumed.</p>`,
+			`<h1>Resume sent</h1><p>Delivered the <strong>${escapeHtml(stored.audience)}</strong> resume to <strong>${escapeHtml(stored.email)}</strong>. The approval link is now consumed.</p>`,
 		),
 		200,
 	);
