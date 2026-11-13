@@ -8,17 +8,23 @@ const playwrightPath = process.env.PW_SKILL_DIR
 const { chromium } = require(playwrightPath);
 
 const targetUrl = process.env.TARGET_URL || "http://127.0.0.1:4321";
+const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 const VIEWPORT_WIDTH = 375;
 
-// The root font size is doubled, as a visitor with a 32px default text size sees it. The page
-// is laid out by its content (flex wrapping, viewport-capped padding), so it must reflow without
-// pushing past the phone's edge, and no word may break inside itself.
+// The site pins the root font size to 16px, so text-only zoom cannot be simulated directly. The
+// script doubles the root by style to stand in for it. The page is laid out by its content (flex
+// wrapping, viewport-capped padding), so it must reflow without pushing past the phone's edge,
+// and a word may break inside itself only when it cannot fit a line of its own.
+let current = null;
+
 async function openWork(browser, width, rootSize) {
 	const page = await browser.newPage({
 		viewport: { width, height: 812 },
 		deviceScaleFactor: 1,
 		reducedMotion: "reduce",
 	});
+
+	current = page;
 
 	await page.goto(new URL("/work", targetUrl).href, {
 		waitUntil: "domcontentloaded",
@@ -79,16 +85,16 @@ async function openWork(browser, width, rootSize) {
 			`the closing panel button label takes ${labelLines} lines at a 200% root`,
 		);
 
+		// A flow is stacked when its last text part starts at or below the bottom of its first text part.
 		const flows = await large.evaluate(() =>
 			[...document.querySelectorAll(".diagram-flow")].map((flow) => {
 				const parts = [...flow.children];
-
-				const tops = parts.map((part) =>
-					Math.round(part.getBoundingClientRect().top),
-				);
+				const text = parts.filter((part) => !part.hasAttribute("aria-hidden"));
+				const first = text[0].getBoundingClientRect();
+				const last = text[text.length - 1].getBoundingClientRect();
 
 				return {
-					stacked: new Set(tops).size > 1,
+					stacked: last.top >= first.bottom,
 					overflow: parts.some((part) => part.scrollWidth > part.clientWidth),
 				};
 			}),
@@ -106,28 +112,34 @@ async function openWork(browser, width, rootSize) {
 		}
 
 		const splitWords = await large.evaluate(() => {
-			// Measures the word unbroken, in the same font, against the box's text width.
-			const fitsInBox = (box, word) => {
+			// The line a word must fit: the flow's width inside a diagram flow, otherwise the
+			// content box of the element that holds the word.
+			const lineWidth = (element) => {
+				const box = element.closest(".diagram-flow") || element;
 				const style = getComputedStyle(box);
 
-				const available =
+				return (
 					box.clientWidth -
 					parseFloat(style.paddingLeft) -
-					parseFloat(style.paddingRight);
+					parseFloat(style.paddingRight)
+				);
+			};
 
+			// Measures the word unbroken, in the same font as the element that holds it.
+			const wordWidth = (element, word) => {
 				const probe = document.createElement("span");
 
 				probe.textContent = word;
 				probe.style.cssText =
 					"position:absolute;visibility:hidden;white-space:nowrap;";
-				probe.style.font = style.font;
-				box.append(probe);
+				probe.style.font = getComputedStyle(element).font;
+				element.append(probe);
 
 				const width = probe.getBoundingClientRect().width;
 
 				probe.remove();
 
-				return width <= available;
+				return width;
 			};
 
 			const roots = [
@@ -159,8 +171,13 @@ async function openWork(browser, width, rootSize) {
 							),
 						);
 
+						const element = node.parentElement;
+
 						// Only a word that would fit on a line of its own counts as broken.
-						if (tops.size > 1 && fitsInBox(node.parentElement, match[0]))
+						if (
+							tops.size > 1 &&
+							wordWidth(element, match[0]) <= lineWidth(element)
+						)
 							found.push(match[0]);
 					}
 				}
@@ -176,15 +193,22 @@ async function openWork(browser, width, rootSize) {
 		for (const width of [390, 1280]) {
 			const normal = await openWork(browser, width, null);
 
+			// On one row when the second text part starts to the right of the first part's right
+			// edge while their vertical ranges overlap.
 			const rows = await normal.evaluate(() =>
 				[...document.querySelectorAll(".diagram-flow")].map((flow) => {
-					const tops = [...flow.children].flatMap((part) =>
-						part.hasAttribute("aria-hidden")
-							? []
-							: [Math.round(part.getBoundingClientRect().top)],
+					const text = [...flow.children].filter(
+						(part) => !part.hasAttribute("aria-hidden"),
 					);
 
-					return tops.every((top) => Math.abs(top - tops[0]) <= 1);
+					const first = text[0].getBoundingClientRect();
+
+					const second = text[text.length - 1].getBoundingClientRect();
+
+					const overlaps =
+						second.top < first.bottom && first.top < second.bottom;
+
+					return overlaps && second.left > first.right;
 				}),
 			);
 
@@ -200,6 +224,15 @@ async function openWork(browser, width, rootSize) {
 
 			await normal.close();
 		}
+	} catch (error) {
+		await current
+			?.screenshot({
+				path: path.join(artifactDir, "_failure-text-scale.png"),
+				fullPage: true,
+			})
+			.catch(() => {});
+
+		throw error;
 	} finally {
 		await browser.close();
 	}

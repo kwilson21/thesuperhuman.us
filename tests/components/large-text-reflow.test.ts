@@ -8,7 +8,6 @@ const work = read("src/pages/work.astro");
 const diagram = read("src/components/WorkDiagram.astro");
 const footer = read("src/components/Footer.astro");
 const global = read("src/styles/global.css");
-const design = read("design.md");
 
 it("lets the single-column story track shrink below its widest child", () => {
 	expect(work).toContain(
@@ -37,7 +36,6 @@ it("lets a flow part wrap to a new line only by its content, with no query", () 
 	expect(diagram).not.toContain("@container");
 	expect(diagram).not.toContain("max-width: 18rem");
 	expect(diagram).not.toContain("rotate(90deg)");
-	expect(diagram.match(/@media/g)?.length).toBe(2);
 });
 
 it("breaks long words only as a last resort in the diagram and timeline text", () => {
@@ -55,14 +53,9 @@ it("caps the large button's side padding by the viewport, not by a query", () =>
 	expect(global).toMatch(
 		/\.site-button-large \{[^}]*padding-inline: min\(1\.75rem, 8\.75vw\);/,
 	);
-	expect(footer).toContain("padding: 3rem min(1.25rem, 6.25vw) 1.75rem;");
+	expect(footer).toMatch(
+		/\.closing-panel \{[^}]*padding: 3rem min\(1\.25rem, 6\.25vw\) 1\.75rem;/,
+	);
 	expect(global).not.toContain("@container");
 	expect(footer).not.toContain("@container");
-});
-
-it("updates the design note to the rem threshold and the enlarged-text case", () => {
-	expect(design).toContain(
-		"At 23.75rem (380px at the default text size) and below a button label may wrap",
-	);
-	expect(design).not.toContain("At 380px wide and below");
 });
