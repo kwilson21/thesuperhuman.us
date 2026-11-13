@@ -137,13 +137,27 @@ async function setClock(step) {
 		);
 }
 
+// True while a step's clock update is in flight. A second step started then would reorder the clock.
+let stepInFlight = false;
+
 // Each capture and ownerFetch a scenario makes moves the clock one step on. Page captures run outside a
-// scenario and never move it, so every page sees step 0.
+// scenario and never move it, so every page sees step 0. Scenario steps must be awaited one at a time.
 async function nextStep() {
 	if (currentScenario === undefined) return;
 
-	clockStep += 1;
-	await setClock(clockStep);
+	if (stepInFlight)
+		throw new Error(
+			"Scenario steps (capture, ownerFetch) must be awaited one at a time: a step started before the previous one finished.",
+		);
+
+	stepInFlight = true;
+
+	try {
+		clockStep += 1;
+		await setClock(clockStep);
+	} finally {
+		stepInFlight = false;
+	}
 }
 
 // sql is synchronous, so it only moves this process's clock. The server catches up at its next capture or ownerFetch.

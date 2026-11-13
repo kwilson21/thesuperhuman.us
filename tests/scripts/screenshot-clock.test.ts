@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { Readable } from "node:stream";
 import { type Context, createContext, runInContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -8,6 +9,11 @@ import {
 	STEP_MS,
 	stepTime,
 } from "../../scripts/screenshots/clock.mjs";
+import {
+	CLOCK_BODY_LIMIT,
+	handleClockPost,
+	readLimitedBody,
+} from "../../scripts/screenshots/clock-endpoint.mjs";
 
 const BASE = Date.parse(CLOCK_BASE);
 const REAL_NOW = Date.parse("2026-11-13T15:00:00.000Z");
@@ -212,6 +218,15 @@ describe("installClock", () => {
 		expect(scope.Date.now()).toBe(BASE + 20_000);
 	});
 
+	it("reports the instant it holds, so the server can answer with the time it really shows", () => {
+		const scope = scopeWithDate();
+		const clock = installClock(scope, BASE);
+
+		expect(clock.now()).toBe(BASE);
+		clock.set(BASE + 3_000);
+		expect(clock.now()).toBe(BASE + 3_000);
+	});
+
 	it("restores the real Date", () => {
 		const scope = scopeWithDate();
 		const clock = installClock(scope, BASE);
@@ -340,7 +355,7 @@ describe("the clock is wired into every process", () => {
 		expect(firstImport).toContain("./clock-install.mjs");
 		expect(dev).toContain('"/__screenshots/clock"');
 		expect(dev).not.toContain("/reset");
-		expect(dev).toMatch(/method !== "POST"/);
+		expect(dev).toContain("handleClockPost(");
 	});
 
 	it("has no day rule left in the capture, cache or README", () => {
@@ -350,6 +365,139 @@ describe("the clock is wired into every process", () => {
 			"scripts/screenshots/README.md",
 		])
 			expect(read(file), file).not.toMatch(/\bday\b/);
+	});
+});
+
+describe("the clock endpoint", () => {
+	// Stands in for installClock's handle: `set` moves the clock and `now` reports where it is.
+	function clockAt(start: number) {
+		let current = start;
+
+		return {
+			set: (ms: number) => {
+				current = ms;
+			},
+			now: () => current,
+		};
+	}
+
+	// A handle whose set does nothing, as a server whose clock did not move would be.
+	const stuckClock = (start: number) => ({ set: () => {}, now: () => start });
+
+	const JSON_TYPE = "application/json";
+
+	const post = (
+		body: string | undefined,
+		contentType: string | undefined = JSON_TYPE,
+	) => handleClockPost({ method: "POST", contentType, body }, clockAt(BASE));
+
+	it("answers 405 to anything but POST, and says POST is allowed", () => {
+		const reply = handleClockPost(
+			{ method: "GET", contentType: JSON_TYPE, body: "" },
+			clockAt(BASE),
+		);
+
+		expect(reply.status).toBe(405);
+		expect(reply.headers).toEqual({ allow: "POST" });
+	});
+
+	it("answers 415 unless the body is declared as JSON, so a page cannot send a simple form POST", () => {
+		const body = JSON.stringify({ now: BASE + STEP_MS });
+
+		expect(
+			handleClockPost(
+				{ method: "POST", contentType: undefined, body },
+				clockAt(BASE),
+			).status,
+		).toBe(415);
+		expect(post(body, "text/plain").status).toBe(415);
+		expect(post(body, "application/x-www-form-urlencoded").status).toBe(415);
+	});
+
+	it("accepts JSON with a charset parameter", () => {
+		expect(
+			post(
+				JSON.stringify({ now: BASE + STEP_MS }),
+				"application/json; charset=utf-8",
+			).status,
+		).toBe(200);
+	});
+
+	it.each([
+		["text that is not JSON", "{ now"],
+		["an object with no now", "{}"],
+		["a fraction", JSON.stringify({ now: BASE + 0.5 })],
+		["a string", JSON.stringify({ now: String(BASE) })],
+		["null", "null"],
+	])("answers 400 for %s", (_, body) => {
+		expect(post(body).status).toBe(400);
+	});
+
+	it.each([
+		["above Date's range", 8.64e15 + 1],
+		["below Date's range", -(8.64e15 + 1)],
+	])("answers 400 for a time %s", (_, now) => {
+		expect(post(JSON.stringify({ now })).status).toBe(400);
+	});
+
+	it("accepts the two ends of Date's range", () => {
+		expect(post(JSON.stringify({ now: 8.64e15 })).status).toBe(200);
+		expect(post(JSON.stringify({ now: -8.64e15 })).status).toBe(200);
+	});
+
+	it("answers 200 with the time the clock shows once it is set", () => {
+		const reply = post(JSON.stringify({ now: BASE + 5_000 }));
+
+		expect(reply.status).toBe(200);
+		expect(JSON.parse(reply.body)).toEqual({ ok: true, now: BASE + 5_000 });
+	});
+
+	it("answers with a different time when the clock did not move, so the capture can fail", () => {
+		const reply = handleClockPost(
+			{
+				method: "POST",
+				contentType: JSON_TYPE,
+				body: JSON.stringify({ now: BASE + 5_000 }),
+			},
+			stuckClock(BASE),
+		);
+
+		expect(JSON.parse(reply.body).now).toBe(BASE);
+	});
+
+	it("answers 413 when the body was longer than the limit", () => {
+		expect(post(undefined).status).toBe(413);
+	});
+
+	it("reads a body that fits the limit whole", async () => {
+		const text = JSON.stringify({ now: BASE });
+
+		await expect(
+			readLimitedBody(Readable.from([Buffer.from(text)]), CLOCK_BODY_LIMIT),
+		).resolves.toBe(text);
+	});
+
+	it("reads no body that is longer than the limit", async () => {
+		const long = Buffer.alloc(CLOCK_BODY_LIMIT + 1, " ");
+
+		await expect(
+			readLimitedBody(Readable.from([long]), CLOCK_BODY_LIMIT),
+		).resolves.toBeUndefined();
+	});
+});
+
+describe("capture's step guard and reply check", () => {
+	const capture = read("scripts/screenshots/capture.mjs");
+
+	it("refuses a step that starts while the previous step's clock update is still in flight", () => {
+		expect(capture).toMatch(/let stepInFlight = false;/);
+		expect(capture).toMatch(/stepInFlight = true;/);
+		expect(capture).toMatch(/finally \{\s*stepInFlight = false;\s*\}/);
+		expect(capture).toMatch(/awaited one at a time/);
+	});
+
+	it("checks the reply's time against the one it sent, so a clock that did not move fails", () => {
+		expect(capture).toMatch(/answer\.now !== now/);
 	});
 });
 

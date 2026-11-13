@@ -118,6 +118,7 @@ export function installClock(scope, startMs) {
 		set(ms) {
 			if (scope[STATE] === state) frozen = ms;
 		},
+		now: () => frozen,
 		restore: state.restore,
 	};
 }
