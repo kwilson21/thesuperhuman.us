@@ -1,10 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-	nonHttpsLinkText,
-	safeHttpsUrl,
-	safeReferences,
-} from "~/lib/link-check";
+import { safeHttpsUrl, safeReferences } from "~/lib/link-check";
 import { validateProjectMessage } from "~/lib/audio-project-messages";
 import { safeExternalUrl } from "~/lib/owner-model";
 
