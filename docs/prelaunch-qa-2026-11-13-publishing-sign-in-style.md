@@ -30,6 +30,16 @@ Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR a
   - Sonnet design review: no visual defect; confirmed the colours and button values equal the site's; asked for the drift test and the document changes, which are in this round.
 - The changes in this round (Libron, `font-src 'self'`, label wrap, drift test, tap highlight, documents, re-recorded fixtures) have not been independently reviewed yet.
 
+## Hallmark audit
+
+- Result: PASS, with limits. Run on 2026-11-13 by an independent Claude Sonnet reviewer, read-only, on the first two commits (`6151aa50`, `76f3fefb`), from the source and four renders (desktop, phone, focus, 320px).
+- Defects found: none.
+- Checked: contrast (body 18.21:1, muted 8.36:1, button label on accent 4.78:1, focus ring 4.78:1), visible focus, the 44px target, no horizontal overflow at 320px, the action visible in the first screen, no `transition: all`, no `outline: none`, no gradients or shadows, no em dashes.
+- Set aside, as `docs/design-standard.md` allows: the raw-hex gate (the page inlines tokens as literals under its own Content-Security-Policy; this is recorded in `design.md` and guarded by a test) and the missing-stamp findings.
+- Design choices noted for the owner, not changed: whether the consent sentence should be set in ink, how the return address is styled, and the gap above the button.
+- Not run: the structural fingerprint (not applicable to a one-form page), the slop test against pixels, and any check in Safari or Firefox.
+- After that audit the page gained Libron, the wrapping button label and the smaller heading minimum. The coordinating session viewed the renders of that round and found the heading splitting a word at 200% text; `2fbd48ed` fixes it. The audit does not cover `2fbd48ed` or later; the re-render check is in Heading fit above.
+
 ## Contrast (from the first review, unchanged in this round)
 
 Body text 18.21:1, muted text 8.36:1, button label on accent 4.78:1, focus ring 4.78:1.
@@ -86,8 +96,8 @@ Local runs on macOS arm64, Node 26.13.1, pnpm on the branch at `2fbd48ed`:
 - 200% text size in a real browser's own text size setting. The fit at 200% was checked only by setting the root font size to 200% in Chromium (see Heading fit).
 - Forced-colors mode.
 - The page in production with its real policy. The fonts are served from the same origin as the page; this is inferred from `wrangler.jsonc` (static assets from `./dist`, Worker route for `/api/publication/*`) and from the dev server, not observed on the live site.
-- The Hallmark audit's rendered checks. `docs/design-standard.md` says the mechanical check does not scan `src/lib/`; this page is covered by its own drift test instead.
-- Independent review of this round's changes.
+- Hallmark audit of the final head: not run on the current page (see Hallmark audit below for what was run, and on which commits).
+- Independent review of the final head (a second review of `2fbd48ed` and later is remaining work).
 
 ## Not in the Screenshots workflow
 
