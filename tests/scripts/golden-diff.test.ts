@@ -12,21 +12,29 @@ const fixtures = join(folder, "tests/golden/fixtures");
 const git = (...args: string[]) =>
 	execFileSync("git", args, { cwd: folder, stdio: "ignore" });
 
-mkdirSync(fixtures, { recursive: true });
-git("init", "-q");
-git("config", "user.email", "test@example.test");
-git("config", "user.name", "Test");
-git("config", "commit.gpgsign", "false");
+const setup = () => {
+	mkdirSync(fixtures, { recursive: true });
 
-writeFileSync(join(fixtures, "old.json"), JSON.stringify([{ name: "a" }]));
+	for (const args of [
+		["init", "-q"],
+		["config", "user.email", "test@example.test"],
+		["config", "user.name", "Test"],
+		["config", "commit.gpgsign", "false"],
+	])
+		git(...args);
 
-writeFileSync(
-	join(fixtures, "new.json.gz"),
-	gzipSync(JSON.stringify([{ name: "b" }, { name: "c" }])),
-);
+	writeFileSync(join(fixtures, "old.json"), JSON.stringify([{ name: "a" }]));
 
-git("add", "-A");
-git("commit", "-q", "-m", "fixtures");
+	writeFileSync(
+		join(fixtures, "new.json.gz"),
+		gzipSync(JSON.stringify([{ name: "b" }, { name: "c" }])),
+	);
+
+	git("add", "-A");
+	git("commit", "-q", "-m", "fixtures");
+};
+
+setup();
 
 afterAll(() => rmSync(folder, { recursive: true, force: true }));
 
