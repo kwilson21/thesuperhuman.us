@@ -36,12 +36,18 @@ describe("astro:content in tests", () => {
 		expect(await getEntry("recordings", "nobody")).toBeUndefined();
 	});
 
-	it("loads a collection that holds only a .gitkeep as empty, as Astro does", async () => {
-		expect(
-			readdirSync(new URL("../../src/content/audio-tracks", import.meta.url)),
-		).toEqual([".gitkeep"]);
+	it("loads only the collection's supported files, so a .gitkeep is not an entry, as in Astro", async () => {
+		const present = readdirSync(
+			new URL("../../src/content/audio-tracks", import.meta.url),
+		);
 
-		expect(await getCollection("audio-tracks")).toEqual([]);
+		expect(present).toContain(".gitkeep");
+
+		const tracks = await getCollection("audio-tracks");
+
+		expect(tracks.map((entry) => `${entry.id}.json`).sort()).toEqual(
+			present.filter((file) => file.endsWith(".json")).sort(),
+		);
 	});
 
 	it("names a collection that does not exist", async () => {
