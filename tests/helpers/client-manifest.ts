@@ -220,6 +220,7 @@ export function inlinedScripts(text: string): { id: string; code: string }[] {
 		} else if (char === '"') inString = true;
 		else if (char === "[") depth++;
 		else if (char === "]" && --depth === 0)
+			// SAFETY: Astro serializes inlinedScripts as an array of [id, code] string pairs.
 			return (JSON.parse(text.slice(start, i + 1)) as [string, string][]).map(
 				([id, code]) => ({ id, code }),
 			);

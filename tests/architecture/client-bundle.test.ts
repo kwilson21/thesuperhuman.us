@@ -238,10 +238,11 @@ describe("bundleViolations", () => {
 		...extra,
 	});
 
+	// SAFETY: an empty list typed as the allowlist's element type; no value is asserted.
 	const allowed = {
 		repoModules: ["src/lib/ok.ts"],
 		packages: ["zod"],
-		virtualModules: [] as string[],
+		virtualModules: [] as readonly string[],
 	};
 
 	const base = [

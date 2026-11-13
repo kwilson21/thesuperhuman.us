@@ -124,6 +124,7 @@ describe("manifestFromChunks", () => {
 			trimmedSha256: "1",
 			modules: [],
 		};
+
 		const b = {
 			file: "_astro/b.js",
 			sha256: "2",
