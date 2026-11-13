@@ -176,6 +176,8 @@ describe("the built browser bundle", () => {
 
 const manifestFile = join(repository, MANIFEST_PATH);
 
+// SAFETY: the file is written by scripts/client-bundle-manifest.mjs in the shape of ClientManifest; staleManifest and
+// bundleViolations then check it against dist/.
 const readManifest = () =>
 	JSON.parse(readFileSync(manifestFile, "utf8")) as ClientManifest;
 
@@ -218,6 +220,7 @@ describe("bundleViolations", () => {
 		tail: "",
 		modules,
 	});
+
 	const manifest = (
 		modules: string[],
 		extra: Partial<ClientManifest> = {},
@@ -228,6 +231,7 @@ describe("bundleViolations", () => {
 		unrendered: [],
 		...extra,
 	});
+
 	const allowed = { repoModules: ["src/lib/ok.ts"], packages: ["zod"] };
 	const base = ["src/scripts/a.ts", "src/lib/ok.ts", "npm:zod/v3/types.js"];
 

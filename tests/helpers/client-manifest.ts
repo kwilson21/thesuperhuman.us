@@ -131,8 +131,7 @@ export function bundleViolations(
 			FORBIDDEN_PACKAGES.some((f) => name === f || name.startsWith(`${f}/`)) ||
 			(name === "zod" && Number(manifest.packages.zod?.split(".")[0]) >= 4);
 
-		if (forbidden)
-			problems.push(`forbidden package in browser code: ${name}`);
+		if (forbidden) problems.push(`forbidden package in browser code: ${name}`);
 	}
 
 	return [...new Set(problems)];
@@ -164,6 +163,7 @@ export function staleManifest(
 	const problems: string[] = [];
 	const byFile = new Map(manifest.chunks.map((chunk) => [chunk.file, chunk]));
 	const astro = join(dist, "_astro");
+
 	const scripts = existsSync(astro)
 		? filesUnder(astro, dist)
 				.filter((file) => /\.m?js$/.test(file))
@@ -179,6 +179,7 @@ export function staleManifest(
 	}
 
 	const worker = join(dist, "_worker.js");
+
 	const serverManifests = existsSync(worker)
 		? readdirSync(worker)
 				.filter((name) => /^manifest_.*\.mjs$/.test(name))

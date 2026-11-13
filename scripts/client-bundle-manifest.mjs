@@ -136,9 +136,9 @@ export function unrenderedModules(chunks, infos, root) {
 
 	return [
 		...new Set(
-			[...infos]
-				.filter(([id, info]) => info?.isIncluded && !rendered.has(id))
-				.map(([id]) => moduleLabel(id, root)),
+			[...infos].flatMap(([id, info]) =>
+				info?.isIncluded && !rendered.has(id) ? [moduleLabel(id, root)] : [],
+			),
 		),
 	].sort();
 }
@@ -179,20 +179,25 @@ export function clientBundleManifest() {
 				const outputs = Object.values(bundle).flatMap((output) =>
 					output.type === "chunk" ? [output] : [],
 				);
+
 				const chunks = Object.entries(bundle).flatMap(([file, output]) =>
 					output.type === "chunk" ? [chunkEntry(file, output, root)] : [],
 				);
+
 				const infos = new Map(
 					[...this.getModuleIds()].map((id) => [id, this.getModuleInfo(id)]),
 				);
+
 				const ids = new Set([
 					...outputs.flatMap((output) => Object.keys(output.modules)),
 					...[...infos].flatMap(([id, info]) => (info?.isIncluded ? [id] : [])),
 				]);
+
 				const packages = {};
 
 				for (const id of ids) {
 					const directory = packageDirectory(id);
+
 					const name = moduleLabel(id, root).match(
 						/^npm:((?:@[^/]+\/)?[^/]+)/,
 					)?.[1];

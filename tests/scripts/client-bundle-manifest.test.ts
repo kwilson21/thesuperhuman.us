@@ -9,6 +9,7 @@ import {
 } from "../../scripts/client-bundle-manifest.mjs";
 
 const root = "/work/site";
+
 const pnpm = (directory: string, name: string, path: string) =>
 	`${root}/node_modules/.pnpm/${directory}/node_modules/${name}/${path}`;
 
@@ -125,6 +126,7 @@ describe("manifestFromChunks", () => {
 describe("unrenderedModules", () => {
 	it("lists included modules that no chunk renders, as sorted labels, and skips what the bundle dropped", () => {
 		const rendered = [{ modules: { [`${root}/src/a.ts`]: {} } }];
+
 		const infos = new Map([
 			[`${root}/src/a.ts`, { isIncluded: true }],
 			[`${root}/src/data/folded.json`, { isIncluded: true }],
@@ -154,11 +156,13 @@ describe("settleChunks", () => {
 			{ code: "before preload map", modules: {} },
 			root,
 		);
+
 		const inlined = chunkEntry(
 			"_astro/b.js",
 			{ code: "inlined code", modules: {} },
 			root,
 		);
+
 		const settled = settleChunks([written, inlined], {
 			"_astro/a.js": { type: "chunk", code: "after preload map\n" },
 			"_astro/style.css": { type: "asset" },
