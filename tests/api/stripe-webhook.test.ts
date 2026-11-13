@@ -406,3 +406,53 @@ it("audio recovery: an older paid event applies when a newer failure links the i
 	expect((await POST(context())).status).toBe(200);
 	expect(audioStatus()).toEqual({ status: "paid" });
 });
+
+// A software invoice read in "creating" has no Stripe id yet. If a different Stripe invoice is linked before the paid
+// event's batch runs, the paid event must not overwrite that id or mark the invoice paid; like a mismatch found at read
+// time, it lands in the unmatched list and is not recorded as processed.
+describe.each([
+	["the invoice-creation response links it", null],
+	["a newer event for it links it", BASE],
+] as const)(
+	"software: a different Stripe invoice is linked between the read and the batch: %s",
+	(_label, linkedAt) => {
+		it("keeps the stored id, does not mark it paid and records the event as unmatched", async () => {
+			seedSoftware();
+			commitBeforeNextBatch(() =>
+				sql
+					.prepare(
+						"UPDATE software_invoices SET stripe_invoice_id='in_other',status='open',status_updated_at=?",
+					)
+					.run(linkedAt === null ? null : isoOf(linkedAt)),
+			);
+			verify.mockResolvedValueOnce(
+				softwareEventAt("paid", "evt_paid", BASE - 60),
+			);
+			expect((await POST(context())).status).toBe(200);
+			expect(
+				sql
+					.prepare("SELECT status,stripe_invoice_id FROM software_invoices")
+					.get(),
+			).toEqual({ status: "open", stripe_invoice_id: "in_other" });
+			expect(
+				sql
+					.prepare(
+						"SELECT event_id,invoice_id FROM software_stripe_unmatched_events",
+					)
+					.all(),
+			).toEqual([{ event_id: "evt_paid", invoice_id: "in_software" }]);
+			expect(
+				sql
+					.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events")
+					.get(),
+			).toEqual({ total: 0 });
+			expect(
+				sql
+					.prepare(
+						"SELECT COUNT(*) AS total FROM software_project_audit WHERE action='invoice-status-updated'",
+					)
+					.get(),
+			).toEqual({ total: 0 });
+		});
+	},
+);
