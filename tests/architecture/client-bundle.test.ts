@@ -1,0 +1,74 @@
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+// The independent backstop to client-graph.test.ts: that test walks the source's import graph, this one looks at what
+// the build actually shipped. It reads dist/_astro/*.js and fails when a chunk holds Effect or @xstate/effect runtime
+// code, however it got there (an import the walker cannot see, a glob, a plugin). It needs a build: run
+// `pnpm run build` first. With no dist/_astro it skips, under a name that says so.
+//
+// The markers are string literals the libraries keep in their runtime, which a minifier cannot rename. They were
+// chosen by bundling scratch entries with esbuild --bundle --minify (the minifier Astro's client build uses) and
+// reading what survived:
+//   "~effect/Cause"   the type id of Effect's Cause module. In every bundle of effect/Effect, effect/Schema,
+//                     effect/Option, effect/Data, effect/Result and effect/Match (13 to 46 `~effect/` ids each); absent
+//                     only from the pure helpers effect/Predicate and effect/Function, which carry no runtime.
+//   "~effect/Schema"  the type id of Schema; in every bundle of effect/Schema.
+//   "EffectFailure"   the class tag of @xstate/effect's failure wrapper; in every bundle of @xstate/effect, which also
+//                     pulls in the Effect runtime.
+const RUNTIME_MARKERS = [
+	"~effect/Cause",
+	"~effect/Schema",
+	"EffectFailure",
+] as const;
+
+const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const bundle = join(repository, "dist", "_astro");
+
+/** Every .js and .mjs file under `directory`. */
+function chunksUnder(directory: string): string[] {
+	return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+		const path = join(directory, entry.name);
+
+		if (entry.isDirectory()) return chunksUnder(path);
+
+		return /\.m?js$/.test(entry.name) ? [path] : [];
+	});
+}
+
+/** The markers a chunk's text holds. */
+function markersIn(text: string): string[] {
+	return RUNTIME_MARKERS.filter((marker) => text.includes(marker));
+}
+
+describe("the markers", () => {
+	it("find each runtime and nothing in plain code", () => {
+		expect(markersIn('var a="~effect/Cause";')).toEqual(["~effect/Cause"]);
+		expect(markersIn('x={_tag:"EffectFailure"}')).toEqual(["EffectFailure"]);
+		expect(markersIn("const a = document.title;")).toEqual([]);
+	});
+});
+
+describe("the built browser bundle", () => {
+	it.skipIf(!existsSync(bundle))(
+		existsSync(bundle)
+			? "holds no Effect or @xstate/effect runtime code"
+			: "holds no Effect runtime code (skipped: no dist/_astro, run pnpm run build first)",
+		() => {
+			const chunks = chunksUnder(bundle);
+
+			expect(chunks.length).toBeGreaterThan(0);
+
+			const holding = chunks.flatMap((chunk) => {
+				const markers = markersIn(readFileSync(chunk, "utf8"));
+
+				return markers.length > 0
+					? [{ chunk: chunk.slice(repository.length + 1), markers }]
+					: [];
+			});
+
+			expect(holding).toEqual([]);
+		},
+	);
+});

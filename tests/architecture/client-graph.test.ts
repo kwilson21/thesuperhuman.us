@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { clientEntries, clientGraphViolations } from "../helpers/client-graph";
+import {
+	clientEntries,
+	clientGraphViolations,
+	FORBIDDEN_MODULES,
+} from "../helpers/client-graph";
 
 // Effect and src/server never reach the browser: src/scripts/** and the <script> blocks of .astro files stay plain
 // TypeScript. This walks the static import graph from those entries and fails when any module they reach imports
@@ -159,5 +163,142 @@ describe("the walker finds what it should", () => {
 		});
 
 		expect(clientGraphViolations(root)).toEqual([]);
+	});
+
+	describe("evasions a page script could try", () => {
+		const server = { "src/server/x.ts": "export const x = 1;" };
+
+		const found = (text: string, extra: Record<string, string> = {}) =>
+			clientGraphViolations(
+				scratch({ "src/scripts/a.ts": text, ...server, ...extra }),
+			).map((violation) => violation.import);
+
+		it("finds a relative import written with a .js suffix that resolves to a .ts file", () => {
+			expect(found('import "../server/x.js";')).toEqual(["../server/x.js"]);
+		});
+
+		it("finds a root-absolute path", () => {
+			expect(found('import "/src/server/x";')).toEqual(["/src/server/x"]);
+			expect(found('import "/src/server/x.ts";')).toEqual(["/src/server/x.ts"]);
+		});
+
+		it("finds import.meta.glob, eager or not, expanded against the file system", () => {
+			expect(
+				found(
+					'export const all = import.meta.glob("../server/*.ts", { eager: true });',
+				),
+			).toEqual(["../server/*.ts"]);
+			expect(
+				found('export const all = import.meta.glob("../server/*");'),
+			).toEqual(["../server/*"]);
+			expect(
+				found(
+					'export const all = import.meta.glob(["../lib/*.ts", "/src/server/**/*.ts"]);',
+					{
+						"src/lib/ok.ts": "export const ok = 1;",
+					},
+				),
+			).toEqual(["/src/server/**/*.ts"]);
+		});
+
+		it("does not flag a glob that matches nothing under src/server", () => {
+			expect(
+				found('export const all = import.meta.glob("../lib/*.ts");', {
+					"src/lib/ok.ts": "export const ok = 1;",
+				}),
+			).toEqual([]);
+		});
+
+		it("finds a template-literal dynamic import without substitutions", () => {
+			expect(
+				found("export const load = () => import(`../server/x.ts`);"),
+			).toEqual(["../server/x.ts"]);
+		});
+
+		it("finds import x = require(...) and require(...)", () => {
+			expect(
+				found('import x = require("../server/x");\nexport { x };'),
+			).toEqual(["../server/x"]);
+			expect(found('export const x = require("effect/Effect");')).toEqual([
+				"effect/Effect",
+			]);
+		});
+
+		it("finds new Worker(new URL(..., import.meta.url))", () => {
+			expect(
+				found(
+					'export const w = new Worker(new URL("../server/x.ts", import.meta.url));',
+				),
+			).toEqual(["../server/x.ts"]);
+		});
+
+		it("finds .cts and .mts files and follows them", () => {
+			expect(
+				found('import "../lib/m.mts";', {
+					"src/lib/m.mts": 'import "../server/x";',
+				}),
+			).toEqual(["../server/x"]);
+			expect(
+				found('import "../lib/c.cjs";', {
+					"src/lib/c.cts": 'import "effect/Effect";',
+				}),
+			).toEqual(["effect/Effect"]);
+			expect(
+				clientEntries(
+					scratch({ "src/scripts/e.cts": "", "src/scripts/f.mts": "" }),
+				).length,
+			).toBe(2);
+		});
+
+		it("finds packages under @effect/", () => {
+			expect(found('import "@effect/platform";')).toEqual(["@effect/platform"]);
+			expect(found('import "@effect/platform/HttpClient";')).toEqual([
+				"@effect/platform/HttpClient",
+			]);
+			expect(found('import "@effect-like/other";')).toEqual([]);
+		});
+
+		it("fails on a load it cannot resolve statically, naming the file and line", () => {
+			const root = scratch({
+				"src/scripts/a.ts":
+					'const name = "x";\nexport const load = () => import(`../server/${name}`);',
+				...server,
+			});
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "<unresolved>",
+					chain: ["src/scripts/a.ts"],
+					line: 2,
+					reason: "import() with an argument that is not a literal",
+				},
+			]);
+			expect(
+				found("declare const n: string;\nexport const l = () => require(n);"),
+			).toEqual(["<unresolved>"]);
+			expect(found("export const g = import.meta.glob(pattern);")).toEqual([
+				"<unresolved>",
+			]);
+		});
+	});
+
+	describe("the allowlist", () => {
+		it("names the forbidden modules in one list", () => {
+			expect(FORBIDDEN_MODULES).toEqual([
+				"effect",
+				"@effect",
+				"@xstate/effect",
+			]);
+		});
+
+		it("lets a named module through and nothing else", () => {
+			const root = scratch({
+				"src/scripts/a.ts": 'import "effect/Schema";\nimport "effect/Effect";',
+			});
+
+			expect(
+				clientGraphViolations(root, ["effect/Schema"]).map((v) => v.import),
+			).toEqual(["effect/Effect"]);
+		});
 	});
 });
