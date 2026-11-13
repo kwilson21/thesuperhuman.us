@@ -456,10 +456,17 @@ describe("publication consent page styling", () => {
 			/body\s*\{[^}]*font:\s*400 1rem\/1\.6 'Libron', 'Iowan Old Style', Georgia, serif/,
 		);
 		expect(css).toMatch(
-			/h1\s*\{[^}]*font:\s*400 clamp\(2rem, 5vw, 2\.5rem\)\/1\.2 'Libron', 'Iowan Old Style', Georgia, serif/,
+			/h1\s*\{[^}]*font:\s*400 clamp\(1\.5rem, 8\.2vw, 2\.5rem\)\/1\.2 'Libron', 'Iowan Old Style', Georgia, serif/,
 		);
 		expect(css).toMatch(/strong\s*\{[^}]*font-weight:\s*700/);
 		expect(css).not.toMatch(/font-weight:\s*600/);
+	});
+
+	it("breaks a word only when it cannot fit on a line, so the title never splits inside a word", async () => {
+		const css = styleOf((await consentPage()).html);
+
+		expect(css).not.toContain("overflow-wrap: anywhere");
+		expect(css).toMatch(/main\s*\{[^}]*overflow-wrap: break-word/);
 	});
 
 	it("allows exactly its own inline style and the site's font files under CSP, with no unsafe-inline", async () => {
