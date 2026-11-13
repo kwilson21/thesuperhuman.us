@@ -1,4 +1,5 @@
 import {
+	chmod,
 	lstat,
 	mkdir,
 	mkdtemp,
@@ -93,6 +94,36 @@ describe("loadOrCreateAccessKey", () => {
 		expect(second.kid).not.toBe(first.kid);
 		expect((await stat(file)).mode & 0o777).toBe(0o600);
 		expect(JSON.parse(await readAbs(file)).kid).toBe(second.kid);
+	});
+
+	it("ends a regenerated file at 0600 even when the corrupt file it replaces was 0644", async () => {
+		await loadOrCreateAccessKey(file);
+		await writeFile(file, "{ not json");
+		await chmod(file, 0o644);
+		expect((await stat(file)).mode & 0o777).toBe(0o644);
+
+		await loadOrCreateAccessKey(file);
+
+		expect((await stat(file)).mode & 0o777).toBe(0o600);
+	});
+
+	it("rewrites a valid file that still carries an old public key field, so it holds only the key id and private key", async () => {
+		const first = await loadOrCreateAccessKey(file);
+		const saved = JSON.parse(await readAbs(file));
+		await writeFile(
+			file,
+			JSON.stringify({ ...saved, jwk: { ...first.jwk } }, null, 2),
+		);
+
+		const second = await loadOrCreateAccessKey(file);
+
+		expect(second.kid).toBe(first.kid);
+		expect(second.jwk).toEqual(first.jwk);
+		expect(Object.keys(JSON.parse(await readAbs(file))).sort()).toEqual([
+			"kid",
+			"privateKeyPem",
+		]);
+		expect(await verifies(second)).toBe("owner@example.test");
 	});
 
 	it("regenerates a file whose private key is unreadable", async () => {

@@ -16,6 +16,7 @@ export async function readLimitedBody(request, limit = CLOCK_BODY_LIMIT) {
 	for await (const chunk of request) {
 		size += chunk.length;
 
+		// A client still sending when the limit is hit may see the connection close before it reads the 413.
 		if (size > limit) return undefined;
 		chunks.push(chunk);
 	}
@@ -68,5 +69,38 @@ export function handleClockPost({ method, contentType, body }, clock) {
 		status: 200,
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ ok: true, now: clock.now() }),
+	};
+}
+
+/**
+ * The dev server's middleware for /__screenshots/clock, for `clock` (the handle installClock returns). It reads the
+ * body of a POST, answers with handleClockPost, and answers 404 for any path other than the endpoint's own.
+ */
+export function clockMiddleware(clock) {
+	return async (request, response) => {
+		// Mounted by prefix, so only the exact path is this endpoint.
+		if (request.url !== "/") {
+			response.statusCode = 404;
+
+			return response.end();
+		}
+
+		const body =
+			request.method === "POST" ? await readLimitedBody(request) : "";
+
+		const reply = handleClockPost(
+			{
+				method: request.method,
+				contentType: request.headers["content-type"],
+				body,
+			},
+			clock,
+		);
+
+		response.statusCode = reply.status;
+
+		for (const [name, value] of Object.entries(reply.headers))
+			response.setHeader(name, value);
+		response.end(reply.body);
 	};
 }

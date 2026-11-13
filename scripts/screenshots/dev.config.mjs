@@ -3,7 +3,7 @@
 // POST /__screenshots/clock sets the server's frozen clock to a step's instant (see clock.mjs). Capture moves it.
 // Start the preview with `astro dev --config scripts/screenshots/dev.config.mjs`. Never deployed.
 import { clock } from "./clock-install.mjs";
-import { handleClockPost, readLimitedBody } from "./clock-endpoint.mjs";
+import { clockMiddleware } from "./clock-endpoint.mjs";
 import config from "../../astro.config.mjs";
 
 const moduleGraph = {
@@ -24,35 +24,7 @@ const moduleGraph = {
 			response.setHeader("content-type", "application/json");
 			response.end(JSON.stringify(graph));
 		});
-		server.middlewares.use(
-			"/__screenshots/clock",
-			async (request, response) => {
-				// Mounted by prefix, so only the exact path is this endpoint.
-				if (request.url !== "/") {
-					response.statusCode = 404;
-
-					return response.end();
-				}
-
-				const body =
-					request.method === "POST" ? await readLimitedBody(request) : "";
-
-				const reply = handleClockPost(
-					{
-						method: request.method,
-						contentType: request.headers["content-type"],
-						body,
-					},
-					clock,
-				);
-
-				response.statusCode = reply.status;
-
-				for (const [name, value] of Object.entries(reply.headers))
-					response.setHeader(name, value);
-				response.end(reply.body);
-			},
-		);
+		server.middlewares.use("/__screenshots/clock", clockMiddleware(clock));
 	},
 };
 

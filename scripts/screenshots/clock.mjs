@@ -21,8 +21,9 @@ export const stepTime = (step) => Date.parse(CLOCK_BASE) + step * STEP_MS;
  * Self-contained on purpose: the browser receives this function's source through Playwright's
  * addInitScript, so it must not refer to anything outside its own body.
  *
- * Returns `{ set, restore }`. `set(ms)` moves the frozen instant to exactly `ms`; nothing else moves it.
- * `restore` puts the real Date back. Installing again on the same scope replaces the earlier install
+ * Returns `{ set, now, restore }`. `set(ms)` moves the frozen instant to exactly `ms`; nothing else moves it.
+ * `now()` reports what code in `scope` sees: `scope.Date.now()`, so it shows the installed clock's time, not the
+ * value `set` stored. `restore` puts the real Date back. Installing again on the same scope replaces the earlier install
  * without stacking on it, and a handle from a replaced install changes nothing.
  *
  * The constructor of a date made by the shim is still the real Date: the shim's prototype is the real one,
@@ -118,7 +119,7 @@ export function installClock(scope, startMs) {
 		set(ms) {
 			if (scope[STATE] === state) frozen = ms;
 		},
-		now: () => frozen,
+		now: () => scope.Date.now(),
 		restore: state.restore,
 	};
 }

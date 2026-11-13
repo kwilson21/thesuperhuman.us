@@ -38,7 +38,8 @@ import {
 	withoutViteVersion,
 } from "./cache.mjs";
 import { loadOrCreateAccessKey } from "./access-key.mjs";
-import { browserClockScript, STEP_MS, stepTime } from "./clock.mjs";
+import { browserClockScript, stepTime } from "./clock.mjs";
+import { createStepper } from "./clock-steps.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
@@ -110,62 +111,38 @@ const timedStateHash = (scope) =>
 // A scenario can't run past the owner token's expiry (setExpirationTime below), so its clock can't either.
 const MAX_STEP_MS = 50 * 60_000;
 
-// Where this capture is in the current scenario's steps. Page captures and the start of each scenario are step 0.
-let clockStep = 0;
+// Moves this process's clock and the dev server's to a scenario step (see clock-steps.mjs). The server's answer
+// must echo the instant it was set to, so a clock that did not move fails here.
+const stepper = createStepper({
+	setLocal: (now) => clock.set(now),
+	setServer: postClock,
+	stepTime,
+	maxMs: MAX_STEP_MS,
+});
 
-// Sets this process's clock and the dev server's to the step's instant. The server's answer must echo it.
-async function setClock(step) {
-	if (step * STEP_MS > MAX_STEP_MS)
-		throw new Error(
-			`A scenario has too many steps for the owner token: step ${step} is past ${MAX_STEP_MS / 60_000} minutes of pinned time. Raise setExpirationTime("1h") in capture.mjs.`,
-		);
-
-	const now = stepTime(step);
-	clock.set(now);
-
-	const answer = await fetch(`${BASE}/__screenshots/clock`, {
+async function postClock(now) {
+	return fetch(`${BASE}/__screenshots/clock`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ now }),
 	})
 		.then((response) => response.json())
 		.catch(() => null);
-
-	if (answer?.ok !== true || answer.now !== now)
-		throw new Error(
-			"No clock update at /__screenshots/clock: start the dev server with --config scripts/screenshots/dev.config.mjs.",
-		);
 }
-
-// True while a step's clock update is in flight. A second step started then would reorder the clock.
-let stepInFlight = false;
 
 // Each capture and ownerFetch a scenario makes moves the clock one step on. Page captures run outside a
 // scenario and never move it, so every page sees step 0. Scenario steps must be awaited one at a time.
 async function nextStep() {
 	if (currentScenario === undefined) return;
 
-	if (stepInFlight)
-		throw new Error(
-			"Scenario steps (capture, ownerFetch) must be awaited one at a time: a step started before the previous one finished.",
-		);
-
-	stepInFlight = true;
-
-	try {
-		clockStep += 1;
-		await setClock(clockStep);
-	} finally {
-		stepInFlight = false;
-	}
+	await stepper.next();
 }
 
 // sql is synchronous, so it only moves this process's clock. The server catches up at its next capture or ownerFetch.
 function sqlStep() {
 	if (currentScenario === undefined) return;
 
-	clockStep += 1;
-	clock.set(stepTime(clockStep));
+	stepper.nextLocal();
 }
 
 // Every path that rendered with the expected status, so seeded pages can be checked afterwards.
@@ -540,8 +517,7 @@ try {
 		VIEWPORTS.map((viewport) => ({ page, viewport })),
 	);
 
-	clockStep = 0;
-	await setClock(0);
+	await stepper.reset();
 	const stateBeforePages = await timedStateHash("pages");
 	await timings.wall(
 		"pages",
@@ -649,8 +625,7 @@ try {
 		scenarioPaths = [];
 		const filesBefore = new Set(requestsByFile.keys());
 
-		clockStep = 0;
-		await setClock(0);
+		await stepper.reset();
 
 		const { steps, wrote } = await timings.wall(name, async () => {
 			const stateBefore = await timedStateHash(name);

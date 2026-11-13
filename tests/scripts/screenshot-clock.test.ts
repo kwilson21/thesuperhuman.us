@@ -11,9 +11,11 @@ import {
 } from "../../scripts/screenshots/clock.mjs";
 import {
 	CLOCK_BODY_LIMIT,
+	clockMiddleware,
 	handleClockPost,
 	readLimitedBody,
 } from "../../scripts/screenshots/clock-endpoint.mjs";
+import { createStepper } from "../../scripts/screenshots/clock-steps.mjs";
 
 const BASE = Date.parse(CLOCK_BASE);
 const REAL_NOW = Date.parse("2026-11-13T15:00:00.000Z");
@@ -21,6 +23,9 @@ const REAL_NOW = Date.parse("2026-11-13T15:00:00.000Z");
 const read = (path: string) => readFileSync(`${process.cwd()}/${path}`, "utf8");
 
 type Scope = { Date: DateConstructor };
+
+// A scope whose Date is only known to have now(), for a test that puts another Date in place.
+type NowOnlyScope = { Date: { now(): number } };
 
 // A fake global: the real Date, and nothing else the shim touches.
 const scopeWithDate = (): Scope => ({ Date });
@@ -227,6 +232,15 @@ describe("installClock", () => {
 		expect(clock.now()).toBe(BASE + 3_000);
 	});
 
+	it("reports the time code in its scope sees, so a Date something else put in place shows its own time", () => {
+		const scope: NowOnlyScope = { Date };
+		const clock = installClock(scope, BASE);
+
+		scope.Date = { now: () => BASE + 9_000 };
+
+		expect(clock.now()).toBe(BASE + 9_000);
+	});
+
 	it("restores the real Date", () => {
 		const scope = scopeWithDate();
 		const clock = installClock(scope, BASE);
@@ -355,7 +369,7 @@ describe("the clock is wired into every process", () => {
 		expect(firstImport).toContain("./clock-install.mjs");
 		expect(dev).toContain('"/__screenshots/clock"');
 		expect(dev).not.toContain("/reset");
-		expect(dev).toContain("handleClockPost(");
+		expect(dev).toContain("clockMiddleware(clock)");
 	});
 
 	it("does not compute a date string for the cache, so the date a run happens on cannot reach an image", () => {
@@ -481,20 +495,267 @@ describe("the clock endpoint", () => {
 			readLimitedBody(Readable.from([long]), CLOCK_BODY_LIMIT),
 		).resolves.toBeUndefined();
 	});
-});
 
-describe("capture's step guard and reply check", () => {
-	const capture = read("scripts/screenshots/capture.mjs");
+	it("reads a body sent in two chunks whose total fits the limit", async () => {
+		const text = JSON.stringify({ now: BASE });
+		const cut = Math.floor(text.length / 2);
 
-	it("refuses a step that starts while the previous step's clock update is still in flight", () => {
-		expect(capture).toMatch(/let stepInFlight = false;/);
-		expect(capture).toMatch(/stepInFlight = true;/);
-		expect(capture).toMatch(/finally \{\s*stepInFlight = false;\s*\}/);
-		expect(capture).toMatch(/awaited one at a time/);
+		await expect(
+			readLimitedBody(
+				Readable.from([
+					Buffer.from(text.slice(0, cut)),
+					Buffer.from(text.slice(cut)),
+				]),
+				CLOCK_BODY_LIMIT,
+			),
+		).resolves.toBe(text);
 	});
 
-	it("checks the reply's time against the one it sent, so a clock that did not move fails", () => {
-		expect(capture).toMatch(/answer\.now !== now/);
+	it("answers 413 to a body sent in two chunks, each under the limit, that is over it together", async () => {
+		const clock = clockAt(BASE);
+		const response = fakeResponse();
+		const chunks = [Buffer.alloc(300, " "), Buffer.alloc(300, " ")];
+
+		await clockMiddleware(clock)(
+			fakeRequest({ method: "POST", contentType: JSON_TYPE, chunks }),
+			response,
+		);
+
+		expect(response.statusCode).toBe(413);
+		expect(clock.now()).toBe(BASE);
+	});
+
+	// A request stream with the method, URL and headers the middleware reads.
+	function fakeRequest({
+		method,
+		url = "/",
+		contentType,
+		chunks,
+	}: {
+		method: string;
+		url?: string;
+		contentType?: string;
+		chunks: Buffer[];
+	}) {
+		return Object.assign(Readable.from(chunks), {
+			method,
+			url,
+			headers: contentType === undefined ? {} : { "content-type": contentType },
+		});
+	}
+
+	// Records the status, headers and body the middleware writes.
+	function fakeResponse() {
+		const headers: Record<string, string> = {};
+
+		const response = {
+			statusCode: 200,
+			body: "",
+			headers,
+			setHeader(name: string, value: string) {
+				headers[name] = value;
+			},
+			end(body = "") {
+				response.body = body;
+			},
+		};
+
+		return response;
+	}
+
+	it("sets the installed clock from a JSON POST and writes the 200 reply with the time it shows", async () => {
+		const clock = clockAt(BASE);
+		const response = fakeResponse();
+
+		await clockMiddleware(clock)(
+			fakeRequest({
+				method: "POST",
+				contentType: JSON_TYPE,
+				chunks: [Buffer.from(JSON.stringify({ now: BASE + 4_000 }))],
+			}),
+			response,
+		);
+
+		expect(response.statusCode).toBe(200);
+		expect(response.headers["content-type"]).toBe(JSON_TYPE);
+		expect(JSON.parse(response.body)).toEqual({ ok: true, now: BASE + 4_000 });
+		expect(clock.now()).toBe(BASE + 4_000);
+	});
+
+	it("writes 405 with an allow header for a GET, and leaves the clock alone", async () => {
+		const clock = clockAt(BASE);
+		const response = fakeResponse();
+
+		await clockMiddleware(clock)(
+			fakeRequest({ method: "GET", chunks: [] }),
+			response,
+		);
+
+		expect(response.statusCode).toBe(405);
+		expect(response.headers.allow).toBe("POST");
+		expect(clock.now()).toBe(BASE);
+	});
+
+	it("answers 404 for any path other than the endpoint's own", async () => {
+		const response = fakeResponse();
+
+		await clockMiddleware(clockAt(BASE))(
+			fakeRequest({
+				method: "POST",
+				url: "/other",
+				contentType: JSON_TYPE,
+				chunks: [],
+			}),
+			response,
+		);
+
+		expect(response.statusCode).toBe(404);
+	});
+});
+
+describe("createStepper", () => {
+	type Call = [string, number];
+
+	// Fake setters that record each call in order. The server answers with `answer(now)`, which a test can change.
+	function recorder(
+		answer: (now: number) => { ok: boolean; now: number } | null = (now) => ({
+			ok: true,
+			now,
+		}),
+	) {
+		const calls: Call[] = [];
+
+		return {
+			calls,
+			setLocal: (now: number) => {
+				calls.push(["local", now]);
+			},
+			setServer: async (now: number) => {
+				calls.push(["server", now]);
+
+				return answer(now);
+			},
+		};
+	}
+
+	const stepperFor = (fake: ReturnType<typeof recorder>, maxMs = 50 * 60_000) =>
+		createStepper({ ...fake, stepTime, maxMs });
+
+	it("sets both clocks on reset and next, and only the local clock on nextLocal", async () => {
+		const fake = recorder();
+		const stepper = stepperFor(fake);
+
+		await stepper.reset();
+		await stepper.next();
+		stepper.nextLocal();
+		await stepper.next();
+
+		expect(fake.calls).toEqual([
+			["local", stepTime(0)],
+			["server", stepTime(0)],
+			["local", stepTime(1)],
+			["server", stepTime(1)],
+			["local", stepTime(2)],
+			["local", stepTime(3)],
+			["server", stepTime(3)],
+		]);
+		expect(stepper.step()).toBe(3);
+	});
+
+	it("moves both clocks back to step 0 on reset, whatever step it was at", async () => {
+		const fake = recorder();
+		const stepper = stepperFor(fake);
+
+		await stepper.next();
+		await stepper.next();
+		fake.calls.length = 0;
+		await stepper.reset();
+
+		expect(fake.calls).toEqual([
+			["local", stepTime(0)],
+			["server", stepTime(0)],
+		]);
+		expect(stepper.step()).toBe(0);
+	});
+
+	it("refuses a next or reset that starts while a next is in flight, and keeps the first call's flag", async () => {
+		const pending: Array<() => void> = [];
+
+		const stepper = createStepper({
+			setLocal: () => {},
+			setServer: (now: number) =>
+				new Promise((done) => pending.push(() => done({ ok: true, now }))),
+			stepTime,
+			maxMs: 50 * 60_000,
+		});
+
+		const first = stepper.next();
+
+		await expect(stepper.next()).rejects.toThrow("awaited one at a time");
+		await expect(stepper.reset()).rejects.toThrow("awaited one at a time");
+
+		pending[0]();
+		await first;
+
+		const second = stepper.next();
+		pending[1]();
+		await second;
+
+		expect(stepper.step()).toBe(2);
+	});
+
+	it("clears the in-flight flag when a clock update rejects, so a later next works", async () => {
+		let attempts = 0;
+
+		const stepper = createStepper({
+			setLocal: () => {},
+			setServer: async (now: number) => {
+				attempts += 1;
+
+				if (attempts === 1) throw new Error("server down");
+
+				return { ok: true, now };
+			},
+			stepTime,
+			maxMs: 50 * 60_000,
+		});
+
+		await expect(stepper.next()).rejects.toThrow("server down");
+		await expect(stepper.next()).resolves.toBeUndefined();
+
+		expect(stepper.step()).toBe(2);
+	});
+
+	it.each([
+		["a different time", (now: number) => ({ ok: true, now: now + 1 })],
+		["an answer that is not ok", (now: number) => ({ ok: false, now })],
+		["no answer", () => null],
+	])(
+		"refuses a server reply with %s, so a clock that did not move fails the capture",
+		async (_, answer) => {
+			const stepper = stepperFor(recorder(answer));
+
+			await expect(stepper.next()).rejects.toThrow(
+				"No clock update at /__screenshots/clock",
+			);
+		},
+	);
+
+	it("refuses a step past the limit before it moves either clock", async () => {
+		const fake = recorder();
+		const stepper = stepperFor(fake, 2_000);
+
+		await stepper.next();
+		await stepper.next();
+		const before = fake.calls.length;
+
+		await expect(stepper.next()).rejects.toThrow(
+			"too many steps for the owner token",
+		);
+		expect(fake.calls.length).toBe(before);
+		expect(() => stepper.nextLocal()).toThrow(
+			"too many steps for the owner token",
+		);
 	});
 });
 
@@ -503,8 +764,7 @@ describe("capture steps the clock", () => {
 
 	// Scenario steps are the only thing that moves the clock. Page captures run before any scenario, at step 0.
 	it("sets step 0 before the page captures and before each scenario runs", () => {
-		const resets =
-			capture.match(/clockStep = 0;\s*await setClock\(0\);/g) ?? [];
+		const resets = capture.match(/await stepper\.reset\(\);/g) ?? [];
 
 		expect(resets.length).toBeGreaterThanOrEqual(2);
 	});
@@ -522,8 +782,24 @@ describe("capture steps the clock", () => {
 		expect(capture).toMatch(/const sql = \(command\) => \{\s*sqlStep\(\);/);
 	});
 
+	it("builds its stepper from the clock and the dev server, and leaves page captures off the clock", () => {
+		expect(capture).toMatch(
+			/import \{ createStepper \} from "\.\/clock-steps\.mjs";/,
+		);
+		expect(capture).toMatch(/setLocal: \(now\) => clock\.set\(now\)/);
+		expect(capture).toMatch(/maxMs: MAX_STEP_MS/);
+		expect(capture).toMatch(
+			/async function nextStep\(\) \{\s*if \(currentScenario === undefined\) return;\s*await stepper\.next\(\);\s*\}/,
+		);
+		expect(capture).toMatch(
+			/function sqlStep\(\) \{\s*if \(currentScenario === undefined\) return;\s*stepper\.nextLocal\(\);\s*\}/,
+		);
+	});
+
 	it("refuses a scenario that would outrun the owner token's expiry", () => {
-		expect(capture).toMatch(/too many steps/);
+		expect(read("scripts/screenshots/clock-steps.mjs")).toMatch(
+			/too many steps/,
+		);
 		expect(capture).toMatch(/setExpirationTime\("1h"\)/);
 	});
 });

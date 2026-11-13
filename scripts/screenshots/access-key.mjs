@@ -38,6 +38,8 @@ async function createAccessKey() {
 /**
  * Reads the saved key, or undefined when the file is missing, is not a plain file, is not JSON, or does not
  * hold a usable private key. A link is never followed, so a key reached through one is not reused.
+ * Returns `{ key, record, current }`: the key pair, the record to save (only the key id and private key), and
+ * whether the file already holds exactly that record.
  */
 async function readAccessKey(file) {
 	try {
@@ -51,7 +53,13 @@ async function readAccessKey(file) {
 		)
 			return undefined;
 
-		return await keyFrom(saved);
+		const record = { kid: saved.kid, privateKeyPem: saved.privateKeyPem };
+
+		return {
+			key: await keyFrom(record),
+			record,
+			current: Object.keys(saved).sort().join(",") === "kid,privateKeyPem",
+		};
 	} catch {
 		return undefined;
 	}
@@ -80,12 +88,17 @@ async function writeAccessKey(file, record) {
 /**
  * The issuer's key at `file`: the saved one when it is intact, otherwise a new one that replaces the file.
  * Only the key id and the private key are saved; the served public JWK is derived from the private key, so a
- * saved public part can neither disagree with it nor carry a private field. Returns `{ kid, privateKey, jwk }`.
+ * saved public part can neither disagree with it nor carry a private field. An intact file that still carries
+ * other fields, such as an old `jwk`, is rewritten in that shape with the same key. Returns `{ kid, privateKey, jwk }`.
  */
 export async function loadOrCreateAccessKey(file) {
 	const existing = await readAccessKey(file);
 
-	if (existing) return existing;
+	if (existing) {
+		if (!existing.current) await writeAccessKey(file, existing.record);
+
+		return existing.key;
+	}
 
 	const created = await createAccessKey();
 
