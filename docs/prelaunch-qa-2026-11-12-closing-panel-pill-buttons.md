@@ -74,7 +74,7 @@ Limits:
 - The Cloudflare branch preview is behind Cloudflare Access and was not opened.
 - `pnpm run screenshots` was not run locally (the Playwright browser is not installed on this machine); the Screenshots workflow covers every page.
 - Greptile and Codex have not reviewed `8225652e` or `c242936f`.
-- Nothing was checked in production.
+- Production was checked only as listed under section 7 (the merge session's live check on 2026-11-13). The owner, studio and agreement pages, a second browser, a real phone, 200% text zoom and tabbing under the pinned button were not checked live.
 
 ## 1. Purpose and content
 
@@ -120,8 +120,9 @@ Limits:
 - **PASS · Diff review.** 27 files against `main`: the footer, its callers, five stylesheets, one script, tests and docs. No secrets, no dependency changes, no generated files. `docs/handoffs/` and `.jolli/` are untracked and not in the PR.
 - **N/A · Bindings, secrets, migrations.** None change.
 - **PASS · Rollback version.** `54c7627e`.
-- **UNVERIFIED · Production verification after deploy.** To be done after an authorized merge: the panel on an invitation page and a quiet page, the pinned button on a phone-width screen, the 404, and the audio host.
-- **PASS · Receipt and evidence.** This record. Status: implemented and verified locally; not deployed; not verified live.
+- **PASS, with limits · Production verification after deploy.** The merge session reported on 2026-11-13 (an observation relayed to this record, not re-run here): PR #233 merged to `main` as `531ec1df` at 01:04 UTC, which deploys production. About two minutes later, production was checked live: the invitation and quiet closing panels on both hosts, the pinned button on the Work page at phone width, the 404 page returning HTTP 404, and Home's contact section intact.
+- **UNVERIFIED · Live check of the remaining pages.** The owner pages, the studio pages and the agreement pages were not checked live. The checks marked UNVERIFIED in section 3 (a second browser and a real phone, 200% text zoom, tabbing through a page while the pinned button shows) were not run live either.
+- **PASS · Receipt and evidence.** This record. Status: implemented and verified locally; deployed by the merge on 2026-11-13; verified live in part (see the production verification entries above); the owner, studio and agreement pages and the section 3 UNVERIFIED items remain UNVERIFIED.
 
 ## 8. Private owner center
 
@@ -132,4 +133,4 @@ Limits:
 
 - CI and bot reviews on the final head.
 - Two controls the inventory left unsorted: `.saved-reference` picker cards and the GitHub sign-in submit.
-- Production checks after deploy (section 7).
+- Live checks of the owner, studio and agreement pages (section 7).
