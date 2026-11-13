@@ -1,34 +1,77 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendUrgentOwnerAlert } from '~/lib/owner-alerts';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
+import { partial } from "../helpers/doubles";
 
-beforeEach(() => vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 }))));
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
-describe('urgent owner alerts', () => {
-  it('sends only a safe category, route, request ID, code and time', async () => {
-    const ok = await sendUrgentOwnerAlert({
-      RESEND_API_KEY: 'secret',
-      CONTACT_FROM_EMAIL: 'noreply@notifs.thesuperhuman.us',
-      CONTACT_TO_EMAIL: 'owner@example.com',
-    } as Env, {
-      category: 'request-storage',
-      route: '/api/audio-intake',
-      requestId: 'request-123',
-      code: 'd1-write-failed',
-      occurredAt: '2026-09-19T12:00:00.000Z',
-    });
-    expect(ok).toBe(true);
-    const payload = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
-    expect(payload.text).toContain('request-123');
-    expect(payload.text).not.toContain('artist@example.com');
-    expect(payload.reply_to).toBeUndefined();
-    expect(JSON.stringify(payload)).not.toContain('secret');
-  });
+beforeEach(() => {
+	fetchMock = vi.fn<typeof fetch>(async () =>
+		partial<Response>({ ok: true, status: 200 }),
+	);
+	vi.stubGlobal("fetch", fetchMock);
+});
 
-  it('stays quiet when alert delivery is not configured', async () => {
-    await expect(sendUrgentOwnerAlert({} as Env, {
-      category: 'request-storage', route: '/api/music-interest', requestId: 'request-456',
-      code: 'd1-write-failed', occurredAt: '2026-09-19T12:00:00.000Z',
-    })).resolves.toBe(false);
-    expect(fetch).not.toHaveBeenCalled();
-  });
+describe("urgent owner alerts", () => {
+	it("sends only a safe category, route, request ID, code and time", async () => {
+		const ok = await sendUrgentOwnerAlert(
+			partial<Env>({
+				RESEND_API_KEY: "secret",
+				CONTACT_FROM_EMAIL: "noreply@notifs.thesuperhuman.us",
+				CONTACT_TO_EMAIL: "owner@example.com",
+			}),
+			{
+				category: "request-storage",
+				route: "/api/audio-intake",
+				requestId: "request-123",
+				code: "d1-write-failed",
+				occurredAt: "2026-09-19T12:00:00.000Z",
+			},
+		);
+
+		expect(ok).toBe(true);
+
+		const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+
+		expect(payload.text).toContain("request-123");
+		expect(payload.text).not.toContain("artist@example.com");
+		expect(payload.reply_to).toBeUndefined();
+		expect(JSON.stringify(payload)).not.toContain("secret");
+	});
+
+	it("stays quiet when alert delivery is not configured", async () => {
+		await expect(
+			sendUrgentOwnerAlert(partial<Env>({}), {
+				category: "request-storage",
+				route: "/api/music-interest",
+				requestId: "request-456",
+				code: "d1-write-failed",
+				occurredAt: "2026-09-19T12:00:00.000Z",
+			}),
+		).resolves.toBe(false);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("reports a failed send as false, whether the provider rejects it or the request throws", async () => {
+		const env = partial<Env>({
+			RESEND_API_KEY: "secret",
+			CONTACT_FROM_EMAIL: "noreply@notifs.thesuperhuman.us",
+			CONTACT_TO_EMAIL: "owner@example.com",
+		});
+
+		const incident = {
+			category: "request-storage",
+			route: "/api/software-inquiry",
+			requestId: "request-789",
+			code: "d1-write-failed",
+			occurredAt: "2026-09-19T12:00:00.000Z",
+		} as const;
+
+		fetchMock.mockResolvedValueOnce(
+			partial<Response>({ ok: false, status: 422 }),
+		);
+		await expect(sendUrgentOwnerAlert(env, incident)).resolves.toBe(false);
+		fetchMock.mockRejectedValueOnce(new Error("network down"));
+		await expect(sendUrgentOwnerAlert(env, incident)).resolves.toBe(false);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
 });

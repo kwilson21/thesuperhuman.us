@@ -1,12 +1,31 @@
 ---
-import MetricDefinition from './MetricDefinition.astro';
-import type { ListeningSummary } from '~/lib/owner-reporting';
-interface Props { listening: ListeningSummary }
+import MetricDefinition from "./MetricDefinition.astro";
+import type { ListeningSummary } from "~/lib/owner-reporting";
+
+interface Props {
+	listening: ListeningSummary;
+}
+
 const { listening } = Astro.props;
+
 const steps = [
-  { label: 'Started', value: listening.reportedStarts, explanation: 'Audio or lyric video began playing.' },
-  { label: 'Reached 30 seconds', value: listening.reported30SecondListens, explanation: 'The browser reported 30 accumulated seconds in a valid sequence.' },
-  { label: 'Completed', value: listening.reportedCompletions, explanation: 'The browser reported playback reaching at least 90 percent of the recording.' },
+	{
+		label: "Started",
+		value: listening.reportedStarts,
+		explanation: "Audio or lyric video began playing.",
+	},
+	{
+		label: "Reached 30 seconds",
+		value: listening.reported30SecondListens,
+		explanation:
+			"The browser reported 30 accumulated seconds in a valid sequence.",
+	},
+	{
+		label: "Completed",
+		value: listening.reportedCompletions,
+		explanation:
+			"The browser reported playback reaching at least 90 percent of the recording.",
+	},
 ];
 ---
 <ol class="listening-path" aria-label="Reported listening path">

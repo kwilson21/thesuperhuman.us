@@ -1,10 +1,36 @@
 ---
-import PersonalName from './PersonalName.astro';
-import { formatUSD, offerTotal, paymentSchedules, type ClientOffer } from '~/lib/software-offers';
-import '~/styles/global.css';
-import '~/styles/studio.css';
-interface Props { signed?: boolean; waiting?: boolean; projectUrl?:string; offer?: ClientOffer | null; preview?: boolean; temporarilyUnavailable?: boolean; signingUrl?: string; turnstileSiteKey?: string }
-const { signed=false, waiting=false, projectUrl, offer, preview = false, temporarilyUnavailable = false, signingUrl, turnstileSiteKey } = Astro.props;
+import PersonalName from "./PersonalName.astro";
+import {
+	formatUSD,
+	offerTotal,
+	paymentSchedules,
+	type ClientOffer,
+} from "~/lib/software-offers";
+import "~/styles/global.css";
+import "~/styles/studio.css";
+
+interface Props {
+	signed?: boolean;
+	waiting?: boolean;
+	projectUrl?: string;
+	offer?: ClientOffer | null;
+	preview?: boolean;
+	temporarilyUnavailable?: boolean;
+	signingUrl?: string;
+	turnstileSiteKey?: string;
+}
+
+const {
+	signed = false,
+	waiting = false,
+	projectUrl,
+	offer,
+	preview = false,
+	temporarilyUnavailable = false,
+	signingUrl,
+	turnstileSiteKey,
+} = Astro.props;
+
 const terms = offer?.terms;
 ---
 <!doctype html><html lang="en"><head>
@@ -64,7 +90,14 @@ const terms = offer?.terms;
     </> : <section class="offer-unavailable"><h1 class="page-title">{temporarilyUnavailable ? 'This offer is temporarily unavailable.' : 'This offer isn’t available.'}</h1>{temporarilyUnavailable ? <p>Please try again later.</p> : <p>Ask Kazon for a current link: <a class="site-link" href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p>}</section>}
   </main>
   {signingUrl && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
-  <script>import {setupAgreementAccess} from '~/scripts/agreement-access'; setupAgreementAccess(); document.querySelector('[data-print-offer]')?.addEventListener('click', () => window.print());</script>
+  <script>
+    import { setupAgreementAccess } from '~/scripts/agreement-access';
+    import { setupSoftwareOfferPrint } from '~/scripts/software-offer-print';
+
+    setupAgreementAccess();
+
+    setupSoftwareOfferPrint();
+  </script>
 <style>
   .offer-shell { max-width: 72rem; padding-block: 2rem; color: var(--ink); overflow-wrap: anywhere; }
   .offer-intro { padding: 2.5rem 0 1.5rem; }

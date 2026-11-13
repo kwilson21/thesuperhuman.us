@@ -1,2 +1,3 @@
-import { setupMusicPlayback } from './music-playback';
+import { setupMusicPlayback } from "./music-playback";
+
 setupMusicPlayback();

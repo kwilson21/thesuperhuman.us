@@ -1,11 +1,36 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { agentsBlock, captureProblems, entriesNeedingNotes, entryIds, frontMatter, hardRules, noteProblems, queueBodyProblems, syncAgents, textProblems } from '../../scripts/publicist/lib.mjs';
+import { afterEach, describe, expect, it } from "vitest";
+import {
+	mkdtempSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import {
+	agentsBlock,
+	captureLabels,
+	captureProblems,
+	entriesNeedingNotes,
+	entryIds,
+	frontMatter,
+	hardRules,
+	noteProblems,
+	queueBodyProblems,
+	syncAgents,
+	textProblems,
+} from "../../scripts/publicist/lib.mjs";
 
-const note = ({ tier = 'shipped', draft = 'verified', publish = 'yes', readiness = 'ready', bullets = true, draftText = true } = {}) => `---
+const note = ({
+	tier = "shipped",
+	draft = "verified",
+	publish = "yes",
+	readiness = "ready",
+	bullets = true,
+	draftText = true,
+} = {}) => `---
 entry: tally-home-screen
 tier: ${tier}
 ---
@@ -13,11 +38,11 @@ tier: ${tier}
 ## Refresher
 A two-minute read.
 
-${bullets ? '- **One line:** Home leads with safe to spend.' : ''}
+${bullets ? "- **One line:** Home leads with safe to spend." : ""}
 
 ## Draft entry
 **The Home screen** · 2026-09-23
-${draftText ? '> Home leads with safe to spend.' : ''}
+${draftText ? "> Home leads with safe to spend." : ""}
 
 ## Visual aids
 Screenshot.
@@ -47,144 +72,321 @@ Built. · status: verified
 - Publish: ${publish}
 `;
 
-describe('noteProblems', () => {
-  it('clears a fully verified shipped note marked ready', () => {
-    expect(noteProblems(note())).toEqual([]);
-  });
-  it('clears on an approved draft even with unverified detail answers', () => {
-    expect(noteProblems(note({ draft: 'corrected' }))).toEqual([]);
-  });
-  it('accepts decisions recorded from conversation with their source', () => {
-    const src = ' (owner, in conversation, 2026-09-23)';
-    expect(noteProblems(note({ draft: `verified${src}`, publish: `yes${src}`, readiness: `ready${src}` }))).toEqual([]);
-  });
-  it('holds a draft the owner has not approved', () => {
-    expect(noteProblems(note({ draft: 'unverified' }))).toContain('draft entry not approved');
-  });
-  it('holds a note without draft text', () => {
-    expect(noteProblems(note({ draftText: false }))).toContain('draft entry missing');
-  });
-  it('holds a note without refresher bullets', () => {
-    expect(noteProblems(note({ bullets: false }))).toContain('refresher missing');
-  });
-  it('holds a shipped note marked not yet', () => {
-    expect(noteProblems(note({ readiness: 'not yet' }))).toContain('shipped entry not marked ready');
-  });
-  it('requires not applicable for exploration work', () => {
-    expect(noteProblems(note({ tier: 'exploration', readiness: 'not applicable' }))).toEqual([]);
-    expect(noteProblems(note({ tier: 'exploration', readiness: 'ready' }))).toContain('exploration entry needs not applicable');
-  });
-  it('holds anything but publish yes', () => {
-    expect(noteProblems(note({ publish: 'hold' }))).toContain('publish is not yes');
-  });
-  it('never treats an unfilled template as approved', () => {
-    const template = readFileSync('docs/publicist/review-note-template.md', 'utf8');
-    const block = template.match(/```markdown\n([\s\S]*?)\n```/)![1];
-    const problems = noteProblems(block);
-    expect(problems).toContain('publish is not yes');
-    expect(problems).toContain('tier missing or invalid');
-    expect(problems).toContain('draft entry not approved');
-  });
+describe("noteProblems", () => {
+	it("clears a fully verified shipped note marked ready", () => {
+		expect(noteProblems(note())).toEqual([]);
+	});
+	it("clears on an approved draft even with unverified detail answers", () => {
+		expect(noteProblems(note({ draft: "corrected" }))).toEqual([]);
+	});
+	it("accepts decisions recorded from conversation with their source", () => {
+		const src = " (owner, in conversation, 2026-09-23)";
+		expect(
+			noteProblems(
+				note({
+					draft: `verified${src}`,
+					publish: `yes${src}`,
+					readiness: `ready${src}`,
+				}),
+			),
+		).toEqual([]);
+	});
+	it("holds a draft the owner has not approved", () => {
+		expect(noteProblems(note({ draft: "unverified" }))).toContain(
+			"draft entry not approved",
+		);
+	});
+	it("holds a note without draft text", () => {
+		expect(noteProblems(note({ draftText: false }))).toContain(
+			"draft entry missing",
+		);
+	});
+	it("holds a note without refresher bullets", () => {
+		expect(noteProblems(note({ bullets: false }))).toContain(
+			"refresher missing",
+		);
+	});
+	it("holds a shipped note marked not yet", () => {
+		expect(noteProblems(note({ readiness: "not yet" }))).toContain(
+			"shipped entry not marked ready",
+		);
+	});
+	it("requires not applicable for exploration work", () => {
+		expect(
+			noteProblems(note({ tier: "exploration", readiness: "not applicable" })),
+		).toEqual([]);
+		expect(
+			noteProblems(note({ tier: "exploration", readiness: "ready" })),
+		).toContain("exploration entry needs not applicable");
+	});
+	it("holds anything but publish yes", () => {
+		expect(noteProblems(note({ publish: "hold" }))).toContain(
+			"publish is not yes",
+		);
+	});
+	it("never treats an unfilled template as approved", () => {
+		const template = readFileSync(
+			"docs/publicist/review-note-template.md",
+			"utf8",
+		);
+
+		const block = template.match(/```markdown\n([\s\S]*?)\n```/)![1];
+		const problems = noteProblems(block);
+		expect(problems).toContain("publish is not yes");
+		expect(problems).toContain("tier missing or invalid");
+		expect(problems).toContain("draft entry not approved");
+	});
 });
 
-describe('text checks', () => {
-  it('flags em dashes and secret-shaped strings', () => {
-    expect(textProblems('A — B')).toEqual(['contains an em dash']);
-    expect(textProblems('token ghp_abcdefghijklmnopqrstuvwxyz0123')).toEqual(['contains a secret-shaped string']);
-    expect(textProblems('Plain text.')).toEqual([]);
-  });
-  it('requires Tally captures to be labeled demo data', () => {
-    expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture · demo data')")).toEqual([]);
-    expect(captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture')")).toHaveLength(1);
-  });
-  it('keeps URLs out of queued post text but allows the link field', () => {
-    const post = (body: string) => `---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
-    expect(queueBodyProblems(post('Tally has a new Home screen.'))).toEqual([]);
-    expect(queueBodyProblems(post('More: https://thesuperhuman.us/building/tally'))).toHaveLength(1);
-    expect(queueBodyProblems(post('More: HTTPS://THESUPERHUMAN.US'))).toHaveLength(1);
-    expect(queueBodyProblems(post('More at thesuperhuman.us/building/tally'))).toHaveLength(1);
-    expect(queueBodyProblems(post('See www.example.org'))).toHaveLength(1);
-    expect(queueBodyProblems(post('Released in v0.51.3. Smash Remix 2.0.1 works.'))).toEqual([]);
-    expect(queueBodyProblems(post('Plain text.').replace(/\n/g, '\r\n'))).toEqual([]);
-    expect(frontMatter('\uFEFF---\r\nsource: a\r\n---\r\nBody')).toEqual({ source: 'a' });
-  });
-  it('reads entry IDs and queue front matter', () => {
-    expect(entryIds("{ id: 'tally-home-screen', day: '2026-09-23' }, { id: 'tally-phase-0' }")).toEqual(['tally-home-screen', 'tally-phase-0']);
-    expect(frontMatter('---\nsource: tally-home-screen   # comment\nplatform: x\n---\nBody')).toEqual({ source: 'tally-home-screen', platform: 'x' });
-  });
+describe("text checks", () => {
+	it("flags em dashes and secret-shaped strings", () => {
+		expect(textProblems("A — B")).toEqual(["contains an em dash"]);
+		expect(textProblems("token ghp_abcdefghijklmnopqrstuvwxyz0123")).toEqual([
+			"contains a secret-shaped string",
+		]);
+		expect(textProblems("Plain text.")).toEqual([]);
+	});
+	it("requires Tally captures to be labeled demo data", () => {
+		expect(
+			captureProblems(
+				"artifact(a, 'Home', 'Caption.', 'Browser capture · demo data')",
+			),
+		).toEqual([]);
+		expect(
+			captureProblems("artifact(a, 'Home', 'Caption.', 'Browser capture')"),
+		).toHaveLength(1);
+	});
+	it("checks Tally capture labels in double quotes too", () => {
+		expect(
+			captureProblems(
+				'artifact(a, "Home", "Caption.", "Browser capture · demo data")',
+			),
+		).toEqual([]);
+		expect(
+			captureProblems('artifact(a, "Home", "Caption.", "Browser capture")'),
+		).toHaveLength(1);
+	});
+	it("checks capture labels in the multi-line shape Biome writes", () => {
+		const call = (label: string) =>
+			`artifact(\n\t\t\t\ta,\n\t\t\t\t"Tally · Home",\n\t\t\t\t"Caption.",\n\t\t\t\t"${label}",\n\t\t\t),`;
+
+		expect(
+			captureProblems(call("Annotated screen capture, demo data")),
+		).toEqual([]);
+		expect(captureProblems(call("Annotated screen capture"))).toHaveLength(1);
+	});
+	it("reads every Tally capture label from the real source", () => {
+		const source = readFileSync("src/data/project-stories/tally.ts", "utf8");
+
+		const captureCalls = source
+			.split("artifact(")
+			.slice(1)
+			.filter((chunk) => /capture/i.test(chunk.split(/\n\s*\),?\n/)[0])).length;
+
+		expect(captureCalls).toBeGreaterThan(0);
+		expect(captureLabels(source).length).toBe(captureCalls);
+	});
+	it("keeps URLs out of queued post text but allows the link field", () => {
+		const post = (body: string) =>
+			`---\nsource: tally-home-screen\nlink: https://thesuperhuman.us/building/tally\n---\n${body}\n`;
+
+		expect(queueBodyProblems(post("Tally has a new Home screen."))).toEqual([]);
+		expect(
+			queueBodyProblems(post("More: https://thesuperhuman.us/building/tally")),
+		).toHaveLength(1);
+		expect(
+			queueBodyProblems(post("More: HTTPS://THESUPERHUMAN.US")),
+		).toHaveLength(1);
+		expect(
+			queueBodyProblems(post("More at thesuperhuman.us/building/tally")),
+		).toHaveLength(1);
+		expect(queueBodyProblems(post("See www.example.org"))).toHaveLength(1);
+		expect(
+			queueBodyProblems(post("Released in v0.51.3. Smash Remix 2.0.1 works.")),
+		).toEqual([]);
+		expect(
+			queueBodyProblems(post("Plain text.").replace(/\n/g, "\r\n")),
+		).toEqual([]);
+		expect(frontMatter("\uFEFF---\r\nsource: a\r\n---\r\nBody")).toEqual({
+			source: "a",
+		});
+	});
+	it("reads entry IDs and queue front matter", () => {
+		expect(
+			entryIds(
+				"{ id: 'tally-home-screen', day: '2026-09-23' }, { id: 'tally-phase-0' }",
+			),
+		).toEqual(["tally-home-screen", "tally-phase-0"]);
+		expect(
+			frontMatter(
+				"---\nsource: tally-home-screen   # comment\nplatform: x\n---\nBody",
+			),
+		).toEqual({ source: "tally-home-screen", platform: "x" });
+	});
+	it("reads entry IDs in double quotes and at any indentation", () => {
+		expect(
+			entryIds(
+				'[\n\t{ id: "tally-home-screen", day: "2026-09-23" },\n    {\n      id: "tally-phase-0",\n    },\n]',
+			),
+		).toEqual(["tally-home-screen", "tally-phase-0"]);
+		expect(entryIds("[{ id: 'site-one' }, { id: \"site-two\" }]")).toEqual([
+			"site-one",
+			"site-two",
+		]);
+	});
+	it("still rejects IDs it rejected before", () => {
+		expect(entryIds("[{ id: 'Not-Lower' }]")).toEqual([]);
+		expect(entryIds('[{ id: "Not-Lower" }]')).toEqual([]);
+		expect(entryIds("[{ id: \"mixed' }]")).toEqual([]);
+		expect(entryIds("[{ id: 'mixed\" }]")).toEqual([]);
+		expect(entryIds("[{ paid: 'site-one' }]")).toEqual([]);
+		expect(entryIds("[{ id: `site-one` }]")).toEqual([]);
+	});
 });
 
-describe('entries needing notes', () => {
-  const source = "[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-backdated', day: '2026-09-01' }]";
-  it('needs a note for every entry when nothing predates the publicist', () => {
-    expect(entriesNeedingNotes(source)).toEqual(['site-old', 'site-new', 'site-backdated']);
-  });
-  it('exempts only the listed entries, whatever their dates', () => {
-    expect(entriesNeedingNotes(source, ['site-old'])).toEqual(['site-new', 'site-backdated']);
-  });
-  it('lists only website entries that exist, and dates the start plainly', () => {
-    const config = JSON.parse(readFileSync('publicist/config.json', 'utf8'));
-    const website = config.projects['personal-website'];
-    expect(website).toMatchObject({ repo: 'kwilson21/thesuperhuman.us', notesSince: '2026-09-27' });
-    expect(website.notesSince).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    const ids = entryIds(readFileSync(website.data, 'utf8'));
-    expect(website.preexisting).toHaveLength(17);
-    expect(website.preexisting.filter((id: string) => !ids.includes(id))).toEqual([]);
-  });
+describe("entries needing notes", () => {
+	const source =
+		"[{ id: 'site-old', day: '2026-09-20' }, { id: 'site-new', day: '2026-09-27' }, { id: 'site-backdated', day: '2026-09-01' }]";
+
+	it("needs a note for every entry when nothing predates the publicist", () => {
+		expect(entriesNeedingNotes(source)).toEqual([
+			"site-old",
+			"site-new",
+			"site-backdated",
+		]);
+	});
+	it("exempts only the listed entries, whatever their dates", () => {
+		expect(entriesNeedingNotes(source, ["site-old"])).toEqual([
+			"site-new",
+			"site-backdated",
+		]);
+	});
+	it("lists only website entries that exist, and dates the start plainly", () => {
+		const config = JSON.parse(readFileSync("publicist/config.json", "utf8"));
+		const website = config.projects["personal-website"];
+		expect(website).toMatchObject({
+			repo: "kwilson21/thesuperhuman.us",
+			notesSince: "2026-09-27",
+		});
+		expect(website.notesSince).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		const ids = entryIds(readFileSync(website.data, "utf8"));
+		expect(website.preexisting).toHaveLength(17);
+		expect(
+			website.preexisting.filter((id: string) => !ids.includes(id)),
+		).toEqual([]);
+	});
 });
 
-describe('AGENTS.md sync', () => {
-  const skill = '# S\n\n## Hard rules (never break these)\n\n1. Rule one.\n\n## Review notes\n\nText.\n';
-  it('extracts the hard rules and inserts the block idempotently', () => {
-    expect(hardRules(skill)).toBe('1. Rule one.');
-    const once = syncAgents('# Agents\n', skill);
-    expect(once).toContain(agentsBlock(skill));
-    expect(syncAgents(once, skill)).toBe(once);
-  });
-  it('keeps the committed AGENTS.md in sync with the canonical skill', () => {
-    const canonical = readFileSync('.agents/skills/publicist/SKILL.md', 'utf8');
-    expect(readFileSync('AGENTS.md', 'utf8')).toContain(agentsBlock(canonical));
-  });
+describe("AGENTS.md sync", () => {
+	const skill =
+		"# S\n\n## Hard rules (never break these)\n\n1. Rule one.\n\n## Review notes\n\nText.\n";
+
+	it("extracts the hard rules and inserts the block idempotently", () => {
+		expect(hardRules(skill)).toBe("1. Rule one.");
+		const once = syncAgents("# Agents\n", skill);
+		expect(once).toContain(agentsBlock(skill));
+		expect(syncAgents(once, skill)).toBe(once);
+	});
+	it("keeps the committed AGENTS.md in sync with the canonical skill", () => {
+		const canonical = readFileSync(".agents/skills/publicist/SKILL.md", "utf8");
+		expect(readFileSync("AGENTS.md", "utf8")).toContain(agentsBlock(canonical));
+	});
 });
 
-describe('gate runner', () => {
-  const roots: string[] = [];
-  afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-  function fixture(entrySource: string | null, websiteSource?: string) {
-    const root = mkdtempSync(join(tmpdir(), 'publicist-gate-')); roots.push(root);
-    for (const dir of ['publicist', '.agents/skills/publicist', 'src/data/project-stories']) mkdirSync(join(root, dir), { recursive: true });
-    const skill = readFileSync('.agents/skills/publicist/SKILL.md', 'utf8');
-    writeFileSync(join(root, '.agents/skills/publicist/SKILL.md'), skill);
-    writeFileSync(join(root, 'AGENTS.md'), syncAgents('# Agents\n', skill));
-    writeFileSync(join(root, 'publicist/config.json'), readFileSync('publicist/config.json'));
-    if (entrySource) writeFileSync(join(root, 'src/data/project-stories/tally.ts'), entrySource);
-    if (websiteSource) writeFileSync(join(root, 'src/data/project-stories/personal-website.ts'), websiteSource);
-    return root;
-  }
-  const run = (root: string, env: Record<string, string>) => spawnSync(process.execPath, [resolve('scripts/publicist/gate.mjs')], {
-    cwd: root, encoding: 'utf8', env: { PATH: process.env.PATH ?? '', ...env },
-  });
-  it('passes with no publicist entries', () => {
-    expect(run(fixture(null), { CI: 'true' }).status).toBe(0);
-  });
-  it('fails in CI when entries exist but the private token is missing', () => {
-    const result = run(fixture("export const x = [{ id: 'tally-home-screen', day: '2026-09-23' }];"), { CI: 'true' });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
-  });
-  it('does not ask for notes on the website entries that predate the publicist', () => {
-    const result = run(fixture(null, "export const x = [{ id: 'website-start-with-the-reader', day: '2026-09-09' }];"), { CI: 'true' });
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('0 entries checked');
-  });
-  it('asks for a note on a new website entry, even one dated before the website joined', () => {
-    const result = run(fixture(null, "export const x = [{ id: 'website-motion-layer', day: '2026-09-26' }];"), { CI: 'true' });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('PUBLICIST_PRIVATE_TOKEN is not set');
-  });
-  it('warns instead of failing on a local build without the token', () => {
-    const result = run(fixture("export const x = [{ id: 'tally-home-screen', day: '2026-09-23' }];"), {});
-    expect(result.status).toBe(0);
-    expect(result.stderr).toContain('skipped private note lookup');
-  });
+describe("gate runner", () => {
+	const roots: string[] = [];
+	afterEach(() => {
+		for (const root of roots.splice(0))
+			rmSync(root, { recursive: true, force: true });
+	});
+
+	function fixture(entrySource: string | null, websiteSource?: string) {
+		const root = mkdtempSync(join(tmpdir(), "publicist-gate-"));
+		roots.push(root);
+
+		for (const dir of [
+			"publicist",
+			".agents/skills/publicist",
+			"src/data/project-stories",
+		])
+			mkdirSync(join(root, dir), { recursive: true });
+		const skill = readFileSync(".agents/skills/publicist/SKILL.md", "utf8");
+		writeFileSync(join(root, ".agents/skills/publicist/SKILL.md"), skill);
+		writeFileSync(join(root, "AGENTS.md"), syncAgents("# Agents\n", skill));
+		writeFileSync(
+			join(root, "publicist/config.json"),
+			readFileSync("publicist/config.json"),
+		);
+
+		if (entrySource)
+			writeFileSync(
+				join(root, "src/data/project-stories/tally.ts"),
+				entrySource,
+			);
+
+		if (websiteSource)
+			writeFileSync(
+				join(root, "src/data/project-stories/personal-website.ts"),
+				websiteSource,
+			);
+
+		return root;
+	}
+
+	const run = (root: string, env: Record<string, string>) =>
+		spawnSync(process.execPath, [resolve("scripts/publicist/gate.mjs")], {
+			cwd: root,
+			encoding: "utf8",
+			env: { PATH: process.env.PATH ?? "", ...env },
+		});
+
+	it("passes with no publicist entries", () => {
+		expect(run(fixture(null), { CI: "true" }).status).toBe(0);
+	});
+	it("fails in CI when entries exist but the private token is missing", () => {
+		const result = run(
+			fixture(
+				"export const x = [{ id: 'tally-home-screen', day: '2026-09-23' }];",
+			),
+			{ CI: "true" },
+		);
+
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("PUBLICIST_PRIVATE_TOKEN is not set");
+	});
+	it("does not ask for notes on the website entries that predate the publicist", () => {
+		const result = run(
+			fixture(
+				null,
+				"export const x = [{ id: 'website-start-with-the-reader', day: '2026-09-09' }];",
+			),
+			{ CI: "true" },
+		);
+
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain("0 entries checked");
+	});
+	it("asks for a note on a new website entry, even one dated before the website joined", () => {
+		const result = run(
+			fixture(
+				null,
+				"export const x = [{ id: 'website-motion-layer', day: '2026-09-26' }];",
+			),
+			{ CI: "true" },
+		);
+
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("PUBLICIST_PRIVATE_TOKEN is not set");
+	});
+	it("warns instead of failing on a local build without the token", () => {
+		const result = run(
+			fixture(
+				"export const x = [{ id: 'tally-home-screen', day: '2026-09-23' }];",
+			),
+			{},
+		);
+
+		expect(result.status).toBe(0);
+		expect(result.stderr).toContain("skipped private note lookup");
+	});
 });

@@ -1,15 +1,19 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import WorkWithMe from '~/components/WorkWithMe.astro';
-import PersonalName from '~/components/PersonalName.astro';
-import WorkDiagram from '~/components/WorkDiagram.astro';
-import '~/styles/service-pages.css';
-import '~/styles/audio-intake.css';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import type { ServiceSheet } from '~/data/services';
-interface Props { sheet: ServiceSheet; }
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import WorkWithMe from "~/components/WorkWithMe.astro";
+import PersonalName from "~/components/PersonalName.astro";
+import WorkDiagram from "~/components/WorkDiagram.astro";
+import "~/styles/service-pages.css";
+import "~/styles/audio-intake.css";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import type { ServiceSheet } from "~/data/services";
+
+interface Props {
+	sheet: ServiceSheet;
+}
+
 const { sheet } = Astro.props;
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const href = (path: string) => mainSitePath(host, path);
 const lyft = sheet.hero;
 ---
@@ -45,19 +49,12 @@ const lyft = sheet.hero;
   </article>
 </BaseLayout>
 <script>
-import { runMotion } from '~/scripts/scroll-scenes';
-runMotion();
-document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());
-const rows = [...document.querySelectorAll<HTMLDetailsElement>('#software .service-offer')];
-let closed: HTMLDetailsElement[] = [];
-window.addEventListener('beforeprint', () => {
-  closed = rows.filter(row => !row.open);
-  rows.forEach(row => { row.open = true; });
-});
-window.addEventListener('afterprint', () => {
-  closed.forEach(row => { row.open = false; });
-  closed = [];
-});
+  import { runMotion } from '~/scripts/scroll-scenes';
+  import { setupServiceSheet } from '~/scripts/service-sheet';
+
+  runMotion();
+
+  setupServiceSheet();
 </script>
 <style>
 .service-sheet { max-width: 1100px; padding-block: 2rem 3rem; }

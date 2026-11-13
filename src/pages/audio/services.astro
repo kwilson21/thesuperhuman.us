@@ -1,22 +1,37 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import MusicNav from '~/components/audio/MusicNav.astro';
-import AudioFooter from '~/components/audio/AudioFooter.astro';
-import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
-import PersonalNameText from '~/components/PersonalNameText.astro';
-import { loadMusicCatalog } from '~/lib/music-content';
-import { audioOffers } from '~/lib/audio-intake';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import '~/styles/music.css';
-import '~/styles/music-hubs.css';
-import '~/styles/service-pages.css';
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import MusicNav from "~/components/audio/MusicNav.astro";
+import AudioFooter from "~/components/audio/AudioFooter.astro";
+import ComparisonPlayer from "~/components/audio/ComparisonPlayer.astro";
+import PersonalNameText from "~/components/PersonalNameText.astro";
+import { loadMusicCatalog } from "~/lib/music-content";
+import { audioOffers } from "~/lib/audio-intake";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import "~/styles/music.css";
+import "~/styles/music-hubs.css";
+import "~/styles/service-pages.css";
+
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const catalog = await loadMusicCatalog();
-const example = catalog.examples.find(example => example.service === 'mastering');
-const recording = example && catalog.recordings.find(track => track.id === example.recordingId);
-const start = audioPath(host, '/start');
-const anchors = {'vocal-mix':'two-track-vocals',mastering:'mastering',bundle:'mix-master',custom:'full-mix'};
+
+const example = catalog.examples.find(
+	(example) => example.service === "mastering",
+);
+
+const recording =
+	example &&
+	catalog.recordings.find((track) => track.id === example.recordingId);
+
+const start = audioPath(host, "/start");
+
+const anchors = {
+	"vocal-mix": "two-track-vocals",
+	mastering: "mastering",
+	bundle: "mix-master",
+	custom: "full-mix",
+};
 ---
 <BaseLayout title="Audio services · Kazon" description="Send your recorded vocals and beat, or a finished mix. I review the files and agree the work with you before mixing or mastering.">
 <div class="site-shell music-page services-page"><MusicNav />
@@ -30,8 +45,15 @@ const anchors = {'vocal-mix':'two-track-vocals',mastering:'mastering',bundle:'mi
 <p class="other-services">Need software or a website? <a href={mainSitePath(host, '/services')}>Work with me →</a></p>
 </div><AudioFooter slot="footer" />
 <script>
-import { setupMusicPlayback } from '~/scripts/music-playback'; import { setupComparisonPlayers } from '~/scripts/comparison-player'; setupMusicPlayback(); setupComparisonPlayers();
-function openService(){const target = document.getElementById(location.hash.slice(1));if(target instanceof HTMLDetailsElement)target.open=true;}openService();window.addEventListener('hashchange',openService);
+  import { setupMusicPlayback } from '~/scripts/music-playback';
+  import { setupComparisonPlayers } from '~/scripts/comparison-player';
+  import { setupAudioServicesLinks } from '~/scripts/audio-services-links';
+
+  setupMusicPlayback();
+
+  setupComparisonPlayers();
+
+  setupAudioServicesLinks();
 </script>
 </BaseLayout>
 <style>

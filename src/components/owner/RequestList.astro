@@ -1,9 +1,20 @@
 ---
-import type { OwnerRequest } from '~/lib/owner-model';
-import { softwarePathLabel } from '~/lib/software-inquiry';
-interface Props { requests: OwnerRequest[]; empty?: string }
-const { requests, empty = 'No requests need attention.' } = Astro.props;
-const labels = { purchase: 'Purchase', merchandise: 'Merchandise', service: 'Audio service', software: 'Software' };
+import type { OwnerRequest } from "~/lib/owner-model";
+import { softwarePathLabel } from "~/lib/software-inquiry";
+
+interface Props {
+	requests: OwnerRequest[];
+	empty?: string;
+}
+
+const { requests, empty = "No requests need attention." } = Astro.props;
+
+const labels = {
+	purchase: "Purchase",
+	merchandise: "Merchandise",
+	service: "Audio service",
+	software: "Software",
+};
 ---
 {requests.length ? <ol class="request-list">
   {requests.map(request => <li><a href={`/owner/requests/${request.id}`}>

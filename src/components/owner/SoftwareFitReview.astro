@@ -1,8 +1,19 @@
 ---
-interface Props { requestId: string; fit: { label: string; note: string } | null; closed?: boolean; path?: string }
+interface Props {
+	requestId: string;
+	fit: { label: string; note: string } | null;
+	closed?: boolean;
+	path?: string;
+}
+
 const { requestId, fit, closed = false, path } = Astro.props;
-const website = path === 'website';
-const fitLabels: Record<string, string> = { 'potential-fit': 'Potential fit', 'needs-clarification': 'Needs clarification', 'stated-mismatch': 'Stated mismatch' };
+const website = path === "website";
+
+const fitLabels: Record<string, string> = {
+	"potential-fit": "Potential fit",
+	"needs-clarification": "Needs clarification",
+	"stated-mismatch": "Stated mismatch",
+};
 ---
 <section class="rail-section software-rail"><h2>Fit review</h2>
   {closed ? fit && <><p>{fitLabels[fit.label]}</p><p class="software-answer">{fit.note}</p></> : <form data-software-action="fit" data-endpoint={`/api/owner/requests/${encodeURIComponent(requestId)}/software`}>

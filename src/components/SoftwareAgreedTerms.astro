@@ -1,26 +1,66 @@
 ---
-import type { OfferTerms } from '~/lib/software-offers';
-import { formatUSD, offerTotal, paymentSchedules } from '~/lib/software-offers';
-import type { Agreement } from '~/lib/software-agreements';
-import type { AgreementDetails, agreementValues } from '~/lib/agreement-fields';
-import { softwareDate } from '~/lib/software-projects';
-type Document = Pick<Agreement, 'id' | 'kind' | 'canonical_text' | 'effective_on' | 'text_sha256'>;
-interface Props { terms: OfferTerms; values?: ReturnType<typeof agreementValues> | null; documents: Document[]; websiteSigned: boolean; conversationOpen: boolean; signing?: boolean; agreementDetails?: AgreementDetails; }
-const { terms, values, documents, websiteSigned, conversationOpen } = Astro.props;
+import type { OfferTerms } from "~/lib/software-offers";
+import { formatUSD, offerTotal, paymentSchedules } from "~/lib/software-offers";
+import type { Agreement } from "~/lib/software-agreements";
+import type { AgreementDetails, agreementValues } from "~/lib/agreement-fields";
+import { softwareDate } from "~/lib/software-projects";
+
+type Document = Pick<
+	Agreement,
+	"id" | "kind" | "canonical_text" | "effective_on" | "text_sha256"
+>;
+
+interface Props {
+	terms: OfferTerms;
+	values?: ReturnType<typeof agreementValues> | null;
+	documents: Document[];
+	websiteSigned: boolean;
+	conversationOpen: boolean;
+	signing?: boolean;
+	agreementDetails?: AgreementDetails;
+}
+
+const { terms, values, documents, websiteSigned, conversationOpen } =
+	Astro.props;
+
 const signing = Astro.props.signing ?? false;
 const details = values?.owner ?? Astro.props.agreementDetails;
-const packet = documents.find(document => document.kind === 'sow');
-const stages = ['What you get', 'Milestones & timing', 'Cost & responsibilities', 'Review agreed terms'];
-const workingTerms = details ? [
-  ['Update channel', details.update_channel], ['Update rhythm', details.update_rhythm],
-  ['Review period', `${details.review_business_days} business days`],
-  ['Correction period', `${details.correction_calendar_days} calendar days`],
-  ['Purchase order', details.po_requirement], ['Expenses and taxes', details.expenses_taxes],
-  ['Recurring charges', details.recurring_charges], ['Visual approvals', details.visual_approvals],
-  ['AI permission', details.ai_permission], ['Sensitive-data addenda', details.sensitive_addenda],
-  ['Support', details.support], ['MSA changes', details.msa_changes],
-  ['Data retention', values?.details?.data_retention ?? details.data_retention], ['Handoff access', values?.details?.handoff_access ?? details.handoff_access],
-] : [];
+const packet = documents.find((document) => document.kind === "sow");
+
+const stages = [
+	"What you get",
+	"Milestones & timing",
+	"Cost & responsibilities",
+	"Review agreed terms",
+];
+
+const workingTerms = details
+	? [
+			["Update channel", details.update_channel],
+			["Update rhythm", details.update_rhythm],
+			["Review period", `${details.review_business_days} business days`],
+			[
+				"Correction period",
+				`${details.correction_calendar_days} calendar days`,
+			],
+			["Purchase order", details.po_requirement],
+			["Expenses and taxes", details.expenses_taxes],
+			["Recurring charges", details.recurring_charges],
+			["Visual approvals", details.visual_approvals],
+			["AI permission", details.ai_permission],
+			["Sensitive-data addenda", details.sensitive_addenda],
+			["Support", details.support],
+			["MSA changes", details.msa_changes],
+			[
+				"Data retention",
+				values?.details?.data_retention ?? details.data_retention,
+			],
+			[
+				"Handoff access",
+				values?.details?.handoff_access ?? details.handoff_access,
+			],
+		]
+	: [];
 ---
 <details class="agreed-terms" data-agreed-terms>
   <summary>What we agreed</summary>
@@ -82,7 +122,11 @@ const workingTerms = details ? [
     <div class="terms-navigation" data-terms-controls hidden><button type="button" class="studio-button studio-button-outline" data-terms-back>← Back</button><button type="button" class="studio-button" data-terms-next>Continue →</button></div>
   </div>
 </details>
-<script>import { setupAgreedTerms } from '~/scripts/agreed-terms'; setupAgreedTerms();</script>
+<script>
+  import { setupAgreedTerms } from '~/scripts/agreed-terms';
+
+  setupAgreedTerms();
+</script>
 <style>
   [hidden] { display: none !important; }
   .agreed-terms { border-top: 1px solid var(--rule); padding: 1.5rem 0; margin-top: 2rem; overflow-wrap: anywhere; }

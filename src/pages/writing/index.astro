@@ -1,11 +1,14 @@
 ---
 export const prerender = false;
-import { getEntry } from 'astro:content';
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
-import { websiteStory } from '~/data/project-stories/personal-website';
-const essay = await getEntry('pages', 'ai-gives-you-speed');
-if (!essay) throw new Error('AI essay content missing');
+
+import { getEntry } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import { websiteStory } from "~/data/project-stories/personal-website";
+
+const essay = await getEntry("pages", "ai-gives-you-speed");
+
+if (!essay) throw new Error("AI essay content missing");
 ---
 <BaseLayout title="Writing · Kazon Wilson" description="Notes on engineering, tools, and the choices behind the work.">
   <div class="site-shell primary-page writing-page">
@@ -29,6 +32,7 @@ if (!essay) throw new Error('AI essay content missing');
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
+
   // Where the page first shows the illustration off screen (small or landscape phones, or a
   // link to a piece further down), its entrance waits until it is seen.
   runMotion();

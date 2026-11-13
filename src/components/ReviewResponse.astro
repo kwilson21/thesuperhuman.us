@@ -1,7 +1,13 @@
 ---
-import '~/styles/studio.css';
+import "~/styles/studio.css";
 
-type Props = { endpoint: string; reviewId: string; roundsLeft: number; rounds: number };
+type Props = {
+	endpoint: string;
+	reviewId: string;
+	roundsLeft: number;
+	rounds: number;
+};
+
 const { endpoint, reviewId, roundsLeft, rounds } = Astro.props;
 const final = roundsLeft === 0;
 ---

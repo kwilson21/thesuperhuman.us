@@ -1,21 +1,58 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import StageTrack from '~/components/StageTrack.astro';
-import { clientPortalEnabled, clientProjectsForSession, clientSoftwareProjectsForSession, groupStudioProjects, studioSessionFromRequest } from '~/lib/audio-client-access';
-import { projectTerms, softwareStateSentence } from '~/lib/software-projects';
+
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import StageTrack from "~/components/StageTrack.astro";
+import {
+	clientPortalEnabled,
+	clientProjectsForSession,
+	clientSoftwareProjectsForSession,
+	groupStudioProjects,
+	studioSessionFromRequest,
+} from "~/lib/audio-client-access";
+import { projectTerms, softwareStateSentence } from "~/lib/software-projects";
+
 const env = Astro.locals.runtime?.env;
-if (!clientPortalEnabled(env)) return new Response('Not found', { status: 404 });
-if (!env.MUSIC_DB) return new Response('Studio is temporarily unavailable.', { status: 503 });
+
+if (!clientPortalEnabled(env))
+	return new Response("Not found", { status: 404 });
+
+if (!env.MUSIC_DB)
+	return new Response("Studio is temporarily unavailable.", { status: 503 });
+
 const token = studioSessionFromRequest(Astro.request);
-const projects = token ? await clientProjectsForSession(env.MUSIC_DB, token) : null;
-if (!projects) return Astro.redirect('/studio/sign-in');
+
+const projects = token
+	? await clientProjectsForSession(env.MUSIC_DB, token)
+	: null;
+
+if (!projects) return Astro.redirect("/studio/sign-in");
+
 const software = await clientSoftwareProjectsForSession(env.MUSIC_DB, token!);
 const { active, delivered: done } = groupStudioProjects(projects);
-const stageName = (stage: string, bookingStatus: string | null) => stage === 'accepted' && bookingStatus === 'paid' ? 'Booking paid'
-  : stage.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
-const longDate = (value: string) => new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-const through = (project: { final_expires_at: string | null; available: boolean }) => project.available ? `Available through ${longDate(project.final_expires_at!)}` : `Final files expired ${longDate(project.final_expires_at!)}`;
+
+const stageName = (stage: string, bookingStatus: string | null) =>
+	stage === "accepted" && bookingStatus === "paid"
+		? "Booking paid"
+		: stage
+				.replaceAll("_", " ")
+				.replace(/^./, (letter) => letter.toUpperCase());
+
+const longDate = (value: string) =>
+	new Date(value).toLocaleDateString("en-US", {
+		month: "long",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
+
+const through = (project: {
+	final_expires_at: string | null;
+	available: boolean;
+}) =>
+	project.available
+		? `Available through ${longDate(project.final_expires_at!)}`
+		: `Final files expired ${longDate(project.final_expires_at!)}`;
 ---
 <BaseLayout title="Your studio · Kazon" description={software?.length ? 'Your private projects.' : 'Your private audio projects.'} noindex>
   <article class="site-shell studio-home">
@@ -63,15 +100,8 @@ const through = (project: { final_expires_at: string | null; available: boolean 
     @media (max-width: 45rem) { .song-list a { grid-template-columns: 1fr; gap: .5rem; } }
   </style>
   <script>
-    document.querySelector('#studio-sign-out')?.addEventListener('click', async () => {
-      const status = document.querySelector<HTMLElement>('#studio-sign-out-status');
-      try {
-        const response = await fetch('/api/studio/sign-out', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-        const result = await response.json() as { localSignedOut?: boolean };
-        if (response.ok) { location.assign('/studio/sign-in'); return; }
-        if (result.localSignedOut) { location.assign('/studio/sign-in?signout=partial'); return; }
-      } catch { /* Display the same retry message below. */ }
-      if (status) status.textContent = 'Could not sign out. Please try again.';
-    });
+    import { setupStudioSignOut } from '~/scripts/studio-sign-out';
+
+    setupStudioSignOut();
   </script>
 </BaseLayout>

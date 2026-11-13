@@ -1,16 +1,50 @@
 ---
 export const prerender = false;
-import OwnerLayout from '~/layouts/OwnerLayout.astro';
-import RequestList from '~/components/owner/RequestList.astro';
-import { listOwnerRequests } from '~/lib/owner-requests';
-import { ownerRequestKinds, ownerRequestStatuses, type OwnerRequestKind, type OwnerRequestStatus } from '~/lib/owner-model';
+
+import OwnerLayout from "~/layouts/OwnerLayout.astro";
+import RequestList from "~/components/owner/RequestList.astro";
+import { listOwnerRequests } from "~/lib/owner-requests";
+import {
+	ownerRequestKinds,
+	ownerRequestStatuses,
+	type OwnerRequestKind,
+	type OwnerRequestStatus,
+} from "~/lib/owner-model";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
-if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
-const kind = ownerRequestKinds.includes(Astro.url.searchParams.get('kind') as OwnerRequestKind) ? Astro.url.searchParams.get('kind') as OwnerRequestKind : undefined;
-const status = ownerRequestStatuses.includes(Astro.url.searchParams.get('status') as OwnerRequestStatus) ? Astro.url.searchParams.get('status') as OwnerRequestStatus : undefined;
+
+if (!db)
+	return new Response("Owner reporting is unavailable.", { status: 503 });
+
+function isOwnerRequestKind(value: string | null): value is OwnerRequestKind {
+	return ownerRequestKinds.some((kind) => kind === value);
+}
+
+function isOwnerRequestStatus(
+	value: string | null,
+): value is OwnerRequestStatus {
+	return ownerRequestStatuses.some((status) => status === value);
+}
+
+const requestedKind = Astro.url.searchParams.get("kind");
+const kind = isOwnerRequestKind(requestedKind) ? requestedKind : undefined;
+
+const requestedStatus = Astro.url.searchParams.get("status");
+
+const status = isOwnerRequestStatus(requestedStatus)
+	? requestedStatus
+	: undefined;
+
 const requests = await listOwnerRequests(db, { kind, status });
-const newRequestCount = (await listOwnerRequests(db, { status: 'new' })).length;
-const kinds = [{ value: '', label: 'All kinds' }, { value: 'purchase', label: 'Purchase' }, { value: 'merchandise', label: 'Merchandise' }, { value: 'service', label: 'Audio service' }, { value: 'software', label: 'Software' }];
+const newRequestCount = (await listOwnerRequests(db, { status: "new" })).length;
+
+const kinds = [
+	{ value: "", label: "All kinds" },
+	{ value: "purchase", label: "Purchase" },
+	{ value: "merchandise", label: "Merchandise" },
+	{ value: "service", label: "Audio service" },
+	{ value: "software", label: "Software" },
+];
 ---
 <OwnerLayout title="Requests" current="requests" {newRequestCount} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">Private inbox</p><h1>Requests</h1><p>Every person waiting for a clear next step.</p></div></header>
