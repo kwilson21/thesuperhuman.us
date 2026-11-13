@@ -161,3 +161,48 @@ describe("sourcesOf and state names", () => {
 		expect(sourcesOf(wild, "GO")).toEqual(["a", "b"]);
 	});
 });
+
+describe("an event with a payload", () => {
+	const review = setup({
+		types: { events: {} as { type: "APPROVE"; actor?: string } },
+	}).createMachine({
+		id: "review",
+		initial: "pending",
+		states: {
+			pending: {
+				on: {
+					APPROVE: ({ event }) =>
+						event.actor === "owner" ? { target: "approved" } : undefined,
+				},
+			},
+			held: { on: { APPROVE: { target: "approved" } } },
+			approved: {},
+		},
+	});
+
+	it("passes the whole event to the guard", () => {
+		expect(next(review, "pending", { type: "APPROVE", actor: "owner" })).toBe(
+			"approved",
+		);
+		expect(next(review, "pending", { type: "APPROVE", actor: "guest" })).toBe(
+			null,
+		);
+		expect(next(review, "pending", { type: "APPROVE" })).toBeNull();
+	});
+
+	it("still takes an event type string", () => {
+		expect(next(review, "held", "APPROVE")).toBe("approved");
+		expect(next(review, "pending", "APPROVE")).toBeNull();
+	});
+
+	it("lists the sources for that event payload", () => {
+		expect(sourcesOf(review, "APPROVE")).toEqual(["held"]);
+		expect(sourcesOf(review, { type: "APPROVE", actor: "owner" })).toEqual([
+			"pending",
+			"held",
+		]);
+		expect(sourcesOf(review, { type: "APPROVE", actor: "guest" })).toEqual([
+			"held",
+		]);
+	});
+});
