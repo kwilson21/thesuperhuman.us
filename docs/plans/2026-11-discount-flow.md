@@ -394,7 +394,14 @@ then superseded. Command: `quint run verification/discount-offers.qnt --main dis
 
 Not covered: refunds; the order of milestones and delivery gating (any slot of the plan may be invoiced once the project
 starts); a third milestone; retention; Stripe event order (the invoice-events model covers it). The manual Apalache
-check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` module; it was not run for this design.
+check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` module. For this design it was run only to
+3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds); run it deeper
+before PR 2 or PR 3 changes a modelled rule.
+
+CI cost: on this machine, loaded by other work (load average about 40 on 12 cores), `verify:quint` took 71 s and
+`verify:quint:mutants` 98 s for both models together. The discount pass run is the slow part (10,000 runs, about 30 s
+alone); its mutants are each found in under 10 s. Measure on a runner in the PR and keep the whole verification step
+under 3 minutes; lower the discount model's runs if it is not.
 
 ## 7. Build order (stacked PRs, tests first)
 
