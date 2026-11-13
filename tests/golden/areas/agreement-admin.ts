@@ -623,3 +623,132 @@ export const signingCookie = (token: Token = SIGNING) =>
 	`agreement_session=${token.value}`;
 
 export const studioCookie = (value = STUDIO) => `studio_session=${value}`;
+
+/** The first line of a text with every required field, so a problem can be added to it. */
+const withProblem = (kind: "msa" | "sow", add: string) =>
+	`${templateText(kind, "Agreement")}\n${add}`;
+
+/** Template texts validateTemplate refuses, with what is wrong. Each starts from a valid text and breaks one rule. */
+export const templateProblems: readonly (readonly [
+	string,
+	"msa" | "sow",
+	string,
+])[] = [
+	["an empty text", "msa", ""],
+	["a text of spaces and newlines", "msa", "   \n  \n"],
+	["a less-than sign", "msa", withProblem("msa", "<b>bold</b>")],
+	["a greater-than sign", "msa", withProblem("msa", "a > b")],
+	["a control character", "msa", withProblem("msa", "bell\u0007")],
+	["a delete character", "msa", withProblem("msa", "del\u007f")],
+	["a lone surrogate", "msa", withProblem("msa", "lone\ud800")],
+	[
+		"an emoji the font cannot print",
+		"msa",
+		withProblem("msa", "smile \u{1F600}"),
+	],
+	["characters outside the font", "msa", withProblem("msa", "日本")],
+	["a line separator", "msa", withProblem("msa", "a b")],
+	["a bracketed blank", "msa", withProblem("msa", "Name: [Client name]")],
+	["an underscore blank", "msa", withProblem("msa", "Sign: ____")],
+	["two underscores are not a blank", "msa", withProblem("msa", "a__b")],
+	["an unknown field", "msa", withProblem("msa", "{{foo.bar}}")],
+	[
+		"a field with spaces inside",
+		"msa",
+		withProblem("msa", "{{ msa.effective_on }}"),
+	],
+	["a field in capitals", "msa", withProblem("msa", "{{MSA.effective_on}}")],
+	["a field with a unicode name", "msa", withProblem("msa", "{{msa.é}}")],
+	["an SOW field in an MSA", "msa", withProblem("msa", "{{sow.number}}")],
+	[
+		"a label field the template may not use",
+		"msa",
+		withProblem("msa", "{{msa.version_label}}"),
+	],
+	["a stray opening brace", "msa", withProblem("msa", "a { b")],
+	["a stray closing brace", "msa", withProblem("msa", "a } b")],
+	["an unclosed field", "msa", withProblem("msa", "{{msa.effective_on")],
+	["an empty field", "msa", withProblem("msa", "{{}}")],
+	[
+		"a loop in an MSA",
+		"msa",
+		withProblem("msa", "{{#milestones}}x{{/milestones}}"),
+	],
+	["a loop end with no start", "sow", withProblem("sow", "{{/milestones}}")],
+	[
+		"a milestone field outside the loop",
+		"sow",
+		withProblem("sow", "{{milestone.name}}"),
+	],
+	[
+		"a nested loop",
+		"sow",
+		templateText("sow").replace(
+			"{{#milestones}}",
+			"{{#milestones}}\n{{#milestones}}",
+		),
+	],
+	[
+		"two loops",
+		"sow",
+		`${templateText("sow")}\n{{#milestones}}\n{{/milestones}}`,
+	],
+	[
+		"a loop never closed",
+		"sow",
+		templateText("sow").replace("{{/milestones}}", ""),
+	],
+	[
+		"one required field missing",
+		"msa",
+		templateText("msa").replace(
+			"client.legal_name: {{client.legal_name}}\n",
+			"",
+		),
+	],
+	["every required field missing", "msa", "Hello"],
+	[
+		"several required fields missing in an SOW",
+		"sow",
+		templateText("sow").replace(/sow\.[a-z_]+: \{\{sow\.[a-z_]+\}\}\n/g, ""),
+	],
+	[
+		"over 100 KiB in bytes with two-byte characters",
+		"msa",
+		`${"é".repeat(51_201)}`,
+	],
+];
+
+/** A text that is valid and carries every sort of harmless oddity. */
+export const harmlessTexts: readonly (readonly [
+	string,
+	"msa" | "sow",
+	string,
+])[] = [
+	["windows line endings", "msa", MSA.replaceAll("\n", "\r\n")],
+	["old Mac line endings", "msa", MSA.replaceAll("\n", "\r")],
+	["tabs", "msa", `${MSA}\n\tindented\tline`],
+	["accents, quotes and symbols", "msa", `${MSA}\nCafé “quoted” — €5 → done`],
+	["ampersand and quotes", "msa", `${MSA}\nA & B "C" 'D'`],
+	[
+		"optional contractor fields",
+		"msa",
+		`${MSA}\n{{contractor.legal_name}} {{contractor.signer_name}}`,
+	],
+	[
+		"the same field twice",
+		"msa",
+		`${MSA}\n{{client.legal_name}} again {{client.legal_name}}`,
+	],
+	["a trailing space on lines", "msa", MSA.replaceAll("\n", "  \n")],
+	["a zero-width space", "msa", `${MSA}\na​b`],
+	["a no-break space", "msa", `${MSA}\na b`],
+	["a combining accent", "msa", `${MSA}\né`],
+	["a single-brace-free long line", "msa", `${MSA}\n${"word ".repeat(2000)}`],
+	["an SOW with the loop", "sow", SOW],
+	[
+		"an SOW with optional SOW fields",
+		"sow",
+		`${SOW}\n{{sow.summary}} {{sow.timing}}`,
+	],
+];
