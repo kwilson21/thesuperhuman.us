@@ -70,3 +70,73 @@ describe("sourcesOf", () => {
 		expect(sourcesOf(request, "REVIEW")).not.toContain("withdrawn");
 	});
 });
+
+describe("next and compound states", () => {
+	const nested = setup({}).createMachine({
+		id: "nested",
+		initial: "idle",
+		states: {
+			idle: { on: { START: { target: "running" } } },
+			running: { initial: "warm", states: { warm: {}, hot: {} } },
+		},
+	});
+
+	it("throws a clear error when the event lands on a compound state", () => {
+		expect(() => next(nested, "idle", "START")).toThrow(
+			/compound state.*"nested".*running/i,
+		);
+	});
+});
+
+describe("a row's own context", () => {
+	const gated = setup({}).createMachine({
+		id: "gated",
+		initial: "a",
+		context: { allowed: true, other: 1 },
+		states: {
+			a: {
+				on: {
+					GO: ({ context }) => (context.allowed ? { target: "b" } : undefined),
+				},
+			},
+			b: {},
+		},
+	});
+
+	it("replaces the default context entirely, it is not merged into it", () => {
+		expect(next(gated, "a", "GO")).toBe("b");
+		// The default says allowed; the row's own context has no `allowed`, so the guard reads undefined.
+		expect(next(gated, "a", "GO", { other: 2 })).toBeNull();
+	});
+});
+
+describe("sourcesOf and state names", () => {
+	it("keeps the declared order when a state name looks like an integer, by refusing such names", () => {
+		const numbered = setup({}).createMachine({
+			id: "numbered",
+			initial: "first",
+			states: {
+				first: { on: { GO: { target: "10" } } },
+				"10": { on: { GO: { target: "first" } } },
+			},
+		});
+
+		expect(() => sourcesOf(numbered, "GO")).toThrow(
+			/state name "10".*integer.*"numbered"/i,
+		);
+	});
+
+	it("never lists a wildcard state name as a source", () => {
+		const wild = setup({}).createMachine({
+			id: "wild",
+			initial: "a",
+			states: {
+				a: { on: { GO: { target: "b" } } },
+				b: { on: { GO: { target: "a" } } },
+				"*": { on: { GO: { target: "a" } } },
+			},
+		});
+
+		expect(sourcesOf(wild, "GO")).toEqual(["a", "b"]);
+	});
+});
