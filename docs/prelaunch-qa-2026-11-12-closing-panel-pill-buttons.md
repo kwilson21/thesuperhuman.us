@@ -120,9 +120,11 @@ Limits:
 - **PASS · Diff review.** 27 files against `main`: the footer, its callers, five stylesheets, one script, tests and docs. No secrets, no dependency changes, no generated files. `docs/handoffs/` and `.jolli/` are untracked and not in the PR.
 - **N/A · Bindings, secrets, migrations.** None change.
 - **PASS · Rollback version.** `54c7627e`.
-- **PASS, with limits · Production verification after deploy.** The merge session reported on 2026-11-13 (an observation relayed to this record, not re-run here): PR #233 merged to `main` as `531ec1df` at 01:04 UTC, which deploys production. About two minutes later, production was checked live: the invitation and quiet closing panels on both hosts, the pinned button on the Work page at phone width, the 404 page returning HTTP 404, and Home's contact section intact.
+- **PASS, with limits · Production verification after deploy.** The merge session reported on 2026-11-13 (an observation relayed to this record, not re-run here): PR #233 merged to `main` as `531ec1df` at 01:04 UTC, which deploys production. About two minutes later, production was checked live: the closing panels on both hosts, the pinned button on the Work page at phone width, the 404 page returning HTTP 404, and Home's contact section intact. The audio host renders only the quiet panel (`src/components/audio/AudioFooter.astro`), so the invitation panel was seen on the main host; the report does not name the pages or say which quiet pages were opened on each host.
+- **PASS, with limits · CI and reviews on the final head.** On the merged head `e1237618`, the `validate` and `capture` checks, the Greptile Review check and the Workers build all succeeded before the merge (GitHub check results, read on 2026-11-13). Limit: Codex reviewed only the head the PR opened with (`2c29391f`) and did not review the later commits.
+- **UNVERIFIED · The rest of the post-deployment check.** Not recorded for this release on either host: the production revision actually served, the main journeys, sitemap and robots, metadata, OG images and icons, the forms, and monitoring.
 - **UNVERIFIED · Live check of the remaining pages.** The owner pages, the studio pages and the agreement pages were not checked live. The checks marked UNVERIFIED in section 3 (a second browser and a real phone, 200% text zoom, tabbing through a page while the pinned button shows) were not run live either.
-- **PASS · Receipt and evidence.** This record. Status: implemented and verified locally; deployed by the merge on 2026-11-13; verified live in part (see the production verification entries above); the owner, studio and agreement pages and the section 3 UNVERIFIED items remain UNVERIFIED.
+- **PASS · Receipt and evidence.** This record. Status: implemented and verified locally; deployed by the merge on 2026-11-13; verified live in part (see the production verification entries above); the rest of the post-deployment check, the owner, studio and agreement pages and the section 3 UNVERIFIED items remain UNVERIFIED.
 
 ## 8. Private owner center
 
@@ -131,6 +133,7 @@ Limits:
 
 ## Remaining work
 
-- CI and bot reviews on the final head.
+- A Codex review of the commits after `2c29391f`, if wanted.
 - Two controls the inventory left unsorted: `.saved-reference` picker cards and the GitHub sign-in submit.
+- The rest of the post-deployment check on both hosts: served revision, main journeys, sitemap and robots, metadata, OG images and icons, forms and monitoring (section 7).
 - Live checks of the owner, studio and agreement pages (section 7).
