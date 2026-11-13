@@ -7,12 +7,20 @@
 /** The email the default env treats as the owner. */
 export const OWNER_EMAIL = "owner@example.test";
 
+/** What Cloudflare puts on request.cf that a route reads: location fields (strings, when present) and bot management. */
+export type RequestCf = {
+	readonly country?: string | number;
+	readonly region?: string;
+	readonly city?: string;
+	readonly botManagement?: { readonly verifiedBot?: boolean };
+};
+
 export type Actor =
 	| {
 			readonly kind: "visitor";
 			readonly ip?: string;
 			readonly headers: { readonly [name: string]: string };
-			readonly cf?: { readonly country: string };
+			readonly cf?: RequestCf;
 	  }
 	| { readonly kind: "owner"; readonly email: string }
 	| { readonly kind: "client"; readonly email: string }
@@ -23,7 +31,7 @@ export function asVisitor(
 	options: {
 		readonly ip?: string;
 		readonly headers?: { readonly [name: string]: string };
-		readonly cf?: { readonly country: string };
+		readonly cf?: RequestCf;
 	} = {},
 ): Actor {
 	return {
