@@ -266,7 +266,7 @@ function isImportMetaUrl(node: ts.Expression): boolean {
  * `import.meta.glob()` and `new URL("...", import.meta.url)` (how a worker is named). A load whose argument is a real
  * expression comes back as unresolved.
  */
-function loadsOf(file: string, text: string): Load[] {
+function loadsOf(file: string, text: string, includeTypes = false): Load[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 	const found: Load[] = [];
 
@@ -295,7 +295,7 @@ function loadsOf(file: string, text: string): Load[] {
 			(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
 			node.moduleSpecifier &&
 			ts.isStringLiteral(node.moduleSpecifier) &&
-			bringsCode(node)
+			(includeTypes || bringsCode(node))
 		)
 			found.push({
 				kind: "module",
@@ -305,7 +305,7 @@ function loadsOf(file: string, text: string): Load[] {
 
 		if (
 			ts.isImportEqualsDeclaration(node) &&
-			!node.isTypeOnly &&
+			(includeTypes || !node.isTypeOnly) &&
 			ts.isExternalModuleReference(node.moduleReference)
 		)
 			add(node, node.moduleReference.expression, "import = require()");
@@ -389,8 +389,11 @@ const blank = (text: string) => text.replace(/[^\n]/g, "");
  * file that trips this on purpose is a false positive to fix, never a case to wave through.
  */
 function clientText(file: string): string {
-	const text = readFileSync(file, "utf8");
+	return scriptTextOf(file, readFileSync(file, "utf8"));
+}
 
+/** `clientText` for a source text already read. */
+function scriptTextOf(file: string, text: string): string {
 	if (!file.endsWith(".astro")) return text;
 	const markup = text.replace(FRONTMATTER, blank);
 	let result = "";
@@ -409,6 +412,23 @@ function clientText(file: string): string {
 	}
 
 	return result + blank(markup.slice(last));
+}
+
+/**
+ * Every module specifier a source text names, type-only imports included: static imports and re-exports, `import = require`,
+ * `require()` and `import()` with a literal. For an .astro file, the frontmatter and the <script> blocks (never the markup).
+ * Parsed with the TypeScript parser, so comments between tokens and text inside strings do not matter.
+ */
+export function specifiersOf(file: string, text: string): string[] {
+	const texts = file.endsWith(".astro")
+		? [FRONTMATTER.exec(text)?.[0] ?? "", scriptTextOf(file, text)]
+		: [text];
+
+	return texts.flatMap((part) =>
+		loadsOf(file, part, true).flatMap((load) =>
+			load.kind === "module" ? [load.specifier] : [],
+		),
+	);
 }
 
 /** True when `specifier` is a forbidden package (or something under it) that `allow` does not name exactly. */

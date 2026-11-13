@@ -10,15 +10,13 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { specifiersOf } from "../helpers/client-graph";
 
 // Each Effect module is imported by its own path (`effect/Effect`, `effect/Schema`), never from the bare `effect`
 // specifier, so what ships is the module that was named and a reader sees which one each file uses.
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SOURCE = /\.(ts|tsx|mts|cts|js|mjs|cjs|astro)$/;
-
-/** An import, re-export, dynamic import or require of exactly "effect" (either quote). */
-const BARE_EFFECT = /(?:from|import|require)\s*\(?\s*["'`]effect["'`]/;
 
 /**
  * The whole repository is scanned (src, tests, scripts, tools, db, migrations, templates, publicist, the root config
@@ -73,10 +71,15 @@ function sourcesUnder(
 	});
 }
 
+/** True when the source text imports, re-exports, requires or dynamically imports exactly "effect". */
+function usesBareEffect(file: string, text: string): boolean {
+	return specifiersOf(file, text).includes("effect");
+}
+
 /** The files under `root` (relative paths) that import from the bare effect specifier. */
 function offendersUnder(root: string, excluded: typeof EXCLUDED): string[] {
 	return sourcesUnder(root, excluded).flatMap((file) =>
-		BARE_EFFECT.test(readFileSync(file, "utf8"))
+		usesBareEffect(file, readFileSync(file, "utf8"))
 			? [relative(root, file).split(sep).join("/")]
 			: [],
 	);
@@ -91,13 +94,48 @@ describe("how Effect is imported", () => {
 	});
 
 	it("recognizes a bare import and not a module path", () => {
-		expect(BARE_EFFECT.test('import { Effect } from "effect";')).toBe(true);
-		expect(BARE_EFFECT.test("export * from 'effect'")).toBe(true);
-		expect(BARE_EFFECT.test('const e = await import("effect")')).toBe(true);
-		expect(BARE_EFFECT.test('import * as Effect from "effect/Effect";')).toBe(
+		for (const text of [
+			'import { Effect } from "effect";',
+			'import type { Effect } from "effect";',
+			'import "effect";',
+			'import /* reason */ "effect";',
+			'import(/* @vite-ignore */ "effect")',
+			'const e = await import("effect")',
+			"const e = await import(`effect`)",
+			"export * from 'effect'",
+			'export { Effect } from "effect";',
+			'const e = require("effect");',
+			'const e = require(/* x */ "effect");',
+			'import e = require("effect");',
+		])
+			expect(usesBareEffect("a.ts", text), text).toBe(true);
+
+		for (const text of [
+			'import * as Effect from "effect/Effect";',
+			'import "@xstate/effect";',
+			'import "effect-utils";',
+			"const s = 'import { Effect } from \"effect\"';",
+			'// import { Effect } from "effect"\nexport const a = 1;',
+			'/* require("effect") */ export const a = 1;',
+			'export const note = `from "effect"`;',
+			'const e = require("effect/Effect");',
+		])
+			expect(usesBareEffect("a.ts", text), text).toBe(false);
+	});
+
+	it("reads an .astro file's frontmatter and script blocks", () => {
+		expect(
+			usesBareEffect(
+				"a.astro",
+				'---\nimport { Effect } from "effect";\n---\n<p/>',
+			),
+		).toBe(true);
+		expect(
+			usesBareEffect("a.astro", '---\n---\n<script>import "effect";</script>'),
+		).toBe(true);
+		expect(usesBareEffect("a.astro", '---\n---\n<p>import "effect"</p>')).toBe(
 			false,
 		);
-		expect(BARE_EFFECT.test('import "@xstate/effect";')).toBe(false);
 	});
 
 	it("scans root config files, tools and every other directory, and skips only what the list names", () => {
@@ -119,7 +157,10 @@ describe("how Effect is imported", () => {
 			"tools/oxlint/anti-slop/rule.ts",
 		]) {
 			mkdirSync(dirname(join(root, path)), { recursive: true });
-			writeFileSync(join(root, path), bare);
+			writeFileSync(
+				join(root, path),
+				path.endsWith(".astro") ? `---\n${bare}\n---\n` : bare,
+			);
 		}
 
 		expect(offendersUnder(root, EXCLUDED).sort()).toEqual([
