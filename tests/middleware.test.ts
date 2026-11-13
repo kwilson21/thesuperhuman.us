@@ -1,14 +1,14 @@
 import type { APIContext, MiddlewareNext } from "astro";
 import { describe, it, expect, vi } from "vitest";
-import { onRequest } from "~/middleware";
-import { verifyOwnerAccess } from "~/lib/owner-access";
+import { createOnRequest } from "~/middleware";
 import { securityHeaders } from "~/lib/security-headers";
 import { double } from "./helpers/doubles";
 import { fakeLocals } from "./helpers/runtime";
 
-vi.mock("~/lib/owner-access", () => ({
-	verifyOwnerAccess: vi.fn(async () => null),
-}));
+const verifyOwnerAccess = vi.fn<Parameters<typeof createOnRequest>[0]>(
+	async () => null,
+);
+const onRequest = createOnRequest(verifyOwnerAccess);
 
 function makeContext(url: string, hostHeader?: string) {
 	const u = new URL(url);
@@ -76,7 +76,7 @@ describe("middleware.onRequest", () => {
 		);
 	});
 	it("rejects unauthenticated owner routes without exposing a cacheable response", async () => {
-		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+		verifyOwnerAccess.mockResolvedValueOnce(null);
 		const ctx = makeContext("https://thesuperhuman.us/owner/requests");
 		const next = vi.fn(async () => new Response("private content"));
 		const response = await run(ctx, next);
@@ -87,7 +87,7 @@ describe("middleware.onRequest", () => {
 	});
 
 	it("passes verified owner identity to routes and marks their responses private", async () => {
-		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({
+		verifyOwnerAccess.mockResolvedValueOnce({
 			email: "owner@example.com",
 		});
 		const ctx = makeContext("https://thesuperhuman.us/owner");
@@ -100,7 +100,7 @@ describe("middleware.onRequest", () => {
 	});
 
 	it("protects owner mutation APIs with the same verified identity", async () => {
-		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({
+		verifyOwnerAccess.mockResolvedValueOnce({
 			email: "owner@example.com",
 		});
 		const ctx = makeContext("https://thesuperhuman.us/api/owner/audience");
@@ -123,7 +123,7 @@ describe("middleware.onRequest", () => {
 	});
 
 	it("rejects cross-site JSON owner mutations while leaving Stripe webhook paths public", async () => {
-		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce({
+		verifyOwnerAccess.mockResolvedValueOnce({
 			email: "owner@example.com",
 		});
 
@@ -155,7 +155,7 @@ describe("middleware.onRequest", () => {
 	});
 
 	it("protects future owner APIs by namespace", async () => {
-		vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+		verifyOwnerAccess.mockResolvedValueOnce(null);
 		const ctx = makeContext("https://thesuperhuman.us/api/owner/campaigns");
 		const next = vi.fn(async () => new Response("private content"));
 		expect((await run(ctx, next)).status).toBe(403);
@@ -445,7 +445,7 @@ it("adds the _headers security headers to API JSON", async () => {
 });
 
 it("keeps owner 403 responses private and adds the _headers security headers", async () => {
-	vi.mocked(verifyOwnerAccess).mockResolvedValueOnce(null);
+	verifyOwnerAccess.mockResolvedValueOnce(null);
 
 	const response = await run(
 		makeContext("https://thesuperhuman.us/owner/requests"),
