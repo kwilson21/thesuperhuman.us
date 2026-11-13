@@ -86,6 +86,18 @@ describe("package manager and Node pin", () => {
 		);
 	});
 
+	it("validate.yml runs the built-bundle backstop after the build, and requires dist", () => {
+		const workflow = read(".github/workflows/validate.yml");
+		const build = workflow.indexOf("- run: pnpm run build");
+		const backstop = workflow.indexOf(
+			"- run: pnpm exec vitest run tests/architecture/client-bundle.test.ts",
+		);
+
+		expect(build).toBeGreaterThanOrEqual(0);
+		expect(backstop).toBeGreaterThan(build);
+		expect(workflow.slice(backstop)).toMatch(/REQUIRE_CLIENT_BUNDLE: "1"/);
+	});
+
 	it("documents pnpm commands without a `--` separator", () => {
 		const offenders = commandFiles.flatMap((path) =>
 			read(path)
