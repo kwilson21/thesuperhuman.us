@@ -424,6 +424,39 @@ describe("the walker finds what it should", () => {
 			).toEqual(["effect/Effect"]);
 		});
 
+		it("reads only the real src attribute of a <script>", () => {
+			const lazy = { "public/lazy.js": 'import "effect/Effect";' };
+
+			// data-src and ng-src are not src: the inline body stays in the graph and /lazy.js is not followed.
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script data-src="/lazy.js">import "effect/Schema";</script>',
+					...lazy,
+				}),
+			).toEqual(["effect/Schema"]);
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script ng-src="/lazy.js">import "zod";</script>',
+					...lazy,
+				}),
+			).toEqual([]);
+
+			// The real attribute is followed, in any case, quoted or not, before or after other attributes.
+			for (const open of [
+				'<script src="/lazy.js">',
+				"<script SRC='/lazy.js'>",
+				"<script src=/lazy.js>",
+				'<script type="module" async src="/lazy.js" defer>',
+				'<script data-src="/other.js" src="/lazy.js">',
+				'<script\n\tsrc = "/lazy.js"\n>',
+			])
+				expect(
+					found({ "src/pages/a.astro": `---\n---\n${open}</script>`, ...lazy }),
+				).toEqual(["effect/Effect"]);
+		});
+
 		it("reads a root-relative <script src> from public/ and walks that file", () => {
 			const root = scratch({
 				"src/pages/a.astro": '---\n---\n<script src="/client.js"></script>',

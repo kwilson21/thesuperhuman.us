@@ -46,7 +46,9 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 const SCRIPT_BLOCK =
 	/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/g;
 
-const SCRIPT_SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/;
+// One attribute of an opening tag: a name, and a double-quoted, single-quoted or unquoted value when it has one.
+const ATTRIBUTE =
+	/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
 const FRONTMATTER = /^\s*---[\s\S]*?\n---/;
 
@@ -361,6 +363,22 @@ function globPatternsOf(argument: ts.Expression): string[] | undefined {
 	return texts.every((text) => text !== undefined) ? texts : undefined;
 }
 
+/**
+ * The value of the `src` attribute of an opening `<script ...>` tag, or undefined when it has none. Attribute names are
+ * read whole and compared without regard to case, so `data-src` and `ng-src` are not `src`; a quoted value that holds
+ * text like ` src=` is one value, never another attribute.
+ */
+function scriptSrc(open: string): string | undefined {
+	for (const attribute of open.slice("<script".length).matchAll(ATTRIBUTE)) {
+		const [, name, double, single, bare] = attribute;
+		const value = double ?? single ?? bare;
+
+		if (name.toLowerCase() === "src" && value !== undefined) return value;
+	}
+
+	return undefined;
+}
+
 /** The text with every character but the line breaks removed: it keeps the line numbers of what follows. */
 const blank = (text: string) => text.replace(/[^\n]/g, "");
 
@@ -380,8 +398,7 @@ function clientText(file: string): string {
 
 	for (const block of markup.matchAll(SCRIPT_BLOCK)) {
 		const [whole, open, inner] = block;
-		const src = SCRIPT_SRC.exec(open);
-		const source = src ? (src[1] ?? src[2] ?? src[3]) : undefined;
+		const source = scriptSrc(open);
 
 		result += blank(markup.slice(last, block.index)) + blank(open);
 		result +=
