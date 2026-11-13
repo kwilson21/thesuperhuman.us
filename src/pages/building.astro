@@ -1,33 +1,104 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
-import BuildingIllustration from '~/components/BuildingIllustration.astro';
-import dailyStory from '~/data/project-stories/the-engineers-daily.json';
-import { tallyStory } from '~/data/project-stories/tally';
-import { kailleraStory } from '~/data/project-stories/kaillera-next';
-import { websiteStory } from '~/data/project-stories/personal-website';
-import { threadlineStory } from '~/data/project-stories/threadline';
+
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import BuildingIllustration from "~/components/BuildingIllustration.astro";
+import dailyStory from "~/data/project-stories/the-engineers-daily.json";
+import { tallyStory } from "~/data/project-stories/tally";
+import { kailleraStory } from "~/data/project-stories/kaillera-next";
+import { websiteStory } from "~/data/project-stories/personal-website";
+import { threadlineStory } from "~/data/project-stories/threadline";
+
 const projects = [
-  { kind: 'tally' as const, title: 'Tally', status: tallyStory.status,
-    description: 'Review transactions, set monthly budgets and see what remains to spend.',
-    actions: ['Organize purchases into categories.', 'Set rules for repeat merchants.', 'Track spending against your budget.'],
-    detail: 'AI suggests categories. Code calculates the money.', role: 'I make the design decisions and review every change; Claude Code and Codex help with implementation.',
-    links: [{ label: 'Try demo', href: 'https://tally-demo.thesuperhuman.us' }, { label: 'GitHub', href: 'https://github.com/kwilson21/tally' }, { label: 'Development journal', href: '/building/tally#tally-updates-title' }] },
-  { kind: 'kaillera' as const, title: 'Kaillera-next', status: kailleraStory.status,
-    description: 'Open a link and play supported retro games with friends.',
-    actions: ['Create a room and invite friends.', 'Play together or watch a game.', 'Use a controller or touch controls.'],
-    detail: 'Built on EmulatorJS, with rollback and host-streaming modes.', role: '',
-    links: [{ label: 'Explore build', href: 'https://kaillera-next.thesuperhuman.us' }, { label: 'GitHub', href: 'https://github.com/kwilson21/kaillera-next' }, { label: 'Development journal', href: '/building/kaillera-next#kaillera-next-updates-title' }] },
-  { kind: 'website' as const, title: 'Personal website', status: websiteStory.status,
-    description: 'See what I can build for you, hear what I can do for your music, and hire me.',
-    actions: ['Explore my software work and hear my mixes.', 'Tell me what you want to build or finish.', 'Start a paid software or audio project.'],
-    detail: '', role: 'I design the site and review every change; Claude Code helps with implementation.',
-    links: [{ label: 'Work with me', href: '/services' }, { label: 'GitHub', href: 'https://github.com/kwilson21/thesuperhuman.us' }, { label: 'Development journal', href: '/building/personal-website#personal-website-updates-title' }] },
+	{
+		kind: "tally" as const,
+		title: "Tally",
+		status: tallyStory.status,
+		description:
+			"Review transactions, set monthly budgets and see what remains to spend.",
+		actions: [
+			"Organize purchases into categories.",
+			"Set rules for repeat merchants.",
+			"Track spending against your budget.",
+		],
+		detail: "AI suggests categories. Code calculates the money.",
+		role: "I make the design decisions and review every change; Claude Code and Codex help with implementation.",
+		links: [
+			{ label: "Try demo", href: "https://tally-demo.thesuperhuman.us" },
+			{ label: "GitHub", href: "https://github.com/kwilson21/tally" },
+			{
+				label: "Development journal",
+				href: "/building/tally#tally-updates-title",
+			},
+		],
+	},
+	{
+		kind: "kaillera" as const,
+		title: "Kaillera-next",
+		status: kailleraStory.status,
+		description: "Open a link and play supported retro games with friends.",
+		actions: [
+			"Create a room and invite friends.",
+			"Play together or watch a game.",
+			"Use a controller or touch controls.",
+		],
+		detail: "Built on EmulatorJS, with rollback and host-streaming modes.",
+		role: "",
+		links: [
+			{
+				label: "Explore build",
+				href: "https://kaillera-next.thesuperhuman.us",
+			},
+			{ label: "GitHub", href: "https://github.com/kwilson21/kaillera-next" },
+			{
+				label: "Development journal",
+				href: "/building/kaillera-next#kaillera-next-updates-title",
+			},
+		],
+	},
+	{
+		kind: "website" as const,
+		title: "Personal website",
+		status: websiteStory.status,
+		description:
+			"See what I can build for you, hear what I can do for your music, and hire me.",
+		actions: [
+			"Explore my software work and hear my mixes.",
+			"Tell me what you want to build or finish.",
+			"Start a paid software or audio project.",
+		],
+		detail: "",
+		role: "I design the site and review every change; Claude Code helps with implementation.",
+		links: [
+			{ label: "Work with me", href: "/services" },
+			{
+				label: "GitHub",
+				href: "https://github.com/kwilson21/thesuperhuman.us",
+			},
+			{
+				label: "Development journal",
+				href: "/building/personal-website#personal-website-updates-title",
+			},
+		],
+	},
 ];
+
 const prototypes = [
-  { title: dailyStory.title, status: dailyStory.status, description: 'Practice coding through a story, alongside Scripture, prayer and reflection.', href: '/building/the-engineers-daily' },
-  { title: threadlineStory.title, status: threadlineStory.status, description: 'Pick up interrupted development work with its context intact.', href: '/building/threadline' },
+	{
+		title: dailyStory.title,
+		status: dailyStory.status,
+		description:
+			"Practice coding through a story, alongside Scripture, prayer and reflection.",
+		href: "/building/the-engineers-daily",
+	},
+	{
+		title: threadlineStory.title,
+		status: threadlineStory.status,
+		description:
+			"Pick up interrupted development work with its context intact.",
+		href: "/building/threadline",
+	},
 ];
 ---
 <BaseLayout title="Building · Kazon Wilson" description="Try my budgeting and browser multiplayer projects, explore my work, and see how I build them.">
@@ -55,6 +126,7 @@ const prototypes = [
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
+
   runMotion();
 </script>
 <style>

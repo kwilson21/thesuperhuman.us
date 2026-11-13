@@ -1,10 +1,18 @@
 ---
 export const prerender = false;
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import Footer from '~/components/Footer.astro';
-import ExperienceRow from '~/components/ExperienceRow.astro';
-import WorkDiagram from '~/components/WorkDiagram.astro';
-import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPreference } from '~/data/profile';
+
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import ExperienceRow from "~/components/ExperienceRow.astro";
+import WorkDiagram from "~/components/WorkDiagram.astro";
+import {
+	personJsonLd,
+	experience,
+	lyftBonus,
+	lyftTeams,
+	skuposStages,
+	workingPreference,
+} from "~/data/profile";
 ---
 <BaseLayout jsonLd={personJsonLd} title="Work · Kazon Wilson" description="See how I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft.">
   <div class="site-shell primary-page work-page">
@@ -41,18 +49,9 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPr
   </div><Footer slot="footer" />
 </BaseLayout>
 <script>
-  import { runMotion } from '~/scripts/scroll-scenes';
-  // Restrained on purpose: only the two evidence diagrams build as they arrive.
-  runMotion();
-  function revealExperience(hash = location.hash) {
-    const target = document.getElementById(hash.slice(1));
-    if (target instanceof HTMLDetailsElement) { target.open = true; target.scrollIntoView(); }
-  }
-  revealExperience();
-  window.addEventListener('hashchange', () => revealExperience());
-  document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]').forEach(link => {
-    link.addEventListener('click', () => revealExperience(link.hash));
-  });
+  import { setupWorkExperience } from '~/scripts/work-experience';
+
+  setupWorkExperience();
 </script>
 <style>
   .work-intro { max-width: 46rem; }

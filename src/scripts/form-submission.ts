@@ -1,96 +1,165 @@
-import { openMessages } from './form-messages';
+import { openMessages } from "./form-messages";
 
 /** Shared interaction states; each form retains its own payload and server rules. */
-export function setupFormSubmission({ form, endpoint, payload, success, onSuccess, onConflict, onSendingChange }: {
-  form: HTMLFormElement;
-  endpoint: string;
-  payload: (data: FormData) => Record<string, unknown>;
-  success: HTMLElement;
-  onSuccess?: (result: Record<string, unknown>) => void;
-  onConflict?: () => void;
-  onSendingChange?: (sending: boolean) => void;
+export function setupFormSubmission<Payload, Result>({
+	form,
+	endpoint,
+	payload,
+	success,
+	onSuccess,
+	onConflict,
+	onSendingChange,
+}: {
+	form: HTMLFormElement;
+	endpoint: string;
+	payload: (data: FormData) => Payload;
+	success: HTMLElement;
+	onSuccess?: (result: Result) => void;
+	onConflict?: () => void;
+	onSendingChange?: (sending: boolean) => void;
 }) {
-  const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-  const status = form.querySelector<HTMLElement>('[data-form-status]')!;
-  const errors = [...form.querySelectorAll<HTMLElement>('[data-form-error]')];
-  const controlsFor = (name: string) => [...form.elements].filter((element): element is HTMLElement => element instanceof HTMLElement && element.getAttribute('name') === name);
-  const label = button.textContent;
-  let pending = false;
-  button.disabled = form.dataset.available !== 'true';
+	const button = form.querySelector<HTMLButtonElement>(
+		'button[type="submit"]',
+	)!;
 
-  for (const error of errors) {
-    error.id = `${form.id}-${error.dataset.formError}-error`;
-    for (const control of controlsFor(error.dataset.formError!)) {
-      const description = control.getAttribute('aria-describedby');
-      control.setAttribute('aria-describedby', [description, error.id].filter(Boolean).join(' '));
-    }
-  }
+	const status = form.querySelector<HTMLElement>("[data-form-status]")!;
+	const errors = [...form.querySelectorAll<HTMLElement>("[data-form-error]")];
 
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (pending || button.disabled) return;
-    pending = true;
-    button.disabled = true;
-    button.textContent = 'Sending…';
-    form.setAttribute('aria-busy', 'true');
-    errors.forEach(error => { error.textContent = ''; error.hidden = true; });
-    form.querySelectorAll('[aria-invalid]').forEach(control => control.removeAttribute('aria-invalid'));
-    openMessages(form, button, () => { status.textContent = 'Sending…'; });
+	const controlsFor = (name: string) =>
+		[...form.elements].filter(
+			(element): element is HTMLElement =>
+				element instanceof HTMLElement && element.getAttribute("name") === name,
+		);
 
-    try {
-      const data = new FormData(form);
-      const body = JSON.stringify({ ...payload(data), turnstileToken: String(data.get('cf-turnstile-response') ?? '') });
-      onSendingChange?.(true);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body,
-        signal: AbortSignal.timeout(30_000),
-      });
-      const result = await response.json() as { ok?: boolean; errors?: Record<string, string>; error?: string };
-      onSendingChange?.(false);
-      if (response.ok && result.ok === true) {
-        onSuccess?.(result);
-        form.hidden = true;
-        success.hidden = false;
-        success.focus();
-        return;
-      }
-      if (response.status === 409) onConflict?.();
-      openMessages(form, button, () => {
-        let firstInvalid: HTMLElement | undefined;
-        let hasDisplayedErrors = false;
-        const generalErrors: string[] = [];
-        for (const [field, message] of Object.entries(result.errors ?? {})) {
-          const error = errors.find(element => element.dataset.formError === field);
-          const controls = controlsFor(field);
-          if (error) {
-            error.textContent = message;
-            error.hidden = false;
-            hasDisplayedErrors = true;
-            if (!controls.length) error.tabIndex = -1;
-          }
-          controls.forEach(control => control.setAttribute('aria-invalid', 'true'));
-          firstInvalid ??= controls[0] ?? error;
-          if (!error && !controls.length) generalErrors.push(message);
-        }
-        status.textContent = generalErrors.join(' ') || result.error || (hasDisplayedErrors ? 'Please check the highlighted fields.' : 'We couldn’t confirm your message was sent. Try again or use email.');
-        (firstInvalid ?? status).focus();
-      });
-    } catch {
-      openMessages(form, button, () => {
-        status.textContent = 'We couldn’t confirm your message was sent. Your text is still here. Try again or use email.';
-        status.focus();
-      });
-    } finally {
-      onSendingChange?.(false);
-      pending = false;
-      button.disabled = form.dataset.available !== 'true';
-      button.textContent = label;
-      form.removeAttribute('aria-busy');
-      // A token may have been consumed even when the response was lost.
-      const turnstile = (window as Window & { turnstile?: { reset: () => void } }).turnstile;
-      try { turnstile?.reset(); } catch { /* Verification can still be loading. */ }
-    }
-  });
+	const label = button.textContent;
+	let pending = false;
+	button.disabled = form.dataset.available !== "true";
+
+	for (const error of errors) {
+		error.id = `${form.id}-${error.dataset.formError}-error`;
+
+		for (const control of controlsFor(error.dataset.formError!)) {
+			const description = control.getAttribute("aria-describedby");
+			control.setAttribute(
+				"aria-describedby",
+				[description, error.id].filter(Boolean).join(" "),
+			);
+		}
+	}
+
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+
+		if (pending || button.disabled) return;
+		pending = true;
+		button.disabled = true;
+		button.textContent = "Sending…";
+		form.setAttribute("aria-busy", "true");
+		errors.forEach((error) => {
+			error.textContent = "";
+			error.hidden = true;
+		});
+		form
+			.querySelectorAll("[aria-invalid]")
+			.forEach((control) => control.removeAttribute("aria-invalid"));
+		openMessages(form, button, () => {
+			status.textContent = "Sending…";
+		});
+
+		try {
+			const data = new FormData(form);
+
+			const body = JSON.stringify({
+				...payload(data),
+				turnstileToken: String(data.get("cf-turnstile-response") ?? ""),
+			});
+
+			onSendingChange?.(true);
+
+			const response = await fetch(endpoint, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body,
+				signal: AbortSignal.timeout(30_000),
+			});
+
+			// SAFETY: the endpoint answers with JSON carrying ok, errors and error. Every field is optional here, and onSuccess and the message code below read them only after checks.
+			const result = (await response.json()) as {
+				ok?: boolean;
+				errors?: Record<string, string>;
+				error?: string;
+			};
+
+			onSendingChange?.(false);
+
+			if (response.ok && result.ok === true) {
+				// SAFETY: a response with ok true is the caller's success body: the caller declares Result for its endpoint (software-inquiry reads brief and clientCopyStatus, which /api/software-inquiry returns on success), and this file does not validate it.
+				onSuccess?.(result as Result);
+				form.hidden = true;
+				success.hidden = false;
+				success.focus();
+
+				return;
+			}
+
+			if (response.status === 409) onConflict?.();
+			openMessages(form, button, () => {
+				let firstInvalid: HTMLElement | undefined;
+				let hasDisplayedErrors = false;
+				const generalErrors: string[] = [];
+
+				for (const [field, message] of Object.entries(result.errors ?? {})) {
+					const error = errors.find(
+						(element) => element.dataset.formError === field,
+					);
+
+					const controls = controlsFor(field);
+
+					if (error) {
+						error.textContent = message;
+						error.hidden = false;
+						hasDisplayedErrors = true;
+
+						if (!controls.length) error.tabIndex = -1;
+					}
+
+					controls.forEach((control) =>
+						control.setAttribute("aria-invalid", "true"),
+					);
+					firstInvalid ??= controls[0] ?? error;
+
+					if (!error && !controls.length) generalErrors.push(message);
+				}
+
+				status.textContent =
+					generalErrors.join(" ") ||
+					result.error ||
+					(hasDisplayedErrors
+						? "Please check the highlighted fields."
+						: "We couldn’t confirm your message was sent. Try again or use email.");
+				(firstInvalid ?? status).focus();
+			});
+		} catch {
+			openMessages(form, button, () => {
+				status.textContent =
+					"We couldn’t confirm your message was sent. Your text is still here. Try again or use email.";
+				status.focus();
+			});
+		} finally {
+			onSendingChange?.(false);
+			pending = false;
+			button.disabled = form.dataset.available !== "true";
+			button.textContent = label;
+			form.removeAttribute("aria-busy");
+
+			// A token may have been consumed even when the response was lost.
+			const turnstile = window.turnstile;
+
+			try {
+				turnstile?.reset();
+			} catch {
+				/* Verification can still be loading. */
+			}
+		}
+	});
 }

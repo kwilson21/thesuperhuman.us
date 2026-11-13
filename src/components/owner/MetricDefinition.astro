@@ -1,5 +1,8 @@
 ---
-interface Props { label: string }
+interface Props {
+	label: string;
+}
+
 const { label } = Astro.props;
 ---
 <details class="metric-definition"><summary aria-label={`What ${label} means`}>?</summary><div><slot /></div></details>

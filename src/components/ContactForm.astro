@@ -1,5 +1,8 @@
 ---
-const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const turnstileSiteKey =
+	Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	"";
 ---
 <form id="contact-form" class="site-form" data-available={Boolean(turnstileSiteKey)} novalidate>
   <p class="form-hint">All fields required unless marked optional.</p>
@@ -19,9 +22,7 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
 </form>
 <div id="contact-success" class="form-success" role="status" tabindex="-1" hidden><h3>Message received.</h3><p>Thanks for getting in touch.</p></div>
 <script>
-  import { setupFormSubmission } from '~/scripts/form-submission';
-  const form = document.getElementById('contact-form') as HTMLFormElement;
-  setupFormSubmission({ form, endpoint: '/api/contact', success: document.getElementById('contact-success')!, payload: data => ({
-    name: String(data.get('name') ?? ''), email: String(data.get('email') ?? ''), company: String(data.get('company') ?? ''), description: String(data.get('description') ?? ''),
-  }) });
+  import { setupContactForm } from '~/scripts/contact-form';
+
+  setupContactForm();
 </script>
