@@ -375,6 +375,7 @@ export function differential<I, A extends object>(
 	oracle: (input: I) => A,
 	subject: (input: I) => A,
 	describeAnswer: (answer: A) => string,
+	observe?: (expected: A) => void,
 ) {
 	const mismatches: Mismatch[] = [];
 	let count = 0;
@@ -384,6 +385,8 @@ export function differential<I, A extends object>(
 			count += 1;
 
 			const expected = attempt(() => oracle(input));
+
+			if (observe && !("threw" in expected)) observe(expected);
 			const actual = attempt(() => subject(input));
 
 			const said = (answer: A | { threw: string }) =>

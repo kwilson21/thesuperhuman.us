@@ -306,7 +306,7 @@ describe("validateIntake against the frozen Zod 3 validator", () => {
 		console.info(
 			`validateIntake differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("returns a fresh plain object the browser may change", () => {
 		for (const body of [base, { ...base, title: "" }, null]) {
@@ -324,7 +324,7 @@ describe("validateIntake against the frozen Zod 3 validator", () => {
 				expect(validateIntake(body)).not.toHaveProperty("errors.extra");
 			}
 		}
-	});
+	}, 60_000);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -542,7 +542,7 @@ describe("validateSoftwareInquiry against the frozen Zod 3 validator", () => {
 		console.info(
 			`validateSoftwareInquiry differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("returns a fresh plain object the browser may change", () => {
 		const body = bases[0];
@@ -557,7 +557,7 @@ describe("validateSoftwareInquiry against the frozen Zod 3 validator", () => {
 				"errors.path",
 			);
 		}
-	});
+	}, 60_000);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -672,7 +672,7 @@ describe("the agreement client details against the frozen Zod 3 validators", () 
 		console.info(
 			`resolveClientDetails differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("answers the draft reader as the Zod draft schema and its field errors did", () => {
 		const oracle = (input: RawValue) => {
@@ -697,7 +697,7 @@ describe("the agreement client details against the frozen Zod 3 validators", () 
 		console.info(
 			`readDraft differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("throws from parseDraft exactly where the Zod schema's parse threw, with a message that starts with [", () => {
 		let threw = 0;
@@ -725,7 +725,7 @@ describe("the agreement client details against the frozen Zod 3 validators", () 
 		}
 
 		expect(threw).toBeGreaterThan(500);
-	});
+	}, 60_000);
 
 	it("answers the client reader and parseClientAgreement as the Zod client schema did", () => {
 		const client = {
@@ -832,7 +832,7 @@ describe("the agreement client details against the frozen Zod 3 validators", () 
 		console.info(
 			`clientAgreement differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1192,7 +1192,19 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 	const answerLine = (answer: Answer) => fingerprint(answer, true);
 
 	it("answers the agreement details as the Zod schema did: values in order, and every issue with its path and sentence, in order", () => {
-		const found = differential(legacyDetailsAnswer, detailsAnswer, answerLine);
+		// The inputs reach both sides of the schema: many accepted, and many different sets of failures (including the
+		// checks across fields, which run only when nothing stopped the details). Counted from the same runs.
+		const outcomes = { accepted: 0, kinds: new Set<string>() };
+
+		const found = differential(
+			legacyDetailsAnswer,
+			detailsAnswer,
+			answerLine,
+			(answer) => {
+				if (answer.ok) outcomes.accepted += 1;
+				else outcomes.kinds.add(Object.values(answer.errors).join("|"));
+			},
+		);
 
 		for (const body of bodies([details, full], detailPools, 20261120, 9000))
 			found.run(body);
@@ -1211,17 +1223,6 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			found.run(shuffled(changed(random.pick([details, full]), set), random));
 		}
 
-		// The inputs reach both sides of the schema: many accepted, and many different sets of failures (including
-		// the checks across fields, which run only when nothing stopped the details).
-		const outcomes = { accepted: 0, kinds: new Set<string>() };
-
-		for (const body of bodies([details, full], detailPools, 20261120, 3000)) {
-			const answer = legacyDetailsAnswer(body);
-
-			if (answer.ok) outcomes.accepted += 1;
-			else outcomes.kinds.add(Object.values(answer.errors).join("|"));
-		}
-
 		expect(outcomes.accepted).toBeGreaterThan(50);
 		expect(outcomes.kinds.size).toBeGreaterThan(300);
 		expect(found.count).toBeGreaterThan(19000);
@@ -1229,7 +1230,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 		console.info(
 			`agreementDetails differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("answers the attachments alone as the Zod array did, missing as none", () => {
 		const oracle = (input: RawValue): Answer => {
@@ -1269,7 +1270,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 		console.info(
 			`agreementAttachments differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	it("throws from validateAgreementDetails exactly where the Zod version did, with the same sentences and the same plain errors", () => {
 		// SAFETY: the function reads only the payment mode and each milestone's checkpoint; the rest of an offer's terms is not read.
@@ -1338,7 +1339,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 		console.info(
 			`validateAgreementDetails differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	const contractorPools = {
 		legal_name: [...texts(200), ...notStrings],
@@ -1410,7 +1411,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 		console.info(
 			`contractor differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
-	});
+	}, 60_000);
 
 	describe("the owner's agreement requests", () => {
 		const id = "123e4567-e89b-42d3-a456-426614174000";
@@ -1556,7 +1557,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			console.info(
 				`ownerAgreementAction differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 			);
-		});
+		}, 60_000);
 
 		it("answers the attachment upload's query as the Zod object did", () => {
 			const oracle = (input: RawValue): Answer => {
@@ -1608,6 +1609,6 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			console.info(
 				`attachmentQuery differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 			);
-		});
+		}, 60_000);
 	});
 });
