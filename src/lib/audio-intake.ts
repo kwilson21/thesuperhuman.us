@@ -1,4 +1,17 @@
-import { z } from "astro/zod";
+import * as Predicate from "effect/Predicate";
+import * as Schema from "effect/Schema";
+import {
+	choiceField,
+	emailPattern,
+	fieldOf,
+	type FieldValues,
+	type Mutable,
+	plainErrors,
+	type RawValue,
+	readFields,
+	receivedKind,
+	stringField,
+} from "./fields";
 import type { NewOwnerRequest } from "./owner-requests";
 
 export const audioOffers = {
@@ -122,42 +135,127 @@ export function describePreferences(
 	});
 }
 
-const short = (max: number) => z.string().trim().max(max);
+// The intake form's validator, written to answer exactly as the Zod 3 schema it replaced did (tests/server/validators-differential.test.ts
+// holds it to that on thousands of inputs): the same sentences, Zod's own among them ("Required", "Expected string,
+// received number", "String must contain at most 120 character(s)"), because the visitor reads them; the last sentence of
+// a field wins; and the error keys follow the order of the fields.
+const kinds = {
+	missing: "Required",
+	wrongType: (received: string) => `Expected string, received ${received}`,
+};
 
-const optionalLink = short(2048).refine((value) => {
+const tooLong = (max: number) =>
+	Schema.isMaxLength(max, {
+		message: `String must contain at most ${max} character(s)`,
+	});
+
+const oneLine = Schema.makeFilter((value: string) =>
+	/[\r\n]/.test(value) ? "Invalid input" : true,
+);
+
+const linkSentence = "Use a complete HTTPS link, or leave this blank.";
+
+const httpsLink = Schema.makeFilter((value: string) => {
 	if (!value) return true;
 
 	try {
 		const url = new URL(value);
 
-		return url.protocol === "https:" && !url.username && !url.password;
+		return url.protocol === "https:" && !url.username && !url.password
+			? true
+			: linkSentence;
 	} catch {
-		return false;
+		return linkSentence;
 	}
-}, "Use a complete HTTPS link, or leave this blank.");
-
-const schema = z.object({
-	service: z.enum(["vocal-mix", "mastering", "bundle", "custom"]),
-	title: short(120)
-		.min(1, "Add a song or project title.")
-		.refine((v) => !/[\r\n]/.test(v)),
-	direction: z.enum(["judgment", "preferences", "specific"]),
-	preferences: z.record(z.string().max(30), z.string().max(30)).default({}),
-	preserve: short(1200).default(""),
-	referenceUrl: optionalLink.default(""),
-	referenceNote: short(2000).default(""),
-	name: short(100)
-		.min(1, "Add your name.")
-		.refine((v) => !/[\r\n]/.test(v)),
-	email: short(120).email("Add a valid email address."),
-	permission: z.literal(true, {
-		errorMap: () => ({ message: "Allow access to the files for this review." }),
-	}),
-	turnstileToken: z.string().min(1, "Complete the security check.").max(2048),
-	fileLink: optionalLink.default(""),
 });
 
-export type IntakeInput = z.infer<typeof schema>;
+const optionalLink = () => stringField(kinds, tooLong(2048), httpsLink);
+
+const choice = <const V extends readonly [string, ...string[]]>(values: V) => {
+	const expected = values.map((value) => `'${value}'`).join(" | ");
+
+	return choiceField(values, {
+		missing: "Required",
+		wrongType: (received) => `Expected ${expected}, received ${received}`,
+		notOneOf: (received) =>
+			`Invalid enum value. Expected ${expected}, received '${received}'`,
+	});
+};
+
+// A record of short keys to short values: the sentence is the last issue Zod raised, a key's before its value's.
+const preferences = fieldOf<Record<string, string>>((raw) => {
+	if (raw === undefined) return { value: {} };
+
+	if (!Predicate.isObject(raw) || receivedKind(raw) !== "object")
+		return { say: `Expected object, received ${receivedKind(raw)}` };
+
+	const said: string[] = [];
+	const copy: Record<string, string> = {};
+
+	for (const [key, chosen] of Object.entries(raw)) {
+		if (key.length > 30)
+			said.push("String must contain at most 30 character(s)");
+
+		if (!Predicate.isString(chosen))
+			said.push(
+				chosen === undefined
+					? "Required"
+					: `Expected string, received ${receivedKind(chosen)}`,
+			);
+		else {
+			if (chosen.length > 30)
+				said.push("String must contain at most 30 character(s)");
+			copy[key] = chosen;
+		}
+	}
+
+	return said.length > 0 ? { say: said[said.length - 1] } : { value: copy };
+});
+
+const fields = {
+	service: choice(["vocal-mix", "mastering", "bundle", "custom"]),
+	title: stringField(
+		kinds,
+		tooLong(120),
+		Schema.isMinLength(1, { message: "Add a song or project title." }),
+		oneLine,
+	),
+	direction: choice(["judgment", "preferences", "specific"]),
+	preferences,
+	preserve: stringField(kinds, tooLong(1200)),
+	referenceUrl: optionalLink(),
+	referenceNote: stringField(kinds, tooLong(2000)),
+	name: stringField(
+		kinds,
+		tooLong(100),
+		Schema.isMinLength(1, { message: "Add your name." }),
+		oneLine,
+	),
+	email: stringField(
+		kinds,
+		tooLong(120),
+		Schema.isPattern(emailPattern, { message: "Add a valid email address." }),
+	),
+	permission: fieldOf<true>((raw) =>
+		raw === true
+			? { value: true }
+			: { say: "Allow access to the files for this review." },
+	),
+	// The security token is kept as it arrived (not trimmed).
+	turnstileToken: stringField(
+		{ ...kinds, trim: false },
+		Schema.isMinLength(1, { message: "Complete the security check." }),
+		tooLong(2048),
+	),
+	fileLink: optionalLink(),
+};
+
+export type IntakeInput = Mutable<FieldValues<typeof fields>>;
+
+/** The sentences the checks across fields give. */
+type CrossFieldErrors = Partial<
+	Record<"preferences" | "fileLink" | "referenceNote", string>
+>;
 
 export function isAudioIntakeAvailable(env: Env | undefined) {
 	return Boolean(env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT);
@@ -185,56 +283,76 @@ export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
 }
 
 export function validateIntake(
-	input: unknown,
+	input: RawValue,
 ):
 	| { ok: true; value: IntakeInput }
 	| { ok: false; errors: Record<string, string> } {
-	const result = schema.safeParse(input);
+	const read = readFields(fields, input, {
+		winner: "last",
+		defaults: {
+			preferences: {},
+			preserve: "",
+			referenceUrl: "",
+			referenceNote: "",
+			fileLink: "",
+		},
+		notObject: {
+			null: "Expected object, received null",
+			string: "Expected object, received string",
+			number: "Expected object, received number",
+			nan: "Expected object, received nan",
+			boolean: "Expected object, received boolean",
+			array: "Expected object, received array",
+			bigint: "Expected object, received bigint",
+			symbol: "Expected object, received symbol",
+			function: "Expected object, received function",
+			promise: "Expected object, received promise",
+			map: "Expected object, received map",
+			set: "Expected object, received set",
+			date: "Expected object, received date",
+			undefined: "Required",
+		},
+		// Run only once every field has read, as the cross-field checks always did.
+		after: (value) => {
+			const errors: CrossFieldErrors = {};
 
-	if (!result.success)
-		return {
-			ok: false,
-			errors: Object.fromEntries(
-				result.error.issues.map((i) => [
-					String(i.path[0] ?? "_form"),
-					i.message,
-				]),
-			),
-		};
+			const allowed = directionFields(value.service);
 
-	const value = result.data,
-		fields = directionFields(value.service);
+			for (const [key, chosen] of Object.entries(value.preferences)) {
+				const field = allowed.find((f) => f.id === key);
 
-	const errors: Record<string, string> = {};
+				if (
+					!field ||
+					(chosen !== "decide" &&
+						!field.options.some((o) => o.value === chosen))
+				)
+					errors.preferences =
+						"These preferences do not match your selected service.";
+			}
 
-	for (const [key, choice] of Object.entries(value.preferences)) {
-		const field = fields.find((f) => f.id === key);
+			if (
+				value.direction === "judgment" &&
+				Object.values(value.preferences).some((v) => v !== "decide")
+			)
+				errors.preferences =
+					"Choose a preference path to include specific settings.";
 
-		if (
-			!field ||
-			(choice !== "decide" && !field.options.some((o) => o.value === choice))
-		)
-			errors.preferences =
-				"These preferences do not match your selected service.";
-	}
+			if (value.service !== "custom" && !value.fileLink)
+				errors.fileLink = "Provide your files before submitting for review.";
 
-	if (
-		value.direction === "judgment" &&
-		Object.values(value.preferences).some((v) => v !== "decide")
-	)
-		errors.preferences =
-			"Choose a preference path to include specific settings.";
+			if (value.direction === "specific" && !value.referenceNote)
+				errors.referenceNote =
+					"Describe the specific direction you have in mind.";
 
-	if (value.service !== "custom" && !value.fileLink)
-		errors.fileLink = "Provide your files before submitting for review.";
+			if (value.service === "custom" && !value.referenceNote)
+				errors.referenceNote =
+					"Briefly describe your project and what you need.";
 
-	if (value.direction === "specific" && !value.referenceNote)
-		errors.referenceNote = "Describe the specific direction you have in mind.";
+			return errors;
+		},
+	});
 
-	if (value.service === "custom" && !value.referenceNote)
-		errors.referenceNote = "Briefly describe your project and what you need.";
-
-	return Object.keys(errors).length
-		? { ok: false, errors }
-		: { ok: true, value };
+	return read.ok
+		? { ok: true, value: read.value }
+		: { ok: false, errors: plainErrors(read.errors) };
 }

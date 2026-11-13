@@ -50,11 +50,25 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 ];
 
 /**
- * Zod v3 through `astro/zod` still validates in the browser: three validators (audio intake, software inquiry, agreement client
- * details) across four modules (`audio-intake`, `software-inquiry`, `agreement-client-fields`, `agreement-draft-fields`). It is the one named exception, until the Zod to Effect Schema PR removes it and this entry with it.
- * `astro` depends on `zod`, so the exception also covers the dependency walk for this specifier only.
+ * The effect modules browser-reachable source may import, by exact specifier (the one allowance in FORBIDDEN_MODULES).
+ * Effect Schema reaches the browser on purpose, through the shared field helpers (src/lib/fields.ts) and the three
+ * validators built on them, and only for synchronous decoding: no `Effect.gen`, service or Layer. Each module, and why:
+ * - `effect/Schema`: the schemas themselves (`Schema.String`, `makeFilter`, `isMaxLength`, `decodeTo`, `decodeUnknownResult`).
+ * - `effect/SchemaGetter`: `SchemaGetter.transform`, the synchronous decode step of a field (trim, normalise, lower-case).
+ * - `effect/SchemaIssue`: `makeFormatterStandardSchemaV1`, which turns a failed decode into one issue per failed check.
+ * - `effect/Result`: `Result.isSuccess`, to read what `Schema.decodeUnknownResult` answers without running an Effect.
+ * - `effect/Predicate`: the `isString`, `isObject` and `isNull` guards a field reader asks.
+ * Everything else of Effect (`effect/Effect`, `effect/Layer`, `effect/Context`, the bare `effect`), `@effect/*`,
+ * `@xstate/effect` and `src/server/**` stays forbidden. Zod is not allowed any more, `astro/zod` and `astro:schema`
+ * included.
  */
-export const ALLOWED_BROWSER_MODULES: readonly string[] = ["astro/zod"];
+export const ALLOWED_BROWSER_EFFECT_MODULES: readonly string[] = [
+	"effect/Predicate",
+	"effect/Result",
+	"effect/Schema",
+	"effect/SchemaGetter",
+	"effect/SchemaIssue",
+];
 
 // What no browser module may load: a Node or Cloudflare built-in, or Astro's server-only env. Specifiers only: the
 // walker reads them with the TypeScript parser, so a comment or an object key that happens to say "node:" is not one.

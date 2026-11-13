@@ -17,7 +17,10 @@ import {
 	validateAgreementDetails,
 	contractorSchema,
 } from "~/lib/agreement-fields";
-import { clientAgreementSchema } from "~/lib/agreement-client-fields";
+import {
+	parseClientAgreement,
+	readClientAgreement,
+} from "~/lib/agreement-client-fields";
 import {
 	reviewAgreements,
 	signAgreements,
@@ -520,9 +523,7 @@ it("enforces dates, milestone counts, invoice duration and owner default semanti
 			paymentMode: "invoice",
 		}),
 	).toThrow();
-	expect(() =>
-		clientAgreementSchema.parse({ ...client, naming: true }),
-	).toThrow();
+	expect(() => parseClientAgreement({ ...client, naming: true })).toThrow();
 	expect(() =>
 		contractorSchema.parse({
 			...contractor,
@@ -1256,7 +1257,7 @@ it("runs private source templates through one, two and three milestones in both 
 			const values = agreementValues(
 				purchase,
 				filled,
-				clientAgreementSchema.parse(client),
+				parseClientAgreement(client),
 				contractorSchema.parse(contractor),
 				{
 					effective_on: "2026-09-30",
@@ -1510,7 +1511,7 @@ it("expires an ended SOW once its project content has been deleted", async () =>
 });
 
 it("records business authority in the single explicit consent statement", () => {
-	expect(clientAgreementSchema.safeParse(client).success).toBe(true);
+	expect(readClientAgreement(client).ok).toBe(true);
 	const source = readFileSync("src/pages/offer/[token]/sign.astro", "utf8");
 	expect(source.match(/type="checkbox"/g)).toHaveLength(1);
 	expect(source).not.toContain('name="initials"');
@@ -3760,7 +3761,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 				},
 			],
 		}),
-		clientAgreementSchema.parse(client),
+		parseClientAgreement(client),
 		contractorSchema.parse(contractor),
 		{
 			effective_on: "2026-10-01",

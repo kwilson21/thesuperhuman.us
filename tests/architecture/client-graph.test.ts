@@ -13,19 +13,22 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { BROWSER_MODULES } from "../helpers/browser-modules";
 import {
-	ALLOWED_BROWSER_MODULES,
+	ALLOWED_BROWSER_EFFECT_MODULES,
 	clientEntries,
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
 	hydratedDirectives,
 	type Reached,
 	serverUsesIn,
+	specifiersOf,
 } from "../helpers/client-graph";
 
-// Effect, src/server and the server-only packages never reach the browser: src/scripts/** and the <script> blocks of
-// .astro files stay plain TypeScript. This walks the static import graph from those entries and fails when any module
-// they reach imports `effect`, `@xstate/effect`, `xstate`, `zod` (v4), `stripe`, `resend`, `pdf-lib` (or a package that
-// depends on one), or anything under src/server. Type-only imports are erased, so they do not count.
+// Only Effect Schema, through the shared field helpers and for synchronous decoding, reaches the browser; the rest of
+// Effect, src/server and the server-only packages never do: src/scripts/** and the <script> blocks of .astro files stay
+// plain TypeScript. This walks the static import graph from those entries and fails when any module they reach imports
+// an effect module that ALLOWED_BROWSER_EFFECT_MODULES does not name, `@effect/*`, `@xstate/effect`, `xstate`, `zod` (any
+// version, `astro/zod` and `astro:schema` included), `stripe`, `resend`, `pdf-lib` (or a package that depends on one),
+// or anything under src/server. Type-only imports are erased, so they do not count.
 //
 // "Server-only" for a src/lib module cannot be told from its path, so the rule is a reviewed allowlist of exactly the
 // src/lib (and src/data) modules a browser entry may reach. A module that is not on it, because someone imported a
@@ -74,10 +77,10 @@ describe("the browser's import graph", () => {
 		expect(entries.some((entry) => entry.endsWith(".astro"))).toBe(true);
 	});
 
-	it("never reaches effect, xstate, zod, stripe, resend, pdf-lib or src/server", () => {
-		expect(clientGraphViolations(repository, ALLOWED_BROWSER_MODULES)).toEqual(
-			[],
-		);
+	it("reaches only the allowed effect modules, and never xstate, zod, stripe, resend, pdf-lib or src/server", () => {
+		expect(
+			clientGraphViolations(repository, ALLOWED_BROWSER_EFFECT_MODULES),
+		).toEqual([]);
 	});
 });
 
@@ -99,7 +102,7 @@ describe("what the browser entries reach", () => {
 	const reach = () => {
 		const reached: Reached = { files: new Set(), packages: new Set() };
 
-		clientGraphViolations(repository, ALLOWED_BROWSER_MODULES, reached);
+		clientGraphViolations(repository, ALLOWED_BROWSER_EFFECT_MODULES, reached);
 
 		return reached;
 	};
@@ -129,11 +132,24 @@ describe("what the browser entries reach", () => {
 		).toEqual([]);
 	});
 
-	it("loads no package but astro (for astro/zod)", () => {
-		// astro/zod is Zod v3, still used by three browser validators across four modules (audio-intake, software-inquiry, agreement-client-fields,
-		// agreement-draft-fields); the Zod to Effect Schema PR removes it, and this test
-		// then expects no package at all.
-		expect([...reach().packages].sort()).toEqual(["astro"]);
+	it("loads no package but effect", () => {
+		// Effect Schema is the one package browser code loads (through src/lib/fields.ts and the validators on it).
+		expect([...reach().packages].sort()).toEqual(["effect"]);
+	});
+
+	it("imports exactly the effect modules on the allowlist, and no other", () => {
+		// Every module on ALLOWED_BROWSER_EFFECT_MODULES is imported by a reached file (a module nobody needs is removed from
+		// the list), and no reached file imports another effect module or the bare `effect`. Type-only imports are erased.
+		const imported = new Set(
+			[...reach().files]
+				.filter((file) => /\.([cm]?[jt]sx?|astro)$/.test(file))
+				.flatMap((file) =>
+					specifiersOf(file, readFileSync(join(repository, file), "utf8")),
+				)
+				.filter((specifier) => /^effect(\/|$)/.test(specifier)),
+		);
+
+		expect([...imported].sort()).toEqual([...ALLOWED_BROWSER_EFFECT_MODULES]);
 	});
 
 	it("has no hydrated framework component in any .astro file", async () => {
@@ -1178,7 +1194,13 @@ describe("the walker finds what it should", () => {
 				"resend",
 				"pdf-lib",
 			]);
-			expect(ALLOWED_BROWSER_MODULES).toEqual(["astro/zod"]);
+			expect(ALLOWED_BROWSER_EFFECT_MODULES).toEqual([
+				"effect/Predicate",
+				"effect/Result",
+				"effect/Schema",
+				"effect/SchemaGetter",
+				"effect/SchemaIssue",
+			]);
 		});
 
 		it("finds each server-only package, and a package that depends on one", () => {
@@ -1208,7 +1230,7 @@ describe("the walker finds what it should", () => {
 			]);
 		});
 
-		it("lets astro/zod through, with astro's own dependency on zod, and nothing else of zod", () => {
+		it("no longer lets astro/zod, zod or astro:schema through, allowlist or not", () => {
 			const files = {
 				"src/scripts/a.ts": 'import { z } from "astro/zod";',
 				"node_modules/astro/package.json": JSON.stringify({
@@ -1218,18 +1240,107 @@ describe("the walker finds what it should", () => {
 
 			const options = { packages: ["astro", "zod"] };
 
+			// astro/zod is Zod v3 by astro's own dependency on zod.
+			for (const allow of [[], ALLOWED_BROWSER_EFFECT_MODULES])
+				expect(
+					clientGraphViolations(scratch(files, options), allow).map(
+						(v) => v.import,
+					),
+				).toEqual(["zod"]);
+
+			for (const allow of [[], ALLOWED_BROWSER_EFFECT_MODULES])
+				expect(
+					clientGraphViolations(
+						scratch(
+							{
+								"src/scripts/b.ts":
+									'import { z } from "zod";\nimport "zod/v3";',
+							},
+							options,
+						),
+						allow,
+					).map((v) => v.import),
+				).toEqual(["zod", "zod/v3"]);
+
+			// astro:schema is an Astro virtual module the walker cannot resolve, so it fails as unresolved.
+			for (const allow of [[], ALLOWED_BROWSER_EFFECT_MODULES])
+				expect(
+					clientGraphViolations(
+						scratch({
+							"src/scripts/c.ts": 'import { z } from "astro:schema";',
+						}),
+						allow,
+					).map((v) => v.import),
+				).toEqual(["astro:schema"]);
+		});
+
+		it("lets the Effect Schema modules through, the field helpers' use of them included", () => {
+			const root = scratch({
+				"src/scripts/a.ts":
+					'import { v } from "~/lib/fields";\nexport const a = v;',
+				"src/lib/fields.ts": [
+					'import * as Predicate from "effect/Predicate";',
+					'import * as Result from "effect/Result";',
+					'import * as Schema from "effect/Schema";',
+					'import type * as SchemaAST from "effect/SchemaAST";',
+					'import * as SchemaGetter from "effect/SchemaGetter";',
+					'import * as SchemaIssue from "effect/SchemaIssue";',
+					"export const v = [Predicate, Result, Schema, SchemaGetter, SchemaIssue];",
+				].join("\n"),
+			});
+
 			expect(
-				clientGraphViolations(scratch(files, options), ALLOWED_BROWSER_MODULES),
+				clientGraphViolations(root, ALLOWED_BROWSER_EFFECT_MODULES),
 			).toEqual([]);
+		});
+
+		it("still fails the rest of Effect, whatever the field helpers import", () => {
+			// The experiments the allowlist change was proved with: a browser script that runs an Effect or builds a Layer.
+			const run = {
+				"src/scripts/a.ts":
+					'import * as Effect from "effect/Effect";\nexport const a = Effect.runSync(Effect.succeed(1));',
+			};
+
+			const layer = {
+				"src/scripts/a.ts":
+					'import * as Layer from "effect/Layer";\nexport const a = Layer.empty;',
+			};
+
 			expect(
-				clientGraphViolations(scratch(files, options)).map((v) => v.import),
-			).toEqual(["zod"]);
+				clientGraphViolations(scratch(run), ALLOWED_BROWSER_EFFECT_MODULES).map(
+					(v) => v.import,
+				),
+			).toEqual(["effect/Effect"]);
 			expect(
 				clientGraphViolations(
-					scratch({ ...files, "src/scripts/b.ts": 'import "zod";' }, options),
-					ALLOWED_BROWSER_MODULES,
+					scratch(layer),
+					ALLOWED_BROWSER_EFFECT_MODULES,
 				).map((v) => v.import),
-			).toEqual(["zod"]);
+			).toEqual(["effect/Layer"]);
+
+			for (const specifier of [
+				"effect",
+				"effect/Effect",
+				"effect/Layer",
+				"effect/Context",
+				"effect/Option",
+				"effect/Schema/Foo",
+				"@effect/platform",
+				"@xstate/effect",
+				"~/server/edge",
+				"../server/edge",
+			]) {
+				const root = scratch({
+					"src/scripts/a.ts": `import "${specifier}";`,
+					"src/server/edge.ts": "export const edge = 1;",
+				});
+
+				expect(
+					clientGraphViolations(root, ALLOWED_BROWSER_EFFECT_MODULES).map(
+						(v) => v.import,
+					),
+				).toEqual([specifier]);
+			}
 		});
 
 		it("lets a named module through and nothing else", () => {

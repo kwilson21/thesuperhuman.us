@@ -13,7 +13,7 @@ import {
 	closeObsoleteAgreementNotifications,
 } from "~/lib/software-agreements";
 import { agreementEvent } from "~/lib/agreement-events";
-import { cleanText } from "~/lib/agreement-client-fields";
+import { cleanText } from "~/server/agreement-zod-fields";
 import {
 	prepareAgreementArtifact,
 	deliverAgreementCopies,

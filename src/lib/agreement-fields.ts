@@ -1,10 +1,6 @@
 import { z } from "astro/zod";
-import {
-	cleanText,
-	email,
-	required,
-	type ClientAgreement,
-} from "./agreement-client-fields";
+import type { ClientAgreement } from "./agreement-client-fields";
+import { cleanText, email, required } from "../server/agreement-zod-fields";
 import { softwareInvoiceTerms } from "./software-invoices";
 import { validProjectDate } from "./audio-project-updates";
 import { formatUSD, offerTotal, type OfferTerms } from "./software-offers";
