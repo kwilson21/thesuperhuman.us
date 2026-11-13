@@ -5,7 +5,8 @@ import {
 	readFileSync,
 	statSync,
 } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { isBuiltin } from "node:module";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import ts from "typescript";
 
 // The static import graph of what runs in the browser: every file under src/scripts and the <script> blocks of every
@@ -37,7 +38,10 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 	"@xstate/effect",
 ];
 
-const SCRIPT_BLOCK = /<script\b[^>]*>([\s\S]*?)<\/script>/g;
+// An opening tag may hold a ">" inside a quoted attribute value.
+const SCRIPT_BLOCK =
+	/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/g;
+const SCRIPT_SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/;
 const FRONTMATTER = /^\s*---[\s\S]*?\n---/;
 
 const EXTENSIONS = [
@@ -74,8 +78,26 @@ function filesUnder(directory: string, suffixes: string[]): string[] {
 		});
 }
 
-/** The `~/` style aliases of the root's tsconfig.json: prefix (with its slash) to the directory it stands for. */
-function aliasesOf(root: string): Map<string, string> {
+/**
+ * What a module specifier may stand for besides itself: a tsconfig.json `paths` entry or a package.json `imports` entry.
+ * `pattern` may hold one `*`; every target (all of them, not only the first) replaces its `*` with what the pattern's
+ * `*` matched. A target is an absolute path, or a bare specifier (only an `imports` entry may name a package).
+ */
+type Alias = { pattern: string; targets: string[] };
+
+/** Every string in a package.json `imports` value: a target, or the targets of a condition object or an array. */
+function importTargets(value: unknown): string[] {
+	if (typeof value === "string") return [value];
+
+	if (Array.isArray(value)) return value.flatMap(importTargets);
+
+	return typeof value === "object" && value !== null
+		? Object.values(value).flatMap(importTargets)
+		: [];
+}
+
+/** The tsconfig.json `paths` and the package.json `imports` of the root, as aliases. */
+function aliasesOf(root: string): Alias[] {
 	const parsed = ts.parseConfigFileTextToJson(
 		"tsconfig.json",
 		readFileSync(join(root, "tsconfig.json"), "utf8"),
@@ -85,16 +107,57 @@ function aliasesOf(root: string): Map<string, string> {
 		parsed.config?.compilerOptions ?? {};
 
 	const base = resolve(root, options.baseUrl ?? ".");
-	const aliases = new Map<string, string>();
 
-	for (const [pattern, targets] of Object.entries(options.paths ?? {})) {
-		const [target] = targets;
+	const aliases: Alias[] = Object.entries(options.paths ?? {}).map(
+		([pattern, targets]) => ({
+			pattern,
+			targets: targets.map((target) => resolve(base, target)),
+		}),
+	);
 
-		if (pattern.endsWith("/*") && target?.endsWith("/*"))
-			aliases.set(pattern.slice(0, -1), join(base, target.slice(0, -1)));
+	const manifest = join(root, "package.json");
+
+	if (existsSync(manifest)) {
+		const { imports } = JSON.parse(readFileSync(manifest, "utf8")) as {
+			imports?: Record<string, unknown>;
+		};
+
+		for (const [pattern, value] of Object.entries(imports ?? {}))
+			aliases.push({
+				pattern,
+				targets: importTargets(value).map((target) =>
+					target.startsWith(".") ? resolve(root, target) : target,
+				),
+			});
 	}
 
 	return aliases;
+}
+
+/** What `specifier` matches in `alias`: the text its `*` stood for ("" with no `*`), or undefined when it does not match. */
+function matchAlias(alias: Alias, specifier: string): string | undefined {
+	const star = alias.pattern.indexOf("*");
+
+	if (star === -1) return alias.pattern === specifier ? "" : undefined;
+	const prefix = alias.pattern.slice(0, star);
+	const suffix = alias.pattern.slice(star + 1);
+
+	return specifier.length >= prefix.length + suffix.length &&
+		specifier.startsWith(prefix) &&
+		specifier.endsWith(suffix)
+		? specifier.slice(prefix.length, specifier.length - suffix.length)
+		: undefined;
+}
+
+/** Every target of every alias that matches `specifier`, with the matched text put in. */
+function aliasTargets(aliases: Alias[], specifier: string): string[] {
+	return aliases.flatMap((alias) => {
+		const matched = matchAlias(alias, specifier);
+
+		return matched === undefined
+			? []
+			: alias.targets.map((target) => target.replace("*", matched));
+	});
 }
 
 /** True when an import brings code into the module: not `import type`, and not every specifier marked `type`. */
@@ -269,14 +332,37 @@ function globPatternsOf(argument: ts.Expression): string[] | undefined {
 	return texts.every((text) => text !== undefined) ? texts : undefined;
 }
 
-/** The script text of a file: a .ts file whole, an .astro file's <script> blocks (never its frontmatter). */
+/** The text with every character but the line breaks removed: it keeps the line numbers of what follows. */
+const blank = (text: string) => text.replace(/[^\n]/g, "");
+
+/**
+ * The script text of a file: a .ts file whole; an .astro file's <script> blocks, never its frontmatter, each at the
+ * line it has in the file, and a `<script src="...">` as the import of that file. Every <script> counts, including one
+ * with `is:inline`, `define:vars` or an unusual `type` (which Astro leaves inline) and one inside an HTML comment: a
+ * file that trips this on purpose is a false positive to fix, never a case to wave through.
+ */
 function clientText(file: string): string {
 	const text = readFileSync(file, "utf8");
 
 	if (!file.endsWith(".astro")) return text;
-	const markup = text.replace(FRONTMATTER, "");
+	const markup = text.replace(FRONTMATTER, blank);
+	let result = "";
+	let last = 0;
 
-	return [...markup.matchAll(SCRIPT_BLOCK)].map((block) => block[1]).join("\n");
+	for (const block of markup.matchAll(SCRIPT_BLOCK)) {
+		const [whole, open, inner] = block;
+		const src = SCRIPT_SRC.exec(open);
+		const source = src ? (src[1] ?? src[2] ?? src[3]) : undefined;
+
+		result += blank(markup.slice(last, block.index)) + blank(open);
+		result +=
+			source === undefined
+				? inner
+				: `import ${JSON.stringify(source)};${blank(inner)}`;
+		last = block.index + whole.length;
+	}
+
+	return result + blank(markup.slice(last));
 }
 
 /** True when `specifier` is a forbidden package (or something under it) that `allow` does not name exactly. */
@@ -293,36 +379,8 @@ function isServerFile(path: string, root: string) {
 	return (path + sep).startsWith(join(root, "src", "server") + sep);
 }
 
-/** The path a relative, root-absolute (`/src/...`) or aliased specifier names, without looking at the file system. */
-function basePath(
-	specifier: string,
-	from: string,
-	root: string,
-	aliases: Map<string, string>,
-): string | undefined {
-	const bare = specifier.split("?")[0];
-
-	for (const [prefix, directory] of aliases)
-		if (bare.startsWith(prefix))
-			return join(directory, bare.slice(prefix.length));
-
-	if (bare.startsWith(".")) return resolve(dirname(from), bare);
-
-	if (bare.startsWith("/")) return join(root, bare);
-
-	return undefined;
-}
-
-/** The file a relative, root-absolute or aliased specifier names, or undefined for a package or a file that is not code. */
-function resolveSpecifier(
-	specifier: string,
-	from: string,
-	root: string,
-	aliases: Map<string, string>,
-): string | undefined {
-	const base = basePath(specifier, from, root, aliases);
-
-	if (!base) return undefined;
+/** The file a path names (with a TypeScript or index file standing in for it), or undefined when none is code. */
+function codeFileAt(base: string): string | undefined {
 	const swap = TYPESCRIPT_OF.find(([js]) => base.endsWith(js));
 
 	const candidates = [
@@ -344,32 +402,118 @@ function resolveSpecifier(
 	);
 }
 
+/** True for a specifier that names something fetched from elsewhere (a URL, a data: URI): never part of the bundle. */
+function isExternal(specifier: string) {
+	return /^(https?:|data:|\/\/)/.test(specifier);
+}
+
+/** The package a bare specifier names: `effect/Schema` is `effect`, `@scope/name/x` is `@scope/name`. */
+function packageOf(specifier: string): string {
+	const [first, second] = specifier.split("/");
+
+	return first.startsWith("@") && second ? `${first}/${second}` : first;
+}
+
+/** True when a directory named for the package exists under a node_modules of `from`'s directory or above it. */
+function isInstalled(name: string, from: string): boolean {
+	for (let directory = dirname(from); ; directory = dirname(directory)) {
+		const path = join(directory, "node_modules", name);
+
+		if (existsSync(path) && statSync(path).isDirectory()) return true;
+		if (dirname(directory) === directory) return false;
+	}
+}
+
+/** What one specifier leads to: files to walk, bare names to judge, and a reason when it cannot be followed. */
+type Resolved = { files: string[]; names: string[]; unresolved?: string };
+
+/**
+ * Where a specifier goes. A relative one is resolved from the file, a root-absolute one (`/src/...`) from the root, an
+ * aliased one (tsconfig `paths`, package.json `imports`) through EVERY target of every alias that matches, and a bare
+ * one is a package. A bare name that is not forbidden must still be a directory under node_modules (a node: built-in
+ * aside), or it is unresolved: an alias or an import map the walker cannot read must fail the test, not pass it.
+ */
+function resolveSpecifier(
+	specifier: string,
+	from: string,
+	root: string,
+	aliases: Alias[],
+): Resolved {
+	const bare = specifier.split("?")[0];
+
+	if (isExternal(bare)) return { files: [], names: [] };
+
+	const bases: string[] = [];
+	const names: string[] = [];
+
+	if (bare.startsWith(".")) bases.push(resolve(dirname(from), bare));
+	else if (bare.startsWith("/")) bases.push(join(root, bare));
+	else {
+		const targets = aliasTargets(aliases, bare);
+
+		for (const target of targets.length > 0 ? targets : [bare])
+			(isAbsolute(target) ? bases : names).push(target);
+	}
+
+	const files = bases.flatMap((base) => codeFileAt(base) ?? []);
+
+	const notInstalled = names.find(
+		(name) =>
+			!isForbiddenPackage(name, []) &&
+			!isBuiltin(name) &&
+			!isInstalled(packageOf(name), from),
+	);
+
+	return notInstalled === undefined
+		? { files, names }
+		: {
+				files,
+				names,
+				unresolved: `"${notInstalled}" is not a relative path, an alias, a forbidden package or a package in node_modules`,
+			};
+}
+
 /** The files an `import.meta.glob` pattern matches: relative to the file, from the root (`/`), or through an alias. */
 function expandGlob(
 	pattern: string,
 	from: string,
 	root: string,
-	aliases: Map<string, string>,
+	aliases: Alias[],
 ): string[] {
 	if (pattern.startsWith("!")) return [];
 	const [bare] = pattern.split("?");
-	const aliased = [...aliases].find(([prefix]) => bare.startsWith(prefix));
 
-	const [cwd, relativePattern] = aliased
-		? [aliased[1], bare.slice(aliased[0].length)]
-		: bare.startsWith("/")
-			? [root, bare.slice(1)]
-			: [dirname(from), bare];
+	// A glob names a directory tree, so an alias counts here when its pattern ends in "/*", for each of its targets.
+	const aliased = aliases.flatMap((alias) => {
+		const matched = alias.pattern.endsWith("/*")
+			? matchAlias(alias, bare)
+			: undefined;
 
-	return globSync(relativePattern, { cwd })
-		.map((match) => resolve(cwd, match))
-		.filter(
-			(match) =>
-				statSync(match).isFile() &&
-				[...EXTENSIONS, ".astro"].some((extension) =>
-					match.endsWith(extension),
-				),
-		);
+		return matched === undefined
+			? []
+			: alias.targets
+					.filter((target) => target.endsWith("/*"))
+					.map((target): [string, string] => [target.slice(0, -1), matched]);
+	});
+
+	const places: [string, string][] =
+		aliased.length > 0
+			? aliased
+			: bare.startsWith("/")
+				? [[root, bare.slice(1)]]
+				: [[dirname(from), bare]];
+
+	return places.flatMap(([cwd, relativePattern]) =>
+		globSync(relativePattern, { cwd })
+			.map((match) => resolve(cwd, match))
+			.filter(
+				(match) =>
+					statSync(match).isFile() &&
+					[...EXTENSIONS, ".astro"].some((extension) =>
+						match.endsWith(extension),
+					),
+			),
+	);
 }
 
 /** The client entry files under `root`: src/scripts/** and every .astro file under src that has a <script> block. */
@@ -411,42 +555,44 @@ export function clientGraphViolations(
 			seen.add(`${entry}|${current.file}`);
 
 			for (const load of loadsOf(current.file, clientText(current.file))) {
-				const targets: { text: string; file?: string }[] =
-					load.kind === "module"
-						? [
-								{
-									text: load.specifier,
-									file: resolveSpecifier(
-										load.specifier,
-										current.file,
-										root,
-										aliases,
-									),
-								},
-							]
-						: load.kind === "glob"
-							? expandGlob(load.pattern, current.file, root, aliases).map(
-									(file) => ({ text: load.pattern, file }),
-								)
-							: [];
-
-				if (load.kind === "unresolved")
+				if (load.kind === "unresolved") {
 					violations.push({
 						import: "<unresolved>",
 						chain: current.chain,
 						line: load.line,
 						reason: load.reason,
 					});
-
-				for (const { text, file } of targets) {
-					if (
-						isForbiddenPackage(text, allow) ||
-						(file !== undefined && isServerFile(file, root))
-					)
-						violations.push({ import: text, chain: current.chain });
-					else if (file && !file.endsWith(".astro"))
-						queue.push({ file, chain: [...current.chain, shown(file)] });
+					continue;
 				}
+
+				const found: Resolved =
+					load.kind === "module"
+						? resolveSpecifier(load.specifier, current.file, root, aliases)
+						: {
+								files: expandGlob(load.pattern, current.file, root, aliases),
+								names: [],
+							};
+
+				const text = load.kind === "module" ? load.specifier : load.pattern;
+
+				if (found.unresolved !== undefined)
+					violations.push({
+						import: text,
+						chain: current.chain,
+						line: load.line,
+						reason: found.unresolved,
+					});
+
+				const forbidden =
+					[text, ...found.names].some((name) =>
+						isForbiddenPackage(name, allow),
+					) || found.files.some((file) => isServerFile(file, root));
+
+				if (forbidden) violations.push({ import: text, chain: current.chain });
+
+				for (const file of found.files)
+					if (!isServerFile(file, root) && !file.endsWith(".astro"))
+						queue.push({ file, chain: [...current.chain, shown(file)] });
 			}
 		}
 	}

@@ -34,17 +34,39 @@ describe("the browser's import graph", () => {
 describe("the walker finds what it should", () => {
 	const roots: string[] = [];
 
-	/** A scratch repository: the tsconfig alias and the given files, each at a path under it. */
-	const scratch = (files: Record<string, string>) => {
+	/**
+	 * A scratch repository: a tsconfig with the `~/` alias (and any more `paths`), a package.json when given, the
+	 * packages the tests import as empty directories under node_modules, and the given files, each at a path under it.
+	 */
+	const scratch = (
+		files: Record<string, string>,
+		options: {
+			paths?: Record<string, string[]>;
+			packageJson?: object;
+			packages?: string[];
+		} = {},
+	) => {
 		const root = mkdtempSync(join(tmpdir(), "client-graph-"));
 
 		roots.push(root);
 		writeFileSync(
 			join(root, "tsconfig.json"),
 			JSON.stringify({
-				compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*"] } },
+				compilerOptions: {
+					baseUrl: ".",
+					paths: { "~/*": ["src/*"], ...options.paths },
+				},
 			}),
 		);
+
+		if (options.packageJson)
+			writeFileSync(
+				join(root, "package.json"),
+				JSON.stringify(options.packageJson),
+			);
+
+		for (const name of options.packages ?? ["zod", "@effect-like/other"])
+			mkdirSync(join(root, "node_modules", name), { recursive: true });
 
 		for (const [path, text] of Object.entries(files)) {
 			mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -279,6 +301,149 @@ describe("the walker finds what it should", () => {
 			expect(found("export const g = import.meta.glob(pattern);")).toEqual([
 				"<unresolved>",
 			]);
+		});
+	});
+
+	describe("evasions through aliases, import maps and script tags", () => {
+		const server = { "src/server/x.ts": "export const x = 1;" };
+
+		const found = (
+			files: Record<string, string>,
+			options?: Parameters<typeof scratch>[1],
+		) =>
+			clientGraphViolations(scratch({ ...server, ...files }, options)).map(
+				(violation) => violation.import,
+			);
+
+		it("finds an exact tsconfig path alias", () => {
+			expect(
+				found(
+					{ "src/scripts/a.ts": 'import "@srv";' },
+					{ paths: { "@srv": ["src/server/x.ts"] } },
+				),
+			).toEqual(["@srv"]);
+		});
+
+		it("finds an alias whose later target is under src/server", () => {
+			expect(
+				found(
+					{ "src/scripts/a.ts": 'import "@m/x";', "src/other/x.ts": "" },
+					{ paths: { "@m/*": ["src/other/*", "src/server/*"] } },
+				),
+			).toEqual(["@m/x"]);
+		});
+
+		it("finds an alias written with a ./ target", () => {
+			expect(
+				found(
+					{ "src/scripts/a.ts": 'import "@s/x";' },
+					{ paths: { "@s/*": ["./src/server/*"] } },
+				),
+			).toEqual(["@s/x"]);
+		});
+
+		it("finds a glob through an alias with more than one target", () => {
+			expect(
+				found(
+					{
+						"src/scripts/a.ts": 'import.meta.glob("@m/*.ts");',
+						"src/other/y.ts": "",
+					},
+					{ paths: { "@m/*": ["src/other/*", "src/server/*"] } },
+				),
+			).toEqual(["@m/*.ts"]);
+		});
+
+		it("finds a package.json imports entry, exact or with a wildcard", () => {
+			expect(
+				found(
+					{ "src/scripts/a.ts": 'import "#srvpkg";\nimport "#dir/x";' },
+					{
+						packageJson: {
+							imports: {
+								"#srvpkg": "./src/server/x.ts",
+								"#dir/*": { default: "./src/server/*.ts" },
+							},
+						},
+					},
+				),
+			).toEqual(["#srvpkg", "#dir/x"]);
+		});
+
+		it("finds an imports entry that names a forbidden package", () => {
+			expect(
+				found(
+					{ "src/scripts/a.ts": 'import "#fx";' },
+					{ packageJson: { imports: { "#fx": ["effect/Schema"] } } },
+				),
+			).toEqual(["#fx"]);
+		});
+
+		it("finds a <script src> in an .astro file", () => {
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script src="../server/x.ts"></script>',
+				}),
+			).toEqual(["../server/x.ts"]);
+			expect(
+				found({
+					"src/pages/a.astro":
+						"---\n---\n<script type='module' src='../lib/b.ts'></script>",
+					"src/lib/b.ts": 'import "effect/Effect";',
+				}),
+			).toEqual(["effect/Effect"]);
+		});
+
+		it("does not follow a <script src> that names a URL", () => {
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script src="https://example.com/x.js"></script>',
+				}),
+			).toEqual([]);
+		});
+
+		it("fails on a bare specifier that is not a package in node_modules, naming the line", () => {
+			const root = scratch({
+				"src/scripts/a.ts": 'import "zod";\nimport "#nothing";',
+			});
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "#nothing",
+					chain: ["src/scripts/a.ts"],
+					line: 2,
+					reason:
+						'"#nothing" is not a relative path, an alias, a forbidden package or a package in node_modules',
+				},
+			]);
+		});
+
+		it("fails on an unresolved <script src> bare name, at the script's line", () => {
+			const root = scratch({
+				"src/pages/a.astro":
+					'---\nconst a = 1;\n---\n<p>x</p>\n<script src="mystery-pkg"></script>',
+			});
+
+			expect(clientGraphViolations(root)).toMatchObject([
+				{ import: "mystery-pkg", chain: ["src/pages/a.astro"], line: 5 },
+			]);
+		});
+
+		it("reports a load in a script block at the line it has in the .astro file", () => {
+			const root = scratch({
+				"src/pages/a.astro":
+					'---\nconst a = 1;\n---\n<p>x</p>\n<script>\n\timport "#nothing";\n</script>',
+			});
+
+			expect(clientGraphViolations(root)).toMatchObject([
+				{ import: "#nothing", line: 6 },
+			]);
+		});
+
+		it("lets a built-in module through", () => {
+			expect(found({ "src/scripts/a.ts": 'import "node:path";' })).toEqual([]);
 		});
 	});
 

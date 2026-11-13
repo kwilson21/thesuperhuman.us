@@ -11,17 +11,14 @@ import { describe, expect, it } from "vitest";
 // The markers are string literals the libraries keep in their runtime, which a minifier cannot rename. They were
 // chosen by bundling scratch entries with esbuild --bundle --minify (the minifier Astro's client build uses) and
 // reading what survived:
-//   "~effect/Cause"   the type id of Effect's Cause module. In every bundle of effect/Effect, effect/Schema,
-//                     effect/Option, effect/Data, effect/Result and effect/Match (13 to 46 `~effect/` ids each); absent
-//                     only from the pure helpers effect/Predicate and effect/Function, which carry no runtime.
-//   "~effect/Schema"  the type id of Schema; in every bundle of effect/Schema.
-//   "EffectFailure"   the class tag of @xstate/effect's failure wrapper; in every bundle of @xstate/effect, which also
-//                     pulls in the Effect runtime.
-const RUNTIME_MARKERS = [
-	"~effect/Cause",
-	"~effect/Schema",
-	"EffectFailure",
-] as const;
+//   "~effect/"       the prefix of every type id Effect keeps ("~effect/Cause", "~effect/Equal", "~effect/Schema" and so
+//                    on). Present in every bundle of effect/Effect (37), effect/Schema (79), effect/Option (13, which
+//                    carries "~effect/Option" and "~effect/Equal" but not "~effect/Cause") and @xstate/effect (96);
+//                    absent only from the pure helper effect/Predicate, which carries no runtime. A marker that names a
+//                    single module (Cause, Schema) misses a chunk that uses a different one, so this is the prefix.
+//   "EffectFailure"  the class tag of @xstate/effect's failure wrapper; in every bundle of @xstate/effect (3 times), which
+//                    also pulls in the Effect runtime.
+const RUNTIME_MARKERS = ["~effect/", "EffectFailure"] as const;
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const bundle = join(repository, "dist", "_astro");
@@ -44,7 +41,10 @@ function markersIn(text: string): string[] {
 
 describe("the markers", () => {
 	it("find each runtime and nothing in plain code", () => {
-		expect(markersIn('var a="~effect/Cause";')).toEqual(["~effect/Cause"]);
+		expect(markersIn('var a="~effect/Cause";')).toEqual(["~effect/"]);
+		expect(markersIn('var a="~effect/Option",b="~effect/Equal";')).toEqual([
+			"~effect/",
+		]);
 		expect(markersIn('x={_tag:"EffectFailure"}')).toEqual(["EffectFailure"]);
 		expect(markersIn("const a = document.title;")).toEqual([]);
 	});
