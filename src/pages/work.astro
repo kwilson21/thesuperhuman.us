@@ -58,7 +58,7 @@ import {
   /* The recruiter actions come straight after the lede so they sit in the first screen (1280 × 800 and 390 × 844). */
   .work-intro .site-links { margin-top: 1.75rem; }
   .work-evidence { margin-top: 1.75rem; color: var(--muted); font-size: 1.125rem; max-width: var(--measure-prose); }
-  .selected-story { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3.5rem; align-items: start; padding-block: .5rem 2rem; }
+  .selected-story { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 3.5rem; align-items: start; padding-block: .5rem 2rem; }
   .selected-story + .selected-story { border-top: 1px solid var(--rule); padding-top: 2.5rem; }
   h3 { font-size: clamp(1.65rem, 2.7vw, 2.2rem); line-height: 1.15; letter-spacing: -.025em; }
   .story-summary { font-size: 1.2rem; line-height: 1.45; color: var(--muted); margin-block: .8rem 1.5rem; max-width: 30rem; }
@@ -73,6 +73,6 @@ import {
   .capacity-figure { font-size: clamp(1.9rem, 3vw, 2.65rem); line-height: 1.2; letter-spacing: -.025em; }
   .capacity-figure span { color: var(--accent); }
   @media(max-width: 800px) {
-    .selected-story { grid-template-columns: 1fr; gap: 1.5rem; }
+    .selected-story { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   }
 </style>

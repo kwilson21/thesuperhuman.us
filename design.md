@@ -100,8 +100,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   screen until the closing panel comes into view. It hides while the phone menu is open
   or a form field has focus, appears and goes without motion, and never shows above
   600px, in print or without JavaScript.
-- At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
-  that it stays on one line.
+- At 23.75rem (380px at the default text size) and below a button label may wrap
+  (reflow, WCAG 1.4.10); wider than that it stays on one line.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
