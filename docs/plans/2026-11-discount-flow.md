@@ -33,8 +33,8 @@ what would change.
    Why: this is how terms already work, so nothing new can go wrong.
 6. **Limits?** Whole dollars, at least $1 off, and the client still pays at least $1 for each milestone (today's minimum
    fee). No 100 percent discount.
-   Why: Stripe cannot send a $0 invoice (it marks it paid at once), and the $1 minimum keeps every deposit at $0.50 or
-   more, Stripe's smallest charge.
+   Why: the invoice code refuses any Stripe invoice that does not come back open with a payment link, so a $0
+   installment could not be invoiced; with at least $1 per milestone every deposit is at least $0.50.
    If different: free work needs a path with no invoices (start without a deposit, skip $0 installments), which changes
    invoicing, project start, the model and the contract.
 7. **A label or reason?** One short label the client sees, up to 60 characters, for example "Friends and family
@@ -50,6 +50,9 @@ what would change.
    deposit. Recommendation: sending refuses while any earlier version has a paid, unrefunded deposit: "A deposit is paid
    on an earlier offer. Refund it in Stripe before sending new terms."
    Why: one project, one set of terms, one deposit.
+   How sure: found by reading the decline, reopen and send guards and confirmed in the model (the mutant
+   `discountTodayDepositGuard` is today's guard, and it fails). It has not been reproduced against the real handlers
+   yet; PR 2 starts with that test.
    If different (keep today's behaviour): the model keeps today's guard and drops the "never mix versions" property for
    that path; nothing else changes.
 
@@ -103,8 +106,8 @@ stateDiagram-v2
     Paid --> [*]
 ```
 
-No Mermaid tooling is installed in the repository and the CLI was not available offline, so both diagrams were checked by
-hand against the `stateDiagram-v2` grammar: plain state names, one `-->` per line, label text after a single colon, no
+No Mermaid tooling is installed in the repository and the Mermaid CLI is not in the local npm cache, so both diagrams
+were checked by hand against the `stateDiagram-v2` grammar: plain state names, one `-->` per line, label text after a single colon, no
 semicolons, braces or nested colons.
 
 Moves that read the discount: review (renders the SOW), reserve (computes the amount), start (copies the terms). Moves
@@ -234,11 +237,22 @@ not change.
 
 ### 4.6 Your invoice panel (`SoftwareInvoiceLine.astro`)
 
-Amounts are unchanged (they are already the lower amounts). Once per discounted milestone:
+The panel shows no amounts today, and the invoice amounts are already the lower ones. One line is added under the
+first invoice row of a discounted milestone.
+
+Before:
 
 ```text
-  Milestone 1 · Deposit   $1,000   Open
+Deposit · Open · Due Nov 20 · Open invoice
+Due in 7 days. Work on this milestone starts after it’s paid.
+```
+
+After:
+
+```text
+  Deposit · Open · Due Nov 20 · Open invoice
 + Discounted milestone: usual $2,400, client pays $2,000.
+  Due in 7 days. Work on this milestone starts after it’s paid.
 ```
 
 ### 4.7 Stripe invoice line (`createSoftwareInvoiceWithClient`)
@@ -290,7 +304,7 @@ const discountCents = optional(
 	cents(100, 99_999_900, {
 		whole: "Use whole cents.",
 		least: "Use a discount of at least $1.",
-		most: "The client must pay at least $1 for this milestone. Lower the discount.",
+		most: "Use a discount of $999,999 or less.",
 	}),
 );
 
@@ -302,7 +316,11 @@ const discountLabel = optional(text(oneLineText(60), false));
 //   projectRange.lowCents >= offerTotal(terms) (unchanged; offerTotal is already the discounted total)
 ```
 
-`feeCents` keeps its rule (whole cents, $1 to $1,000,000), so a discount can never take a milestone below $1. The pure
+`feeCents` keeps its rule (whole cents, $1 to $1,000,000), so a discount can never take a milestone below $1. Which
+sentence the owner sees when the discount is too large: the form checks first and puts "The client must pay at least $1
+for this milestone. Lower the discount." on the discount field, because the form computes `feeCents` from the fixed fee
+and the discount. The server's backstop is the fee's own sentence on `feeCents` ("The fee must be at least $1."), which
+only a hand-made request can reach. The pure
 helpers the pages and the SOW share (`usualFee`, `offerDiscount`, `discountLine`) go in a browser-safe `src/lib` module
 with no Effect imports beyond Schema.
 
@@ -354,7 +372,8 @@ order. Review and sign are separate steps, and so are the invoice read and write
 between them.
 
 The module `discount` is the design: today's code plus decision 9 (the send guard counts a paid deposit on any other
-version).
+version). So the passing run includes a guard the code does not have yet; today's guard is the mutant
+`discountTodayDepositGuard`.
 
 | Property | Meaning | Mutant that breaks it |
 |---|---|---|
@@ -366,9 +385,12 @@ version).
 
 Each mutant fails its property in CI; the pass run makes 10,000 random executions of up to 20 steps with a fixed seed
 (fewer than the invoice-events model's 100,000, because this model's steps are slower to evaluate; the slowest mutant,
-`discountTodayDepositGuard`, is found after about 2,200). A hand run with the negated witness
-`neverFullyPaidAfterRevision` reaches a project started from the second version with a discount, every installment
-invoiced and paid, so the properties are checked on full runs, not only on early states.
+`discountTodayDepositGuard`, is found after about 2,200). Two hand runs with negated witnesses show the properties are
+checked on full runs, not only on early states: `neverFullyPaidAfterRevision` (20 steps, as CI) reaches a project
+started from the second version with a discount and every installment invoiced and paid, on invoice terms; and
+`neverStandardPaidAfterSentRevision` (40 steps) reaches the same on standard terms after the first version was sent and
+then superseded. Command: `quint run verification/discount-offers.qnt --main discount --invariant <witness>
+--max-steps 40 --max-samples 100000 --seed 0x1`; each finds its state in under a second.
 
 Not covered: refunds; the order of milestones and delivery gating (any slot of the plan may be invoiced once the project
 starts); a third milestone; retention; Stripe event order (the invoice-events model covers it). The manual Apalache

@@ -320,6 +320,13 @@ module discountOffers {
     slots.forall(k => (vOf(k) == project and inPlan(offers.get(project).terms, kindOf(k))) implies bills.get(k).status == "paid"),
   }
   val neverFullyPaidAfterRevision = not(fullyPaidAfterRevision)
+
+  // The same on standard terms, after the first version was sent and then superseded (a real revision). It needs about
+  // 19 steps, so the hand run uses more steps and runs than CI.
+  val standardPaidAfterSentRevision = and {
+    fullyPaidAfterRevision, wasSent.contains(1), offers.get(1).status == "superseded", offers.get(project).terms.std,
+  }
+  val neverStandardPaidAfterSentRevision = not(standardPaidAfterSentRevision)
 }
 
 module discount { import discountOffers(MUTANT = "none", VERSIONS = 2).* }
