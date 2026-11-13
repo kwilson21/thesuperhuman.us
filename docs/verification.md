@@ -23,20 +23,13 @@ A Quint model is written before the code exists, from the design. A LemmaScript 
 stateDiagram-v2
     [*] --> not_created: audio row starts here
     [*] --> creating: software row starts here
-    not_created --> open: creation response links the invoice
-    creating --> open: creation response links the invoice
-    state "Not paid" as NotPaid {
-        open
-        payment_failed
-        void
-        uncollectible
-    }
-    not_created --> NotPaid: an event links the invoice first (recovery)
-    creating --> NotPaid: an event links the invoice first
+    state "Not paid (open, payment_failed, void, uncollectible)" as NotPaid
+    not_created --> NotPaid: creation response links it (open), or an event links it first
+    creating --> NotPaid: creation response links it (open), or an event links it first
+    not_created --> paid: invoice.paid links it first
+    creating --> paid: invoice.paid links it first
     NotPaid --> NotPaid: a newer event, or a same-second tie the tie rule allows
     NotPaid --> paid: invoice.paid, however old the event is
-    not_created --> paid: invoice.paid links the invoice first
-    creating --> paid: invoice.paid links the invoice first
     paid --> paid: every later event is ignored
 ```
 
@@ -67,7 +60,7 @@ stateDiagram-v2
 Be exact about the strength of each check:
 
 - **CI, every run:** `quint run` random simulation. Each of the two models (audio, software) runs 100,000 random executions of up to 20 steps with a fixed seed, and every property must hold in every state of every execution. This is strong evidence, not a proof: a rare interleaving can be missed. The mutants (below) are what show it finds real bugs.
-- **By hand, before changing the rule:** `pnpm run verify:quint:exhaustive` runs Apalache, which searches every order of events and steps up to a step bound, with 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. It needs Java 17 or newer, downloads Apalache on first use, and is slow, so CI does not run it. Run it when the rule or the model changes, and say the bound and the result in the PR. Recorded results are in "Exhaustive runs" below.
+- **By hand, before changing the rule:** `pnpm run verify:quint:exhaustive` runs Apalache, which searches every order of events and steps up to a step bound, with 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. It needs Java 17 or newer, downloads Apalache on first use, and is slow (minutes at a shallow bound, hours past about 9 steps), so CI does not run it. Run it before changing a modelled rule, and say the bound and the result in the PR. Its bound is shallower than the random runs reach, so it complements them; it does not replace them. Recorded results are in "Exhaustive runs" below.
 - **LemmaScript and Dafny, every CI run:** a proof, for every input, of the contract on the pure decision (see "Verified modules").
 
 ## Tools and pins
@@ -123,7 +116,7 @@ Each mutant is a module (`audioX` and `softwareX`) that changes one thing. The d
 |---|---|---|
 | `OldRule` | PR 251 bug a: ignore any event older than the stored time, even a paid one | `moneyNotLost` |
 | `StaleGuard` | PR 251 bug b: the guard time is chosen from the stale read | `moneyNotLost` |
-| `NoIdPin` (software) | PR 251 bug c: the write guard does not pin the Stripe invoice id | `idNeverOverwritten` |
+| `NoIdPin` | PR 251 bug c: the write guard does not pin the Stripe invoice id (software: the write batch; audio: recovery's guarded update) | `idNeverOverwritten` |
 | `PreFixLink` (audio) | The unlinked-invoice bug: an event whose id equals the id just linked is parked as a conflict | `moneyNotLost` |
 | `RecoverNoDupGuard` (audio) | The recovery batch's guarded update does not refuse an event already processed | `redeliveryInert` |
 | `NoTimeGuard` | The write guard has no time comparison | `noStaleOverwrite` |
@@ -136,9 +129,8 @@ Each mutant is a module (`audioX` and `softwareX`) that changes one thing. The d
 | `ProcessedOnMismatch` (software) | Processed is recorded even though the id no longer matches | `oneOutcome` |
 | `StoreGuardTime` | The guard time is stored as the event time | `realStoredTime` |
 
-**Equivalent mutants** keep every property, and the driver checks that they do. Each is a real change to the code that cannot be seen from outside this model, for the reason given:
-- `audioNoDecision`: audio ignores its stale-read decision. The stored time only moves forward (and a paid row never changes), so whatever the read said is ignore, the write guard refuses too. The decision is a second line of defence.
-- `audioNoIdPin`: audio's write guard does not pin the invoice id. An audio row's id never changes once set (invoice replacement is not modelled), so the pin cannot matter here. It would matter with replacement.
+**Equivalent mutants** keep every property, and the driver checks that they do. A reviewer found that three real changes to the code pass every property; none can be seen from outside this model, and the reasons are arguments, checked here only by sampling:
+- `audioNoDecision`: audio ignores its stale-read decision (`invoiceEventDecision` in `applyStripeInvoiceEvent`). The stored time only moves forward and a paid row never changes, so whatever the read said is ignore, the write guard refuses too. In this model the audio TypeScript decision is redundant with the SQL guard: a second line of defence, not something a property can depend on.
 - `softwareNoDupDetection`: software without duplicate detection. A software event applied twice leaves the same row, because the rank rule only moves forward and a repeat is a tie of equal rank.
 - `softwareNoReadUnmatched`: no unmatched check at read. The write batch records the event as unmatched for the same reason.
 
@@ -151,7 +143,7 @@ Each mutant is a module (`audioX` and `softwareX`) that changes one thing. The d
 ### What it does not cover
 
 - Refunds, voids of a paid invoice, amount or currency changes, partial payments. The site does not handle refunds, and Stripe cannot void or mark a paid invoice.
-- Invoice replacement (`replaceTerminalInvoice`): a void invoice's id is cleared and a new one created. The stored id never changes once set in the model, so the audio id pin is unexercised (`audioNoIdPin`).
+- Invoice replacement (`replaceTerminalInvoice`): a void invoice's id is cleared and a new one created. The stored id never changes once set in the model, so the pin on audio's apply path (`booking_invoice_id=?` in `applyStripeInvoiceEvent`) is unexercised; only recovery's pin is.
 - Retention deleting external references (`external_refs_deleted_at`, `retention_fenced_at`), and the balance needing the booking paid.
 - The rest of the creation flow (`creating` timeouts, creation retries). `link` stands in for the creation response and is atomic.
 - Amounts and currency checks in recovery (`invalidInvoice` other than a paid row), and an audio row that is paid with no invoice id (a manual payment).
@@ -163,7 +155,7 @@ If the code changes shape (a new status, a new guard), update the model in the s
 
 ### Exhaustive runs
 
-See the PR description for the latest. Bound: 3 events, 3 timestamps, 2 Stripe invoice ids, 3 handler runs, steps as stated.
+`pnpm run verify:quint:exhaustive [steps]` (default 7 steps; both domains, one after the other). It uses `audioExhaustive` and `softwareExhaustive`: 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. The bound is in steps, and an audio delivery takes up to 5 of them, so a depth of 7 reaches the unlinked-invoice bug (a delivery, the link, the attempts check: 3 steps) but not the recovery-guard bug (it needs about 11). Last run (2026-11-13, Apalache 0.62.4, one core, Apple-silicon laptop): `audioExhaustive` and `softwareExhaustive` at 7 steps, no violation, 2 minutes 1 second for both. At 8 steps (`pnpm run verify:quint:exhaustive 8`): no violation in either domain, 5 minutes 30 seconds for both. An earlier, smaller audio model finished 9 steps in 8 minutes 45 seconds; the extended audio model at 10 steps did not finish (stopped after about 15 minutes, still inside step 9). Past about 8 steps use the random runs instead.
 
 ## Verified modules
 
@@ -173,11 +165,13 @@ Tally's four questions decide whether a function carries a contract: is it pure,
 |---|---|
 | `src/lib/invoice-event-order.ts` `decideByOrder` (spec helper `rankOf`) | For any stored and incoming status and any time relation (first, older, same, newer): a paid invoice is never changed; a paid event applies to any invoice that is not paid; otherwise an event applies exactly when it is the first, or newer, or in a same-second tie the tie rule allows (audio: always; software: higher rank). |
 | `nextStatus`, `statusAfter` | Lemmas by induction over a sequence of events, not restatements of the body: a paid invoice stays paid whatever follows, and a sequence of events that contains a paid event ends paid in whatever order the events arrive (so for any two events where one is paid, both orders end paid). |
-| `redeliveryChangesNothing` | Handling an event a second time, once it was handled, leaves the status as it was. This holds for any deterministic rule of this shape, so it is a sanity check of the definitions; whether redelivery changes the row in the real handlers is `redeliveryInert` in the model. |
+| `invoiceEventDecision` (called by the audio handlers) | A paid invoice is never changed, and a paid event applies to any invoice that is not paid, whatever the times. The time comparison itself is not specified (see below). |
 
 The contract is stated over the time relation, not two time strings. `invoiceEventDecision` computes the relation with `relateTimes` and calls `decideByOrder`. That split is a behaviour-preserving rewrite for the tool, and the status ranks moved from a `Map` to `rankOf` for the same reason. The relation is named `first` (not `none`) because the tool's generated Dafny already has a `None`.
 
-`relateTimes` and `invoiceEventDecision` stay `//@ skip`. LemmaScript does read the string comparison (as a lexicographic order), and a contract was tried, but proving that two times are "same" only when equal needs a hand-written Dafny lemma about that recursive order, which would mean committing a `.dfy` file. The 75-row matrix in `tests/lib/invoice-event-order.test.ts` covers the composed function instead.
+`relateTimes` and `invoiceEventDecision` are translated and checked but only the two paid rules are specified for the composed function. LemmaScript reads the string comparison as a lexicographic order, but proving that two times are "same" only when equal needs a hand-written Dafny lemma about that recursive order, which would mean committing a `.dfy` file. The 75-row matrix in `tests/lib/invoice-event-order.test.ts` covers the time relation instead.
+
+A redelivery lemma (handling an event a second time leaves the status as it was) was tried and dropped: it holds for any deterministic rule of this shape, so no planted bug can break it. Redelivery against the real handlers is the `redeliveryInert` property of the model.
 
 LemmaScript cannot express the whole delivery flow (reads, writes, interleaving, two tables), so what remains for Quint is: redelivery against the real handlers, the stale read race, concurrent linking, the id pin, and the outcome of every delivery.
 
@@ -191,7 +185,7 @@ Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verifi
 
 ## Supply chain and install size
 
-`lemmascript` depends on `lemmascript-claimcheck`, which pulls `claimcheck` and the Anthropic SDKs; Tally's lockfile has the same chain, so the roughly 190 added dev packages are not specific to this repository. `lsc check` does not use them. A pnpm override `lemmascript-claimcheck: "-"` in `pnpm-workspace.yaml` removes that chain (in a scratch project, `lemmascript` alone went from 133 to 28 installed packages and `lsc` still ran). It is not applied here, to stay identical to Tally; apply it to both repositories together if the install size matters.
+`lemmascript` depends on `lemmascript-claimcheck`, which pulls `claimcheck` and the Anthropic SDKs; Tally's lockfile has the same chain, so the roughly 190 added dev packages are not specific to this repository. `lsc check` does not use them. A pnpm override `lemmascript-claimcheck: "-"` in `pnpm-workspace.yaml` removes that chain (in a scratch project, `lemmascript` alone went from 133 to 28 installed packages, and `lsc check` on this repository's module still printed "8 verified, 0 errors"). It is not applied here, to stay identical to Tally; apply it to both repositories together if the install size matters.
 
 ## CI
 

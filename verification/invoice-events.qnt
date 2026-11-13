@@ -336,7 +336,16 @@ module invoiceEvents {
     }
   }
 
+  // Every handler slot is used up and finished: nothing more can happen. The model stays where it is, so the checker
+  // does not report the end of the run as a deadlock.
+  action finished = all {
+    deliveries.keys().forall(d => deliveries.get(d).phase == "done"),
+    row' = row, attempts' = attempts, processed' = processed, unmatched' = unmatched, events' = events,
+    deliveries' = deliveries, ghost' = ghost,
+  }
+
   action step = any {
+    finished,
     link,
     nondet d = 1.to(MAX_DELIVERIES).oneOf()
     nondet e = 1.to(MAX_EVENTS).oneOf()
