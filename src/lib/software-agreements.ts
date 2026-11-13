@@ -23,6 +23,7 @@ import {
 } from "./agreement-templates";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
+import { ReaderMessage } from "./reader-message";
 
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
@@ -133,7 +134,7 @@ export async function reviewAgreements(
 	const existing = await offerAgreements(db, offer.id);
 
 	if (existing.some((a) => a.status !== "review"))
-		throw new Error(
+		throw new ReaderMessage(
 			"A signature is already saved. These documents cannot change.",
 		);
 
@@ -179,7 +180,7 @@ export async function reviewAgreements(
 		: null;
 
 	if (offer.reused_msa_id && !reused)
-		throw new Error(
+		throw new ReaderMessage(
 			"The confirmed MSA does not match this legal party. Ask Kazon for a new offer.",
 		);
 
@@ -194,7 +195,7 @@ export async function reviewAgreements(
 		.first<AgreementTemplate>();
 
 	if (!msaTemplate || !sowTemplate)
-		throw new Error("The pinned templates are unavailable.");
+		throw new ReaderMessage("The pinned templates are unavailable.");
 
 	const msaId = reused?.id ?? crypto.randomUUID(),
 		sowId = crypto.randomUUID();
@@ -254,7 +255,7 @@ export async function reviewAgreements(
 		.first<Agreement>();
 
 	if (pending)
-		throw new Error(
+		throw new ReaderMessage(
 			"Another offer has a pending MSA for this party. Ask Kazon to resolve it.",
 		);
 	await db.batch([
@@ -350,7 +351,9 @@ export async function signAgreements(
 		signatureIds(toSign.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
 			signatureIds(documents)
 	)
-		throw new Error("The reviewed documents changed. Review them again.");
+		throw new ReaderMessage(
+			"The reviewed documents changed. Review them again.",
+		);
 
 	if (toSign.every((a) => a.status === "client_signed")) {
 		const saved = await db
@@ -361,7 +364,7 @@ export async function signAgreements(
 			.first<{ receipt_id: string; session_token_hash: string }>();
 
 		if (saved?.session_token_hash !== session.token_hash)
-			throw new Error("A different signing action is already saved.");
+			throw new ReaderMessage("A different signing action is already saved.");
 
 		return saved.receipt_id;
 	}
@@ -390,7 +393,9 @@ export async function signAgreements(
 			!resolved.ok ||
 			JSON.stringify(resolved.client) !== JSON.stringify(client)
 		)
-			throw new Error("Your details changed. Review the agreement again.");
+			throw new ReaderMessage(
+				"Your details changed. Review the agreement again.",
+			);
 	}
 
 	await db.batch([
@@ -514,7 +519,7 @@ function signatureInsert(
 		ua = request.headers.get("user-agent") ?? "";
 
 	if (ip.length > 100 || ua.length > 2000 || /[\x00-\x1f\x7f]/.test(ip + ua))
-		throw new Error("Browser evidence exceeds its limits.");
+		throw new ReaderMessage("Browser evidence exceeds its limits.");
 
 	return db
 		.prepare(
@@ -593,7 +598,7 @@ export async function countersignAgreements(
 		signatureIds(pending.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
 			signatureIds(documents)
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"The pending documents changed. Reload before countersigning.",
 		);
 

@@ -11,6 +11,7 @@ import {
 	nativeAgreementResponse,
 } from "~/lib/agreement-request";
 import { agreementJson, cleanupAgreementAccess } from "~/lib/agreement-access";
+import { classifyFailure, logUnexpected } from "~/server/failure";
 import { readContractor } from "~/lib/agreement-fields";
 import {
 	compareWithPrevious,
@@ -249,15 +250,19 @@ const post: APIRoute = async ({ request, locals }) => {
 			"/owner/agreements",
 		);
 	} catch (error) {
+		const failure = classifyFailure(error);
+
+		if (failure.kind === "unexpected") logUnexpected("Owner agreements", error);
+
 		return agreementJson(
 			{
 				ok: false,
 				error:
-					error instanceof Error
-						? error.message
+					failure.kind === "sentence"
+						? failure.say
 						: "The agreement could not be saved.",
 			},
-			409,
+			failure.kind === "unexpected" ? 500 : 409,
 		);
 	}
 };
