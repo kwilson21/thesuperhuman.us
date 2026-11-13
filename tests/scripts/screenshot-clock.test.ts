@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { type Context, createContext, runInContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -33,8 +33,38 @@ afterEach(() => {
 });
 
 describe("CLOCK_BASE", () => {
-	it("is 22 September 2026 at noon UTC, so no run crosses a date line in New York", () => {
-		expect(CLOCK_BASE).toBe("2026-09-22T12:00:00.000Z");
+	it("is 12 November 2026 at noon UTC, so no run crosses a date line in New York", () => {
+		expect(CLOCK_BASE).toBe("2026-11-12T12:00:00.000Z");
+	});
+
+	// A scenario that treats a date as past must not sit after the pinned clock, or the server refuses it
+	// (the outside signed date cannot be in the future). Dates the website brief treats as still ahead must
+	// stay ahead of the clock.
+	it("is after the latest date a scenario treats as past, and before the date the brief treats as ahead", () => {
+		const day = CLOCK_BASE.slice(0, 10);
+
+		expect(day > "2026-10-20").toBe(true);
+		expect(day < "2026-12-01").toBe(true);
+	});
+
+	it("keeps a scenario date that should be past from ending up after the pinned clock: no hard-coded date lies between the base day and 1 December 2026", () => {
+		const directory = `${process.cwd()}/scripts/screenshots/scenarios`;
+
+		const files = [
+			...readdirSync(directory).map(
+				(file) => `scripts/screenshots/scenarios/${file}`,
+			),
+			"scripts/screenshots/agreed-terms.mjs",
+		];
+
+		const day = CLOCK_BASE.slice(0, 10);
+
+		for (const file of files)
+			for (const [date] of read(file).matchAll(/\b\d{4}-\d{2}-\d{2}\b/g))
+				expect(
+					date > day && date < "2026-12-01",
+					`${file} has ${date}, between the pinned day and 2026-12-01`,
+				).toBe(false);
 	});
 });
 
@@ -51,7 +81,7 @@ describe("installClock", () => {
 
 		real += 5_000;
 		expect(scope.Date.now()).toBe(BASE + 5_000);
-		expect(new scope.Date().toISOString()).toBe("2026-09-22T12:00:05.000Z");
+		expect(new scope.Date().toISOString()).toBe("2026-11-12T12:00:05.000Z");
 		expect(scope.Date).not.toBe(Date);
 	});
 

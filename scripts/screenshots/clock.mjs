@@ -1,8 +1,11 @@
 // The clock every screenshot run reads. Each run pins time to CLOCK_BASE, so the same inputs give the
 // same images on any day. Time still moves forward at the real rate from the base.
-// Noon UTC is 8 am in New York, so a run never crosses a date line in either zone.
+// The base must be later than every date the scenarios treat as past (the latest is 2026-10-20), and earlier
+// than the dates they treat as still ahead (2026-12-01 in the website brief). Otherwise the server refuses a
+// past date as being in the future.
+// Noon UTC is 7 am in New York in November, so a run never crosses a date line in either zone.
 // Changing CLOCK_BASE changes scripts/screenshots, a global input, so every image is captured again.
-export const CLOCK_BASE = "2026-09-22T12:00:00.000Z";
+export const CLOCK_BASE = "2026-11-12T12:00:00.000Z";
 
 /**
  * Pins `scope`'s Date, and the no-argument form of Intl's date formatting, to `baseMs`.
