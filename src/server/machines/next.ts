@@ -1,8 +1,11 @@
 import * as Predicate from "effect/Predicate";
+import type * as Schema from "effect/Schema";
 import { type AnyStateMachine, initialTransition, transition } from "xstate";
 
 /** An event to ask about: its type alone, or a complete event object (`{ type, ...payload }`) for a guard that reads it. */
-export type MachineEvent = string | { readonly type: string };
+export type MachineEvent =
+	| string
+	| { readonly type: string; readonly [key: string]: Schema.Json };
 
 const eventOf = (event: MachineEvent) =>
 	Predicate.isString(event) ? { type: event } : event;

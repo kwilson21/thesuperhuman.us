@@ -163,16 +163,16 @@ describe("sourcesOf and state names", () => {
 });
 
 describe("an event with a payload", () => {
-	const review = setup({
-		types: { events: {} as { type: "APPROVE"; actor?: string } },
-	}).createMachine({
+	const review = setup({}).createMachine({
 		id: "review",
 		initial: "pending",
 		states: {
 			pending: {
 				on: {
 					APPROVE: ({ event }) =>
-						event.actor === "owner" ? { target: "approved" } : undefined,
+						"actor" in event && event.actor === "owner"
+							? { target: "approved" }
+							: undefined,
 				},
 			},
 			held: { on: { APPROVE: { target: "approved" } } },
