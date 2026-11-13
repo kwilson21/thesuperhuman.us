@@ -63,7 +63,7 @@ const year = new Date().getFullYear();
   /* Accent on the panel is below 4.5:1 for small text, so footer links use muted and ink. */
   .compact-footer nav a { color: var(--muted); }
   @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--ink); } }
-  .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; }
+  .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem 1.25rem 1.75rem; } }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {

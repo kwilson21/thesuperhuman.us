@@ -69,7 +69,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Three families at most: Libron (the name mark counts as Libron), Inter, JetBrains Mono.
 - Body 16px / 1.6. Roles in `global.css`: `.page-title` clamp(3.25rem, 6.5vw, 5.4rem)
   / 1.02, `.page-lede`, `.display`, `.heading`, `.lede`, section `h2` clamp(1.75rem,
-  3vw, 2.25rem). Headings balance; prose wraps `pretty`. Roman headings only.
+  3vw, 2.25rem). Headings balance; prose wraps `pretty`. One exception: the closing panel's LLC
+  line balances (Nov 13 decision). Roman headings only.
 - Header wordmark and footer name are both 24px (D10.3-B).
 - Punctuation: curly quotes and apostrophes (D10.5-B), `·` as the separator in
   statuses and metadata (D10.7-B), and no em dashes anywhere.
@@ -207,6 +208,11 @@ and "Pills on every button". The spec is
 `docs/superpowers/specs/2026-11-12-closing-panel-and-pill-buttons-design.md`.
 
 Kazon revised the panel after seeing the built pages: "it feels like there's two calls to action, I just want a simple get in touch button"; "The original one button only worked best"; and, for the pinned button, "Phones only".
+
+## Owner decisions (November 13, 2026)
+Kazon chose how the closing panel's legal line wraps on a narrow phone, from four options
+shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
+is unchanged where it fits on one line.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
