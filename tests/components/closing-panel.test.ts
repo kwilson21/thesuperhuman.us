@@ -153,3 +153,9 @@ it('hides the pinned button by default and shows it only on phones', () => {
 it('hides the pinned button in print', () => {
   expect(footer).toContain('@media print { .pinned-contact { display: none !important; } }');
 });
+
+it('leaves the essay with one invitation, the panel button', () => {
+  const essay = read('src/pages/writing/ai-gives-you-speed.astro');
+  expect(essay).toContain('<nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a></nav>');
+  expect(essay).not.toContain('Get in touch');
+});
