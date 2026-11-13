@@ -1,13 +1,31 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+	lstat,
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	rm,
+	stat,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importJWK, jwtVerify, SignJWT } from "jose";
+import {
+	exportJWK,
+	generateKeyPair,
+	importJWK,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadOrCreateAccessKey } from "../../scripts/screenshots/access-key.mjs";
 
 // Repository files are read from the working directory; the key file is a temporary absolute path.
 const read = (path: string) => readFile(`${process.cwd()}/${path}`, "utf8");
 const readAbs = (path: string) => readFile(path, "utf8");
+
+const PRIVATE_FIELDS = ["d", "p", "q", "dp", "dq", "qi"];
 
 let dir: string;
 let file: string;
@@ -46,6 +64,15 @@ describe("loadOrCreateAccessKey", () => {
 		expect(await verifies(key)).toBe("owner@example.test");
 	});
 
+	it("saves only the key id and the private key, since the public key is derived from the private one", async () => {
+		await loadOrCreateAccessKey(file);
+
+		expect(Object.keys(JSON.parse(await readAbs(file))).sort()).toEqual([
+			"kid",
+			"privateKeyPem",
+		]);
+	});
+
 	it("reuses the key already on disk, so the same key id is served on every run", async () => {
 		const first = await loadOrCreateAccessKey(file);
 		const before = await readAbs(file);
@@ -68,7 +95,7 @@ describe("loadOrCreateAccessKey", () => {
 		expect(JSON.parse(await readAbs(file)).kid).toBe(second.kid);
 	});
 
-	it("regenerates a file whose private key is missing or unreadable", async () => {
+	it("regenerates a file whose private key is unreadable", async () => {
 		const first = await loadOrCreateAccessKey(file);
 		const saved = JSON.parse(await readAbs(file));
 		await writeFile(file, JSON.stringify({ ...saved, privateKeyPem: "junk" }));
@@ -79,19 +106,83 @@ describe("loadOrCreateAccessKey", () => {
 		expect(await verifies(second)).toBe("owner@example.test");
 	});
 
-	it("regenerates a file whose served key id does not match its private key's", async () => {
-		await loadOrCreateAccessKey(file);
+	it("regenerates a file that has no private key at all", async () => {
+		const first = await loadOrCreateAccessKey(file);
+		await writeFile(file, JSON.stringify({ kid: first.kid }));
+
+		const second = await loadOrCreateAccessKey(file);
+
+		expect(second.kid).not.toBe(first.kid);
+		expect(await verifies(second)).toBe("owner@example.test");
+	});
+
+	it("serves the public key of the private key in the file, whatever public part sits beside it", async () => {
+		const first = await loadOrCreateAccessKey(file);
 		const saved = JSON.parse(await readAbs(file));
+		const { publicKey } = await generateKeyPair("RS256", { extractable: true });
+		const other = await exportJWK(publicKey);
+
+		// A tampered public part: another key's modulus, and a private field that must not be served.
 		await writeFile(
 			file,
-			JSON.stringify({ ...saved, jwk: { ...saved.jwk, kid: "other" } }),
+			JSON.stringify({
+				...saved,
+				jwk: { ...other, kid: saved.kid, d: "leaked" },
+			}),
 		);
 
 		const key = await loadOrCreateAccessKey(file);
 
-		expect(key.kid).toBe(JSON.parse(await readAbs(file)).kid);
-		expect(key.jwk.kid).toBe(key.kid);
+		expect(key.jwk.n).toBe(first.jwk.n);
 		expect(await verifies(key)).toBe("owner@example.test");
+	});
+
+	it("serves a public key with no private fields, the same on every load", async () => {
+		const created = await loadOrCreateAccessKey(file);
+		const again = await loadOrCreateAccessKey(file);
+
+		for (const field of PRIVATE_FIELDS)
+			expect(created.jwk).not.toHaveProperty(field);
+		expect(again.jwk).toEqual(created.jwk);
+	});
+
+	it("writes the file through a rename: the replaced file is a new one, owner-only, with no temporary file left beside it", async () => {
+		await loadOrCreateAccessKey(file);
+		const before = (await stat(file)).ino;
+		await writeFile(file, "{ not json");
+
+		await loadOrCreateAccessKey(file);
+
+		expect((await stat(file)).ino).not.toBe(before);
+		expect((await stat(file)).mode & 0o777).toBe(0o600);
+		expect(await readdir(join(dir, "nested"))).toEqual(["access-key.json"]);
+	});
+
+	it("replaces a symbolic link at the path with a regular file and leaves the link's target untouched", async () => {
+		const target = join(dir, "elsewhere.txt");
+		await writeFile(target, "keep me");
+		await mkdir(join(dir, "nested"));
+		await symlink(target, file);
+
+		const key = await loadOrCreateAccessKey(file);
+
+		expect((await lstat(file)).isSymbolicLink()).toBe(false);
+		expect((await lstat(file)).isFile()).toBe(true);
+		expect(await readFile(target, "utf8")).toBe("keep me");
+		expect(await verifies(key)).toBe("owner@example.test");
+	});
+
+	it("does not reuse a key that a symbolic link points to, and leaves that file as it was", async () => {
+		const target = join(dir, "elsewhere.json");
+		const existing = await loadOrCreateAccessKey(target);
+		const before = await readAbs(target);
+		await mkdir(join(dir, "nested"));
+		await symlink(target, file);
+
+		const key = await loadOrCreateAccessKey(file);
+
+		expect(key.kid).not.toBe(existing.kid);
+		expect(await readAbs(target)).toBe(before);
 	});
 
 	it("is wired into capture, which no longer makes a key pair or a random key id per run", async () => {

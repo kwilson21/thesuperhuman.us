@@ -6,66 +6,91 @@
 // The key is kept across runs rather than made fresh each time. The dev server keeps the keys it fetched, and
 // jose will not fetch again for an unknown key id during its 30 second cooldown, which is measured on the
 // server's clock. A run moves that clock, so a new key id on a running server could fail for a long time.
-import { randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { createPublicKey, randomUUID } from "node:crypto";
+import {
+	lstat,
+	mkdir,
+	readFile,
+	rename,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { dirname } from "node:path";
 import { exportJWK, exportPKCS8, generateKeyPair, importPKCS8 } from "jose";
 
-async function createAccessKey() {
-	const { publicKey, privateKey } = await generateKeyPair("RS256", {
-		extractable: true,
-	});
-
-	const kid = randomUUID();
+/** The key pair for a saved record: the private key, and the public JWK derived from it on every load. */
+async function keyFrom({ kid, privateKeyPem }) {
+	const publicJwk = await exportJWK(createPublicKey(privateKeyPem));
 
 	return {
 		kid,
-		privateKeyPem: await exportPKCS8(privateKey),
-		jwk: { ...(await exportJWK(publicKey)), kid, alg: "RS256", use: "sig" },
+		privateKey: await importPKCS8(privateKeyPem, "RS256"),
+		jwk: { ...publicJwk, kid, alg: "RS256", use: "sig" },
 	};
 }
 
-/** Reads the saved key, or undefined when the file is missing, not JSON, or does not hold a usable pair. */
+async function createAccessKey() {
+	const { privateKey } = await generateKeyPair("RS256", { extractable: true });
+
+	return { kid: randomUUID(), privateKeyPem: await exportPKCS8(privateKey) };
+}
+
+/**
+ * Reads the saved key, or undefined when the file is missing, is not a plain file, is not JSON, or does not
+ * hold a usable private key. A link is never followed, so a key reached through one is not reused.
+ */
 async function readAccessKey(file) {
 	try {
+		if (!(await lstat(file)).isFile()) return undefined;
+
 		const saved = JSON.parse(await readFile(file, "utf8"));
 
 		if (
 			typeof saved?.kid !== "string" ||
-			typeof saved.privateKeyPem !== "string" ||
-			saved.jwk?.kid !== saved.kid
+			typeof saved.privateKeyPem !== "string"
 		)
 			return undefined;
 
-		return {
-			kid: saved.kid,
-			privateKey: await importPKCS8(saved.privateKeyPem, "RS256"),
-			jwk: saved.jwk,
-		};
+		return await keyFrom(saved);
 	} catch {
 		return undefined;
 	}
 }
 
 /**
+ * Writes the record owner-only. The bytes go to a new temporary file beside the target, which must not exist
+ * yet (the exclusive flag), and that file is renamed over the target. A link at the target is replaced, not
+ * followed, and a failed write leaves no temporary file behind.
+ */
+async function writeAccessKey(file, record) {
+	const temporary = `${file}.${randomUUID()}.tmp`;
+
+	try {
+		await writeFile(temporary, JSON.stringify(record, null, 2), {
+			mode: 0o600,
+			flag: "wx",
+		});
+		await rename(temporary, file);
+	} catch (error) {
+		await rm(temporary, { force: true });
+		throw error;
+	}
+}
+
+/**
  * The issuer's key at `file`: the saved one when it is intact, otherwise a new one that replaces the file.
- * The file is written owner-only. Returns `{ kid, privateKey, jwk }`, where `jwk` is the public key the issuer serves.
+ * Only the key id and the private key are saved; the served public JWK is derived from the private key, so a
+ * saved public part can neither disagree with it nor carry a private field. Returns `{ kid, privateKey, jwk }`.
  */
 export async function loadOrCreateAccessKey(file) {
-	const saved = await readAccessKey(file);
+	const existing = await readAccessKey(file);
 
-	if (saved) return saved;
+	if (existing) return existing;
 
 	const created = await createAccessKey();
 
 	await mkdir(dirname(file), { recursive: true });
-	await writeFile(file, JSON.stringify(created, null, 2), { mode: 0o600 });
-	// writeFile keeps the mode of a file it overwrites, so set it explicitly.
-	await chmod(file, 0o600);
+	await writeAccessKey(file, created);
 
-	return {
-		kid: created.kid,
-		privateKey: await importPKCS8(created.privateKeyPem, "RS256"),
-		jwk: created.jwk,
-	};
+	return keyFrom(created);
 }
