@@ -1,0 +1,4341 @@
+[
+	{
+		"name": "portal flag unset",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "portal flag false",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "portal flag TRUE in capitals",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "portal flag off wins over missing bindings",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "no database binding",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 503,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "no audio bucket",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 503,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "no bindings and no cookie: still 503",
+		"steps": [
+			{
+				"request": {
+					"actor": "visitor",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 503,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "a signed-in client reads the picture",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "no cookie",
+		"steps": [
+			{
+				"request": {
+					"actor": "visitor",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "a cookie that is not a session token",
+		"steps": [
+			{
+				"request": {
+					"actor": "visitor",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "an unknown token of the right shape",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"039ef56e5b5c4242cdbb5c3190603ce86184e14c444d8a3f39efb0ec6fcfd410",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an upper-case token",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"cc54c5522f129cd51ae4324fd5c345472a886260d4ed9967fa598346e6c4ca65",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the owner without a cookie",
+		"steps": [
+			{
+				"request": {
+					"actor": "owner owner@example.test",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "an expired session",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a session that expires at this instant",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a revoked session",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "another client's session",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"039ef56e5b5c4242cdbb5c3190603ce86184e14c444d8a3f39efb0ec6fcfd410",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["ada@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a session for an email with no request",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"039ef56e5b5c4242cdbb5c3190603ce86184e14c444d8a3f39efb0ec6fcfd410",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["nobody@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "no id param",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "an empty id param",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [],
+		"final": null
+	},
+	{
+		"name": "an unknown project id",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s9/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an unknown update id",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u9/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u9", "s1"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an id that looks like SQL",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1'%20OR%20'1'%3D'1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an update id that looks like SQL",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1'%20OR%20'1'%3D'1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1' OR '1'='1", "s1"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "ids in capitals",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/S1/updates/U1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the project is revoked",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the project has content deleted",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the request is withdrawn",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the request is resolved",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the contact email is erased",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the request's email is changed",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the project is complete",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the id is another of this client's projects",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s2/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 2,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s2"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an update of another of this client's projects",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u2/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 2,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u2", "s1"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the same client reads the picture of the other project",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s2/updates/u2/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 2,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u2", "s2"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s2/u2/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an audio request with that id has no software project",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/a1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a draft update",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a superseded update",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an update with no visual",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key under another update id",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key under another request id",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key whose update id only starts like this one",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key with a path in it",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key with a deeper path",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a gif key",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key in capitals",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key outside the software prefix",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the picture is missing from R2",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": false,
+					"size": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a jpeg",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/jpeg",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.jpg",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a webp",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/webp",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.webp",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a stored media type that does not match the bytes",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/webp",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key but no media type",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "null",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a key with dashes and digits in the file name",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/a-1-b-2.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an update id with dashes",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u-1-a/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u-1-a", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u-1-a/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "an empty picture",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 0
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the session query fails",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "rejected"
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "run",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"threw": "d1 down"
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the project query fails",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "rejected"
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "run",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"threw": "d1 down"
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the update query fails",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "rejected"
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "run",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"threw": "d1 down"
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "R2 get fails",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "rejected"
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the session is revoked between the project and the update queries",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "interleave",
+				"label": "the client signed out",
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "the update is pulled back to a draft between the queries",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "interleave",
+				"label": "the owner pulled the update back to a draft",
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a client signed in through the real flow reads a picture",
+		"steps": [
+			{
+				"request": {
+					"actor": "client grace@example.test",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a real sign-in, a read, a sign-out, a read",
+		"steps": [
+			{
+				"request": {
+					"actor": "client grace@example.test",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			},
+			{
+				"request": {
+					"actor": "client grace@example.test",
+					"method": "POST",
+					"path": "/api/studio/sign-out",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"content-type": "application/json"
+					},
+					"setCookies": [
+						"studio_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure"
+					],
+					"body": "{\"ok\":true}"
+				},
+				"state": {
+					"music": {
+						"audio_client_sessions": [
+							{
+								"token_hash": "2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542",
+								"email": "grace@example.test",
+								"created_at": "2026-11-13T12:00:00.000Z",
+								"expires_at": "2026-11-27T12:00:00.000Z",
+								"last_seen_at": "2026-11-13T12:00:00.000Z",
+								"revoked_at": "2026-11-13T12:00:00.000Z"
+							}
+						]
+					}
+				}
+			},
+			{
+				"request": {
+					"actor": "client grace@example.test",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "run",
+				"sql": "UPDATE audio_client_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL",
+				"args": [
+					"2026-11-13T12:00:00.000Z",
+					"2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": 1
+				},
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "advance",
+				"ms": 1000,
+				"step": 2,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542",
+					"2026-11-13T12:00:01.000Z"
+				],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 2,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "another client's real session cannot read this client's picture",
+		"steps": [
+			{
+				"request": {
+					"actor": "client ada@example.test",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"2e73e3df167569c7a412cc13fd68bb543229243a88d0c3d889e2c7d82491e542",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["ada@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "two reads",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			},
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "advance",
+				"ms": 1000,
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:01.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 1,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a read, then the project is revoked, then a read",
+		"steps": [
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"cache-control": "private, no-store",
+						"content-type": "image/png",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": {
+						"$bytes": {
+							"length": 13,
+							"sha256": "a4c40c5653481b28dabc692442e2c47bacb53343520560b2631626ad85cedc52"
+						}
+					}
+				},
+				"state": null
+			},
+			{
+				"request": {
+					"actor": "client with a given cookie",
+					"method": "GET",
+					"path": "/api/studio/software/s1/updates/u1/visual",
+					"body": null
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 404,
+					"headers": {
+						"cache-control": "private, no-store",
+						"x-content-type-options": "nosniff",
+						"x-robots-tag": "noindex, nofollow"
+					},
+					"setCookies": [],
+					"body": ""
+				},
+				"state": null
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:00.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT visual_key,visual_media_type FROM software_project_updates WHERE id=? AND request_id=? AND status IN ('shared','superseded')",
+				"args": ["u1", "s1"],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "r2",
+				"bucket": "AUDIO",
+				"op": "get",
+				"key": "software/s1/u1/v1.png",
+				"detail": {
+					"options": null,
+					"found": true,
+					"size": 13
+				},
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "advance",
+				"ms": 1000,
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "interleave",
+				"label": "the owner revoked the project",
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "first",
+				"sql": "SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"args": [
+					"8a586da5b78bc6a1d0fefe2599f7781e3ecef9b4b26f25fa3c0ca6844e30e488",
+					"2026-11-13T12:00:01.000Z"
+				],
+				"outcome": {
+					"rows": 1,
+					"changes": null
+				},
+				"step": 1,
+				"phase": "request"
+			},
+			{
+				"kind": "d1",
+				"db": "MUSIC_DB",
+				"via": "all",
+				"sql": "SELECT p.request_id,p.offer_id,p.terms_json,p.payment_mode,p.state,p.waiting_for,p.milestone_index,p.step,\n    p.first_payment_recorded_at,p.started_at,p.next_update_on FROM software_projects p JOIN owner_requests r ON r.id=p.request_id\n    WHERE r.email=? AND r.email<>'' AND r.status<>'withdrawn' AND p.revoked_at IS NULL AND p.content_deleted_at IS NULL\n    ORDER BY p.created_at DESC",
+				"args": ["grace@example.test"],
+				"outcome": {
+					"rows": 0,
+					"changes": null
+				},
+				"step": 1,
+				"phase": "request"
+			}
+		],
+		"final": null
+	}
+]
