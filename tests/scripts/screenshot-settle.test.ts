@@ -291,9 +291,11 @@ describe("createSettleLog", () => {
 });
 
 describe("settle", () => {
-	function fakePage({ widgets = 0, ready = true } = {}) {
+	function fakePage({ widgets = 0, ready = true, held = true } = {}) {
 		return {
-			evaluate: vi.fn(async (_script: () => number) => widgets),
+			evaluate: vi.fn(async (script: () => boolean | number) =>
+				script === widgetsHoldTokens ? held : widgets,
+			),
 			waitForFunction: vi.fn(
 				async (
 					_script: () => boolean,
@@ -355,6 +357,51 @@ describe("settle", () => {
 			`cap: 1 requests in flight, first ${SITE}`,
 		);
 		expect(clock.now()).toBe(SETTLE_CAP_MS);
+	});
+
+	it("checks the widgets once when the cap is hit, and names a drawn widget that has no token", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage({ widgets: 1, held: false });
+
+		tracker.start("a", SITE);
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			`cap: 1 requests in flight, first ${SITE}; turnstile token missing`,
+		);
+		// The check adds no waiting: the cap is still the time settle takes.
+		expect(clock.now()).toBe(SETTLE_CAP_MS);
+		expect(page.waitForFunction).not.toHaveBeenCalled();
+	});
+
+	it("keeps the plain cap reason when every drawn widget holds its token at the cap", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage({ widgets: 1, held: true });
+
+		tracker.start("a", SITE);
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			`cap: 1 requests in flight, first ${SITE}`,
+		);
+	});
+
+	it("reports a page error during the cap check as stopped, without throwing", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		const page = {
+			evaluate: vi.fn(async () => {
+				throw new Error("Target page, context or browser has been closed");
+			}),
+			waitForFunction: vi.fn(),
+		};
+
+		tracker.start("a", SITE);
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"stopped: Target page, context or browser has been closed",
+		);
 	});
 
 	it("strips the query string and fragment from the reason, since they can carry tokens", async () => {

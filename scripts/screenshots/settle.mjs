@@ -145,10 +145,30 @@ function requestsReason(tracker) {
 		: `cap: ${count} requests in flight, first ${reasonUrl(url).slice(0, REASON_URL_LENGTH)}`;
 }
 
+const stoppedReason = (error) =>
+	`stopped: ${String(error?.message ?? error).split("\n")[0]}`;
+
 /**
- * Resolves with why settle stopped waiting: "quiet", "cap: N requests in flight, first <url>" or
- * "cap: turnstile token" when the cap ran out first. It never throws. A page that closes while settling
- * stops it with "stopped: <message>". `pause` is injectable so tests can move a fake clock.
+ * The reason at the cap: the requests in flight, plus a note when a drawn widget still has no token. The
+ * widgets are checked once and not waited for, so the cap is still the most settle takes.
+ */
+async function capReason(page, tracker) {
+	const reason = requestsReason(tracker);
+
+	try {
+		const held = await page.evaluate(widgetsHoldTokens);
+
+		return held ? reason : `${reason}; turnstile token missing`;
+	} catch (error) {
+		return stoppedReason(error);
+	}
+}
+
+/**
+ * Resolves with why settle stopped waiting: "quiet", "cap: N requests in flight, first <url>" (with
+ * "; turnstile token missing" added when a drawn widget has no token) or "cap: turnstile token" when the
+ * cap ran out waiting for a token. It never throws. A page that closes while settling stops it with
+ * "stopped: <message>". `pause` is injectable so tests can move a fake clock.
  */
 export async function settle(
 	page,
@@ -159,7 +179,7 @@ export async function settle(
 	const left = () => cap - (tracker.now() - started);
 
 	while (!tracker.quiet(QUIET_MS)) {
-		if (left() <= 0) return requestsReason(tracker);
+		if (left() <= 0) return capReason(page, tracker);
 
 		await pause(Math.min(POLL_MS, left()));
 	}
@@ -179,9 +199,7 @@ export async function settle(
 	} catch (error) {
 		if (error?.name === "TimeoutError") return "cap: turnstile token";
 
-		const message = String(error?.message ?? error).split("\n")[0];
-
-		return `stopped: ${message}`;
+		return stoppedReason(error);
 	}
 }
 
