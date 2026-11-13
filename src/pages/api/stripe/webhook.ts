@@ -46,6 +46,18 @@ function isInstallment(value: string | undefined): value is Installment {
 	return value === "booking" || value === "balance";
 }
 
+/** The Stripe invoice id stored on the row for this installment, or null when none is linked. */
+function invoiceIdOf(
+	payment: Awaited<ReturnType<typeof getAudioPayment>>,
+	installment: Installment,
+): string | null {
+	if (!payment) return null;
+
+	return installment === "booking"
+		? payment.bookingInvoiceId
+		: payment.balanceInvoiceId;
+}
+
 function isCustomerId(
 	customer: Stripe.Invoice["customer"],
 ): customer is string {
@@ -115,48 +127,56 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json({ received: true });
 	}
 
-	const payment = await getAudioPayment(db, requestId);
+	const linkedInvoiceId = invoiceIdOf(
+		await getAudioPayment(db, requestId),
+		installment,
+	);
 
-	const expectedInvoiceId =
-		installment === "booking"
-			? payment?.bookingInvoiceId
-			: payment?.balanceInvoiceId;
-
-	if (!payment || expectedInvoiceId !== invoice.id) {
+	if (linkedInvoiceId !== invoice.id) {
 		if (await isKnownInvoiceAttempt(db, invoice.id)) {
-			await recordUnmatchedStripeEvent(db, {
+			// An attempt row is written in the same batch that links its invoice, so the row is read again: the invoice may
+			// have been linked since the first read. Only a different linked id is a conflict.
+			const linkedNow = invoiceIdOf(
+				await getAudioPayment(db, requestId),
+				installment,
+			);
+
+			if (linkedNow !== invoice.id) {
+				await recordUnmatchedStripeEvent(db, {
+					eventId: event.id,
+					eventType: event.type,
+					invoiceId: invoice.id,
+					requestId,
+					installment: installment,
+					status,
+					occurredAt: new Date(event.created * 1000).toISOString(),
+					reason: "invoice-conflict",
+				});
+
+				return Response.json({ received: true });
+			}
+		} else {
+			const customerId = isCustomerId(invoice.customer)
+				? invoice.customer
+				: (invoice.customer?.id ?? null);
+
+			const recovery = await recoverInvoiceFromWebhook(db, {
 				eventId: event.id,
 				eventType: event.type,
-				invoiceId: invoice.id,
 				requestId,
 				installment: installment,
+				invoiceId: invoice.id,
+				stripeCustomerId: customerId,
+				hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
 				status,
 				occurredAt: new Date(event.created * 1000).toISOString(),
-				reason: "invoice-conflict",
+				totalAmountCents: invoice.total ?? -1,
+				currency: invoice.currency ?? "",
 			});
 
-			return Response.json({ received: true });
+			// "current": the invoice was linked since the first read, so the event is applied below like any other.
+			if (recovery !== "current") return Response.json({ received: true });
 		}
-
-		const customerId = isCustomerId(invoice.customer)
-			? invoice.customer
-			: (invoice.customer?.id ?? null);
-
-		await recoverInvoiceFromWebhook(db, {
-			eventId: event.id,
-			eventType: event.type,
-			requestId,
-			installment: installment,
-			invoiceId: invoice.id,
-			stripeCustomerId: customerId,
-			hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-			status,
-			occurredAt: new Date(event.created * 1000).toISOString(),
-			totalAmountCents: invoice.total ?? -1,
-			currency: invoice.currency ?? "",
-		});
-
-		return Response.json({ received: true });
 	}
 
 	try {
