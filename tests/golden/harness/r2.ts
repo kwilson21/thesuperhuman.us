@@ -350,16 +350,17 @@ export function recordingR2(
 			key: found.key,
 			uploadId: id,
 			uploadPart: async (partNumber: number, value: R2PutValue) => {
-				failIf("uploadPart");
-				upload(id);
 				const bytes = await bytesOf(value);
-				found.parts.set(partNumber, bytes);
 
 				note("uploadPart", found.key, {
 					uploadId: id,
 					partNumber,
 					body: byteRecord(bytes),
 				});
+
+				failIf("uploadPart");
+				upload(id);
+				found.parts.set(partNumber, bytes);
 
 				return { partNumber, etag: etagOf(bytes) };
 			},
@@ -540,13 +541,31 @@ export function recordingR2(
 				return double<R2MultipartUpload>({
 					key,
 					uploadId,
-					uploadPart: async () => {
+					uploadPart: async (partNumber: number, value: R2PutValue) => {
+						const bytes = await bytesOf(value);
+
+						note("uploadPart", key, {
+							uploadId,
+							partNumber,
+							body: byteRecord(bytes),
+						});
+
 						throw new Error(UPLOAD_GONE);
 					},
 					abort: async () => {
+						note("abort", key, { uploadId });
+
 						throw new Error(UPLOAD_GONE);
 					},
-					complete: async () => {
+					complete: async (parts: R2UploadedPart[]) => {
+						note("complete", key, {
+							uploadId,
+							parts: parts.map((part) => ({
+								partNumber: part.partNumber,
+								etag: part.etag,
+							})),
+						});
+
 						throw new Error(UPLOAD_GONE);
 					},
 				});

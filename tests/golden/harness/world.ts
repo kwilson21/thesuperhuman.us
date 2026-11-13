@@ -323,15 +323,35 @@ export async function runCase(handler: Handler, c: Case): Promise<CaseRecord> {
 	}
 }
 
+/** Opens the case's two databases, and closes both however the case ends. */
 async function runInstalled(
 	handler: Handler,
 	c: Case,
 	log: EffectLog,
 	clock: Determinism,
 ): Promise<CaseRecord> {
-	const music = freshMusicDb();
-	const publication = freshPublicationDb();
+	let music: SqliteDatabase | undefined;
+	let publication: SqliteDatabase | undefined;
 
+	try {
+		music = freshMusicDb();
+		publication = freshPublicationDb();
+
+		return await runOn(handler, c, log, clock, music, publication);
+	} finally {
+		music?.close();
+		publication?.close();
+	}
+}
+
+async function runOn(
+	handler: Handler,
+	c: Case,
+	log: EffectLog,
+	clock: Determinism,
+	music: SqliteDatabase,
+	publication: SqliteDatabase,
+): Promise<CaseRecord> {
 	if (c.music?.seed) seed(music, c.music.seed);
 
 	if (c.publication?.seed) seed(publication, c.publication.seed);

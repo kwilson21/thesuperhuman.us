@@ -28,14 +28,29 @@ function fromDisk(fixture) {
 	return parse(existsSync(path) ? readFileSync(path) : undefined);
 }
 
-function fromRevision(fixture, revision) {
+function gitShow(revision, path, cwd) {
+	return execFileSync("git", ["show", `${revision}:${path}`], {
+		cwd,
+		maxBuffer: 1 << 30,
+		stdio: ["ignore", "pipe", "ignore"],
+	});
+}
+
+/**
+ * The cases of a fixture at a git revision. Three older fixtures were plain `.json` before the corpus was compressed, so
+ * when the `.json.gz` does not exist at the revision the `.json` of the same name is read instead.
+ */
+export function fromRevision(fixture, revision, cwd = process.cwd()) {
 	try {
-		return parse(
-			execFileSync("git", ["show", `${revision}:${pathOf(fixture)}`], {
-				maxBuffer: 1 << 30,
-				stdio: ["ignore", "pipe", "ignore"],
-			}),
-		);
+		return parse(gitShow(revision, pathOf(fixture), cwd));
+	} catch {
+		// Not compressed at that revision, or absent.
+	}
+
+	try {
+		const plain = pathOf(fixture).replace(/\.gz$/, "");
+
+		return JSON.parse(gitShow(revision, plain, cwd).toString("utf8"));
 	} catch {
 		return [];
 	}

@@ -713,3 +713,97 @@ describe("Workers AI that does not answer", () => {
 		).toEqual(['"late"', '"timeout"']);
 	});
 });
+
+describe("failed R2 multipart calls are recorded", () => {
+	const ops = (got: Awaited<ReturnType<typeof runCase>>) =>
+		got.effects.flatMap((effect) =>
+			effect.kind === "r2" ? [`${effect.op}:${effect.key}`] : [],
+		);
+
+	it("a part upload that fails, or that targets an upload that is gone, still leaves a record", async () => {
+		const handler: Handler = async (context) => {
+			const bucket = env(context).AUDIO;
+			const made = await bucket.createMultipartUpload("k");
+			const gone = bucket.resumeMultipartUpload("k2", "nobody");
+
+			for (const attempt of [
+				() => made.uploadPart(1, "x"),
+				() => made.uploadPart(1, "x"),
+				() => gone.uploadPart(2, "yy"),
+				() => gone.abort(),
+				() => gone.complete([{ partNumber: 1, etag: "e" }]),
+			])
+				await attempt().catch(() => undefined);
+
+			return new Response("ok");
+		};
+
+		const got = await runCase(handler, one({ r2: { fails: ["uploadPart"] } }));
+
+		expect(ops(got)).toEqual([
+			"createMultipartUpload:k",
+			"resumeMultipartUpload:k2",
+			"uploadPart:k",
+			"uploadPart:k",
+			"uploadPart:k2",
+			"abort:k2",
+			"complete:k2",
+		]);
+	});
+});
+
+describe("the case databases are closed", () => {
+	const grab = () => {
+		const seen: { open: () => boolean }[] = [];
+
+		return {
+			seen,
+			setup: (world: {
+				music: { isOpen: boolean };
+				publication: { isOpen: boolean };
+			}) => {
+				seen.push(
+					{ open: () => world.music.isOpen },
+					{ open: () => world.publication.isOpen },
+				);
+			},
+		};
+	};
+
+	it("both are closed after a case that finishes", async () => {
+		const { seen, setup } = grab();
+
+		await runCase(async () => new Response("ok"), one({ setup }));
+
+		expect(seen.map((db) => db.open())).toEqual([false, false]);
+	});
+
+	it("both are closed when a handler throws, and when setup throws", async () => {
+		const first = grab();
+
+		await runCase(
+			async () => {
+				throw new Error("boom");
+			},
+			one({ setup: first.setup }),
+		);
+
+		expect(first.seen.map((db) => db.open())).toEqual([false, false]);
+
+		const second = grab();
+
+		await expect(
+			runCase(
+				async () => new Response("ok"),
+				one({
+					setup: (world) => {
+						second.setup(world);
+						throw new Error("setup failed");
+					},
+				}),
+			),
+		).rejects.toThrow("setup failed");
+
+		expect(second.seen.map((db) => db.open())).toEqual([false, false]);
+	});
+});
