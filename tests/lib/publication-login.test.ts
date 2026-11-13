@@ -375,6 +375,15 @@ describe("publication consent style matches the site's global.css", () => {
 		);
 	});
 
+	it("shows the pressed state as the ink fill, not opacity, so the label keeps its contrast", async () => {
+		const css = styleOf((await consentPage()).html);
+		const active = /button:active\s*\{([^}]*)\}/.exec(css)![1];
+
+		expect(active).not.toMatch(/opacity/);
+		expect(active).toMatch(new RegExp(`background:\\s*${site.ink}`, "i"));
+		expect(active).toMatch(new RegExp(`border-color:\\s*${site.ink}`, "i"));
+	});
+
 	it("uses the site's serif stack, and the site's sans stack without Inter, which this page cannot load", async () => {
 		const css = styleOf((await consentPage()).html);
 		// Inter is not self-hosted and this policy admits no font host, so the cancel note keeps the system part of --font-sans.

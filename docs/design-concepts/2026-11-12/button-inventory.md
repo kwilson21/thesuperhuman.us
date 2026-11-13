@@ -18,7 +18,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Print control in the sheet footer | Pill through `.site-button` (it also carries `.site-button-outline`) |
 | `.terms-navigation` buttons | `src/components/SoftwareAgreedTerms.astro` | Back and next controls for the agreed terms | Pill through `.studio-button` |
 | `.next-step-link` | `src/components/AudioProjectUpdates.astro` | Outlined link to the owner's next step on an audio project | Pill; the label is stored text and may wrap. |
-| `button` (inside `consentStyle`) | `src/lib/publication/oauth-login.ts` | Submits "Allow and sign in with GitHub" on the standalone publishing consent page | Pill with the `.site-button` values as literals, because that response's Content-Security-Policy admits only its own hashed inline style. A test pins the literals to `global.css`. The label wraps whenever it does not fit on one line, at any width. |
+| `button` (inside `consentStyle`) | `src/lib/publication/oauth-login.ts` | Submits "Allow and sign in with GitHub" on the standalone publishing consent page | Pill with the `.site-button` values as literals, because that response's Content-Security-Policy admits only its own hashed inline style. A test pins the literals to `global.css`. The label wraps whenever it does not fit on one line, at any width. Its pressed state uses the ink fill instead of the site's opacity, for label contrast. |
 
 ## Stays
 
