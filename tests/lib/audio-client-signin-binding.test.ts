@@ -39,7 +39,8 @@ const rows = (sql: InstanceType<typeof DatabaseSync>) =>
 		)
 		.all();
 
-const wrongFor = (code: string) => (code === "00000000" ? "11111111" : "00000000");
+const wrongFor = (code: string) =>
+	code === "00000000" ? "11111111" : "00000000";
 
 describe("a sign-in code belongs to the browser that asked for it", () => {
 	it("is not charged, or opened, by guesses that carry no matching cookie", async () => {
@@ -320,14 +321,7 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 		const tampered = `${client.nonce.slice(0, 63)}${client.nonce.endsWith("0") ? "1" : "0"}`;
 
 		expect(
-			await completeClientCode(
-				db,
-				address,
-				client.code,
-				tampered,
-				secret,
-				now,
-			),
+			await completeClientCode(db, address, client.code, tampered, secret, now),
 		).toBeNull();
 		expect(
 			await completeClientCode(
@@ -340,7 +334,9 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 			),
 		).toBeNull();
 		expect(
-			sql.prepare("SELECT SUM(attempts) AS total FROM audio_client_signin_codes").get(),
+			sql
+				.prepare("SELECT SUM(attempts) AS total FROM audio_client_signin_codes")
+				.get(),
 		).toEqual({ total: 0 });
 		sql.close();
 	});

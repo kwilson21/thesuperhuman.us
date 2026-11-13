@@ -19,6 +19,7 @@ import {
 	audioClient,
 	BROWSER,
 	browser,
+	browserAt,
 	codeRow,
 	GRACE,
 	mergeSeeds,
@@ -82,7 +83,8 @@ import {
 const URL_PATH = "/api/studio/code";
 const IP = "203.0.113.9";
 const FIRST = "84835301";
-const SECOND = "41233920";
+// The second code the harness hands out (the pending value drawn before it moves the random sequence on from the old 41233920).
+const SECOND = "07085773";
 
 const tables = [
 	"audio_client_signin_codes",
@@ -533,14 +535,14 @@ const cases: Case[] = [
 		steps: [
 			form(),
 			form({ headers: SAME_ORIGIN, advanceMs: 1000 }),
-			signIn(FIRST),
+			signIn(FIRST, { headers: browserAt(0) }),
 		],
 	}),
 	open("another browser asks and its own code works in its own browser", {
 		steps: [
 			form(),
 			form({ headers: SAME_ORIGIN, advanceMs: 1000 }),
-			signIn(SECOND, { headers: browser }),
+			signIn(SECOND, { headers: browserAt(1) }),
 		],
 	}),
 	open("a stranger's guesses cannot use up the client's code", {

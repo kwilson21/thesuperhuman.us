@@ -328,7 +328,13 @@ async function draft() {
 async function session(email = "alex@example.com") {
 	const code = await issueClientCode(db, email, secret);
 
-	return (await completeClientCode(db, email, code!.code, code!.nonce, secret))!;
+	return (await completeClientCode(
+		db,
+		email,
+		code!.code,
+		code!.nonce,
+		secret,
+	))!;
 }
 
 async function shareReview(
@@ -1689,7 +1695,13 @@ it("software-only codes and sessions are scoped across both project kinds and re
 it("refuses sign-in when the only project closes after code issuance, and audits undelivered software codes", async () => {
 	await start();
 	const code = (await issueClientCode(db, "alex@example.com", secret))!;
-	await discardUndeliveredCode(db, "alex@example.com", code.code, code.nonce, secret);
+	await discardUndeliveredCode(
+		db,
+		"alex@example.com",
+		code.code,
+		code.nonce,
+		secret,
+	);
 	expect(
 		sql
 			.prepare(
@@ -1700,7 +1712,13 @@ it("refuses sign-in when the only project closes after code issuance, and audits
 	const second = (await issueClientCode(db, "alex@example.com", secret))!;
 	sql.exec("UPDATE software_projects SET revoked_at='now'");
 	expect(
-		await completeClientCode(db, "alex@example.com", second.code, second.nonce, secret),
+		await completeClientCode(
+			db,
+			"alex@example.com",
+			second.code,
+			second.nonce,
+			secret,
+		),
 	).toBeNull();
 });
 

@@ -104,7 +104,9 @@ const codeIn = (mail: { text: string }) =>
 	/(\d{4}) (\d{4})/.exec(mail.text)!.slice(1, 3).join("");
 
 async function enter(code: string, sent: Sent = {}, who = address) {
-	return completeCode(context("/api/studio/session", { email: who, code }, sent));
+	return completeCode(
+		context("/api/studio/session", { email: who, code }, sent),
+	);
 }
 
 const allowanceRows = () =>
@@ -166,7 +168,12 @@ describe("the pending sign-in cookie", () => {
 		const code = codeIn(mails[0]);
 
 		expect(
-			(await enter(code, { cookie: `${pendingName}=${nonceFrom(asked)}`, ip: "198.51.100.9" })).status,
+			(
+				await enter(code, {
+					cookie: `${pendingName}=${nonceFrom(asked)}`,
+					ip: "198.51.100.9",
+				})
+			).status,
 		).toBe(200);
 	});
 
@@ -185,8 +192,7 @@ describe("the pending sign-in cookie", () => {
 		await ask();
 		const before = allowanceRows();
 
-		for (let attempt = 0; attempt < 30; attempt++)
-			await enter("00000000", {});
+		for (let attempt = 0; attempt < 30; attempt++) await enter("00000000", {});
 
 		expect(allowanceRows()).toEqual(before);
 		expect(
@@ -200,16 +206,17 @@ describe("the pending sign-in cookie", () => {
 		const altered = `${nonce.slice(0, 63)}${nonce.endsWith("0") ? "1" : "0"}`;
 
 		for (let attempt = 0; attempt < 25; attempt++)
-			await enter(
-				"00000000",
-				{ cookie: `${pendingName}=${attempt % 2 ? altered : "e".repeat(64)}`, ip: `198.51.100.${attempt}` },
-			);
+			await enter("00000000", {
+				cookie: `${pendingName}=${attempt % 2 ? altered : "e".repeat(64)}`,
+				ip: `198.51.100.${attempt}`,
+			});
 
 		expect(
 			sql.prepare("SELECT attempts FROM audio_client_signin_codes").get(),
 		).toEqual({ attempts: 0 });
 		expect(
-			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}` })).status,
+			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}` }))
+				.status,
 		).toBe(200);
 	});
 
@@ -228,7 +235,12 @@ describe("the pending sign-in cookie", () => {
 			});
 
 		expect(
-			(await enter(clientCode, { cookie: `${pendingName}=${clientNonce}`, ip: "203.0.113.5" })).status,
+			(
+				await enter(clientCode, {
+					cookie: `${pendingName}=${clientNonce}`,
+					ip: "203.0.113.5",
+				})
+			).status,
 		).toBe(200);
 	});
 
@@ -268,10 +280,18 @@ describe("races", () => {
 	it("gives two requests for one address at once a code and a browser each", async () => {
 		const [one, two] = await Promise.all([
 			requestCode(
-				context("/api/studio/code", { email: address, turnstileToken: "ok" }, { ip: "203.0.113.10" }),
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{ ip: "203.0.113.10" },
+				),
 			),
 			requestCode(
-				context("/api/studio/code", { email: address, turnstileToken: "ok" }, { ip: "203.0.113.11" }),
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{ ip: "203.0.113.11" },
+				),
 			),
 		]);
 
@@ -298,7 +318,9 @@ describe("races", () => {
 			}
 
 		expect(opened.sort()).toEqual([firstCode, secondCode].sort());
-		expect(sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get()).toEqual({ n: 2 });
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 2 });
 	});
 
 	it("signs the client in when another request for the address commits just before the completing batch", async () => {
@@ -310,17 +332,30 @@ describe("races", () => {
 			sql
 				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
           VALUES ('stranger',?,'x',0,?,?)`)
-				.run(address, new Date().toISOString(), new Date(Date.now() + 600_000).toISOString());
+				.run(
+					address,
+					new Date().toISOString(),
+					new Date(Date.now() + 600_000).toISOString(),
+				);
 			db.batch = original;
 
 			return original(statements);
 		});
 
 		expect(
-			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}`, ip: "203.0.113.5" })).status,
+			(
+				await enter(codeIn(mails[0]), {
+					cookie: `${pendingName}=${nonce}`,
+					ip: "203.0.113.5",
+				})
+			).status,
 		).toBe(200);
 		expect(
-			sql.prepare("SELECT attempts FROM audio_client_signin_codes WHERE nonce_hash='stranger'").get(),
+			sql
+				.prepare(
+					"SELECT attempts FROM audio_client_signin_codes WHERE nonce_hash='stranger'",
+				)
+				.get(),
 		).toEqual({ attempts: 0 });
 	});
 
@@ -332,7 +367,12 @@ describe("races", () => {
 		await ask({ ip: "203.0.113.99" });
 		expect(mails).toHaveLength(2);
 		expect(
-			(await enter(clientCode, { cookie: `${pendingName}=${nonce}`, ip: "203.0.113.5" })).status,
+			(
+				await enter(clientCode, {
+					cookie: `${pendingName}=${nonce}`,
+					ip: "203.0.113.5",
+				})
+			).status,
 		).toBe(200);
 	});
 
@@ -342,7 +382,11 @@ describe("races", () => {
 		const code = codeIn(mails[0]);
 		const results = await Promise.all([enter(code, sent), enter(code, sent)]);
 
-		expect(results.map((response) => response.status).sort()).toEqual([200, 401]);
-		expect(sql.prepare("SELECT COUNT(*) AS n FROM audio_client_sessions").get()).toEqual({ n: 1 });
+		expect(results.map((response) => response.status).sort()).toEqual([
+			200, 401,
+		]);
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_sessions").get(),
+		).toEqual({ n: 1 });
 	});
 });

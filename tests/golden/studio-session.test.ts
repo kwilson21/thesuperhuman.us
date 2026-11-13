@@ -496,7 +496,7 @@ const cases: Case[] = [
 			seed: mergeSeeds(client, audioClient("r2", OTHER), {
 				audio_client_signin_codes: [
 					await code(),
-					await codeRow(OTHER, "55555555"),
+					await codeRow(OTHER, "55555555", {}, SECOND_PENDING),
 				],
 			}),
 		},
@@ -504,7 +504,10 @@ const cases: Case[] = [
 			login(),
 			attempt(
 				{ email: OTHER, code: "55555555" },
-				{ as: asVisitor({ ip: "198.51.100.8" }) },
+				{
+					as: asVisitor({ ip: "198.51.100.8" }),
+					headers: { ...BROWSER, cookie: `studio_pending=${SECOND_PENDING}` },
+				},
 			),
 		],
 	}),

@@ -114,7 +114,10 @@ describe("studio access routes", () => {
 	});
 
 	it("responds without waiting for email delivery", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
+		vi.mocked(issueClientCode).mockResolvedValueOnce({
+			code: "12345678",
+			nonce,
+		});
 		let finishDelivery!: (result: { ok: boolean }) => void;
 		vi.mocked(sendAudioMessage).mockReturnValueOnce(
 			new Promise((resolve) => {
@@ -176,7 +179,10 @@ describe("studio access routes", () => {
 	});
 
 	it("invalidates an undelivered code and revokes the current session on sign-out", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
+		vi.mocked(issueClientCode).mockResolvedValueOnce({
+			code: "12345678",
+			nonce,
+		});
 		vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
 
 		const codeContext = context("/api/studio/code", {
@@ -198,7 +204,10 @@ describe("studio access routes", () => {
 	});
 
 	it("keeps a code whose delivery is uncertain, since the email may still arrive", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
+		vi.mocked(issueClientCode).mockResolvedValueOnce({
+			code: "12345678",
+			nonce,
+		});
 		vi.mocked(sendAudioMessage).mockResolvedValueOnce({
 			ok: false,
 			uncertain: true,

@@ -45,6 +45,24 @@ export const browser = (prior: Prior): { [name: string]: string } => {
 	return SAME_ORIGIN;
 };
 
+/** The headers of the browser that made the code request at step `index`: the pending cookie that request set. */
+export const browserAt =
+	(index: number) =>
+	(prior: Prior): { [name: string]: string } => {
+		const answer = prior.steps[index]?.answer;
+
+		const pending =
+			answer?.outcome === "response"
+				? answer.setCookies
+						.map((value) => value.match(/^studio_pending=([0-9a-f]{64})/)?.[1])
+						.find(Boolean)
+				: undefined;
+
+		return pending
+			? { ...SAME_ORIGIN, cookie: `studio_pending=${pending}` }
+			: SAME_ORIGIN;
+	};
+
 /** The code key the default env uses. */
 export const KEY = DEFAULT_ENV.AUDIO_CLIENT_CODE_KEY ?? "";
 
