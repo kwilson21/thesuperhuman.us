@@ -1,5 +1,6 @@
-// The clock every screenshot run reads. Each run pins time to CLOCK_BASE, so the same inputs give the
-// same images on any day. Time still moves forward at the real rate from the base.
+// The clock every screenshot run reads. Time is frozen at CLOCK_BASE and only moves when the capture moves it:
+// each scenario step advances it by STEP_MS (see stepTime). Real elapsed time never reaches the clock, so the
+// same scenario script gives the same times on a fast run and a slow one, and on any day.
 // The base must be later than every date the scenarios treat as past (the latest is 2026-10-20), and earlier
 // than the dates they treat as still ahead (2026-12-01 in the website brief). Otherwise the server refuses a
 // past date as being in the future.
@@ -7,16 +8,28 @@
 // Changing CLOCK_BASE changes scripts/screenshots, a global input, so every image is captured again.
 export const CLOCK_BASE = "2026-11-12T12:00:00.000Z";
 
+// Each scenario step moves the clock forward one second, so rows made in different steps keep their order and
+// every time shown is decided by the step's position in the scenario.
+export const STEP_MS = 1000;
+
+/** The instant for a step: the base plus `step` steps. Pure, so the capture and the dev server agree. */
+export const stepTime = (step) => Date.parse(CLOCK_BASE) + step * STEP_MS;
+
 /**
- * Pins `scope`'s Date, and the no-argument form of Intl's date formatting, to `baseMs`.
+ * Freezes `scope`'s Date, and the no-argument form of Intl's date formatting, at `startMs`.
  *
  * Self-contained on purpose: the browser receives this function's source through Playwright's
  * addInitScript, so it must not refer to anything outside its own body.
  *
- * Returns `{ reset, restore }`. `reset` moves the clock back to exactly the base. `restore` puts the
- * real Date back. Installing again on the same scope replaces the earlier install without stacking on it.
+ * Returns `{ set, restore }`. `set(ms)` moves the frozen instant to exactly `ms`; nothing else moves it.
+ * `restore` puts the real Date back. Installing again on the same scope replaces the earlier install
+ * without stacking on it, and a handle from a replaced install changes nothing.
+ *
+ * The constructor of a date made by the shim is still the real Date: the shim's prototype is the real one,
+ * so dates made before the install stay `instanceof` the shim. Pointing `constructor` at the shim would mean
+ * editing the real Date.prototype, which other code shares.
  */
-export function installClock(scope, baseMs) {
+export function installClock(scope, startMs) {
 	// Where an install keeps its state on the scope, so a later install can find and replace it.
 	const STATE = Symbol.for("thesuperhuman.screenshots.clock");
 	const previous = scope[STATE];
@@ -24,8 +37,8 @@ export function installClock(scope, baseMs) {
 	if (previous) previous.restore();
 
 	const RealDate = previous ? previous.RealDate : scope.Date;
-	let anchor = RealDate.now();
-	const pinnedNow = () => baseMs + (RealDate.now() - anchor);
+	let frozen = startMs;
+	const pinnedNow = () => frozen;
 
 	function PinnedDate(...args) {
 		if (!new.target) return new RealDate(pinnedNow()).toString();
@@ -102,18 +115,18 @@ export function installClock(scope, baseMs) {
 	scope.Date = PinnedDate;
 
 	return {
-		reset() {
-			if (scope[STATE] === state) anchor = RealDate.now();
+		set(ms) {
+			if (scope[STATE] === state) frozen = ms;
 		},
 		restore: state.restore,
 	};
 }
 
 /**
- * The init script that pins a page's clock to `baseMs`, on the preview's own origin only (third-party frames
- * keep the real clock). Capture passes its own pinned Date.now(): the server is reset to CLOCK_BASE before each
- * scenario and moves on from there, so the page starts from the same moment as the server and never runs behind it.
+ * The init script that freezes a page's clock at `instantMs`, on the preview's own origin only (third-party
+ * frames keep the real clock). Capture passes the instant its own clock holds when it sets the page up, which is
+ * the scenario step the server is at, so the page and the server agree on the time.
  */
-export function browserClockScript(origin, baseMs) {
-	return `if (location.origin === ${JSON.stringify(origin)}) (${installClock.toString()})(globalThis, ${baseMs});`;
+export function browserClockScript(origin, instantMs) {
+	return `if (location.origin === ${JSON.stringify(origin)}) (${installClock.toString()})(globalThis, ${instantMs});`;
 }

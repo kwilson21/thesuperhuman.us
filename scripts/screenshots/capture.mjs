@@ -3,7 +3,7 @@
 // Exits non-zero on a page error, a console error, or an unexpected HTTP status.
 // Images whose inputs match an earlier run in .screenshots/reference are copied from it instead (see
 // cache.mjs); SCREENSHOTS_FULL=1 captures everything.
-// The clock is pinned first, before anything here reads the time (see clock.mjs).
+// The clock is frozen first, before anything here reads the time (see clock.mjs).
 import { clock } from "./clock-install.mjs";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -38,7 +38,7 @@ import {
 	unhashed,
 	withoutViteVersion,
 } from "./cache.mjs";
-import { browserClockScript } from "./clock.mjs";
+import { browserClockScript, STEP_MS, stepTime } from "./clock.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
@@ -108,21 +108,51 @@ const scopeName = () => currentScenario ?? "pages";
 const timedStateHash = (scope) =>
 	timings.time(scope, "stateHash", () => stateHash());
 
-// Puts this process's clock and the dev server's back at CLOCK_BASE. Each scenario starts from the same
-// time, so its timestamps don't depend on the scenarios that ran or were reused before it.
-async function resetClock() {
-	clock.reset();
+// A scenario can't run past the owner token's expiry (setExpirationTime below), so its clock can't either.
+const MAX_STEP_MS = 50 * 60_000;
 
-	const answer = await fetch(`${BASE}/__screenshots/clock/reset`, {
+// Where this capture is in the current scenario's steps. Page captures and the start of each scenario are step 0.
+let clockStep = 0;
+
+// Sets this process's clock and the dev server's to the step's instant. The server's answer must echo it.
+async function setClock(step) {
+	if (step * STEP_MS > MAX_STEP_MS)
+		throw new Error(
+			`A scenario has too many steps for the owner token: step ${step} is past ${MAX_STEP_MS / 60_000} minutes of pinned time. Raise setExpirationTime("1h") in capture.mjs.`,
+		);
+
+	const now = stepTime(step);
+	clock.set(now);
+
+	const answer = await fetch(`${BASE}/__screenshots/clock`, {
 		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ now }),
 	})
 		.then((response) => response.json())
 		.catch(() => null);
 
-	if (answer?.ok !== true)
+	if (answer?.ok !== true || answer.now !== now)
 		throw new Error(
-			"No clock reset at /__screenshots/clock/reset: start the dev server with --config scripts/screenshots/dev.config.mjs.",
+			"No clock update at /__screenshots/clock: start the dev server with --config scripts/screenshots/dev.config.mjs.",
 		);
+}
+
+// Each capture and ownerFetch a scenario makes moves the clock one step on. Page captures run outside a
+// scenario and never move it, so every page sees step 0.
+async function nextStep() {
+	if (currentScenario === undefined) return;
+
+	clockStep += 1;
+	await setClock(clockStep);
+}
+
+// sql is synchronous, so it only moves this process's clock. The server catches up at its next capture or ownerFetch.
+function sqlStep() {
+	if (currentScenario === undefined) return;
+
+	clockStep += 1;
+	clock.set(stepTime(clockStep));
 }
 
 // Every path that rendered with the expected status, so seeded pages can be checked afterwards.
@@ -171,6 +201,8 @@ async function capture({
 	expectedResponses = [],
 	expectedResourceErrors = [],
 }) {
+	await nextStep();
+
 	// Read once, so a page capture running alongside others still lands in its own scenario's timings.
 	const scope = scopeName();
 	timings.count(scope, "captures");
@@ -182,9 +214,8 @@ async function capture({
 			reducedMotion: "reduce",
 		});
 
-		// The page's clock starts at this process's pinned time now, not at CLOCK_BASE: the server has moved on
-		// from the base since the last reset, and a page that started behind it would see server times in its
-		// future. Only the preview's own origin gets it; third-party frames such as Turnstile keep the real clock.
+		// The page's clock is frozen at this process's clock now, which is the step the server is at. Only the
+		// preview's own origin gets it; third-party frames such as Turnstile keep the real clock.
 		await context.addInitScript({
 			content: browserClockScript(new URL(BASE).origin, Date.now()),
 		});
@@ -278,6 +309,8 @@ async function capture({
 
 // Synchronous on purpose: scenarios call sql() without await and use its return value.
 const sql = (command) => {
+	sqlStep();
+
 	const scope = scopeName();
 	const started = timings.now();
 
@@ -307,6 +340,7 @@ const sql = (command) => {
 };
 
 async function ownerFetch(path, body, method = "POST", headers = {}) {
+	await nextStep();
 	scenarioPaths.push(new URL(BASE + path).pathname);
 	const binary = body instanceof Uint8Array;
 	const scope = scopeName();
@@ -493,7 +527,8 @@ try {
 		VIEWPORTS.map((viewport) => ({ page, viewport })),
 	);
 
-	await resetClock();
+	clockStep = 0;
+	await setClock(0);
 	const stateBeforePages = await timedStateHash("pages");
 	await timings.wall(
 		"pages",
@@ -601,7 +636,8 @@ try {
 		scenarioPaths = [];
 		const filesBefore = new Set(requestsByFile.keys());
 
-		await resetClock();
+		clockStep = 0;
+		await setClock(0);
 
 		const { steps, wrote } = await timings.wall(name, async () => {
 			const stateBefore = await timedStateHash(name);

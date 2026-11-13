@@ -5,6 +5,8 @@ import {
 	browserClockScript,
 	CLOCK_BASE,
 	installClock,
+	STEP_MS,
+	stepTime,
 } from "../../scripts/screenshots/clock.mjs";
 
 const BASE = Date.parse(CLOCK_BASE);
@@ -69,7 +71,7 @@ describe("CLOCK_BASE", () => {
 });
 
 describe("installClock", () => {
-	it("starts the clock at the base and moves it forward at the real rate", () => {
+	it("freezes the clock at the given instant: real time moving on does not move it", () => {
 		let real = REAL_NOW;
 		vi.spyOn(Date, "now").mockImplementation(() => real);
 		const scope = scopeWithDate();
@@ -80,25 +82,56 @@ describe("installClock", () => {
 		expect(new scope.Date().getTime()).toBe(BASE);
 
 		real += 5_000;
-		expect(scope.Date.now()).toBe(BASE + 5_000);
-		expect(new scope.Date().toISOString()).toBe("2026-11-12T12:00:05.000Z");
+		expect(scope.Date.now()).toBe(BASE);
+		expect(new scope.Date().toISOString()).toBe("2026-11-12T12:00:00.000Z");
 		expect(scope.Date).not.toBe(Date);
 	});
 
-	it("moves the clock back to exactly the base on reset", () => {
+	it("does not move when the real clock runs for minutes", () => {
+		let real = REAL_NOW;
+		vi.spyOn(Date, "now").mockImplementation(() => real);
+		const scope = scopeWithDate();
+		installClock(scope, BASE);
+
+		real += 200_000;
+
+		expect(scope.Date.now()).toBe(BASE);
+		expect(new scope.Date().getTime()).toBe(BASE);
+		expect(runInContext("new Date().getTime()", freshContext(BASE))).toBe(BASE);
+	});
+
+	it("moves the clock to exactly the given instant with set, and only that", () => {
 		let real = REAL_NOW;
 		vi.spyOn(Date, "now").mockImplementation(() => real);
 		const scope = scopeWithDate();
 		const clock = installClock(scope, BASE);
 
-		real += 90_000;
+		clock.set(BASE + 90_000);
 		expect(scope.Date.now()).toBe(BASE + 90_000);
-
-		clock.reset();
-		expect(scope.Date.now()).toBe(BASE);
+		expect(new scope.Date().toISOString()).toBe("2026-11-12T12:01:30.000Z");
 
 		real += 2_000;
-		expect(scope.Date.now()).toBe(BASE + 2_000);
+		expect(scope.Date.now()).toBe(BASE + 90_000);
+
+		clock.set(BASE);
+		expect(scope.Date.now()).toBe(BASE);
+	});
+
+	it("does not let a set from a replaced install change the live clock", () => {
+		const scope = scopeWithDate();
+		const first = installClock(scope, BASE);
+		installClock(scope, BASE + 60_000);
+
+		first.set(BASE + 5_000);
+
+		expect(scope.Date.now()).toBe(BASE + 60_000);
+	});
+
+	it("gives stepTime one second per step from the base, exactly", () => {
+		expect(STEP_MS).toBe(1000);
+		expect(stepTime(0)).toBe(BASE);
+		expect(stepTime(5)).toBe(Date.parse("2026-11-12T12:00:05.000Z"));
+		expect(stepTime(5) - stepTime(4)).toBe(STEP_MS);
 	});
 
 	it("keeps the argument forms of the real Date", () => {
@@ -157,7 +190,7 @@ describe("installClock", () => {
 
 		expect(scope.Date.now()).toBe(BASE + 1_000);
 		real += 500;
-		expect(new scope.Date().getTime()).toBe(BASE + 1_500);
+		expect(new scope.Date().getTime()).toBe(BASE + 1_000);
 
 		second.restore();
 		expect(scope.Date).toBe(Date);
@@ -167,17 +200,16 @@ describe("installClock", () => {
 		expect(scope.Date).toBe(Date);
 	});
 
-	it("does not stack a stale handle's reset over the live clock", () => {
-		let real = REAL_NOW;
-		vi.spyOn(Date, "now").mockImplementation(() => real);
+	it("does not let a stale handle's set move the live clock", () => {
 		const scope = scopeWithDate();
 
 		const first = installClock(scope, BASE);
-		installClock(scope, BASE);
-		real += 10_000;
-		first.reset();
+		const second = installClock(scope, BASE);
+		first.set(BASE + 10_000);
 
-		expect(scope.Date.now()).toBe(BASE + 10_000);
+		expect(scope.Date.now()).toBe(BASE);
+		second.set(BASE + 20_000);
+		expect(scope.Date.now()).toBe(BASE + 20_000);
 	});
 
 	it("restores the real Date", () => {
@@ -241,9 +273,7 @@ describe("installClock", () => {
 	it("is self-contained, so it still works when its source runs in a fresh context", () => {
 		const sandbox = freshContext(BASE);
 
-		const now = Number(runInContext("new Date().getTime()", sandbox));
-		expect(now - BASE).toBeGreaterThanOrEqual(0);
-		expect(now - BASE).toBeLessThan(60_000);
+		expect(runInContext("new Date().getTime()", sandbox)).toBe(BASE);
 	});
 });
 
@@ -260,12 +290,11 @@ describe("browserClockScript", () => {
 		return sandbox;
 	};
 
-	it("pins the page's clock to the base it is given, on the preview's own origin", () => {
+	it("freezes the page's clock at the instant it is given, on the preview's own origin", () => {
 		const sandbox = runOn(ORIGIN, browserClockScript(ORIGIN, CAPTURE_NOW));
 
-		const now = Number(runInContext("Date.now()", sandbox));
-		expect(now - CAPTURE_NOW).toBeGreaterThanOrEqual(0);
-		expect(now - CAPTURE_NOW).toBeLessThan(60_000);
+		expect(runInContext("Date.now()", sandbox)).toBe(CAPTURE_NOW);
+		expect(runInContext("new Date().getTime()", sandbox)).toBe(CAPTURE_NOW);
 	});
 
 	it("leaves a third-party frame on the real clock", () => {
@@ -309,7 +338,8 @@ describe("the clock is wired into every process", () => {
 		const firstImport = dev.match(/^import [^;]+;/m)?.[0] ?? "";
 
 		expect(firstImport).toContain("./clock-install.mjs");
-		expect(dev).toContain("/__screenshots/clock/reset");
+		expect(dev).toContain('"/__screenshots/clock"');
+		expect(dev).not.toContain("/reset");
 		expect(dev).toMatch(/method !== "POST"/);
 	});
 
@@ -320,5 +350,35 @@ describe("the clock is wired into every process", () => {
 			"scripts/screenshots/README.md",
 		])
 			expect(read(file), file).not.toMatch(/\bday\b/);
+	});
+});
+
+describe("capture steps the clock", () => {
+	const capture = read("scripts/screenshots/capture.mjs");
+
+	// Scenario steps are the only thing that moves the clock. Page captures run before any scenario, at step 0.
+	it("sets step 0 before the page captures and before each scenario runs", () => {
+		const resets =
+			capture.match(/clockStep = 0;\s*await setClock\(0\);/g) ?? [];
+
+		expect(resets.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it("moves the clock one step on at the start of each capture and each ownerFetch", () => {
+		expect(capture).toMatch(
+			/async function capture\(\{[^}]*\}\)\s*\{\s*await nextStep\(\);/,
+		);
+		expect(capture).toMatch(
+			/async function ownerFetch\([^)]*\)\s*\{\s*await nextStep\(\);/,
+		);
+	});
+
+	it("moves the capture process's clock one step on at each sql call, without waiting", () => {
+		expect(capture).toMatch(/const sql = \(command\) => \{\s*sqlStep\(\);/);
+	});
+
+	it("refuses a scenario that would outrun the owner token's expiry", () => {
+		expect(capture).toMatch(/too many steps/);
+		expect(capture).toMatch(/setExpirationTime\("1h"\)/);
 	});
 });
