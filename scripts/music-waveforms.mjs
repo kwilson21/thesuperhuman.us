@@ -3,7 +3,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 /**
  * Measures the aligned playback windows of one example and writes its waveforms and loudness.
@@ -128,10 +127,7 @@ export async function deriveWaveforms(id, { readFile, writeFile, spawnSync }) {
 	console.log(`Saved source-derived waveforms for ${id}.`);
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (import.meta.main) {
 	const [id] = process.argv.slice(2);
 
 	await deriveWaveforms(id, { readFile, writeFile, spawnSync });

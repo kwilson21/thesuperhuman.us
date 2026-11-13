@@ -3,7 +3,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 /**
  * Writes the isolated local bindings, applies the music migrations and stages the imported audio.
@@ -120,10 +119,7 @@ export async function setUpMusicPreview({ spawnSync, getPlatformProxy }) {
 	);
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (import.meta.main) {
 	const { getPlatformProxy } = await import("wrangler");
 
 	await setUpMusicPreview({ spawnSync, getPlatformProxy });
