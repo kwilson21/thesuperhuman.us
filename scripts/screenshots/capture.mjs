@@ -37,6 +37,7 @@ import {
 	withoutViteVersion,
 } from "./cache.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
+import { createTimings } from "./timings.mjs";
 import {
 	ACCESS_AUDIENCE,
 	ACCESS_ISSUER,
@@ -91,6 +92,15 @@ const browser = await chromium.launch({
 
 const errors = [];
 
+// Where the run's time goes. The summary is printed at the end of the log (see timings.mjs).
+const timings = createTimings();
+
+// The scope a capture or sql call belongs to: its scenario, or `pages` outside one.
+const scopeName = () => currentScenario ?? "pages";
+
+const timedStateHash = (scope) =>
+	timings.time(scope, "stateHash", () => stateHash());
+
 // Every path that rendered with the expected status, so seeded pages can be checked afterwards.
 const captured = [];
 
@@ -137,38 +147,46 @@ async function capture({
 	expectedResponses = [],
 	expectedResourceErrors = [],
 }) {
+	// Read once, so a page capture running alongside others still lands in its own scenario's timings.
+	const scope = scopeName();
+	timings.count(scope, "captures");
 	const size = VIEWPORTS.find((item) => item.name === viewport);
 
-	const context = await browser.newContext({
-		viewport: { width: size.width, height: size.height },
-		reducedMotion: "reduce",
+	const { context, page } = await timings.time(scope, "context", async () => {
+		const context = await browser.newContext({
+			viewport: { width: size.width, height: size.height },
+			reducedMotion: "reduce",
+		});
+
+		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
+		if (owner)
+			await context.route(
+				(url) => url.origin === new URL(BASE).origin,
+				(route) =>
+					route.continue({
+						headers: { ...route.request().headers(), ...ownerHeaders },
+					}),
+			);
+
+		if (cookie) await context.addCookies([{ ...cookie, url: BASE }]);
+		const requests = [];
+		context.on("request", (request) => {
+			const url = new URL(request.url());
+
+			if (url.origin === new URL(BASE).origin)
+				requests.push({
+					url: withoutViteVersion(url.pathname + url.search),
+					method: request.method(),
+					type: request.resourceType(),
+					accept: request.headers().accept ?? "",
+				});
+		});
+		requestsByFile.set(file, requests);
+		const page = await context.newPage();
+
+		return { context, page };
 	});
 
-	// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
-	if (owner)
-		await context.route(
-			(url) => url.origin === new URL(BASE).origin,
-			(route) =>
-				route.continue({
-					headers: { ...route.request().headers(), ...ownerHeaders },
-				}),
-		);
-
-	if (cookie) await context.addCookies([{ ...cookie, url: BASE }]);
-	const requests = [];
-	context.on("request", (request) => {
-		const url = new URL(request.url());
-
-		if (url.origin === new URL(BASE).origin)
-			requests.push({
-				url: withoutViteVersion(url.pathname + url.search),
-				method: request.method(),
-				type: request.resourceType(),
-				accept: request.headers().accept ?? "",
-			});
-	});
-	requestsByFile.set(file, requests);
-	const page = await context.newPage();
 	const where = `${path} (${viewport})`;
 	page.on("console", (message) => {
 		const expected = expectedResourceError(message, [
@@ -185,68 +203,98 @@ async function capture({
 	});
 	page.on("pageerror", (error) => errors.push(`${where}: ${error.message}`));
 
-	const response = await page.goto(BASE + path, {
-		waitUntil: "load",
-		timeout: 90_000,
-	});
+	const response = await timings.time(scope, "goto", () =>
+		page.goto(BASE + path, {
+			waitUntil: "load",
+			timeout: 90_000,
+		}),
+	);
 
 	if (response?.status() !== status)
 		errors.push(`${where}: HTTP ${response?.status()}, expected ${status}`);
 	else captured.push({ scenario: currentScenario, path });
 	// Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
-	await page
-		.waitForLoadState("networkidle", { timeout: 5_000 })
-		.catch(() => {});
-	await page.evaluate(() => document.fonts.ready);
+	await timings.time(scope, "idle", () =>
+		page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {}),
+	);
+	await timings.time(scope, "fonts", () =>
+		page.evaluate(() => document.fonts.ready),
+	);
 
 	if (prepare)
-		await prepareWithDiagnostics(page, prepare, OUT, currentScenario, file);
+		await timings.time(scope, "prepare", () =>
+			prepareWithDiagnostics(page, prepare, OUT, currentScenario, file),
+		);
 	const target = selector ? page.locator(selector).first() : page;
 	const screenshotOptions = { path: `${OUT}/${file}`, animations: "disabled" };
 
 	if (!selector) screenshotOptions.fullPage = true;
-	await target.screenshot(screenshotOptions);
-	await context.close();
+	await timings.time(scope, "screenshot", () =>
+		target.screenshot(screenshotOptions),
+	);
+	await timings.time(scope, "close", () => context.close());
 
 	return file;
 }
 
-const sql = (command) =>
-	execFileSync(
-		process.execPath,
-		[
-			resolve("node_modules/wrangler/bin/wrangler.js"),
-			"d1",
-			"execute",
-			"MUSIC_DB",
-			"--local",
-			"--config",
-			resolve(".screenshots/wrangler.json"),
-			"--persist-to",
-			resolve(".wrangler/state"),
-			"--json",
-			"--command",
-			command,
-		],
-		{ encoding: "utf8", env: { ...process.env, CI: "1" } },
-	);
+// Synchronous on purpose: scenarios call sql() without await and use its return value.
+const sql = (command) => {
+	const scope = scopeName();
+	const started = timings.now();
+
+	try {
+		return execFileSync(
+			process.execPath,
+			[
+				resolve("node_modules/wrangler/bin/wrangler.js"),
+				"d1",
+				"execute",
+				"MUSIC_DB",
+				"--local",
+				"--config",
+				resolve(".screenshots/wrangler.json"),
+				"--persist-to",
+				resolve(".wrangler/state"),
+				"--json",
+				"--command",
+				command,
+			],
+			{ encoding: "utf8", env: { ...process.env, CI: "1" } },
+		);
+	} finally {
+		timings.add(scope, "sql", timings.now() - started);
+		timings.count(scope, "sql");
+	}
+};
 
 async function ownerFetch(path, body, method = "POST", headers = {}) {
 	scenarioPaths.push(new URL(BASE + path).pathname);
 	const binary = body instanceof Uint8Array;
+	const scope = scopeName();
+	timings.count(scope, "ownerFetch");
 
-	const response = await fetch(BASE + path, {
-		method,
-		body: binary ? body : JSON.stringify(body),
-		headers: {
-			...ownerHeaders,
-			origin: BASE,
-			"content-type": binary ? "application/octet-stream" : "application/json",
-			...headers,
+	const { response, json } = await timings.time(
+		scope,
+		"ownerFetch",
+		async () => {
+			const response = await fetch(BASE + path, {
+				method,
+				body: binary ? body : JSON.stringify(body),
+				headers: {
+					...ownerHeaders,
+					origin: BASE,
+					"content-type": binary
+						? "application/octet-stream"
+						: "application/json",
+					...headers,
+				},
+			});
+
+			const json = await response.json().catch(() => ({}));
+
+			return { response, json };
 		},
-	});
-
-	const json = await response.json().catch(() => ({}));
+	);
 
 	if (!response.ok)
 		throw new Error(
@@ -331,9 +379,8 @@ async function shoot(page, viewport) {
 		earlier.status === params.status &&
 		(await reusable([file]))
 	) {
-		const responses = await replayAll(
-			asRequests(earlier.responses),
-			params.owner,
+		const responses = await timings.time("pages", "replay", () =>
+			replayAll(asRequests(earlier.responses), params.owner),
 		);
 
 		const change = responsesChange(earlier.responses, responses);
@@ -362,12 +409,24 @@ async function shoot(page, viewport) {
 	if (requests.every((request) => request.method === "GET"))
 		cache.pages[file] = {
 			...params,
-			responses: await replayAll(requests, params.owner),
+			responses: await timings.time("pages", "replay", () =>
+				replayAll(requests, params.owner),
+			),
 		};
 }
 
 let reusedPages = 0;
 let currentScenario;
+
+// Printed once: after the scenario summary on success, or from `finally` when the run throws.
+let timingsPrinted = false;
+
+function printTimings() {
+	if (timingsPrinted) return;
+	timingsPrinted = true;
+
+	for (const line of timings.summary()) console.log(line);
+}
 
 // Paths each running scenario sent to ownerFetch, which runs server code without a browser.
 let scenarioPaths = [];
@@ -393,15 +452,20 @@ try {
 		VIEWPORTS.map((viewport) => ({ page, viewport })),
 	);
 
-	const stateBeforePages = await stateHash();
-	await Promise.all(
-		Array.from({ length: PAGE_CONCURRENCY }, async () => {
-			for (let shot = shots.shift(); shot; shot = shots.shift())
-				await shoot(shot.page, shot.viewport);
-		}),
+	const stateBeforePages = await timedStateHash("pages");
+	await timings.wall(
+		"pages",
+		() =>
+			Promise.all(
+				Array.from({ length: PAGE_CONCURRENCY }, async () => {
+					for (let shot = shots.shift(); shot; shot = shots.shift())
+						await shoot(shot.page, shot.viewport);
+				}),
+			),
+		PAGE_CONCURRENCY,
 	);
 	// Scenarios are checked against a run whose pages left the database untouched.
-	cache.pagesWrote = (await stateHash()) !== stateBeforePages;
+	cache.pagesWrote = (await timedStateHash("pages")) !== stateBeforePages;
 
 	const scenarios = [];
 	const directory = resolve("scripts/screenshots/scenarios");
@@ -417,13 +481,15 @@ try {
 	const now = new Date();
 	const day = `${now.toISOString().slice(0, 10)} ${now.toLocaleDateString("en-CA", { timeZone: "America/New_York" })}`;
 
-	const inputsFor = async (name, { files, content, assets }) =>
+	const inputsFor = async (scope, name, { files, content, assets }) =>
 		scenarioInputs({
 			day,
 			script: script(name),
 			files,
 			content,
-			assets: await replayAll(assets, false),
+			assets: await timings.time(scope, "replay", () =>
+				replayAll(assets, false),
+			),
 		});
 
 	// A scenario that no longer exists may have seeded rows the later ones showed.
@@ -433,31 +499,33 @@ try {
 
 	const changed = new Set();
 
-	for (const name of names) {
-		const earlier = reference?.scenarios?.[name];
+	await timings.wall("reuse-check", async () => {
+		for (const name of names) {
+			const earlier = reference?.scenarios?.[name];
 
-		const why = !earlier
-			? "new"
-			: removed
-				? "a scenario was removed"
-				: reference.pagesWrote || cache.pagesWrote
-					? "pages wrote to storage"
-					: !(await reusable(earlier.images))
-						? "images missing"
-						: inputsChange(
-								earlier.inputs,
-								await inputsFor(name, {
-									files: Object.keys(earlier.inputs.sources),
-									content: earlier.content,
-									assets: asRequests(earlier.inputs.assets),
-								}),
-							);
+			const why = !earlier
+				? "new"
+				: removed
+					? "a scenario was removed"
+					: reference.pagesWrote || cache.pagesWrote
+						? "pages wrote to storage"
+						: !(await reusable(earlier.images))
+							? "images missing"
+							: inputsChange(
+									earlier.inputs,
+									await inputsFor("reuse-check", name, {
+										files: Object.keys(earlier.inputs.sources),
+										content: earlier.content,
+										assets: asRequests(earlier.inputs.assets),
+									}),
+								);
 
-		if (why) {
-			changed.add(name);
-			console.log(`Scenario ${name} changed: ${why}.`);
+			if (why) {
+				changed.add(name);
+				console.log(`Scenario ${name} changed: ${why}.`);
+			}
 		}
-	}
+	});
 
 	const pageFiles = (await listFiles(["src/pages"])).filter((file) =>
 		/\.(astro|ts|js|mjs)$/.test(file),
@@ -481,6 +549,7 @@ try {
 	for (const name of names) {
 		if (!planner.shouldRun(name)) {
 			const earlier = reference.scenarios[name];
+			timings.count(name, "reused");
 
 			for (const file of earlier.images)
 				await copyFile(`${REFERENCE}/${file}`, `${OUT}/${file}`);
@@ -494,9 +563,22 @@ try {
 		currentScenario = name;
 		scenarioPaths = [];
 		const filesBefore = new Set(requestsByFile.keys());
-		const stateBefore = await stateHash();
-		const steps = await scenario.run({ base: BASE, capture, sql, ownerFetch });
-		const wrote = (await stateHash()) !== stateBefore;
+
+		const { steps, wrote } = await timings.wall(name, async () => {
+			const stateBefore = await timedStateHash(name);
+
+			const steps = await scenario.run({
+				base: BASE,
+				capture,
+				sql,
+				ownerFetch,
+			});
+
+			const wrote = (await timedStateHash(name)) !== stateBefore;
+
+			return { steps, wrote };
+		});
+
 		planner.ran(name, wrote);
 		scenarios.push({ name, title: scenario.title, steps });
 
@@ -527,37 +609,41 @@ try {
 	currentScenario = undefined;
 
 	if (ran.length) {
-		// The dev server's module graph names the source files behind each route a scenario hit.
-		const graph = await fetch(`${BASE}/__screenshots/deps`)
-			.then((response) => response.json())
-			.catch(() => {
-				throw new Error(
-					"No module graph at /__screenshots/deps: start the dev server with --config scripts/screenshots/dev.config.mjs.",
-				);
-			});
+		await timings.wall("inputs", async () => {
+			// The dev server's module graph names the source files behind each route a scenario hit.
+			const graph = await timings.time("inputs", "graph", () =>
+				fetch(`${BASE}/__screenshots/deps`)
+					.then((response) => response.json())
+					.catch(() => {
+						throw new Error(
+							"No module graph at /__screenshots/deps: start the dev server with --config scripts/screenshots/dev.config.mjs.",
+						);
+					}),
+			);
 
-		for (const { name, paths, wrote, ...rest } of ran) {
-			const roots = [
-				"src/middleware.ts",
-				...new Set(paths.flatMap((path) => routeFiles(path, pageFiles))),
-			];
+			for (const { name, paths, wrote, ...rest } of ran) {
+				const roots = [
+					"src/middleware.ts",
+					...new Set(paths.flatMap((path) => routeFiles(path, pageFiles))),
+				];
 
-			const { files, content } = sourceClosure(graph, roots);
+				const { files, content } = sourceClosure(graph, roots);
 
-			const inputs = await inputsFor(name, {
-				files,
-				content,
-				assets: rest.assets,
-			});
+				const inputs = await inputsFor("inputs", name, {
+					files,
+					content,
+					assets: rest.assets,
+				});
 
-			cache.scenarios[name] = {
-				...rest,
-				assets: undefined,
-				content,
-				inputs,
-				writer: wrote,
-			};
-		}
+				cache.scenarios[name] = {
+					...rest,
+					assets: undefined,
+					content,
+					inputs,
+					writer: wrote,
+				};
+			}
+		});
 	}
 
 	console.log(
@@ -566,6 +652,7 @@ try {
 	console.log(
 		`Scenarios run: ${ran.map((item) => item.name).join(", ") || "none"}. Reused: ${names.filter((name) => !ran.some((item) => item.name === name)).join(", ") || "none"}.`,
 	);
+	printTimings();
 	errors.push(
 		...missingScenarioRoutes(SCENARIO_PAGES, captured).map(
 			(file) => `${file}: its scenario captured no page under its route`,
@@ -577,6 +664,7 @@ try {
 	);
 	await writeFile(`${OUT}/cache.json`, JSON.stringify(cache));
 } finally {
+	printTimings();
 	await browser.close();
 	issuer.close();
 }
