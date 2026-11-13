@@ -111,36 +111,14 @@ export function statusAfter(
 	);
 }
 
-/**
- * Redelivery changes nothing: after an event is handled once, handling it again (now the same time as the stored one if it
- * was applied, unchanged if it was ignored) leaves the status as it was. The result is always true.
- */
-export function redeliveryChangesNothing(
-	storedStatus: string,
-	incomingStatus: string,
-	relation: TimeRelation,
-	sameTime: "latest" | "rank",
-): boolean {
-	//@ verify
-	//@ ensures \result === true
-	const first = nextStatus(storedStatus, incomingStatus, relation, sameTime);
-
-	const relationAfter: TimeRelation =
-		decideByOrder(storedStatus, incomingStatus, relation, sameTime) === "apply"
-			? "same"
-			: relation;
-
-	return nextStatus(first, incomingStatus, relationAfter, sameTime) === first;
-}
-
-//@ skip
 function relateTimes(
 	incomingAt: string,
 	storedAt: string | null,
 ): TimeRelation {
-	// Not checked. LemmaScript reads the string comparison (as a lexicographic order), but proving that two times are
-	// "same" only when they are equal needs a hand-written Dafny lemma about that recursive order (irreflexivity), which
-	// would mean committing a .dfy file. The matrix in tests/lib/invoice-event-order.test.ts covers it instead.
+	//@ verify
+	// Translated, not specified: proving that two times are "same" only when equal needs a hand-written Dafny lemma about
+	// the tool's recursive string order (irreflexivity), which would mean committing a .dfy file. The matrix in
+	// tests/lib/invoice-event-order.test.ts covers the relation instead.
 	if (!storedAt) return "first";
 
 	if (incomingAt > storedAt) return "newer";
@@ -160,10 +138,12 @@ export type InvoiceEventInput = {
 	sameTime: "latest" | "rank";
 };
 
-//@ skip
 export function invoiceEventDecision(
 	input: InvoiceEventInput,
 ): "apply" | "ignore" {
+	//@ verify
+	//@ ensures input.storedStatus === "paid" ==> \result === "ignore"
+	//@ ensures (input.storedStatus !== "paid" && input.incomingStatus === "paid") ==> \result === "apply"
 	return decideByOrder(
 		input.storedStatus,
 		input.incomingStatus,

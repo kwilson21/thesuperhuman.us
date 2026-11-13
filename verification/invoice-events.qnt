@@ -17,7 +17,7 @@ module invoiceEvents {
   // "none" is the code as it is now. Every other value changes one thing so a property must fail (the mutants):
   //   "old-rule"              an event older than the stored time is ignored, even a paid one            (PR 251 bug a)
   //   "stale-guard"           the guard time is chosen from the stale read                               (PR 251 bug b)
-  //   "no-id-pin"             the write guard does not pin the Stripe invoice id                         (PR 251 bug c)
+  //   "no-id-pin"             the write guard does not pin the Stripe invoice id                         (PR 251 bug c; audio: recovery's guarded update)
   //   "pre-fix-link"          an event whose id equals the id just linked is parked as a conflict       (the unlinked-invoice bug)
   //   "no-time-guard"         the write guard has no time comparison
   //   "overwrite-paid"        the write guard does not refuse a paid row
@@ -29,9 +29,10 @@ module invoiceEvents {
   //   "never-unmatched"       an event for a different Stripe invoice is not recorded as unmatched
   //   "processed-on-mismatch" an event is recorded processed even though the id no longer matches
   //   "store-guard-time"      the guard time is stored as the event time
-  // Two more are equivalent in this model: the property still holds, for a stated reason (docs/verification.md):
+  // Three more are equivalent in this model: the property still holds, for a stated reason (docs/verification.md):
   //   "no-decision"           audio: the stale-read decision is ignored (the write guard alone is enough)
   //   "no-read-unmatched"     software: no unmatched check at read (the write batch records it)
+  //   (software "no-dup-detection" is the third: a repeat of a software event leaves the row as it was)
   const MUTANT: str
   // Handler runs per check: 4 for the CI run; the manual Apalache check uses fewer so it can finish.
   const DELIVERIES: int
@@ -242,7 +243,7 @@ module invoiceEvents {
     val pinned = row.id == ev.inv and row.rec != e
     // The guarded update refuses an event already recorded as processed (the "recover-no-dup-guard" mutant is the code before).
     val seen = processed.contains(e) and dupDetected and MUTANT != "recover-no-dup-guard"
-    val guarded = row1.id == ev.inv and row1.rec != e and not(seen) and writeGuard(row1, ev, dl.rAt, "audio")
+    val guarded = (MUTANT == "no-id-pin" or row1.id == ev.inv) and row1.rec != e and not(seen) and writeGuard(row1, ev, dl.rAt, "audio")
     val row2 = if (guarded) { ...row1, status: ev.status, at: storedTime(ev, dl.rAt) } else row1
     val applies = linkApplies or guarded
     val dupBefore = processed.contains(e)

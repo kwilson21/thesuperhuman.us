@@ -8,6 +8,7 @@ export const mutants = {
 	softwareStaleGuard: { property: "moneyNotLost" },
 	audioPreFixLink: { property: "moneyNotLost" },
 	softwareNoIdPin: { property: "idNeverOverwritten" },
+	audioNoIdPin: { property: "idNeverOverwritten" },
 	audioNoTimeGuard: { property: "noStaleOverwrite" },
 	softwareNoTimeGuard: { property: "noStaleOverwrite" },
 	audioOverwritePaid: { property: "paidAbsorbing" },
@@ -27,7 +28,6 @@ export const mutants = {
 // Changes that leave every property true, for the reason given in docs/verification.md ("Equivalent mutants").
 export const equivalents = [
 	"audioNoDecision",
-	"audioNoIdPin",
 	"softwareNoDupDetection",
 	"softwareNoReadUnmatched",
 ];
