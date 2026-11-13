@@ -3,7 +3,7 @@
 Date: November 13, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/large-text-reflow`, merged with `origin/main` (a merge commit, never a rebase)
-Commits: `06c52fd1`, `0878fce9`, `d7c8317e` (reverted `0878fce9`) and `b8f74bd3` from the earlier work; then `11ceb0c9` (merge of `origin/main` at `57e26842`), `5077befc` (button wrap query and padding), `0737ea2e` (browser check and tests), `42b99363` (design note) and this record's commit
+Commits: `06c52fd1`, `0878fce9`, `d7c8317e` (reverted `0878fce9`) and `b8f74bd3` from the earlier work; then `11ceb0c9` (merge of `origin/main` at `57e26842`, with the design note), `5077befc` (button wrap query and padding), `0737ea2e` (browser check and tests), and `2dca2376` (this record). The design note is in the merge commit
 Pull request: to be opened against `main` from this branch
 Target: production `https://thesuperhuman.us` after merge. The shared footer also renders on `audio.thesuperhuman.us`.
 Reviewers: Claude Haiku 5.5 subagent (implementation, test first). The independent reviews listed under Evidence and limits were run on commit `b8f74bd3`, before the revision recorded here. This revision has not been independently reviewed yet.
