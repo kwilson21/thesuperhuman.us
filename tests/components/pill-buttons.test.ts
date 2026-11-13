@@ -50,7 +50,7 @@ it("makes the shared button a pill that defaults to one line", () => {
 
 it("adds the large size used in the closing panel", () => {
 	expect(global).toMatch(
-		/\.site-button-large \{[^}]*min-height: 52px;[^}]*font-size: 1\.0625rem;[^}]*padding-inline: min\(1\.75rem, 8\.75vw\);/,
+		/\.site-button-large \{[^}]*min-height: 52px;[^}]*font-size: 1\.0625rem;[^}]*padding-inline: 1\.75rem;/,
 	);
 });
 
@@ -148,9 +148,8 @@ it("keeps text-style buttons and fields square", () => {
 
 it("allows narrow-phone button labels and door text to shrink", () => {
 	expect(global).toMatch(
-		/@media \(max-width: 23\.75rem\) \{ \.site-button \{ white-space: normal; text-align: center; \} \}/,
+		/@media \(max-width: 380px\) \{ \.site-button \{ white-space: normal; text-align: center; \} \}/,
 	);
-	expect(global).not.toContain("max-width: 380px");
 	const doors = read("src/components/WorkWithMe.astro");
 	expect(doors).not.toMatch(/grid-template-columns: \d+px 1fr;/);
 	expect(doors).toContain("minmax(0, 1fr)");

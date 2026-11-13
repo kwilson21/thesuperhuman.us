@@ -57,6 +57,9 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
 ```
 New colours are named tokens. Illustrations may keep local colour tokens in their own
 component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
+The publishing consent page (`src/lib/publication/oauth-login.ts`) is a standalone page with its own
+Content-Security-Policy, so it inlines the tokens as literals and loads Libron from the site's own font
+files; a test checks those literals against `global.css`.
 
 ## Typography
 - Libron (`--font-serif`) sets headings, body and public interface text at 14px or
@@ -100,8 +103,16 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   screen until the closing panel comes into view. It hides while the phone menu is open
   or a form field has focus, appears and goes without motion, and never shows above
   600px, in print or without JavaScript.
-- At 23.75rem (380px at the default text size) and below a button label may wrap
-  (reflow, WCAG 1.4.10); wider than that it stays on one line.
+- At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
+  that it stays on one line. The publishing consent page's button is the exception: its
+  label wraps at any width, because that page cannot use a width query that follows text
+  size, and the label must stay inside the pill when text is enlarged.
+- The Work diagram's flow wraps by content: its parts share a row 1 : 1.2 and stack when the
+  row cannot hold their longest word, so enlarged text reflows instead of scrolling sideways
+  (WCAG 1.4.10). A word breaks inside itself only when it cannot fit a line. The large
+  button's and the phone closing panel's side padding are capped by the viewport
+  (`min(1.75rem, 8.75vw)`, `min(1.25rem, 6.25vw)`), which equals the rem value at 320px wide
+  and above.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
@@ -213,6 +224,11 @@ Kazon revised the panel after seeing the built pages: "it feels like there's two
 Kazon chose how the closing panel's legal line wraps on a narrow phone, from four options
 shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
 is unchanged where it fits on one line.
+
+When the closing button's label wraps at enlarged text, the arrow stays centred beside both
+lines. Kazon chose it from two renders ("1 for sure", November 13, 2026).
+
+Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
