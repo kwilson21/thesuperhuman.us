@@ -156,6 +156,14 @@ describe("renderers", () => {
 	const source = (path: string) =>
 		readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
+	it("the owner's live preview checks links with the same function as the server", () => {
+		const text = source("src/scripts/software-composer.ts");
+
+		expect(text).toContain('from "~/lib/link-check"');
+		expect(text).not.toMatch(/new URL\(/);
+		expect(text.match(/safeHttpsUrl\(/g)).toHaveLength(3);
+	});
+
 	it.each([
 		"src/components/SoftwareProjectUpdate.astro",
 		"src/pages/studio/software/[id].astro",
