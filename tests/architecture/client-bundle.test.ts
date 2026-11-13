@@ -12,9 +12,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { BROWSER_MODULES, BROWSER_PACKAGES } from "../helpers/browser-modules";
+import {
+	BROWSER_MODULES,
+	BROWSER_PACKAGES,
+	BROWSER_VIRTUAL_MODULES,
+	PUBLIC_SCRIPTS,
+} from "../helpers/browser-modules";
 import {
 	bundleViolations,
+	inlinedScripts,
 	type ClientManifest,
 	MANIFEST_PATH,
 	staleManifest,
@@ -199,7 +205,7 @@ describe("the bundler's module manifest", () => {
 			const manifest = readManifest();
 
 			expect(
-				staleManifest(manifest, bundle),
+				staleManifest(manifest, bundle, PUBLIC_SCRIPTS),
 				`${MANIFEST_PATH} does not describe this dist/. Run pnpm run build again.`,
 			).toEqual([]);
 			expect(manifest.chunks.length).toBeGreaterThan(20);
@@ -207,6 +213,7 @@ describe("the bundler's module manifest", () => {
 				bundleViolations(manifest, {
 					repoModules: BROWSER_MODULES,
 					packages: BROWSER_PACKAGES,
+					virtualModules: BROWSER_VIRTUAL_MODULES,
 				}),
 			).toEqual([]);
 		},
@@ -217,7 +224,7 @@ describe("bundleViolations", () => {
 	const chunk = (...modules: string[]) => ({
 		file: "_astro/a.js",
 		sha256: "",
-		tail: "",
+		trimmedSha256: "",
 		modules,
 	});
 
@@ -225,15 +232,23 @@ describe("bundleViolations", () => {
 		modules: string[],
 		extra: Partial<ClientManifest> = {},
 	): ClientManifest => ({
-		version: 1,
-		packages: { zod: "3.25.76" },
+		version: 2,
 		chunks: [chunk(...modules)],
 		unrendered: [],
 		...extra,
 	});
 
-	const allowed = { repoModules: ["src/lib/ok.ts"], packages: ["zod"] };
-	const base = ["src/scripts/a.ts", "src/lib/ok.ts", "npm:zod/v3/types.js"];
+	const allowed = {
+		repoModules: ["src/lib/ok.ts"],
+		packages: ["zod"],
+		virtualModules: [] as string[],
+	};
+
+	const base = [
+		"src/scripts/a.ts",
+		"src/lib/ok.ts",
+		"npm:zod@3.25.76/v3/types.js",
+	];
 
 	it("accepts exactly the reviewed modules and packages", () => {
 		expect(bundleViolations(manifest(base), allowed)).toEqual([]);
@@ -254,7 +269,7 @@ describe("bundleViolations", () => {
 		).toEqual(["repository module not on the reviewed list: src/lib/new.ts"]);
 		expect(
 			bundleViolations(
-				manifest(["src/scripts/a.ts", "npm:zod/v3/types.js"]),
+				manifest(["src/scripts/a.ts", "npm:zod@3.25.76/v3/types.js"]),
 				allowed,
 			),
 		).toEqual([
@@ -273,10 +288,13 @@ describe("bundleViolations", () => {
 
 	it("flags a package off the list, a forbidden package, and a listed package that is gone", () => {
 		expect(
-			bundleViolations(manifest([...base, "npm:stripe/esm/index.js"]), allowed),
+			bundleViolations(
+				manifest([...base, "npm:stripe@19.0.0/esm/index.js"]),
+				allowed,
+			),
 		).toEqual([
 			"package not on the reviewed list: stripe",
-			"forbidden package in browser code: stripe",
+			"forbidden package in browser code: stripe@19.0.0",
 		]);
 		expect(
 			bundleViolations(
@@ -286,7 +304,7 @@ describe("bundleViolations", () => {
 		).toEqual(["reviewed package no longer in browser code, remove it: zod"]);
 	});
 
-	it("flags Effect, its scoped packages, xstate and Zod v4, but not Zod v3", () => {
+	it("flags Effect, its scoped packages and xstate", () => {
 		const wide = {
 			...allowed,
 			packages: [
@@ -302,16 +320,63 @@ describe("bundleViolations", () => {
 			bundleViolations(
 				manifest([
 					...base,
-					"npm:effect/dist/Schema.js",
-					"npm:@effect/platform/index.js",
-					"npm:@xstate/effect/dist/a.js",
-					"npm:xstate/dist/b.js",
+					"npm:effect@4.0.0/dist/Schema.js",
+					"npm:@effect/platform@4.0.0/index.js",
+					"npm:@xstate/effect@1.0.0/dist/a.js",
+					"npm:xstate@5.0.0/dist/b.js",
 				]),
 				wide,
 			).length,
 		).toBe(4);
+	});
+
+	it("tells the Zod versions apart by each module's own version, in either order", () => {
+		const v3 = "npm:zod@3.25.76/v3/types.js";
+		const v4 = "npm:zod@4.6.5/v4/core/core.js";
+
 		expect(
-			bundleViolations(manifest(base, { packages: { zod: "4.6.5" } }), allowed),
+			bundleViolations(
+				manifest(["src/scripts/a.ts", "src/lib/ok.ts", v3]),
+				allowed,
+			),
+		).toEqual([]);
+		expect(
+			bundleViolations(
+				manifest(["src/scripts/a.ts", "src/lib/ok.ts", v4]),
+				allowed,
+			),
+		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+
+		for (const order of [
+			[v3, v4],
+			[v4, v3],
+		])
+			expect(
+				bundleViolations(
+					manifest(["src/scripts/a.ts", "src/lib/ok.ts", ...order]),
+					allowed,
+				),
+			).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+
+		// Mixed across chunks, and folded in as an unrendered module.
+		expect(
+			bundleViolations(
+				{
+					version: 2,
+					chunks: [chunk("src/scripts/a.ts", "src/lib/ok.ts", v3), chunk(v4)],
+					unrendered: [],
+				},
+				allowed,
+			),
+		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+		expect(
+			bundleViolations(manifest(base, { unrendered: [v4] }), allowed),
+		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+	});
+
+	it("treats a Zod module whose label carries no version as forbidden", () => {
+		expect(
+			bundleViolations(manifest([...base, "npm:zod/v3/errors.js"]), allowed),
 		).toEqual(["forbidden package in browser code: zod"]);
 	});
 
@@ -337,6 +402,28 @@ describe("bundleViolations", () => {
 		);
 	});
 
+	it("flags a virtual module that is not on the reviewed list, and a reviewed one that is gone", () => {
+		for (const id of ["\0plugin/generated.js", "astro:env/client", "virtual:x"])
+			expect(bundleViolations(manifest([...base, id]), allowed)).toEqual([
+				`virtual module not on the reviewed list: ${id}`,
+			]);
+
+		expect(
+			bundleViolations(manifest([...base, "virtual:x"]), {
+				...allowed,
+				virtualModules: ["virtual:x"],
+			}),
+		).toEqual([]);
+		expect(
+			bundleViolations(manifest(base), {
+				...allowed,
+				virtualModules: ["virtual:x"],
+			}),
+		).toEqual([
+			"reviewed virtual module no longer in browser code, remove it: virtual:x",
+		]);
+	});
+
 	it("counts a module folded into code (unrendered) like one in a chunk", () => {
 		expect(
 			bundleViolations(
@@ -348,14 +435,26 @@ describe("bundleViolations", () => {
 		]);
 	});
 
-	it("lets a reviewed prefix through the forbidden check only when its package is listed", () => {
+	it("flags Effect even when its package is listed, until a reviewed prefix allows it", () => {
 		// ALLOWED_FORBIDDEN_PREFIXES is empty today, so Effect is always flagged; see client-manifest.ts for the one-line change.
 		expect(
-			bundleViolations(manifest([...base, "npm:effect/dist/Schema.js"]), {
+			bundleViolations(manifest([...base, "npm:effect@4.0.0/dist/Schema.js"]), {
 				...allowed,
 				packages: ["zod", "effect"],
 			}),
-		).toEqual(["forbidden package in browser code: effect"]);
+		).toEqual(["forbidden package in browser code: effect@4.0.0"]);
+	});
+});
+
+describe("inlinedScripts", () => {
+	it("reads the entries of the array after the key, strings and escapes included", () => {
+		const text = `x = {"a":[["no"]],"inlinedScripts":[["/r/a.astro?astro&type=script","let q=\\"]\\";"],["/r/b.astro","b()"]],"after":[["c"]]}`;
+
+		expect(inlinedScripts(text)).toEqual([
+			{ id: "/r/a.astro?astro&type=script", code: 'let q="]";' },
+			{ id: "/r/b.astro", code: "b()" },
+		]);
+		expect(inlinedScripts("no such key")).toEqual([]);
 	});
 });
 
@@ -385,56 +484,142 @@ describe("staleManifest", () => {
 	const entry = (file: string, code: string) => ({
 		file,
 		sha256: sha(code),
-		tail: code.slice(-60),
+		trimmedSha256: sha(code.trim()),
 		modules: [],
 	});
 
-	it("passes when every script matches its chunk and the inlined chunk appears in the server manifest", () => {
+	/** A server manifest whose inlined scripts are `scripts`, serialized the way Astro does. */
+	const serverManifest = (scripts: Record<string, string>) =>
+		`export const manifest = {"x":1,"inlinedScripts":${JSON.stringify(Object.entries(scripts))},"y":2};`;
+
+	const manifestOf = (
+		...chunks: ReturnType<typeof entry>[]
+	): ClientManifest => ({
+		version: 2,
+		chunks,
+		unrendered: [],
+	});
+
+	const inline = 'let q="z";';
+
+	it("passes for an unchanged build: scripts match their chunks and the inlined script matches its entry", () => {
 		const dist = build({
 			"_astro/a.js": "alert(1)",
-			"_worker.js/manifest_x.mjs": 'inline:"let q=\\"z\\";"',
+			"_worker.js/manifest_x.mjs": serverManifest({ "/r/b.astro": inline }),
 		});
 
 		expect(
 			staleManifest(
-				{
-					version: 1,
-					packages: {},
-					unrendered: [],
-					chunks: [
-						entry("_astro/a.js", "alert(1)"),
-						entry("_astro/b.js", 'let q="z";'),
-					],
-				},
+				manifestOf(
+					entry("_astro/a.js", "alert(1)"),
+					entry("_astro/b.js", `${inline}\n`),
+				),
 				dist,
 			),
 		).toEqual([]);
 	});
 
-	it("fails for a script the manifest does not list, one whose code changed, and a chunk that is nowhere", () => {
+	it("fails when a built file is hand-edited, or a chunk is not in the manifest", () => {
 		const dist = build({
-			"_astro/new.js": "x",
 			"_astro/changed.js": "after",
-			"_worker.js/manifest_x.mjs": "",
+			"_astro/new.js": "x",
+			"_worker.js/manifest_x.mjs": serverManifest({}),
 		});
 
 		expect(
-			staleManifest(
-				{
-					version: 1,
-					packages: {},
-					unrendered: [],
-					chunks: [
-						entry("_astro/changed.js", "before"),
-						entry("_astro/gone.js", "gone-for-good"),
-					],
-				},
-				dist,
-			),
+			staleManifest(manifestOf(entry("_astro/changed.js", "before")), dist),
 		).toEqual([
 			"_astro/changed.js differs from the chunk the manifest describes",
-			"_astro/new.js is in dist/ but not in the manifest",
-			"_astro/gone.js is in the manifest but neither in dist/ nor inlined into a page",
+			"_astro/new.js is a browser script in dist/ that is neither in the manifest nor a reviewed public script",
 		]);
+	});
+
+	it("fails for an old manifest against a rebuilt site, and for no manifest chunk at all", () => {
+		const dist = build({
+			"_astro/a.NEWHASH.js": "alert(2)",
+			"_worker.js/manifest_x.mjs": serverManifest({}),
+		});
+
+		expect(
+			staleManifest(manifestOf(entry("_astro/a.OLDHASH.js", "alert(1)")), dist),
+		).toEqual([
+			"_astro/a.NEWHASH.js is a browser script in dist/ that is neither in the manifest nor a reviewed public script",
+			"_astro/a.OLDHASH.js is in the manifest but neither in dist/ nor inlined into a page",
+		]);
+		expect(staleManifest(manifestOf(), dist)).toEqual([
+			"_astro/a.NEWHASH.js is a browser script in dist/ that is neither in the manifest nor a reviewed public script",
+		]);
+	});
+
+	it("fails for an inlined script whose body changed but whose end did not", () => {
+		const dist = build({
+			"_worker.js/manifest_x.mjs": serverManifest({
+				"/r/b.astro": 'EVIL();let q="z";',
+			}),
+		});
+
+		expect(
+			staleManifest(manifestOf(entry("_astro/b.js", inline)), dist),
+		).toEqual([
+			"_astro/b.js is in the manifest but neither in dist/ nor inlined into a page",
+			"an inlined script (b.astro) has no chunk in the manifest",
+		]);
+	});
+
+	it("fails for an inlined script that has no recorded chunk", () => {
+		const dist = build({
+			"_astro/a.js": "alert(1)",
+			"_worker.js/manifest_x.mjs": serverManifest({ "/r/late.astro": inline }),
+		});
+
+		expect(
+			staleManifest(manifestOf(entry("_astro/a.js", "alert(1)")), dist),
+		).toEqual(["an inlined script (late.astro) has no chunk in the manifest"]);
+	});
+
+	it("fails for a stray script outside _astro, and accepts one only with its reviewed hash", () => {
+		const dist = build({
+			"client.js": "stray()",
+			"nested/lib.mjs": "lib()",
+			"_worker.js/manifest_x.mjs": serverManifest({}),
+		});
+
+		const empty = manifestOf();
+
+		expect(staleManifest(empty, dist)).toEqual([
+			"client.js is a browser script in dist/ that is neither in the manifest nor a reviewed public script",
+			"nested/lib.mjs is a browser script in dist/ that is neither in the manifest nor a reviewed public script",
+		]);
+		expect(
+			staleManifest(empty, dist, {
+				"client.js": sha("stray()"),
+				"nested/lib.mjs": sha("lib()"),
+			}),
+		).toEqual([]);
+		expect(
+			staleManifest(empty, dist, {
+				"client.js": sha("changed()"),
+				"nested/lib.mjs": sha("lib()"),
+			}),
+		).toEqual([
+			"client.js is a public script whose content changed: review it and update its hash",
+		]);
+		expect(
+			staleManifest(empty, dist, {
+				"client.js": sha("stray()"),
+				"nested/lib.mjs": sha("lib()"),
+				"gone.js": sha("x"),
+			}),
+		).toEqual(["reviewed public script gone.js is not in dist/, remove it"]);
+	});
+
+	it("does not read the server output as browser code", () => {
+		const dist = build({
+			"_worker.js/index.js": "server()",
+			"_worker.js/chunks/page.mjs": "page()",
+			"_worker.js/manifest_x.mjs": serverManifest({}),
+		});
+
+		expect(staleManifest(manifestOf(), dist)).toEqual([]);
 	});
 });

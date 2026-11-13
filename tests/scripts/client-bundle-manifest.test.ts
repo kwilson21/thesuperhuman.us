@@ -3,7 +3,6 @@ import {
 	chunkEntry,
 	manifestFromChunks,
 	moduleLabel,
-	packageDirectory,
 	settleChunks,
 	unrenderedModules,
 } from "../../scripts/client-bundle-manifest.mjs";
@@ -44,6 +43,26 @@ describe("moduleLabel", () => {
 		);
 	});
 
+	it("carries the installed version of that very package directory", () => {
+		const v = (directory: string) =>
+			({
+				[`${root}/node_modules/.pnpm/zod@3.25.76/node_modules/zod`]: "3.25.76",
+				[`${root}/node_modules/.pnpm/zod@4.6.5/node_modules/zod`]: "4.6.5",
+				[`${root}/node_modules/.pnpm/@effect+x@1.2.3/node_modules/@effect/x`]:
+					"1.2.3",
+			})[directory];
+
+		expect(
+			moduleLabel(pnpm("zod@3.25.76", "zod", "v3/types.js"), root, v),
+		).toBe("npm:zod@3.25.76/v3/types.js");
+		expect(moduleLabel(pnpm("zod@4.6.5", "zod", "v3/types.js"), root, v)).toBe(
+			"npm:zod@4.6.5/v3/types.js",
+		);
+		expect(
+			moduleLabel(pnpm("@effect+x@1.2.3", "@effect/x", "dist/a.js"), root, v),
+		).toBe("npm:@effect/x@1.2.3/dist/a.js");
+	});
+
 	it("uses the innermost node_modules, so a nested dependency names its own package", () => {
 		expect(
 			moduleLabel(
@@ -70,21 +89,8 @@ describe("moduleLabel", () => {
 	});
 });
 
-describe("packageDirectory", () => {
-	it("is the directory of the package a file belongs to, or undefined", () => {
-		expect(packageDirectory(pnpm("zod@3.25.76", "zod", "v3/types.js"))).toBe(
-			`${root}/node_modules/.pnpm/zod@3.25.76/node_modules/zod`,
-		);
-		expect(
-			packageDirectory(pnpm("@effect+x@1", "@effect/x", "dist/a.js")),
-		).toBe(`${root}/node_modules/.pnpm/@effect+x@1/node_modules/@effect/x`);
-		expect(packageDirectory(`${root}/src/a.ts`)).toBeUndefined();
-		expect(packageDirectory("\0virtual")).toBeUndefined();
-	});
-});
-
 describe("chunkEntry", () => {
-	it("lists sorted unique module labels with a hash of the code and a tail of it", () => {
+	it("lists sorted unique module labels with a hash of the code and of the trimmed code", () => {
 		const entry = chunkEntry(
 			"_astro/a.js",
 			{
@@ -101,25 +107,41 @@ describe("chunkEntry", () => {
 		expect(entry.modules).toEqual(["src/a.ts", "src/b.ts"]);
 		expect(entry.file).toBe("_astro/a.js");
 		expect(entry.sha256).toMatch(/^[0-9a-f]{64}$/);
-		expect(entry.tail).toBe("console.log(1)");
+		expect(entry.trimmedSha256).toMatch(/^[0-9a-f]{64}$/);
+		expect(entry.trimmedSha256).not.toBe(entry.sha256);
+		expect(
+			chunkEntry("x", { code: "console.log(1)", modules: {} }, root)
+				.trimmedSha256,
+		).toBe(entry.trimmedSha256);
 	});
 });
 
 describe("manifestFromChunks", () => {
 	it("is sorted by file so the same build writes the same text", () => {
-		const a = { file: "_astro/a.js", sha256: "1", tail: "", modules: [] };
-		const b = { file: "_astro/b.js", sha256: "2", tail: "", modules: [] };
+		const a = {
+			file: "_astro/a.js",
+			sha256: "1",
+			trimmedSha256: "1",
+			modules: [],
+		};
+		const b = {
+			file: "_astro/b.js",
+			sha256: "2",
+			trimmedSha256: "2",
+			modules: [],
+		};
 
-		expect(manifestFromChunks([b, a], { z: "1", a: "2" })).toEqual(
-			manifestFromChunks([a, b], { a: "2", z: "1" }),
-		);
-		expect(
-			Object.keys(manifestFromChunks([], { z: "1", a: "2" }).packages),
-		).toEqual(["a", "z"]);
-		expect(manifestFromChunks([b, a], {}).chunks.map((c) => c.file)).toEqual([
+		expect(manifestFromChunks([b, a])).toEqual(manifestFromChunks([a, b]));
+		expect(manifestFromChunks([b, a]).chunks.map((c) => c.file)).toEqual([
 			"_astro/a.js",
 			"_astro/b.js",
 		]);
+	});
+
+	it("carries the unrendered modules next to the chunks", () => {
+		expect(manifestFromChunks([], ["src/data/folded.json"]).unrendered).toEqual(
+			["src/data/folded.json"],
+		);
 	});
 });
 
@@ -141,16 +163,8 @@ describe("unrenderedModules", () => {
 	});
 });
 
-describe("manifestFromChunks unrendered", () => {
-	it("carries the unrendered modules next to the chunks", () => {
-		expect(
-			manifestFromChunks([], {}, ["src/data/folded.json"]).unrendered,
-		).toEqual(["src/data/folded.json"]);
-	});
-});
-
 describe("settleChunks", () => {
-	it("takes the hash and tail from the code that was written, and keeps those of a chunk that was inlined", () => {
+	it("takes the hashes from the code that was written, and keeps those of a chunk that was inlined", () => {
 		const written = chunkEntry(
 			"_astro/a.js",
 			{ code: "before preload map", modules: {} },
@@ -168,8 +182,11 @@ describe("settleChunks", () => {
 			"_astro/style.css": { type: "asset" },
 		});
 
-		expect(settled[0].tail).toBe("after preload map");
 		expect(settled[0].sha256).not.toBe(written.sha256);
+		expect(settled[0].trimmedSha256).toBe(
+			chunkEntry("x", { code: "after preload map", modules: {} }, root)
+				.trimmedSha256,
+		);
 		expect(settled[1]).toEqual(inlined);
 	});
 });

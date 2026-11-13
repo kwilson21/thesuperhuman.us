@@ -29,3 +29,17 @@ export const BROWSER_MODULES: readonly string[] = [
  * ALLOWED_FORBIDDEN_PREFIXES in client-manifest.ts.
  */
 export const BROWSER_PACKAGES: readonly string[] = ["zod"];
+
+/**
+ * Every virtual module id (`\0...`, `astro:...`, `virtual:...`) the client build puts in browser code. None today:
+ * the browser bundle holds only repository files and the `zod` package. A virtual module can carry code a plugin
+ * generates, so each id added here is reviewed for what it supplies.
+ */
+export const BROWSER_VIRTUAL_MODULES: readonly string[] = [];
+
+/**
+ * Scripts copied from public/ into dist/ unbundled (a `<script src="/x.js">`), by path under dist/ and the sha256
+ * of the file. None today (public/ holds no .js or .mjs file). A change to a listed file changes its hash and
+ * forces a review.
+ */
+export const PUBLIC_SCRIPTS: Readonly<Record<string, string>> = {};
