@@ -1797,7 +1797,7 @@ describe("screenshot workflow triggers and concurrency", () => {
 		expect(workflow).not.toContain("cancel-in-progress: true");
 	});
 
-	it("keeps the concurrency group and the label handling as they were", () => {
+	it("keeps the label-aware concurrency group and the skip condition for other labels", () => {
 		expect(workflow).toContain(
 			"group: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-screenshots' && format('screenshots-label-{0}', github.run_id) || format('screenshots-{0}', github.event.pull_request.number || github.ref) }}",
 		);
