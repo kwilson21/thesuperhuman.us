@@ -8,6 +8,9 @@ export default defineConfig({
 				new URL("./tests/__mocks__/cloudflare-workers.ts", import.meta.url),
 			),
 			"~": fileURLToPath(new URL("./src", import.meta.url)),
+			"astro:content": fileURLToPath(
+				new URL("./tests/helpers/astro-content.ts", import.meta.url),
+			),
 			"astro:middleware": fileURLToPath(
 				new URL("./tests/__mocks__/astro-middleware.ts", import.meta.url),
 			),
@@ -16,6 +19,8 @@ export default defineConfig({
 	test: {
 		server: { deps: { inline: ["@cloudflare/workers-oauth-provider"] } },
 		environment: "node",
+		// Production runs in UTC. Pin it so a zoneless date reads the same on every machine.
+		env: { TZ: "UTC" },
 		include: ["tests/**/*.test.ts"],
 		coverage: { reporter: ["text", "html"] },
 	},
