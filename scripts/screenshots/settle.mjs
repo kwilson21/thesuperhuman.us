@@ -27,6 +27,30 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 /** The URL without its query string or fragment, which can carry tokens. */
 export const withoutQuery = (url) => url.split(/[?#]/, 1)[0];
 
+const BLOB = "blob:";
+
+/**
+ * The URL a blob wraps: "blob:https://a.test/<id>" gives "https://a.test/<id>". Undefined when it does not
+ * parse (Chrome writes "blob:null/<id>" for an opaque origin).
+ */
+const wrappedUrl = (url) => {
+	try {
+		return new URL(url.slice(BLOB.length));
+	} catch {
+		return undefined;
+	}
+};
+
+/**
+ * The URL a settle reason names: a blob by its origin alone, since its id changes on every request, and any
+ * other URL without its query string or fragment.
+ */
+const reasonUrl = (url) => {
+	if (!url.startsWith(BLOB)) return withoutQuery(url);
+
+	return `${BLOB}${wrappedUrl(url)?.origin ?? "null"}`;
+};
+
 /**
  * Counts requests in flight, with an injected clock (milliseconds). `start` takes the request's key (any
  * unique value) and its URL; `finish` takes the key. Only requests to hosts outside IGNORED_HOSTS count.
@@ -42,9 +66,14 @@ export function createRequestTracker({
 	// asked for anything is quiet at once.
 	let lastChange;
 
+	// A blob counts by the host of the URL it wraps, so Turnstile's blobs are ignored like its other requests.
 	const counted = (url) => {
 		try {
-			return !ignoredHosts.includes(new URL(url).hostname);
+			const host = url.startsWith(BLOB)
+				? wrappedUrl(url)?.hostname
+				: new URL(url).hostname;
+
+			return !ignoredHosts.includes(host ?? "");
 		} catch {
 			return true;
 		}
@@ -113,7 +142,7 @@ function requestsReason(tracker) {
 
 	return url === undefined
 		? `cap: ${count} requests in flight`
-		: `cap: ${count} requests in flight, first ${withoutQuery(url).slice(0, REASON_URL_LENGTH)}`;
+		: `cap: ${count} requests in flight, first ${reasonUrl(url).slice(0, REASON_URL_LENGTH)}`;
 }
 
 /**

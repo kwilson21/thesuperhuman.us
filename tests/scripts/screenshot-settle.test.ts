@@ -99,6 +99,52 @@ describe("createRequestTracker", () => {
 		expect(tracker.inFlight()).toBe(0);
 	});
 
+	it("never blocks on a blob URL that Turnstile's host created", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.start(
+			"b",
+			"blob:https://challenges.cloudflare.com/bd88ee6f-9642-4041-9a7d-c690637446d6",
+		);
+
+		expect(tracker.quiet(0)).toBe(true);
+		expect(tracker.inFlight()).toBe(0);
+	});
+
+	it("counts a blob URL of the preview's own origin", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.start(
+			"b",
+			"blob:http://127.0.0.1:4321/bd88ee6f-9642-4041-9a7d-c690637446d6",
+		);
+
+		expect(tracker.quiet(0)).toBe(false);
+		expect(tracker.inFlight()).toBe(1);
+	});
+
+	it("counts a URL it cannot parse, including a blob with an opaque origin", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.start("n", "not a url");
+		tracker.start("o", "blob:null/bd88ee6f-9642-4041-9a7d-c690637446d6");
+
+		expect(tracker.inFlight()).toBe(2);
+	});
+
+	it("keeps counting data and about URLs as before", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.start("d", "data:text/plain,hello");
+		tracker.start("a", "about:blank");
+
+		expect(tracker.inFlight()).toBe(2);
+	});
+
 	it("does not count Turnstile requests as activity that restarts the window", () => {
 		const clock = fakeClock();
 		const tracker = createRequestTracker({ now: clock.now });
@@ -328,6 +374,38 @@ describe("settle", () => {
 		);
 		expect(reason).not.toContain("secret-value");
 		expect(reason).not.toContain("#frag");
+	});
+
+	it("names a pending blob by its origin, without the id", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage();
+
+		tracker.start(
+			"b",
+			"blob:http://127.0.0.1:4321/bd88ee6f-9642-4041-9a7d-c690637446d6",
+		);
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: 1 requests in flight, first blob:http://127.0.0.1:4321",
+		);
+	});
+
+	it("gives two blobs of one origin the same reason, so the log groups them", async () => {
+		const reasonFor = async (id: string) => {
+			const clock = fakeClock();
+			const tracker = createRequestTracker({ now: clock.now });
+
+			tracker.start("b", `blob:http://127.0.0.1:4321/${id}`);
+
+			return settle(fakePage(), tracker, { pause: clock.pause });
+		};
+
+		const first = await reasonFor("bd88ee6f-9642-4041-9a7d-c690637446d6");
+		const second = await reasonFor("0a1b2c3d-0000-4000-8000-000000000000");
+
+		expect(first).toBe(second);
+		expect(first).not.toContain("bd88ee6f");
 	});
 
 	it("truncates the URL in the reason to 120 characters", async () => {
