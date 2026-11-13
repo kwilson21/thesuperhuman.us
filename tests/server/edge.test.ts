@@ -472,6 +472,7 @@ describe("readVariants", () => {
 			missing: "Required",
 			wrongType: () => "Required",
 		});
+
 		const clash = {
 			site: {
 				path,
