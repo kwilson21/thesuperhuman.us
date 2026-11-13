@@ -436,7 +436,11 @@ export type Fields = { [name: string]: JsonValue };
 export type Wire = "json" | "form";
 
 /** Builds one step of the case in its wire format: the fields as a JSON body, or as a native form post. */
-export type Make = (fields?: Fields, extra?: Partial<Step>) => Step;
+export type Extra = Omit<Partial<Step>, "headers"> & {
+	headers?: { [name: string]: string };
+};
+
+export type Make = (fields?: Fields, extra?: Extra) => Step;
 
 const textOf = (value: JsonValue) =>
 	isText(value) ? value : JSON.stringify(value);

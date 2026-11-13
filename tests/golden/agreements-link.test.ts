@@ -25,6 +25,7 @@ import {
 	TOKEN,
 	withResend,
 	withTurnstile,
+	type Extra,
 	type Make,
 	type Opts,
 } from "./areas/agreement-access";
@@ -137,7 +138,7 @@ const standard = (
 	name: string,
 	over: Partial<Case> = {},
 	fields: Parameters<Make>[0] = ask,
-	extra: Partial<Step> = {},
+	extra: Extra = {},
 ): Case[] =>
 	one(name, (make) => ({
 		...SEED(),

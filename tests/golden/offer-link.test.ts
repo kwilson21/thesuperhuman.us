@@ -31,6 +31,7 @@ import {
 	TOKEN,
 	withResend,
 	withTurnstile,
+	type Extra,
 	type Make,
 	type Opts,
 } from "./areas/agreement-access";
@@ -75,7 +76,7 @@ import { allowanceRow } from "./areas/studio-access";
 
 const PATH = `/api/offer/${TOKEN}/link`;
 
-const base = {
+const base: Partial<Step> & { path: string } = {
 	as: asVisitor({ ip: IP }),
 	path: PATH,
 	params: { token: TOKEN },
@@ -89,15 +90,15 @@ const ask = { turnstileToken: "tok" };
 const one = (
 	name: string,
 	build: (make: Make) => Omit<Case, "name">,
-	override: Partial<typeof base> = {},
+	override: Partial<Step> = {},
 ): Case[] => bothWires(name, { ...base, ...override }, (make) => build(make));
 
 const standard = (
 	name: string,
 	over: Partial<Case> = {},
 	fields: Parameters<Make>[0] = ask,
-	extra: Partial<Step> = {},
-	override: Partial<typeof base> = {},
+	extra: Extra = {},
+	override: Partial<Step> = {},
 ): Case[] =>
 	one(
 		name,

@@ -22,7 +22,6 @@ import {
 	formHeaders,
 	GRACE,
 	IP,
-	mail,
 	ORIGIN,
 	OTHER_SESSION,
 	OTHER_TOKEN,
@@ -72,7 +71,7 @@ import {
 
 const PATH = `/api/offer/${TOKEN}/draft`;
 
-const { scenario, withValues, ALL, TWO } = wireKit(PATH, DRAFT_TABLES);
+const { scenario, withValues, TWO } = wireKit(PATH, DRAFT_TABLES);
 
 const longer = (field: string, max: number) => [
 	...scenario(`${field} of ${max} characters is saved`, {
