@@ -16,6 +16,11 @@ export type MachineContext = {
 // that invokes outside work is never one to save: the machine must move on from it, to its success or its refusal state,
 // before the row is written.
 //
+// Guards and context. Without a `context`, a guard reads the machine's default context, as it would at start (this is
+// deliberate and tested). A guard that depends on data a row holds therefore answers from the DEFAULT, which can read as
+// "not allowed" (null) for a row that is allowed. XState offers no way to tell that a guard needed the row, so this is
+// not detected: a machine whose guards read the row passes the row's context to `next` and `sourcesOf` every time.
+//
 // A defect in a step (a thrown error, `Effect.die`) or an interruption does not land in a refusal state: `failureOf`
 // rethrows it inside `onError`, which errors the actor. `waitFor` alone would report that as a typed
 // `ActorStoppedError`; `settled` (settled.ts) fails the program with the original error instead.
@@ -65,6 +70,9 @@ const INTEGER_NAME = /^(0|[1-9]\d*)$/;
  * time. A state whose guard says no is left out, a final state never appears, and a state named `*` is never listed.
  * `context` is read as it is for `next`.
  *
+ * Throws for a machine with a compound state (child states, or parallel), as `next` throws when an event lands on one: a
+ * parent would otherwise be listed as a source that no saved row can hold.
+ *
  * The order is read from the machine's `states` object, and JavaScript lists integer-like keys first, whatever the
  * order they were written in. A state named like an integer ("10") would therefore move, so such a name is rejected with
  * an error instead.
@@ -75,6 +83,14 @@ export function sourcesOf(
 	context?: MachineContext,
 ): string[] {
 	const names = Object.keys(machine.config.states ?? {});
+	const compound = names.find((name) => isCompound(machine, name));
+
+	if (compound !== undefined) {
+		throw new Error(
+			`State "${compound}" of machine "${machine.id}" is a compound state (it has child states or is parallel): a row stores one top-level state string, so it cannot be listed as a source`,
+		);
+	}
+
 	const integer = names.find((name) => INTEGER_NAME.test(name));
 
 	if (integer !== undefined) {
@@ -86,6 +102,16 @@ export function sourcesOf(
 	return names
 		.filter((state) => state !== "*")
 		.filter((state) => next(machine, state, event, context) !== null);
+}
+
+// True when a top-level state has child states, or is parallel.
+function isCompound(machine: AnyStateMachine, state: string): boolean {
+	const config = machine.config.states?.[state];
+
+	return (
+		config !== undefined &&
+		(config.type === "parallel" || Object.keys(config.states ?? {}).length > 0)
+	);
 }
 
 // Turns a state string into a snapshot the machine can reason about. Without a context of

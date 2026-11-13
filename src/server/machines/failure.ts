@@ -14,6 +14,9 @@ function isTaggedFailure(value: unknown): value is TaggedFailure {
 	);
 }
 
+// A Cause can hold more than one typed failure (`Effect.all` with `concurrency`, `Cause.combine`). `failureOf` gives the
+// first one `Cause.findError` finds, in the order the Cause lists them, and the others are not looked at: a step whose
+// outcome depends on which of two failures it was must fail with one, or compare the Cause itself.
 /**
  * Reads the error event the XState and Effect bridge hands to a state's `onError` and gives the typed, tagged failure
  * the work failed with. The bridge wraps the whole Cause in an `EffectFailure`, and routes a defect (`Effect.die`, a

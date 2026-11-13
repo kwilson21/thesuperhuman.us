@@ -17,7 +17,16 @@
 // (d) `isUniqueViolation` also matches primary-key collisions ("UNIQUE constraint failed" is SQLite's wording for
 //     both), so a save that stores a name must not also insert a row whose primary key can collide.
 //
-// Anything that is not a recognised guard or a unique violation stays a defect, so the request fails as it would have.
+// Anything that is not a recognised guard or a unique violation stays a defect. That is NOT "fails as it would have" for
+// every route. Two differences from today's answers are choices the route's own layer must make explicit, and the owner
+// decides each one:
+//
+// (e) An unrelated database error is a defect here: the route answers 500. Some routes answer 409 for it today: for
+//     example `src/pages/api/owner/requests/[id].ts` catches ANY error from `changeOwnerRequest` and answers 409.
+//     Reproducing today's answer means that route catching that case deliberately (and saying so), not relying on this.
+// (f) With `rowOrChanged`, a lost race is retried on fresh facts and may then succeed, where today an empty `RETURNING`
+//     answers 409 at once. For exact parity a route maps the empty `RETURNING` straight to its refusal and does not
+//     use `rowOrChanged`.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
