@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import {
+	type Dirent,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -53,19 +55,91 @@ function isExcluded(path: string, excluded: typeof EXCLUDED): boolean {
 	);
 }
 
-/** Every source file under `root` that `excluded` does not cover. */
-function sourcesUnder(
-	root: string,
-	excluded: typeof EXCLUDED,
-	directory = root,
-): string[] {
-	return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-		const path = join(directory, entry.name);
+/**
+ * The scan reads a tree that other tests write into: one of them makes a scratch directory at the root and removes it
+ * again, so a path listed here can be gone by the time it is read. The rule, decided from what the scan must cover:
+ *
+ * - A root-level directory whose name starts with a dot and that holds no tracked file (a scratch or cache directory,
+ *   never source) is skipped. The tracked dot-directories (`.github`, `.agents` and the like) are scanned as before.
+ * - A file or directory that is not tracked by Git and has vanished since it was listed is skipped. A tracked path that
+ *   vanishes still fails the test with the system's own error: tracked source must always be readable.
+ *
+ * `tracked` is the set of tracked files (relative, "/"-separated); outside a Git checkout it is empty.
+ */
+type Walk = {
+	excluded: typeof EXCLUDED;
+	tracked: ReadonlySet<string>;
+	/** Lists a directory (readdirSync, or a stand-in in a test). */
+	list: (directory: string) => Dirent[];
+};
 
-		if (isExcluded(relative(root, path).split(sep).join("/"), excluded))
+/** The files Git tracks under `root`, relative and "/"-separated, or none when `root` is not a checkout. */
+function trackedFiles(root: string): Set<string> {
+	try {
+		return new Set(
+			execFileSync("git", ["ls-files", "-z"], {
+				cwd: root,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "ignore"],
+				maxBuffer: 64 * 1024 * 1024,
+			})
+				.split("\0")
+				.filter(Boolean),
+		);
+	} catch {
+		return new Set();
+	}
+}
+
+/** True when a tracked file is `path` or is under it. */
+function holdsTracked(path: string, tracked: ReadonlySet<string>): boolean {
+	if (tracked.has(path)) return true;
+
+	for (const file of tracked) if (file.startsWith(`${path}/`)) return true;
+
+	return false;
+}
+
+/** True when the error is a path that is gone. */
+function isMissing(error: Error): boolean {
+	return "code" in error && error.code === "ENOENT";
+}
+
+/** Every source file under `root` that the walk does not skip. */
+function sourcesUnder(root: string, walk: Walk, directory = root): string[] {
+	let entries: Dirent[];
+
+	try {
+		entries = walk.list(directory);
+	} catch (error) {
+		if (
+			error instanceof Error &&
+			isMissing(error) &&
+			!holdsTracked(
+				relative(root, directory).split(sep).join("/"),
+				walk.tracked,
+			)
+		)
 			return [];
 
-		if (entry.isDirectory()) return sourcesUnder(root, excluded, path);
+		throw error;
+	}
+
+	return entries.flatMap((entry) => {
+		const path = join(directory, entry.name);
+		const shown = relative(root, path).split(sep).join("/");
+
+		if (isExcluded(shown, walk.excluded)) return [];
+
+		if (
+			entry.isDirectory() &&
+			directory === root &&
+			entry.name.startsWith(".") &&
+			!holdsTracked(shown, walk.tracked)
+		)
+			return [];
+
+		if (entry.isDirectory()) return sourcesUnder(root, walk, path);
 
 		return SOURCE.test(entry.name) ? [path] : [];
 	});
@@ -77,12 +151,39 @@ function usesBareEffect(file: string, text: string): boolean {
 }
 
 /** The files under `root` (relative paths) that import from the bare effect specifier. */
-function offendersUnder(root: string, excluded: typeof EXCLUDED): string[] {
-	return sourcesUnder(root, excluded).flatMap((file) =>
-		usesBareEffect(file, readFileSync(file, "utf8"))
-			? [relative(root, file).split(sep).join("/")]
-			: [],
-	);
+function offendersUnder(
+	root: string,
+	excluded: typeof EXCLUDED,
+	walk: Partial<Walk> = {},
+): string[] {
+	const full: Walk = {
+		excluded,
+		tracked: walk.tracked ?? trackedFiles(root),
+		list:
+			walk.list ??
+			((directory) => readdirSync(directory, { withFileTypes: true })),
+	};
+
+	return sourcesUnder(root, full).flatMap((file) => {
+		const shown = relative(root, file).split(sep).join("/");
+
+		let text: string;
+
+		try {
+			text = readFileSync(file, "utf8");
+		} catch (error) {
+			if (
+				error instanceof Error &&
+				isMissing(error) &&
+				!full.tracked.has(shown)
+			)
+				return [];
+
+			throw error;
+		}
+
+		return usesBareEffect(file, text) ? [shown] : [];
+	});
 }
 
 describe("how Effect is imported", () => {
@@ -171,6 +272,58 @@ describe("how Effect is imported", () => {
 			"tools/own/rule.ts",
 			"vitest.config.ts",
 		]);
+	});
+
+	it("survives a scratch directory that appears and disappears during the walk", () => {
+		const root = mkdtempSync(join(tmpdir(), "effect-imports-"));
+
+		roots.push(root);
+		const bare = 'import { Effect } from "effect";';
+
+		for (const path of [
+			"src/a.ts",
+			".render-tmp/layout.mjs",
+			".github/scripts/tracked.mjs",
+			"scratch/out/file.ts",
+			"scratch/gone.ts",
+		]) {
+			mkdirSync(dirname(join(root, path)), { recursive: true });
+			writeFileSync(join(root, path), bare);
+		}
+
+		const tracked = new Set(["src/a.ts", ".github/scripts/tracked.mjs"]);
+
+		// The scratch directories are listed, then removed before the walk reads them, as another test does.
+		const racing = (directory: string) => {
+			const entries = readdirSync(directory, { withFileTypes: true });
+
+			if (directory === root)
+				for (const name of [".render-tmp", "scratch"])
+					rmSync(join(root, name), { recursive: true, force: true });
+
+			return entries;
+		};
+
+		expect(
+			offendersUnder(root, EXCLUDED, { tracked, list: racing }).sort(),
+		).toEqual([".github/scripts/tracked.mjs", "src/a.ts"]);
+
+		// A tracked file that vanishes is a real failure.
+		writeFileSync(join(root, "src/b.ts"), bare);
+		const gone = new Set([...tracked, "src/b.ts"]);
+
+		const vanishing = (directory: string) => {
+			const entries = readdirSync(directory, { withFileTypes: true });
+
+			if (directory === join(root, "src"))
+				rmSync(join(root, "src/b.ts"), { force: true });
+
+			return entries;
+		};
+
+		expect(() =>
+			offendersUnder(root, EXCLUDED, { tracked: gone, list: vanishing }),
+		).toThrow(/ENOENT/);
 	});
 
 	it("never imports from the bare effect specifier", () => {

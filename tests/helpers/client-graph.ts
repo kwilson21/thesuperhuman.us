@@ -54,6 +54,63 @@ export const FORBIDDEN_MODULES: readonly string[] = [
  */
 export const ALLOWED_BROWSER_MODULES: readonly string[] = ["astro/zod"];
 
+// What no browser module may load: a Node or Cloudflare built-in, or Astro's server-only env. Specifiers only: the
+// walker reads them with the TypeScript parser, so a comment or an object key that happens to say "node:" is not one.
+const SERVER_SPECIFIER = /^(node:|cloudflare:|astro:env\/server)/;
+
+/** True for a specifier that names a Node built-in (with or without `node:`), a `cloudflare:` module or `astro:env/server`. */
+function isServerSpecifier(specifier: string): boolean {
+	const bare = specifier.split("?")[0];
+
+	return SERVER_SPECIFIER.test(bare) || isBuiltin(bare);
+}
+
+// The Cloudflare binding types: no browser module may name one, as a value, a type or an import.
+const BINDING_TYPES: ReadonlySet<string> = new Set([
+	"D1Database",
+	"R2Bucket",
+	"KVNamespace",
+]);
+
+/**
+ * The server-only uses in a browser module's own text: an identifier naming a Cloudflare binding type (`D1Database`,
+ * `R2Bucket`, `KVNamespace`) and a `.prepare(` call (how D1 runs SQL). Read from the syntax tree of the file's script
+ * text (the whole file for .ts, the <script> blocks for .astro), so comments, strings and object keys never count. A D1
+ * handle reached through a renamed type-only alias and run through another method name is not found: the reviewed
+ * allowlist of modules is the control for that.
+ */
+export function serverUsesIn(file: string, text: string): string[] {
+	const source = ts.createSourceFile(
+		file,
+		scriptTextOf(file, text),
+		ts.ScriptTarget.Latest,
+		true,
+	);
+
+	const found: string[] = [];
+
+	const visit = (node: ts.Node) => {
+		const line =
+			source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+
+		if (ts.isIdentifier(node) && BINDING_TYPES.has(node.text))
+			found.push(`${node.text} at line ${line}`);
+
+		if (
+			ts.isCallExpression(node) &&
+			ts.isPropertyAccessExpression(node.expression) &&
+			node.expression.name.text === "prepare"
+		)
+			found.push(`.prepare() call at line ${line}`);
+
+		ts.forEachChild(node, visit);
+	};
+
+	visit(source);
+
+	return found;
+}
+
 /** What a walk reached: every file (paths relative to the root) and every package (by name) any client entry loads. */
 export type Reached = { files: Set<string>; packages: Set<string> };
 
@@ -757,6 +814,11 @@ export function clientGraphViolations(
 							};
 
 				const text = load.kind === "module" ? load.specifier : load.pattern;
+
+				if (load.kind === "module" && isServerSpecifier(text)) {
+					violations.push({ import: text, chain: current.chain });
+					continue;
+				}
 
 				for (const name of found.names)
 					if (!isBuiltin(name)) reached?.packages.add(packageOf(name));

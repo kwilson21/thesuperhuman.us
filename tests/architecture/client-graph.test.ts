@@ -15,6 +15,7 @@ import {
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
 	type Reached,
+	serverUsesIn,
 } from "../helpers/client-graph";
 
 // Effect, src/server and the server-only packages never reach the browser: src/scripts/** and the <script> blocks of
@@ -25,7 +26,19 @@ import {
 // "Server-only" for a src/lib module cannot be told from its path, so the rule is a reviewed allowlist of exactly the
 // src/lib (and src/data) modules a browser entry may reach. A module that is not on it, because someone imported a
 // server module from a script, fails with an instruction to split the module. Adding a name to the list is a review
-// decision: it must be pure (no binding, secret or server package) and is reviewed as such.
+// decision: it must be pure (no binding, secret or server package) and is reviewed as such. The allowlist covers the
+// modules under src/lib and src/data; the other checks below cover every reached file and every browser entry.
+//
+// What is checked in every reached file and entry (all the code extensions the walker follows, and the <script> blocks
+// of .astro entries): no load of a Node built-in (`node:*` or a bare name like `fs`), of `cloudflare:*` or of
+// `astro:env/server` (static import, re-export, `import()`, `require`); no identifier `D1Database`, `R2Bucket` or
+// `KVNamespace`; no `.prepare(` call. All of these are read from the syntax tree, so comments, strings and object keys
+// never count.
+//
+// Known gap: a D1 handle that is typed through an owner interface other than the Cloudflare names (so no identifier
+// above appears) and run through a method other than `.prepare(` (for example `.batch(` or `.exec(`) is not found.
+// A renamed alias of the Cloudflare types with a `.prepare(` call is found. The allowlist review is the control for the
+// rest: a module added to BROWSER_MODULES must be read for server work.
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -105,15 +118,12 @@ describe("what the browser entries reach", () => {
 		expect([...reach().packages].sort()).toEqual(["astro"]);
 	});
 
-	it("reaches no module that names a Cloudflare binding, a Cloudflare or Node module, or server-only Astro env", () => {
-		const server =
-			/cloudflare:|astro:env\/server|\bD1Database\b|\bR2Bucket\b|\bKVNamespace\b|\bnode:/;
-
-		const holding = reachedModules()
-			.filter((file) => /\.(m?ts|mjs)$/.test(file))
-			.filter((file) =>
-				server.test(readFileSync(join(repository, file), "utf8")),
-			);
+	it("names no Cloudflare binding type and makes no .prepare() call, in any reached file or entry", () => {
+		const holding = [...reach().files].flatMap((file) =>
+			serverUsesIn(file, readFileSync(join(repository, file), "utf8")).map(
+				(use) => `${file}: ${use}`,
+			),
+		);
 
 		expect(holding).toEqual([]);
 	});
@@ -674,8 +684,46 @@ describe("the walker finds what it should", () => {
 			]);
 		});
 
-		it("lets a built-in module through", () => {
-			expect(found({ "src/scripts/a.ts": 'import "node:path";' })).toEqual([]);
+		it("finds a Node built-in, a cloudflare: module and astro:env/server, in every form of load", () => {
+			expect(
+				found({
+					"src/scripts/a.ts": [
+						'import "node:path";',
+						'import { randomUUID } from "node:crypto";',
+						'import fs from "fs";',
+						'export * from "node:os";',
+						'export const load = () => import("cloudflare:workers");',
+						'export const r = require("node:buffer");',
+						'import { SECRET } from "astro:env/server";',
+					].join("\n"),
+				}),
+			).toEqual([
+				"node:path",
+				"node:crypto",
+				"fs",
+				"node:os",
+				"cloudflare:workers",
+				"node:buffer",
+				"astro:env/server",
+			]);
+		});
+
+		it("finds a Node built-in in an .astro script block and in a module a script reaches", () => {
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\nimport { x } from "node:fs";\n---\n<script>import "~/lib/b";\nimport "node:crypto";</script>',
+					"src/lib/b.ts": 'import "node:path";',
+				}),
+			).toEqual(["node:crypto", "node:path"]);
+		});
+
+		it("does not count a type-only import of a built-in", () => {
+			expect(
+				found({
+					"src/scripts/a.ts": 'import type { Buffer } from "node:buffer";',
+				}),
+			).toEqual([]);
 		});
 	});
 
@@ -789,7 +837,7 @@ describe("the walker finds what it should", () => {
 		it("lists every file and package that any client entry loads, and nothing it does not", () => {
 			const root = scratch({
 				"src/scripts/a.ts":
-					'import "~/lib/b";\nimport "left-pad";\nimport "node:path";\nimport type { T } from "~/lib/types-only";',
+					'import "~/lib/b";\nimport "left-pad";\nimport type { T } from "~/lib/types-only";',
 				"src/lib/b.ts": 'import "./c";',
 				"src/lib/c.ts": "export const c = 1;",
 				"src/lib/types-only.ts": "export type T = 1;",
@@ -805,6 +853,44 @@ describe("the walker finds what it should", () => {
 				"src/scripts/a.ts",
 			]);
 			expect([...reached.packages]).toEqual(["left-pad"]);
+		});
+	});
+
+	describe("server-only uses in a file's own text", () => {
+		it("finds binding types and .prepare() calls, in .ts and in .astro script blocks", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					'import type { D1Database as Db } from "x";\nlet a: R2Bucket;\nconst k: KVNamespace = 1;\ndb.prepare("select 1");',
+				),
+			).toEqual([
+				"D1Database at line 1",
+				"R2Bucket at line 2",
+				"KVNamespace at line 3",
+				".prepare() call at line 4",
+			]);
+			expect(
+				serverUsesIn(
+					"a.astro",
+					"---\nlet a: D1Database;\n---\n<script>\nlet b: R2Bucket;\n</script>",
+				),
+			).toEqual(["R2Bucket at line 5"]);
+		});
+
+		it("does not count a comment, a string, an object key or free text that says the same", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					[
+						"// the DOM node: a D1Database is not used here, nor db.prepare(x)",
+						'const note = "node: R2Bucket KVNamespace .prepare(";',
+						"const o = { node: el, prepare: 1, R2: 2 };",
+						"o.node = el;",
+						"const f = o.prepare;",
+						"/* import 'node:fs' */",
+					].join("\n"),
+				),
+			).toEqual([]);
 		});
 	});
 
