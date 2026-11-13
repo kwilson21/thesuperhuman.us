@@ -1,4 +1,5 @@
 import { audioOffers } from "./audio-intake";
+import { guardTime, invoiceEventDecision } from "./invoice-event-order";
 import { isText } from "./type-guards";
 
 export const invoiceStatuses = [
@@ -598,7 +599,7 @@ export async function recoverInvoiceFromWebhook(
 				input.requestId,
 				input.invoiceId,
 				input.eventId,
-				input.occurredAt,
+				guardTime(input.status, input.occurredAt),
 			),
 		db
 			.prepare(`UPDATE audio_payments SET ${prefix}_status=?,${prefix}_status_updated_at=?,updated_at=?
@@ -611,7 +612,7 @@ export async function recoverInvoiceFromWebhook(
 				input.requestId,
 				input.invoiceId,
 				input.eventId,
-				input.occurredAt,
+				guardTime(input.status, input.occurredAt),
 			),
 		db
 			.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
@@ -722,8 +723,17 @@ export async function applyStripeInvoiceEvent(
 	const currentEventAt = row[`${installment}_status_updated_at`];
 
 	const shouldApply =
-		currentStatus !== "paid" &&
-		(!currentEventAt || input.occurredAt >= currentEventAt);
+		invoiceEventDecision({
+			storedStatus: currentStatus,
+			storedAt: currentEventAt,
+			incomingStatus: input.status,
+			incomingAt: input.occurredAt,
+			sameTime: "latest",
+		}) === "apply";
+
+	// The guards below are that rule's compare-and-set: a paid event is bound later than any stored time, whatever this read saw.
+	// The decision above is the audio copy of the rule; the software copy is the SQL in applySoftwareInvoiceEvent.
+	const guardAt = guardTime(input.status, input.occurredAt);
 
 	const statements = [
 		db
@@ -755,7 +765,7 @@ export async function applyStripeInvoiceEvent(
 					processedAt,
 					row.request_id,
 					input.invoiceId,
-					input.occurredAt,
+					guardAt,
 				),
 			db
 				.prepare(`UPDATE audio_payments SET ${installment}_status=?,${installment}_status_updated_at=?,updated_at=?
@@ -768,7 +778,7 @@ export async function applyStripeInvoiceEvent(
 					processedAt,
 					row.request_id,
 					input.invoiceId,
-					input.occurredAt,
+					guardAt,
 				),
 		);
 	await db.batch(statements);
