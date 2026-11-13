@@ -36,6 +36,7 @@ No copy, route, binding, migration or dependency change. Nothing changes at the 
 - On 2026-11-13, in conversation: fix the large-text problems with "whichever is more performant" (no media queries that follow text size, no scripts).
 - On 2026-11-13, in conversation, from two renders: the closing button's arrow stays centred beside its wrapped label ("1 for sure"). The label is two lines at the widths measured below, so the decision is the two-line layout the owner saw. A width where the label needs three lines has not been approved and is an owner decision.
 - Recorded in `design.md` under "Owner decisions (November 13, 2026)".
+- On 2026-11-13, in conversation, after a render of the closing panel at a doubled root at 375px and 430px wide (and before the fix): the footer panel's side gutter stops growing with the text, so (a) the footer panel's left edge sits to the left of the main content's (24.0px against 48px at 320px wide, 28.1 against 48 at 375, 32.3 against 48 at 430), and (b) the gap between the label and the arrow grows on wider phones because the button fills the panel (30px at 320, 46px at 375, 61px at 430 at a doubled root; 9.6px at the default size). Both were asked about: "Yes, acceptable".
 
 ## Evidence and limits
 
@@ -213,6 +214,4 @@ UNVERIFIED until checked:
 - CI green on the PR head with the "Check large text reflow" step passing; Greptile and Codex reviews on the head.
 - Firefox, Safari, a real phone, and text above 200% (UNVERIFIED above).
 - Owner decisions: the arrow after "Support" when the next part stacks below it, the "After ·" dot at a line end, and the three-line case if any width needs it.
-- Owner decision, pending: at a doubled root the footer panel's left edge sits to the left of the main content's (24.0px against 48px at 320px wide, 28.1 against 48 at 375, 32.3 against 48 at 430).
-- Owner decision, pending: because the button fills the panel, the gap between the label and the arrow grows with the screen (30px at 320, 46px at 375, 61px at 430 at a doubled root; 9.6px at the default size).
 - Production check after an authorized merge (section 7). Merging deploys production.
