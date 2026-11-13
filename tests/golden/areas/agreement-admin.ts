@@ -476,3 +476,150 @@ export const projectSql = (
 
 /** The saved orphan-scan cursor key. */
 export const MARKER = "agreements/retention/attachment-cursor.json";
+
+/** A 43-character base64url cookie value (the only shape agreementSession accepts) and its SHA-256, which the database holds. */
+export type Token = { readonly value: string; readonly hash: string };
+
+export async function sessionToken(n: number): Promise<Token> {
+	const value = `${"Q".repeat(42)}${"abcdefghijklmnop"[n]}`;
+
+	return { value, hash: await hashOfferToken(value) };
+}
+
+export const ARCHIVE = await sessionToken(0);
+export const SIGNING = await sessionToken(1);
+export const OTHER_TOKEN = await sessionToken(2);
+
+/** A studio_session cookie value (72 characters) and its hash, for a client signed in to the studio. */
+export const STUDIO = `${"0".repeat(8)}-0000-4000-8000-${"1".repeat(12)}${"0".repeat(8)}-0000-4000-8000-${"2".repeat(12)}`;
+export const STUDIO_HASH = await hashValue(STUDIO);
+
+export const LATER = "2026-11-13T13:00:00.000Z";
+
+export const linkRow = (
+	id: string,
+	purpose: "agreement" | "archive",
+	over: SeedRow = {},
+): SeedRow => ({
+	id,
+	purpose,
+	offer_id: purpose === "agreement" ? "o-r1" : null,
+	link_hash: purpose === "agreement" ? "hash-r1" : null,
+	recipient_email: GRACE,
+	token_hash: `link-token-${id}`,
+	issued_at: EARLIER,
+	expires_at: LATER,
+	used_at: EARLIER,
+	...over,
+});
+
+export const agreementSessionRow = (
+	token: Token,
+	purpose: "agreement" | "archive",
+	over: SeedRow = {},
+): SeedRow => ({
+	token_hash: token.hash,
+	purpose,
+	offer_id: purpose === "agreement" ? "o-r1" : null,
+	link_hash: purpose === "agreement" ? "hash-r1" : null,
+	recipient_email: GRACE,
+	link_id: purpose === "agreement" ? "l-signing" : "l-archive",
+	verified_at: EARLIER,
+	expires_at: LATER,
+	revoked_at: null,
+	csrf_nonce: "csrf-nonce",
+	...over,
+});
+
+export const SIGNED_KEY = "agreements/a1/signed.pdf";
+
+/**
+ * An executed agreement a1 of request r1 (offer o-r1, sent, signing link live) with a ready artifact whose PDF is stored
+ * under SIGNED_KEY (seed the bucket with `signedBucket()`), an archive session, a signing session, and a studio
+ * session and software project for the same client. Everything is right; a case breaks one thing.
+ */
+export function downloadSeed(
+	over: {
+		agreement?: SeedRow;
+		artifact?: SeedRow | null;
+		offer?: SeedRow;
+		request?: SeedRow;
+		project?: SeedRow | null;
+		extra?: Seed;
+	} = {},
+): Seed {
+	return merge(
+		agreementTables(),
+		offerSeed("r1", GRACE, {
+			offer: { status: "sent", ...over.offer },
+			request: over.request,
+		}),
+		{
+			software_agreements: [
+				rows.agreement("a1", "r1", "o-r1", {
+					status: "executed",
+					executed_at: EARLIER,
+					...over.agreement,
+				}),
+			],
+			software_agreement_artifacts:
+				over.artifact === null
+					? []
+					: [
+							{
+								agreement_id: "a1",
+								status: "ready",
+								pdf_key: SIGNED_KEY,
+								pdf_sha256: PDF_SHA,
+								certificate_key: "agreements/a1/certificate.pdf",
+								certificate_sha256: SHA,
+								ready_at: EARLIER,
+								...over.artifact,
+							},
+						],
+			software_agreement_links: [
+				linkRow("l-archive", "archive"),
+				linkRow("l-signing", "agreement"),
+			],
+			software_agreement_sessions: [
+				agreementSessionRow(ARCHIVE, "archive"),
+				agreementSessionRow(SIGNING, "agreement"),
+			],
+			audio_client_sessions: [
+				{
+					token_hash: STUDIO_HASH,
+					email: GRACE,
+					created_at: EARLIER,
+					expires_at: "2026-11-27T11:00:00.000Z",
+					last_seen_at: EARLIER,
+				},
+			],
+			software_projects:
+				over.project === null
+					? []
+					: [
+							rows.softwareProject("r1", "o-r1", {
+								agreement_id: "a1",
+								...over.project,
+							}),
+						],
+		},
+		over.extra ?? {},
+	);
+}
+
+/** A bucket holding the signed PDF at SIGNED_KEY. */
+export const signedBucket = (key = SIGNED_KEY) => ({ [key]: { body: PDF } });
+
+/** A cookie header for the agreement and studio sessions given. */
+export const cookies = (...parts: readonly string[]) => ({
+	cookie: parts.join("; "),
+});
+
+export const archiveCookie = (token: Token = ARCHIVE) =>
+	`agreement_archive=${token.value}`;
+
+export const signingCookie = (token: Token = SIGNING) =>
+	`agreement_session=${token.value}`;
+
+export const studioCookie = (value = STUDIO) => `studio_session=${value}`;
