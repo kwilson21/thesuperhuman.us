@@ -199,9 +199,15 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@6.4.4(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
+      '@xstate/effect':
+        specifier: 1.0.0-alpha.12
+        version: 1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.1)
       astro:
         specifier: ^5.1.0
         version: 5.18.1(@types/node@24.12.4)(jiti@2.7.0)(lightningcss@1.32.0)(rollup@4.60.4)(supports-color@10.2.2)(typescript@6.0.3)(yaml@2.9.0)
+      effect:
+        specifier: 4.1.4
+        version: 4.1.4
       jose:
         specifier: ^6.2.12
         version: 6.2.12
@@ -220,6 +226,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      xstate:
+        specifier: 6.0.0-beta.1
+        version: 6.0.0-beta.1
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -2158,6 +2167,16 @@ packages:
   '@vscode/l10n@0.0.18':
     resolution: {integrity: sha512-KYSIHVmslkaCDyw013pphY+d7x1qV8IZupYfeIfzNA+nsaWHbn5uPuQRvdRFsa9zFzGeudPuoGoZ1Op4jrJXIQ==}
 
+  '@xstate/effect@1.0.0-alpha.12':
+    resolution: {integrity: sha512-D72whH2VWGnvMefc3CrylVwgqu2Ph2jfA861RG3gbLOk0mkXH8ZUn9h+IZO//xRKaCPFfKMXkXnqy4aIED1THg==}
+    peerDependencies:
+      '@oxlint/plugins': ^1.76.0
+      effect: ^4.0.0
+      xstate: ^6.0.0-alpha.73
+    peerDependenciesMeta:
+      '@oxlint/plugins':
+        optional: true
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -2457,6 +2476,9 @@ packages:
 
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
+
+  effect@4.1.4:
+    resolution: {integrity: sha512-Tgrv/9FN+TZYyOn8XSli+fVqAfwDrDAkiX5Uu9vztINb675VTQdhD0gWI5Kzvhlh9QqzjZvw72iugqw5pwoghQ==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -3959,6 +3981,10 @@ packages:
       utf-8-validate:
         optional: true
 
+  xstate@6.0.0-beta.1:
+    resolution: {integrity: sha512-HzG+CdBxkxcqBv91aUfbscjKhREhnu949en+Ype3kIZ0cUVmK7LsPWU06GMyu+O7z9bIq52eDPQfzlUM7AtJ9g==}
+    hasBin: true
+
   xxhash-wasm@1.1.0:
     resolution: {integrity: sha512-147y/6YNh+tlp6nd/2pWq38i9h6mz/EuQ6njIrmW8D1BS5nCqs0P6DG+m6zTGnNz5I+uhZ0SHxBs9BsPrwcKDA==}
 
@@ -5345,6 +5371,13 @@ snapshots:
 
   '@vscode/l10n@0.0.18': {}
 
+  '@xstate/effect@1.0.0-alpha.12(@oxlint/plugins@1.93.0)(effect@4.1.4)(xstate@6.0.0-beta.1)':
+    dependencies:
+      effect: 4.1.4
+      xstate: 6.0.0-beta.1
+    optionalDependencies:
+      '@oxlint/plugins': 1.93.0
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -5699,6 +5732,8 @@ snapshots:
       gopd: 1.2.0
 
   ee-first@1.1.1: {}
+
+  effect@4.1.4: {}
 
   emmet@2.4.11:
     dependencies:
@@ -7566,6 +7601,8 @@ snapshots:
   ws@8.18.0: {}
 
   ws@8.21.0: {}
+
+  xstate@6.0.0-beta.1: {}
 
   xxhash-wasm@1.1.0: {}
 
