@@ -52,3 +52,10 @@ __pycache__/
 # would write. design.md is the system here and the tokens live in src/styles/global.css.
 /.hallmark/
 /tokens.css
+
+# LemmaScript generated Dafny (docs/verification.md). Commit a module .dfy only if it ever needs a hand-written proof.
+*.dfy
+*.dfy.gen
+
+# Apalache scratch output from quint verify
+_apalache-out/

@@ -1,4 +1,5 @@
 allowBuilds:
+  protobufjs: false
   esbuild: true
   sharp: true
   workerd: true
