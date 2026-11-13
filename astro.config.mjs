@@ -3,6 +3,7 @@ import { defineConfig } from "astro/config";
 import cloudflare from "@astrojs/cloudflare";
 import tailwindcss from "@tailwindcss/vite";
 import sitemap from "@astrojs/sitemap";
+import { clientBundleManifest } from "./scripts/client-bundle-manifest.mjs";
 import {
 	publicReleasePages,
 	shouldIncludeSitemapPage,
@@ -42,7 +43,7 @@ export default defineConfig({
 		}),
 	],
 	vite: {
-		plugins: [tailwindcss()],
+		plugins: [tailwindcss(), clientBundleManifest()],
 		server: {
 			allowedHosts: [
 				"thesuperhuman.us",
