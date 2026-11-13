@@ -1,7 +1,7 @@
 // Shared seed builders and steps for the golden corpora of the owner's software-project routes (project.ts, brief-copy.ts
 // and messages.ts under /api/owner/requests/[id]). Times sit on the frozen clock's day (2026-11-13T12:00:00.000Z, which
 // is 07:00 on 2026-11-13 in New York).
-import type { JsonValue } from "../../helpers/json";
+import type { JsonObject, JsonValue } from "../../helpers/json";
 import {
 	asOwner,
 	byHost,
@@ -205,3 +205,67 @@ export const MONEY_TABLES = [
 	"software_milestone_payments",
 	"software_invoices",
 ];
+
+/** The body of a start action that is valid for an outside-site signature. A member set to undefined is left out. */
+export const startBody = (over: JsonObject = {}): JsonObject => ({
+	action: "start",
+	offer_id: "o1",
+	offer_version: 1,
+	expectedRequestUpdatedAt: EARLIER,
+	signature_source: "external",
+	external_signed_on: "2026-11-10",
+	external_parties: "Grace Hopper LLC and The Superhuman Group LLC",
+	external_copy_reference: "Shared drive: SOW-1.pdf",
+	external_kept_copy: true,
+	inputs_ready: true,
+	signatures: true,
+	payment: true,
+	next_update_on: "2026-11-20",
+	...over,
+});
+
+/** The body of a state action. A member set to undefined is left out. */
+export const stateBody = (over: JsonObject = {}): JsonObject => ({
+	action: "state",
+	state: "building",
+	waiting_for: "",
+	milestone_index: 0,
+	step: "build",
+	next_update_on: "2026-11-20",
+	expectedUpdatedAt: EARLIER,
+	...over,
+});
+
+/** The owner's tables a project case usually dumps. */
+export const ALL_TABLES = [
+	...PROJECT_TABLES,
+	"software_milestone_deposits",
+	"software_milestone_payments",
+];
+
+/**
+ * A deposit or balance invoice row for "r1" and "o1". The kind follows the milestone unless named.
+ */
+export const invoice = (
+	id: string,
+	status: string,
+	over: SeedRow = {},
+): SeedRow => rows.softwareInvoice(id, "r1", "o1", { status, ...over });
+
+/** The shared accepted delivery and handoff that let a project complete: milestone `m` accepted, then its handoff. */
+export const acceptedHandoff = (m = 1) => ({
+	software_project_updates: [
+		update("d1", { milestone_index: m, shared_at: EARLIER }),
+		update("h1", {
+			kind: "handoff",
+			milestone_index: m,
+			artifact_version: "Handoff v1",
+			shared_at: "2026-11-13T11:30:00.000Z",
+		}),
+	],
+	software_project_messages: [
+		decision("d1", "milestone_accepted", {
+			created_at: "2026-11-13T11:10:00.000Z",
+		}),
+	],
+});
