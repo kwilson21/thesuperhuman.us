@@ -16,7 +16,6 @@ import {
 import {
 	BASE,
 	EARLIER,
-	ORIGIN,
 	details,
 	executedSow,
 	invoice,
@@ -131,8 +130,6 @@ const withBody = (
 	seed = startable(),
 	extra: Partial<Case> = {},
 ) => go(name, startBody(over), seed, extra);
-
-const D = (day: string) => `${day}T12:00:00Z`;
 
 const cases: Case[] = [
 	// who and where

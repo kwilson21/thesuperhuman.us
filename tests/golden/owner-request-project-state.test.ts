@@ -7,6 +7,7 @@ import {
 	defineCorpus,
 	rows,
 	type Case,
+	type Seed,
 	type SeedRow,
 	type Step,
 } from "./harness";
@@ -71,7 +72,7 @@ const done = { state: "complete", completed_at: EARLIER };
 const go = (
 	name: string,
 	body: JsonValue | undefined,
-	seed: ReturnType<typeof running> = running(),
+	seed: Seed = running(),
 	extra: Partial<Case> = {},
 	step: Partial<Step> = {},
 ): Case => ({ name, music: { seed }, steps: [act(body, step)], ...extra });

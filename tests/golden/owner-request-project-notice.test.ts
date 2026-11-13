@@ -11,6 +11,7 @@ import {
 	networkDown,
 	rows,
 	type Case,
+	type Seed,
 	type SeedRow,
 	type Step,
 } from "./harness";
@@ -84,7 +85,7 @@ const REVOKE = { action: "revoke", confirmed: true };
 const go = (
 	name: string,
 	body: JsonValue | undefined,
-	seed: ReturnType<typeof running> = running(),
+	seed: Seed = running(),
 	extra: Partial<Case> = {},
 	step: Partial<Step> = {},
 ): Case => ({
@@ -143,58 +144,37 @@ const LOOKUP = /SELECT \* FROM software_projects WHERE request_id=\?/;
 const RECIPIENT =
 	/SELECT r\.email FROM owner_requests r JOIN software_projects p/;
 
+const session = (
+	token: string,
+	email: string,
+	revoked: string | null = null,
+): SeedRow => ({
+	token_hash: token,
+	email,
+	created_at: EARLIER,
+	expires_at: "2026-12-01T00:00:00.000Z",
+	last_seen_at: EARLIER,
+	revoked_at: revoked,
+});
+
+const code = (email: string, hash: string): SeedRow => ({
+	email,
+	code_hash: hash,
+	created_at: EARLIER,
+	expires_at: "2026-12-01T00:00:00.000Z",
+});
+
 const sessions = {
 	audio_client_sessions: [
-		{
-			token_hash: "s1",
-			email: "grace@example.test",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-			last_seen_at: EARLIER,
-		},
-		{
-			token_hash: "s2",
-			email: "grace@example.test",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-			last_seen_at: EARLIER,
-		},
-		{
-			token_hash: "s3",
-			email: "grace@example.test",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-			last_seen_at: EARLIER,
-			revoked_at: "2026-11-12T00:00:00.000Z",
-		},
-		{
-			token_hash: "s4",
-			email: "ada@example.test",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-			last_seen_at: EARLIER,
-		},
-		{
-			token_hash: "s5",
-			email: "Grace@Example.TEST",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-			last_seen_at: EARLIER,
-		},
+		session("s1", "grace@example.test"),
+		session("s2", "grace@example.test"),
+		session("s3", "grace@example.test", "2026-11-12T00:00:00.000Z"),
+		session("s4", "ada@example.test"),
+		session("s5", "Grace@Example.TEST"),
 	],
 	audio_client_codes: [
-		{
-			email: "grace@example.test",
-			code_hash: "c1",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-		},
-		{
-			email: "ada@example.test",
-			code_hash: "c2",
-			created_at: EARLIER,
-			expires_at: "2026-12-01T00:00:00.000Z",
-		},
+		code("grace@example.test", "c1"),
+		code("ada@example.test", "c2"),
 	],
 };
 
