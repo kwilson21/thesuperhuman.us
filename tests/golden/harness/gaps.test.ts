@@ -962,9 +962,13 @@ describe("injected failures", () => {
 		const outcomes: string[] = [];
 
 		const handler: Handler = async (context) => {
+			const db = env(context).MUSIC_DB;
+
+			if (!db) throw new Error("the harness did not provide MUSIC_DB");
+
 			for (let call = 1; call <= 3; call += 1) {
 				try {
-					await env(context).MUSIC_DB.prepare("SELECT 1").first();
+					await db.prepare("SELECT 1").first();
 					outcomes.push("ran");
 				} catch {
 					outcomes.push("threw");
