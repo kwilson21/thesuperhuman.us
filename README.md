@@ -62,7 +62,7 @@ Apply `migrations/music/0003_audio_payments.sql` and `migrations/music/0004_stri
 
 Apply `migrations/music/0005_audio_projects.sql` before deploying portal code. It creates one provisional project and audit entry with each new audio-service request, and backfills open service requests. The project references the existing request email instead of storing another copy. This migration alone adds no client access or file-delivery route. The [portal design](docs/superpowers/specs/2026-09-21-audio-client-portal-design.md) defines the later communication, authentication, and delivery gates.
 
-The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project.
+The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project. A code works only in the browser that asked for it (see "Sign-in codes migration" below).
 
 The private message-thread slice requires `migrations/music/0007_audio_project_messages.sql` after 0006. It stores one immutable owner/client conversation per project, including who sent each message and when the other side read it. Clients can clarify files before approval and both sides can reply until the project is complete. Messages accept plain text and HTTPS links; the site never fetches or previews those links. Routine client messages appear in the owner request view without sending email.
 
@@ -304,6 +304,12 @@ the required schema is applied.
 ### Agreement template labels
 
 Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `pnpm run owner:health --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
+
+### Sign-in codes migration
+
+Apply music migration `0027_audio_client_signin_codes.sql` after `0026_agreement_template_labels.sql` and **before** deploying code that reads it; deploying first breaks studio sign-in (every code request and sign-in answers 503). Migrations are not applied by a deploy or by CI in this project: the owner applies them by hand, then deploys (`wrangler.jsonc` names `migrations/music` as the migrations directory for `MUSIC_DB`). The command is `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` to see what is pending, then `pnpm exec wrangler d1 migrations apply MUSIC_DB --remote`. The migration only adds a table and leaves `audio_client_codes` alone, so the code running before the deploy keeps working on the migrated database. Codes pending when the new code goes live stop working (they expire within 10 minutes anyway); the client asks for a new one. Sign-ins in progress are not affected: sessions are a separate table. After the deploy, a later migration drops `audio_client_codes`, which is unused from then on (it is not part of 0027, so that applying 0027 cannot break the code still running).
+
+A code request sets a `studio_pending` cookie (HttpOnly, Secure over https, SameSite=Lax, Path `/api/studio`, 10 minutes) and a code is accepted only with that cookie, so it must be entered in the browser that asked for it. Each request is its own row (keyed by a hash of the cookie value) with its own five attempts; at most six live codes exist per address; expired rows are deleted when a new code is issued; closing a client's access deletes every code for the address.
 
 ## Credits
 

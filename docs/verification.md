@@ -72,8 +72,8 @@ Be exact about the strength of each check:
 
 | Command | What it does |
 |---|---|
-| `pnpm run verify:quint` | The current rule keeps every property, for the audio and software domains |
-| `pnpm run verify:quint:mutants` | Every mutant breaks the property named for it, every equivalent mutant keeps them all, and every property has a mutant; fails otherwise |
+| `pnpm run verify:quint` | The current rule keeps every property, for the audio and software invoice domains and for the sign-in codes |
+| `pnpm run verify:quint:mutants` | Every mutant breaks the property named for it, every equivalent mutant keeps them all, and every property has a mutant, in both models; fails otherwise |
 | `pnpm run verify:quint:exhaustive` | Manual: Apalache search of both domains (see above) |
 | `pnpm run verify:dafny` | `lsc check --backend=dafny` on the files in `LemmaScript-files.txt` |
 
@@ -158,6 +158,58 @@ If the code changes shape (a new status, a new guard), update the model in the s
 
 `pnpm run verify:quint:exhaustive [steps]` (default 7 steps; both domains, one after the other). It uses `audioExhaustive` and `softwareExhaustive`: 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. The bound is in steps, and an audio delivery takes up to 5 of them, so a depth of 7 reaches the unlinked-invoice bug (a delivery, the link, the attempts check: 3 steps) but not the recovery-guard bug (it needs about 11). Last run (2026-11-13, Apalache 0.62.4, one core, Apple-silicon laptop): `audioExhaustive` and `softwareExhaustive` at 7 steps, no violation, 2 minutes 1 second for both. At 8 steps (`pnpm run verify:quint:exhaustive 8`): no violation in either domain, 5 minutes 41 seconds for both. An earlier, smaller audio model finished 9 steps in 8 minutes 45 seconds; the extended audio model at 10 steps did not finish (stopped after about 15 minutes, still inside step 9). Past about 8 steps use the random runs instead.
 
+## The sign-in codes model
+
+File: `verification/signin-codes.qnt`, written before the code that fixes it (the code is `src/lib/audio-client-access.ts`, `src/pages/api/studio/code.ts` and `session.ts`). The driver (`scripts/verify-quint.mjs`) runs it with the invoice models: `signin` for the pass run and one module per mutant (`scripts/lib/quint-mutants.mjs`, `signinMutants`). It runs 30,000 random executions of up to 20 steps (the invoice models run 100,000), about 10 seconds for the pass run; the whole mutant run is about 45 seconds on 12 cores. There is no Apalache run for it.
+
+**The problem it models.** Sign-in codes were one row per email address. Anyone who knew a client's address could spend that row's five attempts, use up the session and code allowances that were keyed by the address, or ask for a new code that replaced the one the client had just been sent, so the client could not sign in. The fix binds each code to the browser that asked for it: the code request sets a pending sign-in cookie holding a random value, the stored row is keyed by its hash and the code's hash covers it, and entering a code needs that cookie.
+
+```mermaid
+stateDiagram-v2
+    [*] --> live: a browser asks for a code (new row bound to its cookie)
+    live --> live: that browser guesses wrong (its row's attempts +1, up to the limit)
+    live --> used: that browser enters the right code (the cookie is cleared)
+    live --> replaced: the same browser asks again after the pause (its own row is replaced)
+    live --> expired: the code's lifetime passes
+    expired --> swept: the next code request deletes it
+    used --> swept: its lifetime passes and the next code request deletes it
+    replaced --> [*]
+    swept --> [*]
+```
+
+A browser with no cookie, or a cookie that matches no row, is not looked up at all: nothing is charged and nothing changes. Another browser asking for a code adds its own row and leaves the others alone.
+
+**State.** The rows (owner browser, delivered or not, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the time, and the emails allowance window. Browsers: the client's own (0), the client's other browser that can read the inbox but holds no cookie (1), and three strangers who know the address and never learn a code (2 to 4). Numbers are scaled from the code: 3 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 4 ticks (10 minutes), a pause of 1 tick (30 seconds), 3 live rows (6).
+
+**Actions.** Request a code, deliver it, guess (with the right code only if the browser can read the inbox and the email was delivered), let a tick of time pass, and sweep expired rows.
+
+**Properties** (all must hold in every state):
+1. `clientNeverLockedOut`: a client who asked for a code and enters it correctly from the same browser while it is valid is signed in unless that browser used up its own attempts, whatever others do (others asking for codes up to the allowance included). As states: the client's current row is still there, with attempts left and its code unchanged, and no correct entry of it was refused.
+2. `cookieRequired`: a browser without the matching cookie never signs in.
+3. `othersUntouched`: a browser without the matching cookie never changes another requester's code or attempts (a row's stored attempts equal the guesses its own browser made).
+4. `attemptsBounded`: the guesses that can ever be compared with one code are bounded by the limit.
+5. `emailsBounded`: emails asked for an address in one window are bounded.
+6. `deadCodeNeverSignsIn`: a used or expired code never signs anyone in.
+7. `liveRowsBounded`: live rows for the address are bounded.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `SingleRow` | One row per address (the code before this fix): a new request replaces the address's row once it is older than the pause | `clientNeverLockedOut` |
+| `EvictOldest` | A full address makes room by removing the oldest live row | `clientNeverLockedOut` |
+| `SweepLive` | The sweep also removes rows that have not expired | `clientNeverLockedOut` |
+| `CookieNotRequired` | A correct code signs in without the cookie (the code before this fix) | `cookieRequired` |
+| `AddressAttempts` | A guess charges the attempts of the address's live rows, whoever sends it (the code before this fix) | `othersUntouched` |
+| `ReplaceLive` | A request from another browser changes the live code in place (the code before this fix) | `othersUntouched` |
+| `NoAttemptCap` | The attempt limit is not enforced | `attemptsBounded` |
+| `NoAllowance` | The emails-per-window allowance is not enforced | `emailsBounded` |
+| `IgnoreExpiry` | An expired code still signs in | `deadCodeNeverSignsIn` |
+| `ReuseUsed` | A used code signs in again | `deadCodeNeverSignsIn` |
+| `NoRowCap` | The live-row cap is not enforced | `liveRowsBounded` |
+
+**Choices the model records.** A full address refuses the new request (it does not drop another browser's code), because dropping the oldest breaks property 1 (`EvictOldest`). The model's cap is 3 against an allowance of 2 per window so a random search can reach it; the code's cap is 6 (two windows of the allowance of 3).
+
+**What it does not cover.** The captcha, per-IP allowances, email delivery failure and the discard of an undelivered code, the project check (an address with no project gets no row and the same answer), the 30-second pause beyond one tick, and what the client types. A stranger can still use the address's email allowance (3 per five minutes) and the live-row cap to stop a client who has not yet asked for a code from getting one for a few minutes; that is the cost of the email allowance and is not a property of the model. A stranger who asks for codes also gets their own row for the address and, by luck, can guess its code (1 in 10^8 per guess, 5 guesses per row, 3 emails per five minutes), as before the fix; the model treats a stranger's guesses as always wrong.
+
 ## Verified modules
 
 Tally's four questions decide whether a function carries a contract: is it pure, does its rule involve a sum, count, partition or conservation law, would a break lose or miscount money, and can the rule be said in one plain sentence. The decision function is pure and a break loses money. Question two is met loosely (the rule is "money received is never lost"), and the owner asked for it (2026-11-13), so it is in. `guardTime` is not: it is one conditional, a test says it as clearly, and the model checks that its value is never stored.
@@ -189,5 +241,7 @@ Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verifi
 `lemmascript` depends on `lemmascript-claimcheck`, which pulls `claimcheck` and the Anthropic SDKs; Tally's lockfile has the same chain, so the roughly 190 added dev packages are not specific to this repository. `lsc check` does not use them. A pnpm override `lemmascript-claimcheck: "-"` in `pnpm-workspace.yaml` removes that chain (in a scratch project, `lemmascript` alone went from 133 to 28 installed packages, and `lsc check` on this repository's module still printed "8 verified, 0 errors"). It is not applied here, to stay identical to Tally; apply it to both repositories together if the install size matters.
 
 ## CI
+
+The sign-in codes model adds about 4 seconds to `verify:quint` and 11 seconds to `verify:quint:mutants` (12 cores, measured locally).
 
 `.github/workflows/validate.yml` installs Dafny 4.9.0 and Quint's evaluator by version and checksum, then runs `verify:dafny`, `verify:quint` and `verify:quint:mutants`. No new GitHub Action is used. The Quint runs go in parallel (up to the number of CPUs). Measured locally on 12 cores: `verify:dafny` 5 s, `verify:quint` 29 s, `verify:quint:mutants` 34 s; about 140 CPU-seconds in all, so roughly 40 s on a 4-core runner and 75 s on a 2-core one, plus the Dafny download (60 MB) and the evaluator download (1 MB). The estimate for the whole new CI cost is 1 to 2 minutes (not yet measured on a runner); keep it under 3 minutes.
