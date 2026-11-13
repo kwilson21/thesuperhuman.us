@@ -467,6 +467,43 @@ describe("readVariants", () => {
 		defaults: { app: { notes: "" } },
 	};
 
+	it("does not let a variant declare the discriminator as a field", () => {
+		const path = stringField({
+			missing: "Required",
+			wrongType: () => "Required",
+		});
+
+		const clash = {
+			site: {
+				path,
+				name: text(5),
+			},
+		};
+
+		expect(() =>
+			readVariants(
+				"path",
+				// @ts-expect-error a variant's fields may not include the discriminator
+				clash,
+				{ path: "site", name: "Ada" },
+				options,
+			),
+		).toThrow(
+			'Variant "site" declares a field named "path", the discriminator',
+		);
+	});
+
+	it("puts the canonical tag last, over any decoded field of that name", () => {
+		const read = readVariants(
+			"path",
+			variants,
+			{ path: "site", name: "Ada", url: "u" },
+			options,
+		);
+
+		expect(read.ok && Object.keys(read.value).at(-1)).toBe("path");
+	});
+
 	it("reads the fields of the variant the discriminator names, and tags the value with it", () => {
 		expect(
 			readVariants(

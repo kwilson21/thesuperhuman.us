@@ -1,5 +1,14 @@
 import * as Predicate from "effect/Predicate";
+import type * as Schema from "effect/Schema";
 import { type AnyStateMachine, initialTransition, transition } from "xstate";
+
+/** An event to ask about: its type alone, or a complete event object (`{ type, ...payload }`) for a guard that reads it. */
+export type MachineEvent =
+	| string
+	| { readonly type: string; readonly [key: string]: Schema.Json };
+
+const eventOf = (event: MachineEvent) =>
+	Predicate.isString(event) ? { type: event } : event;
 
 /** The row's own context for the guards: plain values, one per key. */
 export type MachineContext = {
@@ -37,6 +46,10 @@ export type MachineContext = {
  * lands on a compound state (one with child states), whose value is not a string: a row
  * stores one string, so such a machine is a design error to surface, not "[object Object]".
  *
+ * `event` is a type string or a complete event object: the whole object goes to `can` and `transition`, so a guard
+ * that reads the payload (the acting user, an expected version) is answered from it. A string is `{ type }` with no
+ * payload, and a guard that reads one answers as it would for an event that has none.
+ *
  * `context`, when given, is the row's own context: the guards read it instead of the
  * machine's default. It REPLACES the default entirely, it is not merged into it: a key the
  * row's context lacks reads as undefined in a guard, even when the default has it. Without
@@ -45,17 +58,18 @@ export type MachineContext = {
 export function next(
 	machine: AnyStateMachine,
 	state: string,
-	event: string,
+	event: MachineEvent,
 	context?: MachineContext,
 ): string | null {
 	const current = restoreState(machine, state, context);
+	const full = eventOf(event);
 
-	if (!current.can({ type: event })) return null;
-	const [after] = transition(machine, current, { type: event });
+	if (!current.can(full)) return null;
+	const [after] = transition(machine, current, full);
 
 	if (!Predicate.isString(after.value)) {
 		throw new Error(
-			`Event "${event}" from "${state}" lands on a compound state in machine "${machine.id}": ${JSON.stringify(after.value)}`,
+			`Event "${full.type}" from "${state}" lands on a compound state in machine "${machine.id}": ${JSON.stringify(after.value)}`,
 		);
 	}
 
@@ -70,6 +84,10 @@ const INTEGER_NAME = /^(0|[1-9]\d*)$/;
  * time. A state whose guard says no is left out, a final state never appears, and a state named `*` is never listed.
  * `context` is read as it is for `next`.
  *
+ * The list is the states from which the event is allowed FOR THAT EVENT PAYLOAD AND CONTEXT. A rule whose guard reads
+ * the payload cannot be answered by the event type alone, so it must pass the full event (`{ type, ...payload }`); the
+ * type string alone asks as an event with no payload, and a guard that needs one will leave its states out.
+ *
  * Throws for a machine with a compound state (child states, or parallel), as `next` throws when an event lands on one: a
  * parent would otherwise be listed as a source that no saved row can hold.
  *
@@ -79,7 +97,7 @@ const INTEGER_NAME = /^(0|[1-9]\d*)$/;
  */
 export function sourcesOf(
 	machine: AnyStateMachine,
-	event: string,
+	event: MachineEvent,
 	context?: MachineContext,
 ): string[] {
 	const names = Object.keys(machine.config.states ?? {});

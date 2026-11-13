@@ -3,6 +3,7 @@ import {
 	globSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	statSync,
 } from "node:fs";
 import { isBuiltin } from "node:module";
@@ -45,7 +46,9 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 const SCRIPT_BLOCK =
 	/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/g;
 
-const SCRIPT_SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/;
+// One attribute of an opening tag: a name, and a double-quoted, single-quoted or unquoted value when it has one.
+const ATTRIBUTE =
+	/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
 const FRONTMATTER = /^\s*---[\s\S]*?\n---/;
 
@@ -177,7 +180,20 @@ function aliasTargets(aliases: Alias[], specifier: string): string[] {
 
 /** True when an import brings code into the module: not `import type`, and not every specifier marked `type`. */
 function bringsCode(node: ts.ImportDeclaration | ts.ExportDeclaration) {
-	if (ts.isExportDeclaration(node)) return !node.isTypeOnly;
+	if (ts.isExportDeclaration(node)) {
+		const exported = node.exportClause;
+
+		// `export type { A }` and `export { type A }` are erased; `export *` and `export * as N` are not.
+		if (node.isTypeOnly) return false;
+
+		return !(
+			exported &&
+			ts.isNamedExports(exported) &&
+			exported.elements.length > 0 &&
+			exported.elements.every((element) => element.isTypeOnly)
+		);
+	}
+
 	const clause = node.importClause;
 
 	if (!clause) return true;
@@ -250,7 +266,7 @@ function isImportMetaUrl(node: ts.Expression): boolean {
  * `import.meta.glob()` and `new URL("...", import.meta.url)` (how a worker is named). A load whose argument is a real
  * expression comes back as unresolved.
  */
-function loadsOf(file: string, text: string): Load[] {
+function loadsOf(file: string, text: string, includeTypes = false): Load[] {
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
 	const found: Load[] = [];
 
@@ -279,7 +295,7 @@ function loadsOf(file: string, text: string): Load[] {
 			(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
 			node.moduleSpecifier &&
 			ts.isStringLiteral(node.moduleSpecifier) &&
-			bringsCode(node)
+			(includeTypes || bringsCode(node))
 		)
 			found.push({
 				kind: "module",
@@ -289,7 +305,7 @@ function loadsOf(file: string, text: string): Load[] {
 
 		if (
 			ts.isImportEqualsDeclaration(node) &&
-			!node.isTypeOnly &&
+			(includeTypes || !node.isTypeOnly) &&
 			ts.isExternalModuleReference(node.moduleReference)
 		)
 			add(node, node.moduleReference.expression, "import = require()");
@@ -347,6 +363,22 @@ function globPatternsOf(argument: ts.Expression): string[] | undefined {
 	return texts.every((text) => text !== undefined) ? texts : undefined;
 }
 
+/**
+ * The value of the `src` attribute of an opening `<script ...>` tag, or undefined when it has none. Attribute names are
+ * read whole and compared without regard to case, so `data-src` and `ng-src` are not `src`; a quoted value that holds
+ * text like ` src=` is one value, never another attribute.
+ */
+function scriptSrc(open: string): string | undefined {
+	for (const attribute of open.slice("<script".length).matchAll(ATTRIBUTE)) {
+		const [, name, double, single, bare] = attribute;
+		const value = double ?? single ?? bare;
+
+		if (name.toLowerCase() === "src" && value !== undefined) return value;
+	}
+
+	return undefined;
+}
+
 /** The text with every character but the line breaks removed: it keeps the line numbers of what follows. */
 const blank = (text: string) => text.replace(/[^\n]/g, "");
 
@@ -357,8 +389,11 @@ const blank = (text: string) => text.replace(/[^\n]/g, "");
  * file that trips this on purpose is a false positive to fix, never a case to wave through.
  */
 function clientText(file: string): string {
-	const text = readFileSync(file, "utf8");
+	return scriptTextOf(file, readFileSync(file, "utf8"));
+}
 
+/** `clientText` for a source text already read. */
+function scriptTextOf(file: string, text: string): string {
 	if (!file.endsWith(".astro")) return text;
 	const markup = text.replace(FRONTMATTER, blank);
 	let result = "";
@@ -366,8 +401,7 @@ function clientText(file: string): string {
 
 	for (const block of markup.matchAll(SCRIPT_BLOCK)) {
 		const [whole, open, inner] = block;
-		const src = SCRIPT_SRC.exec(open);
-		const source = src ? (src[1] ?? src[2] ?? src[3]) : undefined;
+		const source = scriptSrc(open);
 
 		result += blank(markup.slice(last, block.index)) + blank(open);
 		result +=
@@ -378,6 +412,23 @@ function clientText(file: string): string {
 	}
 
 	return result + blank(markup.slice(last));
+}
+
+/**
+ * Every module specifier a source text names, type-only imports included: static imports and re-exports, `import = require`,
+ * `require()` and `import()` with a literal. For an .astro file, the frontmatter and the <script> blocks (never the markup).
+ * Parsed with the TypeScript parser, so comments between tokens and text inside strings do not matter.
+ */
+export function specifiersOf(file: string, text: string): string[] {
+	const texts = file.endsWith(".astro")
+		? [FRONTMATTER.exec(text)?.[0] ?? "", scriptTextOf(file, text)]
+		: [text];
+
+	return texts.flatMap((part) =>
+		loadsOf(file, part, true).flatMap((load) =>
+			load.kind === "module" ? [load.specifier] : [],
+		),
+	);
 }
 
 /** True when `specifier` is a forbidden package (or something under it) that `allow` does not name exactly. */
@@ -429,22 +480,91 @@ function packageOf(specifier: string): string {
 	return first.startsWith("@") && second ? `${first}/${second}` : first;
 }
 
-/** True when a directory named for the package exists under a node_modules of `from`'s directory or above it. */
-function isInstalled(name: string, from: string): boolean {
+/** The directory named for the package under a node_modules of `from`'s directory or above it, or undefined. */
+function packageDirectory(name: string, from: string): string | undefined {
 	for (let directory = dirname(from); ; directory = dirname(directory)) {
 		const path = join(directory, "node_modules", name);
 
-		if (existsSync(path) && statSync(path).isDirectory()) return true;
+		if (existsSync(path) && statSync(path).isDirectory()) return path;
 
-		if (dirname(directory) === directory) return false;
+		if (dirname(directory) === directory) return undefined;
 	}
+}
+
+/** True when a directory named for the package exists under a node_modules of `from`'s directory or above it. */
+function isInstalled(name: string, from: string): boolean {
+	return packageDirectory(name, from) !== undefined;
+}
+
+// The dependency fields that put a package's code in the bundle of whatever imports it.
+const DEPENDENCY_FIELDS = [
+	"dependencies",
+	"peerDependencies",
+	"optionalDependencies",
+] as const;
+
+/** The package names a package.json lists under DEPENDENCY_FIELDS, or none when it cannot be read. */
+function dependenciesOf(manifest: string): string[] {
+	if (!existsSync(manifest)) return [];
+
+	const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
+
+	if (!isJsonObject(parsed)) return [];
+
+	return DEPENDENCY_FIELDS.flatMap((field) => {
+		const listed = parsed[field];
+
+		return isJsonObject(listed) ? Object.keys(listed) : [];
+	});
+}
+
+/** An installed package's dependency on a forbidden module: which one, and the package.json files that lead to it. */
+type Dependency = { forbidden: string; via: string[] };
+
+/**
+ * Whether the installed package `name` (found from `from`) depends on a forbidden module, directly or through the
+ * packages it depends on. A package that is not installed ends the search: nothing of it can be read. `visited` stops a
+ * dependency cycle; the directories are real paths, so pnpm's symlinks do not hide a package that was seen.
+ */
+function dependencyOnForbidden(
+	name: string,
+	from: string,
+	allow: readonly string[],
+	visited: Set<string>,
+): Dependency | undefined {
+	const directory = packageDirectory(packageOf(name), from);
+
+	if (directory === undefined) return undefined;
+	const real = realpathSync(directory);
+
+	if (visited.has(real)) return undefined;
+	visited.add(real);
+	const manifest = join(real, "package.json");
+
+	const dependencies = dependenciesOf(manifest);
+
+	const direct = dependencies.find((dependency) =>
+		isForbiddenPackage(dependency, allow),
+	);
+
+	if (direct !== undefined) return { forbidden: direct, via: [manifest] };
+
+	for (const dependency of dependencies) {
+		const deeper = dependencyOnForbidden(dependency, manifest, allow, visited);
+
+		if (deeper)
+			return { forbidden: deeper.forbidden, via: [manifest, ...deeper.via] };
+	}
+
+	return undefined;
 }
 
 /** What one specifier leads to: files to walk, bare names to judge, and a reason when it cannot be followed. */
 type Resolved = { files: string[]; names: string[]; unresolved?: string };
 
 /**
- * Where a specifier goes. A relative one is resolved from the file, a root-absolute one (`/src/...`) from the root, an
+ * Where a specifier goes. A relative one is resolved from the file, a root-absolute one (`/src/...`) from the root, any
+ * other root-relative URL (`/client.js`, as in `<script src>`) from public/ (unresolved when no code file is there), an
  * aliased one (tsconfig `paths`, package.json `imports`) through EVERY target of every alias that matches, and a bare
  * one is a package. A bare name that is not forbidden must still be a directory under node_modules (a node: built-in
  * aside), or it is unresolved: an alias or an import map the walker cannot read must fail the test, not pass it.
@@ -463,8 +583,24 @@ function resolveSpecifier(
 	const names: string[] = [];
 
 	if (bare.startsWith(".")) bases.push(resolve(dirname(from), bare));
-	else if (bare.startsWith("/")) bases.push(join(root, bare));
-	else {
+	else if (bare.startsWith("/src/")) bases.push(join(root, bare));
+	else if (bare.startsWith("/")) {
+		// Any other root-relative URL is a file of public/, which Astro copies to the same path in dist/.
+		const published = join(root, "public", bare);
+
+		if (
+			!existsSync(published) ||
+			!statSync(published).isFile() ||
+			![...EXTENSIONS].some((extension) => published.endsWith(extension))
+		)
+			return {
+				files: [],
+				names: [],
+				unresolved: `"${bare}" is a root-relative URL with no code file at public${bare}`,
+			};
+
+		bases.push(published);
+	} else {
 		const targets = aliasTargets(aliases, bare);
 
 		for (const target of targets.length > 0 ? targets : [bare])
@@ -556,8 +692,14 @@ export function clientGraphViolations(
 ): (ClientGraphViolation | UnresolvedLoad)[] {
 	const aliases = aliasesOf(root);
 	const violations: (ClientGraphViolation | UnresolvedLoad)[] = [];
+	const dependencies = new Map<string, Dependency | undefined>();
 	const seen = new Set<string>();
 	const shown = (file: string) => relative(root, file).split(sep).join("/");
+	// A package's files are reached through real paths (symlinks resolved), so show them against the real root.
+	const realRoot = realpathSync(root);
+
+	const shownReal = (file: string) =>
+		relative(realRoot, file).split(sep).join("/");
 
 	for (const entry of clientEntries(root)) {
 		const queue: { file: string; chain: string[] }[] = [
@@ -605,6 +747,33 @@ export function clientGraphViolations(
 					) || found.files.some((file) => isServerFile(file, root));
 
 				if (forbidden) violations.push({ import: text, chain: current.chain });
+
+				// An installed package browser code imports must not depend on Effect either: its own imports are in the bundle.
+				for (const name of found.names) {
+					if (isForbiddenPackage(name, allow) || isBuiltin(name)) continue;
+
+					const directory = packageDirectory(packageOf(name), current.file);
+
+					if (directory === undefined) continue;
+					const key = realpathSync(directory);
+
+					if (!dependencies.has(key))
+						dependencies.set(
+							key,
+							dependencyOnForbidden(name, current.file, allow, new Set()),
+						);
+
+					const dependency = dependencies.get(key);
+
+					if (dependency)
+						violations.push({
+							import: dependency.forbidden,
+							chain: [
+								...current.chain,
+								...dependency.via.map((file) => shownReal(file)),
+							],
+						});
+				}
 
 				for (const file of found.files)
 					if (!isServerFile(file, root) && !file.endsWith(".astro"))

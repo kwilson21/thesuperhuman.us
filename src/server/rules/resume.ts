@@ -91,21 +91,13 @@ export class RequestNotFound extends Data.TaggedError("RequestNotFound") {
 /** The PDF for the request's audience is not in the store. The request stays saved. */
 export class ResumePdfMissing extends Data.TaggedError("ResumePdfMissing")<{
 	readonly audience: ResumeAudience;
-}> {
-	get say() {
-		return `The KV key pdf:${this.audience} is empty. Upload the PDF with wrangler kv key put and click the approval link again. The request is still saved.`;
-	}
-}
+}> {}
 
 /** Resend did not take the email with the PDF. The request stays saved, so the link can be tried again. */
 export class ResumeNotSent extends Data.TaggedError("ResumeNotSent")<{
-	readonly name: string;
+	readonly requesterName: string;
 	readonly email: string;
-}> {
-	get say() {
-		return `The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for ${this.name} (${this.email}).`;
-	}
-}
+}> {}
 
 export type ResumeApproval = {
 	/** The `id` query parameter of the link, or null when it has none (or an empty one). */
@@ -148,7 +140,11 @@ export const approveResume = (approval: ResumeApproval) =>
 			)
 			.pipe(
 				Effect.mapError(
-					() => new ResumeNotSent({ name: stored.name, email: stored.email }),
+					() =>
+						new ResumeNotSent({
+							requesterName: stored.name,
+							email: stored.email,
+						}),
 				),
 			);
 

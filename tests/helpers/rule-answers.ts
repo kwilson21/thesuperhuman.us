@@ -30,11 +30,36 @@ export const answerOf = <W, E extends Refusal>(
 
 export const done = <V>(value: V) => ({ kind: "done" as const, value });
 
+/** A refusal that carries facts and no sentence: the route words it, so a story names the facts. */
+export const refuseWith = (type: string, facts: Record<string, string>) => ({
+	kind: "refuse" as const,
+	type,
+	facts,
+});
+
+/** Puts a refusal in a story's words: its sentence when it carries one, otherwise the facts it carries. */
+const refusalOf = (refusal: { readonly _tag: string }) => {
+	if ("say" in refusal && typeof refusal.say === "string") {
+		return refuse(refusal._tag, refusal.say);
+	}
+
+	const facts = Object.fromEntries(
+		Object.entries(refusal).filter(
+			(entry): entry is [string, string] =>
+				entry[0] !== "_tag" && typeof entry[1] === "string",
+		),
+	);
+
+	return refuseWith(refusal._tag, facts);
+};
+
 /** Runs a rule whose services the test has provided and puts what it answered in a story's words. */
-export const answerOfRun = <V, E extends Refusal>(rule: Effect.Effect<V, E>) =>
+export const answerOfRun = <V, E extends { readonly _tag: string }>(
+	rule: Effect.Effect<V, E>,
+) =>
 	Effect.runPromise(
 		Effect.match(rule, {
-			onFailure: (refusal) => refuse(refusal._tag, refusal.say),
+			onFailure: refusalOf,
 			onSuccess: (value) => done(value),
 		}),
 	);

@@ -13,7 +13,7 @@ import {
 	TurnstileFailed,
 } from "../../src/server/services";
 import { fakeKv } from "../helpers/doubles";
-import { answerOfRun, done, refuse } from "../helpers/rule-answers";
+import { answerOfRun, done, refuse, refuseWith } from "../helpers/rule-answers";
 
 // The resume rules as stories. A visitor asks (`requestResume`): the request is stored and the owner is emailed a link.
 // The owner opens the link (`approveResume`): the PDF is emailed and only then is the request deleted. The time, the id
@@ -273,19 +273,16 @@ describe("Approve a resume request from the owner's link", () => {
 		[
 			"says which key is empty when the resume is not in storage, and keeps the request",
 			{ request: stored("general") },
-			refuse(
-				"ResumePdfMissing",
-				"The KV key pdf:general is empty. Upload the PDF with wrangler kv key put and click the approval link again. The request is still saved.",
-			),
+			refuseWith("ResumePdfMissing", { audience: "general" }),
 			{ read: ["req:abc", "pdf:general"], mails: [], deleted: [] },
 		],
 		[
 			"keeps the request when Resend refuses the email",
 			{ request: stored("general"), pdfs: ["general"], mail: "refused" },
-			refuse(
-				"ResumeNotSent",
-				"The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for Grace Hopper (grace@example.com).",
-			),
+			refuseWith("ResumeNotSent", {
+				requesterName: "Grace Hopper",
+				email: "grace@example.com",
+			}),
 			{
 				read: ["req:abc", "pdf:general"],
 				mails: ["grace@example.com: Kazon-Wilson-Resume.pdf"],
@@ -295,10 +292,10 @@ describe("Approve a resume request from the owner's link", () => {
 		[
 			"keeps the request when the email may not have gone",
 			{ request: stored("general"), pdfs: ["general"], mail: "uncertain" },
-			refuse(
-				"ResumeNotSent",
-				"The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for Grace Hopper (grace@example.com).",
-			),
+			refuseWith("ResumeNotSent", {
+				requesterName: "Grace Hopper",
+				email: "grace@example.com",
+			}),
 			{
 				read: ["req:abc", "pdf:general"],
 				mails: ["grace@example.com: Kazon-Wilson-Resume.pdf"],

@@ -396,16 +396,19 @@ export function readFields<F extends FieldSchemas<F>, Input>(
 		: { ok: false, errors: settled.errors as FormErrors<F> };
 }
 
-/** Several sets of fields, named by the value of one field: `{ workflow: { today: ... }, idea: { idea: ... } }`. */
-type VariantFields<V> = {
-	readonly [K in keyof V]: FieldSchemas<V[K]>;
+/**
+ * Several sets of fields, named by the value of one field `D`: `{ workflow: { today: ... }, idea: { idea: ... } }`. No
+ * variant may have a field named `D`: the discriminator is the tag, and a field of that name could carry another value.
+ */
+type VariantFields<D extends string, V> = {
+	readonly [K in keyof V]: FieldSchemas<V[K]> & { readonly [P in D]?: never };
 };
 
 /** Every field name any variant has. */
 type VariantFieldName<V> = { [K in keyof V]: keyof V[K] }[keyof V];
 
 /** The typed value of a variant read: a union, one member per variant, each tagged with the discriminator's value. */
-export type VariantValues<D extends string, V extends VariantFields<V>> = {
+export type VariantValues<D extends string, V extends VariantFields<D, V>> = {
 	readonly [K in Extract<keyof V, string>]: { readonly [P in D]: K } & {
 		readonly [N in keyof V[K]]: V[K][N] extends Schema.ConstraintDecoder<unknown>
 			? V[K][N]["Type"]
@@ -414,7 +417,7 @@ export type VariantValues<D extends string, V extends VariantFields<V>> = {
 }[Extract<keyof V, string>];
 
 /** What `readVariants` answers with when it fails: a sentence per field of any variant, the discriminator, and `_form`. */
-export type VariantErrors<D extends string, V extends VariantFields<V>> = {
+export type VariantErrors<D extends string, V extends VariantFields<D, V>> = {
 	readonly [K in VariantFieldName<V> | D | "_form"]?: string;
 };
 
@@ -425,7 +428,7 @@ export type VariantErrors<D extends string, V extends VariantFields<V>> = {
  */
 export type ReadVariantsOptions<
 	D extends string,
-	V extends VariantFields<V>,
+	V extends VariantFields<D, V>,
 > = {
 	readonly unknownVariant: string;
 	readonly notObject?: ReadFieldsOptions<Record<string, never>>["notObject"];
@@ -449,7 +452,7 @@ export type ReadVariantsOptions<
  */
 export function readVariants<
 	D extends string,
-	V extends VariantFields<V>,
+	V extends VariantFields<D, V>,
 	Input,
 >(
 	discriminator: D,
@@ -459,6 +462,12 @@ export function readVariants<
 ):
 	| { ok: true; value: VariantValues<D, V> }
 	| { ok: false; errors: VariantErrors<D, V> } {
+	for (const [name, fields] of Object.entries(variants))
+		if (Object.hasOwn(Object(fields), discriminator))
+			throw new Error(
+				`Variant "${name}" declares a field named "${discriminator}", the discriminator. Name the field something else.`,
+			);
+
 	const form = formSentence(input, options.notObject);
 
 	if (form !== undefined) {
@@ -503,10 +512,10 @@ export function readVariants<
 		: { ok: false, errors: settled.errors as VariantErrors<D, V> };
 }
 
-/** The values of a read, led by the discriminator and the variant it chose. */
+/** The values of a read, followed by the discriminator and the variant it chose, so nothing read can override it. */
 function tagged(discriminator: string, chosen: string, read: Read): Read {
 	return {
-		values: [[discriminator, chosen], ...read.values],
+		values: [...read.values, [discriminator, chosen]],
 		errors: read.errors,
 	};
 }

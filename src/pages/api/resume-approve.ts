@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import { escapeHtml } from "~/lib/email-template";
 import { approveResume } from "~/server/rules/resume";
 import { runRoute } from "~/server/run";
 import { bindingsOrDefect, liveMail } from "~/server/services";
@@ -57,7 +58,7 @@ export const GET: APIRoute = async (context) => {
 				htmlResponse(
 					htmlPage(
 						"Resume sent",
-						`<h1>Resume sent</h1><p>Delivered the <strong>${sent.audience}</strong> resume to <strong>${sent.email}</strong>. The approval link is now consumed.</p>`,
+						`<h1>Resume sent</h1><p>Delivered the <strong>${escapeHtml(sent.audience)}</strong> resume to <strong>${escapeHtml(sent.email)}</strong>. The approval link is now consumed.</p>`,
 					),
 					200,
 				),
@@ -88,7 +89,7 @@ export const GET: APIRoute = async (context) => {
 						htmlResponse(
 							htmlPage(
 								"Resume PDF not configured",
-								`<h1>Resume not in storage</h1><p>The KV key <code>pdf:${refusal.audience}</code> is empty. Upload the PDF with <code>wrangler kv key put</code> and click the approval link again. The request is still saved.</p>`,
+								`<h1>Resume not in storage</h1><p>The KV key <code>pdf:${escapeHtml(refusal.audience)}</code> is empty. Upload the PDF with <code>wrangler kv key put</code> and click the approval link again. The request is still saved.</p>`,
 							),
 							500,
 						),
@@ -98,7 +99,7 @@ export const GET: APIRoute = async (context) => {
 						htmlResponse(
 							htmlPage(
 								"Send failed",
-								`<h1>Resume not sent</h1><p>${refusal.say}</p>`,
+								`<h1>Resume not sent</h1><p>The email delivery failed. The request is still saved. Try the approval link again, or check Resend's logs. Request is for ${escapeHtml(refusal.requesterName)} (${escapeHtml(refusal.email)}).</p>`,
 							),
 							500,
 						),

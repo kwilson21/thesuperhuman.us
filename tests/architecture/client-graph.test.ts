@@ -157,6 +157,35 @@ describe("the walker finds what it should", () => {
 		expect(clientGraphViolations(root)).toEqual([]);
 	});
 
+	it("does not count a re-export whose named elements are all type-only", () => {
+		const root = scratch({
+			"src/scripts/a.ts": [
+				'export { type Schema } from "effect/Schema";',
+				'export { type A, type B } from "effect/Effect";',
+			].join("\n"),
+		});
+
+		expect(clientGraphViolations(root)).toEqual([]);
+	});
+
+	it("still counts export * and a re-export with a value among its names", () => {
+		const root = scratch({
+			"src/scripts/a.ts": [
+				'export * from "effect/Option";',
+				'export * as O from "effect/Result";',
+				'export { type A, value } from "effect/Schema";',
+				'export { value } from "effect/Effect";',
+			].join("\n"),
+		});
+
+		expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+			"effect/Option",
+			"effect/Result",
+			"effect/Schema",
+			"effect/Effect",
+		]);
+	});
+
 	it("walks the script blocks of an .astro file and not its frontmatter", () => {
 		const root = scratch({
 			"src/pages/server-only.astro":
@@ -395,6 +424,75 @@ describe("the walker finds what it should", () => {
 			).toEqual(["effect/Effect"]);
 		});
 
+		it("reads only the real src attribute of a <script>", () => {
+			const lazy = { "public/lazy.js": 'import "effect/Effect";' };
+
+			// data-src and ng-src are not src: the inline body stays in the graph and /lazy.js is not followed.
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script data-src="/lazy.js">import "effect/Schema";</script>',
+					...lazy,
+				}),
+			).toEqual(["effect/Schema"]);
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\n---\n<script ng-src="/lazy.js">import "zod";</script>',
+					...lazy,
+				}),
+			).toEqual([]);
+
+			// The real attribute is followed, in any case, quoted or not, before or after other attributes.
+			for (const open of [
+				'<script src="/lazy.js">',
+				"<script SRC='/lazy.js'>",
+				"<script src=/lazy.js>",
+				'<script type="module" async src="/lazy.js" defer>',
+				'<script data-src="/other.js" src="/lazy.js">',
+				'<script\n\tsrc = "/lazy.js"\n>',
+			])
+				expect(
+					found({ "src/pages/a.astro": `---\n---\n${open}</script>`, ...lazy }),
+				).toEqual(["effect/Effect"]);
+		});
+
+		it("reads a root-relative <script src> from public/ and walks that file", () => {
+			const root = scratch({
+				"src/pages/a.astro": '---\n---\n<script src="/client.js"></script>',
+				"public/client.js": 'import "./helper.js";',
+				"public/helper.js": 'import "effect/Effect";',
+			});
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "effect/Effect",
+					chain: ["src/pages/a.astro", "public/client.js", "public/helper.js"],
+				},
+			]);
+		});
+
+		it("passes a root-relative <script src> that names a plain file in public/", () => {
+			const root = scratch({
+				"src/pages/a.astro": '---\n---\n<script src="/client.js"></script>',
+				"public/client.js": "document.title = 'x';",
+			});
+
+			expect(clientGraphViolations(root)).toEqual([]);
+		});
+
+		it("fails on a root-relative <script src> with no file in public/, naming the line", () => {
+			const root = scratch({
+				"src/pages/a.astro":
+					'---\n---\n<p>x</p>\n<script src="/missing.js"></script>',
+				"src/missing.js": "export {};",
+			});
+
+			expect(clientGraphViolations(root)).toMatchObject([
+				{ import: "/missing.js", chain: ["src/pages/a.astro"], line: 4 },
+			]);
+		});
+
 		it("does not follow a <script src> that names a URL", () => {
 			expect(
 				found({
@@ -444,6 +542,110 @@ describe("the walker finds what it should", () => {
 
 		it("lets a built-in module through", () => {
 			expect(found({ "src/scripts/a.ts": 'import "node:path";' })).toEqual([]);
+		});
+	});
+
+	describe("installed packages that depend on Effect", () => {
+		const manifest = (
+			name: string,
+			dependencies: Record<string, Record<string, string>>,
+		) => ({
+			[`node_modules/${name}/package.json`]: JSON.stringify(dependencies),
+		});
+
+		const entry = { "src/scripts/a.ts": 'import "dep";' };
+
+		it("finds a package browser code imports that depends on effect", () => {
+			const root = scratch(
+				{ ...entry, ...manifest("dep", { dependencies: { effect: "^4" } }) },
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "effect",
+					chain: ["src/scripts/a.ts", "node_modules/dep/package.json"],
+				},
+			]);
+		});
+
+		it("finds a peer dependency on an @effect package", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { peerDependencies: { "@effect/platform": "*" } }),
+				},
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"@effect/platform",
+			]);
+		});
+
+		it("finds @xstate/effect two packages away, naming the packages between", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { dependencies: { mid: "1" } }),
+					...manifest("mid", { dependencies: { "@xstate/effect": "1" } }),
+				},
+				{ packages: ["dep", "mid"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "@xstate/effect",
+					chain: [
+						"src/scripts/a.ts",
+						"node_modules/dep/package.json",
+						"node_modules/mid/package.json",
+					],
+				},
+			]);
+		});
+
+		it("finds a package that imports only effect/Predicate through its dependencies", () => {
+			const root = scratch(
+				{
+					"src/scripts/a.ts": 'import "dep/sub";',
+					...manifest("dep", { dependencies: { effect: "^4" } }),
+				},
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"effect",
+			]);
+		});
+
+		it("follows a dependency cycle once and passes when nothing in it uses effect", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { dependencies: { mid: "1" } }),
+					...manifest("mid", { dependencies: { dep: "1" } }),
+				},
+				{ packages: ["dep", "mid"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([]);
+		});
+
+		it("ignores devDependencies, a package browser code never imports, and a package with no manifest", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { devDependencies: { effect: "^4" } }),
+					...manifest("unused", { dependencies: { effect: "^4" } }),
+				},
+				{ packages: ["dep", "unused"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([]);
+			expect(
+				clientGraphViolations(scratch({ "src/scripts/a.ts": 'import "zod";' })),
+			).toEqual([]);
 		});
 	});
 
