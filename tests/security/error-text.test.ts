@@ -168,7 +168,11 @@ it("review keeps a sentence the code wrote for the client, word for word", async
 it.each([
 	["a stale guard", guardError(), 409],
 	["a database error", new Error("FOREIGN KEY constraint failed"), 500],
-	["a unique violation", new Error("UNIQUE constraint failed: t.c"), 500],
+	[
+		"a unique violation, which another request caused",
+		new Error("UNIQUE constraint failed: t.c"),
+		409,
+	],
 	[
 		"a JavaScript error",
 		new TypeError("Cannot read properties of undefined"),
