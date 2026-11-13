@@ -22,10 +22,24 @@ pnpm run screenshots   # in a second terminal; images land in screenshots/
 CI keeps each run's images and `cache.json` in the Actions cache, and the next run on the same branch (or, failing that, the latest run on `main`) restores them into `.screenshots/reference`. `cache.mjs` decides what can be copied from there instead of captured:
 
 - **A page** at one size is reused when every same-origin response it loaded (its HTML, CSS, scripts, images and data requests) is byte-identical when fetched again. A change anywhere in its code, content, data or Tailwind output changes one of those responses. Files Vite serves from `node_modules` are only checked for presence: their bytes vary between server starts, and they come from `pnpm-lock.yaml`, which recaptures everything when it changes.
-- **A scenario** is reused on the same day, in both UTC and New York time (scenarios seed dates from the clock), when its script, the source files behind every route it requested (from the module graph, plus all of `src/content/` if it reads content collections) and the static files it loaded are unchanged. Requests an endpoint serves, such as owner-only images from an API route, count as routes, not static files. If a scenario was removed since the earlier run, every scenario runs. Scenarios share one database, so a scenario that changed the stored state is a writer: a scenario that runs first reruns every writer before it, and once a run writes differently from before, every later scenario runs.
+- **A scenario** is reused when its script, the source files behind every route it requested (from the module graph, plus all of `src/content/` if it reads content collections) and the static files it loaded are unchanged. Scenarios run on the pinned clock (below), so the date a run happens on doesn't change their images. Requests an endpoint serves, such as owner-only images from an API route, count as routes, not static files. If a scenario was removed since the earlier run, every scenario runs. Scenarios share one database, so a scenario that changed the stored state is a writer: a scenario that runs first reruns every writer before it, and once a run writes differently from before, every later scenario runs.
 - **Everything** is captured when the capture scripts, the dependencies, `astro.config.mjs`, `tsconfig.json`, `wrangler.jsonc`, the migrations, this workflow, Node or Chromium changed, when there is no earlier run, or when `SCREENSHOTS_FULL=1` is set. In a pull request, adding the `full-screenshots` label sets it.
 
 A reused image skips that page's console and status checks; its inputs are the same as in the run that passed them. Locally, nothing is reused unless you copy an earlier `screenshots/` folder to `.screenshots/reference`.
+
+## Pinned clock
+
+`clock.mjs` pins every run to `CLOCK_BASE`, 22 September 2026 at noon UTC, so the same inputs give the same images on any date. Noon UTC is 8 am in New York, so a run never crosses a date line in either zone. Time still moves forward from the base at the real rate.
+
+The pin covers three processes. The capture process pins its clock first, since `clock-install.mjs` is its first import. The dev server does the same (`dev.config.mjs` imports it first), so the site's server code and the rows it stamps see the same time. Pages that capture opens on the preview's own origin also start from the base, through an init script. Third-party frames, such as Turnstile's, keep the real clock. Before each scenario, capture moves the capture process's clock and the dev server's back to the base (`POST /__screenshots/clock/reset`), so a scenario's timestamps don't depend on the scenarios that ran or were reused before it. Changing `CLOCK_BASE` recaptures everything, because `scripts/screenshots` is a global input.
+
+What still reads the real clock, and whether it reaches an image:
+
+- Two migrations default a column with SQLite `strftime('now')`: `migrations/music/0023_software_signing.sql` (the signing settings row's `updated_at`) and `migrations/publication/0001_publication_journal.sql` (`published_at`). Neither reaches an image. No page shows the settings timestamp, and no scenario writes publication events, so the journal feed stays empty in the preview.
+- R2 `uploaded` times, which the agreement retention sweep reads, come from R2 and use the real clock. No captured page shows them.
+- Cookies use `Max-Age` and KV uses `expirationTtl`, both relative. Nothing sets an absolute `Expires` or expiry time from `Date`, so a pinned clock is safe there. Neither reaches an image.
+- Turnstile's siteverify answer carries a real timestamp, and the site does not compare it with its clock.
+- Intl's date formatting with no argument reads the real clock natively, so the capture process and the browser patch it. No code in the repo calls it that way today.
 
 ## Settling before a capture
 

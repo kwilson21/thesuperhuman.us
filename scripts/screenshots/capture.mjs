@@ -3,6 +3,8 @@
 // Exits non-zero on a page error, a console error, or an unexpected HTTP status.
 // Images whose inputs match an earlier run in .screenshots/reference are copied from it instead (see
 // cache.mjs); SCREENSHOTS_FULL=1 captures everything.
+// The clock is pinned first, before anything here reads the time (see clock.mjs).
+import { clock } from "./clock-install.mjs";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import {
@@ -35,6 +37,7 @@ import {
 	unhashed,
 	withoutViteVersion,
 } from "./cache.mjs";
+import { CLOCK_BASE, installClock } from "./clock.mjs";
 import { openLocalD1 } from "./local-d1.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { settle, trackRequests } from "./settle.mjs";
@@ -102,6 +105,23 @@ const scopeName = () => currentScenario ?? "pages";
 const timedStateHash = (scope) =>
 	timings.time(scope, "stateHash", () => stateHash());
 
+// Puts this process's clock and the dev server's back at CLOCK_BASE. Each scenario starts from the same
+// time, so its timestamps don't depend on the scenarios that ran or were reused before it.
+async function resetClock() {
+	clock.reset();
+
+	const answer = await fetch(`${BASE}/__screenshots/clock/reset`, {
+		method: "POST",
+	})
+		.then((response) => response.json())
+		.catch(() => null);
+
+	if (answer?.ok !== true)
+		throw new Error(
+			"No clock reset at /__screenshots/clock/reset: start the dev server with --config scripts/screenshots/dev.config.mjs.",
+		);
+}
+
 // Every path that rendered with the expected status, so seeded pages can be checked afterwards.
 const captured = [];
 
@@ -157,6 +177,12 @@ async function capture({
 		const context = await browser.newContext({
 			viewport: { width: size.width, height: size.height },
 			reducedMotion: "reduce",
+		});
+
+		// The page's clock starts at the same base as this process's. Only the preview's own origin gets it:
+		// third-party frames such as Turnstile keep the real clock.
+		await context.addInitScript({
+			content: `if (location.origin === ${JSON.stringify(new URL(BASE).origin)}) (${installClock.toString()})(globalThis, ${Date.parse(CLOCK_BASE)});`,
 		});
 
 		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -446,6 +472,7 @@ try {
 		VIEWPORTS.map((viewport) => ({ page, viewport })),
 	);
 
+	await resetClock();
 	const stateBeforePages = await timedStateHash("pages");
 	await timings.wall(
 		"pages",
@@ -470,14 +497,9 @@ try {
 		.map((file) => file.replace(/\.mjs$/, ""));
 
 	const script = (name) => `scripts/screenshots/scenarios/${name}.mjs`;
-	// Scenarios seed dates from the clock, in UTC and New York time, so a scenario image is reused
-	// only while both dates are the ones it was taken on.
-	const now = new Date();
-	const day = `${now.toISOString().slice(0, 10)} ${now.toLocaleDateString("en-CA", { timeZone: "America/New_York" })}`;
 
 	const inputsFor = async (scope, name, { files, content, assets }) =>
 		scenarioInputs({
-			day,
 			script: script(name),
 			files,
 			content,
@@ -557,6 +579,8 @@ try {
 		currentScenario = name;
 		scenarioPaths = [];
 		const filesBefore = new Set(requestsByFile.keys());
+
+		await resetClock();
 
 		const { steps, wrote } = await timings.wall(name, async () => {
 			const stateBefore = await timedStateHash(name);
