@@ -487,6 +487,16 @@ const stateCases: Case[] = [
 		]),
 	),
 	draftCase(
+		"a new draft after a lone sent offer of version 3 is version 4",
+		d(),
+		withOffers([offer("sent", 3)]),
+	),
+	draftCase(
+		"a new draft after versions 2 and 5 is version 6",
+		d(),
+		withOffers([offer("superseded", 2), offer("withdrawn", 5)]),
+	),
+	draftCase(
 		"a new draft after only a superseded offer",
 		d(),
 		withOffers([offer("superseded")]),
