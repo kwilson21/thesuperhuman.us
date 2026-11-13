@@ -1,4 +1,5 @@
 import { setupBriefAutocomplete } from "./brief-autocomplete";
+import { setupSuggestionPass } from "./brief-suggestion-pass";
 import {
 	clientSoftwareLabels,
 	softwareBriefKickers,
@@ -95,7 +96,10 @@ export function renderSoftwareReceipt(
 			"I’ll look at what you have and reply with a fixed-price first milestone, or a question or two.";
 }
 
-export function setupSoftwareInquiry(form: HTMLFormElement) {
+export function setupSoftwareInquiry(
+	form: HTMLFormElement,
+	startSuggestionPass: typeof setupSuggestionPass,
+) {
 	const steps = [...form.querySelectorAll<HTMLElement>("[data-step]")];
 	const next = form.querySelector<HTMLButtonElement>("[data-next]")!;
 	const back = form.querySelector<HTMLButtonElement>("[data-back]")!;
@@ -350,13 +354,16 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 
 	configureQuestions();
 
-	const suggestions = setupBriefAutocomplete(form, () =>
-		plan()[step] === 2
-			? {
-					path: path(),
-					[pathFields[path()][0]]: payload()[pathFields[path()][0]],
-				}
-			: { path: path() },
+	const suggestions = setupBriefAutocomplete(
+		form,
+		() =>
+			plan()[step] === 2
+				? {
+						path: path(),
+						[pathFields[path()][0]]: payload()[pathFields[path()][0]],
+					}
+				: { path: path() },
+		startSuggestionPass,
 	);
 
 	function renderSummary() {
@@ -697,4 +704,4 @@ export function setupSoftwareInquiry(form: HTMLFormElement) {
 
 const form = document.querySelector<HTMLFormElement>("#software-inquiry");
 
-if (form) setupSoftwareInquiry(form);
+if (form) setupSoftwareInquiry(form, setupSuggestionPass);

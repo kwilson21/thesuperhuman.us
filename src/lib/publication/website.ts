@@ -1,9 +1,10 @@
 import { readProject, type ProjectFeed } from "./read";
 
-/** Optional public data must never break page rendering. */
+/** Optional public data must never break page rendering. The pages call it without `read`; it exists so the reader can be swapped. */
 export async function websiteFeed(
 	env: Env,
 	projectId = "threadline",
+	read: typeof readProject = readProject,
 ): Promise<ProjectFeed | null> {
 	if (
 		!env.PUBLICATION_DB ||
@@ -15,7 +16,7 @@ export async function websiteFeed(
 		return null;
 
 	try {
-		return await readProject(env.PUBLICATION_DB, projectId);
+		return await read(env.PUBLICATION_DB, projectId);
 	} catch {
 		return null;
 	}
