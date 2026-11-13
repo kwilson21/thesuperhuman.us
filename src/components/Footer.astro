@@ -49,7 +49,8 @@ const year = new Date().getFullYear();
   setupPinnedContact();
 </script>
 <style>
-  .compact-footer { margin-top: var(--site-section-space); padding-bottom: var(--space-8); }
+  /* The side gutter is rem-based, so it doubles with enlarged text and squeezes the closing panel at phone widths. Capped by the viewport it equals the site gutter from 320px up at the default size. */
+  .compact-footer { margin-top: var(--site-section-space); padding-inline: min(var(--site-gutter), 7.5vw); padding-bottom: var(--space-8); }
   .closing-panel { display: grid; justify-items: center; text-align: center; padding: 3rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
   /* Each link gets a 44px-tall tap area from a pseudo-element, so the text and layout keep their look.
      Wrapped rows sit 44px apart (row gap = 44px minus one line), so neighbouring areas never overlap. */
@@ -64,7 +65,7 @@ const year = new Date().getFullYear();
   .compact-footer nav a { color: var(--muted); }
   @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--ink); } }
   /* The two Get in touch buttons may wrap their label at any width, so enlarged text reflows inside the panel. */
-  .closing-panel .site-button-large, .pinned-contact .site-button-large { white-space: normal; text-align: center; }
+  .closing-panel .site-button-large { white-space: normal; text-align: center; }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } }
   .pinned-contact { display: none; }

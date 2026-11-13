@@ -60,10 +60,11 @@ it("caps the large button's side padding by the viewport, not by a query", () =>
 	expect(footer).not.toContain("@container");
 });
 
-it("lets the closing panel's two Get in touch buttons wrap their label, scoped to the footer", () => {
+it("lets the closing panel's Get in touch button wrap its label, scoped to the footer", () => {
 	expect(footer).toMatch(
-		/\.closing-panel \.site-button-large, \.pinned-contact \.site-button-large \{[^}]*white-space: normal;[^}]*text-align: center;/,
+		/\.closing-panel \.site-button-large \{[^}]*white-space: normal;[^}]*text-align: center;/,
 	);
+	expect(footer).not.toContain(".pinned-contact .site-button-large {");
 });
 
 it("keeps the global button rule and its 380px query unchanged, so other buttons do not wrap", () => {
@@ -75,5 +76,15 @@ it("keeps the global button rule and its 380px query unchanged, so other buttons
 it("lets a long word in the page lede break only when it cannot fit a line", () => {
 	expect(global).toMatch(
 		/\.page-lede \{[^}]*overflow-wrap: break-word;[^}]*\}/,
+	);
+});
+
+it("caps the footer's side gutter by the viewport, so the closing panel is wider at enlarged text", () => {
+	expect(footer).toMatch(
+		/\.compact-footer \{[^}]*padding-inline: min\(var\(--site-gutter\), 7\.5vw\);/,
+	);
+	expect(global).toContain("--site-gutter: clamp(1.5rem, 5vw, 3.5rem);");
+	expect(global).toMatch(
+		/\.site-shell \{[^}]*padding-inline: var\(--site-gutter\);/,
 	);
 });

@@ -14,18 +14,18 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 // widest phone the site targets (430).
 const LARGE_WIDTHS = [320, 360, 375, 390, 414, 430];
 
-// The closing label's line budget at a 200% root. From 375px the label fits two lines. The
-// narrowest phones need more lines: 320px is 224px of text beside a 48px gutter, and 360px
-// is 264px. Both are measured on /work after the closing panel fix; see the release record.
-const LABEL_LINES_MAX = { 320: 3, 360: 2, 375: 2, 390: 2, 414: 2, 430: 2 };
+// The closing label's line budget at a 200% root: two lines at every tested width from 320px.
+// The footer's side gutter is capped by the viewport, so the panel keeps its content box at the
+// narrowest phones; see the release record for the measured widths.
+const LABEL_LINES_MAX = { 320: 2, 360: 2, 375: 2, 390: 2, 414: 2, 430: 2 };
 
 // The site pins the root font size to 16px, so text-only zoom cannot be simulated directly. The
 // script doubles the root by style to stand in for it. The page is laid out by its content (flex
-// wrapping, viewport-capped padding), so it must reflow without pushing past the phone's edge,
-// and a word may break inside itself only when it cannot fit a line of its own.
+// wrapping, viewport-capped padding and gutters), so it must reflow without pushing past the
+// phone's edge, and a word may break inside itself only when it cannot fit a line of its own.
 let current = null;
 
-async function openWork(browser, width, rootSize) {
+async function openWork(browser, width, rootSize, { openDetails = true } = {}) {
 	const page = await browser.newPage({
 		viewport: { width, height: 812 },
 		deviceScaleFactor: 1,
@@ -45,6 +45,13 @@ async function openWork(browser, width, rootSize) {
 			document.documentElement.style.fontSize = size;
 		}, rootSize);
 	}
+
+	// The experience rows live in <details>; open them all so their text is measured too.
+	if (openDetails)
+		await page.evaluate(() => {
+			for (const details of document.querySelectorAll("details"))
+				details.open = true;
+		});
 
 	return page;
 }
@@ -98,12 +105,25 @@ async function checkLargeText(browser, width) {
 		const arrowBox = arrow ? box(arrow.getBoundingClientRect()) : null;
 		const panel = button.closest(".closing-panel");
 
+		// The panel's content box: its border box minus its computed padding.
+		let contentBox = null;
+
+		if (panel) {
+			const style = getComputedStyle(panel);
+			const rect = panel.getBoundingClientRect();
+
+			contentBox = {
+				left: rect.left + parseFloat(style.paddingLeft),
+				right: rect.right - parseFloat(style.paddingRight),
+			};
+		}
+
 		return {
 			lines: tops.size,
 			labelRects,
 			arrowBox,
 			buttonBox: box(button.getBoundingClientRect()),
-			panelBox: panel ? box(panel.getBoundingClientRect()) : null,
+			contentBox,
 		};
 	});
 
@@ -134,14 +154,35 @@ async function checkLargeText(browser, width) {
 			`the closing arrow leaves its button at ${width}px with a 200% root`,
 		);
 
-	assert.ok(closing.panelBox, "the closing button is not in the closing panel");
 	assert.ok(
-		within(closing.buttonBox, closing.panelBox),
-		`the closing button leaves its panel at ${width}px with a 200% root`,
+		closing.contentBox,
+		"the closing button is not in the closing panel",
+	);
+
+	const { buttonBox, contentBox } = closing;
+	const tolerance = 0.5;
+
+	assert.ok(
+		buttonBox.left >= contentBox.left - tolerance &&
+			buttonBox.right <= contentBox.right + tolerance,
+		`the closing button leaves its panel's content box at ${width}px with a 200% root: button ${buttonBox.left.toFixed(2)} to ${buttonBox.right.toFixed(2)}, content ${contentBox.left.toFixed(2)} to ${contentBox.right.toFixed(2)}`,
+	);
+
+	const freeLeft = buttonBox.left - contentBox.left;
+	const freeRight = contentBox.right - buttonBox.right;
+
+	assert.ok(
+		Math.abs(freeLeft - freeRight) <= 1,
+		`the closing button is not centred in its panel at ${width}px with a 200% root: ${freeLeft.toFixed(2)}px free on the left, ${freeRight.toFixed(2)}px on the right`,
 	);
 
 	// The pinned contact bar is shown only on scroll; the check reveals it to measure the layout.
-	const pinned = await large.evaluate(() => {
+	// It is measured on a page with the <details> closed: with them open the bar is not rendered.
+	const pinnedPage = await openWork(browser, width, "200%", {
+		openDetails: false,
+	});
+
+	const pinned = await pinnedPage.evaluate(() => {
 		const bar = document.querySelector("[data-pinned-contact]");
 
 		if (!bar) return null;
@@ -149,20 +190,65 @@ async function checkLargeText(browser, width) {
 		bar.hidden = false;
 
 		const button = bar.querySelector(".site-button");
+
+		const box = (rect) => ({
+			left: rect.left,
+			right: rect.right,
+			top: rect.top,
+			bottom: rect.bottom,
+		});
+
+		const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+		const range = document.createRange();
+		const labelRects = [];
+		let node;
+
+		while ((node = walker.nextNode())) {
+			range.selectNodeContents(node);
+
+			for (const rect of range.getClientRects())
+				if (rect.height > 0) labelRects.push(box(rect));
+		}
+
+		// The button's content box: its border box minus its computed padding and border.
+		const style = getComputedStyle(button);
 		const rect = button.getBoundingClientRect();
 
 		return {
-			left: rect.left,
-			right: rect.right,
+			button: box(rect),
+			content: {
+				left:
+					rect.left +
+					parseFloat(style.paddingLeft) +
+					parseFloat(style.borderLeftWidth),
+				right:
+					rect.right -
+					parseFloat(style.paddingRight) -
+					parseFloat(style.borderRightWidth),
+			},
+			labelRects,
 			viewport: document.documentElement.clientWidth,
 		};
 	});
 
+	await pinnedPage.context().close();
+
 	assert.ok(pinned, "/work has no pinned contact bar");
 	assert.ok(
-		pinned.left >= 0 && pinned.right <= pinned.viewport,
+		pinned.button.right > pinned.button.left && pinned.labelRects.length > 0,
+		`the pinned contact button is not rendered at ${width}px with a 200% root`,
+	);
+	assert.ok(
+		pinned.button.left >= 0 && pinned.button.right <= pinned.viewport,
 		`the pinned contact button leaves the viewport at ${width}px with a 200% root`,
 	);
+
+	for (const rect of pinned.labelRects)
+		assert.ok(
+			rect.left >= pinned.content.left - 0.5 &&
+				rect.right <= pinned.content.right + 0.5,
+			`the pinned contact label leaves its button's content box at ${width}px with a 200% root`,
+		);
 
 	// A flow is stacked when its last text part starts at or below the bottom of its first text part.
 	const flows = await large.evaluate(() =>
@@ -227,7 +313,7 @@ async function checkLargeText(browser, width) {
 
 		const roots = [
 			...document.querySelectorAll(
-				".work-diagram, .diagram-flow, .closing-panel [data-closing-button]",
+				".page-lede, .selected-story, #experience, .work-diagram, .diagram-flow, .closing-panel [data-closing-button]",
 			),
 		];
 
@@ -242,7 +328,8 @@ async function checkLargeText(browser, width) {
 				let match;
 
 				while ((match = re.exec(node.textContent || ""))) {
-					if (match[0].includes("-")) continue;
+					// A hyphen or dash is a line-break opportunity, so a word that contains one may wrap there.
+					if (/[-\u2010-\u2015]/.test(match[0])) continue;
 
 					const range = document.createRange();
 					range.setStart(node, match.index);
