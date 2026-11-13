@@ -42,4 +42,45 @@ describe("sourceText", () => {
 		expect(sourceText("(x) => x")).toBe(sourceText("x => x"));
 		expect(sourceText("(x) => x")).toBe("x=>x");
 	});
+
+	it("keeps the contents of string literals exact", () => {
+		const copy = "line: 'I build web apps people can try, or a tool'";
+		expect(sourceText(copy)).toContain(
+			"'I build web apps people can try, or a tool'",
+		);
+		expect(sourceText(copy)).not.toContain("try,or");
+		expect(sourceText("const a = 'try, or';")).not.toContain(
+			sourceText("const a = 'try,or';"),
+		);
+		expect(sourceText('label: "Start a project"')).not.toContain(
+			sourceText('label: "Starta project"'),
+		);
+		expect(sourceText('x = "a  b"')).toBe("x='a  b'");
+	});
+
+	it("keeps the contents of template literals exact", () => {
+		expect(sourceText("const t = `a , b ${x + y}`;")).toBe(
+			"const t=`a , b ${x + y}`;",
+		);
+	});
+
+	it("reads either quote style as the same string", () => {
+		expect(sourceText('f("a, b")')).toBe(sourceText("f('a, b')"));
+	});
+
+	it("does not end a string at an escaped quote", () => {
+		expect(sourceText("f('it\\'s , ok' , 1)")).toBe("f('it\\'s , ok',1)");
+	});
+
+	it("does not treat an apostrophe in a comment as a string", () => {
+		expect(sourceText("// don't\nf( 1 , 2 )")).toBe("//don't f(1,2)");
+		expect(sourceText("/* it's */ f( 1 )")).toBe("/*it's*/f(1)");
+	});
+
+	it("still matches code needles across formatting differences", () => {
+		const formatted = 'media.forEach((audio) => {\n\tplay( "a, b" ,\n);\n});';
+		expect(sourceText(formatted)).toContain(
+			sourceText("media.forEach(audio => { play('a, b') ; });"),
+		);
+	});
 });

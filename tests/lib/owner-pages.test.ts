@@ -74,13 +74,15 @@ it("keeps audio payment work inside the service request with one clear next acti
 	const page = read("src/pages/owner/requests/[id].astro");
 	const panel = read("src/components/owner/AudioPaymentPanel.astro");
 	const script = read("src/scripts/owner-payment-actions.ts");
-	expect(page).toContain("request.kind === 'service'");
+	expect(page).toContain(
+		"{!portalProject && request.kind === 'service' && <AudioPaymentPanel",
+	);
 	expect(page).toContain("AudioPaymentPanel");
 	expect(panel).toContain("Payment");
 	expect(panel).toContain("Client accepted the written offer");
 	expect(panel).toContain("Create booking invoice");
 	expect(panel).toContain("Create balance invoice");
-	expect(panel).toContain("payment.bookingStatus === 'paid'");
+	expect(panel).toContain("{payment.bookingStatus === 'paid' &&");
 	// While an invoice is unpaid, remind the owner how to close it when the client paid another way.
 	expect(panel).toContain("Mark as paid</strong>, not Void");
 	expect(panel).not.toContain("stripeCustomerId");
