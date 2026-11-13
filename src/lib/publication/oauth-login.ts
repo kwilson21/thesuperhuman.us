@@ -140,7 +140,7 @@ p { margin: 0 0 1rem; color: #4A4A4A; text-wrap: pretty; }
 strong { color: #0E0E0E; font-weight: 700; }
 .return-address { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #E8E3DA; }
 form { margin: 0 0 1.5rem; }
-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .55rem 1.5rem; background: #AE5534; color: #FBF8F2; border: 1px solid #AE5534; border-radius: 999px; font: inherit; line-height: 1.4; white-space: normal; text-align: center; cursor: pointer; }
+button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .55rem 1.5rem; background: #AE5534; color: #FBF8F2; border: 1px solid #AE5534; border-radius: 999px; font: inherit; line-height: 1.4; white-space: normal; text-align: center; cursor: pointer; -webkit-tap-highlight-color: color-mix(in srgb, #AE5534 20%, transparent); }
 button:active { opacity: .78; }
 @media (hover: hover) and (pointer: fine) { button:hover { background: #0E0E0E; border-color: #0E0E0E; } }
 :focus-visible { outline: 2px solid #AE5534; outline-offset: 2px; }

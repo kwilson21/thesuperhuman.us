@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { double, partial } from "../helpers/doubles";
@@ -9,6 +9,55 @@ import {
 } from "~/lib/publication/oauth-login";
 
 const origin = "https://thesuperhuman.us";
+
+// The site's values, read from global.css so the consent page cannot drift from them.
+const globalCss = readFileSync(
+	new URL("../../src/styles/global.css", import.meta.url),
+	"utf8",
+);
+
+const tokenHex = (name: string) => {
+	const match = globalCss.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6});`));
+
+	if (!match) throw new Error(`--${name} not found in global.css`);
+
+	return match[1].toUpperCase();
+};
+
+const tokenValue = (name: string) => {
+	const match = globalCss.match(new RegExp(`--${name}:\\s*([^;]+);`));
+
+	if (!match) throw new Error(`--${name} not found in global.css`);
+
+	return match[1].trim();
+};
+
+const siteButton = (() => {
+	const block = /\.site-button \{([^}]*)\}/.exec(globalCss);
+
+	if (!block) throw new Error(".site-button not found in global.css");
+
+	const declared = (prop: string) =>
+		new RegExp(`${prop}:\\s*([^;]+);`).exec(block[1])?.[1].trim();
+
+	return {
+		minHeight: declared("min-height")!,
+		padding: declared("padding")!,
+		lineHeight: declared("line-height")!,
+	};
+})();
+
+const site = {
+	paper: tokenHex("paper"),
+	ink: tokenHex("ink"),
+	muted: tokenHex("muted"),
+	rule: tokenHex("rule"),
+	accent: tokenHex("accent"),
+	radius: tokenValue("radius-button"),
+	serif: tokenValue("font-serif"),
+	sans: tokenValue("font-sans"),
+	button: siteButton,
+};
 
 const auth = {
 	responseType: "code",
@@ -240,6 +289,56 @@ async function consentPage(clientName?: string) {
 
 const styleOf = (html: string) => /<style>([\s\S]*?)<\/style>/.exec(html)![1];
 
+const buttonRule = (css: string) =>
+	/(?:^|\n)button\s*\{([^}]*)\}/.exec(css)![1];
+
+describe("publication consent style matches the site's global.css", () => {
+	it("uses only the site's colour tokens, as literals", async () => {
+		const css = styleOf((await consentPage()).html);
+		const allowed = new Set([
+			site.paper,
+			site.ink,
+			site.muted,
+			site.rule,
+			site.accent,
+		]);
+		const used = (css.match(/#[0-9A-Fa-f]{6}\b/g) ?? []).map((h) =>
+			h.toUpperCase(),
+		);
+
+		expect(used.length).toBeGreaterThan(0);
+		for (const colour of used) expect(allowed.has(colour)).toBe(true);
+	});
+
+	it("gives the button the site's size, padding, line height and radius", async () => {
+		const button = buttonRule(styleOf((await consentPage()).html));
+
+		expect(button).toContain(`min-height: ${site.button.minHeight}`);
+		expect(button).toContain(`padding: ${site.button.padding}`);
+		expect(button).toContain(`line-height: ${site.button.lineHeight}`);
+		expect(button).toContain(`border-radius: ${site.radius}`);
+	});
+
+	it("sets the site's tap highlight on the button", async () => {
+		const highlight = /-webkit-tap-highlight-color:\s*([^;]+);/
+			.exec(globalCss)![1]
+			.replace(/var\(--accent\)/g, site.accent);
+
+		expect(buttonRule(styleOf((await consentPage()).html))).toContain(
+			`-webkit-tap-highlight-color: ${highlight}`,
+		);
+	});
+
+	it("uses the site's serif stack, and the site's sans stack without the self-hosted-only Inter", async () => {
+		const css = styleOf((await consentPage()).html);
+		// Inter is not self-hosted and this policy admits no font host, so the cancel note keeps the system part of --font-sans.
+		const sans = site.sans.replace(/^'Inter',\s*/, "");
+
+		expect(css).toContain(site.serif);
+		expect(css).toContain(`font: .8125rem/1.5 ${sans}`);
+	});
+});
+
 async function sha256Base64(text: string) {
 	const digest = await crypto.subtle.digest(
 		"SHA-256",
@@ -271,10 +370,18 @@ describe("publication consent page styling", () => {
 	it("styles the sign-in button as the site's primary pill", async () => {
 		const css = styleOf((await consentPage()).html);
 
-		expect(css).toMatch(/button\s*\{[^}]*border-radius:\s*999px/);
-		expect(css).toMatch(/button\s*\{[^}]*min-height:\s*44px/);
-		expect(css).toMatch(/button\s*\{[^}]*background:\s*#AE5534/i);
-		expect(css).toMatch(/button\s*\{[^}]*color:\s*#FBF8F2/i);
+		expect(css).toMatch(
+			new RegExp(`button\\s*\\{[^}]*border-radius:\\s*${site.radius}`),
+		);
+		expect(css).toMatch(
+			new RegExp(`button\\s*\\{[^}]*min-height:\\s*${site.button.minHeight}`),
+		);
+		expect(css).toMatch(
+			new RegExp(`button\\s*\\{[^}]*background:\\s*${site.accent}`, "i"),
+		);
+		expect(css).toMatch(
+			new RegExp(`button\\s*\\{[^}]*color:\\s*${site.paper}`, "i"),
+		);
 	});
 
 	it("lets the button label wrap at any text size, centred, with no width breakpoint", async () => {
@@ -290,7 +397,9 @@ describe("publication consent page styling", () => {
 	it("keeps a visible keyboard focus ring", async () => {
 		const css = styleOf((await consentPage()).html);
 
-		expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid #AE5534/);
+		expect(css).toMatch(
+			new RegExp(`:focus-visible\\s*\\{[^}]*outline:\\s*2px solid ${site.accent}`, "i"),
+		);
 	});
 
 	it("loads no external script, stylesheet, image or frame, and only the site's own font files", async () => {
