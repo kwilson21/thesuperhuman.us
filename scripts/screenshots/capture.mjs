@@ -6,7 +6,6 @@
 // The clock is frozen first, before anything here reads the time (see clock.mjs).
 import { clock } from "./clock-install.mjs";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import {
 	access,
@@ -19,7 +18,7 @@ import {
 } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { chromium } from "playwright";
 import {
 	ASSET_TYPES,
@@ -38,6 +37,7 @@ import {
 	unhashed,
 	withoutViteVersion,
 } from "./cache.mjs";
+import { loadOrCreateAccessKey } from "./access-key.mjs";
 import { browserClockScript, STEP_MS, stepTime } from "./clock.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
@@ -60,12 +60,11 @@ const BASE = process.env.BASE_URL ?? "http://127.0.0.1:4321";
 // Enough to keep a 4-core runner busy alongside the dev server.
 const PAGE_CONCURRENCY = 4;
 
-// A throwaway Access issuer so owner pages render with the real JWT check.
-const { publicKey, privateKey } = await generateKeyPair("RS256");
-
-// A fresh key id per run, so a dev server that cached an earlier run's key fetches this one.
-const kid = randomUUID();
-const jwk = { ...(await exportJWK(publicKey)), kid, alg: "RS256", use: "sig" };
+// A throwaway Access issuer so owner pages render with the real JWT check. Its key is kept across runs, so a
+// dev server still running from an earlier run keeps trusting it (see access-key.mjs).
+const { kid, privateKey, jwk } = await loadOrCreateAccessKey(
+	resolve(".screenshots/access-key.json"),
+);
 
 const issuer = createServer((_, response) => {
 	response.setHeader("content-type", "application/json");
