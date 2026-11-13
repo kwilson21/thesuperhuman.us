@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
 import { multipartUploadGone } from "~/lib/audio-project-uploads";
+import { isWholeRecording } from "./fixtures";
 import {
 	aiAfter,
 	aiNever,
@@ -12,6 +13,7 @@ import {
 	json,
 	rows,
 	runCase,
+	uuidFor,
 	type Case,
 	type Handler,
 } from "./index";
@@ -805,5 +807,152 @@ describe("the case databases are closed", () => {
 		).rejects.toThrow("setup failed");
 
 		expect(second.seen.map((db) => db.open())).toEqual([false, false]);
+	});
+});
+
+describe("a re-recording is written only when whole", () => {
+	it("every expected case, in order, is a whole recording; fewer, others or a different order are not", () => {
+		const got = (...names: string[]) => names.map((name) => ({ name }));
+
+		expect(isWholeRecording(got("a", "b"), ["a", "b"])).toBe(true);
+		expect(isWholeRecording(got("a"), ["a", "b"])).toBe(false);
+		expect(isWholeRecording(got(), ["a"])).toBe(false);
+		expect(isWholeRecording(got("b", "a"), ["a", "b"])).toBe(false);
+		expect(isWholeRecording(got("a", "b", "c"), ["a", "b"])).toBe(false);
+	});
+});
+
+describe("an injected D1 failure records the method that was called", () => {
+	it("first, all and run each appear as themselves", async () => {
+		const handler: Handler = async (context) => {
+			const db = env(context).MUSIC_DB!;
+
+			for (const call of [
+				() => db.prepare("SELECT 1 AS first_one").first(),
+				() => db.prepare("SELECT 2 AS all_two").all(),
+				() => db.prepare("SELECT 3 AS run_three").run(),
+			])
+				await call().catch(() => null);
+
+			return new Response("ok");
+		};
+
+		const got = await runCase(
+			handler,
+			one({
+				failures: [
+					{ on: /first_one/, message: "one" },
+					{ on: /all_two/, message: "two" },
+					{ on: /run_three/, message: "three" },
+				],
+			}),
+		);
+
+		expect(
+			got.effects.flatMap((effect) =>
+				effect.kind === "d1" ? [effect.via] : [],
+			),
+		).toEqual(["first", "all", "run"]);
+	});
+});
+
+describe("sign-in in the middle of a case", () => {
+	it("a client who signs in after earlier requests does not make later requests draw an id again", async () => {
+		const handler: Handler = async () => new Response(crypto.randomUUID());
+
+		const got = await runCase(handler, {
+			name: "late sign-in",
+			music: {
+				seed: {
+					owner_requests: [
+						rows.ownerRequest("r1"),
+						rows.ownerRequest("r2", { email: "ada@example.test" }),
+					],
+				},
+			},
+			steps: [
+				{ path: "/x", as: asClient("grace@example.test") },
+				{ path: "/x", as: asClient("grace@example.test") },
+				{ path: "/x", as: asClient("ada@example.test") },
+				{ path: "/x", as: asClient("ada@example.test") },
+			],
+		});
+
+		const ids = got.steps.map((step) =>
+			step.answer.outcome === "response" ? step.answer.body : "",
+		);
+
+		expect(new Set(ids).size).toBe(4);
+		expect(ids).toEqual([uuidFor(1), uuidFor(2), uuidFor(3), uuidFor(4)]);
+	});
+});
+
+describe("a rate limit with no scripted answer", () => {
+	it("is recorded as thrown, not as a refusal", async () => {
+		const handler: Handler = async (context) => {
+			const limit = context.locals.runtime.env.BRIEF_SUGGEST_RATE_LIMIT!;
+			const seen: string[] = [];
+
+			for (const key of ["a", "b"])
+				seen.push(
+					await limit.limit({ key }).then(
+						(result) => String(result.success),
+						(error: Error) => error.message,
+					),
+				);
+
+			return new Response(seen.join("|"));
+		};
+
+		const got = await runCase(
+			handler,
+			one({ rateLimits: { BRIEF_SUGGEST_RATE_LIMIT: [false] } }),
+		);
+
+		expect(got.effects).toEqual([
+			{
+				kind: "rate-limit",
+				binding: "BRIEF_SUGGEST_RATE_LIMIT",
+				key: "a",
+				success: false,
+				step: 0,
+				phase: "request",
+			},
+			{
+				kind: "rate-limit",
+				binding: "BRIEF_SUGGEST_RATE_LIMIT",
+				key: "b",
+				threw: "golden harness: no rate-limit answer scripted",
+				step: 0,
+				phase: "request",
+			},
+		]);
+	});
+});
+
+describe("advancing the clock on virtual timers", () => {
+	it("fires the timers that become due, in the step that advances, and not before", async () => {
+		const fired: string[] = [];
+
+		const handler: Handler = async (context) => {
+			const step = new URL(context.request.url).pathname;
+
+			if (step === "/set") setTimeout(() => fired.push("late"), 5_000);
+			else fired.push(`seen ${fired.length}`);
+
+			return new Response("ok");
+		};
+
+		await runCase(handler, {
+			name: "timers",
+			virtualTimers: true,
+			steps: [
+				{ path: "/set" },
+				{ path: "/check", advanceMs: 4_000 },
+				{ path: "/check", advanceMs: 1_000 },
+			],
+		});
+
+		expect(fired).toEqual(["seen 0", "late", "seen 2"]);
 	});
 });

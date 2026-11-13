@@ -117,7 +117,7 @@ export function recordingD1(
 	): D1PreparedStatement => {
 		const inner = real.prepare(sql).bind(...args);
 
-		const guard = () => {
+		const guard = (via: "first" | "all" | "run") => {
 			const failure = hooks.before(label, [sql], sqlite, log);
 
 			if (failure === null) return;
@@ -125,7 +125,7 @@ export function recordingD1(
 			log.push({
 				kind: "d1",
 				db: label,
-				via: "run",
+				via,
 				sql,
 				args: argRecords(args),
 				outcome: { threw: failure },
@@ -139,7 +139,7 @@ export function recordingD1(
 			work: () => Promise<T>,
 			outcome: (value: T) => D1Outcome,
 		): Promise<T> => {
-			guard();
+			guard(via);
 
 			try {
 				const value = await work();

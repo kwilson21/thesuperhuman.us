@@ -5,6 +5,7 @@ import {
 	suggestionVisitorHash,
 } from "~/lib/brief-suggestion-pass";
 import {
+	aiNever,
 	aiThrows,
 	aiValue,
 	asVisitor,
@@ -43,8 +44,8 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                        starts with the pass name
 //   effects            budget rows reserved (visitor then site); the first row of the day starts a cleanup of old days in
 //                        the background (runs, throws, no context); the call to the model with its exact prompt
-//   not reachable      the 1200 ms model timeout (the harness cannot hold a model call open) and the localhost, 127.0.0.1
-//                        and [::1] gates (a step's host is fixed at thesuperhuman.us); see the report
+//   local previews     localhost, 127.0.0.1 and [::1] each get an empty answer before any rate limit, budget or model call
+//   model timeout      the model never answers, the route's own 1200 ms timer wins (empty answer, budget already reserved)
 //   sequences          three suggestions in a row, the visitor reaching 300 mid-sequence, a day change between requests
 
 const PATH = "/api/software/brief/suggest";
@@ -718,6 +719,29 @@ const cases: Case[] = [
 		env: { SOFTWARE_SUGGESTIONS_ENABLED: "true" },
 		final: FINAL,
 	},
+
+	// --- local previews never reach the model, the rate limits or the budget
+	...[
+		"http://localhost:4321",
+		"http://127.0.0.1:4321",
+		"http://[::1]:4321",
+	].map((origin) =>
+		single(
+			`a request to ${origin.replace("http://", "").replace(":4321", "")} is answered empty before anything is used`,
+			good,
+			{},
+			{ origin },
+		),
+	),
+
+	// --- the model never answers, so the 1200 ms timer wins
+	single(
+		"the model never answers and the timeout gives an empty suggestion",
+		good,
+		{
+			ai: [aiNever()],
+		},
+	),
 ];
 
 defineCorpus("software-brief-suggest", POST, cases);

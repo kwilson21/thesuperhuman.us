@@ -86,12 +86,34 @@ export function expectRecorded(area: string, got: Named) {
 	);
 }
 
-/** With UPDATE_GOLDEN=1, writes the fixture for the area. Otherwise checks it records exactly these case names. */
+/** Whether every expected case was collected, in order: only then is a recording a whole fixture. */
+export function isWholeRecording(
+	collected: readonly Named[],
+	names: readonly string[],
+) {
+	return (
+		collected.length === names.length &&
+		collected.every((entry, index) => entry.name === names[index])
+	);
+}
+
+/**
+ * With UPDATE_GOLDEN=1, writes the fixture for the area, but only when every expected case was collected: a case that
+ * threw, or a run filtered to some cases, must not replace the fixture with a partial one. Otherwise checks it records
+ * exactly these case names.
+ */
 export function settleFixture(area: string, names: readonly string[]) {
 	if (UPDATING) {
+		const collected = written.get(area) ?? [];
+
+		if (!isWholeRecording(collected, names))
+			throw new Error(
+				`golden harness: ${area} was not re-recorded. Collected ${collected.length} of ${names.length} cases, so the fixture was left as it is.`,
+			);
+
 		writeFileSync(
 			fixturePath(area),
-			gzipFixture(`${JSON.stringify(written.get(area) ?? [], null, "\t")}\n`),
+			gzipFixture(`${JSON.stringify(collected, null, "\t")}\n`),
 		);
 
 		return;

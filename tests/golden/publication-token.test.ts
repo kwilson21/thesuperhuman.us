@@ -18,7 +18,8 @@ import { defineCorpus, type Case } from "./harness";
 // invalid_scope, 401 invalid_client, 405 for a GET. The MCP calls made with the issued tokens are in
 // publication-mcp.test.ts; the few here only show what a token may read.
 //
-// Not reachable through the harness: the ten minute life of an authorization code (the harness KV does not expire keys).
+// The ten minute life of an authorization code is covered: the code is exchanged just inside it and just after it (the
+// harness KV drops a key put with expirationTtl once the frozen clock passes it).
 
 const { run, oc, connect, withKv } = oauthKit(ALL);
 
@@ -26,6 +27,7 @@ const { run, oc, connect, withKv } = oauthKit(ALL);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const REFRESH_TTL = 2_592_001_000;
+const CODE_LIFETIME = 600_000;
 
 const tokenCases: Case[] = [
 	oc(
@@ -44,6 +46,20 @@ const tokenCases: Case[] = [
 				capture: { clientB: fromJson("client_id") },
 			}),
 			c.token({ client_id: "~clientB~" }),
+		]),
+	),
+	oc(
+		"token: the code is exchanged just inside its ten minute life",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token({}, { advanceMs: CODE_LIFETIME - 1_000 }),
+		]),
+	),
+	oc(
+		"token: the code is exchanged after its ten minute life",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token({}, { advanceMs: CODE_LIFETIME + 1_000 }),
 		]),
 	),
 	oc(

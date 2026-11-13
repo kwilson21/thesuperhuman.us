@@ -468,6 +468,8 @@ async function runOn(
 
 		if (known) return known;
 
+		const position = clock.idPosition();
+
 		// Each distinct client draws its sign-in values from a sequence of its own, so two clients never share a session.
 		if (tokens.size > 0) clock.startIds(tokens.size * 1_000_000);
 
@@ -537,7 +539,8 @@ async function runOn(
 			}),
 		);
 
-		clock.resetIds();
+		// Back to where the case's own requests were, so they never draw an id the sign-in or an earlier request drew.
+		clock.startIds(position);
 		tokens.set(email, token);
 
 		return token;

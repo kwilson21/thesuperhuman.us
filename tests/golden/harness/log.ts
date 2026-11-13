@@ -62,6 +62,8 @@ export type EffectBody =
 	  }
 	| { kind: "ai"; model: string; input: Recorded; options: Recorded }
 	| { kind: "rate-limit"; binding: string; key: string; success: boolean }
+	/** A call the script had no answer for: the binding failed (an outage), which is not a refusal. */
+	| { kind: "rate-limit"; binding: string; key: string; threw: string }
 	| { kind: "waitUntil"; id: number }
 	| {
 			kind: "waitUntil-settled";

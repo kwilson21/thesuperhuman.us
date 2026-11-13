@@ -53,8 +53,8 @@ import {
 //                                        user, network down, malformed), expiry, KV failure
 //   404 "Not found" (login handler)      login: an authorize/callback path with the wrong method
 //
-// Not reachable through the harness: the expiry of a KV key (the harness records expirationTtl and does not expire
-// keys, so an authorization code that outlives its ten minutes still works), and a cookie that decrypts to invalid UTF-8.
+// Not reachable through the harness: a cookie that decrypts to invalid UTF-8. (The ten minute life of an authorization
+// code is covered in publication-token.test.ts: the harness KV drops a key put with expirationTtl once the clock passes it.)
 
 const { run, oc, withKv } = oauthKit(ALL);
 

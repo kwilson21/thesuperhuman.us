@@ -38,8 +38,10 @@ import {
 //                                         so the session stays live), the cookie among others, two cookies of that name (the
 //                                         valid one is found), another client's session untouched, a foreign Origin and a body
 //                                         (both ignored), the owner, a signed-in client from the real sign-in, twice in a row
-//   cookie                                always "studio_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure" (the
-//                                         harness requests are https, so the non-Secure branch cannot be reached)
+//   cookie                                "studio_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure" on https (every
+//                                         case but the three below); the same without "; Secure" for a request from
+//                                         http://localhost:4321: a live session revoked, no database binding, and the
+//                                         revoking statement failing (the cookie is non-Secure on all three answers)
 
 const URL_PATH = "/api/studio/sign-out";
 
@@ -179,6 +181,31 @@ const cases: Case[] = [
 			{ on: /UPDATE audio_client_sessions SET revoked_at/, message: "d1 down" },
 		],
 	}),
+	open(
+		"a live session is revoked over http on localhost, and the cookie is not Secure",
+		{
+			steps: [out({ origin: "http://localhost:4321" })],
+		},
+	),
+	open(
+		"no database binding over http on localhost clears a non-Secure cookie",
+		{
+			music: { missing: true },
+			steps: [out({ origin: "http://localhost:4321" })],
+		},
+	),
+	open(
+		"the revoking statement failing over http on localhost clears a non-Secure cookie",
+		{
+			steps: [out({ origin: "http://localhost:4321" })],
+			failures: [
+				{
+					on: /UPDATE audio_client_sessions SET revoked_at/,
+					message: "d1 down",
+				},
+			],
+		},
+	),
 	open("a client signed in through the real flow signs out", {
 		music: { seed: audioClient("r1", GRACE) },
 		steps: [out({ as: asClient(GRACE) })],

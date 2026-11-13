@@ -177,9 +177,9 @@ export class Determinism {
 		];
 	}
 
-	/** Restarts the id sequence, for setup (sign-in) that must not move the ids the case draws. */
-	resetIds() {
-		this.ids = 0;
+	/** Where the id sequence is, so setup that draws ids of its own (sign-in) can put it back. */
+	idPosition() {
+		return this.ids;
 	}
 
 	/** Moves the id sequence to `start`, so a sign-in draws values no other sign-in or request draws. */
@@ -229,7 +229,10 @@ export class Determinism {
 
 	advance(ms: number) {
 		this.log.push({ kind: "advance", ms });
-		vi.setSystemTime(Date.now() + ms);
+
+		// On virtual timers the timers that become due fire, as they do when the clock really passes them.
+		if (this.virtualTimers) vi.advanceTimersByTime(ms);
+		else vi.setSystemTime(Date.now() + ms);
 	}
 
 	restore() {
