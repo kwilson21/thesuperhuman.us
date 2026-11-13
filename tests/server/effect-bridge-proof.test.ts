@@ -3,7 +3,6 @@ import {
 	createEffectLogic,
 	send,
 	setupEffect,
-	waitFor,
 } from "@xstate/effect";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -12,6 +11,7 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { failureOf } from "../../src/server/machines/failure";
+import { settled } from "../../src/server/machines/settled";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The proof that the XState and Effect bridge works under this repository's vitest and TypeScript: a machine is
@@ -60,6 +60,57 @@ const invoice = setupEffect({
 	},
 });
 
+// A second machine with two steps in a row, to prove a defect after a successful first step is still the program's
+// failure: nothing is saved and the bug is not turned into a refusal.
+const twoStepMachine = (second: Effect.Effect<void, StripeRefused>) =>
+	setupEffect({
+		actors: {
+			first: createEffectLogic(() => Effect.void),
+			second: createEffectLogic(() => second),
+		},
+	}).createMachine({
+		id: "twoStepProof",
+		initial: "open",
+		states: {
+			open: { on: { GO: { target: "one" } } },
+			one: { invoke: { src: "first", onDone: { target: "two" } } },
+			two: {
+				invoke: {
+					src: "second",
+					onDone: { target: "done" },
+					onError: ({ event }) =>
+						Predicate.isTagged(failureOf(event), "StripeRefused")
+							? { target: "refused" }
+							: undefined,
+				},
+			},
+			refused: {},
+			done: { type: "final" },
+		},
+	});
+
+const twoSteps = (second: Effect.Effect<void, StripeRefused>) =>
+	Effect.gen(function* () {
+		const actor = yield* createEffectActor(twoStepMachine(second), {});
+
+		yield* send(actor, { type: "GO" });
+
+		const landed = yield* settled(
+			actor,
+			(s) => s.matches("done") || s.matches("refused"),
+			{ timeout: "5 seconds" },
+		);
+
+		yield* Effect.promise(() =>
+			db
+				.prepare("UPDATE invoice_state SET value = ? WHERE id = 7")
+				.bind(String(landed.value))
+				.run(),
+		);
+
+		return String(landed.value);
+	}).pipe(Effect.scoped);
+
 const database = new DatabaseSync(":memory:");
 const db = sqliteD1(database);
 
@@ -92,7 +143,7 @@ const voidInvoice = (id: number) =>
 
 		yield* send(actor, { type: "VOID" });
 
-		const landed = yield* waitFor(
+		const landed = yield* settled(
 			actor,
 			(s) => s.matches("voided") || s.context.refused,
 			{ timeout: "5 seconds" },
@@ -157,29 +208,38 @@ describe("the XState and Effect bridge", () => {
 		expect(await stored()).toBe("voided");
 	});
 
-	it("does not land a defect in the refusal state: the program rejects and nothing is saved", async () => {
+	it("rejects with the original error object when the work dies, and saves nothing", async () => {
+		const bug = new Error("bug in the billing code");
+
 		await expect(
-			Effect.runPromise(
-				voidInvoice(7).pipe(
-					withBilling(() => Effect.die(new Error("bug in the billing code"))),
-				),
-			),
-		).rejects.toThrow();
+			Effect.runPromise(voidInvoice(7).pipe(withBilling(() => Effect.die(bug)))),
+		).rejects.toBe(bug);
 		expect(await stored()).toBe("open");
 	});
 
-	it("does not land a thrown error in the refusal state: the program rejects and nothing is saved", async () => {
+	it("rejects with the original error object when the work throws, and saves nothing", async () => {
+		const thrown = new Error("thrown by the billing code");
+
 		await expect(
 			Effect.runPromise(
 				voidInvoice(7).pipe(
 					withBilling(() =>
 						Effect.sync(() => {
-							throw new Error("thrown by the billing code");
+							throw thrown;
 						}),
 					),
 				),
 			),
-		).rejects.toThrow();
+		).rejects.toBe(thrown);
+		expect(await stored()).toBe("open");
+	});
+
+	it("rejects with the original error object when a later step dies after an earlier one succeeded", async () => {
+		const bug = new Error("bug in the second step");
+
+		await expect(
+			Effect.runPromise(twoSteps(Effect.die(bug))),
+		).rejects.toBe(bug);
 		expect(await stored()).toBe("open");
 	});
 
@@ -188,7 +248,7 @@ describe("the XState and Effect bridge", () => {
 			Effect.runPromise(
 				voidInvoice(7).pipe(withBilling(() => Effect.interrupt)),
 			),
-		).rejects.toThrow();
+		).rejects.toThrow("All fibers interrupted without error");
 		expect(await stored()).toBe("open");
 	});
 

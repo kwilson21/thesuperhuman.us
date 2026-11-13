@@ -15,6 +15,10 @@ export type MachineContext = {
 // entering the state, and a restore is not an entry (tests/server/effect-bridge-proof.test.ts proves it). So a state
 // that invokes outside work is never one to save: the machine must move on from it, to its success or its refusal state,
 // before the row is written.
+//
+// A defect in a step (a thrown error, `Effect.die`) or an interruption does not land in a refusal state: `failureOf`
+// rethrows it inside `onError`, which errors the actor. `waitFor` alone would report that as a typed
+// `ActorStoppedError`; `settled` (settled.ts) fails the program with the original error instead.
 
 /**
  * The state the machine moves to on this event, or null when it may not.
