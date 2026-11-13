@@ -3,6 +3,7 @@ import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
 import { fakeBatch } from "../helpers/d1";
+import { readJson } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
@@ -189,7 +190,7 @@ describe("the pending sign-in cookie", () => {
 		const response = await enter(codeIn(mails[0]));
 
 		expect(response.status).toBe(401);
-		expect((await response.json()).error).toBe(
+		expect((await readJson<{ error: string }>(response)).error).toBe(
 			"That code is invalid or expired. Enter it in the browser where you asked for it, or request a new one here.",
 		);
 		expect(response.headers.getSetCookie()).toEqual([]);
