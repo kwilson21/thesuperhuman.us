@@ -277,6 +277,16 @@ describe("publication consent page styling", () => {
 		expect(css).toMatch(/button\s*\{[^}]*color:\s*#FBF8F2/i);
 	});
 
+	it("lets the button label wrap at any text size, centred, with no width breakpoint", async () => {
+		const css = styleOf((await consentPage()).html);
+		const button = /(?:^|\n)button\s*\{([^}]*)\}/.exec(css)![1];
+
+		expect(button).not.toContain("nowrap");
+		expect(button).toMatch(/white-space:\s*normal/);
+		expect(button).toMatch(/text-align:\s*center/);
+		expect(css).not.toContain("max-width: 380px");
+	});
+
 	it("keeps a visible keyboard focus ring", async () => {
 		const css = styleOf((await consentPage()).html);
 
