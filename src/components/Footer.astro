@@ -49,7 +49,7 @@ const year = new Date().getFullYear();
   setupPinnedContact();
 </script>
 <style>
-  /* The side gutter is rem-based, so it doubles with enlarged text and squeezes the closing panel at phone widths. Capped by the viewport it equals the site gutter from 320px up at the default size. */
+  /* The side gutter is rem-based, so it doubles with enlarged text and squeezes the closing panel at phone widths. Capped by the viewport, and never below 24px, it equals the site gutter at every width at the default size. */
   .compact-footer { margin-top: var(--site-section-space); padding-inline: min(var(--site-gutter), max(24px, 7.5vw)); padding-bottom: var(--space-8); }
   .closing-panel { display: grid; justify-items: center; text-align: center; padding: 3rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
   /* Each link gets a 44px-tall tap area from a pseudo-element, so the text and layout keep their look.

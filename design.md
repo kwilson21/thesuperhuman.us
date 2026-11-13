@@ -235,7 +235,7 @@ beside both lines. Kazon chose it from two renders ("1 for sure", November 13, 2
 doubled root the label is two lines from 320px to 430px wide (measured in the release
 record). A width where it needs three lines is not yet approved and is an owner decision.
 
-At enlarged text the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
+At enlarged text on phone widths the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 

@@ -181,8 +181,8 @@ async function checkLargeText(browser, width) {
 	// The label's lines are centred on each other, the arrow is centred on the label's block
 	// vertically, sits to the right of it and at the button's content edge. The label is not
 	// centred between the button edge and the arrow: its box fills the space left of the arrow
-	// minus the flex gap, so the gap grows with the screen (a pending owner decision, see the
-	// release record). The label's lines still agree on their centre within 2px.
+	// minus the flex gap, so the gap grows with the screen (accepted by the owner on 2026-11-13,
+	// see the release record). The label's lines still agree on their centre within 2px.
 	const lineCentres = closing.labelRects.map(
 		(rect) => (rect.left + rect.right) / 2,
 	);
