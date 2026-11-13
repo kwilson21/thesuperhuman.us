@@ -102,6 +102,18 @@ Design-choice findings go to Kazon as alternatives; never change them silently.
 [docs/design-standard.md](docs/design-standard.md) has the triage, where records go and
 how to update the vendored copy.
 
+## Back-end rules
+
+Owner decisions, 2026-11-12. The back end is being converted, one complete area at a time, to the form in kwilson21/tally (its `docs/decisions.md` rows 170, 190, 192 to 196, 201, 206 and 209 say why). The shared helpers are in `src/server/`.
+
+- Business logic does not live in SQL strings. A rule is written in one of three styles: XState alone where the rule is states and moves (asked through `next()` in `src/server/machines/next.ts`), the `@xstate/effect` bridge where a move waits on outside work (Stripe, Resend, R2), and Effect alone where there are no states (`rule` in `src/server/terms.ts`). SQL keeps only the compare-and-set guard.
+- Effect `Schema` is the single input validator on the server. Zod remains only where a library requires it: `src/lib/publication/mcp.ts` and `src/pages/api/mcp-probe.ts` (the MCP SDK) and `src/content/config.ts` (Astro content collections).
+- Effect and `src/server/**` never reach the browser. `src/scripts/**` and `.astro` script blocks stay plain TypeScript, and `tests/architecture/client-graph.test.ts` enforces it.
+- No ratchets and no legacy lists. An area is converted completely, or it is not started.
+- Five database triggers still write (tracked in issue #242). Each is named in its area's rule file until it is moved.
+- New features and plans use XState diagrams, Quint models for flows over time and LemmaScript contracts for pure money rules, following Tally's `docs/verification.md`.
+- Pins, exact: `effect` 4.1.4, `@xstate/effect` 1.0.0-alpha.12, `xstate` 6.0.0-beta.1. This is an owner-approved exception to the rule in [docs/coding-approach.md](docs/coding-approach.md) against new dependencies.
+
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
