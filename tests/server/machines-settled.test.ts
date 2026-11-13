@@ -2,6 +2,8 @@ import { createEffectActor, setupEffect } from "@xstate/effect";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
 import { describe, expect, it } from "vitest";
 import { settled } from "../../src/server/machines/settled";
 
@@ -23,13 +25,15 @@ describe("settled", () => {
 		);
 
 		expect(Exit.isFailure(exit)).toBe(true);
+
 		if (Exit.isFailure(exit)) {
 			const failure = Cause.findError(exit.cause);
 
-			expect(failure._tag).toBe("Success");
-			expect(failure._tag === "Success" && failure.success).toMatchObject({
-				_tag: "ActorStoppedError",
-			});
+			expect(Result.isSuccess(failure)).toBe(true);
+			expect(
+				Result.isSuccess(failure) &&
+					Predicate.isTagged(failure.success, "ActorStoppedError"),
+			).toBe(true);
 		}
 	});
 });

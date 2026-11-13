@@ -7,6 +7,9 @@ import {
 } from "node:fs";
 import { isBuiltin } from "node:module";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import * as Predicate from "effect/Predicate";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import ts from "typescript";
 
 // The static import graph of what runs in the browser: every file under src/scripts and the <script> blocks of every
@@ -41,7 +44,9 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 // An opening tag may hold a ">" inside a quoted attribute value.
 const SCRIPT_BLOCK =
 	/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/g;
+
 const SCRIPT_SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/;
+
 const FRONTMATTER = /^\s*---[\s\S]*?\n---/;
 
 const EXTENSIONS = [
@@ -86,15 +91,20 @@ function filesUnder(directory: string, suffixes: string[]): string[] {
 type Alias = { pattern: string; targets: string[] };
 
 /** Every string in a package.json `imports` value: a target, or the targets of a condition object or an array. */
-function importTargets(value: unknown): string[] {
-	if (typeof value === "string") return [value];
+function importTargets(value: Schema.Json): string[] {
+	if (Predicate.isString(value)) return [value];
 
 	if (Array.isArray(value)) return value.flatMap(importTargets);
 
-	return typeof value === "object" && value !== null
-		? Object.values(value).flatMap(importTargets)
-		: [];
+	return isJsonObject(value) ? Object.values(value).flatMap(importTargets) : [];
 }
+
+const isJsonObject = Schema.is(Schema.JsonObject);
+
+/** What of a package.json the walker reads: its `imports`. */
+const Manifest = Schema.Struct({
+	imports: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
+});
 
 /** The tsconfig.json `paths` and the package.json `imports` of the root, as aliases. */
 function aliasesOf(root: string): Alias[] {
@@ -118,11 +128,16 @@ function aliasesOf(root: string): Alias[] {
 	const manifest = join(root, "package.json");
 
 	if (existsSync(manifest)) {
-		const { imports } = JSON.parse(readFileSync(manifest, "utf8")) as {
-			imports?: Record<string, unknown>;
-		};
+		const read = Schema.decodeUnknownResult(Manifest)(
+			JSON.parse(readFileSync(manifest, "utf8")),
+		);
 
-		for (const [pattern, value] of Object.entries(imports ?? {}))
+		if (Result.isFailure(read))
+			throw new Error(
+				`Cannot read the imports of ${manifest}: ${read.failure.message}`,
+			);
+
+		for (const [pattern, value] of Object.entries(read.success.imports ?? {}))
 			aliases.push({
 				pattern,
 				targets: importTargets(value).map((target) =>
@@ -420,6 +435,7 @@ function isInstalled(name: string, from: string): boolean {
 		const path = join(directory, "node_modules", name);
 
 		if (existsSync(path) && statSync(path).isDirectory()) return true;
+
 		if (dirname(directory) === directory) return false;
 	}
 }

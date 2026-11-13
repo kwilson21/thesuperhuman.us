@@ -89,6 +89,7 @@ describe("package manager and Node pin", () => {
 	it("validate.yml runs the built-bundle backstop after the build, and requires dist", () => {
 		const workflow = read(".github/workflows/validate.yml");
 		const build = workflow.indexOf("- run: pnpm run build");
+
 		const backstop = workflow.indexOf(
 			"- run: pnpm exec vitest run tests/architecture/client-bundle.test.ts",
 		);
