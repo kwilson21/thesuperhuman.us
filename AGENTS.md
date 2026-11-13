@@ -63,8 +63,9 @@ writes. Report observed runtime capabilities and pending delivery honestly.
 Owner decisions, 2026-11-12; the full text is "Back-end rules" in [CLAUDE.md](CLAUDE.md).
 
 - Business logic does not live in SQL strings. A rule is XState alone (states and moves, asked through `next()`), the `@xstate/effect` bridge (a move that waits on Stripe, Resend or R2), or Effect alone (no states), as in kwilson21/tally. SQL keeps only the compare-and-set guard.
-- Effect `Schema` is the single server input validator. Zod stays only in `src/lib/publication/mcp.ts`, `src/pages/api/mcp-probe.ts` and `src/content/config.ts`, where a library requires it.
-- Effect and `src/server/**` never reach the browser; `tests/architecture/client-graph.test.ts` enforces it.
+- Effect `Schema` is the single server input validator. Many files still import Zod today; when the conversion is finished, Zod remains only in `src/lib/publication/mcp.ts`, `src/pages/api/mcp-probe.ts` and `src/content/config.ts`, where a library requires it.
+- Effect and `src/server/**` never reach the browser. `tests/architecture/client-graph.test.ts` walks the source import graph from every browser entry; `tests/architecture/client-bundle.test.ts` checks the built `dist/_astro` for Effect runtime code (it skips without a build, so run `pnpm run build` first). Neither alone is the guarantee.
+- Import each Effect module by its own path (`effect/Effect`, `effect/Schema`), never from `effect`; `tests/architecture/effect-imports.test.ts` fails on a bare `effect` import.
 - No ratchets or legacy lists: an area is converted completely. Five database triggers still write (issue #242); each is named in its area's rule file until moved.
 - New features and plans use XState diagrams, Quint models and LemmaScript contracts, following Tally's `docs/verification.md`.
 - Pins, exact: `effect` 4.1.4, `@xstate/effect` 1.0.0-alpha.12, `xstate` 6.0.0-beta.1.
