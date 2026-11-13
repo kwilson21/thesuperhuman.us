@@ -94,8 +94,13 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   takes a large radius without an owner decision.
   On invitation pages the panel holds one "Get in touch" button, the footer links and the
   LLC line. On quiet pages it holds the name mark, the footer links and the LLC line.
-- Pinned contact button (the one thing that floats): on invitation pages at 600px wide and below, a full-width Get in touch pill stays at the bottom of the screen until the closing panel comes into view. It hides while the phone menu is open or a form field has focus, appears and goes without motion, and never shows above 600px, in print or without JavaScript.
-  At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than that it stays on one line.
+- Pinned contact button: the only element fixed over page content. On invitation pages
+  at 600px wide and below, a full-width Get in touch pill stays at the bottom of the
+  screen until the closing panel comes into view. It hides while the phone menu is open
+  or a form field has focus, appears and goes without motion, and never shows above
+  600px, in print or without JavaScript.
+- At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
+  that it stays on one line.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
