@@ -1,7 +1,5 @@
 import { POST } from "~/pages/api/offer/[token]/draft";
 import { POST as link } from "~/pages/api/offer/[token]/link";
-import { isObject, isText } from "~/lib/type-guards";
-import type { JsonValue } from "../helpers/json";
 import {
 	asOwner,
 	asVisitor,
@@ -9,13 +7,12 @@ import {
 	json,
 	byHost,
 	type Case,
-	type Lazy,
-	type Prior,
 	type Step,
 } from "./harness";
 import {
 	agreementWorld,
 	cookie,
+	wireKit,
 	CSRF,
 	csrfRead,
 	DRAFT_TABLES,
@@ -75,124 +72,7 @@ import {
 
 const PATH = `/api/offer/${TOKEN}/draft`;
 
-type Wire = "json" | "form values" | "form fields";
-
-type Input = { csrf_nonce?: JsonValue; values?: JsonValue };
-
-type Send = (input?: Lazy<Input>, extra?: Partial<Step>) => Step;
-
-const flat = (input: Input): { [name: string]: string } | null => {
-	const out: { [name: string]: string } = {};
-
-	if (input.csrf_nonce !== undefined)
-		out.csrf_nonce = isText(input.csrf_nonce)
-			? input.csrf_nonce
-			: JSON.stringify(input.csrf_nonce);
-	const given = input.values;
-
-	if (given === undefined) return out;
-
-	if (!isObject(given) || Array.isArray(given)) return null;
-
-	for (const [name, value] of Object.entries(given))
-		out[name] = isText(value) ? value : JSON.stringify(value);
-
-	return out;
-};
-
-const resolve = <T>(value: Lazy<T>, prior: Prior): T =>
-	value instanceof Function ? value(prior) : value;
-
-const sender =
-	(wire: Wire, params = { token: TOKEN }): Send =>
-	(input = { csrf_nonce: CSRF, values: values() }, extra = {}) => {
-		const headers = (prior: Prior) => ({
-			...(wire === "json" ? SAME_ORIGIN : formHeaders()),
-			...cookie(),
-			...resolve(extra.headers ?? {}, prior),
-		});
-
-		const common = {
-			as: asVisitor({ ip: IP }),
-			path: PATH,
-			params,
-			dump: { music: DRAFT_TABLES },
-			...extra,
-			headers,
-		};
-
-		if (wire === "json")
-			return { ...common, json: (prior: Prior) => resolve(input, prior) };
-
-		return {
-			...common,
-			body: (prior: Prior) => {
-				const given = resolve(input, prior);
-
-				if (wire === "form values") {
-					const fields: { [name: string]: string } = {};
-
-					if (given.csrf_nonce !== undefined)
-						fields.csrf_nonce = isText(given.csrf_nonce)
-							? given.csrf_nonce
-							: JSON.stringify(given.csrf_nonce);
-
-					if (given.values !== undefined)
-						fields.values = JSON.stringify(given.values);
-
-					return formBody(fields);
-				}
-
-				return formBody(flat(given) ?? {});
-			},
-		};
-	};
-
-const ALL: readonly Wire[] = ["json", "form values", "form fields"];
-const TWO: readonly Wire[] = ["json", "form values"];
-
-type Spec = {
-	readonly input?: Lazy<Input>;
-	readonly opts?: Opts;
-	readonly headers?: Lazy<{ [name: string]: string }>;
-	readonly params?: { token: string };
-	readonly over?: Partial<Case>;
-	readonly wires?: readonly Wire[];
-	readonly steps?: (send: Send) => Step[];
-};
-
-const scenario = (name: string, spec: Spec = {}): Case[] =>
-	(spec.wires ?? ALL)
-		.filter(
-			(wire) =>
-				wire !== "form fields" ||
-				spec.steps ||
-				spec.input instanceof Function ||
-				flat(spec.input ?? { csrf_nonce: CSRF, values: values() }) !== null,
-		)
-		.map((wire) => {
-			const send = sender(wire, spec.params);
-
-			return {
-				name: `${name} (${wire})`,
-				...agreementWorld(spec.opts),
-				fetches: mail,
-				steps: spec.steps
-					? spec.steps(send)
-					: [
-							send(
-								spec.input,
-								spec.headers === undefined ? {} : { headers: spec.headers },
-							),
-						],
-				...spec.over,
-			};
-		});
-
-const withValues = (over: { [field: string]: string }): Input => ({
-	csrf_nonce: CSRF,
-	values: values(over),
-});
+const { scenario, withValues, ALL, TWO } = wireKit(PATH, DRAFT_TABLES);
 
 const longer = (field: string, max: number) => [
 	...scenario(`${field} of ${max} characters is saved`, {
