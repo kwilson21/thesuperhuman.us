@@ -20,13 +20,17 @@ export async function agreementDownload(
 			headers: agreementHeaders,
 		});
 
-	// A visitor is checked before the agreement is looked up, and an unknown id answers as a known one that is not theirs,
-	// so ids cannot be told apart without signing in.
-	const denied = () =>
+	// A visitor is checked before the agreement is looked up. With no valid session the answer is the same 401 for any id.
+	// With one, anything they cannot download (an unknown id, an agreement still in review or closed by retention, another
+	// client's) answers the same 404, so a verified visitor cannot tell ids apart either, and is not told to verify again.
+	const signInFirst = () =>
 		new Response("Verify your agreement email first.", {
 			status: 401,
 			headers: agreementHeaders,
 		});
+
+	const notFound = () =>
+		new Response("Not found", { status: 404, headers: agreementHeaders });
 
 	const archive = owner ? null : await agreementSession(db, request, "archive"),
 		signing = owner ? null : await agreementSession(db, request, "agreement"),
@@ -44,7 +48,7 @@ export async function agreementDownload(
 				.first<{ email: string }>()
 		: null;
 
-	if (!owner && !archive && !signing && !studioIdentity) return denied();
+	if (!owner && !archive && !signing && !studioIdentity) return signInFirst();
 
 	const agreement = await db
 		.prepare(
@@ -58,13 +62,7 @@ export async function agreementDownload(
 			recipient_email: string;
 		}>();
 
-	if (!agreement)
-		return owner
-			? new Response("Not found", {
-					status: 404,
-					headers: agreementHeaders,
-				})
-			: denied();
+	if (!agreement) return notFound();
 
 	if (!owner) {
 		const project = studio
@@ -102,7 +100,7 @@ export async function agreementDownload(
 			(studioIdentity?.email === agreement.recipient_email &&
 				(projectAgreement?.agreement_id === id || linked?.msa_id === id));
 
-		if (!allowed) return denied();
+		if (!allowed) return notFound();
 	}
 
 	const artifact = await db

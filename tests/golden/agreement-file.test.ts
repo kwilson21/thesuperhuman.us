@@ -34,10 +34,11 @@ import {
 // Every response branch of the handler and agreementDownload (src/lib/agreement-download.ts), and its cases:
 //
 //   503 "Unavailable" + agreement headers        no database, no bucket, neither
-//   401 "Verify your agreement email first."     no cookie (the agreement is not looked up), an id that does not exist or is not
-//                                                open to a visitor (unknown, empty, SQL-looking, very long or unicode id; status
-//                                                review, client_signed or abandoned; archive_closed_at set), so ids cannot be told
-//                                                apart, and each reason a session does not count, each alone:
+//   404 "Not found"                              with a valid session: an id that does not exist or is not open to the visitor
+//                                                (unknown, empty, SQL-looking, very long or unicode id; status review, client_signed
+//                                                or abandoned; archive_closed_at set; another client's), so ids cannot be told apart
+//   401 "Verify your agreement email first."     no cookie (the agreement is not looked up), and each reason a session does not count,
+//                                                each alone:
 //     archive session     expired (at the instant and before), revoked, a signing session in the archive cookie, another client's
 //                         email, a recipient email seeded in another case by hand (the app stores it lower-cased), a malformed cookie (42 characters, trailing text), an unknown token
 //     signing session     expired, revoked, offer not sent, offer link revoked, request withdrawn, request resolved, snapshot email
@@ -211,7 +212,7 @@ const cases: Case[] = [
 		],
 	},
 	{
-		name: "an unknown id with a valid session is 401, as for an id that is not theirs",
+		name: "an unknown id with a valid session is 404, as for an id that is not theirs",
 		...base(),
 		steps: [
 			dl(archive, { path: "/api/agreements/zzz/file", params: { id: "zzz" } }),
@@ -247,18 +248,28 @@ const cases: Case[] = [
 		...base(),
 		steps: [dl(archive, { params: { id: "A1" } })],
 	},
-	ok("an agreement in review is refused as an unknown id", archive, [
-		"UPDATE software_agreements SET status='review' WHERE id='a1'",
-	]),
-	ok("a client-signed agreement is refused as an unknown id", archive, [
-		"UPDATE software_agreements SET status='client_signed' WHERE id='a1'",
-	]),
-	ok("an abandoned agreement is refused as an unknown id", archive, [
-		"UPDATE software_agreements SET status='abandoned' WHERE id='a1'",
-	]),
-	ok("a retention-closed agreement is refused as an unknown id", archive, [
-		"UPDATE software_agreements SET archive_closed_at='2026-11-12T00:00:00.000Z' WHERE id='a1'",
-	]),
+	ok(
+		"an agreement in review is 404 for a verified visitor, as an unknown id is",
+		archive,
+		["UPDATE software_agreements SET status='review' WHERE id='a1'"],
+	),
+	ok(
+		"a client-signed agreement is 404 for a verified visitor, as an unknown id is",
+		archive,
+		["UPDATE software_agreements SET status='client_signed' WHERE id='a1'"],
+	),
+	ok(
+		"an abandoned agreement is 404 for a verified visitor, as an unknown id is",
+		archive,
+		["UPDATE software_agreements SET status='abandoned' WHERE id='a1'"],
+	),
+	ok(
+		"a retention-closed agreement is 404 for a verified visitor, as an unknown id is",
+		archive,
+		[
+			"UPDATE software_agreements SET archive_closed_at='2026-11-12T00:00:00.000Z' WHERE id='a1'",
+		],
+	),
 
 	// archive session faults
 	ok("an archive session that expires at this instant", archive, [

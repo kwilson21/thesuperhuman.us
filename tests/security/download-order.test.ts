@@ -74,3 +74,66 @@ it("keeps the owner's 404 for an unknown id", async () => {
 
 	expect(response.status).toBe(404);
 });
+
+// A visitor with a verified session is not told to verify again. Whatever they cannot download answers the same 404, so
+// they cannot tell a known id from an unknown one either.
+
+const TOKEN = "a".repeat(43);
+
+type Row = { [column: string]: string } | null;
+
+function verified(agreement: Row) {
+	const db = fakeD1({
+		prepare: (query: string) =>
+			partial<D1PreparedStatement>({
+				bind: () =>
+					partial<D1PreparedStatement>({
+						first: async () =>
+							/FROM software_agreement_sessions/.test(query)
+								? {
+										recipient_email: "me@example.test",
+										offer_id: "o-mine",
+										token_hash: "h",
+									}
+								: /FROM software_agreements a JOIN/.test(query)
+									? agreement
+									: null,
+					}),
+			}),
+	});
+
+	return agreementDownload(
+		partial<Env>({ MUSIC_DB: db, AUDIO: double<R2Bucket>({}) }),
+		new Request("https://thesuperhuman.us/api/agreements/a1/file", {
+			headers: { cookie: `agreement_archive=${TOKEN}` },
+		}),
+		"a1",
+	);
+}
+
+const answer = async (response: Response) => ({
+	status: response.status,
+	body: await response.text(),
+});
+
+it.each([
+	// The lookup only finds executed agreements that are not closed, so an agreement still in review and one closed by
+	// retention come back as no row, as an unknown id does.
+	["an unknown id", null],
+	["their own agreement still in review", null],
+	["their own agreement closed by retention", null],
+	[
+		"someone else's agreement",
+		{
+			id: "a1",
+			offer_id: "o-other",
+			request_id: "r-other",
+			recipient_email: "other@example.test",
+		},
+	],
+])("answers a verified visitor 404 for %s", async (_name, agreement) => {
+	expect(await answer(await verified(agreement))).toEqual({
+		status: 404,
+		body: "Not found",
+	});
+});
