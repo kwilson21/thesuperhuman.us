@@ -8,6 +8,7 @@ import { fakeLocals } from "./helpers/runtime";
 const verifyOwnerAccess = vi.fn<Parameters<typeof createOnRequest>[0]>(
 	async () => null,
 );
+
 const onRequest = createOnRequest(verifyOwnerAccess);
 
 function makeContext(url: string, hostHeader?: string) {

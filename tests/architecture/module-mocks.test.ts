@@ -192,13 +192,11 @@ describe("module mocks", () => {
 		).toEqual([]);
 
 		expect(
-			REMAINING_MODULE_MOCKS.filter(
-				({ file, calls }) => found.get(file) !== calls,
-			).map(({ file, calls }) => ({
-				file,
-				listed: calls,
-				found: found.get(file) ?? 0,
-			})),
+			REMAINING_MODULE_MOCKS.flatMap(({ file, calls }) =>
+				found.get(file) === calls
+					? []
+					: [{ file, listed: calls, found: found.get(file) ?? 0 }],
+			),
 			"The list can only shrink: lower the count of a file with fewer module mocks, delete the entry of a file with none.",
 		).toEqual([]);
 	});
