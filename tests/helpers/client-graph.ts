@@ -607,7 +607,14 @@ function resolveSpecifier(
 			(isAbsolute(target) ? bases : names).push(target);
 	}
 
-	const files = bases.flatMap((base) => codeFileAt(base) ?? []);
+	// A file under src/server is server code whatever its extension, so it is reported even when no walker reads it.
+	const files = bases.flatMap((base) => {
+		const code = codeFileAt(base);
+
+		if (code !== undefined) return [code];
+
+		return isServerFile(base, root) ? [base] : [];
+	});
 
 	const notInstalled = names.find(
 		(name) =>
@@ -661,9 +668,10 @@ function expandGlob(
 			.filter(
 				(match) =>
 					statSync(match).isFile() &&
-					[...EXTENSIONS, ".astro"].some((extension) =>
-						match.endsWith(extension),
-					),
+					(isServerFile(match, root) ||
+						[...EXTENSIONS, ".astro"].some((extension) =>
+							match.endsWith(extension),
+						)),
 			),
 	);
 }

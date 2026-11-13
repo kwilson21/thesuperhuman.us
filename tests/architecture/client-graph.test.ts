@@ -260,6 +260,43 @@ describe("the walker finds what it should", () => {
 			).toEqual([]);
 		});
 
+		it("finds a load of a non-code file under src/server, whatever its extension", () => {
+			const data = { "src/server/settings.json": '{ "a": 1 }' };
+
+			expect(
+				found('import settings from "../server/settings.json";', data),
+			).toEqual(["../server/settings.json"]);
+			expect(
+				found('import text from "../server/notes.txt?raw";', {
+					"src/server/notes.txt": "notes",
+				}),
+			).toEqual(["../server/notes.txt?raw"]);
+			expect(
+				found('import url from "../server/schema.sql?url";', {
+					"src/server/schema.sql": "select 1;",
+				}),
+			).toEqual(["../server/schema.sql?url"]);
+			expect(found('import "/src/server/settings.json";', data)).toEqual([
+				"/src/server/settings.json",
+			]);
+		});
+
+		it("finds a glob that matches a non-code file under src/server", () => {
+			expect(
+				found('export const all = import.meta.glob("../server/*.json");', {
+					"src/server/settings.json": "{}",
+				}),
+			).toEqual(["../server/*.json"]);
+		});
+
+		it("does not flag a non-code file outside src/server", () => {
+			expect(
+				found('import data from "../data/x.json";', {
+					"src/data/x.json": "{}",
+				}),
+			).toEqual([]);
+		});
+
 		it("finds a template-literal dynamic import without substitutions", () => {
 			expect(
 				found("export const load = () => import(`../server/x.ts`);"),
