@@ -216,6 +216,32 @@ describe("publication consent and GitHub identity", () => {
 		expect(fetcher).not.toHaveBeenCalled();
 		expect(complete).not.toHaveBeenCalled();
 	});
+	it("refuses a same-origin consent POST with a wrong nonce before any redirect, and the right nonce still works", async () => {
+		const { env } = fixture();
+		const { page, nonce } = await start(env);
+
+		const post = (value: string) =>
+			publicationLogin(
+				new Request(origin + "/api/publication/authorize", {
+					method: "POST",
+					headers: { origin, cookie: cookie(page) },
+					body: new URLSearchParams({ nonce: value }),
+				}),
+				env,
+			);
+
+		const refused = await post("wrong-nonce");
+
+		expect(refused.status).toBe(400);
+		expect(refused.headers.get("location")).toBeNull();
+
+		const accepted = await post(nonce);
+
+		expect(accepted.status).toBe(302);
+		expect(new URL(accepted.headers.get("location")!).origin).toBe(
+			"https://github.com",
+		);
+	});
 	it("grants only the verified owner and discards the upstream access token", async () => {
 		const { env, complete } = fixture();
 		const { response, nonce } = await start(env);

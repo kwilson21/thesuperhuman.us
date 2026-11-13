@@ -8,7 +8,7 @@ Pull request: #261 (see the PR description for the link).
 Target: production `https://thesuperhuman.us` after merge. The consent page is served by the Astro route `src/pages/api/publication/[...path].ts`, which returns 404 unless the request origin is `https://thesuperhuman.us` (`src/lib/publication/oauth.ts`). Its fonts are static files on the same origin (`public/fonts/libron-v0.25/`). The page is never served on the audio host.
 Reviewer: Claude Haiku 5.5 subagent, tests first. The coordinating session owns the review, the browser checks listed as UNVERIFIED, and the deployment decision. This record does not certify them.
 Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR adds no migration and writes no stored data.
-Evidence: the code, tests, golden fixtures and renders were gathered at code commit `77c047e8`. The later commit in this branch changes documents only, so the evidence applies to the code at `77c047e8`.
+Evidence: the code, tests, golden fixtures and renders were gathered at code commit `77c047e8`. The later commits in this branch change documents and one test file (adding the wrong-nonce test, with no production code change), so the evidence applies to the production code at `77c047e8`.
 
 ## Scope
 
@@ -45,8 +45,8 @@ Body text 18.21:1, muted text 8.36:1, button label on accent 4.78:1, focus ring 
 
 Local runs on macOS arm64, Node 26.13.1, pnpm, on code commit `77c047e8`:
 
-- Test first: the h1 clamp assertion was changed to `1.25rem` and failed on the old value (`clamp(1.5rem …)`), then passed after the one-line change. The drift test and the test rename were added and pass. Final: `tests/lib/publication-login.test.ts`, 22 of 22.
-- `pnpm test`: 264 files, 11,987 passed, 1 skipped.
+- Test first: the h1 clamp assertion was changed to `1.25rem` and failed on the old value (`clamp(1.5rem …)`), then passed after the one-line change. The drift test and the test rename were added and pass. Final: `tests/lib/publication-login.test.ts`, 22 of 22 at `77c047e8`; 23 of 23 after the wrong-nonce test added in this revision.
+- `pnpm test`: 264 files, 11,988 passed, 1 skipped.
 - `pnpm run format`: no fixes, 693 files. `pnpm run format:check`: no fixes, 693 files.
 - `pnpm run lint`: FAIL (pre-existing, not from this change). 64 findings, none in a file this PR touches (`src/lib/publication/oauth-login.ts`, `tests/lib/publication-login.test.ts`, `design.md`, `docs/design-standard.md`, `docs/design-concepts/2026-11-12/button-inventory.md`).
 - `pnpm run check`: 0 errors, 0 warnings, 17 hints.
@@ -149,7 +149,7 @@ What the renders show (each read as an image):
 
 - **PASS · Form shape.** The form is unchanged: a native POST to `/api/publication/authorize` with a hidden nonce and no JavaScript. Covered by the publication login tests, which check the form, the action and the hidden nonce, and by the golden comparison, which shows no change to the POST route.
 - **PASS · No JavaScript needed.** The page has no `<script>` element (asserted by the tests) and the form posts natively. Not run in a browser with JavaScript disabled in this PR.
-- **PASS · Server-side origin, nonce and state checks.** The consent POST is unchanged. Tests cover a cross-site POST, a wrong nonce, expired browser state, and a callback with a tampered state (`tests/lib/publication-login.test.ts`, 22 of 22 pass).
+- **PASS · Server-side origin, nonce and state checks.** The consent POST is unchanged. Tests cover a cross-site POST (refused on the origin check, in "rejects cross-site consent and callback state tampering before upstream calls"), a same-origin POST with a wrong nonce (refused with no redirect to GitHub, and the correct nonce still succeeds from the same cookie, in "refuses a same-origin consent POST with a wrong nonce before any redirect, and the right nonce still works", added in this revision), and the callback cases (a tampered `state` in the same test as the cross-site POST, and "denies another GitHub account and expired browser state"). `tests/lib/publication-login.test.ts`: 23 of 23 pass.
 - **UNVERIFIED · Error and load paths on the live route.** Timeouts, 429, 500, network failure and duplicate-submit prevention were not run against the live route. The route's upstream behavior is unchanged.
 - **N/A · Delivery and receipt.** No email is sent by this page.
 - **PASS · Approval-gated flow.** The consent step still precedes the GitHub sign-in; no remembered approval was added (existing test coverage).
@@ -166,7 +166,7 @@ What the renders show (each read as an image):
 
 ## 7. Release and final QA
 
-- **PASS · Type, test, asset and build checks.** `pnpm run check`: 0 errors, 0 warnings, 17 hints. `pnpm run design:check`: passed. `pnpm test`: 264 files, 11,987 passed, 1 skipped. `pnpm run build`: exit 0.
+- **PASS · Type, test, asset and build checks.** `pnpm run check`: 0 errors, 0 warnings, 17 hints. `pnpm run design:check`: passed. `pnpm test`: 264 files, 11,988 passed, 1 skipped. `pnpm run build`: exit 0.
 - **FAIL (pre-existing, not from this change) · Lint.** 64 findings, none in a file this PR touches. Open PRs #256 to #258 remove these findings, per the closing-legal record.
 - **PASS · Exact diff.** The diff is limited to the files listed under Scope and the document commit. No secrets, no unrelated changes, no generated files committed (`.screenshots/` and `.jolli/` are not committed).
 - **UNVERIFIED · Production bindings, secrets and headers on dynamic responses.** Not deployed; no production response was observed.
