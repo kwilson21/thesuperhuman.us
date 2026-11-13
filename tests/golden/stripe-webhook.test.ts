@@ -78,7 +78,7 @@ type Options = Parameters<typeof webhookStep>[1];
 
 /** The stripe-signature header of a step built by webhookStep (its headers are a plain object). */
 const signatureOf = (step: Step) =>
-	typeof step.headers === "object" ? step.headers["stripe-signature"] : "";
+	step.headers instanceof Function ? "" : step.headers?.["stripe-signature"];
 
 const audioCase = (
 	name: string,

@@ -54,6 +54,7 @@ const RELEASE = "old-news-single";
 const RECORDING = "old-news-recording";
 const SESSION = "22222222-2222-4222-8222-222222222222";
 const PLAY = "33333333-3333-4333-8333-333333333333";
+
 const eid = (n: number) =>
 	`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -141,7 +142,7 @@ const jsonHeaders = { origin: ORIGIN, "content-type": "application/json" };
 const ALL = `rl:music-event-all:${IP}`;
 const EACH = `rl:music-event:${RELEASE}:${RECORDING}:audio:start:${IP}`;
 
-const campaign = (status: string): { [table: string]: SeedRow[] } => ({
+const campaign = (status: string) => ({
 	owner_campaigns: [
 		{
 			id: "spring-launch",

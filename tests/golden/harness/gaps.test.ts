@@ -355,10 +355,9 @@ describe("steps that use earlier answers", () => {
 		expect(got.steps[2].request.body).toBe("id=abc");
 
 		const second = got.steps[1].answer;
+		const text = second.outcome === "response" ? String(second.body) : "";
 
-		expect(
-			second.outcome === "response" && JSON.parse(second.body as string),
-		).toEqual({
+		expect(JSON.parse(text)).toEqual({
 			path: "/use/abc",
 			body: '{"code":"1234"}',
 			header: "1234",

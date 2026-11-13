@@ -115,7 +115,7 @@ Time and randomness are fixed per case: `Date`, `performance.now`, `crypto.rando
 ## More of what a case can say
 
 - A step's `path`, `json`, `body` and `headers` may be functions of what is recorded so far:
-  `path: (prior) => \`/x/${prior.answerJson(0).id}\``, or read `prior.effects` (a sign-in code from a recorded email).
+  ``path: (prior) => `/x/${prior.answerJson(0).id}` ``, or read `prior.effects` (a sign-in code from a recorded email).
   The resolved value is what the fixture holds.
 - `body` may be text, a `Uint8Array`, `generatedBody(size, byteAt?)` or a `ReadableStream`. Bytes, and text over 64 KB
   (a JSON body counts), are recorded as length and SHA-256.

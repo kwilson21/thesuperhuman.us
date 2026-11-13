@@ -247,18 +247,25 @@ function textBody(text: string, contentType: string | null): Sent {
 	};
 }
 
+const isLazy = <T>(value: Lazy<T>): value is (prior: Prior) => T =>
+	value instanceof Function;
+
+/** A step member as the case wrote it, or as the function the case gave computes it from the earlier records. */
+const resolved = <T>(value: Lazy<T>, prior: Prior): T =>
+	isLazy(value) ? value(prior) : value;
+
 async function bodyOf(step: Step, prior: Prior): Promise<Sent> {
-	const wanted = typeof step.json === "function" ? step.json(prior) : step.json;
+	const wanted = resolved(step.json, prior);
 
 	if (wanted !== undefined)
 		return textBody(JSON.stringify(wanted), "application/json");
 
-	const given = typeof step.body === "function" ? step.body(prior) : step.body;
+	const given = resolved(step.body, prior);
 
 	if (given === undefined)
 		return { record: null, send: undefined, contentType: null };
 
-	if (typeof given === "string") return textBody(given, null);
+	if (isText(given)) return textBody(given, null);
 
 	const bytes: Uint8Array<ArrayBuffer> =
 		given instanceof Uint8Array
@@ -569,7 +576,7 @@ async function runInstalled(
 		const actor = step.as ?? asVisitor();
 		const method = (step.method ?? "POST").toUpperCase();
 		const { record, send, contentType } = await bodyOf(step, prior);
-		const path = typeof step.path === "function" ? step.path(prior) : step.path;
+		const path = resolved(step.path, prior);
 		const headers = new Headers();
 
 		if (contentType) headers.set("content-type", contentType);
@@ -587,8 +594,7 @@ async function runInstalled(
 		if (actor.kind === "client-cookie")
 			headers.set("cookie", `studio_session=${actor.token}`);
 
-		const extra =
-			typeof step.headers === "function" ? step.headers(prior) : step.headers;
+		const extra = resolved(step.headers, prior);
 
 		for (const [name, value] of Object.entries(extra ?? {}))
 			headers.set(name, value);

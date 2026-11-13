@@ -103,6 +103,7 @@ export function recordingKv(
 			if (held === undefined) return null;
 
 			const bytes = isText(held) ? new TextEncoder().encode(held) : held;
+
 			const asText = () =>
 				isText(held) ? held : new TextDecoder().decode(held);
 

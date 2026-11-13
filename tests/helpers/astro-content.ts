@@ -8,6 +8,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "astro/zod";
+import type { JsonObject } from "./json";
 
 export { z };
 
@@ -23,21 +24,18 @@ export const defineCollection = <T extends CollectionConfig>(config: T): T =>
 export type Entry = {
 	id: string;
 	collection: string;
-	data: { [key: string]: unknown };
+	data: JsonObject;
 	body?: string;
 };
 
 const root = fileURLToPath(new URL("../../src/content/", import.meta.url));
 
-function frontMatter(text: string): {
-	data: { [key: string]: string | number | boolean };
-	body: string;
-} {
+function frontMatter(text: string) {
 	const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text);
 
 	if (!match) return { data: {}, body: text };
 
-	const data: { [key: string]: string | number | boolean } = {};
+	const data: JsonObject = {};
 
 	for (const line of match[1].split(/\r?\n/)) {
 		const pair = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
@@ -75,19 +73,19 @@ async function load(name: string): Promise<Entry[]> {
 		.sort()
 		.map((file) => {
 			const text = readFileSync(`${directory}${file}`, "utf8");
-			const isData = config.type === "data";
-			const { data: given, body } = isData
-				? { data: JSON.parse(text), body: undefined }
-				: frontMatter(text);
-
+			const parsed = config.type === "data" ? undefined : frontMatter(text);
+			const given = parsed ? parsed.data : JSON.parse(text);
 			const data = config.schema ? config.schema.parse(given) : given;
 
-			return {
+			const entry: Entry = {
 				id: basename(file, extname(file)),
 				collection: name,
 				data,
-				...(body === undefined ? {} : { body }),
 			};
+
+			if (parsed) entry.body = parsed.body;
+
+			return entry;
 		});
 }
 

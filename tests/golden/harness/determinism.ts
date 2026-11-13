@@ -5,6 +5,7 @@
 // only with `advance(ms)`, and the move is recorded.
 import { vi } from "vitest";
 import type { EffectLog } from "./log";
+import { isText } from "~/lib/type-guards";
 import { errorText, plain, type Passed, type Recorded } from "./plain";
 
 export const START = "2026-11-13T12:00:00.000Z";
@@ -45,8 +46,8 @@ function generatedKey(
 	extractable: boolean,
 	usages: KeyUsage[],
 ): Promise<CryptoKey> {
-	const algorithm: KeyRequest =
-		typeof given === "string" ? { name: given } : given;
+	const algorithm: KeyRequest = isText(given) ? { name: given } : given;
+
 	const name = (algorithm.name ?? "").toUpperCase();
 
 	if (name.startsWith("AES") && algorithm.length !== undefined)
@@ -60,7 +61,7 @@ function generatedKey(
 
 	if (name === "HMAC" && algorithm.hash !== undefined) {
 		const hash = (
-			typeof algorithm.hash === "string" ? algorithm.hash : algorithm.hash.name
+			isText(algorithm.hash) ? algorithm.hash : algorithm.hash.name
 		).toUpperCase();
 
 		const bits =
@@ -146,10 +147,12 @@ export class Determinism {
 
 		const math = vi.spyOn(Math, "random").mockImplementation(floats);
 
+		// SAFETY: generateKey is overloaded by key type; the fake answers the key (or the refusal) that the overload a caller picked would return.
+		const fake = generatedKey as typeof crypto.subtle.generateKey;
+
 		const generate = vi
 			.spyOn(crypto.subtle, "generateKey")
-			// SAFETY: generateKey is overloaded by key type; the fake answers the key (or the refusal) that the overload a caller picked would return.
-			.mockImplementation(generatedKey as typeof crypto.subtle.generateKey);
+			.mockImplementation(fake);
 
 		const spyOnConsole = (level: "error" | "warn") =>
 			vi.spyOn(console, level).mockImplementation((...args: Passed[]) => {
@@ -192,6 +195,7 @@ export class Determinism {
 		if (!this.virtualTimers) return work;
 
 		let settled = false;
+
 		const watched = work.finally(() => {
 			settled = true;
 		});

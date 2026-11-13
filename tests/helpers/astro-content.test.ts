@@ -21,7 +21,7 @@ describe("astro:content in tests", () => {
 		);
 
 		expect(recordings[0]?.collection).toBe("recordings");
-		expect(typeof recordings[0]?.data.id).toBe("string");
+		expect(recordings[0]?.data.id).toEqual(expect.any(String));
 	});
 
 	it("getCollection filters with the callback, and getEntry finds one entry or nothing", async () => {
@@ -46,8 +46,8 @@ describe("astro:content in tests", () => {
 		const pages = await getCollection("pages");
 
 		expect(pages.length).toBeGreaterThan(0);
-		expect(typeof pages[0]?.data.title).toBe("string");
-		expect(typeof pages[0]?.body).toBe("string");
+		expect(pages[0]?.data.title).toEqual(expect.any(String));
+		expect(pages[0]?.body).toEqual(expect.any(String));
 	});
 
 	it("serves the real music catalog to music-content", async () => {
