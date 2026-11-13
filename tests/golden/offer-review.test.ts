@@ -40,8 +40,8 @@ import {
 // answer) and an HTML page that keeps the status code on every failure; a JSON request gets JSON.
 //
 // Branches (the handler, agreementRequest and nativeAgreementRoute/nativeAgreementResponse in src/lib/agreement-request.ts,
-// agreementSession and signingEnabled in agreement-access.ts, resolveClientDetails and saveAgreementDraft in
-// agreement-draft.ts, reviewAgreements in software-agreements.ts, validateAgreementDetails in agreement-fields.ts,
+// agreementSession and signingEnabled in agreement-access.ts, resolveClientDetails (agreement-draft-fields.ts) and saveAgreementDraft
+// (agreement-draft.ts) in src/lib, reviewAgreements in software-agreements.ts, validateAgreementDetails in agreement-fields.ts,
 // renderAgreement and validateAgreementCharacters in agreement-templates.ts):
 //
 //   POST

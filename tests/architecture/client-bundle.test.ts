@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 // The independent backstop to client-graph.test.ts: that test walks the source's import graph, this one looks at what
-// the build actually shipped. It reads every browser script under dist/ (dist/_astro/ and scripts copied from public/, not the server output dist/_worker.js/) and fails when a chunk holds Effect or @xstate/effect runtime
+// the build actually shipped. It reads every browser script under dist/ (dist/_astro/ and scripts copied from public/, not the server output dist/_worker.js/) and fails when a chunk holds Effect, @xstate/effect, Stripe or Zod v4 runtime
 // code, however it got there (an import the walker cannot see, a glob, a plugin). It needs a build: run
 // `pnpm run build` first. With no dist/ it skips, under a name that says so, unless REQUIRE_CLIENT_BUNDLE=1 is set:
 // then a missing dist/ FAILS the test. CI sets it, in a step after the build (.github/workflows/validate.yml);
@@ -29,7 +29,18 @@ import { afterEach, describe, expect, it } from "vitest";
 //                    single module (Cause, Schema) misses a chunk that uses a different one, so this is the prefix.
 //   "EffectFailure"  the class tag of @xstate/effect's failure wrapper; in every bundle of @xstate/effect (3 times), which
 //                    also pulls in the Effect runtime.
-const RUNTIME_MARKERS = ["~effect/", "EffectFailure"] as const;
+//   "api.stripe.com" and "Stripe-Version"
+//                    the Stripe SDK's API host and its version header. Stripe is a server package: browser code never
+//                    holds a Stripe client, so either string in a browser script means the SDK was bundled.
+//   "$ZodType"       the base class of Zod v4 (`zod`, the package; the Zod v3 that `astro/zod` ships has no such name). Zod v4
+//                    is a server validator and does not reach the browser.
+const RUNTIME_MARKERS = [
+	"~effect/",
+	"EffectFailure",
+	"api.stripe.com",
+	"Stripe-Version",
+	"$ZodType",
+] as const;
 
 const required = process.env.REQUIRE_CLIENT_BUNDLE === "1";
 
@@ -71,6 +82,13 @@ describe("the markers", () => {
 			"~effect/",
 		]);
 		expect(markersIn('x={_tag:"EffectFailure"}')).toEqual(["EffectFailure"]);
+		expect(markersIn('fetch("https://api.stripe.com/v1/invoices")')).toEqual([
+			"api.stripe.com",
+		]);
+		expect(markersIn('h={"Stripe-Version":"2026"}')).toEqual([
+			"Stripe-Version",
+		]);
+		expect(markersIn("class a extends $ZodType{}")).toEqual(["$ZodType"]);
 		expect(markersIn("const a = document.title;")).toEqual([]);
 	});
 });
@@ -116,8 +134,8 @@ describe("browserScripts", () => {
 describe("the built browser bundle", () => {
 	it.skipIf(!existsSync(bundle) && !required)(
 		existsSync(bundle) || required
-			? "holds no Effect or @xstate/effect runtime code"
-			: "holds no Effect runtime code (skipped: no dist/, run pnpm run build first)",
+			? "holds no Effect, @xstate/effect, Stripe or Zod v4 runtime code"
+			: "holds no server runtime code (skipped: no dist/, run pnpm run build first)",
 		() => {
 			expect(
 				existsSync(bundle),

@@ -6,11 +6,8 @@ import {
 	signingEnabled,
 } from "~/lib/agreement-access";
 import { getLinkedOffer } from "~/lib/software-offers";
-import {
-	draftSchema,
-	draftFieldErrors,
-	saveAgreementDraft,
-} from "~/lib/agreement-draft";
+import { saveAgreementDraft } from "~/lib/agreement-draft";
+import { draftSchema, draftFieldErrors } from "~/lib/agreement-draft-fields";
 
 export const prerender = false;
 

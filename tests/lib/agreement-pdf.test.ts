@@ -684,7 +684,9 @@ it("preserves heading characters absent from Libron using Inter", async () => {
 it.each([false, true])(
 	"prints stored statement versions unchanged in the PDF (SOW only: %s)",
 	async (sowOnly) => {
-		const { intentText, consentText } = await import("~/lib/agreement-fields");
+		const { intentText, consentText } = await import(
+			"~/lib/agreement-client-fields"
+		);
 
 		const signatures = ["client", "contractor"].map((party) => ({
 			party,

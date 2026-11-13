@@ -48,7 +48,7 @@ import {
 //
 // Every response branch of the handler, agreementRequest / musicRequest (src/lib/agreement-request.ts, music-request.ts),
 // agreementSession and signingEnabled (src/lib/agreement-access.ts), getLinkedOffer (software-offers.ts), draftSchema,
-// draftFieldErrors and saveAgreementDraft (src/lib/agreement-draft.ts), and the cases that reach it:
+// draftFieldErrors (src/lib/agreement-draft-fields.ts) and saveAgreementDraft (src/lib/agreement-draft.ts), and the cases that reach it:
 //
 //   request                              403 Forbidden (no Origin, other site, http scheme), 415 JSON required, 400 Missing request,
 //                                        413 above 16384 bytes, 400 Invalid JSON, 400 Invalid fields (form with a values field that is not JSON)

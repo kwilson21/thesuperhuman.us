@@ -3,7 +3,7 @@ import {
 	templateVersionLabel,
 	versionLabelPattern,
 } from "./agreement-version-label";
-import { softwareDate } from "./software-projects";
+import { softwareDate } from "./software-project-display";
 import { agreementEvent } from "./agreement-events";
 import { hashOfferToken } from "./software-offers";
 import { templateFields } from "./agreement-template-fields.mjs";

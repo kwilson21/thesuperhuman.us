@@ -15,9 +15,9 @@ import {
 } from "~/lib/agreement-templates";
 import {
 	validateAgreementDetails,
-	clientAgreementSchema,
 	contractorSchema,
 } from "~/lib/agreement-fields";
+import { clientAgreementSchema } from "~/lib/agreement-client-fields";
 import {
 	reviewAgreements,
 	signAgreements,
@@ -3297,12 +3297,10 @@ it("restores retry metadata when private storage refuses orphan deletion", async
 });
 
 it("resumes the server draft under a fresh two-hour email session without sharing it with another email", async () => {
-	const {
-		saveAgreementDraft,
-		loadAgreementDraft,
-		prefillAgreementDraft,
-		resolveClientDetails,
-	} = await import("~/lib/agreement-draft");
+	const { saveAgreementDraft, loadAgreementDraft, prefillAgreementDraft } =
+		await import("~/lib/agreement-draft");
+
+	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
 	const { getOwnerRequest } = await import("~/lib/owner-requests");
 	sql
@@ -3379,7 +3377,10 @@ it.each([
 ] as const)(
 	"maps %s into the exact SOW fields",
 	async (choice, portfolio, naming) => {
-		const { resolveClientDetails } = await import("~/lib/agreement-draft");
+		const { resolveClientDetails } = await import(
+			"~/lib/agreement-draft-fields"
+		);
+
 		const { jurisdiction, ...rest } = client;
 		const { portfolio: unused, naming: unusedNaming, ...fields } = rest;
 
@@ -3411,7 +3412,10 @@ it.each([
 );
 
 it("retains both verbatim statements and verification method in signatures and certificates", async () => {
-	const { consentText, intentText } = await import("~/lib/agreement-fields");
+	const { consentText, intentText } = await import(
+		"~/lib/agreement-client-fields"
+	);
+
 	const result = await signed();
 
 	const id = await countersignAgreements(
@@ -3466,9 +3470,9 @@ it("retains both verbatim statements and verification method in signatures and c
 });
 
 it("rejects signing stale reviewed documents after autosaved details change", async () => {
-	const { resolveClientDetails, saveAgreementDraft } = await import(
-		"~/lib/agreement-draft"
-	);
+	const { saveAgreementDraft } = await import("~/lib/agreement-draft");
+
+	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
 	const { jurisdiction, portfolio, naming, ...rest } = client;
 
@@ -3535,9 +3539,9 @@ it("returns field-linked validation messages without raw schema output", async (
 });
 
 it("retires the redundant draft after saving immutable signatures", async () => {
-	const { saveAgreementDraft, resolveClientDetails } = await import(
-		"~/lib/agreement-draft"
-	);
+	const { saveAgreementDraft } = await import("~/lib/agreement-draft");
+
+	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 
 	const { jurisdiction, portfolio, naming, ...rest } = client;
 
@@ -3661,7 +3665,10 @@ it.each([
 ])(
 	"maps control characters in %s to a field error in browser and API validation",
 	async (field) => {
-		const { resolveClientDetails } = await import("~/lib/agreement-draft");
+		const { resolveClientDetails } = await import(
+			"~/lib/agreement-draft-fields"
+		);
+
 		const { jurisdiction, portfolio, naming, ...rest } = client;
 
 		const values = {
@@ -3710,7 +3717,7 @@ it.each([
 );
 
 it("maps unfamiliar draft validation issues to a generic message on the field", async () => {
-	const { resolveClientDetails } = await import("~/lib/agreement-draft");
+	const { resolveClientDetails } = await import("~/lib/agreement-draft-fields");
 	expect(
 		resolveClientDetails({ signer_title: 123 }, "client@example.com"),
 	).toEqual({ ok: false, errors: { signer_title: "Check this field." } });

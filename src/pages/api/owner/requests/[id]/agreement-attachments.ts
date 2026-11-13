@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "astro/zod";
-import { cleanText } from "~/lib/agreement-fields";
+import { cleanText } from "~/lib/agreement-client-fields";
 import { validProjectDate } from "~/lib/audio-project-updates";
 import { readBodyWithin } from "~/lib/audio-project-uploads";
 import { hashBytes } from "~/lib/agreement-artifacts";

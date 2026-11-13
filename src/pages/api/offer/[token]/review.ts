@@ -1,8 +1,6 @@
 import type { APIRoute } from "astro";
-import {
-	resolveClientDetails,
-	saveAgreementDraft,
-} from "~/lib/agreement-draft";
+import { saveAgreementDraft } from "~/lib/agreement-draft";
+import { resolveClientDetails } from "~/lib/agreement-draft-fields";
 import { z } from "astro/zod";
 import {
 	agreementSession,
