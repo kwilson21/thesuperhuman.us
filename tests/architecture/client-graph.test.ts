@@ -90,6 +90,12 @@ const WALKER_ONLY = ["src/data/project-stories/threadline-review.json"];
 const WALKED_MODULES = [...BROWSER_MODULES, ...WALKER_ONLY].sort();
 
 describe("what the browser entries reach", () => {
+	it("keeps the walker-only files apart from the bundler's reviewed list", () => {
+		expect(
+			WALKER_ONLY.filter((file) => BROWSER_MODULES.includes(file)),
+		).toEqual([]);
+	});
+
 	const reach = () => {
 		const reached: Reached = { files: new Set(), packages: new Set() };
 

@@ -425,6 +425,34 @@ describe("bundleViolations", () => {
 		]);
 	});
 
+	it("fails closed on a worker, which is built apart from this bundle and not listed here", () => {
+		const message = (what: string) =>
+			`Web Worker in browser code: ${what}. The guard does not follow worker builds: extend it before introducing workers.`;
+
+		expect(
+			bundleViolations(
+				manifest([...base, "src/lib/ok.ts?worker&inline"]),
+				allowed,
+			),
+		).toEqual([message("src/lib/ok.ts?worker&inline")]);
+		expect(
+			bundleViolations(
+				manifest([...base, "src/lib/ok.ts?sharedworker"]),
+				allowed,
+			),
+		).toEqual([message("src/lib/ok.ts?sharedworker")]);
+		expect(
+			bundleViolations(
+				{
+					version: 2,
+					chunks: [{ ...chunk(...base), worker: true }],
+					unrendered: [],
+				},
+				allowed,
+			),
+		).toEqual([message("a chunk that constructs a Worker (_astro/a.js)")]);
+	});
+
 	it("counts a module folded into code (unrendered) like one in a chunk", () => {
 		expect(
 			bundleViolations(

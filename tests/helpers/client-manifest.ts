@@ -13,6 +13,8 @@ export type ClientManifest = {
 		/** Hash of the trimmed code: the text Astro inlines into a page. */
 		trimmedSha256: string;
 		modules: string[];
+		/** Set when the chunk's code constructs a Web Worker or SharedWorker. */
+		worker?: true;
 	}[];
 	/** Modules the bundler included but no chunk renders (data folded into the code that uses it). */
 	unrendered: string[];
@@ -36,9 +38,11 @@ export const FORBIDDEN_PACKAGES: readonly string[] = [
 
 /**
  * A module id with one of these prefixes is exempt from the forbidden-package check (but still needs its package in
- * the reviewed list). This is where `effect/Schema` goes when the browser is allowed to load it: add the package to
- * BROWSER_PACKAGES in browser-modules.ts and a prefix such as "npm:effect@" here (a prefix names a package and may
- * name its version: "npm:effect@4.1.0/dist/Schema").
+ * the reviewed list). This is where Effect goes when the browser is allowed to load it, and the prefix is the whole
+ * package, "npm:effect@" (a prefix may name a version: "npm:effect@4.1.4/"): `effect/dist/Schema.js` imports about 68
+ * other effect modules, so a prefix for Schema alone would still fail. Which effect modules browser code may import
+ * is a source-level rule the walker (client-graph.test.ts) carries, not something this check can express. Add the
+ * package to BROWSER_PACKAGES in browser-modules.ts as well.
  */
 export const ALLOWED_FORBIDDEN_PREFIXES: readonly string[] = [];
 
@@ -69,6 +73,10 @@ export function bundledModules(manifest: ClientManifest): string[] {
 		]),
 	].sort();
 }
+
+/** A module imported with a `?worker` or `?sharedworker` query: built in a separate Rollup run this guard cannot see. */
+const isWorkerModule = (module: string) =>
+	/[?&](?:worker|sharedworker)(?:[&=]|$)/.test(module);
 
 const isEntry = (module: string) =>
 	module.startsWith("src/scripts/") ||
@@ -110,8 +118,23 @@ export function bundleViolations(
 		virtualModules: readonly string[];
 	},
 ): string[] {
-	const modules = bundledModules(manifest);
+	const all = bundledModules(manifest);
+	const modules = all.filter((module) => !isWorkerModule(module));
 	const problems: string[] = [];
+
+	// Fail closed: Vite builds a worker in a separate Rollup run this plugin is not part of, and `?worker&inline`
+	// puts that code in a chunk, listed here only by an id the other checks would take for a reviewed file.
+	const workers = [
+		...all.filter(isWorkerModule),
+		...manifest.chunks
+			.filter((chunk) => chunk.worker)
+			.map((chunk) => `a chunk that constructs a Worker (${chunk.file})`),
+	];
+
+	for (const what of workers)
+		problems.push(
+			`Web Worker in browser code: ${what}. The guard does not follow worker builds: extend it before introducing workers.`,
+		);
 	const held = modules.filter(isRepoFile).filter((module) => !isEntry(module));
 	const virtuals = modules.filter(isVirtual).filter((m) => !isBuiltin(m));
 

@@ -82,6 +82,21 @@ describe("moduleLabel", () => {
 		);
 	});
 
+	it("keeps a worker query on the label, since a worker is built apart from this bundle", () => {
+		expect(moduleLabel(`${root}/src/lib/a.ts?worker&inline`, root)).toBe(
+			"src/lib/a.ts?worker&inline",
+		);
+		expect(moduleLabel(`${root}/src/lib/a.ts?sharedworker`, root)).toBe(
+			"src/lib/a.ts?sharedworker",
+		);
+		expect(moduleLabel(`${root}/src/lib/a.ts?raw&worker`, root)).toBe(
+			"src/lib/a.ts?raw&worker",
+		);
+		expect(moduleLabel(`${root}/src/lib/a.ts?workerish`, root)).toBe(
+			"src/lib/a.ts",
+		);
+	});
+
 	it("does not mistake a sibling directory for the repository", () => {
 		expect(moduleLabel("/work/site-other/a.ts", root)).toBe(
 			"outside:/work/site-other/a.ts",
@@ -113,6 +128,22 @@ describe("chunkEntry", () => {
 			chunkEntry("x", { code: "console.log(1)", modules: {} }, root)
 				.trimmedSha256,
 		).toBe(entry.trimmedSha256);
+	});
+});
+
+describe("chunkEntry workers", () => {
+	it("marks a chunk whose code constructs a Worker or SharedWorker", () => {
+		for (const code of [
+			"const w=new Worker(u)",
+			"new  SharedWorker(u,{})",
+			"x=new Worker (u)",
+		])
+			expect(chunkEntry("a.js", { code, modules: {} }, root).worker).toBe(true);
+
+		for (const code of ["const w=new Workers(u)", "MyWorker(u)", "x"])
+			expect(chunkEntry("a.js", { code, modules: {} }, root).worker).toBe(
+				undefined,
+			);
 	});
 });
 

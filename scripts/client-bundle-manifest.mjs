@@ -57,7 +57,22 @@ function packageParts(path) {
  */
 export function moduleLabel(id, root, versionOf = () => undefined) {
 	const path = id.includes("?") ? id.slice(0, id.indexOf("?")) : id;
+	const label = labelOfPath(path, root, versionOf);
 
+	// A worker is built in a separate Rollup run this plugin is not part of, and `?worker&inline` puts its code in
+	// the chunk: keep the query so the test can fail on it.
+	return WORKER_QUERY.test(id.slice(path.length))
+		? `${label}${id.slice(path.length)}`
+		: label;
+}
+
+/** A `?worker`, `?sharedworker` (or `&worker`...) query, with or without a value. */
+const WORKER_QUERY = /[?&](?:worker|sharedworker)(?:[&=]|$)/;
+
+/** A chunk whose code constructs a Web Worker. */
+const WORKER_CONSTRUCTION = /new\s+(?:Shared)?Worker\s*\(/;
+
+function labelOfPath(path, root, versionOf) {
 	if (path.startsWith("\0") || !path.startsWith("/")) return path;
 
 	const found = packageParts(path);
@@ -95,12 +110,22 @@ export function chunkEntry(file, chunk, root, versionOf) {
 	};
 }
 
-/** The hash of a chunk's code, and of the code trimmed, which is the text Astro inlines into a page. */
+/**
+ * The hash of a chunk's code, and of the code trimmed, which is the text Astro inlines into a page; and `worker:
+ * true` when the code constructs a Web Worker.
+ *
+ * @param {string} code
+ * @returns {{ sha256: string; trimmedSha256: string; worker?: true }}
+ */
 function hashes(code) {
-	return {
+	const facts = {
 		sha256: createHash("sha256").update(code).digest("hex"),
 		trimmedSha256: createHash("sha256").update(code.trim()).digest("hex"),
 	};
+
+	return WORKER_CONSTRUCTION.test(code)
+		? { ...facts, worker: /** @type {const} */ (true) }
+		: facts;
 }
 
 /**

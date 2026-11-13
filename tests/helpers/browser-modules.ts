@@ -1,9 +1,12 @@
 /**
- * Every module under src/lib or src/data that the client build puts in browser code, reviewed one by one: each is
- * pure (constants, types, validators and formatting) and imports nothing server-side. The bundler's own list (the
+ * Every repository file other than a browser entry that the client build puts in browser code, reviewed one by one.
+ * This is every non-entry file, not only src/lib and src/data: a `package.json`, `src/styles/global.css`, a
+ * `public/` svg or a `?raw` JSON import each fail as unreviewed until listed. Entries (src/scripts/** and the
+ * <script> of an .astro file) are browser code by definition and not listed. Today the list is pure modules
+ * (constants, types, validators and formatting) that import nothing server-side. The bundler's own list (the
  * manifest scripts/client-bundle-manifest.mjs writes) must equal this exactly: tests/architecture/client-bundle.test.ts.
  * The source walker in client-graph.test.ts checks the same list, plus the files it reaches that the bundler drops.
- * Adding a name is a review decision: read the module for server work first.
+ * Adding a name is a review decision: read the file for server work first.
  */
 export const BROWSER_MODULES: readonly string[] = [
 	"src/lib/agreement-client-fields.ts",
@@ -25,8 +28,10 @@ export const BROWSER_MODULES: readonly string[] = [
  * Every installed package the client build puts in browser code (by package name, not by import specifier: the
  * source walker sees `astro/zod`, the bundler sees the `zod` v3 that astro ships). Zod v3 only: Zod v4, Effect and
  * the other server packages are forbidden in client-manifest.ts. Remove `zod` when the Zod to Effect Schema work
- * removes `astro/zod` from the browser; to let `effect/Schema` in later, add `effect` here and its module prefix to
- * ALLOWED_FORBIDDEN_PREFIXES in client-manifest.ts.
+ * removes `astro/zod` from the browser. To let `effect/Schema` in later, allow the whole `effect` package here and in
+ * ALLOWED_FORBIDDEN_PREFIXES (prefix "npm:effect@"): `effect/dist/Schema.js` imports about 68 other effect modules,
+ * so a prefix for Schema alone would still fail. Which effect modules browser code may IMPORT is a source-level rule
+ * that the walker (client-graph.test.ts) carries; the manifest check can only allow or forbid the package.
  */
 export const BROWSER_PACKAGES: readonly string[] = ["zod"];
 
