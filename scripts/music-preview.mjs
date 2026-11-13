@@ -7,7 +7,10 @@ import { pathToFileURL } from "node:url";
 
 /**
  * Writes the isolated local bindings, applies the music migrations and stages the imported audio.
- * @param {{ spawnSync: typeof spawnSync, getPlatformProxy: typeof import("wrangler").getPlatformProxy }} io
+ * @param {{
+ *   spawnSync: (command: string, args: string[], options: { encoding: "utf8" }) => { status: number | null, stdout: string, stderr: string },
+ *   getPlatformProxy: (options: { configPath: string, persist: { path: string } }) => Promise<{ env: any, dispose: () => Promise<void> }>,
+ * }} io
  */
 export async function setUpMusicPreview({ spawnSync, getPlatformProxy }) {
 	const configPath = resolve(".private/wrangler-music-preview.json");

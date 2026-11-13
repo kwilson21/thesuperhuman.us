@@ -1,16 +1,18 @@
 import { expect, it, vi } from "vitest";
-import type {
-	readFile as ReadFile,
-	writeFile as WriteFile,
-} from "node:fs/promises";
-import type { spawnSync as SpawnSync } from "node:child_process";
 import { partial } from "../helpers/doubles";
 import { deriveWaveforms } from "../../scripts/music-waveforms.mjs";
 
 it("measures each aligned playback window for both waveform and loudness", async () => {
-	const readFile = vi.fn<typeof ReadFile>();
-	const writeFile = vi.fn<typeof WriteFile>();
-	const spawnSync = vi.fn<typeof SpawnSync>();
+	const readFile = vi.fn<(path: string, encoding: "utf8") => Promise<string>>();
+	const writeFile = vi.fn<(path: string, text: string) => Promise<void>>();
+	const spawnSync =
+		vi.fn<
+			(
+				command: string,
+				args: string[],
+				options: { maxBuffer: number },
+			) => { status: number | null; stdout: Buffer; stderr: Buffer }
+		>();
 	readFile
 		.mockResolvedValueOnce(
 			JSON.stringify({
@@ -27,7 +29,7 @@ it("measures each aligned playback window for both waveform and loudness", async
 			}),
 		);
 	spawnSync.mockImplementation((_command, args) =>
-		partial<ReturnType<typeof SpawnSync>>({
+		partial<ReturnType<typeof spawnSync>>({
 			status: 0,
 			stdout: Buffer.alloc(640),
 			stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),

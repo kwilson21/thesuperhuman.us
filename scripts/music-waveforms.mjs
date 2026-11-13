@@ -8,7 +8,11 @@ import { pathToFileURL } from "node:url";
 /**
  * Measures the aligned playback windows of one example and writes its waveforms and loudness.
  * @param {string | undefined} id
- * @param {{ readFile: typeof readFile, writeFile: typeof writeFile, spawnSync: typeof spawnSync }} io
+ * @param {{
+ *   readFile: (path: string, encoding: "utf8") => Promise<string>,
+ *   writeFile: (path: string, text: string) => Promise<void>,
+ *   spawnSync: (command: string, args: string[], options: { maxBuffer: number }) => { status: number | null, stdout: Buffer, stderr: Buffer },
+ * }} io
  */
 export async function deriveWaveforms(id, { readFile, writeFile, spawnSync }) {
 	if (!id || !/^[a-z0-9-]+$/.test(id))
