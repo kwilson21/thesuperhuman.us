@@ -11,6 +11,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import { parse } from "@astrojs/compiler";
+import { walk } from "@astrojs/compiler/utils";
 import ts from "typescript";
 
 // The static import graph of what runs in the browser: every file under src/scripts and the <script> blocks of every
@@ -129,32 +131,47 @@ export function serverUsesIn(file: string, text: string): string[] {
 	return found;
 }
 
-// A hydration directive: `client:load`, `client:idle`, `client:visible`, `client:media` or `client:only`.
-const HYDRATION = /(?<![\w:-])client:(load|idle|visible|media|only)\b/g;
-
-const STYLE_BLOCK = /<style\b[^>]*>[\s\S]*?<\/style>/g;
-
-const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+// The hydration directives: `client:load`, `client:idle`, `client:visible`, `client:media` and `client:only`.
+const HYDRATION_ATTRIBUTE = /^client:(load|idle|visible|media|only)$/;
 
 /**
- * Every `client:*` hydration directive in an .astro file's markup, with its line. A component hydrated with one runs in
- * the browser, and the import graph walk reads only `src/scripts/**` and `<script>` blocks, so it would never see that
- * component's imports. The frontmatter, comments, `<script>` and `<style>` blocks are blanked first, so none of them
- * counts. Any other file gives none.
+ * Every `client:*` hydration directive in an .astro file, with its line. A component hydrated with one runs in the
+ * browser, and the import graph walk reads only `src/scripts/**` and `<script>` blocks, so it would never see that
+ * component's imports. The file is read with Astro's own compiler (`@astrojs/compiler`, already installed as a
+ * dependency of Astro and used by the render tests), so only attribute NAMES on tags count: text, attribute values,
+ * comments, the frontmatter and the contents of `<script>` and `<style>` never do. A lower-case HTML element that
+ * carries the attribute (`<div client:load>`) counts too: Astro does not hydrate it, but a stray directive is worth
+ * removing, so it fails. Any other file gives none.
  */
-export function hydratedDirectives(file: string, text: string): string[] {
+export async function hydratedDirectives(
+	file: string,
+	text: string,
+): Promise<string[]> {
 	if (!file.endsWith(".astro")) return [];
 
-	const markup = text
-		.replace(FRONTMATTER, blank)
-		.replace(HTML_COMMENT, blank)
-		.replace(SCRIPT_BLOCK, blank)
-		.replace(STYLE_BLOCK, blank);
+	const { ast } = await parse(text, { position: true });
+	const found: string[] = [];
 
-	return [...markup.matchAll(HYDRATION)].map(
-		(match) =>
-			`client:${match[1]} at line ${markup.slice(0, match.index).split("\n").length}`,
-	);
+	walk(ast, (node) => {
+		if (
+			node.type !== "element" &&
+			node.type !== "component" &&
+			node.type !== "custom-element" &&
+			node.type !== "fragment"
+		)
+			return;
+
+		for (const attribute of node.attributes) {
+			const match = HYDRATION_ATTRIBUTE.exec(attribute.name);
+
+			if (match)
+				found.push(
+					`client:${match[1]} at line ${attribute.position?.start.line ?? 0}`,
+				);
+		}
+	});
+
+	return found;
 }
 
 /** What a walk reached: every file (paths relative to the root) and every package (by name) any client entry loads. */

@@ -50,7 +50,8 @@ import {
 //
 // Hydrated framework components: a component used with a `client:*` directive is browser code this walk does not read.
 // The site installs no UI framework (astro.config.mjs lists the sitemap only; package.json has no React, Preact, Vue,
-// Svelte, Solid or Lit), so any `client:*` directive in an .astro file fails the test outright, with a message to extend
+// Svelte, Solid or Lit), so any `client:*` directive in an .astro file (read as an attribute name on a tag with
+// Astro's compiler; text and attribute values never count) fails the test outright, with a message to extend
 // the walk (take the component's frontmatter import as an entry) before such components are introduced. That is cheaper
 // and stricter than walking components that cannot exist yet.
 //
@@ -139,18 +140,23 @@ describe("what the browser entries reach", () => {
 		expect([...reach().packages].sort()).toEqual(["astro"]);
 	});
 
-	it("has no hydrated framework component in any .astro file", () => {
+	it("has no hydrated framework component in any .astro file", async () => {
 		// The site installs no UI framework integration (astro.config.mjs lists the sitemap only, and package.json has no
 		// React, Preact, Vue, Svelte, Solid or Lit), so a `client:*` directive hydrates nothing today. If one appears, the
 		// component is browser code this walk does not read: extend the walk to take the component's frontmatter import as
 		// an entry before removing this check.
-		const holding = globSync("src/**/*.astro", { cwd: repository }).flatMap(
-			(file) =>
-				hydratedDirectives(
-					file,
-					readFileSync(join(repository, file), "utf8"),
-				).map((use) => `${file}: ${use}`),
-		);
+		const holding = (
+			await Promise.all(
+				globSync("src/**/*.astro", { cwd: repository }).map(async (file) =>
+					(
+						await hydratedDirectives(
+							file,
+							readFileSync(join(repository, file), "utf8"),
+						)
+					).map((use) => `${file}: ${use}`),
+				),
+			)
+		).flat();
 
 		expect(
 			holding,
@@ -1088,9 +1094,9 @@ describe("the walker finds what it should", () => {
 	});
 
 	describe("hydrated framework components", () => {
-		it("finds every client: directive on a component, in any attribute position", () => {
+		it("finds every client: directive on a component, in any attribute position", async () => {
 			expect(
-				hydratedDirectives(
+				await hydratedDirectives(
 					"a.astro",
 					[
 						"---",
@@ -1115,9 +1121,9 @@ describe("the walker finds what it should", () => {
 			]);
 		});
 
-		it("does not count a comment, frontmatter, a script or style block, or a name that is not a directive", () => {
+		it("does not count a comment, frontmatter, a script or style block, text, an attribute value, or a name that is not a directive", async () => {
 			expect(
-				hydratedDirectives(
+				await hydratedDirectives(
 					"a.astro",
 					[
 						'---\nconst s = "client:load";\n---',
@@ -1125,13 +1131,42 @@ describe("the walker finds what it should", () => {
 						'<script>const s = "<A client:load />";</script>',
 						"<style>.a::after { content: 'client:idle'; }</style>",
 						"<B client:other data-client:load2 myclient:load />",
+						"<p>Use client:load</p>",
+						'<p title="client:load example">Use client:only="react"</p>',
+						"<Foo label='client:idle' data-note=\"x client:visible y\" />",
 					].join("\n"),
 				),
 			).toEqual([]);
 		});
 
-		it("is empty for a file that is not .astro", () => {
-			expect(hydratedDirectives("a.ts", "<A client:load />")).toEqual([]);
+		it("finds the plain cases and the awkward ones", async () => {
+			expect(
+				await hydratedDirectives("a.astro", "<Foo client:load />"),
+			).toEqual(["client:load at line 1"]);
+			expect(
+				await hydratedDirectives("a.astro", '<Foo client:only="react" />'),
+			).toEqual(["client:only at line 1"]);
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					'<Foo\n  title="x"\n  client:idle\n/>',
+				),
+			).toEqual(["client:idle at line 3"]);
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					'<Foo title="a > b" other={1 > 0} client:visible />',
+				),
+			).toEqual(["client:visible at line 1"]);
+			// A lower-case HTML element carrying the attribute counts too: Astro does not hydrate it, but a stray directive
+			// is a mistake worth failing on.
+			expect(
+				await hydratedDirectives("a.astro", "<div client:load></div>"),
+			).toEqual(["client:load at line 1"]);
+		});
+
+		it("is empty for a file that is not .astro", async () => {
+			expect(await hydratedDirectives("a.ts", "<A client:load />")).toEqual([]);
 		});
 	});
 
