@@ -3,6 +3,7 @@ import {
 	PUT,
 } from "~/pages/api/owner/requests/[id]/updates/[updateId]/visual";
 import { POST as updates } from "~/pages/api/owner/requests/[id]/updates";
+import { tinyImages } from "../fixtures/tiny-images";
 import {
 	asClient,
 	asOwner,
@@ -81,6 +82,74 @@ const image = {
 	"image/webp": withTail(WEBP),
 } as const;
 
+// Complete images, made with Pillow: a visual must be a whole image of its type (see src/lib/image-structure.ts).
+const real = {
+	"image/png": Uint8Array.from(atob(tinyImages.png), (c) => c.charCodeAt(0)),
+	"image/jpeg": Uint8Array.from(atob(tinyImages.jpeg), (c) => c.charCodeAt(0)),
+	"image/webp": Uint8Array.from(atob(tinyImages.webpLossy), (c) =>
+		c.charCodeAt(0),
+	),
+} as const;
+
+const crc32 = (bytes: Uint8Array) => {
+	let crc = 0xffffffff;
+
+	for (const byte of bytes) {
+		crc ^= byte;
+
+		for (let bit = 0; bit < 8; bit++)
+			crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+	}
+
+	return (crc ^ 0xffffffff) >>> 0;
+};
+
+const ascii = (text: string) => [...text].map((c) => c.charCodeAt(0));
+
+/** The tiny PNG with a text chunk before its end so that the file is exactly `size` bytes. */
+const pngOfSize = (size: number) => {
+	const png = real["image/png"],
+		body = png.slice(0, png.length - 12),
+		end = png.slice(png.length - 12),
+		length = size - png.length - 12,
+		chunk = new Uint8Array(length + 12),
+		view = new DataView(chunk.buffer);
+
+	view.setUint32(0, length);
+	chunk.set(ascii("tEXt"), 4);
+	chunk.fill(0x21, 8, 8 + length);
+	view.setUint32(8 + length, crc32(chunk.slice(4, 8 + length)));
+
+	return Uint8Array.from([...body, ...chunk, ...end]);
+};
+
+/** The tiny JPEG with comment segments after its start so that the file is exactly `size` bytes. */
+const jpegOfSize = (size: number) => {
+	const jpeg = real["image/jpeg"],
+		segments: number[][] = [];
+	let remaining = size - jpeg.length;
+
+	while (remaining > 0) {
+		let take = Math.min(remaining, 65_537);
+
+		if (remaining - take > 0 && remaining - take < 4) take -= 4;
+		segments.push([
+			0xff,
+			0xfe,
+			(take - 2) >> 8,
+			(take - 2) & 0xff,
+			...Array(take - 4).fill(0x21),
+		]);
+		remaining -= take;
+	}
+
+	return Uint8Array.from([
+		...jpeg.slice(0, 2),
+		...segments.flat(),
+		...jpeg.slice(2),
+	]);
+};
+
 const draft = (over = {}) =>
 	update(D1, "draft", { visual_alt: "A chart", ...over });
 
@@ -122,7 +191,7 @@ const put = (
 	...extra,
 });
 
-const png = () => image["image/png"];
+const png = () => real["image/png"];
 
 type Parts = {
 	readonly updates?: SeedRow[];
@@ -446,23 +515,67 @@ const cases: Case[] = [
 			},
 		}),
 	),
-	putCase(
-		"put size: exactly 5 MiB",
-		put(generatedBody(5 * 1024 * 1024, (i) => PNG[i] ?? 0x21)),
-	),
+	putCase("put size: exactly 5 MiB", put(pngOfSize(5 * 1024 * 1024))),
 	putCase(
 		"put size: one byte over 5 MiB",
 		put(generatedBody(5 * 1024 * 1024 + 1, (i) => PNG[i] ?? 0x21)),
 	),
 	putCase(
 		"put size: 5 MiB jpeg",
-		put(
-			generatedBody(5 * 1024 * 1024, (i) => JPEG[i] ?? 0x21),
-			"image/jpeg",
-		),
+		put(jpegOfSize(5 * 1024 * 1024), "image/jpeg"),
 	),
 	// PUT bytes
 	...mismatched,
+	putCase(
+		"put bytes: a png signature followed by filler",
+		put(image["image/png"]),
+	),
+	putCase(
+		"put bytes: a jpeg start followed by filler",
+		put(image["image/jpeg"], "image/jpeg"),
+	),
+	putCase(
+		"put bytes: a webp header followed by filler",
+		put(image["image/webp"], "image/webp"),
+	),
+	putCase(
+		"put bytes: a png cut before its end",
+		put(real["image/png"].slice(0, real["image/png"].length - 12)),
+	),
+	putCase(
+		"put bytes: a png with bytes after its end",
+		put(Uint8Array.from([...real["image/png"], ...ascii("<script>")])),
+	),
+	putCase(
+		"put bytes: a png with a changed byte in a chunk",
+		put(
+			Uint8Array.from(real["image/png"], (byte, i) =>
+				i === 20 ? byte ^ 1 : byte,
+			),
+		),
+	),
+	putCase(
+		"put bytes: a jpeg with bytes after its end",
+		put(Uint8Array.from([...real["image/jpeg"], 0, 0, 0]), "image/jpeg"),
+	),
+	putCase(
+		"put bytes: a jpeg cut before its end",
+		put(
+			real["image/jpeg"].slice(0, real["image/jpeg"].length - 2),
+			"image/jpeg",
+		),
+	),
+	putCase(
+		"put bytes: a webp with bytes after its end",
+		put(Uint8Array.from([...real["image/webp"], 0, 0]), "image/webp"),
+	),
+	putCase(
+		"put bytes: a webp cut before its end",
+		put(
+			real["image/webp"].slice(0, real["image/webp"].length - 4),
+			"image/webp",
+		),
+	),
 	putCase("put bytes: a png of 7 bytes", put(Uint8Array.from(PNG.slice(0, 7)))),
 	putCase("put bytes: a png of exactly 8 bytes", put(Uint8Array.from(PNG))),
 	putCase(
@@ -551,15 +664,15 @@ const cases: Case[] = [
 	),
 	// PUT ok
 	putCase("put ok: a png on a draft with no picture", put(png())),
-	putCase("put ok: a jpeg", put(image["image/jpeg"], "image/jpeg")),
-	putCase("put ok: a webp", put(image["image/webp"], "image/webp")),
+	putCase("put ok: a jpeg", put(real["image/jpeg"], "image/jpeg")),
+	putCase("put ok: a webp", put(real["image/webp"], "image/webp")),
 	putCase("put ok: replacing a picture deletes the old one", put(png()), {
 		updates: [withKey()],
 		r2: { seed: OLD },
 	}),
 	putCase(
 		"put ok: replacing a png with a jpeg",
-		put(image["image/jpeg"], "image/jpeg"),
+		put(real["image/jpeg"], "image/jpeg"),
 		{ updates: [withKey()], r2: { seed: OLD } },
 	),
 	putCase("put ok: an old key that fails the key check is kept", put(png()), {
@@ -689,7 +802,7 @@ const cases: Case[] = [
 		...stage(),
 		steps: [
 			put(png()),
-			put(image["image/jpeg"], "image/jpeg", {
+			put(real["image/jpeg"], "image/jpeg", {
 				headers: (prior) => ({
 					origin: SITE,
 					"content-type": "image/jpeg",
@@ -701,12 +814,12 @@ const cases: Case[] = [
 	{
 		name: "put twice: the second reuses the old time",
 		...stage(),
-		steps: [put(png()), put(image["image/jpeg"], "image/jpeg")],
+		steps: [put(png()), put(real["image/jpeg"], "image/jpeg")],
 	},
 	{
 		name: "put then get after a replacement: the new picture reads back",
 		...stage({ updates: [withKey()], r2: { seed: OLD } }),
-		steps: [put(image["image/webp"], "image/webp"), getStep()],
+		steps: [put(real["image/webp"], "image/webp"), getStep()],
 	},
 	{
 		name: "put then get after a failed cleanup",
