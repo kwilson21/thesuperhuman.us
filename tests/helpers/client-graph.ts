@@ -62,7 +62,7 @@ function bringsCode(node: ts.ImportDeclaration | ts.ExportDeclaration) {
 
 	if (!clause) return true;
 
-	if (clause.isTypeOnly) return false;
+	if (clause.phaseModifier === ts.SyntaxKind.TypeKeyword) return false;
 	const named = clause.namedBindings;
 
 	if (clause.name || !named || ts.isNamespaceImport(named)) return true;
