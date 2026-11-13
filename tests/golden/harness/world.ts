@@ -488,13 +488,16 @@ async function runOn(
 				};
 
 				const send = async (path: string, body: JsonValue, cookie?: string) => {
+					const headers = new Headers({
+						"content-type": "application/json",
+						origin: ORIGIN,
+					});
+
+					if (cookie) headers.set("cookie", cookie);
+
 					const request = new Request(`${ORIGIN}${path}`, {
 						method: "POST",
-						headers: {
-							"content-type": "application/json",
-							origin: ORIGIN,
-							...(cookie ? { cookie } : {}),
-						},
+						headers,
 						body: JSON.stringify(body),
 					});
 

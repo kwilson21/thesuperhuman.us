@@ -29,6 +29,7 @@ const SIGNIN_MODEL = "verification/signin-codes.qnt";
 const SEED = "0x1";
 const STEPS = "20";
 const SAMPLES = "100000";
+
 // The sign-in model has a larger state, so it runs fewer samples (about 10 s for the pass run).
 const SIGNIN_SAMPLES = "30000";
 

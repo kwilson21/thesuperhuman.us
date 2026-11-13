@@ -51,7 +51,11 @@ beforeEach(() => {
 
 type Sent = { cookie?: string; ip?: string; origin?: string };
 
-function context(path: string, body: unknown, sent: Sent = {}): APIContext {
+function context(
+	path: string,
+	body: { [field: string]: string },
+	sent: Sent = {},
+): APIContext {
 	const origin = sent.origin ?? originOf;
 	const headers = new Headers({ origin, "content-type": "application/json" });
 
@@ -95,6 +99,7 @@ async function ask(sent: Sent = {}, who = address) {
 	const response = await requestCode(
 		context("/api/studio/code", { email: who, turnstileToken: "ok" }, sent),
 	);
+
 	await Promise.all(background.splice(0));
 
 	return response;
@@ -116,16 +121,17 @@ describe("the pending sign-in cookie", () => {
 	it("is set on every code request, with the same attributes whether or not the address has a project", async () => {
 		const known = await ask();
 		const unknown = await ask({}, "nobody@example.com");
-		const shape = (response: Response) =>
+
+		const pendingCookieOf = (response: Response) =>
 			response.headers
 				.getSetCookie()
 				.find((cookie) => cookie.startsWith(`${pendingName}=`))!
 				.replace(/=[0-9a-f]{64}/, "=<nonce>");
 
-		expect(shape(known)).toBe(
+		expect(pendingCookieOf(known)).toBe(
 			`${pendingName}=<nonce>; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=600; Secure`,
 		);
-		expect(shape(unknown)).toBe(shape(known));
+		expect(pendingCookieOf(unknown)).toBe(pendingCookieOf(known));
 		expect(await known.json()).toEqual(await unknown.json());
 		expect(mails).toHaveLength(1);
 	});
@@ -149,6 +155,7 @@ describe("the pending sign-in cookie", () => {
 
 	it("lets the browser that asked sign in, and clears the pending cookie beside the session cookie", async () => {
 		const asked = await ask();
+
 		const response = await enter(codeIn(mails[0]), {
 			cookie: `${pendingName}=${nonceFrom(asked)}`,
 		});

@@ -58,6 +58,7 @@ const codeHash = (
 
 const pendingFormat = /^[0-9a-f]{64}$/;
 const resendPause = 30_000;
+
 // Two allowance windows of codes (3 emails per five minutes, ten-minute lifetime); see verification/signin-codes.qnt.
 const liveCodesPerAddress = 6;
 

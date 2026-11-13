@@ -83,6 +83,7 @@ import {
 const URL_PATH = "/api/studio/code";
 const IP = "203.0.113.9";
 const FIRST = "84835301";
+
 // The second code the harness hands out (the pending value drawn before it moves the random sequence on from the old 41233920).
 const SECOND = "07085773";
 

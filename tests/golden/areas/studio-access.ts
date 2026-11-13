@@ -28,7 +28,7 @@ export const BROWSER = { ...SAME_ORIGIN, cookie: PENDING_COOKIE };
  * The headers of a browser that keeps its cookies: it sends back the pending sign-in cookie of the latest code request
  * that set one, as a real browser does between steps of a case.
  */
-export const browser = (prior: Prior): { [name: string]: string } => {
+export const browser = (prior: Prior) => {
 	for (const step of [...prior.steps].reverse()) {
 		if (step.answer.outcome !== "response") continue;
 
@@ -46,22 +46,20 @@ export const browser = (prior: Prior): { [name: string]: string } => {
 };
 
 /** The headers of the browser that made the code request at step `index`: the pending cookie that request set. */
-export const browserAt =
-	(index: number) =>
-	(prior: Prior): { [name: string]: string } => {
-		const answer = prior.steps[index]?.answer;
+export const browserAt = (index: number) => (prior: Prior) => {
+	const answer = prior.steps[index]?.answer;
 
-		const pending =
-			answer?.outcome === "response"
-				? answer.setCookies
-						.map((value) => value.match(/^studio_pending=([0-9a-f]{64})/)?.[1])
-						.find(Boolean)
-				: undefined;
+	const pending =
+		answer?.outcome === "response"
+			? answer.setCookies
+					.map((value) => value.match(/^studio_pending=([0-9a-f]{64})/)?.[1])
+					.find(Boolean)
+			: undefined;
 
-		return pending
-			? { ...SAME_ORIGIN, cookie: `studio_pending=${pending}` }
-			: SAME_ORIGIN;
-	};
+	return pending
+		? { ...SAME_ORIGIN, cookie: `studio_pending=${pending}` }
+		: SAME_ORIGIN;
+};
 
 /** The code key the default env uses. */
 export const KEY = DEFAULT_ENV.AUDIO_CLIENT_CODE_KEY ?? "";

@@ -68,6 +68,7 @@ const URL_PATH = "/api/studio/session";
 const IP = "203.0.113.9";
 const GOOD = "12345678";
 const SECOND_PENDING = "cd".repeat(32);
+
 // The subject of the per-requester allowance: the address and the hash of the browser's pending value.
 const REQUESTER = `${GRACE}:${await hashValue(PENDING)}`;
 
