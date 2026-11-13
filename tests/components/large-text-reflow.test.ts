@@ -59,3 +59,21 @@ it("caps the large button's side padding by the viewport, not by a query", () =>
 	expect(global).not.toContain("@container");
 	expect(footer).not.toContain("@container");
 });
+
+it("lets the closing panel's two Get in touch buttons wrap their label, scoped to the footer", () => {
+	expect(footer).toMatch(
+		/\.closing-panel \.site-button-large, \.pinned-contact \.site-button-large \{[^}]*white-space: normal;[^}]*text-align: center;/,
+	);
+});
+
+it("keeps the global button rule and its 380px query unchanged, so other buttons do not wrap", () => {
+	expect(global).toContain(
+		"line-height: 1.4; white-space: nowrap; }\n  /* Reflow (WCAG 1.4.10): on the narrowest phones a long label may wrap instead of pushing past the gutter. */\n  @media (max-width: 380px) { .site-button { white-space: normal; text-align: center; } }",
+	);
+});
+
+it("lets a long word in the page lede break only when it cannot fit a line", () => {
+	expect(global).toMatch(
+		/\.page-lede \{[^}]*overflow-wrap: break-word;[^}]*\}/,
+	);
+});

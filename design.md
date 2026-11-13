@@ -106,13 +106,16 @@ files; a test checks those literals against `global.css`.
 - At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
   that it stays on one line. The publishing consent page's button is the exception: its
   label wraps at any width, because that page cannot use a width query that follows text
-  size, and the label must stay inside the pill when text is enlarged.
+  size, and the label must stay inside the pill when text is enlarged. The closing panel's
+  large button and the pinned contact button are a second exception: their labels wrap at
+  any width when they do not fit, so enlarged text reflows inside the panel; at the default
+  text size they stay on one line.
 - The Work diagram's flow wraps by content: its parts share a row 1 : 1.2 and stack when the
   row cannot hold their longest word, so enlarged text reflows instead of scrolling sideways
   (WCAG 1.4.10). A word breaks inside itself only when it cannot fit a line. The large
   button's and the phone closing panel's side padding are capped by the viewport
   (`min(1.75rem, 8.75vw)`, `min(1.25rem, 6.25vw)`), which equals the rem value at 320px wide
-  and above.
+  and above at the default text size.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
@@ -225,8 +228,9 @@ Kazon chose how the closing panel's legal line wraps on a narrow phone, from fou
 shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
 is unchanged where it fits on one line.
 
-When the closing button's label wraps at enlarged text, the arrow stays centred beside both
-lines. Kazon chose it from two renders ("1 for sure", November 13, 2026).
+When the closing button's label wraps at enlarged text, the arrow stays centred beside the
+wrapped label, however many lines it takes. Kazon chose it from two renders ("1 for sure",
+November 13, 2026).
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 
