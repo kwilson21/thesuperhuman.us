@@ -301,14 +301,19 @@ const cases: Case[] = [
 	text("https:// with nothing after it", "see https:// for details"),
 	text("https:// followed by a dot", "see https://. now"),
 	text(
-		"mailto: with no slashes is refused",
+		"mailto: with no slashes is kept as text, never linked",
 		"mail me: mailto:someone@example.com",
 	),
 	text("javascript: with no slashes is refused", "javascript:alert(1)"),
 	text("JAVASCRIPT: in capitals is refused", "JAVASCRIPT:alert(1)"),
 	text("javascript: split by a tab is refused", "java\tscript:alert(1)"),
 	text("vbscript: with no slashes is refused", "vbscript:msgbox(1)"),
-	text("a file: address is refused", "file:///etc/passwd"),
+	text("a file:/// address is refused", "file:///etc/passwd"),
+	text("file: with no slashes is kept as text", "file:mix_v2.wav"),
+	text(
+		"an https address holding file: is accepted",
+		"https://example.com/file:notes",
+	),
 	text("Data: followed by a space is prose", "Data: the export finished"),
 	text(
 		"a data: URI with no slashes is refused",

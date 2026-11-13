@@ -77,17 +77,17 @@ describe("message text", () => {
 		"java\nscript:alert(1)",
 		"vbscript:msgbox(1)",
 		"data:text/html,hi",
+		"DATA:image/svg+xml,<svg/>",
 		"open data:text/html;base64,AAAA please",
-		"mailto:someone@example.com",
-		"file:///etc/passwd",
-		"blob:https://example.com/id",
+		"data:;base64,AAAA",
+		"da\tta:text/html,hi",
 		"http://example.com/files",
 		"ftp://example.com/files",
+		"file:///Users/me/mix.wav",
 		"www.example.com/files",
 		"https://user:secret@example.com/files",
 	])("refuses %j", (body) => {
 		expect(validateProjectMessage(body)).toBeNull();
-		expect(nonHttpsLinkText(body) || /:\/\/|www\./.test(body)).toBe(true);
 	});
 
 	it.each([
@@ -97,6 +97,13 @@ describe("message text", () => {
 		"Data: the export finished",
 		"Here is the folder: https://example.com/files.",
 		"Use mailto in the footer, not a form",
+		"https://example.com/file:notes",
+		"see https://example.com/a/javascript:b and https://example.com/data:text/plain",
+		"file:mix_v2.wav",
+		"the file:path is on the drive",
+		"re: mailto:me@x.com",
+		"mailto:someone@example.com",
+		"blob:notes",
 	])("accepts %j", (body) => {
 		expect(validateProjectMessage(body)).toBe(body);
 	});
@@ -134,6 +141,18 @@ describe("references shown to a client", () => {
 });
 
 describe("renderers", () => {
+	it("links only a checked https address in message text, so mailto: and file: text is never a link", () => {
+		const text = readFileSync(
+			new URL("../../src/components/ProjectMessages.astro", import.meta.url),
+			"utf8",
+		);
+
+		expect(text).toContain("const links = /https:\\/\\/[^\\s<>\"']+/gi;");
+		expect(text).toContain("safeExternalUrl(link)");
+		expect(text.match(/href=/g)).toHaveLength(1);
+		expect(text).toContain("part.href ?");
+	});
+
 	const source = (path: string) =>
 		readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 

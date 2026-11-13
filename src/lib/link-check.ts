@@ -26,28 +26,30 @@ export function safeHttpsUrl<T>(value: T): string | null {
 // A URL parser drops tab, line feed and carriage return anywhere in an address, so `java<tab>script:` is `javascript:`.
 const between = "[\\t\\n\\r]*";
 
-const schemeWords = [
-	"javascript",
-	"vbscript",
-	"data",
-	"mailto",
-	"file",
-	"blob",
-];
+const spelled = (word: string) => [...word].join(between);
 
-const schemeText = new RegExp(
-	`(?<![a-z0-9+.-])(?:${schemeWords
-		.map((word) => [...word].join(between))
-		.join("|")})${between}:(?=\\S)`,
+const script = `(?:${spelled("javascript")}|${spelled("vbscript")})${between}:(?=\\S)`;
+
+// A media type, or the ;base64, marker, after `data:`: the shape of a data address, not of a sentence.
+const dataAddress = `${spelled("data")}${between}:(?:[a-z][a-z0-9.+-]*\\/[a-z0-9.+-]+|[^,\\s]*;base64,)`;
+
+const executable = new RegExp(
+	`(?<![a-z0-9+.-])(?:${script}|${dataAddress})`,
 	"i",
 );
 
+// The same pattern the message renderer links (src/components/ProjectMessages.astro).
+const httpsSpan = /https:\/\/[^\s<>"']+/gi;
+
 /**
- * Whether message text holds one of these schemes written as an address (the name, a colon and then more text). A word
- * followed by a colon and a space, such as "Data: the export finished", is prose and is not caught.
+ * Whether message text holds an address that would run code or carry data: `javascript:` or `vbscript:` followed by text,
+ * or `data:` followed by a media type or `;base64,`, in any case and split by tab or line breaks. A valid https address
+ * is set aside first, so `https://example.com/file:notes` is fine, and `mailto:`, `file:` and a word with a colon
+ * ("Data: the export finished") are ordinary text: the renderer links only checked https addresses, so this refusal is
+ * a second line of defence and must not block normal writing.
  */
 export function nonHttpsLinkText(body: string): boolean {
-	return schemeText.test(body);
+	return executable.test(body.replace(httpsSpan, " "));
 }
 
 /**
