@@ -512,7 +512,7 @@ const cases: Case[] = [
 	go("the project lookup throws twice", notice(), invite("pending"), {
 		failures: [
 			{ on: LOOKUP, message: "d1 down" },
-			{ on: LOOKUP, message: "d1 down" },
+			{ on: LOOKUP, nth: 2, message: "d1 down" },
 		],
 	}),
 	go("the invitation queue throws", notice(), invite("failed"), {

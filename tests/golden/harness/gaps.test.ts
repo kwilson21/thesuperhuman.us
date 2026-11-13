@@ -956,3 +956,34 @@ describe("advancing the clock on virtual timers", () => {
 		expect(fired).toEqual(["seen 0", "late", "seen 2"]);
 	});
 });
+
+describe("injected failures", () => {
+	it("count every matching call per trigger, so a second trigger with nth 2 fires on the second call", async () => {
+		const outcomes: string[] = [];
+
+		const handler: Handler = async (context) => {
+			for (let call = 1; call <= 3; call += 1) {
+				try {
+					await env(context).MUSIC_DB.prepare("SELECT 1").first();
+					outcomes.push("ran");
+				} catch {
+					outcomes.push("threw");
+				}
+			}
+
+			return new Response("ok");
+		};
+
+		await runCase(
+			handler,
+			one({
+				failures: [
+					{ on: /^SELECT 1/, message: "first" },
+					{ on: /^SELECT 1/, nth: 2, message: "second" },
+				],
+			}),
+		);
+
+		expect(outcomes).toEqual(["threw", "threw", "ran"]);
+	});
+});

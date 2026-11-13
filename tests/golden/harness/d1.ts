@@ -79,10 +79,14 @@ export class SqlHooks {
 			interleave.run(sqlite);
 		}
 
-		for (const failure of this.failures)
-			if (this.hit(failure, db, sqls)) return failure.message;
+		// Every trigger counts every matching call, so `nth` means the n-th match of that trigger alone, even when an
+		// earlier trigger fails the same call. The first trigger due supplies the message.
+		let due: string | null = null;
 
-		return null;
+		for (const failure of this.failures)
+			if (this.hit(failure, db, sqls)) due ??= failure.message;
+
+		return due;
 	}
 }
 

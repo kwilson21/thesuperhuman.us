@@ -825,7 +825,7 @@ const cases: Case[] = [
 		],
 	}),
 	go(
-		"the invitation claim and final write both throw",
+		"the invitation claim throws, so the final write is never reached",
 		startBody(),
 		startable(),
 		{
@@ -872,6 +872,7 @@ const cases: Case[] = [
 				{ on: BATCH, message: "d1 down" },
 				{
 					on: /FROM software_invoices WHERE request_id=\?/,
+					nth: 2,
 					message: "d1 down",
 				},
 			],

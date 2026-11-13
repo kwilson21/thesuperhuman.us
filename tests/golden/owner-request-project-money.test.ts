@@ -338,7 +338,7 @@ const cases: Case[] = [
 	go("the deposit project lookup throws twice", dep(1), running(), {
 		failures: [
 			{ on: LOOKUP, message: "d1 down" },
-			{ on: LOOKUP, message: "d1 down" },
+			{ on: LOOKUP, nth: 2, message: "d1 down" },
 		],
 	}),
 	go("the deposit batch throws", dep(1), running(), {
@@ -359,6 +359,7 @@ const cases: Case[] = [
 				{ on: DEPOSIT_BATCH, message: "d1 down" },
 				{
 					on: /FROM software_invoices WHERE request_id=\?/,
+					nth: 2,
 					message: "d1 down",
 				},
 			],
@@ -552,7 +553,7 @@ const cases: Case[] = [
 	go("the payment project lookup throws twice", pay(0), running(), {
 		failures: [
 			{ on: LOOKUP, message: "d1 down" },
-			{ on: LOOKUP, message: "d1 down" },
+			{ on: LOOKUP, nth: 2, message: "d1 down" },
 		],
 	}),
 	go("the payment batch throws", pay(0), running(), {
