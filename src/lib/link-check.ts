@@ -26,7 +26,14 @@ export function safeHttpsUrl(value: unknown): string | null {
 // A URL parser drops tab, line feed and carriage return anywhere in an address, so `java<tab>script:` is `javascript:`.
 const between = "[\\t\\n\\r]*";
 
-const schemeWords = ["javascript", "vbscript", "data", "mailto", "file", "blob"];
+const schemeWords = [
+	"javascript",
+	"vbscript",
+	"data",
+	"mailto",
+	"file",
+	"blob",
+];
 
 const schemeText = new RegExp(
 	`(?<![a-z0-9+.-])(?:${schemeWords

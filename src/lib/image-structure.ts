@@ -5,7 +5,8 @@
 const crcTable = Uint32Array.from({ length: 256 }, (_, n) => {
 	let c = n;
 
-	for (let bit = 0; bit < 8; bit++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+	for (let bit = 0; bit < 8; bit++)
+		c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
 
 	return c >>> 0;
 });
@@ -46,7 +47,10 @@ function completePng(b: Uint8Array) {
 		if (first) {
 			if (type !== "IHDR" || length !== 13) return false;
 
-			if (view.getUint32(position + 8) === 0 || view.getUint32(position + 12) === 0)
+			if (
+				view.getUint32(position + 8) === 0 ||
+				view.getUint32(position + 12) === 0
+			)
 				return false;
 			first = false;
 		} else if (type === "IHDR") return false;
@@ -147,7 +151,12 @@ function completeWebp(b: Uint8Array) {
 		if (type === "VP8 ") {
 			image = true;
 
-			if (length < 10 || b[body + 3] !== 0x9d || b[body + 4] !== 0x01 || b[body + 5] !== 0x2a)
+			if (
+				length < 10 ||
+				b[body + 3] !== 0x9d ||
+				b[body + 4] !== 0x01 ||
+				b[body + 5] !== 0x2a
+			)
 				return false;
 		}
 
