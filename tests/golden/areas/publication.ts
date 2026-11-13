@@ -3,9 +3,7 @@
 import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
 import { canonicalPublication } from "~/lib/publication/canonical";
-import { afterEach, beforeEach, vi } from "vitest";
-import { isText } from "~/lib/type-guards";
-import { double, partial } from "../../helpers/doubles";
+import { partial } from "../../helpers/doubles";
 import type { JsonObject } from "../../helpers/json";
 import {
 	byHost,
@@ -207,36 +205,6 @@ export const OAUTH_ENV = {
 	PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
 } as const;
 
-type KvGet = (
-	key: string,
-	type?: string | { type?: string },
-) => Promise<string | null>;
-
-/**
- * The harness KV answers `get(key, { type: "json" })` with the stored text, not the parsed value (a harness gap: see the
- * report). The OAuth library reads every record that way. This adapter calls the harness namespace with exactly the
- * arguments the library passed, so the recorded `get` keeps `type: "json"`, and parses the text it gets back, as real
- * KV does. put, delete and list pass through unchanged.
- */
-function jsonKv(kv: KVNamespace): KVNamespace {
-	// SAFETY: the harness namespace's get takes a key and an optional type (a string or an options object) and answers the stored text or null; the overloads of KVNamespace["get"] describe that same function for each type.
-	const read = kv.get.bind(kv) as KvGet;
-
-	return double<KVNamespace>({
-		// SAFETY: the library calls get(key) for text and get(key, { type: "json" }) for records; the adapter answers a string or the parsed JSON, as the overload it picked returns.
-		get: (async (key: string, type?: string | { type?: string }) => {
-			const held = await read(key, type);
-			const kind = isText(type) ? type : type?.type;
-
-			return kind === "json" && isText(held) ? JSON.parse(held) : held;
-		}) as KVNamespace["get"],
-		put: (key: string, value: string, options?: KVNamespacePutOptions) =>
-			kv.put(key, value, options),
-		delete: (key: string) => kv.delete(key),
-		list: (options?: KVNamespaceListOptions) => kv.list(options),
-	});
-}
-
 type Capture = (response: Response) => Promise<string>;
 
 /** What a step of a flow reads from the answer and keeps for later steps. */
@@ -307,7 +275,6 @@ export type FlowStep = {
  */
 export class Flow {
 	private readonly vars = new Map<string, string>();
-	private readonly adapted = new WeakSet<KVNamespace>();
 
 	constructor(private readonly route: Handler) {}
 
@@ -358,14 +325,6 @@ export class Flow {
 				for (const [name, value] of Object.entries(spec.env ?? {}))
 					if (value === undefined) Reflect.deleteProperty(env, name);
 					else Reflect.set(env, name, value);
-
-				const original = env.OAUTH_KV;
-
-				if (original && !this.adapted.has(original)) {
-					const adapter = jsonKv(original);
-					this.adapted.add(adapter);
-					env.OAUTH_KV = adapter;
-				}
 
 				const response = await this.route(
 					partial<APIContext>({
@@ -603,38 +562,8 @@ export function oauthCase(c: Case): Case {
 	};
 }
 
-/**
- * The OAuth library makes a new AES key with crypto.subtle.generateKey for every grant and token, and keeps it,
- * wrapped, in the KV records. WebCrypto draws that key from its own source, which the harness cannot seed, so without
- * this the KV records differ on every run. This makes generateKey answer one fixed key (32 bytes of 7). Only the key
- * is fixed: the library's own calls, their order and every other value are unchanged. Call it before each case and
- * restore the returned spy after.
- */
-export function pinGeneratedKeys() {
-	return vi
-		.spyOn(crypto.subtle, "generateKey")
-		.mockImplementation(() =>
-			crypto.subtle.importKey(
-				"raw",
-				new Uint8Array(32).fill(7),
-				"AES-GCM",
-				true,
-				["encrypt", "decrypt"],
-			),
-		);
-}
-
 /** Everything an OAuth case file shares: the case builders and the per-case pin of generated keys. */
 export function oauthKit(route: Handler) {
-	let restoreKeys = () => {};
-
-	beforeEach(() => {
-		const spy = pinGeneratedKeys();
-		restoreKeys = () => spy.mockRestore();
-	});
-
-	afterEach(() => restoreKeys());
-
 	const run = (
 		build: (f: Flow, c: ReturnType<typeof connection>) => Step[],
 	): Step[] => {

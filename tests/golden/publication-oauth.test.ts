@@ -26,7 +26,7 @@ import {
 // The golden corpus for the login half of /api/publication/[...path] (src/lib/publication/oauth.ts and oauth-login.ts):
 // routing and configuration, the size limit, client registration, the authorize page, consent and the GitHub callback.
 // The OAuth library (@cloudflare/workers-oauth-provider) keeps its state in OAUTH_KV; the harness seeds
-// crypto.getRandomValues and freezes the clock, and pinGeneratedKeys fixes the one key WebCrypto draws on its own, so every
+// crypto.getRandomValues, fixes the one key WebCrypto draws on its own and freezes the clock, so every
 // id, code, token and sealed cookie is deterministic and recorded with its real value. A later request needs a value an
 // earlier answer made, so those cases use a Flow (tests/golden/areas/publication.ts): ~name~ in a request marks a
 // captured value, and the request is recorded as written. The token and refresh cases are in publication-token.test.ts

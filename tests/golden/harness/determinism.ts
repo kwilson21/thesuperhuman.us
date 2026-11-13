@@ -28,6 +28,60 @@ function seeded(seed: number) {
 	};
 }
 
+type KeyRequest = {
+	readonly name?: string;
+	readonly length?: number;
+	readonly hash?: string | { readonly name: string };
+};
+
+/**
+ * WebCrypto draws a generated key from its own source, which cannot be seeded, so the harness makes it: every key is the
+ * same bytes (seven in every byte) at the length asked for. Only the key is fixed; the code's own calls and their order
+ * are unchanged. A key type that cannot be built from bytes is refused by name.
+ */
+function generatedKey(
+	given: string | KeyRequest,
+	extractable: boolean,
+	usages: KeyUsage[],
+): Promise<CryptoKey> {
+	const algorithm: KeyRequest =
+		typeof given === "string" ? { name: given } : given;
+	const name = (algorithm.name ?? "").toUpperCase();
+
+	if (name.startsWith("AES") && algorithm.length !== undefined)
+		return crypto.subtle.importKey(
+			"raw",
+			new Uint8Array(algorithm.length / 8).fill(7),
+			name,
+			extractable,
+			usages,
+		);
+
+	if (name === "HMAC" && algorithm.hash !== undefined) {
+		const hash = (
+			typeof algorithm.hash === "string" ? algorithm.hash : algorithm.hash.name
+		).toUpperCase();
+
+		const bits =
+			algorithm.length ??
+			(hash === "SHA-384" || hash === "SHA-512" ? 1024 : 512);
+
+		return crypto.subtle.importKey(
+			"raw",
+			new Uint8Array(bits / 8).fill(7),
+			{ name: "HMAC", hash },
+			extractable,
+			usages,
+		);
+	}
+
+	return Promise.reject(
+		new Error(
+			`golden harness: generateKey for ${name} is not deterministic yet. Add it to determinism.ts.`,
+		),
+	);
+}
+
 export class Determinism {
 	private ids = 0;
 	private uploads = 0;
@@ -70,7 +124,13 @@ export class Determinism {
 
 		const math = vi.spyOn(Math, "random").mockImplementation(floats);
 
+		const generate = vi
+			.spyOn(crypto.subtle, "generateKey")
+			// SAFETY: generateKey is overloaded by key type; the fake answers the key (or the refusal) that the overload a caller picked would return.
+			.mockImplementation(generatedKey as typeof crypto.subtle.generateKey);
+
 		this.restores = [
+			() => generate.mockRestore(),
 			() => uuid.mockRestore(),
 			() => random.mockRestore(),
 			() => math.mockRestore(),
