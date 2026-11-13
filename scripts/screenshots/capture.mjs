@@ -40,7 +40,7 @@ import {
 import { CLOCK_BASE, installClock } from "./clock.mjs";
 import { openLocalD1 } from "./local-d1.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
-import { settle, trackRequests } from "./settle.mjs";
+import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
 import {
 	ACCESS_AUDIENCE,
@@ -98,6 +98,9 @@ const errors = [];
 
 // Where the run's time goes. The summary is printed at the end of the log (see timings.mjs).
 const timings = createTimings();
+
+// Why a capture stopped waiting for its page, when it was not quiet (see settle.mjs).
+const settles = createSettleLog();
 
 // The scope a capture or sql call belongs to: its scenario, or `pages` outside one.
 const scopeName = () => currentScenario ?? "pages";
@@ -243,9 +246,15 @@ async function capture({
 	if (response?.status() !== status)
 		errors.push(`${where}: HTTP ${response?.status()}, expected ${status}`);
 	else captured.push({ scenario: currentScenario, path });
+
 	// Turnstile's script is not counted, since it keeps requesting in the background. A page with its widget
 	// also waits for the widget to hold a token (see settle.mjs), so the image matches the drawn widget.
-	await timings.time(scope, "idle", () => settle(page, tracker));
+	const settled = await timings.time(scope, "idle", () =>
+		settle(page, tracker),
+	);
+
+	settles.record(settled, file);
+
 	await timings.time(scope, "fonts", () =>
 		page.evaluate(() => document.fonts.ready),
 	);
@@ -446,6 +455,8 @@ function printTimings() {
 	timingsPrinted = true;
 
 	for (const line of timings.summary()) console.log(line);
+
+	for (const line of settles.lines()) console.log(line);
 }
 
 // Paths each running scenario sent to ownerFetch, which runs server code without a browser.

@@ -1,12 +1,15 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	countVisibleWidgets,
 	createRequestTracker,
+	createSettleLog,
 	QUIET_MS,
 	SETTLE_CAP_MS,
 	settle,
 	trackRequests,
 	WIDGET_PAINT_MS,
+	widgetsHoldTokens,
 } from "../../scripts/screenshots/settle.mjs";
 
 // A clock the test moves by hand. `pause` moves it too, so settle's own waiting is exact.
@@ -26,6 +29,10 @@ function fakeClock() {
 
 const SITE = "https://thesuperhuman.us/app.js";
 const TURNSTILE = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 describe("createRequestTracker", () => {
 	it("is quiet immediately when nothing is in flight", () => {
@@ -138,6 +145,103 @@ describe("createRequestTracker", () => {
 		expect(tracker.inFlight()).toBe(1);
 		expect(tracker.quiet()).toBe(false);
 	});
+
+	it("remembers the URL of the first request still in flight", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		expect(tracker.firstUrl()).toBeUndefined();
+
+		tracker.start("a", SITE);
+		tracker.start("b", "https://thesuperhuman.us/other.js");
+		expect(tracker.firstUrl()).toBe(SITE);
+
+		tracker.finish("a");
+		expect(tracker.firstUrl()).toBe("https://thesuperhuman.us/other.js");
+	});
+});
+
+// Stands in for the page's document: the widgets a selector finds, and whether each is drawn.
+type FakeWidget = ReturnType<typeof widget>;
+
+function fakeDocument(widgets: FakeWidget[]) {
+	vi.stubGlobal("document", {
+		querySelectorAll: (selector: string) => {
+			expect(selector).toBe(".cf-turnstile");
+
+			return widgets;
+		},
+	});
+}
+
+// A widget as the page holds it: drawn (has layout boxes) or inside a hidden container (none), with
+// its token input in the light DOM. An iframe is never reachable from here, so none is given.
+function widget({
+	drawn = true,
+	token = "",
+}: {
+	drawn?: boolean;
+	token?: string;
+} = {}) {
+	return {
+		getClientRects: () => (drawn ? [{}] : []),
+		querySelector: (selector: string) =>
+			selector === '[name="cf-turnstile-response"]' ? { value: token } : null,
+	};
+}
+
+describe("widget checks that run in the page", () => {
+	it("counts only the widgets that are drawn", () => {
+		fakeDocument([
+			widget({ drawn: true }),
+			widget({ drawn: false }),
+			widget({ drawn: true }),
+		]);
+
+		expect(countVisibleWidgets()).toBe(2);
+	});
+
+	it("holds when every drawn widget has its token, even with no iframe reachable", () => {
+		fakeDocument([widget({ token: "0.abc" })]);
+
+		expect(widgetsHoldTokens()).toBe(true);
+	});
+
+	it("does not hold while a drawn widget has an empty token", () => {
+		fakeDocument([widget({ token: "0.abc" }), widget({ token: "" })]);
+
+		expect(widgetsHoldTokens()).toBe(false);
+	});
+
+	it("ignores a hidden widget that never gets a token", () => {
+		fakeDocument([widget({ token: "0.abc" }), widget({ drawn: false })]);
+
+		expect(widgetsHoldTokens()).toBe(true);
+	});
+});
+
+describe("createSettleLog", () => {
+	it("prints nothing when every capture settled quietly", () => {
+		const log = createSettleLog();
+
+		log.record("quiet", "home-desktop.png");
+
+		expect(log.lines()).toEqual([]);
+	});
+
+	it("prints one line per distinct reason with its count and its first file", () => {
+		const log = createSettleLog();
+
+		log.record("cap: turnstile token", "studio-sign-in-desktop.png");
+		log.record("quiet", "home-desktop.png");
+		log.record("cap: turnstile token", "offer-sign-phone.png");
+		log.record("cap: 1 requests in flight, first https://a.test/x.js", "x.png");
+
+		expect(log.lines()).toEqual([
+			"Settle cap: turnstile token: 2 captures, first studio-sign-in-desktop.png",
+			"Settle cap: 1 requests in flight, first https://a.test/x.js: 1 capture, first x.png",
+		]);
+	});
 });
 
 describe("settle", () => {
@@ -150,7 +254,12 @@ describe("settle", () => {
 					_arg: null,
 					_options: { timeout: number },
 				) => {
-					if (!ready) throw new Error("timeout");
+					if (!ready) {
+						const timeout = new Error("Timeout 5000ms exceeded.");
+						timeout.name = "TimeoutError";
+
+						throw timeout;
+					}
 
 					return true;
 				},
@@ -158,12 +267,14 @@ describe("settle", () => {
 		};
 	}
 
-	it("returns at once when the page is quiet and has no Turnstile widget", async () => {
+	it("returns at once when the page is quiet and has no drawn Turnstile widget", async () => {
 		const clock = fakeClock();
 		const tracker = createRequestTracker({ now: clock.now });
 		const page = fakePage();
 
-		await settle(page, tracker, { pause: clock.pause });
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"quiet",
+		);
 
 		expect(clock.now()).toBe(0);
 		expect(page.waitForFunction).not.toHaveBeenCalled();
@@ -183,8 +294,7 @@ describe("settle", () => {
 			if (clock.now() >= 200) tracker.finish("a");
 		};
 
-		await settle(page, tracker, { pause });
-
+		await expect(settle(page, tracker, { pause })).resolves.toBe("quiet");
 		expect(clock.now()).toBe(200 + QUIET_MS);
 	});
 
@@ -195,34 +305,87 @@ describe("settle", () => {
 
 		tracker.start("a", SITE);
 
-		await expect(
-			settle(page, tracker, { pause: clock.pause }),
-		).resolves.toBeUndefined();
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			`cap: 1 requests in flight, first ${SITE}`,
+		);
 		expect(clock.now()).toBe(SETTLE_CAP_MS);
 	});
 
-	it("waits for each widget to hold a token, then a short paint pause", async () => {
+	it("strips the query string and fragment from the reason, since they can carry tokens", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage();
+
+		tracker.start(
+			"a",
+			"https://thesuperhuman.us/api/owner/file.json?token=secret-value#frag",
+		);
+
+		const reason = await settle(page, tracker, { pause: clock.pause });
+
+		expect(reason).toBe(
+			"cap: 1 requests in flight, first https://thesuperhuman.us/api/owner/file.json",
+		);
+		expect(reason).not.toContain("secret-value");
+		expect(reason).not.toContain("#frag");
+	});
+
+	it("truncates the URL in the reason to 120 characters", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage();
+		const long = `https://thesuperhuman.us/${"a".repeat(200)}`;
+
+		tracker.start("a", long);
+
+		const reason = await settle(page, tracker, { pause: clock.pause });
+
+		expect(reason).toBe(
+			`cap: 1 requests in flight, first ${long.slice(0, 120)}`,
+		);
+	});
+
+	it("waits for each drawn widget to hold a token, then a short paint pause", async () => {
 		const clock = fakeClock();
 		const tracker = createRequestTracker({ now: clock.now });
 		const page = fakePage({ widgets: 1 });
 
-		await settle(page, tracker, { pause: clock.pause });
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"quiet",
+		);
 
+		expect(page.evaluate.mock.calls[0][0]).toBe(countVisibleWidgets);
 		expect(page.waitForFunction).toHaveBeenCalledTimes(1);
+		expect(page.waitForFunction.mock.calls[0][0]).toBe(widgetsHoldTokens);
 		expect(page.waitForFunction.mock.calls[0][2]).toEqual({
 			timeout: SETTLE_CAP_MS,
 		});
 		expect(clock.now()).toBe(WIDGET_PAINT_MS);
 	});
 
-	it("carries on silently when a widget never gets its token", async () => {
+	it("reports the cap when a widget never gets its token, and carries on", async () => {
 		const clock = fakeClock();
 		const tracker = createRequestTracker({ now: clock.now });
 		const page = fakePage({ widgets: 2, ready: false });
 
-		await expect(
-			settle(page, tracker, { pause: clock.pause }),
-		).resolves.toBeUndefined();
-		expect(clock.now()).toBe(0);
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: turnstile token",
+		);
+	});
+
+	it("reports a page error while settling as stopped, without throwing", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		const page = {
+			evaluate: vi.fn(async () => {
+				throw new Error("Target page, context or browser has been closed");
+			}),
+			waitForFunction: vi.fn(),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"stopped: Target page, context or browser has been closed",
+		);
 	});
 });
