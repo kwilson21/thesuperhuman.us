@@ -94,7 +94,13 @@ function consoleArg(arg: Passed): Recorded {
 	}
 }
 
+// The real timer, kept before any case fakes the global one, for the short real waits of `untilSettled`.
+const realSetTimeout = globalThis.setTimeout;
+
 export class Determinism {
+	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
+	virtualTimers = false;
+
 	private ids = 0;
 	private uploads = 0;
 	private restores: (() => void)[] = [];
@@ -107,7 +113,11 @@ export class Determinism {
 	now = () => new Date();
 
 	install() {
-		vi.useFakeTimers({ toFake: ["Date", "performance"] });
+		vi.useFakeTimers({
+			toFake: this.virtualTimers
+				? ["Date", "performance", "setTimeout", "clearTimeout"]
+				: ["Date", "performance"],
+		});
 		vi.setSystemTime(new Date(START));
 
 		const bytes = seeded(0x2545f491);
@@ -172,6 +182,45 @@ export class Determinism {
 	/** Moves the id sequence to `start`, so a sign-in draws values no other sign-in or request draws. */
 	startIds(start: number) {
 		this.ids = start;
+	}
+
+	/**
+	 * Waits for `work`. On virtual timers, whenever it has made no progress for a few real milliseconds the clock
+	 * moves to the next timer (recorded as an advance), so a route's timeout fires without the test waiting for it.
+	 */
+	async untilSettled<T>(work: Promise<T>): Promise<T> {
+		if (!this.virtualTimers) return work;
+
+		let settled = false;
+		const watched = work.finally(() => {
+			settled = true;
+		});
+
+		watched.catch(() => {});
+
+		for (let idle = 0; !settled; ) {
+			await new Promise<void>((resolve) => realSetTimeout(resolve, 5));
+
+			if (settled) break;
+
+			if (vi.getTimerCount() === 0) {
+				idle += 1;
+
+				if (idle > 200)
+					throw new Error(
+						"golden harness: the handler never settled and no timer is pending.",
+					);
+
+				continue;
+			}
+
+			idle = 0;
+			const before = Date.now();
+			await vi.advanceTimersToNextTimerAsync();
+			this.log.push({ kind: "advance", ms: Date.now() - before });
+		}
+
+		return work;
 	}
 
 	advance(ms: number) {

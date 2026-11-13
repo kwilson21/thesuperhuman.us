@@ -32,9 +32,28 @@ export type R2Setup = {
 	readonly seed?: R2Seed;
 	/** A listed operation rejects with an Error. Multipart calls are named createMultipartUpload and so on. */
 	readonly fails?: readonly string[];
-	/** Multipart uploads already started before the case: upload id to key. */
-	readonly uploads?: { readonly [uploadId: string]: string };
+	/**
+	 * Multipart uploads already started before the case: upload id to the key, or to the key and the parts already
+	 * uploaded (part number to its content) and the metadata the upload was created with.
+	 */
+	readonly uploads?: {
+		readonly [uploadId: string]:
+			| string
+			| {
+					readonly key: string;
+					readonly parts?: {
+						readonly [partNumber: number]: string | Uint8Array;
+					};
+					readonly httpMetadata?: R2HTTPMetadata;
+					readonly customMetadata?: { [name: string]: string };
+			  };
+	};
+	/** Keys that disappear right after a head() answers for them, so the get() that follows finds nothing. */
+	readonly vanishAfterHead?: readonly string[];
 };
+
+/** What R2 says of an upload it no longer has: error 10024, which `multipartUploadGone` in the source matches. */
+const UPLOAD_GONE = "The specified multipart upload does not exist. (10024)";
 
 type Held = {
 	bytes: Bytes;
@@ -164,8 +183,30 @@ export function recordingR2(
 		{ key: string; meta: Meta; parts: Map<number, Bytes> }
 	>();
 
-	for (const [uploadId, key] of Object.entries(setup.uploads ?? {}))
-		uploads.set(uploadId, { key, meta: {}, parts: new Map() });
+	const asBytes = (value: string | Uint8Array): Bytes =>
+		isText(value) ? new TextEncoder().encode(value) : value.slice();
+
+	for (const [uploadId, given] of Object.entries(setup.uploads ?? {}))
+		uploads.set(
+			uploadId,
+			isText(given)
+				? { key: given, meta: {}, parts: new Map() }
+				: {
+						key: given.key,
+						meta: {
+							httpMetadata: given.httpMetadata,
+							customMetadata: given.customMetadata,
+						},
+						parts: new Map(
+							Object.entries(given.parts ?? {}).map(([number, value]) => [
+								Number(number),
+								asBytes(value),
+							]),
+						),
+					},
+		);
+
+	const vanishing = new Set(setup.vanishAfterHead ?? []);
 
 	for (const [key, entry] of Object.entries(setup.seed ?? {})) {
 		const bytes = isText(entry.body)
@@ -297,7 +338,7 @@ export function recordingR2(
 	const upload = (id: string) => {
 		const found = uploads.get(id);
 
-		if (!found) throw new Error("r2: no such multipart upload");
+		if (!found) throw new Error(UPLOAD_GONE);
 
 		return found;
 	};
@@ -310,6 +351,7 @@ export function recordingR2(
 			uploadId: id,
 			uploadPart: async (partNumber: number, value: R2PutValue) => {
 				failIf("uploadPart");
+				upload(id);
 				const bytes = await bytesOf(value);
 				found.parts.set(partNumber, bytes);
 
@@ -324,6 +366,7 @@ export function recordingR2(
 			abort: async () => {
 				note("abort", found.key, { uploadId: id });
 				failIf("abort");
+				upload(id);
 				uploads.delete(id);
 			},
 			complete: async (parts: R2UploadedPart[]) => {
@@ -336,6 +379,7 @@ export function recordingR2(
 				});
 
 				failIf("complete");
+				upload(id);
 
 				const bytes = concat(
 					parts.map((part) => {
@@ -394,7 +438,14 @@ export function recordingR2(
 			});
 			failIf("head");
 
-			return held ? objectOf(key, held) : null;
+			const answer = held ? objectOf(key, held) : null;
+
+			if (held && vanishing.has(key)) {
+				store.delete(key);
+				note("vanish", key, null);
+			}
+
+			return answer;
 		},
 		// SAFETY: as for get().
 		put: (async (
@@ -490,13 +541,13 @@ export function recordingR2(
 					key,
 					uploadId,
 					uploadPart: async () => {
-						throw new Error("r2: no such multipart upload");
+						throw new Error(UPLOAD_GONE);
 					},
 					abort: async () => {
-						throw new Error("r2: no such multipart upload");
+						throw new Error(UPLOAD_GONE);
 					},
 					complete: async () => {
-						throw new Error("r2: no such multipart upload");
+						throw new Error(UPLOAD_GONE);
 					},
 				});
 

@@ -204,7 +204,19 @@ export function recordingFetch(
 /** What Workers AI gives back, or that it fails. */
 export type AiAnswer =
 	| { readonly kind: "value"; readonly value: JsonValue }
-	| { readonly kind: "throws"; readonly message: string };
+	| { readonly kind: "throws"; readonly message: string }
+	/** The run never settles, so only a timeout of the route's own ends the wait. */
+	| { readonly kind: "never" }
+	/** The run answers `ms` milliseconds after it was called, on the case's virtual timers. */
+	| { readonly kind: "after"; readonly ms: number; readonly value: JsonValue };
+
+export const aiNever = (): AiAnswer => ({ kind: "never" });
+
+export const aiAfter = (ms: number, value: JsonValue): AiAnswer => ({
+	kind: "after",
+	ms,
+	value,
+});
 
 export const aiValue = (value: JsonValue): AiAnswer => ({
 	kind: "value",
@@ -239,6 +251,13 @@ export function recordingAi(script: readonly AiAnswer[], log: EffectLog): Ai {
 			if (!answer) throw new Error("golden harness: no AI answer scripted");
 
 			if (answer.kind === "throws") throw new Error(answer.message);
+
+			if (answer.kind === "never") return new Promise(() => {});
+
+			if (answer.kind === "after")
+				return new Promise((resolve) =>
+					setTimeout(() => resolve(answer.value), answer.ms),
+				);
 
 			return answer.value;
 		}) as Ai["run"],

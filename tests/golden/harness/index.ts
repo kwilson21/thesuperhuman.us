@@ -24,6 +24,8 @@ export type { InjectedFailure, Interleave } from "./d1";
 export type { Effect, EffectBody } from "./log";
 
 export {
+	aiAfter,
+	aiNever,
 	aiThrows,
 	aiValue,
 	byHost,

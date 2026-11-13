@@ -876,7 +876,7 @@ const cases: Case[] = [
 		act(finish("abort")),
 	),
 	named(
-		"abort: R2 no longer has the upload (the row stays discarding today)",
+		"abort: R2 no longer has the upload (the abort is swallowed and the row is deleted)",
 		{ ...open(), r2: {} },
 		act(finish("abort")),
 	),

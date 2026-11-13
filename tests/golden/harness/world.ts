@@ -168,6 +168,11 @@ export type Case = {
 	};
 	/** The scheme and host requests come from, unless a step names its own. Default: https://thesuperhuman.us. */
 	readonly origin?: string;
+	/**
+	 * setTimeout and clearTimeout run on the frozen clock and fire as the runner advances it, so a route's timeout is
+	 * recorded without waiting. On by default when an AI answer never comes or comes late.
+	 */
+	readonly virtualTimers?: boolean;
 	readonly env?: EnvText;
 	/** Env members to remove, as a deployment that never set them. */
 	readonly omit?: readonly (keyof EnvText)[];
@@ -296,6 +301,14 @@ async function readAnswer(response: Response): Promise<StepRecord["answer"]> {
 export async function runCase(handler: Handler, c: Case): Promise<CaseRecord> {
 	const log = new EffectLog();
 	const clock = new Determinism(log);
+
+	clock.virtualTimers =
+		c.virtualTimers ??
+		c.ai?.some(
+			(answer) => answer.kind === "never" || answer.kind === "after",
+		) ??
+		false;
+
 	clock.install();
 
 	try {
@@ -604,7 +617,15 @@ async function runInstalled(
 		let answer: StepRecord["answer"];
 
 		try {
-			answer = await readAnswer(await (step.handler ?? handler)(context));
+			// With real timers the handler is awaited directly, so the order of its background work against the answer is
+			// exactly what the platform gives; only a case on virtual timers is driven by the runner.
+			const run = step.handler ?? handler;
+
+			answer = await readAnswer(
+				clock.virtualTimers
+					? await clock.untilSettled(Promise.resolve(run(context)))
+					: await run(context),
+			);
 		} catch {
 			answer = { outcome: "rejected" };
 		}

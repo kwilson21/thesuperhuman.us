@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
+import { multipartUploadGone } from "~/lib/audio-project-uploads";
 import {
+	aiAfter,
+	aiNever,
 	asClient,
 	generatedBody,
 	asVisitor,
@@ -540,5 +544,173 @@ describe("console output", () => {
 		expect(
 			got.effects.filter((effect) => effect.kind === "console"),
 		).toMatchObject([{ phase: "background" }]);
+	});
+});
+
+describe("R2 multipart uploads and vanishing objects", () => {
+	const etag = (text: string) =>
+		createHash("sha256").update(text).digest("hex").slice(0, 32);
+
+	it("an upload seeded with uploaded parts can be completed from those parts", async () => {
+		const handler: Handler = async (context) => {
+			const upload = env(context).AUDIO.resumeMultipartUpload("a/b.wav", "u1");
+
+			const object = await upload.complete([
+				{ partNumber: 1, etag: etag("one") },
+				{ partNumber: 2, etag: etag("two") },
+			]);
+
+			return new Response(String(object.size));
+		};
+
+		const got = await runCase(
+			handler,
+			one({
+				r2: {
+					uploads: { u1: { key: "a/b.wav", parts: { 1: "one", 2: "two" } } },
+				},
+				final: { r2: true },
+			}),
+		);
+
+		const answer = got.steps[0].answer;
+
+		expect(answer.outcome === "response" && answer.body).toBe("6");
+		expect(got.final).toMatchObject({ r2: { "a/b.wav": { size: 6 } } });
+	});
+
+	it("an upload given only as an id and a key still works, with no parts", async () => {
+		const handler: Handler = async (context) => {
+			const upload = env(context).AUDIO.resumeMultipartUpload("k", "u1");
+
+			await upload.abort();
+
+			return new Response("aborted");
+		};
+
+		const got = await runCase(handler, one({ r2: { uploads: { u1: "k" } } }));
+
+		expect(got.steps[0].answer).toMatchObject({ body: "aborted" });
+	});
+
+	it("an upload that no longer exists fails with the error R2 gives, which the source recognises as gone", async () => {
+		const messages: string[] = [];
+
+		const handler: Handler = async (context) => {
+			const bucket = env(context).AUDIO;
+			const gone = bucket.resumeMultipartUpload("k", "nobody");
+
+			for (const attempt of [
+				() => gone.abort(),
+				() => gone.uploadPart(1, "x"),
+				() => gone.complete([]),
+			])
+				try {
+					await attempt();
+				} catch (error) {
+					messages.push(multipartUploadGone(error) ? "gone" : String(error));
+				}
+
+			const made = await bucket.createMultipartUpload("k2");
+			await made.abort();
+
+			try {
+				await made.abort();
+			} catch (error) {
+				messages.push(multipartUploadGone(error) ? "gone" : String(error));
+			}
+
+			return new Response("ok");
+		};
+
+		await runCase(handler, one());
+
+		expect(messages).toEqual(["gone", "gone", "gone", "gone"]);
+	});
+
+	it("an object can vanish between head and get", async () => {
+		const handler: Handler = async (context) => {
+			const bucket = env(context).AUDIO;
+			const head = await bucket.head("o");
+			const body = await bucket.get("o");
+
+			return new Response(
+				`${head ? "head" : "nohead"}|${body ? "get" : "noget"}`,
+			);
+		};
+
+		const got = await runCase(
+			handler,
+			one({
+				r2: { seed: { o: { body: "x" } }, vanishAfterHead: ["o"] },
+				final: { r2: true },
+			}),
+		);
+
+		expect(got.steps[0].answer).toMatchObject({ body: "head|noget" });
+		expect(got.final).toEqual({ r2: {} });
+		expect(
+			got.effects.map((effect) => effect.kind === "r2" && effect.op),
+		).toEqual(["head", "vanish", "get"]);
+	});
+});
+
+describe("Workers AI that does not answer", () => {
+	it("an answer that never comes lets a route's own timeout win, on virtual time that advances the frozen clock", async () => {
+		const handler: Handler = async (context) => {
+			let timer: ReturnType<typeof setTimeout> | undefined;
+
+			const result = await Promise.race([
+				context.locals.runtime.env.AI?.run("@cf/model", { prompt: "x" }),
+				new Promise<null>((resolve) => {
+					timer = setTimeout(() => resolve(null), 1200);
+				}),
+			]);
+
+			clearTimeout(timer);
+
+			return new Response(result === null ? "timed out" : "answered");
+		};
+
+		const started = Date.now();
+		const got = await runCase(handler, one({ ai: [aiNever()] }));
+
+		expect(got.steps[0].answer).toMatchObject({ body: "timed out" });
+		expect(got.effects).toContainEqual({
+			kind: "advance",
+			ms: 1200,
+			step: 0,
+			phase: "request",
+		});
+		expect(Date.now() - started).toBeLessThan(1000);
+	});
+
+	it("an answer after a delay beats a longer timeout and loses to a shorter one", async () => {
+		const handler: Handler = async (context) => {
+			const wait = Number(
+				new URL(context.request.url).searchParams.get("wait"),
+			);
+
+			const result = await Promise.race([
+				context.locals.runtime.env.AI?.run("@cf/model", { prompt: "x" }),
+				new Promise<string>((resolve) =>
+					setTimeout(() => resolve("timeout"), wait),
+				),
+			]);
+
+			return new Response(JSON.stringify(result));
+		};
+
+		const got = await runCase(handler, {
+			name: "delay",
+			ai: [aiAfter(500, "late"), aiAfter(500, "late")],
+			steps: [{ path: "/x?wait=2000" }, { path: "/x?wait=100" }],
+		});
+
+		expect(
+			got.steps.map((step) =>
+				step.answer.outcome === "response" ? step.answer.body : "",
+			),
+		).toEqual(['"late"', '"timeout"']);
 	});
 });
