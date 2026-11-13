@@ -177,7 +177,19 @@ function aliasTargets(aliases: Alias[], specifier: string): string[] {
 
 /** True when an import brings code into the module: not `import type`, and not every specifier marked `type`. */
 function bringsCode(node: ts.ImportDeclaration | ts.ExportDeclaration) {
-	if (ts.isExportDeclaration(node)) return !node.isTypeOnly;
+	if (ts.isExportDeclaration(node)) {
+		const exported = node.exportClause;
+
+		// `export type { A }` and `export { type A }` are erased; `export *` and `export * as N` are not.
+		if (node.isTypeOnly) return false;
+
+		return !(
+			exported &&
+			ts.isNamedExports(exported) &&
+			exported.elements.length > 0 &&
+			exported.elements.every((element) => element.isTypeOnly)
+		);
+	}
 	const clause = node.importClause;
 
 	if (!clause) return true;

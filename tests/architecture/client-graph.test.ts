@@ -157,6 +157,35 @@ describe("the walker finds what it should", () => {
 		expect(clientGraphViolations(root)).toEqual([]);
 	});
 
+	it("does not count a re-export whose named elements are all type-only", () => {
+		const root = scratch({
+			"src/scripts/a.ts": [
+				'export { type Schema } from "effect/Schema";',
+				'export { type A, type B } from "effect/Effect";',
+			].join("\n"),
+		});
+
+		expect(clientGraphViolations(root)).toEqual([]);
+	});
+
+	it("still counts export * and a re-export with a value among its names", () => {
+		const root = scratch({
+			"src/scripts/a.ts": [
+				'export * from "effect/Option";',
+				'export * as O from "effect/Result";',
+				'export { type A, value } from "effect/Schema";',
+				'export { value } from "effect/Effect";',
+			].join("\n"),
+		});
+
+		expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+			"effect/Option",
+			"effect/Result",
+			"effect/Schema",
+			"effect/Effect",
+		]);
+	});
+
 	it("walks the script blocks of an .astro file and not its frontmatter", () => {
 		const root = scratch({
 			"src/pages/server-only.astro":
