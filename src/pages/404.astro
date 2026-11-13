@@ -57,12 +57,12 @@ const viewHeight = reflection + 37;
       </div>
     </div>
   </section>
-  <Footer compact slot="footer" />
+  <Footer variant="quiet" slot="footer" />
 </BaseLayout>
 <style>
   /* Home's first-screen composition: the words on the left, the picture on the right. The scene is
      hidden from screen readers, so the markup can keep it first and phones show it on top. */
-  .missing-page { display: grid; grid-template-columns: minmax(0, 34rem) minmax(0, 520px); justify-content: space-between; align-items: center; column-gap: var(--space-16); padding-block: var(--space-12) 5rem; }
+  .missing-page { display: grid; grid-template-columns: minmax(0, 34rem) minmax(0, 520px); justify-content: space-between; align-items: center; column-gap: var(--space-16); padding-block: var(--space-12) 0; }
   .missing-scene { order: 2; width: 100%; }
   .missing-copy { min-width: 0; }
   .missing-status { color: var(--muted); font-size: .875rem; margin: 0 0 var(--space-4); }
@@ -114,7 +114,7 @@ const viewHeight = reflection + 37;
 
   /* Phones and narrow windows: the scene on top, the words below, still left-aligned. */
   @media (max-width: 800px) {
-    .missing-page { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-8); padding-block: var(--space-2) var(--space-12); }
+    .missing-page { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-8); padding-block: var(--space-2) 0; }
     .missing-scene { order: 0; max-width: 520px; }
     .horizon-sky { height: 110px; }
     .horizon-sun { width: 60px; height: 60px; margin-left: -30px; }

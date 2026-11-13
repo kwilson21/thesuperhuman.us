@@ -34,15 +34,15 @@ const sections = headings.filter((heading) => heading.depth === 2);
       </details>
       <div class="prose-writing"><Content /></div>
       <div class="essay-projects"><a class="site-link" href="/building">Explore the projects <span aria-hidden="true">→</span></a></div>
-      <nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a><a class="site-link" href="/#contact">Get in touch <span aria-hidden="true">→</span></a></nav>
+      <nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a></nav>
     </article>
   </div>
-  <Footer compact slot="footer" />
+  <Footer slot="footer" />
 </BaseLayout>
 <style>
   /* The rail fits the longest section title on one line (about 276px at .85rem). Below about 1130px
      the article narrows instead; its prose keeps about 50 to 70 characters a line down to 1000px. */
-  .essay-layout { display: grid; grid-template-columns: 19rem minmax(0, 760px); gap: clamp(2rem, 5vw, 4.5rem); padding-block: clamp(3rem, 6vw, 5rem) 2rem; }
+  .essay-layout { display: grid; grid-template-columns: 19rem minmax(0, 760px); gap: clamp(2rem, 5vw, 4.5rem); padding-block: clamp(3rem, 6vw, 5rem) 0; }
   .essay-contents nav { position: sticky; top: 2rem; }
   .essay-contents p { font-size: .9rem; margin-bottom: 1rem; }
   .essay-contents ol, .essay-mobile-contents ol { list-style: none; }
@@ -54,7 +54,7 @@ const sections = headings.filter((heading) => heading.depth === 2);
   .essay-byline { margin-top: 1.5rem; font-size: .95rem; }
   .essay-mobile-contents { display: none; }
   .essay-projects { margin-block: 2rem; }
-  .essay-close { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; padding-block: 2rem; border-top: 1px solid var(--rule); }
+  .essay-close { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 0; border-top: 1px solid var(--rule); }
   @media(max-width: 1000px) {
     .essay-layout { display: block; max-width: 840px; }
     .essay-contents { display: none; }

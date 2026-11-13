@@ -46,8 +46,7 @@ import {
         <ul>{team.projects.map(project => <li><strong>{project.title}.</strong> {project.description}</li>)}</ul>
       </section>)}</div>}
     </ExperienceRow>)}</section>
-    <section class="page-connect"><div><h2>Have a problem worth exploring?</h2><p>I’d love to hear about it.</p></div><a class="site-button" href="/#contact">Get in touch</a></section>
-  </div><Footer compact slot="footer" />
+  </div><Footer slot="footer" />
 </BaseLayout>
 <script>
   import { setupWorkExperience } from '~/scripts/work-experience';

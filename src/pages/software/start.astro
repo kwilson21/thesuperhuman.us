@@ -136,7 +136,7 @@ const href = (path: string) =>
     </section>
     <p class="intake-contact">Not sure it fits? <a href={href('/#contact')}>Get in touch</a>. Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>.</p>
   </article>
-  <Footer compact slot="footer" />
+  <Footer variant="quiet" slot="footer" />
   {available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
   <script>import '~/scripts/software-inquiry';</script>
 </BaseLayout>
