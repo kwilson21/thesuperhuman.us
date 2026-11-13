@@ -3,6 +3,7 @@ import {
 	globSync,
 	readdirSync,
 	readFileSync,
+	realpathSync,
 	statSync,
 } from "node:fs";
 import { isBuiltin } from "node:module";
@@ -441,15 +442,81 @@ function packageOf(specifier: string): string {
 	return first.startsWith("@") && second ? `${first}/${second}` : first;
 }
 
-/** True when a directory named for the package exists under a node_modules of `from`'s directory or above it. */
-function isInstalled(name: string, from: string): boolean {
+/** The directory named for the package under a node_modules of `from`'s directory or above it, or undefined. */
+function packageDirectory(name: string, from: string): string | undefined {
 	for (let directory = dirname(from); ; directory = dirname(directory)) {
 		const path = join(directory, "node_modules", name);
 
-		if (existsSync(path) && statSync(path).isDirectory()) return true;
+		if (existsSync(path) && statSync(path).isDirectory()) return path;
 
-		if (dirname(directory) === directory) return false;
+		if (dirname(directory) === directory) return undefined;
 	}
+}
+
+/** True when a directory named for the package exists under a node_modules of `from`'s directory or above it. */
+function isInstalled(name: string, from: string): boolean {
+	return packageDirectory(name, from) !== undefined;
+}
+
+// The dependency fields that put a package's code in the bundle of whatever imports it.
+const DEPENDENCY_FIELDS = [
+	"dependencies",
+	"peerDependencies",
+	"optionalDependencies",
+] as const;
+
+/** The package names a package.json lists under DEPENDENCY_FIELDS, or none when it cannot be read. */
+function dependenciesOf(manifest: string): string[] {
+	if (!existsSync(manifest)) return [];
+
+	const parsed: unknown = JSON.parse(readFileSync(manifest, "utf8"));
+
+	if (!isJsonObject(parsed)) return [];
+
+	return DEPENDENCY_FIELDS.flatMap((field) => {
+		const listed = parsed[field];
+
+		return isJsonObject(listed) ? Object.keys(listed) : [];
+	});
+}
+
+/** An installed package's dependency on a forbidden module: which one, and the package.json files that lead to it. */
+type Dependency = { forbidden: string; via: string[] };
+
+/**
+ * Whether the installed package `name` (found from `from`) depends on a forbidden module, directly or through the
+ * packages it depends on. A package that is not installed ends the search: nothing of it can be read. `visited` stops a
+ * dependency cycle; the directories are real paths, so pnpm's symlinks do not hide a package that was seen.
+ */
+function dependencyOnForbidden(
+	name: string,
+	from: string,
+	allow: readonly string[],
+	visited: Set<string>,
+): Dependency | undefined {
+	const directory = packageDirectory(packageOf(name), from);
+
+	if (directory === undefined) return undefined;
+	const real = realpathSync(directory);
+
+	if (visited.has(real)) return undefined;
+	visited.add(real);
+	const manifest = join(real, "package.json");
+	const dependencies = dependenciesOf(manifest);
+	const direct = dependencies.find((dependency) =>
+		isForbiddenPackage(dependency, allow),
+	);
+
+	if (direct !== undefined) return { forbidden: direct, via: [manifest] };
+
+	for (const dependency of dependencies) {
+		const deeper = dependencyOnForbidden(dependency, manifest, allow, visited);
+
+		if (deeper)
+			return { forbidden: deeper.forbidden, via: [manifest, ...deeper.via] };
+	}
+
+	return undefined;
 }
 
 /** What one specifier leads to: files to walk, bare names to judge, and a reason when it cannot be followed. */
@@ -585,8 +652,14 @@ export function clientGraphViolations(
 ): (ClientGraphViolation | UnresolvedLoad)[] {
 	const aliases = aliasesOf(root);
 	const violations: (ClientGraphViolation | UnresolvedLoad)[] = [];
+	const dependencies = new Map<string, Dependency | undefined>();
 	const seen = new Set<string>();
 	const shown = (file: string) => relative(root, file).split(sep).join("/");
+	// A package's files are reached through real paths (symlinks resolved), so show them against the real root.
+	const realRoot = realpathSync(root);
+
+	const shownReal = (file: string) =>
+		relative(realRoot, file).split(sep).join("/");
 
 	for (const entry of clientEntries(root)) {
 		const queue: { file: string; chain: string[] }[] = [
@@ -634,6 +707,33 @@ export function clientGraphViolations(
 					) || found.files.some((file) => isServerFile(file, root));
 
 				if (forbidden) violations.push({ import: text, chain: current.chain });
+
+				// An installed package browser code imports must not depend on Effect either: its own imports are in the bundle.
+				for (const name of found.names) {
+					if (isForbiddenPackage(name, allow) || isBuiltin(name)) continue;
+
+					const directory = packageDirectory(packageOf(name), current.file);
+
+					if (directory === undefined) continue;
+					const key = realpathSync(directory);
+
+					if (!dependencies.has(key))
+						dependencies.set(
+							key,
+							dependencyOnForbidden(name, current.file, allow, new Set()),
+						);
+
+					const dependency = dependencies.get(key);
+
+					if (dependency)
+						violations.push({
+							import: dependency.forbidden,
+							chain: [
+								...current.chain,
+								...dependency.via.map((file) => shownReal(file)),
+							],
+						});
+				}
 
 				for (const file of found.files)
 					if (!isServerFile(file, root) && !file.endsWith(".astro"))

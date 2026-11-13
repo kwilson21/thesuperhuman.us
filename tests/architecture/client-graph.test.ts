@@ -512,6 +512,107 @@ describe("the walker finds what it should", () => {
 		});
 	});
 
+	describe("installed packages that depend on Effect", () => {
+		const manifest = (name: string, dependencies: object) => ({
+			[`node_modules/${name}/package.json`]: JSON.stringify(dependencies),
+		});
+
+		const entry = { "src/scripts/a.ts": 'import "dep";' };
+
+		it("finds a package browser code imports that depends on effect", () => {
+			const root = scratch(
+				{ ...entry, ...manifest("dep", { dependencies: { effect: "^4" } }) },
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "effect",
+					chain: ["src/scripts/a.ts", "node_modules/dep/package.json"],
+				},
+			]);
+		});
+
+		it("finds a peer dependency on an @effect package", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { peerDependencies: { "@effect/platform": "*" } }),
+				},
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"@effect/platform",
+			]);
+		});
+
+		it("finds @xstate/effect two packages away, naming the packages between", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { dependencies: { mid: "1" } }),
+					...manifest("mid", { dependencies: { "@xstate/effect": "1" } }),
+				},
+				{ packages: ["dep", "mid"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "@xstate/effect",
+					chain: [
+						"src/scripts/a.ts",
+						"node_modules/dep/package.json",
+						"node_modules/mid/package.json",
+					],
+				},
+			]);
+		});
+
+		it("finds a package that imports only effect/Predicate through its dependencies", () => {
+			const root = scratch(
+				{
+					"src/scripts/a.ts": 'import "dep/sub";',
+					...manifest("dep", { dependencies: { effect: "^4" } }),
+				},
+				{ packages: ["dep"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"effect",
+			]);
+		});
+
+		it("follows a dependency cycle once and passes when nothing in it uses effect", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { dependencies: { mid: "1" } }),
+					...manifest("mid", { dependencies: { dep: "1" } }),
+				},
+				{ packages: ["dep", "mid"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([]);
+		});
+
+		it("ignores devDependencies, a package browser code never imports, and a package with no manifest", () => {
+			const root = scratch(
+				{
+					...entry,
+					...manifest("dep", { devDependencies: { effect: "^4" } }),
+					...manifest("unused", { dependencies: { effect: "^4" } }),
+				},
+				{ packages: ["dep", "unused"] },
+			);
+
+			expect(clientGraphViolations(root)).toEqual([]);
+			expect(
+				clientGraphViolations(scratch({ "src/scripts/a.ts": 'import "zod";' })),
+			).toEqual([]);
+		});
+	});
+
 	describe("the allowlist", () => {
 		it("names the forbidden modules in one list", () => {
 			expect(FORBIDDEN_MODULES).toEqual([
