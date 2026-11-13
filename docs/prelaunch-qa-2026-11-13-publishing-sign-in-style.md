@@ -3,12 +3,12 @@
 Date: November 13, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/publishing-sign-in-style`, from `origin/main` at `fad7694e`
-Commits: `6151aa50` (style), `76f3fefb` (golden re-record for the style), then `bcfce0b0` (Libron and `font-src`), `14179d78` (label wrap), `dffc5aeb` (drift test and tap highlight), `64425f34` (design docs), `7eed2599` (golden re-record for Libron), `b9b4f37e` and `c9b1c20c` (format and lint fixes in the test file), `2fbd48ed` (heading size and word breaking, with the golden re-record), `77c047e8` (heading minimum 1.25rem, drift test, golden re-record), and then the document commit that adds this revision.
+Commits: `6151aa50` (style), `76f3fefb` (golden re-record for the style), then `bcfce0b0` (Libron and `font-src`), `14179d78` (label wrap), `dffc5aeb` (drift test and tap highlight), `64425f34` (design docs), `7eed2599` (golden re-record for Libron), `b9b4f37e` and `c9b1c20c` (format and lint fixes in the test file), `2fbd48ed` (heading size and word breaking, with the golden re-record), `77c047e8` (heading minimum 1.25rem, drift test, golden re-record), `ac16b966` and `be0c3834` (wrong-nonce test and the record), `dae9ea58` (pressed state uses the ink fill instead of opacity, with the golden re-record), and then the document commit that adds this revision.
 Pull request: #261 (see the PR description for the link).
 Target: production `https://thesuperhuman.us` after merge. The consent page is served by the Astro route `src/pages/api/publication/[...path].ts`, which returns 404 unless the request origin is `https://thesuperhuman.us` (`src/lib/publication/oauth.ts`). Its fonts are static files on the same origin (`public/fonts/libron-v0.25/`). The page is never served on the audio host.
 Reviewer: Claude Haiku 5.5 subagent, tests first. The coordinating session owns the review, the browser checks listed as UNVERIFIED, and the deployment decision. This record does not certify them.
 Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR adds no migration and writes no stored data.
-Evidence: the code, tests, golden fixtures and renders were gathered at code commit `77c047e8`. The later commits in this branch change documents and one test file (adding the wrong-nonce test, with no production code change), so the evidence applies to the production code at `77c047e8`.
+Evidence: the renders and the 320px and 200% measurements were gathered at code commit `77c047e8`. Commit `dae9ea58` changes one style declaration (the pressed state), so the golden comparison and the tests below were re-run at `dae9ea58`. The wrong-nonce test in `be0c3834` adds no production code change.
 
 ## Scope
 
@@ -52,10 +52,10 @@ Local runs on macOS arm64, Node 26.13.1, pnpm, on code commit `77c047e8`:
 - `pnpm run check`: 0 errors, 0 warnings, 17 hints.
 - `pnpm run design:check`: passed, 6 gates, 12 allowlisted exceptions.
 - `pnpm run build`: exit 0, "Complete!". The built worker contains the Libron font path.
-- Golden fixtures: `UPDATE_GOLDEN=1` run once per file on `77c047e8`; `pnpm exec vitest run` on the three files passed. The golden comparison below uses `node scripts/golden-diff.mjs diff <set> origin/main`, and a residual check removes the added markup from each differing body (the `style` block, `<meta name="color-scheme">`, and the `class` attributes on the return address and cancel note) and the two added CSP directives (`style-src`, `font-src`) before comparing:
-  - publication-oauth: 124 cases; 53 cases differ (52 steps in the consent step, 1 step in the callback case's first step); every differing path is `body` or `headers.content-security-policy`; residual after removing the added markup: 0.
-  - publication-mcp: 60 cases; 60 cases differ; every differing path is `body` or `headers.content-security-policy`; residual: 0.
-  - publication-token: 42 cases; 42 cases differ, 43 consent steps in total (one case has two consent steps); every differing path is `body` or `headers.content-security-policy`; residual: 0.
+- Golden fixtures: `UPDATE_GOLDEN=1` run once per file on `dae9ea58` (the pressed-state change, which changes the style bytes and so the `style-src` hash); `pnpm exec vitest run` on the three files passed (229 of 229). The golden comparison below uses `node scripts/golden-diff.mjs diff <set> origin/main`. A residual check parses each fixture, takes every consent body against its `origin/main` counterpart, removes the `style` block, the `<meta name="color-scheme">` and the `class` attributes, and compares what is left:
+  - publication-oauth: 124 cases; 53 cases differ, all in the consent step; every differing path is `body` or `headers.content-security-policy`; consent bodies compared: 53; residual: 0.
+  - publication-mcp: 60 cases; 60 cases differ; every differing path is `body` or `headers.content-security-policy`; consent bodies compared: 60; residual: 0.
+  - publication-token: 42 cases; 42 cases differ, 43 consent steps in total (one case has two consent steps); every differing path is `body` or `headers.content-security-policy`; consent bodies compared: 43; residual: 0.
 - Renders, from the page HTML and its real CSP header, served from the Astro dev server on `127.0.0.1:4323` (the screenshots config, which serves the same-origin fonts), with requests to other hosts blocked, at device scale factor 2. Files are in the gitignored `.screenshots/` folder and are not attached:
   - `.screenshots/sign-in-desktop.png` (1280x800)
   - `.screenshots/sign-in-phone.png` (390x844)
@@ -102,6 +102,21 @@ What the renders show (each read as an image):
 - `sign-in-desktop.png` (1280px): the title on two lines (a design choice the Hallmark reviewer raised, unchanged), the button on one line, the cancel note below.
 - `sign-in-focus.png` (1280px): the button with the 2px accent focus ring after one Tab press; the focused element is the BUTTON.
 
+## Pressed state (`dae9ea58`)
+
+The button's `:active` rule was `opacity: .78`, copied from the site's `.site-button:active`. At that opacity the label's contrast on the paper background drops to about 3.24:1. The rule is now `background: #0E0E0E; border-color: #0E0E0E`, the same ink fill and border the hover state uses (label on ink 18.21:1). The site's own `.site-button` is unchanged. `tests/lib/publication-login.test.ts` checks that the active rule has no `opacity` and sets the ink background and border, read from `global.css`. The test was written first and failed on the old rule. The full suite passes (264 files; 11,989 tests passed, 1 skipped). The button inventory records the exception.
+
+## Screenshot capture (blocked)
+
+The Screenshots workflow does not capture the consent page, and no `publication-consent` scenario was added. The page renders only for a valid authorization request, and the route refuses any origin but a hard-coded production origin:
+
+- `src/lib/publication/oauth-login.ts:6`: `export const publicationOrigin = "https://thesuperhuman.us";`
+- `src/lib/publication/oauth.ts:92`: `if (url.origin !== publicationOrigin || !paths.has(url.pathname)) return 404`. Every request to the route, including the authorize page, fails at this line on the preview at `127.0.0.1:4321`.
+- `src/lib/publication/oauth-login.ts:230`: the consent POST requires `request.headers.get("origin") === publicationOrigin`, so the approve step is blocked too.
+- `SITE_ORIGIN` in `PREVIEW_OVERRIDES` does not reach these checks. The route never reads it.
+
+No production behaviour was changed and no bypass was added. Option for the owner: read the publication origin from a configured variable (for example `PUBLICATION_ORIGIN`) that defaults to `https://thesuperhuman.us` in `wrangler.jsonc`, and set it to the preview address in `PREVIEW_OVERRIDES`. That change touches the route, the consent POST, the redirect URIs and the CSP `form-action`, so it needs the owner's approval before it is made. With it in place, a scenario would seed one fictional client, then drive `/api/publication/authorize` with fixed PKCE and state values, and capture the page at both sizes.
+
 ## Deviation from the brief
 
 - The drift test checks the cancel note's sans stack against `--font-sans` without `'Inter'`, the first family in that token. Inter is not self-hosted, and the policy admits no font host, so the note keeps the system part of the stack. Adding `'Inter'` to the note is a one-line change if the owner wants it.
@@ -132,7 +147,7 @@ What the renders show (each read as an image):
 - **N/A · Skip link, menus, dialogs.** None on the page.
 - **N/A · Inputs and status messages.** The only form field is the hidden nonce; there are no user inputs.
 - **PASS (limits) · Contrast and touch targets.** Contrast figures are those of the first Hallmark audit (see Contrast); the colours are unchanged. Button minimum height 44px, measured 44px at 1280px and 390px. Measured at 200% text only by setting the root font size in Chromium (see Heading fit); the browser's own text size setting is UNVERIFIED.
-- **N/A · Reduced motion.** The page has no animation or transition; the button's `:active` state changes opacity only.
+- **N/A · Reduced motion.** The page has no animation or transition; the button's `:active` state swaps to the ink fill and border with no opacity change and no transition.
 - **PASS (limits) · Widths.** 320, 390 and 1280 checked, with no horizontal overflow (scrollWidth equals the viewport in every case). Tablet widths were not rendered: UNVERIFIED.
 - **UNVERIFIED · Browsers and devices.** Chromium only. Safari, Firefox, a real phone and forced-colors mode were not run.
 
@@ -185,7 +200,7 @@ What the renders show (each read as an image):
 - Noindex: decide whether the consent response should carry `X-Robots-Tag: noindex`. It is not added here, because it changes behavior.
 - Follow-up outside this PR (pre-existing): reject redirect origins containing `;` or `,` when a client registers. An injected directive can only tighten the policy.
 - Remaining checks listed as UNVERIFIED above: Safari and Firefox, a real phone, the browser's own 200% text setting, forced-colors mode, tablet widths, production headers and cache behavior, and the live error paths.
-- Optional: add a Screenshots scenario in `scripts/screenshots/scenarios/` that makes a valid authorization request, so CI captures this page.
+- Screenshots: CI does not capture the consent page. The blocker and a proposed option are under "Screenshot capture (blocked)" above. The owner decides whether to take that option.
 
 ## Deployment
 
