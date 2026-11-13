@@ -103,7 +103,8 @@ it("owner agreements answers a database fault with its fixed sentence at 500 and
 		error: "The agreement could not be saved.",
 	});
 	expect(text).not.toMatch(/no such table|SQLITE/);
-	expect(JSON.stringify(logged)).not.toMatch(/no such table|SQLITE/);
+	// The log says what failed, so an outage can be diagnosed; the response does not.
+	expect(JSON.stringify(logged)).toMatch(/no such table/);
 	expect(logged).toHaveLength(1);
 });
 

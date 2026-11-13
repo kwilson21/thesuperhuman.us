@@ -23,7 +23,7 @@ import {
 } from "./agreement-templates";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
-import { ReaderMessage } from "./reader-message";
+import { LostRace, ReaderMessage } from "./reader-message";
 
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
@@ -258,7 +258,7 @@ export async function reviewAgreements(
 		throw new ReaderMessage(
 			"Another offer has a pending MSA for this party. Ask Kazon to resolve it.",
 		);
-	await db.batch([
+	const batch = [
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),
 		softwareGuard(
@@ -319,7 +319,26 @@ export async function reviewAgreements(
 				]
 			: []),
 		agreementEvent(db, "reviewed", session.token_hash, at, null, offer.id),
-	]);
+	];
+
+	try {
+		await db.batch(batch);
+	} catch (error) {
+		// Another tab can create the same legal party under its own id, so this batch's insert of the client is skipped and
+		// the agreements then name a client that does not exist. That is a lost race. A foreign key failure while the
+		// client row exists is not, and stays a fault.
+		if (
+			error instanceof Error &&
+			/FOREIGN KEY/.test(error.message) &&
+			!(await db
+				.prepare("SELECT 1 FROM software_agreement_clients WHERE id=?")
+				.bind(clientId)
+				.first())
+		)
+			throw new LostRace("The client row was created by another request.");
+
+		throw error;
+	}
 
 	return {
 		documents,

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { ReaderMessage } from "~/lib/reader-message";
+import { LostRace, ReaderMessage } from "~/lib/reader-message";
 import { classifyFailure, logUnexpected } from "~/server/failure";
 
 // What a route does with what it caught: only a sentence the code wrote for the reader may be shown.
@@ -20,6 +20,7 @@ it.each([
 		"a unique index",
 		new Error("UNIQUE constraint failed: software_invoices.id"),
 	],
+	["a race a batch recognised itself", new LostRace("client row")],
 	[
 		"a failed guard under a wrapper",
 		new Error("batch failed", { cause: new Error("malformed JSON") }),
@@ -29,7 +30,11 @@ it.each([
 });
 
 it.each([
-	["a database fault", new Error("FOREIGN KEY constraint failed")],
+	[
+		"a foreign key failure no batch recognised",
+		new Error("FOREIGN KEY constraint failed"),
+	],
+	["a database fault", new Error("D1_ERROR: no such table: x")],
 	["a JavaScript fault", new TypeError("Cannot read properties of undefined")],
 	[
 		"a parser fault",
@@ -41,17 +46,33 @@ it.each([
 	expect(classifyFailure(error)).toEqual({ kind: "unexpected" });
 });
 
-it("logs a fault by its name and never its message", () => {
+it("logs the route, the name and a clean, cut message, and leaves out a message that quotes input", () => {
 	const logged: unknown[][] = [];
 
 	vi.spyOn(console, "error").mockImplementation((...args) => {
 		logged.push(args);
 	});
-	logUnexpected("Agreement review", new Error("FOREIGN KEY constraint failed"));
+	logUnexpected(
+		"Agreement review",
+		new Error("D1_ERROR: no such table: x\r\nBcc: a@b.c"),
+	);
+	logUnexpected("Agreement review", new Error("x".repeat(500)));
+	logUnexpected(
+		"Agreement review",
+		new SyntaxError(
+			"Unexpected token 'o', \"ada@example.com\" is not valid JSON",
+		),
+	);
 	logUnexpected("Agreement review", "not an error");
 
 	expect(logged).toEqual([
-		["Agreement review failed unexpectedly:", "Error"],
-		["Agreement review failed unexpectedly:", "UnknownError"],
+		[
+			"Agreement review failed unexpectedly:",
+			"Error",
+			"D1_ERROR: no such table: x Bcc: a@b.c",
+		],
+		["Agreement review failed unexpectedly:", "Error", "x".repeat(300)],
+		["Agreement review failed unexpectedly:", "SyntaxError", ""],
+		["Agreement review failed unexpectedly:", "UnknownError", ""],
 	]);
 });
