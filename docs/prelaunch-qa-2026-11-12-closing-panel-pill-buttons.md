@@ -29,15 +29,16 @@ All in conversation on November 12, 2026.
 - On the simpler mockups: "The original one button only worked best, can you make it so it's sticky at the bottom like the reference website made it?"
 - On where the pinned button appears: "Phones only".
 - After seeing screenshots of the built panel and pinned button on a local copy: "Looks right".
+- On the essay's "Get in touch" text link sitting directly above the panel's button: "Yes, remove it". Removed in `e89e9d09`; the essay keeps "Back to Writing".
 - Merge authorization: not yet given when this record was written. Merging to `main` deploys production.
 
 Changes made during review that depart from the approved brief are listed in the brief under "Amendments from review". The owner has seen the list and has not objected; none has been explicitly accepted.
 
 ## Evidence and limits
 
-Local runs on macOS arm64, Node 26.13.1, pnpm 12.20.0, on head `c242936f`:
+Local runs on macOS arm64, Node 26.13.1, pnpm 12.20.0:
 
-- `pnpm test`: 146 files, 1,820 passed, 1 skipped.
+- `pnpm test`: 146 files, 1,821 passed, 1 skipped, on `e89e9d09`.
 - `pnpm run check`: 0 errors, 0 warnings, 17 hints (on `8225652e`; `c242936f` changes only `design.md`).
 - `pnpm run design:check`: passed, 6 Hallmark gates, 12 allowlisted exceptions.
 - `pnpm run copy:check`: passed.
@@ -121,6 +122,5 @@ Limits:
 
 - Owner's merge authorization.
 - CI and bot reviews on the final head.
-- The essay still has a "Get in touch" text link in its closing row directly above the panel's "Get in touch" button. Left for the owner to decide.
 - Two controls the inventory left unsorted: `.saved-reference` picker cards and the GitHub sign-in submit.
 - Production checks after deploy (section 7).

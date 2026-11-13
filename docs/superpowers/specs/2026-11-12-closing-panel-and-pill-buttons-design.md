@@ -237,6 +237,11 @@ button".
   bottom while it is showing.
 - Quiet pages, the Work with me hub, service sheets and all private pages never show it.
 
+**The essay**
+
+- Its closing row keeps "Back to Writing" and loses its "Get in touch" text link, which
+  sat directly above the panel's button. Owner: "Yes, remove it".
+
 **design.md** gains the pinned button as a named, single exception to "nothing floats",
 with these rules, and the three owner quotes above under the November 12 decisions.
 
