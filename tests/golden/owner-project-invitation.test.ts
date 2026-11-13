@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/invitation";
 import {
 	asClient,
@@ -59,7 +60,7 @@ import {
 const step = routeStep("invitation");
 
 const send = (
-	body: Step["json"] = { action: "send" },
+	body: JsonValue | undefined = { action: "send" },
 	extra: Partial<Step> = {},
 ): Step => step(body, { dump: { music: ["audio_projects"] }, ...extra });
 
@@ -76,7 +77,7 @@ const pending = () => invite({ invitation_status: "pending" });
 
 const one = (
 	name: string,
-	body: Step["json"],
+	body: JsonValue | undefined,
 	columns: { [column: string]: string | null } = {
 		invitation_status: "pending",
 	},
@@ -119,7 +120,7 @@ const flag = (name: string, env: Case["env"], omit?: Case["omit"]): Case => ({
 	steps: [send()],
 });
 
-const schema = (name: string, body: Step["json"]): Case =>
+const schema = (name: string, body: JsonValue | undefined): Case =>
 	one(`schema: ${name}`, body);
 
 // Every invitation state, as (label, columns).
@@ -169,7 +170,7 @@ const STATES: [string, { [column: string]: string | null }][] = [
 	["sending with no attempt time", { invitation_status: "sending" }],
 ];
 
-const CONFIRMED: [string, Step["json"]][] = [
+const CONFIRMED: [string, JsonValue | undefined][] = [
 	["not given", { action: "send" }],
 	["false", { action: "send", confirmedNotSent: false }],
 	["true", { action: "send", confirmedNotSent: true }],

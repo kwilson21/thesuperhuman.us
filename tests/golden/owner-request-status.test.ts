@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/requests/[id]";
 import {
 	asClient,
@@ -48,7 +49,10 @@ const withStatus = (status: string, over: SeedRow = {}) => ({
 	owner_requests: [rows.ownerRequest("r1", { status, ...over })],
 });
 
-const change = (body: Step["json"], extra: Partial<Step> = {}): Step => ({
+const change = (
+	body: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => ({
 	as: asOwner(),
 	path: `${BASE}/r1`,
 	params: { id: "r1" },
@@ -60,7 +64,7 @@ const change = (body: Step["json"], extra: Partial<Step> = {}): Step => ({
 const plainCase = (
 	name: string,
 	status: string,
-	body: Step["json"],
+	body: JsonValue | undefined,
 	extra: Partial<Case> = {},
 ): Case => ({
 	name,

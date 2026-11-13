@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/messages";
 import {
 	asClient,
@@ -56,14 +57,16 @@ const step = routeStep("messages");
 
 const TABLES = ["audio_project_messages"];
 
-const act = (body: Step["json"], extra: Partial<Step> = {}): Step =>
+const act = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step =>
 	step(body, { dump: { music: TABLES }, ...extra });
 
-const send = (body: Step["json"], extra: Partial<Step> = {}): Step =>
+const send = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step =>
 	act({ action: "send", body }, extra);
 
-const read = (messageId: Step["json"], extra: Partial<Step> = {}): Step =>
-	act({ action: "read", messageId }, extra);
+const read = (
+	messageId: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => act({ action: "read", messageId }, extra);
 
 /** A project at `stage` with one unread client message (id 1) and one owner message (id 2). */
 const talk = (stage = "in_progress", parts: Parts = {}): Partial<Case> =>
@@ -94,11 +97,14 @@ const flag = (name: string, env: Case["env"], omit?: Case["omit"]): Case => ({
 	steps: [send("hello")],
 });
 
-const schema = (name: string, body: Step["json"]): Case =>
+const schema = (name: string, body: JsonValue | undefined): Case =>
 	named(`schema: ${name}`, talk(), act(body));
 
-const text = (name: string, value: Step["json"], parts: Parts = {}): Case =>
-	named(`send: ${name}`, talk("in_progress", parts), send(value));
+const text = (
+	name: string,
+	value: JsonValue | undefined,
+	parts: Parts = {},
+): Case => named(`send: ${name}`, talk("in_progress", parts), send(value));
 
 const long = (n: number) => "a".repeat(n);
 

@@ -91,7 +91,7 @@ const step = routeStep("uploads");
 
 const dumps = { music: UPLOAD_TABLES, r2: true };
 
-const act = (body: Step["json"], extra: Partial<Step> = {}): Step =>
+const act = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step =>
 	step(body, { dump: dumps, ...extra });
 
 const startBody = (over: { [name: string]: string | number } = {}) => ({
@@ -176,7 +176,7 @@ const flag = (name: string, env: Case["env"], omit?: Case["omit"]): Case => ({
 	steps: [act(startBody())],
 });
 
-const schema = (name: string, body: Step["json"]): Case =>
+const schema = (name: string, body: JsonValue | undefined): Case =>
 	named(`schema: ${name}`, begin(), act(body));
 
 const long = (n: number) => "a".repeat(n);

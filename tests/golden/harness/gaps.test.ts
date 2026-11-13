@@ -2,6 +2,7 @@ import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
 import {
 	asClient,
+	generatedBody,
 	asVisitor,
 	byHost,
 	json,
@@ -239,5 +240,305 @@ describe("generated keys", () => {
 					"hex",
 				),
 			);
+	});
+});
+
+describe("two signed-in clients", () => {
+	it("each gets its own session, and the same client keeps one", async () => {
+		const handler: Handler = async (context) =>
+			new Response(context.request.headers.get("cookie") ?? "none");
+
+		const got = await runCase(handler, {
+			name: "two clients",
+			music: {
+				seed: {
+					owner_requests: [
+						rows.ownerRequest("r1"),
+						rows.ownerRequest("r2", { email: "ada@example.test" }),
+					],
+				},
+			},
+			steps: [
+				{ path: "/x", as: asClient("grace@example.test") },
+				{ path: "/x", as: asClient("ada@example.test") },
+				{ path: "/x", as: asClient("grace@example.test") },
+			],
+		});
+
+		const bodies = got.steps.map((step) =>
+			step.answer.outcome === "response" ? step.answer.body : "",
+		);
+
+		expect(bodies[0]).not.toBe(bodies[1]);
+		expect(bodies[2]).toBe(bodies[0]);
+	});
+});
+
+describe("hooks during sign-in", () => {
+	it("an injected failure and an interleave aimed at a statement do not fire during the off-record sign-in", async () => {
+		let interleaved = 0;
+
+		const handler: Handler = async (context) => {
+			await env(context)
+				.MUSIC_DB?.prepare("SELECT count(*) AS n FROM owner_requests")
+				.first();
+
+			return new Response("ok");
+		};
+
+		const got = await runCase(handler, {
+			name: "hooks",
+			music: { seed: { owner_requests: [rows.ownerRequest("r1")] } },
+			steps: [{ path: "/x", as: asClient("grace@example.test") }],
+			failures: [{ on: /studio_/i, message: "boom" }],
+			interleave: [
+				{
+					on: /studio_/i,
+					label: "other request",
+					run: () => {
+						interleaved += 1;
+					},
+				},
+			],
+		});
+
+		expect(interleaved).toBe(0);
+		expect(
+			got.effects.filter((effect) => effect.kind === "interleave"),
+		).toEqual([]);
+	});
+});
+
+describe("steps that use earlier answers", () => {
+	it("a step's path, json, body and headers may be functions of the earlier records, and the resolved values are recorded", async () => {
+		const handler: Handler = async (context) => {
+			const url = new URL(context.request.url);
+
+			if (url.pathname === "/make")
+				return Response.json({ id: "abc", code: "1234" });
+
+			return Response.json({
+				path: url.pathname,
+				body: await context.request.text(),
+				header: context.request.headers.get("x-code"),
+			});
+		};
+
+		const got = await runCase(handler, {
+			name: "chain",
+			steps: [
+				{ path: "/make" },
+				{
+					path: (prior) => `/use/${prior.answerJson(0).id}`,
+					json: (prior) => ({ code: prior.answerJson(0).code }),
+					headers: (prior) => ({ "x-code": String(prior.answerJson(0).code) }),
+				},
+				{
+					path: "/raw",
+					body: (prior) => `id=${prior.answerJson(0).id}`,
+					headers: { "content-type": "text/plain" },
+				},
+			],
+		});
+
+		expect(got.steps[1].request).toEqual({
+			actor: "visitor",
+			method: "POST",
+			path: "/use/abc",
+			body: '{"code":"1234"}',
+		});
+
+		expect(got.steps[2].request.body).toBe("id=abc");
+
+		const second = got.steps[1].answer;
+
+		expect(
+			second.outcome === "response" && JSON.parse(second.body as string),
+		).toEqual({
+			path: "/use/abc",
+			body: '{"code":"1234"}',
+			header: "1234",
+		});
+	});
+
+	it("a step can read a recorded effect, such as a mail an earlier step sent", async () => {
+		const handler: Handler = async (context) => {
+			const url = new URL(context.request.url);
+
+			if (url.pathname === "/mail")
+				await fetch("https://api.resend.com/emails", {
+					method: "POST",
+					body: JSON.stringify({ text: "code 9999" }),
+				});
+
+			return new Response(url.search);
+		};
+
+		const got = await runCase(handler, {
+			name: "effects",
+			fetches: byHost({ resend: json(200, { id: "e1" }) }),
+			steps: [
+				{ path: "/mail" },
+				{
+					path: (prior) => {
+						const sent = prior.effects.find(
+							(effect) => effect.kind === "fetch",
+						);
+
+						return `/next?body=${sent?.kind === "fetch" ? sent.body : ""}`;
+					},
+				},
+			],
+		});
+
+		expect(got.steps[1].request.path).toContain("code 9999");
+	});
+});
+
+describe("binary and large request bodies", () => {
+	const echo: Handler = async (context) =>
+		new Response(String((await context.request.arrayBuffer()).byteLength));
+
+	it("records a Uint8Array body as a length and SHA-256, and sends it intact", async () => {
+		const bytes = new Uint8Array([0, 255, 1, 2, 3]);
+
+		const got = await runCase(echo, {
+			name: "bytes",
+			steps: [{ path: "/x", body: bytes }],
+		});
+
+		expect(got.steps[0].request.body).toEqual({
+			$bytes: {
+				length: 5,
+				sha256:
+					"4be72cf29a33b5f223067ab9d5dd9567e0c14978e6ed54e2d556ddc9e2cc6038",
+			},
+		});
+
+		const answer = got.steps[0].answer;
+
+		expect(answer.outcome === "response" && answer.body).toBe("5");
+	});
+
+	it("records a generated body of a given size, and a stream, without holding text", async () => {
+		const got = await runCase(echo, {
+			name: "generated",
+			steps: [
+				{ path: "/x", body: generatedBody(200_000, (index) => index % 251) },
+				{
+					path: "/y",
+					body: new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(new Uint8Array(10).fill(9));
+							controller.enqueue(new Uint8Array(5).fill(8));
+							controller.close();
+						},
+					}),
+				},
+			],
+		});
+
+		expect(got.steps[0].request.body).toMatchObject({
+			$bytes: { length: 200_000 },
+		});
+		expect(got.steps[1].request.body).toMatchObject({ $bytes: { length: 15 } });
+		expect(
+			got.steps.map((step) =>
+				step.answer.outcome === "response" ? step.answer.body : "",
+			),
+		).toEqual(["200000", "15"]);
+	});
+
+	it("records text over 64 KB as a length and SHA-256, and short text as text", async () => {
+		const got = await runCase(echo, {
+			name: "text",
+			steps: [
+				{ path: "/x", body: "a".repeat(70_000) },
+				{ path: "/y", body: "short" },
+				{ path: "/z", json: { big: "b".repeat(70_000) } },
+			],
+		});
+
+		expect(got.steps[0].request.body).toMatchObject({
+			$bytes: { length: 70_000 },
+		});
+		expect(got.steps[1].request.body).toBe("short");
+		expect(got.steps[2].request.body).toMatchObject({
+			$bytes: { length: 70_010 },
+		});
+	});
+});
+
+describe("the request origin", () => {
+	it("a step or case can choose the scheme and host", async () => {
+		const handler: Handler = async (context) =>
+			new Response(`${context.url.origin}|${context.request.url}`);
+
+		const got = await runCase(handler, {
+			name: "origin",
+			origin: "http://localhost:4321",
+			steps: [
+				{ path: "/a" },
+				{ path: "/b", origin: "https://audio.thesuperhuman.us" },
+			],
+		});
+
+		const bodies = got.steps.map((step) =>
+			step.answer.outcome === "response" ? step.answer.body : "",
+		);
+
+		expect(bodies).toEqual([
+			"http://localhost:4321|http://localhost:4321/a",
+			"https://audio.thesuperhuman.us|https://audio.thesuperhuman.us/b",
+		]);
+	});
+});
+
+describe("console output", () => {
+	it("console.error and console.warn calls are recorded in order and not printed", async () => {
+		const handler: Handler = async () => {
+			console.error("failed", new Error("boom"), { id: 1 });
+			console.warn("careful");
+			console.log("not recorded");
+
+			return new Response("ok");
+		};
+
+		const got = await runCase(handler, one());
+
+		expect(got.effects).toEqual([
+			{
+				kind: "console",
+				level: "error",
+				args: ["failed", "Error: boom", { id: 1 }],
+				step: 0,
+				phase: "request",
+			},
+			{
+				kind: "console",
+				level: "warn",
+				args: ["careful"],
+				step: 0,
+				phase: "request",
+			},
+		]);
+	});
+
+	it("records work done after the answer as background", async () => {
+		const handler: Handler = async (context) => {
+			context.locals.runtime.ctx.waitUntil(
+				new Promise<void>((resolve) => setTimeout(resolve, 5)).then(() =>
+					console.error("later"),
+				),
+			);
+
+			return new Response("ok");
+		};
+
+		const got = await runCase(handler, one());
+
+		expect(
+			got.effects.filter((effect) => effect.kind === "console"),
+		).toMatchObject([{ phase: "background" }]);
 	});
 });

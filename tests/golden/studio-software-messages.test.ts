@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/studio/software/[id]/messages";
 import {
 	ADA,
@@ -62,7 +63,10 @@ const WITH_PROJECT = ["software_project_messages", "software_projects"];
 
 const ownerNote = { id: 1, ...message("r1", "owner") };
 
-const post = (json: Step["json"], extra: Partial<Step> = {}): Step => ({
+const post = (
+	json: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => ({
 	as: GOOD,
 	path: `${BASE}/r1/messages`,
 	params: { id: "r1" },
@@ -79,10 +83,10 @@ const raw = (body: string, extra: Partial<Step> = {}): Step =>
 		...extra,
 	});
 
-const text = (body: Step["json"], extra: Partial<Step> = {}) =>
+const text = (body: JsonValue | undefined, extra: Partial<Step> = {}) =>
 	post({ action: "send", body }, extra);
 
-const read = (messageId: Step["json"], extra: Partial<Step> = {}) =>
+const read = (messageId: JsonValue | undefined, extra: Partial<Step> = {}) =>
 	post({ action: "read", messageId }, extra);
 
 type Options = {
@@ -105,8 +109,11 @@ const swCase = (
 	...more,
 });
 
-const sendCase = (name: string, body: Step["json"], options: Options = {}) =>
-	swCase(name, options, [text(body)]);
+const sendCase = (
+	name: string,
+	body: JsonValue | undefined,
+	options: Options = {},
+) => swCase(name, options, [text(body)]);
 
 const race = (
 	label: string,

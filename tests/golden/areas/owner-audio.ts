@@ -1,3 +1,4 @@
+import type { JsonValue } from "../../helpers/json";
 // Shared builders for the owner audio-project corpora (updates, invitation, files/[fileId], uploads, access,
 // messages). A service owner request fires a trigger that creates its audio_projects row, so that table cannot be
 // seeded for it: `world()` seeds everything else and then moves the project to the state a case needs with a `setup`
@@ -60,7 +61,7 @@ export function routeStep(route: string, fileId?: string, requestId = "r1") {
 
 	const path = `/api/owner/projects/${requestId}/${route}${fileId === undefined ? "" : `/${fileId}`}`;
 
-	return (body: Step["json"], extra: Partial<Step> = {}): Step => ({
+	return (body: JsonValue | undefined, extra: Partial<Step> = {}): Step => ({
 		as: asOwner(),
 		path,
 		params,
@@ -311,11 +312,13 @@ export const at = (stage: string, over: Parts = {}): Partial<Case> => ({
 const updates = routeStep("updates");
 
 /** A request to the updates route, with the project tables dumped after it. */
-export const act = (body: Step["json"], extra: Partial<Step> = {}): Step =>
-	updates(body, { dump: { music: PROJECT_TABLES }, ...extra });
+export const act = (
+	body: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => updates(body, { dump: { music: PROJECT_TABLES }, ...extra });
 
 export const retry = (
-	updateId: Step["json"],
+	updateId: JsonValue | undefined,
 	extra: Partial<Step> = {},
 ): Step => act({ action: "retry_email", updateId }, extra);
 

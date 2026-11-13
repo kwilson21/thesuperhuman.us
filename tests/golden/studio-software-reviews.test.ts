@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/studio/software/[id]/reviews/[updateId]";
 import {
 	ADA,
@@ -64,7 +65,10 @@ import {
 const BASE = "/api/studio/software";
 const GOOD = asClientCookie(GRACE_TOKEN);
 
-const decide = (json: Step["json"], extra: Partial<Step> = {}): Step => ({
+const decide = (
+	json: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => ({
 	as: GOOD,
 	path: `${BASE}/r1/reviews/u1`,
 	params: { id: "r1", updateId: "u1" },
@@ -74,7 +78,7 @@ const decide = (json: Step["json"], extra: Partial<Step> = {}): Step => ({
 	...extra,
 });
 
-const onDelivery = (json: Step["json"], extra: Partial<Step> = {}) =>
+const onDelivery = (json: JsonValue | undefined, extra: Partial<Step> = {}) =>
 	decide(json, {
 		path: `${BASE}/r1/reviews/u2`,
 		params: { id: "r1", updateId: "u2" },
@@ -92,8 +96,8 @@ const confirm = { decision: "direction_confirmed" };
 const accept = { decision: "milestone_accepted", confirm: true };
 
 const changes = (
-	note: Step["json"],
-	extra: { [key: string]: Step["json"] } = {},
+	note: JsonValue | undefined,
+	extra: { [key: string]: JsonValue | undefined } = {},
 ) => ({
 	decision: "changes_requested",
 	note,

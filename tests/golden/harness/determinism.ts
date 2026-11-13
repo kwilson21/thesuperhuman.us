@@ -5,6 +5,7 @@
 // only with `advance(ms)`, and the move is recorded.
 import { vi } from "vitest";
 import type { EffectLog } from "./log";
+import { errorText, plain, type Passed, type Recorded } from "./plain";
 
 export const START = "2026-11-13T12:00:00.000Z";
 
@@ -82,6 +83,17 @@ function generatedKey(
 	);
 }
 
+/** One argument of a console call, as a fixture holds it: an Error by its name and message. */
+function consoleArg(arg: Passed): Recorded {
+	if (arg instanceof Error) return errorText(arg);
+
+	try {
+		return plain(arg);
+	} catch {
+		return String(arg);
+	}
+}
+
 export class Determinism {
 	private ids = 0;
 	private uploads = 0;
@@ -129,7 +141,21 @@ export class Determinism {
 			// SAFETY: generateKey is overloaded by key type; the fake answers the key (or the refusal) that the overload a caller picked would return.
 			.mockImplementation(generatedKey as typeof crypto.subtle.generateKey);
 
+		const spyOnConsole = (level: "error" | "warn") =>
+			vi.spyOn(console, level).mockImplementation((...args: Passed[]) => {
+				this.log.push({
+					kind: "console",
+					level,
+					args: args.map((arg) => consoleArg(arg)),
+				});
+			});
+
+		const errors = spyOnConsole("error");
+		const warnings = spyOnConsole("warn");
+
 		this.restores = [
+			() => errors.mockRestore(),
+			() => warnings.mockRestore(),
 			() => generate.mockRestore(),
 			() => uuid.mockRestore(),
 			() => random.mockRestore(),
@@ -141,6 +167,11 @@ export class Determinism {
 	/** Restarts the id sequence, for setup (sign-in) that must not move the ids the case draws. */
 	resetIds() {
 		this.ids = 0;
+	}
+
+	/** Moves the id sequence to `start`, so a sign-in draws values no other sign-in or request draws. */
+	startIds(start: number) {
+		this.ids = start;
 	}
 
 	advance(ms: number) {

@@ -19,7 +19,13 @@ import {
 	startedProject,
 	webhookStep,
 } from "./areas/payments";
-import { defineCorpus, rows, type Case, type SeedRow } from "./harness";
+import {
+	defineCorpus,
+	rows,
+	type Case,
+	type SeedRow,
+	type Step,
+} from "./harness";
 
 // The golden corpus for POST /api/stripe/webhook: Stripe tells the site an invoice was sent, paid, failed, voided or marked
 // uncollectible. The real Stripe SDK checks the signature (signStripeWebhook signs on the frozen clock). Nothing here calls
@@ -69,6 +75,10 @@ const WEBHOOK = "/api/stripe/webhook";
 type Event = Parameters<typeof webhookStep>[0];
 
 type Options = Parameters<typeof webhookStep>[1];
+
+/** The stripe-signature header of a step built by webhookStep (its headers are a plain object). */
+const signatureOf = (step: Step) =>
+	typeof step.headers === "object" ? step.headers["stripe-signature"] : "";
 
 const audioCase = (
 	name: string,
@@ -292,7 +302,7 @@ const transport: Case[] = [
 			{},
 			{
 				headers: {
-					"stripe-signature": `${valid.headers?.["stripe-signature"]},v1=${"0".repeat(64)}`,
+					"stripe-signature": `${signatureOf(valid)},v1=${"0".repeat(64)}`,
 				},
 			},
 		);

@@ -34,11 +34,23 @@ export type InjectedFailure = SqlTrigger & { readonly message: string };
 /** The hooks of a case, with the count of matches each has seen. */
 export class SqlHooks {
 	private readonly seen = new Map<SqlTrigger, number>();
+	private paused = 0;
 
 	constructor(
 		private readonly interleaves: readonly Interleave[],
 		private readonly failures: readonly InjectedFailure[],
 	) {}
+
+	/** Runs `work` with no hook firing and no match counted, for setup that is not part of the case (sign-in). */
+	async quietly<T>(work: () => Promise<T>): Promise<T> {
+		this.paused += 1;
+
+		try {
+			return await work();
+		} finally {
+			this.paused -= 1;
+		}
+	}
 
 	private hit(trigger: SqlTrigger, db: string, sqls: readonly string[]) {
 		if (trigger.db !== undefined && trigger.db !== db) return false;
@@ -58,6 +70,8 @@ export class SqlHooks {
 		sqlite: SqliteDatabase,
 		log: EffectLog,
 	): string | null {
+		if (this.paused > 0) return null;
+
 		for (const interleave of this.interleaves) {
 			if (!this.hit(interleave, db, sqls)) continue;
 

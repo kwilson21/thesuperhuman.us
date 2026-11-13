@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/studio/code";
 import { POST as session } from "~/pages/api/studio/session";
 import {
@@ -88,7 +89,7 @@ const tables = [
 	"audio_client_allowances",
 ];
 
-const ask = (body: Step["json"], extra: Partial<Step> = {}): Step => ({
+const ask = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step => ({
 	as: asVisitor({ ip: IP }),
 	path: URL_PATH,
 	json: body,

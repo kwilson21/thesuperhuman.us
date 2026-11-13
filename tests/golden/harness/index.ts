@@ -44,12 +44,17 @@ export { signStripeWebhook } from "./stripe";
 
 export {
 	defineCorpus,
+	generatedBody,
 	runCase,
 	DEFAULT_ENV,
 	type Case,
 	type CaseRecord,
 	type Dump,
+	type GeneratedBody,
 	type Handler,
+	type Lazy,
+	type Prior,
+	type StepBody,
 	type Step,
 	type World,
 } from "./world";

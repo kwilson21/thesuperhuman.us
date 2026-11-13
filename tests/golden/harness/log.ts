@@ -69,7 +69,8 @@ export type EffectBody =
 			outcome: "fulfilled" | "rejected";
 			error: string | null;
 	  }
-	| { kind: "advance"; ms: number };
+	| { kind: "advance"; ms: number }
+	| { kind: "console"; level: "error" | "warn"; args: Recorded[] };
 
 export type Effect = EffectBody & { step: number; phase: Phase };
 

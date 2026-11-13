@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/studio/projects/[id]/messages";
 import {
 	ADA,
@@ -79,7 +80,10 @@ const GOOD = asClientCookie(GRACE_TOKEN);
 
 const ownerNote = { id: 1, ...message("r1", "owner") };
 
-const post = (json: Step["json"], extra: Partial<Step> = {}): Step => ({
+const post = (
+	json: JsonValue | undefined,
+	extra: Partial<Step> = {},
+): Step => ({
 	as: GOOD,
 	path: `${BASE}/r1/messages`,
 	params: { id: "r1" },
@@ -96,17 +100,17 @@ const raw = (body: string, extra: Partial<Step> = {}): Step =>
 		...extra,
 	});
 
-const text = (body: Step["json"], extra: Partial<Step> = {}) =>
+const text = (body: JsonValue | undefined, extra: Partial<Step> = {}) =>
 	post({ action: "send", body }, extra);
 
-const read = (messageId: Step["json"], extra: Partial<Step> = {}) =>
+const read = (messageId: JsonValue | undefined, extra: Partial<Step> = {}) =>
 	post({ action: "read", messageId }, extra);
 
 const respond = (
-	decision: Step["json"],
-	body: Step["json"] = null,
+	decision: JsonValue | undefined,
+	body: JsonValue | undefined = null,
 	extra: Partial<Step> = {},
-	reviewId: Step["json"] = "f1",
+	reviewId: JsonValue | undefined = "f1",
 ) => post({ action: "respond", reviewId, decision, body }, extra);
 
 type Options = {
@@ -146,8 +150,11 @@ const STAGES = [
 
 const DECISIONS = ["approved", "changes", "stopped"] as const;
 
-const sendCase = (name: string, body: Step["json"], options: Options = {}) =>
-	audioCase(name, options, [text(body)]);
+const sendCase = (
+	name: string,
+	body: JsonValue | undefined,
+	options: Options = {},
+) => audioCase(name, options, [text(body)]);
 
 const raceOnInsert = (
 	label: string,

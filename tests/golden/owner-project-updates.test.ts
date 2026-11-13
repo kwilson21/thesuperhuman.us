@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/updates";
 import {
 	asClient,
@@ -72,7 +73,7 @@ const quiet = (stage: string, parts: Parts = {}): Partial<Case> => ({
 
 const one = (
 	name: string,
-	body: Step["json"],
+	body: JsonValue | undefined,
 	parts: Parts = {},
 	extra: Partial<Case> = {},
 	stage = "in_progress",
@@ -93,7 +94,7 @@ const matrix: Case[] = STAGES.flatMap((stage) =>
 	),
 );
 
-const schema = (name: string, body: Step["json"]): Case =>
+const schema = (name: string, body: JsonValue | undefined): Case =>
 	one(`schema: ${name}`, body);
 
 const long = (n: number) => "a".repeat(n);
@@ -110,7 +111,7 @@ const STATE = /SELECT p\.stage,p\.current_due_at/;
 
 const race = (
 	name: string,
-	body: Step["json"],
+	body: JsonValue | undefined,
 	stage: string,
 	on: RegExp,
 	statement: string,
@@ -126,7 +127,7 @@ const race = (
 
 const outage = (
 	name: string,
-	body: Step["json"],
+	body: JsonValue | undefined,
 	stage: string,
 	on: RegExp,
 	parts: Parts = {},

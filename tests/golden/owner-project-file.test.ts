@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/files/[fileId]";
 import {
 	asClient,
@@ -70,7 +71,7 @@ const R2 = { seed: { [keyOf("f1")]: { body: BYTES } } };
 
 const fileStep = routeStep("files", "f1");
 
-const act = (body: Step["json"], extra: Partial<Step> = {}): Step =>
+const act = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step =>
 	fileStep(body, { dump: { music: FILE_TABLES }, ...extra });
 
 const publish = (extra: Partial<Step> = {}, downloadable = true): Step =>
@@ -149,7 +150,7 @@ const flag = (name: string, env: Case["env"], omit?: Case["omit"]): Case => ({
 	steps: [publish()],
 });
 
-const schema = (name: string, body: Step["json"]): Case => ({
+const schema = (name: string, body: JsonValue | undefined): Case => ({
 	name: `schema: ${name}`,
 	...draft("in_progress"),
 	steps: [act(body)],

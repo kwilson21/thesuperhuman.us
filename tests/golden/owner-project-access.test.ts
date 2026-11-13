@@ -1,3 +1,4 @@
+import type { JsonValue } from "../helpers/json";
 import { POST } from "~/pages/api/owner/projects/[id]/access";
 import { POST as invite } from "~/pages/api/owner/projects/[id]/invitation";
 import { POST as updates } from "~/pages/api/owner/projects/[id]/updates";
@@ -95,7 +96,7 @@ const flag = (name: string, env: Case["env"], omit?: Case["omit"]): Case => ({
 	steps: [revoke()],
 });
 
-const schema = (name: string, body: Step["json"]): Case =>
+const schema = (name: string, body: JsonValue | undefined): Case =>
 	named(`schema: ${name}`, live(), step(body, { dump: { music: TABLES } }));
 
 const BATCH =
