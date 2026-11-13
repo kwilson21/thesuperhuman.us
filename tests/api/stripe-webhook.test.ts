@@ -543,9 +543,9 @@ const attemptQuery = /FROM stripe_invoice_attempts WHERE invoice_id/;
 
 function expectPaidAndRecorded() {
 	expect(audioStatus()).toEqual({ status: "paid" });
-	expect(
-		sql.prepare("SELECT id FROM stripe_webhook_events").all(),
-	).toEqual([{ id: "evt_paid" }]);
+	expect(sql.prepare("SELECT id FROM stripe_webhook_events").all()).toEqual([
+		{ id: "evt_paid" },
+	]);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS total FROM stripe_unmatched_events").get(),
 	).toEqual({ total: 0 });
@@ -573,7 +573,10 @@ describe("audio: an unlinked invoice is linked while its paid event is being han
 		verify.mockResolvedValueOnce({
 			...audioEventAt("paid", "evt_other", BASE),
 			data: {
-				object: { ...audioEventAt("paid", "x", BASE).data.object, id: "in_other" },
+				object: {
+					...audioEventAt("paid", "x", BASE).data.object,
+					id: "in_other",
+				},
 			},
 		});
 		expect((await POST(context())).status).toBe(200);
@@ -621,9 +624,9 @@ it("software: a paid event applies when the creation response links the same Str
 	verify.mockResolvedValueOnce(softwareEventAt("paid", "evt_paid", BASE));
 	expect((await POST(context())).status).toBe(200);
 	expect(softwareStatus()).toEqual({ status: "paid" });
-	expect(
-		sql.prepare("SELECT id FROM stripe_webhook_events").all(),
-	).toEqual([{ id: "evt_paid" }]);
+	expect(sql.prepare("SELECT id FROM stripe_webhook_events").all()).toEqual([
+		{ id: "evt_paid" },
+	]);
 	expect(
 		sql
 			.prepare("SELECT COUNT(*) AS total FROM software_stripe_unmatched_events")

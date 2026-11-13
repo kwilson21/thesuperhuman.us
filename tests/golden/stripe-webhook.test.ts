@@ -989,7 +989,8 @@ const linkedWhileHandled: Case[] = [
 			interleave: [
 				{
 					on: /UPDATE audio_payments SET stripe_customer_id=COALESCE/,
-					label: "the invoice is linked, evt_1 is processed and a later event wins the second",
+					label:
+						"the invoice is linked, evt_1 is processed and a later event wins the second",
 					run: (sqlite) => {
 						linkBooking(sqlite);
 						sqlite.exec(
