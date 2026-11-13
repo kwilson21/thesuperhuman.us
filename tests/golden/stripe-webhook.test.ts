@@ -60,6 +60,9 @@ import {
 //                                            reserved creation (cleared), deleted references (discarded), no payment row or
 //                                            request ("request-not-found"), customer as object or absent, a later event
 //                                            after recovery, and races before the recovery batch
+//   linked while handled                     the invoice is linked by the creation response between the webhook's first read
+//                                            and its attempts check, or before recovery's read; a different id stays a
+//                                            conflict; a late recovery batch for an event already processed; software
 //   software path (applySoftwareInvoiceEvent)
 //                                            5 events x 6 starting statuses for a deposit; balance and milestone kinds; the
 //                                            milestone payment row and its audit for a paid balance or milestone with a
@@ -912,6 +915,111 @@ const recovery: Case[] = [
 ];
 
 // Outages and races on the audio statements.
+// An audio invoice that is not linked on the row yet, linked by another handler while this event is being handled
+// (verification/invoice-events.qnt, mutant "pre-fix-link"). An event for the linked invoice is applied; one for a
+// different invoice id is still a conflict; a recovery batch that runs late does not undo a tie a later event won.
+const linkBooking = (sqlite: { exec: (sql: string) => void }) =>
+	sqlite.exec(`UPDATE audio_payments SET booking_invoice_id='in_b1',booking_invoice_url='https://invoice.stripe.test/i/b1',
+    booking_status='open',booking_creation_started_at=NULL WHERE booking_invoice_id IS NULL AND booking_status='not_created';
+    INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at) VALUES ('in_b1','r1','booking','${isoAt(-120)}')`);
+
+const linkedWhileHandled: Case[] = [
+	audioCase(
+		"linked while handled: the invoice is linked before the attempts check, invoice.paid",
+		{},
+		audioEvent("invoice.paid"),
+		{
+			interleave: [
+				{
+					on: /FROM stripe_invoice_attempts WHERE invoice_id/,
+					label: "the creation response links the invoice",
+					run: linkBooking,
+				},
+			],
+		},
+	),
+	audioCase(
+		"linked while handled: the invoice is linked between the attempts check and recovery's read, invoice.paid",
+		{},
+		audioEvent("invoice.paid"),
+		{
+			interleave: [
+				{
+					on: FIRST_PAYMENT_READ,
+					nth: 2,
+					label: "the creation response links the invoice",
+					run: linkBooking,
+				},
+			],
+		},
+	),
+	audioCase(
+		"linked while handled: the invoice is linked before the attempts check, invoice.sent",
+		{},
+		audioEvent("invoice.sent"),
+		{
+			interleave: [
+				{
+					on: /FROM stripe_invoice_attempts WHERE invoice_id/,
+					label: "the creation response links the invoice",
+					run: linkBooking,
+				},
+			],
+		},
+	),
+	audioCase(
+		"linked while handled: a different Stripe invoice stays a conflict",
+		{},
+		audioEvent("invoice.paid", { id: "in_other" }),
+		{
+			interleave: [
+				{
+					on: /FROM stripe_invoice_attempts WHERE invoice_id/,
+					label: "the creation response links in_b1",
+					run: linkBooking,
+				},
+			],
+		},
+	),
+	audioCase(
+		"linked while handled: a late recovery batch for an event already processed leaves the tie alone",
+		{},
+		audioEvent("invoice.sent", {}, { created: NOW_SECONDS - 60 }),
+		{
+			interleave: [
+				{
+					on: /UPDATE audio_payments SET stripe_customer_id=COALESCE/,
+					label: "the invoice is linked, evt_1 is processed and a later event wins the second",
+					run: (sqlite) => {
+						linkBooking(sqlite);
+						sqlite.exec(
+							`INSERT INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at) VALUES ('evt_1','invoice.sent','in_b1','${isoAt(-60)}','${isoAt(0)}');
+              UPDATE audio_payments SET booking_status='uncollectible',booking_status_updated_at='${isoAt(-60)}'`,
+						);
+					},
+				},
+			],
+		},
+	),
+	softwareCase(
+		"software: the creation response links the same Stripe invoice between the read and the batch, invoice.paid",
+		softwareInvoiceRow("si1"),
+		softwareEvent("invoice.paid"),
+		{
+			interleave: [
+				{
+					on: /UPDATE software_invoices SET stripe_invoice_id/,
+					label: "the creation response links in_s1",
+					run: (sqlite) =>
+						sqlite.exec(
+							`UPDATE software_invoices SET stripe_invoice_id='in_s1',status='open' WHERE stripe_invoice_id IS NULL`,
+						),
+				},
+			],
+		},
+	),
+];
+
 const audioOutages: Case[] = [
 	audioCase(
 		"outage: the first payment read fails",
@@ -1886,6 +1994,7 @@ const cases: Case[] = [
 	...ordering,
 	...metadata,
 	...recovery,
+	...linkedWhileHandled,
 	...audioOutages,
 	...softwareMatrix,
 	...softwareKinds,
