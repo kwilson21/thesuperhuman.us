@@ -1,16 +1,17 @@
 import { expect, it, vi } from "vitest";
-import { readFile, writeFile } from "node:fs/promises";
-import { spawnSync } from "node:child_process";
+import type {
+	readFile as ReadFile,
+	writeFile as WriteFile,
+} from "node:fs/promises";
+import type { spawnSync as SpawnSync } from "node:child_process";
 import { partial } from "../helpers/doubles";
-
-vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn() }));
-
-vi.mock("node:child_process", () => ({ spawnSync: vi.fn() }));
+import { deriveWaveforms } from "../../scripts/music-waveforms.mjs";
 
 it("measures each aligned playback window for both waveform and loudness", async () => {
-	const argv = process.argv;
-	process.argv = ["node", "music-waveforms.mjs", "demo"];
-	vi.mocked(readFile)
+	const readFile = vi.fn<typeof ReadFile>();
+	const writeFile = vi.fn<typeof WriteFile>();
+	const spawnSync = vi.fn<typeof SpawnSync>();
+	readFile
 		.mockResolvedValueOnce(
 			JSON.stringify({
 				recordingId: "song",
@@ -25,34 +26,30 @@ it("measures each aligned playback window for both waveform and loudness", async
 				versions: { mix: { key: "mix.mp3" }, master: { key: "master.mp3" } },
 			}),
 		);
-	vi.mocked(spawnSync).mockImplementation((_command, args) =>
-		partial<ReturnType<typeof spawnSync>>({
+	spawnSync.mockImplementation((_command, args) =>
+		partial<ReturnType<typeof SpawnSync>>({
 			status: 0,
 			stdout: Buffer.alloc(640),
 			stderr: Buffer.from(args?.includes("null") ? '{"input_i":"-18"}' : ""),
 		}),
 	);
 
-	try {
-		await import("../../scripts/music-waveforms.mjs");
-		const calls = vi.mocked(spawnSync).mock.calls;
-		expect(calls).toHaveLength(4);
+	await deriveWaveforms("demo", { readFile, writeFile, spawnSync });
+	const calls = spawnSync.mock.calls;
+	expect(calls).toHaveLength(4);
 
-		for (const [index, offset] of [4, 2].entries()) {
-			for (const call of calls.slice(index * 2, index * 2 + 2)) {
-				const args = call[1];
+	for (const [index, offset] of [4, 2].entries()) {
+		for (const call of calls.slice(index * 2, index * 2 + 2)) {
+			const args = call[1];
 
-				if (!Array.isArray(args))
-					throw new Error("spawnSync was called without an argument array.");
-				expect(args[args.indexOf("-ss") + 1]).toBe(String(offset));
-				expect(args[args.indexOf("-t") + 1]).toBe("12");
-				expect(args[args.indexOf("-af") + 1]).toContain("atrim=duration=12");
-			}
+			if (!Array.isArray(args))
+				throw new Error("spawnSync was called without an argument array.");
+			expect(args[args.indexOf("-ss") + 1]).toBe(String(offset));
+			expect(args[args.indexOf("-t") + 1]).toBe("12");
+			expect(args[args.indexOf("-af") + 1]).toContain("atrim=duration=12");
 		}
-
-		const output = JSON.parse(String(vi.mocked(writeFile).mock.calls[0][1]));
-		expect(output.loudness).toEqual({ before: -18, after: -18 });
-	} finally {
-		process.argv = argv;
 	}
+
+	const output = JSON.parse(String(writeFile.mock.calls[0][1]));
+	expect(output.loudness).toEqual({ before: -18, after: -18 });
 });
