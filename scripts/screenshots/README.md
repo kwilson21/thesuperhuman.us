@@ -31,6 +31,10 @@ A reused image skips that page's console and status checks; its inputs are the s
 
 After a page loads, `settle.mjs` decides when it is ready to photograph. A request counts while it is in flight. The page is quiet once no counted request has started or finished for 500 ms. Requests to `challenges.cloudflare.com` (Turnstile's script) never count, because that script keeps requesting in the background. If the page has a `.cf-turnstile` widget, settle also waits until every widget has an iframe and a non-empty response token, then 500 ms more so the success state paints. Settling never takes more than 5 seconds, counted from its start; at that cap the capture carries on as it is.
 
+## Scenario seeds
+
+`sql` in a scenario writes straight to the local D1 file under `.wrangler/state` with `node:sqlite` (`local-d1.mjs`), not through a `wrangler d1 execute` process per statement. The file is the one whose `d1_migrations` table lists the first file in `migrations/music`. `sql` returns nothing, so a scenario must not read its result.
+
 ## Timings
 
 The capture log ends with one `Timing` line per scenario, then one for `pages` (marked `4 at once`, since four pages render together) and a `total` line. Each line gives seconds, counts such as captures and sql calls, then phases largest first: `goto`, `idle`, `fonts`, `prepare`, `screenshot` and `close` are parts of each capture, `context` is browser context and page setup, `sql`, `ownerFetch` and `stateHash` are scenario helpers, `replay` is the work of checking reused images, and `other` is the scenario's wall time that no phase covers.
