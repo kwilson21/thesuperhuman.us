@@ -13,6 +13,7 @@ import {
 const { scenario } = wireKit(`/api/offer/${TOKEN}/review`, REVIEW_TABLES);
 
 const CLIENTS_INSERT = /INSERT OR IGNORE INTO software_agreement_clients/;
+
 const KEY =
 	"'grace@example.test','Hopper Systems LLC','hopper systems llc','LLC','Virginia','1 Main Street, Roanoke, VA 24011','grace@example.test'";
 
@@ -37,6 +38,7 @@ const answers = async (
 			failures: failure ? [{ ...failure, nth: 1 }] : [],
 		},
 	});
+
 	const record = await runCase(POST, json);
 	const answer = record.steps[0].answer;
 

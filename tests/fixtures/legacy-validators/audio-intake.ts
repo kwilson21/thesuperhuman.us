@@ -6,6 +6,7 @@
 // `RawValue`. A later edit to either moves both sides of the differential together.
 import { z } from "astro/zod";
 import type { RawValue } from "../../../src/lib/fields";
+import { isObject, isText } from "../../../src/lib/type-guards";
 import { directionFields } from "../../../src/lib/audio-intake";
 
 // Added with the Effect version (security fixes, 2026-11): a control character is refused, as in the software inquiry. Both
@@ -60,18 +61,16 @@ export type LegacyIntakeInput = z.infer<typeof schema>;
 // answers is read as a line break. The same preprocessing runs on both sides of the differential, so the comparison is
 // still of the two schemas.
 function withLineBreaks(input: RawValue): RawValue {
-	if (typeof input !== "object" || input === null || Array.isArray(input))
-		return input;
-	const copy: { [name: string]: RawValue } = { ...input };
+	if (!isObject(input) || Array.isArray(input)) return input;
 
-	for (const name of ["preserve", "referenceNote"]) {
-		const text = Object.hasOwn(copy, name) ? copy[name] : undefined;
-
-		if (typeof text === "string")
-			copy[name] = text.replace(/[\u000b\u000c]/g, "\n");
-	}
-
-	return copy;
+	return Object.fromEntries(
+		Object.entries(input).map(([name, value]) => [
+			name,
+			(name === "preserve" || name === "referenceNote") && isText(value)
+				? value.replace(/[\u000b\u000c]/g, "\n")
+				: value,
+		]),
+	);
 }
 
 export function legacyValidateIntake(

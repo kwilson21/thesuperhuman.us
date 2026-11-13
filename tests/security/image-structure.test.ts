@@ -222,6 +222,7 @@ describe("headers with no image data", () => {
 			components,
 			...Array(3 * components).fill(1),
 		];
+
 		const scan = (components: number, data: number[]) => [
 			0xff,
 			0xda,
@@ -231,6 +232,7 @@ describe("headers with no image data", () => {
 			...Array(2 * components + 3).fill(0),
 			...data,
 		];
+
 		const file = (...parts: number[][]) =>
 			Uint8Array.from([0xff, 0xd8, ...parts.flat(), 0xff, 0xd9]);
 
@@ -257,6 +259,7 @@ describe("headers with no image data", () => {
 
 	it("refuses a PNG whose image data chunk is empty", () => {
 		const full = bytes("png");
+
 		const noData = Uint8Array.from([
 			...full.slice(0, 33),
 			...[0, 0, 0, 0, 0x49, 0x44, 0x41, 0x54, 0x35, 0xaf, 0x06, 0x1e],

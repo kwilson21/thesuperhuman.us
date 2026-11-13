@@ -258,6 +258,7 @@ export async function reviewAgreements(
 		throw new ReaderMessage(
 			"Another offer has a pending MSA for this party. Ask Kazon to resolve it.",
 		);
+
 	const batch = [
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),

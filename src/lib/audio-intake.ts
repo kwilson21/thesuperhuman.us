@@ -1,3 +1,4 @@
+import { isObject, isText } from "./type-guards";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
@@ -301,17 +302,16 @@ export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
  * character).
  */
 function withLineBreaks(input: RawValue): RawValue {
-	if (!Predicate.isObject(input) || Array.isArray(input)) return input;
-	const copy: { [name: string]: RawValue } = { ...input };
+	if (!isObject(input) || Array.isArray(input)) return input;
 
-	for (const name of ["preserve", "referenceNote"]) {
-		const text = Object.hasOwn(copy, name) ? copy[name] : undefined;
-
-		if (Predicate.isString(text))
-			copy[name] = text.replace(/[\u000b\u000c]/g, "\n");
-	}
-
-	return copy;
+	return Object.fromEntries(
+		Object.entries(input).map(([name, value]) => [
+			name,
+			(name === "preserve" || name === "referenceNote") && isText(value)
+				? value.replace(/[\u000b\u000c]/g, "\n")
+				: value,
+		]),
+	);
 }
 
 export function validateIntake(
