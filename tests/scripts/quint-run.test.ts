@@ -137,6 +137,7 @@ describe("the mutants of verification/invoice-events.qnt", () => {
 		const listed = [
 			...Object.keys(mutants),
 			...equivalents,
+			...exhaustive,
 			"audio",
 			"software",
 		];
