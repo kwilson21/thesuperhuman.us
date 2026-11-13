@@ -212,7 +212,9 @@ describe("the XState and Effect bridge", () => {
 		const bug = new Error("bug in the billing code");
 
 		await expect(
-			Effect.runPromise(voidInvoice(7).pipe(withBilling(() => Effect.die(bug)))),
+			Effect.runPromise(
+				voidInvoice(7).pipe(withBilling(() => Effect.die(bug))),
+			),
 		).rejects.toBe(bug);
 		expect(await stored()).toBe("open");
 	});
@@ -237,9 +239,9 @@ describe("the XState and Effect bridge", () => {
 	it("rejects with the original error object when a later step dies after an earlier one succeeded", async () => {
 		const bug = new Error("bug in the second step");
 
-		await expect(
-			Effect.runPromise(twoSteps(Effect.die(bug))),
-		).rejects.toBe(bug);
+		await expect(Effect.runPromise(twoSteps(Effect.die(bug)))).rejects.toBe(
+			bug,
+		);
 		expect(await stored()).toBe("open");
 	});
 
