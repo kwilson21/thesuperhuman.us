@@ -336,16 +336,7 @@ module invoiceEvents {
     }
   }
 
-  // Every handler slot is used up and finished: nothing more can happen. The model stays where it is, so the checker
-  // does not report the end of the run as a deadlock.
-  action finished = all {
-    deliveries.keys().forall(d => deliveries.get(d).phase == "done"),
-    row' = row, attempts' = attempts, processed' = processed, unmatched' = unmatched, events' = events,
-    deliveries' = deliveries, ghost' = ghost,
-  }
-
   action step = any {
-    finished,
     link,
     nondet d = 1.to(MAX_DELIVERIES).oneOf()
     nondet e = 1.to(MAX_EVENTS).oneOf()
@@ -353,6 +344,17 @@ module invoiceEvents {
     nondet d = 1.to(MAX_DELIVERIES).oneOf()
     any { audioAttempt(d), audioRecoverRead(d), audioRecoverWrite(d), audioApplyRead(d), applyWrite(d) },
   }
+
+  // For the Apalache check only (`--step stepOrEnd`): once every handler slot is used up and finished nothing more can
+  // happen, and the model stays where it is, so the checker does not report the end of a run as a deadlock. The random
+  // runs use `step` and simply stop there.
+  action finished = all {
+    deliveries.keys().forall(d => deliveries.get(d).phase == "done"),
+    row' = row, attempts' = attempts, processed' = processed, unmatched' = unmatched, events' = events,
+    deliveries' = deliveries, ghost' = ghost,
+  }
+
+  action stepOrEnd = any { step, finished }
 
   // ---- Properties -------------------------------------------------------------------------------------------------
   val allDone = deliveries.keys().forall(d => deliveries.get(d).phase == "idle" or deliveries.get(d).phase == "done")

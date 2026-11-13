@@ -155,7 +155,7 @@ If the code changes shape (a new status, a new guard), update the model in the s
 
 ### Exhaustive runs
 
-`pnpm run verify:quint:exhaustive [steps]` (default 7 steps; both domains, one after the other). It uses `audioExhaustive` and `softwareExhaustive`: 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. The bound is in steps, and an audio delivery takes up to 5 of them, so a depth of 7 reaches the unlinked-invoice bug (a delivery, the link, the attempts check: 3 steps) but not the recovery-guard bug (it needs about 11). Last run (2026-11-13, Apalache 0.62.4, one core, Apple-silicon laptop): `audioExhaustive` and `softwareExhaustive` at 7 steps, no violation, 2 minutes 1 second for both. At 8 steps (`pnpm run verify:quint:exhaustive 8`): no violation in either domain, 5 minutes 30 seconds for both. An earlier, smaller audio model finished 9 steps in 8 minutes 45 seconds; the extended audio model at 10 steps did not finish (stopped after about 15 minutes, still inside step 9). Past about 8 steps use the random runs instead.
+`pnpm run verify:quint:exhaustive [steps]` (default 7 steps; both domains, one after the other). It uses `audioExhaustive` and `softwareExhaustive`: 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. The bound is in steps, and an audio delivery takes up to 5 of them, so a depth of 7 reaches the unlinked-invoice bug (a delivery, the link, the attempts check: 3 steps) but not the recovery-guard bug (it needs about 11). Last run (2026-11-13, Apalache 0.62.4, one core, Apple-silicon laptop): `audioExhaustive` and `softwareExhaustive` at 7 steps, no violation, 2 minutes 1 second for both. At 8 steps (`pnpm run verify:quint:exhaustive 8`): no violation in either domain, 5 minutes 41 seconds for both. An earlier, smaller audio model finished 9 steps in 8 minutes 45 seconds; the extended audio model at 10 steps did not finish (stopped after about 15 minutes, still inside step 9). Past about 8 steps use the random runs instead.
 
 ## Verified modules
 
@@ -189,4 +189,4 @@ Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verifi
 
 ## CI
 
-`.github/workflows/validate.yml` installs Dafny 4.9.0 and Quint's evaluator by version and checksum, then runs `verify:dafny`, `verify:quint` and `verify:quint:mutants`. No new GitHub Action is used.
+`.github/workflows/validate.yml` installs Dafny 4.9.0 and Quint's evaluator by version and checksum, then runs `verify:dafny`, `verify:quint` and `verify:quint:mutants`. No new GitHub Action is used. The Quint runs go in parallel (up to the number of CPUs). Measured locally on 12 cores: `verify:dafny` 5 s, `verify:quint` 29 s, `verify:quint:mutants` 34 s; about 140 CPU-seconds in all, so roughly 40 s on a 4-core runner and 75 s on a 2-core one, plus the Dafny download (60 MB) and the evaluator download (1 MB). The estimate for the whole new CI cost is 1 to 2 minutes (not yet measured on a runner); keep it under 3 minutes.

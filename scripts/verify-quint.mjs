@@ -162,7 +162,7 @@ if (mode === "mutants") {
 			"--init",
 			"init",
 			"--step",
-			"step",
+			"stepOrEnd",
 			"--invariant",
 			"allProperties",
 			"--max-steps",
