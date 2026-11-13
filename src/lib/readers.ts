@@ -1,5 +1,6 @@
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
+import * as SchemaGetter from "effect/SchemaGetter";
 import {
 	afterwards,
 	choiceField,
@@ -9,17 +10,17 @@ import {
 	type Issue,
 	type KindSentences,
 	type RawValue,
-	readOne,
+	readEvery,
 	receivedKind,
 	stringField,
 } from "./fields";
 
 // Nested readers (objects, arrays, numbers, dates, choices) read with Effect Schema field by field, and the failures kept
-// as a list of issues, each with its path down to the field, in the order and with the sentences Zod 3 gave them. The
-// owner agreement schemas (src/lib/agreement-fields.ts) are written with these: a person reads their failures word for
-// word (the owner request route lists every failed field under `agreement.<path>`), so the sentences, the paths, the
-// order and which failures stop the rest are Zod's, which the differential tests (tests/server/validators-differential.test.ts)
-// hold them to. The rules, as Zod 3 had them:
+// as a list of issues, each with its path down to the field, in the order and with the sentences Zod 3 gave them: a
+// value that fails two checks gives both issues, in the order of the checks (the owner request route lists every failed
+// field of a rejected agreement details payload word for word, last sentence per path). The differential tests
+// (tests/server/validators-differential.test.ts) compare the whole issue list, path and sentence, in order. The rules, as
+// Zod 3 had them:
 // - A value of the wrong type, a choice that is not one, and a text that is too long STOP that value: nothing is read from
 //   it and the object that holds it is stopped too, so a check across fields (`refined`) never runs.
 // - Any other failure (a number out of range, a date that is not a date, a blank answer, a control character, a list of
@@ -34,7 +35,7 @@ export type Read<T> =
 			readonly issues: readonly Issue[];
 	  };
 
-/** One reader of one value of the reader: the raw value and where it was found. */
+/** One reader of one value: it takes the raw value and where it was found. */
 export type Reader<T> = (
 	raw: RawValue,
 	path: readonly (string | number)[],
@@ -55,12 +56,12 @@ export function leaf<T>(
 	keep: (sentence: string, raw: RawValue) => { value: T } | undefined,
 ): Reader<T> {
 	return (raw, path) => {
-		const read = readOne(schema, raw, "last");
+		const read = readEvery(schema, raw);
 
 		if (read.ok) return { stopped: false, value: read.value, issues: [] };
 
-		const issues = [{ path, message: read.say }];
-		const kept = keep(read.say, raw);
+		const issues = read.says.map((message) => ({ path, message }));
+		const kept = keep(read.says.at(-1) ?? "", raw);
 
 		return kept
 			? { stopped: false, value: kept.value, issues }
@@ -71,6 +72,14 @@ export function leaf<T>(
 /** The value a reader gives when the field is missing, in place of reading it (Zod's `.default`). */
 export function withDefault<T>(reader: Reader<T>, value: T): Reader<T> {
 	return (raw, path) => reader(raw === undefined ? value : raw, path);
+}
+
+/** A reader for a field that may be left out (Zod's `.optional()`): a missing field is not in the value. */
+export function optional<T>(reader: Reader<T>): Reader<T | undefined> {
+	return (raw, path) =>
+		raw === undefined
+			? { stopped: false, value: undefined, issues: [] }
+			: reader(raw, path);
 }
 
 /** A reader that also takes `null` as a value of its own (Zod's `.nullable()`). */
@@ -160,29 +169,54 @@ export type NumberCheck =
 	| { readonly least: number }
 	| { readonly most: number };
 
-/** A number that passes every check; a number out of range does not stop it, a value that is not a number does. */
-export function integer(checks: readonly NumberCheck[]): Reader<number> {
-	const schema = fieldOf<number>((raw) => {
-		if (!Predicate.isNumber(raw) || Number.isNaN(raw))
-			return { say: notKind("number", raw) };
+/** The sentence of one number check, or true when the number passes it. */
+const numberCheck = (check: NumberCheck) =>
+	Schema.makeFilter((value: number) => {
+		if (check === "int")
+			return Number.isInteger(value)
+				? true
+				: "Expected integer, received float";
 
-		let said: string | undefined;
+		if ("above" in check)
+			return value > check.above
+				? true
+				: `Number must be greater than ${check.above}`;
 
-		for (const check of checks) {
-			if (check === "int") {
-				if (!Number.isInteger(raw)) said = "Expected integer, received float";
-			} else if ("above" in check) {
-				if (!(raw > check.above))
-					said = `Number must be greater than ${check.above}`;
-			} else if ("least" in check) {
-				if (raw < check.least)
-					said = `Number must be greater than or equal to ${check.least}`;
-			} else if (raw > check.most)
-				said = `Number must be less than or equal to ${check.most}`;
-		}
+		if ("least" in check)
+			return value >= check.least
+				? true
+				: `Number must be greater than or equal to ${check.least}`;
 
-		return said === undefined ? { value: raw } : { say: said };
+		return value <= check.most
+			? true
+			: `Number must be less than or equal to ${check.most}`;
 	});
+
+/**
+ * A number that passes every check, each failed check giving its own sentence in order; a number out of range does not
+ * stop it, a value that is not a number (or is NaN) does.
+ */
+export function integer(checks: readonly NumberCheck[]): Reader<number> {
+	const [first, ...rest] = checks.map(numberCheck);
+
+	const schema = Schema.Unknown.check(
+		Schema.makeFilter((raw: RawValue) =>
+			Predicate.isNumber(raw) && !Number.isNaN(raw)
+				? true
+				: notKind("number", raw),
+		),
+	).pipe(
+		Schema.decodeTo(
+			first ? Schema.Number.check(first, ...rest) : Schema.Number,
+			{
+				decode: SchemaGetter.transform((raw: RawValue) =>
+					// The filter above refused anything that is not a number.
+					Predicate.isNumber(raw) ? raw : Number.NaN,
+				),
+				encode: SchemaGetter.transform((value: number) => value),
+			},
+		),
+	);
 
 	return leaf(schema, (_sentence, raw) =>
 		Predicate.isNumber(raw) && !Number.isNaN(raw) ? { value: raw } : undefined,
@@ -272,9 +306,20 @@ export function list<T>(
 type Fields = { readonly [name: string]: Reader<never> | Reader<unknown> };
 
 /** The object a set of field readers reads. */
-export type Fielded<F extends Fields> = {
-	-readonly [K in keyof F]: Value<F[K]>;
-};
+export type Fielded<F extends Fields> = Flat<
+	{
+		-readonly [K in keyof F as undefined extends Value<F[K]>
+			? never
+			: K]: Value<F[K]>;
+	} & {
+		-readonly [K in keyof F as undefined extends Value<F[K]>
+			? K
+			: never]?: Exclude<Value<F[K]>, undefined>;
+	}
+>;
+
+/** One object type with the properties of an intersection. */
+type Flat<T> = { [K in keyof T]: T[K] };
 
 /**
  * An object that holds these fields and, with `strict`, nothing else (an unknown key is reported, and does not stop it).

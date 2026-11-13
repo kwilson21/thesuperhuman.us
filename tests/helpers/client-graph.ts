@@ -172,8 +172,19 @@ const SCHEMA_COMBINATORS: readonly string[] = [
 
 const RUNNER_LIKE = /^(decode|encode|validate|asserts)|^make.*Effect/;
 
-/** True for a name of the Schema module that runs a decode or encode asynchronously or as an Effect (or at all, for encode). */
+// Schema functions that hand back an object with a runner of their own. A standard schema's `validate` may answer with a
+// Promise, and an XML encoder is an encoder; the other `to*` functions build a schema, a formatter, an equivalence or a
+// document and run nothing.
+const REFUSED_CONVERTERS: readonly string[] = [
+	"toStandardSchemaV1",
+	"toStandardJSONSchemaV1",
+	"toEncoderXml",
+];
+
+/** True for a name of the Schema module that runs a decode or encode asynchronously or as an Effect (or at all, for encode), or hands back a runner. */
 function isRefusedSchemaName(name: string): boolean {
+	if (REFUSED_CONVERTERS.includes(name)) return true;
+
 	return (
 		RUNNER_LIKE.test(name) &&
 		!ALLOWED_SCHEMA_RUNNERS.includes(name) &&
@@ -260,6 +271,12 @@ export function schemaRunnersIn(file: string, text: string): string[] {
 			)
 				found.push(`${node.name.text} at line ${lineOf(node)}`);
 		} else if (ts.isElementAccessExpression(node)) {
+			if (
+				ts.isStringLiteralLike(node.argumentExpression) &&
+				node.argumentExpression.text === "~standard"
+			)
+				found.push(`a standard schema validator at line ${lineOf(node)}`);
+
 			if (
 				ts.isIdentifier(node.expression) &&
 				namespaces.has(node.expression.text)

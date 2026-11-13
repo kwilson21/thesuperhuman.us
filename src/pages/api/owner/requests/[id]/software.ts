@@ -71,7 +71,7 @@ type AgreementDetailsFailure = {
 	errors?: Record<string, string>;
 };
 
-/** Attachment details as stored; attachments stay unparsed until agreementDetailsSchema checks them. */
+/** Attachment details as stored; attachments stay unparsed until parseAgreementAttachments checks them. */
 type StoredAttachmentSource = { attachments?: unknown } | null;
 
 function isRemovedKeyRow(row: unknown): row is { object_key: string } {

@@ -735,7 +735,7 @@ export function setupSoftwareOffers() {
 	updateControls();
 }
 
-// Agreement fields posted as a draft. The server validates them with agreementDetailsSchema (src/lib/agreement-fields.ts).
+// Agreement fields posted as a draft. The server validates them with parseAgreementDetails (src/lib/agreement-fields.ts).
 function agreementDetails(form: HTMLFormElement) {
 	if (!form.querySelector("[data-agreement-details]")) return {};
 	const milestones: Partial<Record<string, string>>[] = [];

@@ -361,12 +361,11 @@ function formSentence<Input>(
 	return kind === "object" ? undefined : notObject[kind];
 }
 
-/** Reads one value with one schema: its typed value, or the sentence the `winner` check gives (see `ReadFieldsOptions`). */
-export function readOne<S extends Schema.ConstraintDecoder<unknown>, Input>(
+/** Reads one value with one schema: its typed value, or every sentence its failed checks gave, in the order of the checks. */
+export function readEvery<S extends Schema.ConstraintDecoder<unknown>, Input>(
 	schema: S,
 	input: Input,
-	winner: "first" | "last",
-): { ok: true; value: S["Type"] } | { ok: false; say: string } {
+): { ok: true; value: S["Type"] } | { ok: false; says: readonly string[] } {
 	const read = Schema.decodeUnknownResult(schema)(input, { errors: "all" });
 
 	if (Result.isSuccess(read)) return { ok: true, value: read.success };
@@ -375,9 +374,29 @@ export function readOne<S extends Schema.ConstraintDecoder<unknown>, Input>(
 		read.failure.issue,
 	);
 
-	const issue = winner === "last" ? issues.at(-1) : issues.at(0);
+	return {
+		ok: false,
+		says:
+			issues.length > 0
+				? issues.map((issue) => issue.message)
+				: [read.failure.message],
+	};
+}
 
-	return { ok: false, say: issue?.message ?? read.failure.message };
+/** Reads one value with one schema: its typed value, or the sentence the `winner` check gives (see `ReadFieldsOptions`). */
+export function readOne<S extends Schema.ConstraintDecoder<unknown>, Input>(
+	schema: S,
+	input: Input,
+	winner: "first" | "last",
+): { ok: true; value: S["Type"] } | { ok: false; say: string } {
+	const read = readEvery(schema, input);
+
+	if (read.ok) return read;
+
+	return {
+		ok: false,
+		say: (winner === "last" ? read.says.at(-1) : read.says.at(0)) ?? "",
+	};
 }
 
 /** Sentences by name; an entry that is `undefined` says nothing. */

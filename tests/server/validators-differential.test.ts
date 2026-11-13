@@ -849,6 +849,18 @@ const errorsOf = (issues: Issues) =>
 		issues.map((issue) => [`agreement.${issue.path.join(".")}`, issue.message]),
 	);
 
+/**
+ * Every issue, as a list: its path and sentence, in the order they were found (an issue is not dropped when a value fails
+ * two checks). Each is its own entry, so two issues for one path both show.
+ */
+const rawOf = (issues: Issues) =>
+	Object.fromEntries(
+		issues.map((issue, index) => [
+			String(index),
+			JSON.stringify([issue.path, issue.message]),
+		]),
+	);
+
 type Answer =
 	| { ok: true; value: RawValue }
 	| { ok: false; errors: Record<string, string> };
@@ -1166,7 +1178,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 
 		return read.ok
 			? { ok: true, value: read.value }
-			: { ok: false, errors: errorsOf(read.issues) };
+			: { ok: false, errors: rawOf(read.issues) };
 	};
 
 	const legacyDetailsAnswer = (input: RawValue): Answer => {
@@ -1174,12 +1186,12 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 
 		return read.success
 			? { ok: true, value: read.data }
-			: { ok: false, errors: errorsOf(read.error.issues) };
+			: { ok: false, errors: rawOf(read.error.issues) };
 	};
 
 	const answerLine = (answer: Answer) => fingerprint(answer, true);
 
-	it("answers the agreement details as the Zod schema did: values in order, and every failed path with its sentence", () => {
+	it("answers the agreement details as the Zod schema did: values in order, and every issue with its path and sentence, in order", () => {
 		const found = differential(legacyDetailsAnswer, detailsAnswer, answerLine);
 
 		for (const body of bodies([details, full], detailPools, 20261120, 9000))
@@ -1207,7 +1219,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			const answer = legacyDetailsAnswer(body);
 
 			if (answer.ok) outcomes.accepted += 1;
-			else outcomes.kinds.add(Object.keys(answer.errors).join("|"));
+			else outcomes.kinds.add(Object.values(answer.errors).join("|"));
 		}
 
 		expect(outcomes.accepted).toBeGreaterThan(50);
@@ -1227,7 +1239,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 
 			return read.success
 				? { ok: true, value: read.data }
-				: { ok: false, errors: errorsOf(read.error.issues) };
+				: { ok: false, errors: rawOf(read.error.issues) };
 		};
 
 		const subject = (input: RawValue): Answer => {
@@ -1236,7 +1248,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			} catch (error) {
 				return {
 					ok: false,
-					errors: errorsOf(error instanceof FieldsRefused ? error.issues : []),
+					errors: rawOf(error instanceof FieldsRefused ? error.issues : []),
 				};
 			}
 		};
@@ -1355,7 +1367,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 
 			return read.ok
 				? { ok: true, value: read.value }
-				: { ok: false, errors: errorsOf(read.issues) };
+				: { ok: false, errors: rawOf(read.issues) };
 		};
 
 		const oracle = (input: RawValue): Answer => {
@@ -1363,7 +1375,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 
 			return read.success
 				? { ok: true, value: read.data }
-				: { ok: false, errors: errorsOf(read.error.issues) };
+				: { ok: false, errors: rawOf(read.error.issues) };
 		};
 
 		const found = differential(oracle, subject, answerLine);
@@ -1533,7 +1545,7 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			};
 
 			const found = differential(oracle, subject, (answer) =>
-				fingerprint(answer),
+				fingerprint(answer, true),
 			);
 
 			for (const body of bodies(bases, actionPools, 20261124, 6000))

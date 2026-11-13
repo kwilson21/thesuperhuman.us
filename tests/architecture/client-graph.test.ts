@@ -1411,6 +1411,45 @@ describe("schemaRunnersIn: browser code decodes synchronously", () => {
 			).toHaveLength(1);
 	});
 
+	it("fails the converters that hand back a runner outside the allowlist, and a standard schema validator", () => {
+		for (const name of [
+			"toStandardSchemaV1",
+			"toStandardJSONSchemaV1",
+			"toEncoderXml",
+		]) {
+			expect(
+				found(`import * as S from "effect/Schema";\nS.${name}(S.String);`),
+				name,
+			).toHaveLength(1);
+			expect(
+				found(`import { ${name} as c } from "effect/Schema";\nc(1);`),
+				name,
+			).toHaveLength(1);
+		}
+
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nconst r = S.toStandardSchemaV1(S.String)["~standard"].validate("x");',
+			),
+		).toHaveLength(2);
+
+		// Whatever made it, a standard schema's validator can answer with a Promise.
+		expect(
+			found(
+				'declare const s: { "~standard": unknown };\nconst v = s["~standard"];',
+			),
+		).toHaveLength(1);
+		expect(found('const note = "~standard";')).toEqual([]);
+	});
+
+	it("lets the converters that build a schema or a formatter through", () => {
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nS.toType(S.String);S.toEncoded(S.String);S.toFormatter(S.String);S.toEquivalence(S.String);S.toCodecJson(S.String);',
+			),
+		).toEqual([]);
+	});
+
 	it("fails an aliased import, a string-literal member, a destructured name and a computed member", () => {
 		expect(
 			found(
@@ -1520,15 +1559,20 @@ describe("schemaRunnersIn: browser code decodes synchronously", () => {
 			[...names]
 				.filter(
 					(name) =>
-						/^(decode|encode|validate|asserts)|^make.*Effect/.test(name) &&
-						!ALLOWED_SCHEMA_RUNNERS.includes(name) &&
-						![
-							"decode",
-							"decodeTo",
-							"encode",
-							"encodeTo",
-							"encodeKeys",
-						].includes(name),
+						[
+							"toStandardSchemaV1",
+							"toStandardJSONSchemaV1",
+							"toEncoderXml",
+						].includes(name) ||
+						(/^(decode|encode|validate|asserts)|^make.*Effect/.test(name) &&
+							!ALLOWED_SCHEMA_RUNNERS.includes(name) &&
+							![
+								"decode",
+								"decodeTo",
+								"encode",
+								"encodeTo",
+								"encodeKeys",
+							].includes(name)),
 				)
 				.sort(),
 		);
