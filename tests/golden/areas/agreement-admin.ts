@@ -728,7 +728,11 @@ export const harmlessTexts: readonly (readonly [
 	["windows line endings", "msa", MSA.replaceAll("\n", "\r\n")],
 	["old Mac line endings", "msa", MSA.replaceAll("\n", "\r")],
 	["tabs", "msa", `${MSA}\n\tindented\tline`],
-	["accents, quotes and symbols", "msa", `${MSA}\nCafé “quoted” — €5 → done`],
+	[
+		"accents, quotes and symbols",
+		"msa",
+		`${MSA}\nCafé “quoted” ${String.fromCharCode(0x2014)} €5 → done`,
+	],
 	["ampersand and quotes", "msa", `${MSA}\nA & B "C" 'D'`],
 	[
 		"optional contractor fields",
