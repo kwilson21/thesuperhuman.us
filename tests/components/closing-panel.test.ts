@@ -11,34 +11,35 @@ it('keeps the footer landmark, class names and nav label', () => {
   expect(footer).toContain('.footer-name { font-size: 1.5rem;');
 });
 
-it('defaults to the invitation with the approved copy and target', () => {
+it('defaults to the invitation with one Get in touch button to the contact section', () => {
   expect(footer).toContain("variant = 'invitation'");
-  expect(footer).toContain("heading = 'Let’s work together.'");
-  expect(footer).toContain("line = 'Every project is fixed price and agreed in writing before work begins.'");
-  expect(footer).toContain("buttonLabel = 'Work with me'");
-  expect(footer).toContain("buttonPath = '/services'");
+  expect(footer).toContain("buttonLabel = 'Get in touch'");
+  expect(footer).toContain("buttonPath = '/#contact'");
   expect(footer).not.toMatch(/compact\?: boolean/);
 });
 
-it('shows the heading, line and large pill only in the invitation, before the nav', () => {
-  const start = footer.indexOf("{variant === 'invitation' && <>");
-  const end = footer.indexOf('</>}', start);
-  expect(start).toBeGreaterThan(-1);
-  expect(end).toBeGreaterThan(start);
-  const gated = footer.slice(start, end + '</>}'.length);
-  expect(gated).toContain('<h2 class="closing-heading">{heading}</h2>');
-  expect(gated).toContain('<p class="closing-line">{line}</p>');
-  expect(gated).toContain('<a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a>');
-  expect(gated).not.toContain('<nav');
-  expect(start).toBeLessThan(footer.indexOf('<nav aria-label="Elsewhere">'));
+it('has no heading or line in the panel', () => {
+  expect(footer).not.toContain('heading');
+  expect(footer).not.toContain('closing-line');
+  expect(footer).not.toContain('closing-heading');
+});
+
+it('shows the name mark only in the quiet panel', () => {
+  expect(footer).toContain('{variant === \'quiet\' && <a class="footer-name"');
+});
+
+it('shows the panel button only in the invitation, before the nav', () => {
+  expect(footer).toContain('{variant === \'invitation\' && <a class="site-button site-button-large" href={mainHref(buttonPath)} data-closing-button>');
+  expect(footer.indexOf('data-closing-button')).toBeLessThan(footer.indexOf('<nav aria-label="Elsewhere">'));
 });
 
 it('puts the legal line after the nav', () => {
   expect(footer.indexOf('<p class="closing-legal">')).toBeGreaterThan(footer.indexOf('<nav aria-label="Elsewhere">'));
 });
 
-it('keeps Work with me in the links only when there is no button', () => {
-  expect(footer).toMatch(/variant === 'quiet' && <a href=\{hireHref\}>Work with me<\/a>/);
+it('keeps Work with me in the links in both variants', () => {
+  expect(footer).toContain('<a href={hireHref}>Work with me</a>');
+  expect(footer).not.toContain("variant === 'quiet' && <a href={hireHref}>");
 });
 
 it('mutes the footer nav links', () => {
@@ -47,8 +48,8 @@ it('mutes the footer nav links', () => {
 
 it('draws the panel from tokens with no border, shadow or motion', () => {
   expect(footer).toMatch(/\.closing-panel \{[^}]*background: var\(--panel\);[^}]*border-radius: var\(--radius-panel\);/);
-  expect(footer).toMatch(/\.closing-panel \{[^}]*padding: 4\.5rem 2rem 2\.25rem;/);
-  expect(footer).toMatch(/\.closing-panel--quiet \{[^}]*padding-top: 3rem;/);
+  expect(footer).toMatch(/\.closing-panel \{[^}]*padding: 3rem 2rem 2\.25rem;/);
+  expect(footer).not.toContain('.closing-panel--quiet { padding-top');
   expect(footer).toMatch(/@media \(max-width: 600px\) \{[^@]*\.closing-panel \{[^}]*border-radius: 28px;[^}]*padding: 3rem 1\.25rem 1\.75rem;/);
   expect(footer).not.toMatch(/border-top|box-shadow|data-reveal|animation|#[0-9a-fA-F]{3,6}\b/);
 });
@@ -57,9 +58,9 @@ it('sets the space above and below the panel', () => {
   expect(footer).toMatch(/\.compact-footer \{[^}]*margin-top: var\(--site-section-space\);[^}]*padding-bottom: var\(--space-8\);/);
 });
 
-it('sizes the heading and line as specified', () => {
-  expect(footer).toMatch(/\.closing-heading \{[^}]*font-size: clamp\(2rem, 3\.6vw, 2\.9rem\);[^}]*line-height: 1\.08;[^}]*letter-spacing: -\.03em;[^}]*text-wrap: balance;/);
-  expect(footer).toMatch(/\.closing-line \{[^}]*font-size: 1\.125rem;[^}]*color: var\(--muted\);[^}]*max-width: 28rem;/);
+it('keeps the nav gap above the links on the invitation only', () => {
+  expect(footer).toMatch(/nav \{[^}]*margin-top: 3\.25rem;/);
+  expect(footer).toMatch(/\.closing-panel--quiet nav \{ margin-top: 0; \}/);
 });
 
 it('keeps the global pill button used by the closing panel', () => {
@@ -77,14 +78,21 @@ it('gives invitation pages the default panel', () => {
   for (const path of invitation) expect(read(path), path).toContain('<Footer slot="footer" />');
 });
 
-it('moves the Work and About endings into the panel, word for word', () => {
-  expect(read('src/pages/work.astro')).toContain('<Footer heading="Have a problem worth exploring?" line="I’d love to hear about it." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
-  expect(read('src/pages/about.astro')).toContain('<Footer id="contact" heading="Let’s talk." line="An idea, a shared interest, or an opportunity worth discussing." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
+it('gives Work, About and Writing the default panel with no per-page copy', () => {
+  const work = read('src/pages/work.astro');
+  const about = read('src/pages/about.astro');
+  const writing = read('src/pages/writing/index.astro');
+  expect(work).toContain('<Footer slot="footer" />');
+  expect(about).toContain('<Footer id="contact" slot="footer" />');
+  expect(writing).toContain('<Footer slot="footer" />');
+  for (const page of [work, about, writing]) {
+    expect(page).not.toContain('heading=');
+    expect(page).not.toContain('buttonLabel=');
+  }
 });
 
-it('moves the Writing index ending into the panel, word for word', () => {
+it('keeps the Writing index invitation block, not a heading in the footer', () => {
   const writing = read('src/pages/writing/index.astro');
-  expect(writing).toContain('<Footer heading="Have something to discuss?" line="Ideas, opportunities, or a conversation worth having." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
   expect(writing.match(/class="writing-invitation"/g)).toHaveLength(1);
   expect(writing).not.toContain('<h2>Have something to discuss?</h2>');
 });
@@ -122,4 +130,26 @@ it('keeps the link and large button arrows still under reduced motion', () => {
 it('uses ink for readable footer link hover text on the panel', () => {
   expect(footer).toMatch(/\.compact-footer nav a:hover \{ color: var\(--ink\); \}/);
   expect(footer).not.toMatch(/nav a:hover \{ color: var\(--accent\)/);
+});
+
+it('renders the pinned button only on invitation pages, hidden until the script shows it', () => {
+  expect(footer).toContain('{variant === \'invitation\' && <div class="pinned-contact" data-pinned-contact hidden>');
+  expect(footer).toContain('<script>import { setupPinnedContact } from \'~/scripts/pinned-contact\'; setupPinnedContact();</script>');
+});
+
+it('hides the pinned button by default and shows it only on phones', () => {
+  expect(footer).toContain('.pinned-contact { display: none; }');
+  const mobileStart = footer.indexOf('@media (max-width: 600px) {', footer.indexOf('.pinned-contact { display: none; }'));
+  expect(mobileStart).toBeGreaterThan(-1);
+  const mobile = footer.slice(mobileStart, footer.indexOf('@media print'));
+  expect(mobile).toContain('.pinned-contact:not([hidden])');
+  expect(mobile).toContain('position: fixed');
+  expect(mobile).toContain('.pinned-contact[data-at-end] { display: none; }');
+  expect(mobile).toContain(':global(body:has(.mobile-menu[open])) .pinned-contact');
+  expect(mobile).toContain(':global(body:has(main :is(input, textarea, select):focus)) .pinned-contact');
+  expect(mobile).toContain(':global(html:has([data-pinned-contact]:not([hidden]))) { scroll-padding-bottom: 5.5rem; }');
+});
+
+it('hides the pinned button in print', () => {
+  expect(footer).toContain('@media print { .pinned-contact { display: none !important; } }');
 });

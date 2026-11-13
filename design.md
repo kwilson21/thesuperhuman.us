@@ -92,13 +92,15 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Every page with the shared footer ends on the closing panel (`--panel`,
   `--radius-panel`). It is the site's one soft surface; no other panel, card or field
   takes a large radius without an owner decision.
-  The panel's heading takes no hairline rule.
+  On invitation pages the panel holds one "Get in touch" button, the footer links and the
+  LLC line. On quiet pages it holds the name mark, the footer links and the LLC line.
+- Pinned contact button (the one thing that floats): on invitation pages at 600px wide and below, a full-width Get in touch pill stays at the bottom of the screen until the closing panel comes into view. It hides while the phone menu is open or a form field has focus, appears and goes without motion, and never shows above 600px, in print or without JavaScript.
   At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than that it stays on one line.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
   44px minimum height, one line; on a fine-pointer hover, ink fill. Large size,
-  `.site-button-large`, 52px, in the closing panel only.
+  `.site-button-large`, 52px, in the closing panel and the pinned contact button only.
 - Secondary · `.site-button-outline` (transparent, ink text, also a pill) or `.site-link`: ink
   text, accent rule about 4px under the baseline, accent arrow, 44px tap area
   (D8.4-C).
@@ -198,6 +200,8 @@ maintenance).
 Kazon chose the closing panel and pill buttons from the design options: "I really like B"
 and "Pills on every button". The spec is
 `docs/superpowers/specs/2026-11-12-closing-panel-and-pill-buttons-design.md`.
+
+Kazon revised the panel after seeing the built pages: "it feels like there's two calls to action, I just want a simple get in touch button"; "The original one button only worked best"; and, for the pinned button, "Phones only".
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

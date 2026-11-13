@@ -38,7 +38,7 @@ import { personJsonLd, experience, lyftBonus, lyftTeams, skuposStages, workingPr
         <ul>{team.projects.map(project => <li><strong>{project.title}.</strong> {project.description}</li>)}</ul>
       </section>)}</div>}
     </ExperienceRow>)}</section>
-  </div><Footer heading="Have a problem worth exploring?" line="I’d love to hear about it." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />
+  </div><Footer slot="footer" />
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';

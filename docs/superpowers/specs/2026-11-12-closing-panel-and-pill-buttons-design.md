@@ -198,6 +198,48 @@ owner's yes or no on the pull request.
    so the page no longer ends on two invitations. Owner, in conversation, 2026-11-12:
    "Yes, move it".
 
+## Revision after seeing the built pages (November 12, 2026)
+
+The owner looked at the built panel and changed it. In his words: "it feels like
+there's two calls to action, I just want a simple get in touch button"; of the
+mockups, "The original one button only worked best"; and, asked for the reference's
+pinned button, "Phones only". This section replaces the parts of the brief it
+contradicts, including amendment 5 above and the non-goal "No pinned or floating
+button".
+
+**The panel**
+
+- Invitation variant, top to bottom: one "Get in touch" button (`.site-button
+  .site-button-large` with its arrow), the footer links, the LLC line. No name mark,
+  no heading, no line of text. Top padding 3rem at every width.
+- The button goes to Home's contact section (`/#contact`) on every invitation page.
+  The per-page headings and lines on Work, About and Writing are removed, not moved.
+  The component no longer takes `heading` or `line`.
+- "Work with me" is in the link row in both variants, since no panel button goes there.
+- Quiet variant: unchanged (name mark, links, LLC line).
+- The page-to-variant table is unchanged: Work, About, Building, Writing index, the
+  essay and project pages are invitation pages; Home, Privacy, 404, both intake flows
+  and the audio pages are quiet.
+
+**The pinned button, phones only**
+
+- On invitation pages, at 600px wide and below, a full-width "Get in touch" pill stays
+  at the bottom of the screen while the visitor reads. Same target as the panel button.
+- It sits over a fade from paper to transparent so text does not collide with it, with
+  the phone's bottom safe area respected.
+- When the closing panel comes into view the pinned button goes away, so two "Get in
+  touch" buttons are never on screen together.
+- It also goes away while the phone menu is open and while a form field has focus
+  (About has the resume request form).
+- It appears and goes without motion. It never shows above 600px wide, in print, or
+  without JavaScript; in those cases the panel's own button is the invitation.
+- Keyboard focus must not land under it: the page reserves scroll padding at the
+  bottom while it is showing.
+- Quiet pages, the Work with me hub, service sheets and all private pages never show it.
+
+**design.md** gains the pinned button as a named, single exception to "nothing floats",
+with these rules, and the three owner quotes above under the November 12 decisions.
+
 ## Calls made by the designer, for the owner to check
 
 1. The default line reuses the hub's live sentence instead of new copy.

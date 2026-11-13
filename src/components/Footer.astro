@@ -3,18 +3,14 @@ import { mainSitePath, audioPath } from '~/lib/host-routing';
 import PersonalName from '~/components/PersonalName.astro';
 interface Props {
   variant?: 'invitation' | 'quiet';
-  heading?: string;
-  line?: string;
   buttonLabel?: string;
   buttonPath?: string;
   id?: string;
 }
 const {
   variant = 'invitation',
-  heading = 'Let’s work together.',
-  line = 'Every project is fixed price and agreed in writing before work begins.',
-  buttonLabel = 'Work with me',
-  buttonPath = '/services',
+  buttonLabel = 'Get in touch',
+  buttonPath = '/#contact',
   id,
 } = Astro.props;
 const host = Astro.isPrerendered ? Astro.url.host : Astro.request.headers.get('host') ?? Astro.url.host;
@@ -25,22 +21,19 @@ const privacyHref = mainHref('/privacy');
 const homeHref = mainHref('/');
 const year = new Date().getFullYear();
 ---
+{variant === 'invitation' && <div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel}</a></div>}
 <footer class="compact-footer site-shell">
   <div class:list={['closing-panel', { 'closing-panel--quiet': variant === 'quiet' }]} id={id}>
-    <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>
-    {variant === 'invitation' && <>
-      <h2 class="closing-heading">{heading}</h2>
-      <p class="closing-line">{line}</p>
-      <a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a>
-    </>}
-    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a>{variant === 'quiet' && <a href={hireHref}>Work with me</a>}<a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
+    {variant === 'quiet' && <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>}
+    {variant === 'invitation' && <a class="site-button site-button-large" href={mainHref(buttonPath)} data-closing-button>{buttonLabel} <span aria-hidden="true">→</span></a>}
+    <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={hireHref}>Work with me</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
     <p class="closing-legal">The Superhuman Group LLC · {year}</p>
   </div>
 </footer>
+<script>import { setupPinnedContact } from '~/scripts/pinned-contact'; setupPinnedContact();</script>
 <style>
   .compact-footer { margin-top: var(--site-section-space); padding-bottom: var(--space-8); }
-  .closing-panel { display: grid; justify-items: center; text-align: center; padding: 4.5rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
-  .closing-panel--quiet { padding-top: 3rem; }
+  .closing-panel { display: grid; justify-items: center; text-align: center; padding: 3rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
   /* Each link gets a 44px-tall tap area from a pseudo-element, so the text and layout keep their look.
      Wrapped rows sit 44px apart (row gap = 44px minus one line), so neighbouring areas never overlap. */
   .compact-footer nav a, .compact-footer .footer-name { position: relative; border: 0; }
@@ -48,8 +41,6 @@ const year = new Date().getFullYear();
   /* The same 24px as the header wordmark (SiteNav .site-name). */
   .footer-name { font-size: 1.5rem; letter-spacing: -.03em; color: var(--ink); margin-bottom: 1.6rem; }
   .closing-panel--quiet .footer-name { margin-bottom: 1.25rem; }
-  .closing-heading { margin: 0 0 .9rem; font-size: clamp(2rem, 3.6vw, 2.9rem); line-height: 1.08; letter-spacing: -.03em; text-wrap: balance; }
-  .closing-line { margin: 0 0 1.9rem; font-size: 1.125rem; color: var(--muted); max-width: 28rem; }
   nav { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(44px - 1lh) var(--space-6); margin-top: 3.25rem; color: var(--muted); font-size: .875rem; }
   .closing-panel--quiet nav { margin-top: 0; }
   /* Accent on the panel is below 4.5:1 for small text, so footer links use muted and ink. */
@@ -57,4 +48,14 @@ const year = new Date().getFullYear();
   @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--ink); } }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; }
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem 1.25rem 1.75rem; } }
+  .pinned-contact { display: none; }
+  @media (max-width: 600px) {
+    .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) var(--site-gutter) calc(var(--space-4) + env(safe-area-inset-bottom)); background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); pointer-events: none; }
+    .pinned-contact .site-button { pointer-events: auto; width: 100%; }
+    .pinned-contact[data-at-end] { display: none; }
+    :global(body:has(.mobile-menu[open])) .pinned-contact { display: none; }
+    :global(body:has(main :is(input, textarea, select):focus)) .pinned-contact { display: none; }
+    :global(html:has([data-pinned-contact]:not([hidden]))) { scroll-padding-bottom: 5.5rem; }
+  }
+  @media print { .pinned-contact { display: none !important; } }
 </style>
