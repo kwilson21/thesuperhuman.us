@@ -1,7 +1,13 @@
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
 import { describe, expect, it } from "vitest";
-import { readAtEdge, readFields, readText } from "../../src/server/edge";
+import {
+	rawTextField,
+	readAtEdge,
+	readFields,
+	readText,
+	textField,
+} from "../../src/server/edge";
 
 // A message on the base type is what a missing field or a value of the wrong type says; a message on a filter is
 // what a value that fails the check says.
@@ -146,5 +152,100 @@ describe("readFields", () => {
 			expect(name).toBe("Name is required.");
 			expect(other).toBeUndefined();
 		}
+	});
+});
+
+describe("readFields options", () => {
+	const Code = textField(
+		Schema.isMinLength(3, { message: "too short" }),
+		Schema.isPattern(/^\d+$/, { message: "digits only" }),
+	);
+
+	it("takes the first failing check's sentence by default and the last when asked", () => {
+		expect(readFields({ code: Code }, { code: "a" })).toEqual({
+			ok: false,
+			errors: { code: "too short" },
+		});
+		expect(
+			readFields({ code: Code }, { code: "a" }, { winner: "last" }),
+		).toEqual({
+			ok: false,
+			errors: { code: "digits only" },
+		});
+	});
+
+	it("lists errors in the order the fields are written, not the body's", () => {
+		const read = readFields(
+			{ a: Code, b: Code, c: Code },
+			{ c: "x", a: "x", b: "x" },
+		);
+
+		expect(read.ok).toBe(false);
+
+		if (!read.ok) expect(Object.keys(read.errors)).toEqual(["a", "b", "c"]);
+	});
+
+	it("gives a missing or undefined field its default without reading it", () => {
+		const read = readFields(
+			{ code: Code, tags: Schema.Array(Schema.String) },
+			{ code: "123" },
+			{ defaults: { tags: [] } },
+		);
+
+		expect(read).toEqual({ ok: true, value: { code: "123", tags: [] } });
+	});
+
+	it("answers a body that is not an object under _form, with a sentence or one per kind", () => {
+		expect(readFields({ code: Code }, null, { notObject: "bad body" })).toEqual(
+			{
+				ok: false,
+				errors: { _form: "bad body" },
+			},
+		);
+		expect(readFields({ code: Code }, [], { notObject: "bad body" }).ok).toBe(
+			false,
+		);
+		expect(
+			readFields({ code: Code }, ["x"], { notObject: { null: "n" } }),
+		).toEqual({ ok: false, errors: { code: "too short" } });
+		expect(
+			readFields({ code: Code }, null, { notObject: { null: "n" } }),
+		).toEqual({
+			ok: false,
+			errors: { _form: "n" },
+		});
+	});
+
+	it("runs cross-field checks only after every field passed", () => {
+		const after = (value: { readonly lo: number; readonly hi: number }) =>
+			value.lo > value.hi ? { hi: "hi must not be below lo" } : {};
+
+		const fields = { lo: Schema.Number, hi: Schema.Number };
+
+		expect(readFields(fields, { lo: 3, hi: 1 }, { after })).toEqual({
+			ok: false,
+			errors: { hi: "hi must not be below lo" },
+		});
+		expect(readFields(fields, { lo: 1, hi: 3 }, { after }).ok).toBe(true);
+		expect(readFields(fields, { lo: "x", hi: 1 }, { after })).toEqual({
+			ok: false,
+			errors: { lo: expect.any(String) },
+		});
+	});
+
+	it("keeps a raw text field untrimmed and reads a non-string as empty", () => {
+		const read = readFields(
+			{ token: rawTextField(), text: textField() },
+			{ token: "  t  ", text: 5 },
+		);
+
+		expect(read).toEqual({ ok: true, value: { token: "  t  ", text: "" } });
+	});
+
+	it("accepts a body typed unknown", () => {
+		let body: Schema.Unknown["Type"];
+
+		body = { code: "123" };
+		expect(readFields({ code: Code }, body).ok).toBe(true);
 	});
 });
