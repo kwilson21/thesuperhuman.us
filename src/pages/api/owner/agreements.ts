@@ -11,7 +11,7 @@ import {
 	nativeAgreementResponse,
 } from "~/lib/agreement-request";
 import { agreementJson, cleanupAgreementAccess } from "~/lib/agreement-access";
-import { contractorSchema } from "~/lib/agreement-fields";
+import { readContractor } from "~/lib/agreement-fields";
 import {
 	compareWithPrevious,
 	currentTemplate,
@@ -64,7 +64,18 @@ const schema = z.discriminatedUnion("action", [
 	}),
 	z.object({
 		action: z.literal("config"),
-		values: contractorSchema,
+		// The contractor's details are read with Effect Schema; a failure fails the whole body, as the Zod object did.
+		values: z.unknown().transform((value, context) => {
+			const read = readContractor(value);
+
+			if (read.ok) return read.value;
+			context.addIssue({
+				code: "custom",
+				message: "Invalid contractor details.",
+			});
+
+			return z.NEVER;
+		}),
 		expectedCurrentVersion: z.coerce.number().int().min(0),
 	}),
 ]);

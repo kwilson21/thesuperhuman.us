@@ -9,10 +9,7 @@ import { transform } from "@astrojs/compiler";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { hashOfferToken, type OfferTerms } from "~/lib/software-offers";
-import {
-	agreementValues,
-	agreementDetailsSchema,
-} from "~/lib/agreement-fields";
+import { agreementValues, parseAgreementDetails } from "~/lib/agreement-fields";
 import { projectToday } from "~/lib/audio-project-updates";
 import { double, fakeD1 } from "../helpers/doubles";
 import { fakeLocals } from "../helpers/runtime";
@@ -2046,7 +2043,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 		],
 	};
 
-	const owner = agreementDetailsSchema.parse({
+	const owner = parseAgreementDetails({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
 		environment: "Synthetic browser environment",
@@ -2284,7 +2281,7 @@ it.each(
 				)
 				.run(JSON.stringify(terms));
 
-			const owner = agreementDetailsSchema.parse({
+			const owner = parseAgreementDetails({
 				correction_calendar_days: days,
 				planned_start: "2026-10-01",
 				planned_end: "2026-10-20",

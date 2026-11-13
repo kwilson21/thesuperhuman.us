@@ -50,11 +50,25 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 ];
 
 /**
- * Zod v3 through `astro/zod` still validates in the browser: three validators (audio intake, software inquiry, agreement client
- * details) across four modules (`audio-intake`, `software-inquiry`, `agreement-client-fields`, `agreement-draft-fields`). It is the one named exception, until the Zod to Effect Schema PR removes it and this entry with it.
- * `astro` depends on `zod`, so the exception also covers the dependency walk for this specifier only.
+ * The effect modules browser-reachable source may import, by exact specifier (the one allowance in FORBIDDEN_MODULES).
+ * Effect Schema reaches the browser on purpose, through the shared field helpers (src/lib/fields.ts) and the three
+ * validators built on them, and only for synchronous decoding: no `Effect.gen`, service or Layer. Each module, and why:
+ * - `effect/Schema`: the schemas themselves (`Schema.String`, `makeFilter`, `isMaxLength`, `decodeTo`, `decodeUnknownResult`).
+ * - `effect/SchemaGetter`: `SchemaGetter.transform`, the synchronous decode step of a field (trim, normalise, lower-case).
+ * - `effect/SchemaIssue`: `makeFormatterStandardSchemaV1`, which turns a failed decode into one issue per failed check.
+ * - `effect/Result`: `Result.isSuccess`, to read what `Schema.decodeUnknownResult` answers without running an Effect.
+ * - `effect/Predicate`: the `isString`, `isObject` and `isNull` guards a field reader asks.
+ * Everything else of Effect (`effect/Effect`, `effect/Layer`, `effect/Context`, the bare `effect`), `@effect/*`,
+ * `@xstate/effect` and `src/server/**` stays forbidden. Zod is not allowed any more, `astro/zod` and `astro:schema`
+ * included.
  */
-export const ALLOWED_BROWSER_MODULES: readonly string[] = ["astro/zod"];
+export const ALLOWED_BROWSER_EFFECT_MODULES: readonly string[] = [
+	"effect/Predicate",
+	"effect/Result",
+	"effect/Schema",
+	"effect/SchemaGetter",
+	"effect/SchemaIssue",
+];
 
 // What no browser module may load: a Node or Cloudflare built-in, or Astro's server-only env. Specifiers only: the
 // walker reads them with the TypeScript parser, so a comment or an object key that happens to say "node:" is not one.
@@ -129,6 +143,191 @@ export function serverUsesIn(file: string, text: string): string[] {
 	visit(source);
 
 	return found;
+}
+
+/**
+ * The Schema run entry points browser code may call: the synchronous ones. Everything else that reads like a runner
+ * (`decode*`, `encode*`, `validate*`, `asserts*` or `make*Effect`) is refused, which takes in every Promise, Effect and
+ * Exit runner and the synchronous encoders (browser code only decodes). `src/lib/fields.ts` calls `decodeUnknownResult`.
+ */
+export const ALLOWED_SCHEMA_RUNNERS: readonly string[] = [
+	"decodeUnknownResult",
+	"decodeUnknownSync",
+	"decodeResult",
+	"decodeSync",
+	"decodeUnknownOption",
+	"decodeOption",
+	"is",
+	"asserts",
+];
+
+// Schema functions whose names start like a runner but only build a schema (apply a transformation, rename keys).
+const SCHEMA_COMBINATORS: readonly string[] = [
+	"decode",
+	"decodeTo",
+	"encode",
+	"encodeTo",
+	"encodeKeys",
+];
+
+const RUNNER_LIKE = /^(decode|encode|validate|asserts)|^make.*Effect/;
+
+// Schema functions that hand back an object with a runner of their own. A standard schema's `validate` may answer with a
+// Promise, and an XML encoder is an encoder; the other `to*` functions build a schema, a formatter, an equivalence or a
+// document and run nothing.
+const REFUSED_CONVERTERS: readonly string[] = [
+	"toStandardSchemaV1",
+	"toStandardJSONSchemaV1",
+	"toEncoderXml",
+];
+
+/** True for a name of the Schema module that runs a decode or encode asynchronously or as an Effect (or at all, for encode), or hands back a runner. */
+function isRefusedSchemaName(name: string): boolean {
+	if (REFUSED_CONVERTERS.includes(name)) return true;
+
+	return (
+		RUNNER_LIKE.test(name) &&
+		!ALLOWED_SCHEMA_RUNNERS.includes(name) &&
+		!SCHEMA_COMBINATORS.includes(name)
+	);
+}
+
+const SCHEMA_MODULE = "effect/Schema";
+
+/**
+ * The uses of Schema's asynchronous or Effect-returning entry points in one file (the whole file for .ts, the <script>
+ * blocks for .astro), from the syntax tree so comments and strings never count: a named import (aliased or not), a
+ * member of the namespace import by name or by string literal (`S.decodeUnknownPromise`, `S["decodeUnknownPromise"]`), a
+ * re-export, and anything the walker cannot follow: a computed member (`S[name]`), the namespace used as a value
+ * (`const { x } = S`, `f(S)`), `export * from`, and a dynamic `import()` or `require` of the module. Type-only imports are
+ * erased and do not count. This is the rule behind "synchronous decoding only" in browser code.
+ */
+export function schemaRunnersIn(file: string, text: string): string[] {
+	const source = ts.createSourceFile(
+		file,
+		scriptTextOf(file, text),
+		ts.ScriptTarget.Latest,
+		true,
+	);
+
+	const found: string[] = [];
+	const namespaces = new Set<string>();
+
+	const lineOf = (node: ts.Node) =>
+		source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+
+	const isSchema = (specifier: ts.Expression | undefined) =>
+		specifier !== undefined &&
+		ts.isStringLiteralLike(specifier) &&
+		specifier.text === SCHEMA_MODULE;
+
+	for (const statement of source.statements) {
+		if (
+			ts.isImportDeclaration(statement) &&
+			isSchema(statement.moduleSpecifier) &&
+			statement.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
+		) {
+			const bindings = statement.importClause?.namedBindings;
+
+			if (bindings && ts.isNamespaceImport(bindings))
+				namespaces.add(bindings.name.text);
+
+			if (bindings && ts.isNamedImports(bindings))
+				for (const element of bindings.elements) {
+					const name = (element.propertyName ?? element.name).text;
+
+					if (!element.isTypeOnly && isRefusedSchemaName(name))
+						found.push(`${name} imported at line ${lineOf(element)}`);
+				}
+		}
+
+		if (
+			ts.isExportDeclaration(statement) &&
+			isSchema(statement.moduleSpecifier) &&
+			!statement.isTypeOnly
+		) {
+			const clause = statement.exportClause;
+
+			if (!clause || ts.isNamespaceExport(clause))
+				found.push(
+					`the whole Schema module re-exported at line ${lineOf(statement)}`,
+				);
+			else
+				for (const element of clause.elements) {
+					const name = (element.propertyName ?? element.name).text;
+
+					if (!element.isTypeOnly && isRefusedSchemaName(name))
+						found.push(`${name} re-exported at line ${lineOf(element)}`);
+				}
+		}
+	}
+
+	const visit = (node: ts.Node) => {
+		if (ts.isPropertyAccessExpression(node)) {
+			if (
+				ts.isIdentifier(node.expression) &&
+				namespaces.has(node.expression.text) &&
+				isRefusedSchemaName(node.name.text)
+			)
+				found.push(`${node.name.text} at line ${lineOf(node)}`);
+		} else if (ts.isElementAccessExpression(node)) {
+			if (
+				ts.isStringLiteralLike(node.argumentExpression) &&
+				node.argumentExpression.text === "~standard"
+			)
+				found.push(`a standard schema validator at line ${lineOf(node)}`);
+
+			if (
+				ts.isIdentifier(node.expression) &&
+				namespaces.has(node.expression.text)
+			) {
+				const key = node.argumentExpression;
+
+				if (!ts.isStringLiteralLike(key))
+					found.push(`a computed Schema member at line ${lineOf(node)}`);
+				else if (isRefusedSchemaName(key.text))
+					found.push(`${key.text} at line ${lineOf(node)}`);
+			}
+		} else if (
+			ts.isIdentifier(node) &&
+			namespaces.has(node.text) &&
+			!isNamespaceReferenceAllowed(node)
+		)
+			found.push(
+				`the Schema namespace used as a value at line ${lineOf(node)}`,
+			);
+
+		if (ts.isCallExpression(node) && isSchema(node.arguments[0])) {
+			const callee = node.expression;
+
+			if (
+				callee.kind === ts.SyntaxKind.ImportKeyword ||
+				(ts.isIdentifier(callee) && callee.text === "require")
+			)
+				found.push(
+					`the Schema module loaded dynamically at line ${lineOf(node)}`,
+				);
+		}
+
+		ts.forEachChild(node, visit);
+	};
+
+	visit(source);
+
+	return found;
+}
+
+/** True for the namespace identifier where it is only a way to name a member, a type or its own import. */
+function isNamespaceReferenceAllowed(node: ts.Identifier): boolean {
+	const parent = node.parent;
+
+	return (
+		ts.isNamespaceImport(parent) ||
+		ts.isQualifiedName(parent) ||
+		ts.isTypeQueryNode(parent) ||
+		(ts.isPropertyAccessExpression(parent) && parent.expression === node) ||
+		(ts.isElementAccessExpression(parent) && parent.expression === node)
+	);
 }
 
 // The hydration directives: `client:load`, `client:idle`, `client:visible`, `client:media` and `client:only`.

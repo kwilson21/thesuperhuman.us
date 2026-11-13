@@ -30,7 +30,7 @@ import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { prepareWithDiagnostics } from "../../scripts/screenshots/prepare.mjs";
 import { POST as sendOffer } from "../../src/pages/api/owner/requests/[id]/software";
-import { contractorSchema } from "../../src/lib/agreement-fields";
+import { readContractor } from "../../src/lib/agreement-fields";
 import { partial } from "../helpers/doubles";
 import { fakeLocals } from "../helpers/runtime";
 import { sqliteD1 } from "../helpers/sqlite-d1";
@@ -214,7 +214,7 @@ it("seeds a completed send so missing details reach the real agreement validatio
 				.values_json,
 		);
 
-		expect(contractorSchema.safeParse(config).success).toBe(true);
+		expect(readContractor(config).ok).toBe(true);
 
 		const draft = sql
 			.prepare("SELECT updated_at FROM software_offers WHERE status='draft'")

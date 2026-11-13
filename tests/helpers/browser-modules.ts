@@ -14,6 +14,7 @@ export const BROWSER_MODULES: readonly string[] = [
 	"src/lib/audio-intake.ts",
 	"src/lib/audio-peaks.ts",
 	"src/lib/business-days.ts",
+	"src/lib/fields.ts",
 	"src/lib/home-motion.ts",
 	"src/lib/line-diff.ts",
 	"src/lib/project-story.ts",
@@ -25,19 +26,19 @@ export const BROWSER_MODULES: readonly string[] = [
 ];
 
 /**
- * Every installed package the client build puts in browser code (by package name, not by import specifier: the
- * source walker sees `astro/zod`, the bundler sees the `zod` v3 that astro ships). Zod v3 only: Zod v4, Effect and
- * the other server packages are forbidden in client-manifest.ts. Remove `zod` when the Zod to Effect Schema work
- * removes `astro/zod` from the browser. To let `effect/Schema` in later, allow the whole `effect` package here and in
- * ALLOWED_FORBIDDEN_PREFIXES (prefix "npm:effect@"): `effect/dist/Schema.js` imports about 68 other effect modules,
- * so a prefix for Schema alone would still fail. Which effect modules browser code may IMPORT is a source-level rule
- * that the walker (client-graph.test.ts) carries; the manifest check can only allow or forbid the package.
+ * Every installed package the client build puts in browser code (by package name, not by import specifier). Effect only,
+ * for Effect Schema through the shared field helpers (src/lib/fields.ts). `effect/dist/Schema.js` imports about 68 other
+ * effect modules, so the manifest check can only allow or forbid the whole package (ALLOWED_FORBIDDEN_PREFIXES in
+ * client-manifest.ts, prefix "npm:effect@"); which effect modules browser SOURCE may import is a source-level rule that
+ * the walker (client-graph.test.ts, ALLOWED_BROWSER_EFFECT_MODULES) carries, and the text markers in client-bundle.test.ts
+ * catch the runtime parts a Schema-only bundle does not hold (Layer, Scope, Deferred). Zod, in either version, is gone
+ * from the browser and forbidden outright; `@effect/*`, `@xstate/effect` and `xstate` stay forbidden.
  */
-export const BROWSER_PACKAGES: readonly string[] = ["zod"];
+export const BROWSER_PACKAGES: readonly string[] = ["effect"];
 
 /**
  * Every virtual module id (`\0...`, `astro:...`, `virtual:...`) the client build puts in browser code. None today:
- * the browser bundle holds only repository files and the `zod` package. A virtual module can carry code a plugin
+ * the browser bundle holds only repository files and the `effect` package. A virtual module can carry code a plugin
  * generates, so each id added here is reviewed for what it supplies.
  */
 export const BROWSER_VIRTUAL_MODULES: readonly string[] = [];

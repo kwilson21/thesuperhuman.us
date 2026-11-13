@@ -1,5 +1,5 @@
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
-import { draftSchema, states } from "./agreement-draft-fields";
+import { parseDraft, states } from "./agreement-draft-fields";
 import { sessionGuard } from "./software-agreements";
 import type { SoftwareOffer } from "./software-offers";
 import type { OwnerRequest } from "./owner-model";
@@ -10,7 +10,7 @@ export function prefillAgreementDraft(
 ) {
 	const jurisdiction = String(previous?.jurisdiction ?? "");
 
-	return draftSchema.parse({
+	return parseDraft({
 		legal_name: previous?.legal_name ?? request.details.company ?? "",
 		signer_name: request.name,
 		entity_type: previous?.entity_type ?? "",
@@ -36,7 +36,7 @@ export async function loadAgreementDraft(
 		.bind(offerId, email)
 		.first<{ values_json: string }>();
 
-	return saved ? draftSchema.parse(JSON.parse(saved.values_json)) : null;
+	return saved ? parseDraft(JSON.parse(saved.values_json)) : null;
 }
 
 export async function saveAgreementDraft(
@@ -45,7 +45,7 @@ export async function saveAgreementDraft(
 	session: AgreementSession,
 	input: unknown,
 ) {
-	const draft = draftSchema.parse(input);
+	const draft = parseDraft(input);
 	await db.batch([
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),

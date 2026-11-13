@@ -34,8 +34,9 @@ import {
 // in it. The text markers further down are a second, independent look at the emitted files.
 //
 // The independent backstop to client-graph.test.ts: that test walks the source's import graph, this one looks at what
-// the build actually shipped. It reads every browser script under dist/ (dist/_astro/ and scripts copied from public/, not the server output dist/_worker.js/) and fails when a chunk holds Effect, @xstate/effect, Stripe or Zod v4 runtime
-// code, however it got there (an import the walker cannot see, a glob, a plugin). It needs a build: run
+// the build actually shipped. It reads every browser script under dist/ (dist/_astro/ and scripts copied from public/, not the server output dist/_worker.js/) and fails when a chunk holds anything of Effect beyond
+// Effect Schema, @xstate/effect, Stripe, Zod (either version) or another reviewed-out runtime, however it got there
+// (an import the walker cannot see, a glob, a plugin). It needs a build: run
 // `pnpm run build` first. With no dist/ it skips, under a name that says so, unless REQUIRE_CLIENT_BUNDLE=1 is set:
 // then a missing dist/ FAILS the test. CI sets it, in a step after the build (.github/workflows/validate.yml);
 // the plain `pnpm test` step there runs before the build, so without it the test would skip in CI for good.
@@ -43,25 +44,60 @@ import {
 // The markers are string literals the libraries keep in their runtime, which a minifier cannot rename. They were
 // chosen by bundling scratch entries with esbuild --bundle --minify (the minifier Astro's client build uses) and
 // reading what survived:
-//   "~effect/"       the prefix of every type id Effect keeps ("~effect/Cause", "~effect/Equal", "~effect/Schema" and so
-//                    on). Present in every bundle of effect/Effect (37), effect/Schema (79), effect/Option (13, which
-//                    carries "~effect/Option" and "~effect/Equal" but not "~effect/Cause") and @xstate/effect (96);
-//                    absent only from the pure helper effect/Predicate, which carries no runtime. A marker that names a
-//                    single module (Cause, Schema) misses a chunk that uses a different one, so this is the prefix.
+//   "~effect/<Name>" the type id Effect keeps for each of its modules ("~effect/Cause", "~effect/Schema", and so on).
+//                    Effect Schema is allowed in the browser, and its bundle holds 23 of these (SCHEMA_MARKERS: the
+//                    Schema's own ids and the few runtime modules it is built on: Cause, Context, Effect, Equal, Exit,
+//                    Fiber, Hash, Option, Redactable, Result and the Schema modules). Any other "~effect/<Name>" is a
+//                    module the Schema bundle does not hold, so it fails: "~effect/Layer", "~effect/Scope" and
+//                    "~effect/Deferred" are what a bundle that builds a Layer adds, and what `Effect.runSync` or
+//                    `Effect.gen` alone adds is not distinguishable here (they use only modules Schema holds), so the
+//                    source walker (client-graph.test.ts) carries that rule. A change of the pinned effect version can
+//                    change this list: review it with the pin.
 //   "EffectFailure"  the class tag of @xstate/effect's failure wrapper; in every bundle of @xstate/effect (3 times), which
 //                    also pulls in the Effect runtime.
 //   "api.stripe.com" and "Stripe-Version"
 //                    the Stripe SDK's API host and its version header. Stripe is a server package: browser code never
 //                    holds a Stripe client, so either string in a browser script means the SDK was bundled.
-//   "$ZodType"       the base class of Zod v4 (`zod`, the package; the Zod v3 that `astro/zod` ships has no such name). Zod v4
-//                    is a server validator and does not reach the browser.
+//   "$ZodType"       the base class of Zod v4 (`zod`, the package). Zod v4 is a server validator and does not reach the browser.
+//   "ZodString" and "ZodEffects"
+//                    the names of Zod v3's classes (`astro/zod` ships v3), kept as the strings of its
+//                    `ZodFirstPartyTypeKind` enum; in every bundle of `astro/zod` (one or more of each). The browser
+//                    validators are Effect Schema now, so Zod 3 no longer reaches the browser.
 const RUNTIME_MARKERS = [
-	"~effect/",
 	"EffectFailure",
 	"api.stripe.com",
 	"Stripe-Version",
 	"$ZodType",
+	"ZodString",
+	"ZodEffects",
 ] as const;
+
+/** The `~effect/<Name>` type ids an Effect Schema bundle holds (the 23 the real client build has). */
+const SCHEMA_MARKERS: readonly string[] = [
+	"~effect/Cause",
+	"~effect/Cause/AsyncFiberError",
+	"~effect/Cause/Reason",
+	"~effect/Context",
+	"~effect/Context/Reference",
+	"~effect/Context/Service",
+	"~effect/Context/defaultValue",
+	"~effect/Effect",
+	"~effect/Effect/stackProbe",
+	"~effect/Equal",
+	"~effect/Exit",
+	"~effect/Fiber",
+	"~effect/Fiber/currentFiber",
+	"~effect/Hash",
+	"~effect/Option",
+	"~effect/Redactable",
+	"~effect/Result",
+	"~effect/Schema",
+	"~effect/Schema/Schema",
+	"~effect/Schema/SchemaError",
+	"~effect/SchemaIssue/Issue",
+	"~effect/SchemaTransformation/Transformation",
+	"~effect/Utils/internal",
+];
 
 const required = process.env.REQUIRE_CLIENT_BUNDLE === "1";
 
@@ -91,17 +127,20 @@ function browserScripts(dist: string): string[] {
 	return chunksUnder(dist, join(dist, SERVER_OUTPUT)).sort();
 }
 
-/** The markers a chunk's text holds. */
+/** The markers a chunk's text holds that it must not: the runtime markers, and every `~effect/<Name>` Schema does not hold. */
 function markersIn(text: string): string[] {
-	return RUNTIME_MARKERS.filter((marker) => text.includes(marker));
+	const effect = [...new Set(text.match(/~effect\/[A-Za-z0-9_/]*/g) ?? [])]
+		.filter((marker) => !SCHEMA_MARKERS.includes(marker))
+		.sort();
+
+	return [
+		...RUNTIME_MARKERS.filter((marker) => text.includes(marker)),
+		...effect,
+	];
 }
 
 describe("the markers", () => {
 	it("find each runtime and nothing in plain code", () => {
-		expect(markersIn('var a="~effect/Cause";')).toEqual(["~effect/"]);
-		expect(markersIn('var a="~effect/Option",b="~effect/Equal";')).toEqual([
-			"~effect/",
-		]);
 		expect(markersIn('x={_tag:"EffectFailure"}')).toEqual(["EffectFailure"]);
 		expect(markersIn('fetch("https://api.stripe.com/v1/invoices")')).toEqual([
 			"api.stripe.com",
@@ -110,7 +149,32 @@ describe("the markers", () => {
 			"Stripe-Version",
 		]);
 		expect(markersIn("class a extends $ZodType{}")).toEqual(["$ZodType"]);
+		expect(markersIn('var a="ZodString",b="ZodEffects";')).toEqual([
+			"ZodString",
+			"ZodEffects",
+		]);
 		expect(markersIn("const a = document.title;")).toEqual([]);
+	});
+
+	it("let Effect Schema's own ids through", () => {
+		expect(
+			markersIn(SCHEMA_MARKERS.map((marker) => `var a="${marker}";`).join("")),
+		).toEqual([]);
+		expect(markersIn('var a="~effect/Cause",b="~effect/Schema";')).toEqual([]);
+	});
+
+	it("find the runtime a Layer adds, and any effect module Schema does not hold", () => {
+		for (const name of ["Layer", "Scope", "Deferred"])
+			expect(markersIn(`var a="~effect/${name}";`)).toEqual([
+				`~effect/${name}`,
+			]);
+
+		expect(
+			markersIn(
+				'var a="~effect/Layer/MemoMap",b="~effect/Scope/Closeable",c="~effect/Schema";',
+			),
+		).toEqual(["~effect/Layer/MemoMap", "~effect/Scope/Closeable"]);
+		expect(markersIn('var a="~effect/Logger";')).toEqual(["~effect/Logger"]);
 	});
 });
 
@@ -155,7 +219,7 @@ describe("browserScripts", () => {
 describe("the built browser bundle", () => {
 	it.skipIf(!existsSync(bundle) && !required)(
 		existsSync(bundle) || required
-			? "holds no Effect, @xstate/effect, Stripe or Zod v4 runtime code"
+			? "holds no Effect beyond Schema, no @xstate/effect, Stripe or Zod runtime code"
 			: "holds no server runtime code (skipped: no dist/, run pnpm run build first)",
 		() => {
 			expect(
@@ -241,14 +305,14 @@ describe("bundleViolations", () => {
 	// SAFETY: an empty list typed as the allowlist's element type; no value is asserted.
 	const allowed = {
 		repoModules: ["src/lib/ok.ts"],
-		packages: ["zod"],
+		packages: ["effect"],
 		virtualModules: [] as readonly string[],
 	};
 
 	const base = [
 		"src/scripts/a.ts",
 		"src/lib/ok.ts",
-		"npm:zod@3.25.76/v3/types.js",
+		"npm:effect@4.1.4/dist/Schema.js",
 	];
 
 	it("accepts exactly the reviewed modules and packages", () => {
@@ -270,7 +334,7 @@ describe("bundleViolations", () => {
 		).toEqual(["repository module not on the reviewed list: src/lib/new.ts"]);
 		expect(
 			bundleViolations(
-				manifest(["src/scripts/a.ts", "npm:zod@3.25.76/v3/types.js"]),
+				manifest(["src/scripts/a.ts", "npm:effect@4.1.4/dist/Schema.js"]),
 				allowed,
 			),
 		).toEqual([
@@ -302,82 +366,87 @@ describe("bundleViolations", () => {
 				manifest(["src/scripts/a.ts", "src/lib/ok.ts"]),
 				allowed,
 			),
-		).toEqual(["reviewed package no longer in browser code, remove it: zod"]);
+		).toEqual([
+			"reviewed package no longer in browser code, remove it: effect",
+		]);
 	});
 
-	it("flags Effect, its scoped packages and xstate", () => {
+	it("accepts the effect package as a whole, and flags its scoped packages and xstate", () => {
 		const wide = {
 			...allowed,
-			packages: [
-				"zod",
-				"effect",
-				"@effect/platform",
-				"@xstate/effect",
-				"xstate",
-			],
+			packages: ["effect", "@effect/platform", "@xstate/effect", "xstate"],
 		};
 
 		expect(
 			bundleViolations(
 				manifest([
 					...base,
-					"npm:effect@4.0.0/dist/Schema.js",
+					"npm:effect@4.1.4/dist/internal/effect.js",
+					"npm:effect@4.1.4/dist/Layer.js",
+				]),
+				allowed,
+			),
+		).toEqual([]);
+
+		expect(
+			bundleViolations(
+				manifest([
+					...base,
 					"npm:@effect/platform@4.0.0/index.js",
 					"npm:@xstate/effect@1.0.0/dist/a.js",
 					"npm:xstate@5.0.0/dist/b.js",
 				]),
 				wide,
-			).length,
-		).toBe(4);
+			).sort(),
+		).toEqual([
+			"forbidden package in browser code: @effect/platform@4.0.0",
+			"forbidden package in browser code: @xstate/effect@1.0.0",
+			"forbidden package in browser code: xstate@5.0.0",
+		]);
 	});
 
-	it("tells the Zod versions apart by each module's own version, in either order", () => {
+	it("forbids Zod in every version: v3 (astro/zod) and v4 are both server validators now", () => {
 		const v3 = "npm:zod@3.25.76/v3/types.js";
 		const v4 = "npm:zod@4.6.5/v4/core/core.js";
+		const withZod = { ...allowed, packages: ["effect", "zod"] };
 
-		expect(
-			bundleViolations(
-				manifest(["src/scripts/a.ts", "src/lib/ok.ts", v3]),
-				allowed,
-			),
-		).toEqual([]);
-		expect(
-			bundleViolations(
-				manifest(["src/scripts/a.ts", "src/lib/ok.ts", v4]),
-				allowed,
-			),
-		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
-
-		for (const order of [
-			[v3, v4],
-			[v4, v3],
-		])
+		for (const [module, label] of [
+			[v3, "zod@3.25.76"],
+			[v4, "zod@4.6.5"],
+		] as const) {
+			// Listed as a package, it is still forbidden.
+			expect(bundleViolations(manifest([...base, module]), withZod)).toEqual([
+				`forbidden package in browser code: ${label}`,
+			]);
+			// Not listed, it is off the list as well.
 			expect(
-				bundleViolations(
-					manifest(["src/scripts/a.ts", "src/lib/ok.ts", ...order]),
-					allowed,
-				),
-			).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+				bundleViolations(manifest([...base, module]), allowed).sort(),
+			).toEqual(
+				[
+					`forbidden package in browser code: ${label}`,
+					"package not on the reviewed list: zod",
+				].sort(),
+			);
+			// Folded in as an unrendered module counts too.
+			expect(
+				bundleViolations(manifest(base, { unrendered: [module] }), withZod),
+			).toEqual([`forbidden package in browser code: ${label}`]);
+		}
 
-		// Mixed across chunks, and folded in as an unrendered module.
 		expect(
-			bundleViolations(
-				{
-					version: 2,
-					chunks: [chunk("src/scripts/a.ts", "src/lib/ok.ts", v3), chunk(v4)],
-					unrendered: [],
-				},
-				allowed,
-			),
-		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
-		expect(
-			bundleViolations(manifest(base, { unrendered: [v4] }), allowed),
-		).toEqual(["forbidden package in browser code: zod@4.6.5"]);
+			bundleViolations(manifest([...base, v3, v4]), withZod).sort(),
+		).toEqual([
+			"forbidden package in browser code: zod@3.25.76",
+			"forbidden package in browser code: zod@4.6.5",
+		]);
 	});
 
 	it("treats a Zod module whose label carries no version as forbidden", () => {
 		expect(
-			bundleViolations(manifest([...base, "npm:zod/v3/errors.js"]), allowed),
+			bundleViolations(manifest([...base, "npm:zod/v3/errors.js"]), {
+				...allowed,
+				packages: ["effect", "zod"],
+			}),
 		).toEqual(["forbidden package in browser code: zod"]);
 	});
 
@@ -464,14 +533,18 @@ describe("bundleViolations", () => {
 		]);
 	});
 
-	it("flags Effect even when its package is listed, until a reviewed prefix allows it", () => {
-		// ALLOWED_FORBIDDEN_PREFIXES is empty today, so Effect is always flagged; see client-manifest.ts for the one-line change.
+	it("flags the effect package when it is not on the reviewed list, and when it is gone", () => {
 		expect(
-			bundleViolations(manifest([...base, "npm:effect@4.0.0/dist/Schema.js"]), {
-				...allowed,
-				packages: ["zod", "effect"],
-			}),
-		).toEqual(["forbidden package in browser code: effect@4.0.0"]);
+			bundleViolations(manifest([...base]), { ...allowed, packages: [] }),
+		).toEqual(["package not on the reviewed list: effect"]);
+		expect(
+			bundleViolations(
+				manifest(["src/scripts/a.ts", "src/lib/ok.ts"]),
+				allowed,
+			),
+		).toEqual([
+			"reviewed package no longer in browser code, remove it: effect",
+		]);
 	});
 });
 
