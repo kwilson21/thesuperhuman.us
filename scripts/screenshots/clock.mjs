@@ -105,3 +105,12 @@ export function installClock(scope, baseMs) {
 		restore: state.restore,
 	};
 }
+
+/**
+ * The init script that pins a page's clock to `baseMs`, on the preview's own origin only (third-party frames
+ * keep the real clock). Capture passes its own pinned Date.now(): the server is reset to CLOCK_BASE before each
+ * scenario and moves on from there, so the page starts from the same moment as the server and never runs behind it.
+ */
+export function browserClockScript(origin, baseMs) {
+	return `if (location.origin === ${JSON.stringify(origin)}) (${installClock.toString()})(globalThis, ${baseMs});`;
+}

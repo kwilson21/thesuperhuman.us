@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { type Context, createContext, runInContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CLOCK_BASE, installClock } from "../../scripts/screenshots/clock.mjs";
+import {
+	browserClockScript,
+	CLOCK_BASE,
+	installClock,
+} from "../../scripts/screenshots/clock.mjs";
 
 const BASE = Date.parse(CLOCK_BASE);
 const REAL_NOW = Date.parse("2026-11-13T15:00:00.000Z");
@@ -210,6 +214,55 @@ describe("installClock", () => {
 		const now = Number(runInContext("new Date().getTime()", sandbox));
 		expect(now - BASE).toBeGreaterThanOrEqual(0);
 		expect(now - BASE).toBeLessThan(60_000);
+	});
+});
+
+describe("browserClockScript", () => {
+	const ORIGIN = "http://127.0.0.1:4321";
+	// The capture process's pinned time at some moment: a real day, away from CLOCK_BASE.
+	const CAPTURE_NOW = Date.parse("2026-09-24T09:15:00.000Z");
+
+	// Runs the init script in a fresh page context on the given origin, the way Playwright does.
+	const runOn = (origin: string, script: string) => {
+		const sandbox = createContext({ location: { origin } });
+		runInContext(script, sandbox);
+
+		return sandbox;
+	};
+
+	it("pins the page's clock to the base it is given, on the preview's own origin", () => {
+		const sandbox = runOn(ORIGIN, browserClockScript(ORIGIN, CAPTURE_NOW));
+
+		const now = Number(runInContext("Date.now()", sandbox));
+		expect(now - CAPTURE_NOW).toBeGreaterThanOrEqual(0);
+		expect(now - CAPTURE_NOW).toBeLessThan(60_000);
+	});
+
+	it("leaves a third-party frame on the real clock", () => {
+		const sandbox = runOn(
+			"https://challenges.cloudflare.com",
+			browserClockScript(ORIGIN, CAPTURE_NOW),
+		);
+
+		expect(
+			Math.abs(Number(runInContext("Date.now()", sandbox)) - Date.now()),
+		).toBeLessThan(60_000);
+	});
+
+	it("names the base in the script, so each capture passes its own", () => {
+		expect(browserClockScript(ORIGIN, CAPTURE_NOW)).toContain(
+			`, ${CAPTURE_NOW})`,
+		);
+	});
+
+	it("is what capture installs, with the capture process's pinned Date.now() as the base", () => {
+		const capture = read("scripts/screenshots/capture.mjs");
+
+		expect(capture).toContain("browserClockScript(");
+		expect(capture).toMatch(
+			/browserClockScript\(new URL\(BASE\)\.origin, Date\.now\(\)\)/,
+		);
+		expect(capture).not.toContain("Date.parse(CLOCK_BASE)");
 	});
 });
 

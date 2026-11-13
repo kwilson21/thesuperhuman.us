@@ -37,7 +37,7 @@ import {
 	unhashed,
 	withoutViteVersion,
 } from "./cache.mjs";
-import { CLOCK_BASE, installClock } from "./clock.mjs";
+import { browserClockScript } from "./clock.mjs";
 import { openLocalD1 } from "./local-d1.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
@@ -182,10 +182,11 @@ async function capture({
 			reducedMotion: "reduce",
 		});
 
-		// The page's clock starts at the same base as this process's. Only the preview's own origin gets it:
-		// third-party frames such as Turnstile keep the real clock.
+		// The page's clock starts at this process's pinned time now, not at CLOCK_BASE: the server has moved on
+		// from the base since the last reset, and a page that started behind it would see server times in its
+		// future. Only the preview's own origin gets it; third-party frames such as Turnstile keep the real clock.
 		await context.addInitScript({
-			content: `if (location.origin === ${JSON.stringify(new URL(BASE).origin)}) (${installClock.toString()})(globalThis, ${Date.parse(CLOCK_BASE)});`,
+			content: browserClockScript(new URL(BASE).origin, Date.now()),
 		});
 
 		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
