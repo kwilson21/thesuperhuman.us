@@ -65,6 +65,26 @@ describe("owner requests", () => {
 		).toEqual({ action: "created", actor: "system" });
 	});
 
+	it.each(["software", "service"] as const)(
+		"stores a %s request email lowercased, matching the studio sign-in and access revocation",
+		async (kind) => {
+			const { db, sql } = fixture();
+
+			const request = await saveOwnerRequest(db, {
+				...purchase,
+				kind,
+				email: "  Grace@Example.COM ",
+			});
+
+			expect(request.email).toBe("grace@example.com");
+			expect(
+				sql
+					.prepare("SELECT email FROM owner_requests WHERE id=?")
+					.get(request.id),
+			).toEqual({ email: "grace@example.com" });
+		},
+	);
+
 	it("rejects oversized request details with the typed error", async () => {
 		const { db } = fixture();
 		await expect(
