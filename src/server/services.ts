@@ -7,8 +7,11 @@
 import type StripeSdk from "stripe";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
-import type * as Effect from "effect/Effect";
+import * as Effect from "effect/Effect";
+import * as Match from "effect/Match";
 import type { AudioPayment } from "../lib/audio-payments";
+import { sendMail } from "../lib/resend";
+import { verifyTurnstile } from "../lib/turnstile";
 
 /**
  * Each binding service is typed as REQUIRED, as kwilson21/tally types its `Database`: a program that reads one is never
@@ -92,7 +95,15 @@ export function bindingsOrUnavailable<
 
 	if (missing.length > 0) return { ok: false, missing };
 
-	// SAFETY: this starts with no services, and each binding that is set is added below with its own service class; the checks above make every name in `needs` one of them, so the route is promised only what it asked for.
+	return { ok: true, services: boundServices(env) };
+}
+
+/**
+ * The services for every binding that is set, and none for one that is not. The caller promises a type; `bindingsOrUnavailable`
+ * has checked it, and `bindingsOrDefect` leaves it to the first read.
+ */
+function boundServices(env: Env) {
+	// SAFETY: this starts with no services, and each binding that is set is added below with its own service class; the caller states which of them it will read.
 	let services = Context.empty() as Context.Context<ServiceOf[BindingName]>;
 
 	if (env.MUSIC_DB) services = Context.add(services, MusicDb, env.MUSIC_DB);
@@ -110,7 +121,20 @@ export function bindingsOrUnavailable<
 
 	if (env.AUDIO) services = Context.add(services, AudioBucket, env.AUDIO);
 
-	return { ok: true, services };
+	return services;
+}
+
+/**
+ * For a route that has never answered a missing binding itself: today's contact and resume routes read their KV
+ * namespaces without checking, so a deployment missing one fails (Astro answers 500) at the first read, after the
+ * checks and effects that come before it. This gives them the same: a binding that is not set is not provided, and the
+ * rule that reads it dies with "Service not found" at the same point, a defect that `runRoute` rejects with.
+ * `bindingsOrUnavailable` is for a route that answers a missing binding with a 503.
+ */
+export function bindingsOrDefect<
+	const Needs extends readonly [BindingName, ...BindingName[]],
+>(env: Env, _needs: Needs): Context.Context<ServiceOf[Needs[number]]> {
+	return boundServices(env);
 }
 
 // Mail: Resend. A refusal is a provider answer that is not a success below 500; an uncertain send is a 5xx or a timeout,
@@ -213,3 +237,35 @@ export class Turnstile extends Context.Service<
 		) => Effect.Effect<void, TurnstileFailed>;
 	}
 >()("site/Turnstile") {}
+
+// The live Mail and Turnstile. Each wraps the function the site called before (sendMail in src/lib/resend.ts, which
+// the Resend-backed senders there share, and verifyTurnstile in src/lib/turnstile.ts) with the secret the request's env
+// gives. A secret that is not set is passed on as it is, as it was: the provider then refuses it.
+
+/** Mail through Resend, signed with `apiKey` (env.RESEND_API_KEY). */
+export const liveMail = (apiKey: string) =>
+	Context.make(Mail, {
+		send: (message) =>
+			Effect.promise(() => sendMail(apiKey, message)).pipe(
+				Effect.flatMap(
+					(outcome): Effect.Effect<void, MailRefused | MailUncertain> =>
+						Match.value(outcome).pipe(
+							Match.when("sent", () => Effect.void),
+							Match.when("refused", () => Effect.fail(new MailRefused())),
+							Match.when("uncertain", () => Effect.fail(new MailUncertain())),
+							Match.exhaustive,
+						),
+				),
+			),
+	});
+
+/** The Turnstile check with `secret` (env.TURNSTILE_SECRET_KEY). */
+export const liveTurnstile = (secret: string) =>
+	Context.make(Turnstile, {
+		verify: (token, remoteIp) =>
+			Effect.promise(() => verifyTurnstile(token, secret, remoteIp)).pipe(
+				Effect.flatMap((passed) =>
+					passed ? Effect.void : Effect.fail(new TurnstileFailed()),
+				),
+			),
+	});

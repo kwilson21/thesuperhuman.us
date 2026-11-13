@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { sendContactEmails } from "~/lib/resend";
-import type { ContactInput } from "~/lib/validation";
+import type { ContactInput } from "~/server/contact-input";
 import { double } from "../helpers/doubles";
 
 const input: ContactInput = {

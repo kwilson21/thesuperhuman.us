@@ -24,3 +24,17 @@ export const answerOf = <W, E extends Refusal>(
 				Option.isSome(save) ? write(save.value) : nothingToDo(),
 		}),
 	);
+
+// For a rule that reads services (a KV namespace, Resend, Turnstile) rather than being handed its facts: it finishes, with
+// what it answers, or fails with a named refusal. The services are provided by the test, so it runs asynchronously.
+
+export const done = <V>(value: V) => ({ kind: "done" as const, value });
+
+/** Runs a rule whose services the test has provided and puts what it answered in a story's words. */
+export const answerOfRun = <V, E extends Refusal>(rule: Effect.Effect<V, E>) =>
+	Effect.runPromise(
+		Effect.match(rule, {
+			onFailure: (refusal) => refuse(refusal._tag, refusal.say),
+			onSuccess: (value) => done(value),
+		}),
+	);

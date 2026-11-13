@@ -9,18 +9,18 @@ import {
 	softwareQuestions,
 	validateSoftwareInquiry,
 } from "../../src/lib/software-inquiry";
-import { validateContactInput } from "../../src/lib/validation";
 import {
 	type Body,
 	choiceField,
 	fieldOf,
-	rawTextField,
 	readFields,
 	readVariants,
 	receivedKind,
 	stringField,
-	textField,
 } from "../../src/server/edge";
+import { readContactInput } from "../../src/server/contact-input";
+import { isObject, isText } from "../../src/lib/type-guards";
+import type { JsonValue } from "../helpers/json";
 
 // What these tests show, and what they do not. Layer 2 will convert routes whose answers the site's current validators
 // define. Each describe block below takes one real validator (validateContactInput, validateIntake,
@@ -39,32 +39,65 @@ import {
 // `approverRole` unless `approver` is "other") is plain code after the read, written in the test as the route will. A body
 // that is `undefined` is the only non-object kind of "other" tested; a bigint or a symbol cannot come from JSON.
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+type LegacyContactResult =
+	| { ok: true; value: Record<string, string> }
+	| { ok: false; errors: Record<string, string> };
 
-const contactFields = {
-	name: textField(
-		Schema.isMinLength(1, { message: "Name is required." }),
-		Schema.isMaxLength(100, { message: "Name is too long." }),
-	),
-	email: textField(
-		Schema.isMinLength(1, { message: "Email is required." }),
-		Schema.isMaxLength(120, { message: "Invalid email." }),
-		Schema.isPattern(EMAIL, { message: "Invalid email." }),
-	),
-	company: textField(
-		Schema.isMaxLength(120, { message: "Company is too long." }),
-	),
-	description: textField(
-		Schema.isMinLength(1, { message: "Please enter a message." }),
-		Schema.isMaxLength(4000, { message: "Message is too long." }),
-	),
-	turnstileToken: rawTextField(
-		Schema.isMinLength(1, { message: "Captcha missing." }),
-	),
-};
+/**
+ * The contact validator as src/lib/validation.ts wrote it, before the contact route was converted (layer 2). It is the
+ * oracle for the schema the route now reads with (src/server/contact-input.ts), kept here as it was.
+ */
+function validateContactInput(
+	input: JsonValue | undefined,
+): LegacyContactResult {
+	const errors: Record<string, string> = {};
 
-const readContact = <Input>(input: Input) =>
-	readFields(contactFields, input, { notObject: "Invalid request body." });
+	if (!isObject(input)) {
+		return { ok: false, errors: { _form: "Invalid request body." } };
+	}
+
+	const v = new Map<string, unknown>(Object.entries(input));
+
+	const text = (key: string): string | undefined => {
+		const value = v.get(key);
+
+		return isText(value) ? value : undefined;
+	};
+
+	const name = text("name")?.trim() ?? "";
+
+	if (!name) errors.name = "Name is required.";
+	else if (name.length > 100) errors.name = "Name is too long.";
+
+	const email = text("email")?.trim() ?? "";
+
+	if (!email) errors.email = "Email is required.";
+	else if (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+		errors.email = "Invalid email.";
+
+	const company = text("company")?.trim() ?? "";
+
+	if (company.length > 120) errors.company = "Company is too long.";
+
+	const description = text("description")?.trim() ?? "";
+
+	if (!description) errors.description = "Please enter a message.";
+	else if (description.length > 4000)
+		errors.description = "Message is too long.";
+
+	const turnstileToken = text("turnstileToken") ?? "";
+
+	if (!turnstileToken) errors.turnstileToken = "Captcha missing.";
+
+	if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+	return {
+		ok: true,
+		value: { name, email, company, description, turnstileToken },
+	};
+}
+
+const readContact = readContactInput;
 
 const good = {
 	name: "Ada",
@@ -78,7 +111,7 @@ const withProto = JSON.parse(
 	'{"__proto__":{"name":"evil"},"name":"Ada","email":"ada@example.com","description":"Hi","turnstileToken":"t"}',
 );
 
-const contactInputs: [string, unknown][] = [
+const contactInputs: [string, JsonValue | undefined][] = [
 	["a good body", good],
 	["a good body with extra keys", { ...good, admin: true, role: "owner" }],
 	["a good body without the optional company", { ...good, company: undefined }],

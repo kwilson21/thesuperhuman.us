@@ -1,4 +1,5 @@
-import type { ContactInput } from "./validation";
+import type { ContactInput } from "../server/contact-input";
+import type { MailMessage } from "../server/services";
 import type { ResumeAudience, StoredResumeRequest } from "./resume-requests";
 import { contactReplyEmail, resumeDeliveryEmail } from "./client-emails";
 
@@ -39,48 +40,59 @@ function primaryBody(input: ContactInput): string {
 		.join("\n");
 }
 
-async function sendOne(args: {
-	apiKey: string;
-	from: string;
-	to: string;
-	subject: string;
-	text: string;
-	html?: string;
-	replyTo?: string;
-	attachments?: Attachment[];
-}): Promise<boolean> {
+function payloadOf(message: MailMessage): ResendPayload {
 	const payload: ResendPayload = {
-		from: args.from,
-		to: [args.to],
-		subject: args.subject,
-		text: args.text,
+		from: message.from,
+		to: [...message.to],
+		subject: message.subject,
+		text: message.text,
 	};
 
-	if (args.html) payload.html = args.html;
+	if (message.html) payload.html = message.html;
 
-	if (args.replyTo) payload.reply_to = args.replyTo;
+	if (message.reply_to) payload.reply_to = message.reply_to;
 
-	if (args.attachments && args.attachments.length > 0) {
-		payload.attachments = args.attachments;
+	if (message.attachments && message.attachments.length > 0) {
+		payload.attachments = message.attachments.map((a) => ({ ...a }));
 	}
+
+	return payload;
+}
+
+/** What Resend answered: it sent the email, it refused (a status below 500), or it may not have (5xx, or no answer). */
+export type MailOutcome = "sent" | "refused" | "uncertain";
+
+/**
+ * Sends one email. A message that carries an `idempotencyKey` sends it as the Idempotency-Key header, as
+ * sendAudioMessage does; no route in this area sets one.
+ */
+export async function sendMail(
+	apiKey: string,
+	message: MailMessage,
+): Promise<MailOutcome> {
+	const baseHeaders = {
+		Authorization: `Bearer ${apiKey}`,
+		"Content-Type": "application/json",
+	};
 
 	let res: Response;
 
 	try {
 		res = await fetch(ENDPOINT, {
 			method: "POST",
-			headers: {
-				Authorization: `Bearer ${args.apiKey}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(payload),
+			headers: message.idempotencyKey
+				? { ...baseHeaders, "Idempotency-Key": message.idempotencyKey }
+				: baseHeaders,
+			body: JSON.stringify(payloadOf(message)),
 			signal: AbortSignal.timeout(10_000),
 		});
 	} catch {
-		return false;
+		return "uncertain";
 	}
 
-	return res.ok;
+	if (res.ok) return "sent";
+
+	return res.status >= 500 ? "uncertain" : "refused";
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -94,28 +106,49 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 	return btoa(binary);
 }
 
+/** The email to the owner with what the visitor wrote, replies going to the visitor. */
+export function contactOwnerMessage(args: {
+	input: ContactInput;
+	from: string;
+	to: string;
+}): MailMessage {
+	return {
+		from: args.from,
+		to: [args.to],
+		subject: `New message from ${args.input.name}`,
+		text: primaryBody(args.input),
+		reply_to: args.input.email,
+	};
+}
+
+/** The autoresponder to the visitor. */
+export function contactReplyMessage(args: {
+	input: ContactInput;
+	from: string;
+}): MailMessage {
+	return {
+		from: args.from,
+		to: [args.input.email],
+		subject: "Thanks for reaching out (Kazon Wilson)",
+		...contactReplyEmail(),
+	};
+}
+
 export async function sendContactEmails(
 	args: SendArgs,
 ): Promise<{ ok: boolean }> {
-	const primaryOk = await sendOne({
-		apiKey: args.apiKey,
-		from: args.from,
-		to: args.to,
-		subject: `New message from ${args.input.name}`,
-		text: primaryBody(args.input),
-		replyTo: args.input.email,
-	});
+	const primary = await sendMail(
+		args.apiKey,
+		contactOwnerMessage({ input: args.input, from: args.from, to: args.to }),
+	);
 
-	if (!primaryOk) return { ok: false };
+	if (primary !== "sent") return { ok: false };
 
 	// Best-effort autoresponder. Do not fail the request if this errors.
-	await sendOne({
-		apiKey: args.apiKey,
-		from: args.from,
-		to: args.input.email,
-		subject: "Thanks for reaching out (Kazon Wilson)",
-		...contactReplyEmail(),
-	}).catch(() => false);
+	await sendMail(
+		args.apiKey,
+		contactReplyMessage({ input: args.input, from: args.from }),
+	).catch(() => "uncertain");
 
 	return { ok: true };
 }
@@ -150,19 +183,28 @@ function approvalNotificationBody(
 		.join("\n");
 }
 
+/** The email to the owner with the approval link. */
+export function resumeApprovalMessage(args: {
+	request: StoredResumeRequest;
+	from: string;
+	to: string;
+	approvalUrl: string;
+}): MailMessage {
+	return {
+		from: args.from,
+		to: [args.to],
+		subject: `Resume request from ${args.request.name}: ${args.request.audience}`,
+		text: approvalNotificationBody(args.request, args.approvalUrl),
+		reply_to: args.request.email,
+	};
+}
+
 export async function sendResumeApprovalRequest(
 	args: ResumeApprovalArgs,
 ): Promise<{ ok: boolean }> {
-	const ok = await sendOne({
-		apiKey: args.apiKey,
-		from: args.from,
-		to: args.to,
-		subject: `Resume request from ${args.request.name}: ${args.request.audience}`,
-		text: approvalNotificationBody(args.request, args.approvalUrl),
-		replyTo: args.request.email,
-	});
+	const sent = await sendMail(args.apiKey, resumeApprovalMessage(args));
 
-	return { ok };
+	return { ok: sent === "sent" };
 }
 
 interface ResumeDeliveryArgs {
@@ -175,13 +217,17 @@ interface ResumeDeliveryArgs {
 	filename: string;
 }
 
-export async function sendResumeDelivery(
-	args: ResumeDeliveryArgs,
-): Promise<{ ok: boolean }> {
-	const ok = await sendOne({
-		apiKey: args.apiKey,
+/** The email to the person who asked, with the resume attached. */
+export function resumeDeliveryMessage(args: {
+	from: string;
+	to: string;
+	name: string;
+	pdf: ArrayBuffer;
+	filename: string;
+}): MailMessage {
+	return {
 		from: args.from,
-		to: args.to,
+		to: [args.to],
 		subject: "Your requested resume (Kazon Wilson)",
 		...resumeDeliveryEmail(args.name),
 		attachments: [
@@ -190,7 +236,13 @@ export async function sendResumeDelivery(
 				content: arrayBufferToBase64(args.pdf),
 			},
 		],
-	});
+	};
+}
 
-	return { ok };
+export async function sendResumeDelivery(
+	args: ResumeDeliveryArgs,
+): Promise<{ ok: boolean }> {
+	const sent = await sendMail(args.apiKey, resumeDeliveryMessage(args));
+
+	return { ok: sent === "sent" };
 }

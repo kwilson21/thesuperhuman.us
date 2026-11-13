@@ -29,9 +29,10 @@ function key(id: string): string {
 export async function createResumeRequest(
 	kv: ResumeKv,
 	request: ResumeRequest,
+	id: string = crypto.randomUUID(),
+	now: number = Date.now(),
 ): Promise<string> {
-	const id = crypto.randomUUID();
-	const payload: StoredResumeRequest = { ...request, ts: Date.now() };
+	const payload: StoredResumeRequest = { ...request, ts: now };
 	await kv.put(key(id), JSON.stringify(payload), {
 		expirationTtl: TTL_SECONDS,
 	});

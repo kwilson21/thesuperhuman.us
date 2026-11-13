@@ -61,13 +61,22 @@ export type Responder = (call: {
 	n: number;
 }) => FetchAnswer;
 
+/** The env members a case sets or leaves out. The two KV namespaces have their own members on a case. */
+type EnvText = Pick<
+	Env,
+	| "RESEND_API_KEY"
+	| "TURNSTILE_SECRET_KEY"
+	| "CONTACT_TO_EMAIL"
+	| "CONTACT_FROM_EMAIL"
+>;
+
 export type Case = {
 	readonly name: string;
 	readonly steps: readonly Step[];
 	/** Env members to add or change on top of the defaults. */
-	readonly env?: Partial<Record<keyof Env, string>>;
+	readonly env?: Partial<EnvText>;
 	/** Env members to remove, as a deployment that never set them. */
-	readonly omit?: readonly (keyof Env)[];
+	readonly omit?: readonly (keyof EnvText)[];
 	readonly rateLimit?: KvSetup;
 	readonly resumeStore?: KvSetup;
 	readonly fetches?: Responder;
@@ -145,7 +154,7 @@ export const unreadable = (isOk = true): FetchAnswer => ({
 export const allGood: Responder = ({ host }) =>
 	host === "turnstile" ? ok({ success: true }) : ok({ id: "em_1" });
 
-const DEFAULT_ENV: Partial<Record<keyof Env, string>> = {
+const DEFAULT_ENV: EnvText = {
 	RESEND_API_KEY: "re_test_key",
 	TURNSTILE_SECRET_KEY: "ts_test_secret",
 	CONTACT_TO_EMAIL: "owner@example.test",
@@ -272,7 +281,7 @@ function contextFor(
 	step: Step,
 	namespaces: Record<"RATE_LIMIT" | "RESUME_STORE", KVNamespace | undefined>,
 ) {
-	const env: Partial<Record<keyof Env, string | KVNamespace>> = {
+	const env: Partial<Env> = {
 		...DEFAULT_ENV,
 		...c.env,
 	};
@@ -311,7 +320,7 @@ export function thaw() {
 
 /** Sends every step of the case to the handler, in order, and records what it answered and did. */
 export async function record(
-	handler: (context: APIContext) => Promise<Response>,
+	handler: (context: APIContext) => Response | Promise<Response>,
 	c: Case,
 ): Promise<Recorded> {
 	const log: Log = [];
