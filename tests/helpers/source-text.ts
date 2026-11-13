@@ -17,8 +17,10 @@ function normaliseCode(code: string): string {
 function literalEnd(text: string, start: number): number {
 	const quote = text[start];
 	let i = start + 1;
+
 	while (i < text.length) {
 		const char = text[i];
+
 		if (char === "\\") {
 			i += 2;
 		} else if (char === quote) {
@@ -29,6 +31,7 @@ function literalEnd(text: string, start: number): number {
 			i += 1;
 		}
 	}
+
 	return text.length;
 }
 
@@ -36,12 +39,16 @@ function literalEnd(text: string, start: number): number {
 function commentEnd(text: string, start: number): number {
 	if (text.startsWith("//", start)) {
 		const newline = text.indexOf("\n", start);
+
 		return newline === -1 ? text.length : newline;
 	}
+
 	if (text.startsWith("/*", start)) {
 		const close = text.indexOf("*/", start + 2);
+
 		return close === -1 ? text.length : close + 2;
 	}
+
 	return start;
 }
 
@@ -61,14 +68,18 @@ function commentEnd(text: string, start: number): number {
 export function sourceText(text: string): string {
 	let out = "";
 	let code = "";
+
 	const flush = () => {
 		out += normaliseCode(code);
 		code = "";
 	};
+
 	let i = 0;
+
 	while (i < text.length) {
 		const char = text[i];
 		const comment = commentEnd(text, i);
+
 		if (comment > i) {
 			code += text.slice(i, comment);
 			i = comment;
@@ -86,7 +97,9 @@ export function sourceText(text: string): string {
 			i += 1;
 		}
 	}
+
 	flush();
+
 	return out.trim();
 }
 
