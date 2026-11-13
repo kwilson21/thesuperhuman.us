@@ -50,76 +50,97 @@ describe("audio client access", () => {
 		expect(normalizeClientEmail("not an email")).toBeNull();
 	});
 
-	it("issues only to project members and stores a hash rather than the code", async () => {
+	it("issues only to project members and stores hashes rather than the code or the nonce", async () => {
 		const { sql, db, addRequest } = fixture();
 		expect(
 			await issueClientCode(db, "unknown@example.com", secret, now),
 		).toBeNull();
 		addRequest("song-1");
-		const code = await issueClientCode(db, "artist@example.com", secret, now);
-		expect(code).toMatch(/^\d{8}$/);
 
-		const stored: { code_hash: string } = sql
-			.prepare(
-				"SELECT code_hash FROM audio_client_codes WHERE email='artist@example.com'",
-			)
-			.get();
-
-		expect(stored.code_hash).not.toBe(code);
-		expect(stored.code_hash).toMatch(/^[0-9a-f]{64}$/);
-		expect(
-			sql.prepare("SELECT action FROM audio_client_access_audit").all(),
-		).toEqual([{ action: "code-issued" }]);
-		sql.close();
-	});
-
-	it("requires the current unused code and confines a session to its email projects", async () => {
-		const { sql, db, addRequest } = fixture();
-		addRequest("song-1");
-		addRequest("song-2");
-		addRequest("other-song", "other@example.com");
-
-		const oldCode = (await issueClientCode(
+		const issued = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
 
+		expect(issued.code).toMatch(/^\d{8}$/);
+		expect(issued.nonce).toMatch(/^[0-9a-f]{64}$/);
+
+		const stored: { code_hash: string; nonce_hash: string } = sql
+			.prepare(
+				"SELECT code_hash,nonce_hash FROM audio_client_signin_codes WHERE email='artist@example.com'",
+			)
+			.get();
+
+		expect(stored.code_hash).not.toBe(issued.code);
+		expect(stored.code_hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(stored.nonce_hash).toMatch(/^[0-9a-f]{64}$/);
+		expect(stored.nonce_hash).not.toBe(issued.nonce);
 		expect(
-			await issueClientCode(db, "artist@example.com", secret, now),
+			sql.prepare("SELECT action FROM audio_client_access_audit").all(),
+		).toEqual([{ action: "code-issued" }]);
+		sql.close();
+	});
+
+	it("requires the current unused code from the browser that asked and confines a session to its email projects", async () => {
+		const { sql, db, addRequest } = fixture();
+		addRequest("song-1");
+		addRequest("song-2");
+		addRequest("other-song", "other@example.com");
+
+		const first = (await issueClientCode(
+			db,
+			"artist@example.com",
+			secret,
+			now,
+		))!;
+
+		// The same browser asking again inside thirty seconds changes nothing.
+		expect(
+			await issueClientCode(db, "artist@example.com", secret, now, first.nonce),
 		).toBeNull();
 		const afterCooldown = new Date(now.getTime() + 31_000);
 
-		const code = (await issueClientCode(
+		const second = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			afterCooldown,
+			first.nonce,
 		))!;
 
-		if (oldCode !== code)
-			expect(
-				await completeClientCode(
-					db,
-					"artist@example.com",
-					oldCode,
-					secret,
-					now,
-				),
-			).toBeNull();
+		// The first code belonged to the browser's earlier request and is gone.
+		expect(
+			await completeClientCode(
+				db,
+				"artist@example.com",
+				first.code,
+				first.nonce,
+				secret,
+				afterCooldown,
+			),
+		).toBeNull();
 
 		const token = await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			second.code,
+			second.nonce,
 			secret,
 			afterCooldown,
 		);
 
 		expect(token).toBeTruthy();
 		expect(
-			await completeClientCode(db, "artist@example.com", code, secret, now),
+			await completeClientCode(
+				db,
+				"artist@example.com",
+				second.code,
+				second.nonce,
+				secret,
+				afterCooldown,
+			),
 		).toBeNull();
 		expect(
 			(await clientProjectsForSession(db, token!, now))?.map(
@@ -156,31 +177,41 @@ describe("audio client access", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
+		const issued = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
 
-		const wrong = code === "00000000" ? "11111111" : "00000000";
+		const wrong = issued.code === "00000000" ? "11111111" : "00000000";
 
 		const guesses = await Promise.all(
 			Array.from({ length: 10 }, () =>
-				completeClientCode(db, "artist@example.com", wrong, secret, now),
+				completeClientCode(
+					db,
+					"artist@example.com",
+					wrong,
+					issued.nonce,
+					secret,
+					now,
+				),
 			),
 		);
 
 		expect(guesses.every((token) => token === null)).toBe(true);
 		expect(
-			sql
-				.prepare(
-					"SELECT attempts FROM audio_client_codes WHERE email='artist@example.com'",
-				)
-				.get(),
+			sql.prepare("SELECT attempts FROM audio_client_signin_codes").get(),
 		).toEqual({ attempts: 5 });
 		expect(
-			await completeClientCode(db, "artist@example.com", code, secret, now),
+			await completeClientCode(
+				db,
+				"artist@example.com",
+				issued.code,
+				issued.nonce,
+				secret,
+				now,
+			),
 		).toBeNull();
 		sql.close();
 	});
@@ -235,46 +266,75 @@ describe("audio client access", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
+		const issued = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
 			now,
 		))!;
 
-		const wrong = code === "00000000" ? "11111111" : "00000000";
+		const wrong = issued.code === "00000000" ? "11111111" : "00000000";
 
 		for (let attempt = 0; attempt < 5; attempt++) {
 			expect(
-				await completeClientCode(db, "artist@example.com", wrong, secret, now),
+				await completeClientCode(
+					db,
+					"artist@example.com",
+					wrong,
+					issued.nonce,
+					secret,
+					now,
+				),
 			).toBeNull();
 		}
 
 		expect(
-			await completeClientCode(db, "artist@example.com", code, secret, now),
+			await completeClientCode(
+				db,
+				"artist@example.com",
+				issued.code,
+				issued.nonce,
+				secret,
+				now,
+			),
 		).toBeNull();
+
+		const later = new Date(now.getTime() + 31_000);
 
 		const newer = (await issueClientCode(
 			db,
 			"artist@example.com",
 			secret,
-			new Date(now.getTime() + 31_000),
+			later,
+			issued.nonce,
 		))!;
 
 		expect(
 			await completeClientCode(
 				db,
 				"artist@example.com",
-				newer,
+				newer.code,
+				newer.nonce,
 				secret,
-				new Date(now.getTime() + 31_000),
+				later,
 			),
 		).toBeTruthy();
+
+		const tooLate = (await issueClientCode(
+			db,
+			"artist@example.com",
+			secret,
+			later,
+			newer.nonce,
+		))!;
+
+		expect(tooLate).not.toBeNull();
 		expect(
 			await completeClientCode(
 				db,
 				"artist@example.com",
-				newer,
+				tooLate.code,
+				tooLate.nonce,
 				secret,
 				new Date("2026-09-22T12:11:00Z"),
 			),
@@ -290,7 +350,8 @@ describe("audio client access", () => {
 		await discardUndeliveredCode(
 			db,
 			"artist@example.com",
-			undelivered,
+			undelivered.code,
+			undelivered.nonce,
 			secret,
 			now,
 		);
@@ -298,7 +359,8 @@ describe("audio client access", () => {
 			await completeClientCode(
 				db,
 				"artist@example.com",
-				undelivered,
+				undelivered.code,
+				undelivered.nonce,
 				secret,
 				now,
 			),
@@ -327,7 +389,8 @@ describe("audio client access", () => {
 		await discardUndeliveredCode(
 			db,
 			"artist@example.com",
-			undelivered,
+			undelivered.code,
+			undelivered.nonce,
 			secret,
 			now,
 		);
