@@ -191,6 +191,7 @@ function bringsCode(node: ts.ImportDeclaration | ts.ExportDeclaration) {
 			exported.elements.every((element) => element.isTypeOnly)
 		);
 	}
+
 	const clause = node.importClause;
 
 	if (!clause) return true;
@@ -502,7 +503,9 @@ function dependencyOnForbidden(
 	if (visited.has(real)) return undefined;
 	visited.add(real);
 	const manifest = join(real, "package.json");
+
 	const dependencies = dependenciesOf(manifest);
+
 	const direct = dependencies.find((dependency) =>
 		isForbiddenPackage(dependency, allow),
 	);

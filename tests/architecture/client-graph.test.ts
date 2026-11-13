@@ -513,7 +513,10 @@ describe("the walker finds what it should", () => {
 	});
 
 	describe("installed packages that depend on Effect", () => {
-		const manifest = (name: string, dependencies: object) => ({
+		const manifest = (
+			name: string,
+			dependencies: Record<string, Record<string, string>>,
+		) => ({
 			[`node_modules/${name}/package.json`]: JSON.stringify(dependencies),
 		});
 
