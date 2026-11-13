@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { double, partial } from "../helpers/doubles";
@@ -282,15 +283,57 @@ describe("publication consent page styling", () => {
 		expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid #AE5534/);
 	});
 
-	it("loads no external stylesheet, script, font or image", async () => {
+	it("loads no external script, stylesheet, image or frame, and only the site's own font files", async () => {
 		const { html } = await consentPage();
+		const css = styleOf(html);
 
 		expect(html).not.toMatch(/<(script|link|img|iframe|object)\b/i);
 		expect(html).not.toContain("@import");
-		expect(html).not.toContain("url(");
+		const urls = css.match(/url\([^)]*\)/g) ?? [];
+		expect(urls.length).toBeGreaterThan(0);
+		for (const url of urls)
+			expect(url).toMatch(
+				/^url\('\/fonts\/libron-v0\.25\/Libron-(Regular|Bold)\.woff2'\)$/,
+			);
 	});
 
-	it("allows exactly its own inline style under CSP, with no unsafe-inline", async () => {
+	it("loads Libron, the site's serif, from its own font files with the site's descriptors", async () => {
+		const css = styleOf((await consentPage()).html);
+		const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map(
+			(m) => m[1],
+		);
+
+		expect(faces).toHaveLength(2);
+		for (const face of faces) {
+			expect(face).toMatch(/font-family:\s*'Libron'/);
+			expect(face).toMatch(/font-display:\s*swap/);
+			expect(face).toMatch(/font-style:\s*normal/);
+			const src = /url\('([^']+)'\)/.exec(face)![1];
+			expect(src).toMatch(
+				/^\/fonts\/libron-v0\.25\/Libron-(Regular|Bold)\.woff2$/,
+			);
+			expect(
+				existsSync(new URL("../../public" + src, import.meta.url)),
+			).toBe(true);
+		}
+		expect(faces.some((f) => /font-weight:\s*400/.test(f))).toBe(true);
+		expect(faces.some((f) => /font-weight:\s*700/.test(f))).toBe(true);
+	});
+
+	it("sets Libron first in the serif stack and uses the real bold face for strong", async () => {
+		const css = styleOf((await consentPage()).html);
+
+		expect(css).toMatch(
+			/body\s*\{[^}]*font:\s*400 1rem\/1\.6 'Libron', 'Iowan Old Style', Georgia, serif/,
+		);
+		expect(css).toMatch(
+			/h1\s*\{[^}]*font:\s*400 clamp\(2rem, 5vw, 2\.5rem\)\/1\.2 'Libron', 'Iowan Old Style', Georgia, serif/,
+		);
+		expect(css).toMatch(/strong\s*\{[^}]*font-weight:\s*700/);
+		expect(css).not.toMatch(/font-weight:\s*600/);
+	});
+
+	it("allows exactly its own inline style and the site's font files under CSP, with no unsafe-inline", async () => {
 		const { policy, html } = await consentPage();
 		const hash = await sha256Base64(styleOf(html));
 
@@ -298,6 +341,19 @@ describe("publication consent page styling", () => {
 		expect(policy).not.toContain("unsafe-inline");
 		expect(policy).toContain("default-src 'none'");
 		expect(policy).toContain("frame-ancestors 'none'");
+	});
+
+	it("admits fonts from the site's own origin only, once, before form-action", async () => {
+		const { policy } = await consentPage();
+		const directives = policy.split(";").map((d) => d.trim());
+
+		expect(directives.filter((d) => d.startsWith("font-src"))).toEqual([
+			"font-src 'self'",
+		]);
+		expect(directives.indexOf("font-src 'self'")).toBeLessThan(
+			directives.findIndex((d) => d.startsWith("form-action")),
+		);
+		expect(policy).not.toMatch(/unsafe-inline|data:/);
 	});
 
 	it("keeps a client name that tries to close the style block as escaped text", async () => {
