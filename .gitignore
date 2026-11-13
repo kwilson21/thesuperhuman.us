@@ -57,6 +57,8 @@ __pycache__/
 # ever needs a hand-written proof loses its lines here and commits its .dfy.
 src/lib/invoice-event-order.dfy
 src/lib/invoice-event-order.dfy.gen
+tests/fixtures/discount-installments.dfy
+tests/fixtures/discount-installments.dfy.gen
 
 # Apalache scratch output from quint verify
 _apalache-out/

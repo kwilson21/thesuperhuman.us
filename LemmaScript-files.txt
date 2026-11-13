@@ -1,1 +1,2 @@
 src/lib/invoice-event-order.ts
+tests/fixtures/discount-installments.ts

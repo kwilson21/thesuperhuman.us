@@ -2,28 +2,25 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { equivalents, exhaustive, mutants } from "./lib/quint-mutants.mjs";
+import { models } from "./lib/quint-mutants.mjs";
 import {
 	classifyRun,
 	propertiesOf,
 	propertiesWithoutMutant,
 } from "./lib/quint-run.mjs";
 
-// Runs the Quint model in verification/invoice-events.qnt (docs/verification.md).
-//   node scripts/verify-quint.mjs              the current rule keeps every property, for both domains
+// Runs the Quint models listed in scripts/lib/quint-mutants.mjs (docs/verification.md): verification/invoice-events.qnt
+// and verification/discount-offers.qnt.
+//   node scripts/verify-quint.mjs              the current rule keeps every property, in every model
 //   node scripts/verify-quint.mjs mutants      each mutant breaks the property named for it, every equivalent mutant keeps
-//                                              them all, and every property has a mutant
+//                                              them all, and every property of every model has a mutant
 //   node scripts/verify-quint.mjs exhaustive [steps]
 //                                              by hand: Apalache searches every order up to a step bound (slow)
 // The seed is fixed so a run is the same every time; the Quint version is pinned in package.json. Runs are independent,
 // so they go in parallel, up to the number of CPUs.
 
-const MODEL = "verification/invoice-events.qnt";
 const SEED = "0x1";
 const STEPS = "20";
-const SAMPLES = "100000";
-
-const current = ["audio", "software"];
 
 /** Runs `quint` with these arguments to the end, and resolves to its exit status and output. */
 function quint(args) {
@@ -41,10 +38,10 @@ function quint(args) {
 	});
 }
 
-const simulate = (main, invariant) =>
+const simulate = (model, main, invariant) =>
 	quint([
 		"run",
-		MODEL,
+		model.file,
 		"--main",
 		main,
 		"--init",
@@ -56,7 +53,7 @@ const simulate = (main, invariant) =>
 		"--max-steps",
 		STEPS,
 		"--max-samples",
-		SAMPLES,
+		model.samples,
 		"--seed",
 		SEED,
 	]);
@@ -92,8 +89,9 @@ function report(ok, line, result) {
 	}
 }
 
-/** One check: run the model `main` against `invariant` and expect `kind` ("pass" or "violation"). */
-const check = (main, invariant, kind, describe) => ({
+/** One check: run the module `main` of `model` against `invariant` and expect `kind` ("pass" or "violation"). */
+const check = (model, main, invariant, kind, describe) => ({
+	model,
 	main,
 	invariant,
 	kind,
@@ -103,9 +101,9 @@ const check = (main, invariant, kind, describe) => ({
 async function runChecks(checks) {
 	const results = await runAll(
 		checks.map(
-			({ main, invariant }) =>
+			({ model, main, invariant }) =>
 				() =>
-					simulate(main, invariant),
+					simulate(model, main, invariant),
 		),
 		availableParallelism(),
 	);
@@ -122,63 +120,83 @@ async function runChecks(checks) {
 }
 
 if (mode === "mutants") {
-	const properties = propertiesOf(readFileSync(MODEL, "utf8"));
+	for (const model of models) {
+		const properties = propertiesOf(readFileSync(model.file, "utf8"));
 
-	for (const property of propertiesWithoutMutant(properties, mutants))
-		report(false, `no mutant is expected to break ${property}`, {
-			stdout: "",
-			stderr: "",
-		});
+		for (const property of propertiesWithoutMutant(properties, model.mutants))
+			report(
+				false,
+				`${model.file}: no mutant is expected to break ${property}`,
+				{
+					stdout: "",
+					stderr: "",
+				},
+			);
+	}
 
-	await runChecks([
-		...Object.entries(mutants).map(([main, { property }]) =>
-			check(
-				main,
-				property,
-				"violation",
-				`${main} breaks ${property}, as it must`,
+	await runChecks(
+		models.flatMap((model) => [
+			...Object.entries(model.mutants).map(([main, { property }]) =>
+				check(
+					model,
+					main,
+					property,
+					"violation",
+					`${main} breaks ${property}, as it must`,
+				),
 			),
-		),
-		...equivalents.map((main) =>
-			check(
-				main,
-				"allProperties",
-				"pass",
-				`${main} keeps every property, as an equivalent mutant must`,
+			...model.equivalents.map((main) =>
+				check(
+					model,
+					main,
+					"allProperties",
+					"pass",
+					`${main} keeps every property, as an equivalent mutant must`,
+				),
 			),
-		),
-	]);
+		]),
+	);
 } else if (mode === "exhaustive") {
 	// Apalache: every order up to the bound, not a sample. Needs Java 17 or newer; slow (see docs/verification.md). One at
 	// a time: each starts a server on a fixed port.
 	const steps = process.argv[3] ?? "7";
 
-	for (const main of exhaustive) {
-		const result = await quint([
-			"verify",
-			MODEL,
-			"--main",
-			main,
-			"--init",
-			"init",
-			"--step",
-			"stepOrEnd",
-			"--invariant",
-			"allProperties",
-			"--max-steps",
-			steps,
-		]);
+	for (const { file, exhaustive } of models)
+		for (const main of exhaustive) {
+			const result = await quint([
+				"verify",
+				file,
+				"--main",
+				main,
+				"--init",
+				"init",
+				"--step",
+				"stepOrEnd",
+				"--invariant",
+				"allProperties",
+				"--max-steps",
+				steps,
+			]);
 
-		report(
-			result.status === 0 && /^\[ok\] No violation found/m.test(result.stdout),
-			`${main} keeps every property in every order up to ${steps} steps`,
-			result,
-		);
-	}
+			report(
+				result.status === 0 &&
+					/^\[ok\] No violation found/m.test(result.stdout),
+				`${main} keeps every property in every order up to ${steps} steps`,
+				result,
+			);
+		}
 } else {
 	await runChecks(
-		current.map((main) =>
-			check(main, "allProperties", "pass", `${main} keeps every property`),
+		models.flatMap((model) =>
+			model.current.map((main) =>
+				check(
+					model,
+					main,
+					"allProperties",
+					"pass",
+					`${main} keeps every property`,
+				),
+			),
 		),
 	);
 }
