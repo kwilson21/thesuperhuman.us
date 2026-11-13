@@ -19,7 +19,15 @@ pnpm run screenshots   # in a second terminal; images land in screenshots/
 
 ## Preview config
 
-The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` lists the only vars it changes, and why: Turnstile's test keys, a throwaway Access issuer on `127.0.0.1:9911` so owner pages render through the real JWT check, a local studio code key, and the client portal flag turned on so gated pages can be reviewed before launch. Nothing reaches production. The throwaway Access signing key is kept in `.screenshots/access-key.json` (gitignored), so a dev server that is still running keeps trusting the next run.
+The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` replaces the vars below, each for the reason given; every other var is copied as it is:
+
+- `SITE_ORIGIN`: the local preview address.
+- `PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`: Turnstile's always-pass test keys, since the production site key rejects localhost.
+- `OWNER_ACCESS_TEAM_DOMAIN`, `OWNER_ACCESS_AUD` and `OWNER_EMAIL`: a throwaway Access issuer on `127.0.0.1:9911`, so owner pages render through the real JWT check.
+- `AGREEMENT_RETENTION_BINDING_ID` and `AUDIO_CLIENT_CODE_KEY`: local values, so the agreement retention route is configured and studio codes can be issued.
+- `AUDIO_CLIENT_PORTAL_ENABLED`: turned on, so gated pages can be reviewed before launch.
+
+Nothing reaches production. The throwaway Access signing key is kept in `.screenshots/access-key.json` (gitignored), so a dev server that is still running keeps trusting the next run.
 
 ## Reusing unchanged images
 
@@ -39,7 +47,7 @@ Time only moves when capture moves it, one step at a time. A step is one second 
 
 The pin covers three processes. The capture process starts frozen at the base, since `clock-install.mjs` is its first import. The dev server does the same (`dev.config.mjs` imports it first), and capture sets it with `POST /__screenshots/clock` (`{ "now": <ms> }`), so the site's server code and the rows it stamps see the step's time. Pages that capture opens on the preview's own origin are frozen at the capture's clock when each page is set up, through an init script (`browserClockScript` in `clock.mjs`), so the page and the server agree. Third-party frames, such as Turnstile's, keep the real clock. The owner token expires one hour after step 0, so a scenario may not go past 50 minutes of steps; capture stops with an error when one would.
 
-Times are ordered only within a scenario, since each scenario starts again at the base time. A scenario's steps must run one after another: a step started while the previous step's clock update is still in flight throws. Turnstile's own frames keep the real clock, while its script in the page sees the pinned one. After a run, the dev server stays at the last step's time until it is restarted or set again.
+Times are ordered only within a scenario, since each scenario starts again at the base time. A scenario's steps must run one after another: the step guard throws when a `capture` or `ownerFetch` starts while another one's clock request is still in flight, and since it does not cover `sql`, scenario code must await each `capture` and `ownerFetch` before its next `capture`, `ownerFetch` or `sql` call. Turnstile's own frames keep the real clock, while its script in the page sees the pinned one. After a run, the dev server stays at the last step's time until it is restarted or set again.
 
 Changing `CLOCK_BASE` recaptures everything, because `scripts/screenshots` is a global input.
 
@@ -61,11 +69,13 @@ If the page has a drawn `.cf-turnstile` widget, settle also waits until every dr
 - `cap: N requests in flight`, followed by `, first <url>` only when a request is pending. A blob is named by its origin alone (such as `blob:http://127.0.0.1:4321`); other URLs lose their query string and fragment, and the named URL is at most 120 characters.
 - `; turnstile token missing`, added to a cap reason when a drawn widget has no token.
 - `cap: turnstile token`: the cap ran out while waiting for a widget's token.
-- `stopped: <message>`: the page closed or errored while settling. The capture log prints its `Settle` lines after the `Timing` lines: one per reason that was not `quiet`, with how many captures hit it and the first file.
+- `stopped: <message>`: the page closed or errored while settling.
+
+The capture log prints its `Settle` lines after the `Timing` lines: one per reason that was not `quiet`, with how many captures hit it and the first file.
 
 ## Scenario seeds
 
-`sql` in a scenario runs `wrangler d1 execute` against the local D1 database, one wrangler process per statement. Seeds go through wrangler because it is the supported route to the local D1 database; a direct `node:sqlite` write behaved differently in CI.
+`sql` in a scenario runs `wrangler d1 execute` against the local D1 database, one wrangler process per statement. Seeds go through wrangler because it is the supported route to the local D1 database; a direct `node:sqlite` write lost a seed row in CI.
 
 ## Timings
 
