@@ -69,8 +69,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Three families at most: Libron (the name mark counts as Libron), Inter, JetBrains Mono.
 - Body 16px / 1.6. Roles in `global.css`: `.page-title` clamp(3.25rem, 6.5vw, 5.4rem)
   / 1.02, `.page-lede`, `.display`, `.heading`, `.lede`, section `h2` clamp(1.75rem,
-  3vw, 2.25rem). Headings balance; prose wraps `pretty`. Short centred lines may balance too: the
-  closing panel's LLC line does (Nov 13 decision). Roman headings only.
+  3vw, 2.25rem). Headings balance; prose wraps `pretty`. One exception: the closing panel's LLC
+  line balances (Nov 13 decision). Roman headings only.
 - Header wordmark and footer name are both 24px (D10.3-B).
 - Punctuation: curly quotes and apostrophes (D10.5-B), `·` as the separator in
   statuses and metadata (D10.7-B), and no em dashes anywhere.
