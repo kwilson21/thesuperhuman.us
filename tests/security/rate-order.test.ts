@@ -35,7 +35,7 @@ afterEach(() => {
 
 // The flow: contact and resume request.
 
-function flow(options: {
+async function flow(options: {
 	captcha: "pass" | "fail";
 	stored?: Record<string, string>;
 }) {
@@ -50,7 +50,7 @@ function flow(options: {
 		},
 	});
 
-	const answer = answerOfRun(
+	const result = await answerOfRun(
 		passGuards({ ip: IP, turnstileToken: "token" }).pipe(
 			Effect.provideService(RateLimit, kv),
 			Effect.provideService(Turnstile, {
@@ -65,7 +65,7 @@ function flow(options: {
 		),
 	);
 
-	return answer.then((result) => ({ result, log }));
+	return { result, log };
 }
 
 const wait = refuse(
