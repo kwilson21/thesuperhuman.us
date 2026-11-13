@@ -179,6 +179,12 @@ it("drops the essay close bottom padding so the footer owns the space", () => {
 	);
 });
 
+it("lets the large panel button fill the panel at large text", () => {
+	expect(footer).toMatch(
+		/@media \(max-width: 18rem\) \{ \.site-button-large \{ width: 100%; padding-inline: \.75rem; gap: \.4rem; \} \}/,
+	);
+});
+
 it("keeps the link and large button arrows still under reduced motion", () => {
 	expect(global).toContain(
 		".site-link span, .site-link:hover span { transition: none; transform: none; }",
