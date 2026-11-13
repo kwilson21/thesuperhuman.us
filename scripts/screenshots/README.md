@@ -19,7 +19,7 @@ pnpm run screenshots   # in a second terminal; images land in screenshots/
 
 ## Preview config
 
-The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` replaces the vars below, each for the reason given; every other var is copied as it is:
+The preview config is built from `wrangler.jsonc`: the same compatibility settings, vars and binding names, with local D1, KV and R2 in place of every production resource. `PREVIEW_OVERRIDES` in `config.mjs` sets the vars below, each for the reason given; every other var is copied as it is:
 
 - `SITE_ORIGIN`: the local preview address.
 - `PUBLIC_TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`: Turnstile's always-pass test keys, since the production site key rejects localhost.

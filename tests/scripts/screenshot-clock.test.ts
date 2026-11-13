@@ -563,7 +563,7 @@ describe("the clock endpoint", () => {
 		return response;
 	}
 
-	it("sets the installed clock from a JSON POST and writes the 200 reply with the time it shows", async () => {
+	it("passes the request to the clock handle it was given and writes the reply", async () => {
 		const clock = clockAt(BASE);
 		const response = fakeResponse();
 
