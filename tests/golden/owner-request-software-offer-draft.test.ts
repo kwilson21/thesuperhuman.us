@@ -561,7 +561,7 @@ const stateCases: Case[] = [
 		withOffers([], {}, { status: "new" }),
 	),
 	draftCase(
-		"a client email in capitals",
+		"a request email seeded in capitals with spaces by hand (cannot arise through the app)",
 		d(),
 		withOffers([], {}, { email: " Grace@Example.TEST " }),
 	),

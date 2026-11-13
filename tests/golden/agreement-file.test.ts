@@ -39,7 +39,7 @@ import {
 //                                                client_signed or abandoned; archive_closed_at set (retention-closed)
 //   401 "Verify your agreement email first."     no cookie, and each reason a session does not count, each alone:
 //     archive session     expired (at the instant and before), revoked, a signing session in the archive cookie, another client's
-//                         email, the email in another case, a malformed cookie (42 characters, trailing text), an unknown token
+//                         email, a recipient email seeded in another case by hand (the app stores it lower-cased), a malformed cookie (42 characters, trailing text), an unknown token
 //     signing session     expired, revoked, offer not sent, offer link revoked, request withdrawn, request resolved, snapshot email
 //                         differs, an offer that does not reuse this MSA
 //     studio session      forged, expired, revoked, another client's, project revoked, content deleted, request withdrawn, the
@@ -277,9 +277,13 @@ const cases: Case[] = [
 	ok("another client's archive session", archive, [
 		"UPDATE software_agreement_sessions SET recipient_email='ada@example.test' WHERE purpose='archive'",
 	]),
-	ok("an archive session with the email in another case", archive, [
-		"UPDATE software_agreement_sessions SET recipient_email='Grace@Example.test' WHERE purpose='archive'",
-	]),
+	ok(
+		"an archive session whose recipient email is seeded in another case by hand (cannot arise through the app)",
+		archive,
+		[
+			"UPDATE software_agreement_sessions SET recipient_email='Grace@Example.test' WHERE purpose='archive'",
+		],
+	),
 	ok(
 		"an archive cookie of 42 characters",
 		`agreement_archive=${ARCHIVE.value.slice(1)}`,

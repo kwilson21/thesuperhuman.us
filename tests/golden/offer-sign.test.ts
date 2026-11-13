@@ -933,7 +933,7 @@ const values: Case[] = [
 		withClient({ ...CLIENT, portfolio: "allow", naming: true }),
 	),
 	sign(
-		"a client notice email in capitals",
+		"a stored client notice email seeded in capitals by hand (the review stores it lower-cased)",
 		withClient({ ...CLIENT, notice_email: "NOTICES@EXAMPLE.TEST" }),
 	),
 	sign("a client address that equals the recorded client: no notice row", {

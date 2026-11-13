@@ -335,7 +335,7 @@ const snapshots: Case[] = [
 	),
 	snapshot(
 		JSON.stringify({ ...CONTRACTOR, notice_email: "NOTICE@EXAMPLE.TEST" }),
-		"a contractor notice email in capitals is lower-cased",
+		"a contractor snapshot notice email seeded in capitals by hand is lower-cased (the app stores it lower-cased)",
 	),
 	snapshot(
 		JSON.stringify({ ...CONTRACTOR, signer_title: "总裁" }),

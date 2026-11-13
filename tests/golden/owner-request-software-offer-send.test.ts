@@ -486,7 +486,7 @@ const cases: Case[] = [
 		draftSeed({}, {}, { name: "Zoë 🙂 Müller" }),
 	),
 	sendCase(
-		"a client email in capitals with spaces around it",
+		"a request email seeded in capitals with spaces by hand (cannot arise through the app)",
 		draftSeed({}, {}, { email: " Grace@Example.TEST " }),
 	),
 	// races on the batch

@@ -54,7 +54,9 @@ import {
 //   revoke
 //   200 {ok:true}                 closes every session of the client email, deletes the sign-in code, audits access-revoked,
 //                                 on each project state including complete, on a resolved request; a session for another
-//                                 email, a session already revoked, and an email that differs in case are left as they were
+//                                 email, and a session already revoked are left as they were. A mixed-case session and a
+//                                 request email in capitals are seeded by hand (the app stores both lower-cased, so neither can
+//                                 arise through it) only to pin that the SQL compares the email exactly
 //   409 generic                   already revoked (a repeat), content deleted, withdrawn request, blank email, the batch throws,
 //                                 a race that revokes first
 //   400 schema                    confirmed missing, false or text
@@ -164,6 +166,8 @@ const code = (email: string, hash: string): SeedRow => ({
 	expires_at: "2026-12-01T00:00:00.000Z",
 });
 
+// Session s5 has a mixed-case email. The app lower-cases a session email when it stores it, so s5 cannot arise through the
+// app; it is seeded by hand to pin that the revoke compares the email exactly and leaves s5 open.
 const sessions = {
 	audio_client_sessions: [
 		session("s1", "grace@example.test"),
@@ -318,7 +322,7 @@ const cases: Case[] = [
 		invite("pending", null, { request: { email: "" } }),
 	),
 	go(
-		"an invitation to a mixed-case address",
+		"an invitation to a request email seeded in mixed case by hand (cannot arise through the app)",
 		notice(),
 		invite("pending", null, { request: { email: "Grace@Example.TEST" } }),
 	),
@@ -600,7 +604,11 @@ const cases: Case[] = [
 		},
 	),
 	// revoke
-	go("a revoke closes the client's sessions and codes", REVOKE, withSessions()),
+	go(
+		"a revoke closes the client's sessions and codes and leaves a mixed-case session seeded by hand open",
+		REVOKE,
+		withSessions(),
+	),
 	go("a revoke of a project with no sessions", REVOKE),
 	go(
 		"a revoke of a project that is waiting for input",
@@ -640,7 +648,7 @@ const cases: Case[] = [
 		withSessions({ request: { email: "" } }),
 	),
 	go(
-		"a revoke on a request whose email differs in case from the sessions",
+		"a revoke on a request email seeded in capitals by hand, so it differs in case from the sessions (cannot arise through the app)",
 		REVOKE,
 		withSessions({ request: { email: "GRACE@example.test" } }),
 	),

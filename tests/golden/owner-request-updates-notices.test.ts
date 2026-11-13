@@ -245,9 +245,15 @@ const cases: Case[] = [
 	mail("recipient: the kind lookup fails", ok, {
 		failures: [{ on: KIND, message: "D1 unavailable" }],
 	}),
-	mail("recipient: an accented plus-tagged address", ok, {}, share(mailed()), {
-		request: { email: "Grâce+Studio@Example.TEST" },
-	}),
+	mail(
+		"recipient: an accented plus-tagged address, its capitals seeded by hand (the app stores it lower-cased)",
+		ok,
+		{},
+		share(mailed()),
+		{
+			request: { email: "Grâce+Studio@Example.TEST" },
+		},
+	),
 	// final
 	mail(
 		"final: the row was reset before the write",

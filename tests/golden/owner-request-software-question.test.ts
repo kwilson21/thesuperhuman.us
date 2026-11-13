@@ -126,9 +126,12 @@ const cases: Case[] = [
 	statusCase("a resolved request", { status: "resolved" }),
 	statusCase("a new request", { status: "new" }),
 	statusCase("a reviewed request", { status: "reviewed" }),
-	statusCase("a client email in capitals with spaces around it", {
-		email: " Grace@Example.TEST ",
-	}),
+	statusCase(
+		"a request email seeded in capitals with spaces by hand (cannot arise through the app)",
+		{
+			email: " Grace@Example.TEST ",
+		},
+	),
 	statusCase("a request whose updated_at is ahead of the clock", {
 		updated_at: secondsFromNow(3600),
 	}),

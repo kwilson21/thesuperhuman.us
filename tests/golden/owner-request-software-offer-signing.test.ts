@@ -53,7 +53,7 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 // Every response branch that only signing reaches, and the cases that reach it:
 //
 //   200 {ok:true,...}       a standard offer, an invoice offer, three milestones with checkpoints, one and two attachments,
-//                           a reused MSA, a client email in capitals (stored lower-cased and trimmed); a sent offer
+//                           a reused MSA, a request email seeded in capitals by hand (the app stores it lower-cased and trimmed; the send batch lower-cases it again); a sent offer
 //                           reissued (nothing is validated again; the email says to sign on the website only when the offer
 //                           has a pinned MSA template); signing off with agreement details that are not valid
 //   400 {ok:false,message:"Complete and validate Agreement details before sending.",errors?}  every failure inside the
@@ -277,7 +277,7 @@ const cases: Case[] = [
 		}),
 	),
 	signCase(
-		"a client email in capitals with spaces around it",
+		"a request email seeded in capitals with spaces by hand (cannot arise through the app)",
 		signSeed({ request: { email: " Grace@Example.TEST " } }),
 	),
 	signCase("one attachment", withAttachment(), bucket, dumpFiles),
@@ -318,7 +318,7 @@ const cases: Case[] = [
 		{ dump: { music: SIGN_TABLES, r2: true } },
 	),
 	signCase(
-		"a reused MSA of a recipient written in capitals",
+		"a reused MSA for a request email seeded in capitals by hand (cannot arise through the app)",
 		signSeed({
 			msa: true,
 			offer: { reused_msa_id: MSA_ID },

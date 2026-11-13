@@ -324,7 +324,7 @@ const cases: Case[] = [
 		decline("Hi\nBcc: x@example.test"),
 	),
 	declineCase(
-		"a client email in capitals with spaces around it",
+		"a request email seeded in capitals with spaces by hand (cannot arise through the app)",
 		sentSeed({}, { email: " Grace@Example.TEST " }),
 	),
 	declineCase(
