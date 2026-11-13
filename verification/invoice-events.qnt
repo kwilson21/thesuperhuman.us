@@ -420,6 +420,7 @@ module softwareOldRule { import invoiceEvents(DOMAIN = "software", MUTANT = "old
 module audioStaleGuard { import invoiceEvents(DOMAIN = "audio", MUTANT = "stale-guard", DELIVERIES = 4).* }
 module softwareStaleGuard { import invoiceEvents(DOMAIN = "software", MUTANT = "stale-guard", DELIVERIES = 4).* }
 module softwareNoIdPin { import invoiceEvents(DOMAIN = "software", MUTANT = "no-id-pin", DELIVERIES = 4).* }
+module audioNoIdPin { import invoiceEvents(DOMAIN = "audio", MUTANT = "no-id-pin", DELIVERIES = 4).* }
 module audioPreFixLink { import invoiceEvents(DOMAIN = "audio", MUTANT = "pre-fix-link", DELIVERIES = 4).* }
 module audioRecoverNoDupGuard { import invoiceEvents(DOMAIN = "audio", MUTANT = "recover-no-dup-guard", DELIVERIES = 4).* }
 module audioNoTimeGuard { import invoiceEvents(DOMAIN = "audio", MUTANT = "no-time-guard", DELIVERIES = 4).* }
@@ -427,7 +428,6 @@ module softwareNoTimeGuard { import invoiceEvents(DOMAIN = "software", MUTANT = 
 module audioOverwritePaid { import invoiceEvents(DOMAIN = "audio", MUTANT = "overwrite-paid", DELIVERIES = 4).* }
 module softwareOverwritePaid { import invoiceEvents(DOMAIN = "software", MUTANT = "overwrite-paid", DELIVERIES = 4).* }
 module audioNoDupDetection { import invoiceEvents(DOMAIN = "audio", MUTANT = "no-dup-detection", DELIVERIES = 4).* }
-module softwareNoDupDetection { import invoiceEvents(DOMAIN = "software", MUTANT = "no-dup-detection", DELIVERIES = 4).* }
 module softwareNoRank { import invoiceEvents(DOMAIN = "software", MUTANT = "no-rank", DELIVERIES = 4).* }
 module softwareRankGe { import invoiceEvents(DOMAIN = "software", MUTANT = "rank-ge", DELIVERIES = 4).* }
 module audioAudioLt { import invoiceEvents(DOMAIN = "audio", MUTANT = "audio-lt", DELIVERIES = 4).* }
@@ -437,9 +437,9 @@ module softwareProcessedOnMismatch { import invoiceEvents(DOMAIN = "software", M
 module audioStoreGuardTime { import invoiceEvents(DOMAIN = "audio", MUTANT = "store-guard-time", DELIVERIES = 4).* }
 module softwareStoreGuardTime { import invoiceEvents(DOMAIN = "software", MUTANT = "store-guard-time", DELIVERIES = 4).* }
 
-// Equivalent mutants: allProperties must still hold (the reason is in docs/verification.md).
+// Equivalent mutants: allProperties must still hold (the reasons are in docs/verification.md).
+module softwareNoDupDetection { import invoiceEvents(DOMAIN = "software", MUTANT = "no-dup-detection", DELIVERIES = 4).* }
 module audioNoDecision { import invoiceEvents(DOMAIN = "audio", MUTANT = "no-decision", DELIVERIES = 4).* }
-module audioNoIdPin { import invoiceEvents(DOMAIN = "audio", MUTANT = "no-id-pin", DELIVERIES = 4).* }
 module softwareNoReadUnmatched { import invoiceEvents(DOMAIN = "software", MUTANT = "no-read-unmatched", DELIVERIES = 4).* }
 
 // For `pnpm run verify:quint:exhaustive` (Apalache, by hand): fewer handler runs so every order up to the bound can be searched.
