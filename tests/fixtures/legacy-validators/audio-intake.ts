@@ -56,12 +56,30 @@ const schema = z.object({
 
 export type LegacyIntakeInput = z.infer<typeof schema>;
 
+// Added with the Effect version, as for the control-character refusal: a vertical tab or form feed in the two free-text
+// answers is read as a line break. The same preprocessing runs on both sides of the differential, so the comparison is
+// still of the two schemas.
+function withLineBreaks(input: RawValue): RawValue {
+	if (typeof input !== "object" || input === null || Array.isArray(input))
+		return input;
+	const copy: { [name: string]: RawValue } = { ...input };
+
+	for (const name of ["preserve", "referenceNote"]) {
+		const text = Object.hasOwn(copy, name) ? copy[name] : undefined;
+
+		if (typeof text === "string")
+			copy[name] = text.replace(/[\u000b\u000c]/g, "\n");
+	}
+
+	return copy;
+}
+
 export function legacyValidateIntake(
-	input: RawValue,
+	rawInput: RawValue,
 ):
 	| { ok: true; value: LegacyIntakeInput }
 	| { ok: false; errors: Record<string, string> } {
-	const result = schema.safeParse(input);
+	const result = schema.safeParse(withLineBreaks(rawInput));
 
 	if (!result.success)
 		return {

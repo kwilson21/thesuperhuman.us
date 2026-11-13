@@ -156,3 +156,32 @@ it("never stores more than the request limit for the most expensive answers it a
 			16_000,
 		);
 });
+
+it("treats a vertical tab and a form feed from a word processor as line breaks in the two free-text answers", () => {
+	const answer = validateIntake({
+		...base,
+		preserve: "keep\u000bthe vocal\u000cdry",
+		referenceNote: "one\u000b\u000ctwo",
+	});
+
+	expect(answer.ok).toBe(true);
+
+	if (answer.ok) {
+		expect(answer.value.preserve).toBe("keep\nthe vocal\ndry");
+		expect(answer.value.referenceNote).toBe("one\n\ntwo");
+	}
+});
+
+it("still refuses a vertical tab or form feed in a one-line answer", () => {
+	for (const field of ["title", "name"])
+		expect(validateIntake({ ...base, [field]: "a\u000bb" }).ok).toBe(false);
+});
+
+it("counts a normalised answer against its limit as it arrived", () => {
+	expect(validateIntake({ ...base, preserve: "a\u000b".repeat(601) }).ok).toBe(
+		false,
+	);
+	expect(validateIntake({ ...base, preserve: "a\u000b".repeat(600) }).ok).toBe(
+		true,
+	);
+});

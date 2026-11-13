@@ -461,6 +461,18 @@ const cases: Case[] = [
 		...good,
 		fileLink: "https://example.com/a\u0001b",
 	}),
+	single(
+		"a vertical tab and a form feed in the free-text answers become line breaks",
+		{
+			...good,
+			preserve: "keep the vocal\u000bdry",
+			referenceNote: "line one\u000cline two",
+		},
+	),
+	single("a vertical tab in the title is refused", {
+		...good,
+		title: "My\u000bsong",
+	}),
 	single("line breaks and tabs are kept in the two free-text answers", {
 		...good,
 		preserve: "keep the vocal\n\tdry",

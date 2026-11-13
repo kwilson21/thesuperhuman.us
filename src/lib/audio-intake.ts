@@ -294,11 +294,33 @@ export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
 	};
 }
 
+/**
+ * Text pasted from a word processor carries vertical tabs and form feeds where it has line breaks. In the two free-text
+ * answers, which allow line breaks, they become "\n" before the answers are read, so the stored text has them too. In a
+ * one-line answer they are still refused as control characters. The length is counted as it arrived (each becomes one
+ * character).
+ */
+function withLineBreaks(input: RawValue): RawValue {
+	if (!Predicate.isObject(input) || Array.isArray(input)) return input;
+	const copy: { [name: string]: RawValue } = { ...input };
+
+	for (const name of ["preserve", "referenceNote"]) {
+		const text = Object.hasOwn(copy, name) ? copy[name] : undefined;
+
+		if (Predicate.isString(text))
+			copy[name] = text.replace(/[\u000b\u000c]/g, "\n");
+	}
+
+	return copy;
+}
+
 export function validateIntake(
-	input: RawValue,
+	rawInput: RawValue,
 ):
 	| { ok: true; value: IntakeInput }
 	| { ok: false; errors: Record<string, string> } {
+	const input = withLineBreaks(rawInput);
+
 	const read = readFields(fields, input, {
 		winner: "last",
 		defaults: {
