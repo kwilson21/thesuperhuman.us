@@ -49,6 +49,9 @@ export const T1 = await makeToken(1);
 export const T2 = await makeToken(2);
 export const T3 = await makeToken(3);
 
+/** A token with hex letters in it, so its upper-case form differs from it. */
+export const T4 = await makeToken(0xabc);
+
 /** A session row. */
 export const sessionRow = (
 	token: Token,
