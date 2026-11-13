@@ -233,6 +233,22 @@ describe("readFields options", () => {
 		});
 	});
 
+	it("does not refuse a body because `after` answered entries that are all undefined", () => {
+		const fields = { lo: Schema.Number };
+
+		expect(
+			readFields(fields, { lo: 1 }, { after: () => ({ lo: undefined }) }),
+		).toEqual({ ok: true, value: { lo: 1 } });
+		expect(readFields(fields, { lo: 1 }, { after: () => ({}) }).ok).toBe(true);
+		expect(
+			readFields(
+				fields,
+				{ lo: 1 },
+				{ after: () => ({ lo: undefined, _form: "no" }) },
+			),
+		).toEqual({ ok: false, errors: { _form: "no" } });
+	});
+
 	it("keeps a raw text field untrimmed and reads a non-string as empty", () => {
 		const read = readFields(
 			{ token: rawTextField(), text: textField() },

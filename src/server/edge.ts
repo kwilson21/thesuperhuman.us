@@ -113,7 +113,8 @@ export type BodyKind =
  *   an `else if` chain) or the `last` (Zod's `Object.fromEntries` over its issues).
  * - `defaults`: the value a field takes when it is missing or `undefined`, in place of reading it. Not checked.
  * - `after`: checks across fields, run only once every field has been read, with the typed values. It answers the
- *   sentences to give (empty when all is well); when it answers any, they are the result's errors.
+ *   sentences to give (empty when all is well; an entry whose value is `undefined` is dropped); when it answers any,
+ *   they are the result's errors.
  */
 export type ReadFieldsOptions<F extends FieldSchemas<F>> = {
 	readonly notObject?: string | { readonly [K in BodyKind]?: string };
@@ -221,7 +222,13 @@ export function readFields<F extends FieldSchemas<F>, Input>(
 
 	// SAFETY: each decoded value is stored under the field name it was decoded for, and its schema is F[name], so the entries are FieldValues<F>.
 	const value = Object.fromEntries(values) as FieldValues<F>;
-	const across = options.after?.(value) ?? {};
+	// An entry whose sentence is `undefined` says nothing, so it neither refuses the body nor shows as an error.
+	// SAFETY: the entries are the ones `after` answered, which are FormErrors<F>, so what is kept is too.
+	const across = Object.fromEntries(
+		Object.entries(options.after?.(value) ?? {}).filter(
+			([, sentence]) => sentence !== undefined,
+		),
+	) as FormErrors<F>;
 
 	return Object.keys(across).length > 0
 		? { ok: false, errors: across }
