@@ -124,6 +124,7 @@ export function redeliveryChangesNothing(
 	//@ verify
 	//@ ensures \result === true
 	const first = nextStatus(storedStatus, incomingStatus, relation, sameTime);
+
 	const relationAfter: TimeRelation =
 		decideByOrder(storedStatus, incomingStatus, relation, sameTime) === "apply"
 			? "same"

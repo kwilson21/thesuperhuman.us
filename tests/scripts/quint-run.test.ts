@@ -81,6 +81,7 @@ describe("classifyRun", () => {
 	it("does not report a violation for a parse error, a missing file or a crash", () => {
 		const parse = "error: [QNT000] Couldn't unify str and oper\n";
 		const missing = "error: file verification/nope.qnt does not exist\n";
+
 		const crash =
 			"RangeError: Maximum call stack size exceeded\n    at run (cli.js:1:1)\n";
 
@@ -134,6 +135,7 @@ describe("the mutants of verification/invoice-events.qnt", () => {
 		const modules = [
 			...model.matchAll(/^module (\w+) \{ import invoiceEvents/gm),
 		].map((match) => match[1]);
+
 		const listed = [
 			...Object.keys(mutants),
 			...equivalents,

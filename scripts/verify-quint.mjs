@@ -109,6 +109,7 @@ if (mode === "mutants") {
 			"--max-steps",
 			steps,
 		]);
+
 		const ok =
 			result.status === 0 && /^\[ok\] No violation found/m.test(result.stdout);
 
