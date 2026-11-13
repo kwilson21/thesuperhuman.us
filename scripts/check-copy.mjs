@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, basename } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join, basename } from "node:path";
 
 // Mechanical checks for the copy rules in CLAUDE.md ("Things to Never Do",
 // "Clearance posture"). This cannot judge tone or whether copy is true; it
@@ -217,9 +216,6 @@ function main() {
 	console.log("copy-check passed: no banned copy patterns found.");
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (import.meta.main) {
 	main();
 }
