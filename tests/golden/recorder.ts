@@ -390,7 +390,7 @@ function readFixture(area: string): Recorded[] {
 
 	if (!existsSync(path)) return [];
 
-	// SAFETY: this file is written only by `writeFixture` below, as a JSON array of Recorded.
+	// SAFETY: this file is written only by `settleFixture` below, as a JSON array of Recorded.
 	return JSON.parse(readFileSync(path, "utf8")) as Recorded[];
 }
 

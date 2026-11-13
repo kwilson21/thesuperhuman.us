@@ -1,16 +1,9 @@
 import type { ContactInput } from "../server/contact-input";
 import type { MailMessage } from "../server/services";
-import type { ResumeAudience, StoredResumeRequest } from "./resume-requests";
+import type { StoredResumeRequest } from "./resume-requests";
 import { contactReplyEmail, resumeDeliveryEmail } from "./client-emails";
 
 const ENDPOINT = "https://api.resend.com/emails";
-
-interface SendArgs {
-	input: ContactInput;
-	apiKey: string;
-	from: string;
-	to: string;
-}
 
 interface Attachment {
 	filename: string;
@@ -134,33 +127,6 @@ export function contactReplyMessage(args: {
 	};
 }
 
-export async function sendContactEmails(
-	args: SendArgs,
-): Promise<{ ok: boolean }> {
-	const primary = await sendMail(
-		args.apiKey,
-		contactOwnerMessage({ input: args.input, from: args.from, to: args.to }),
-	);
-
-	if (primary !== "sent") return { ok: false };
-
-	// Best-effort autoresponder. Do not fail the request if this errors.
-	await sendMail(
-		args.apiKey,
-		contactReplyMessage({ input: args.input, from: args.from }),
-	).catch(() => "uncertain");
-
-	return { ok: true };
-}
-
-interface ResumeApprovalArgs {
-	request: StoredResumeRequest;
-	apiKey: string;
-	from: string;
-	to: string;
-	approvalUrl: string;
-}
-
 function approvalNotificationBody(
 	req: StoredResumeRequest,
 	approvalUrl: string,
@@ -199,24 +165,6 @@ export function resumeApprovalMessage(args: {
 	};
 }
 
-export async function sendResumeApprovalRequest(
-	args: ResumeApprovalArgs,
-): Promise<{ ok: boolean }> {
-	const sent = await sendMail(args.apiKey, resumeApprovalMessage(args));
-
-	return { ok: sent === "sent" };
-}
-
-interface ResumeDeliveryArgs {
-	apiKey: string;
-	from: string;
-	to: string;
-	name: string;
-	audience: ResumeAudience;
-	pdf: ArrayBuffer;
-	filename: string;
-}
-
 /** The email to the person who asked, with the resume attached. */
 export function resumeDeliveryMessage(args: {
 	from: string;
@@ -237,12 +185,4 @@ export function resumeDeliveryMessage(args: {
 			},
 		],
 	};
-}
-
-export async function sendResumeDelivery(
-	args: ResumeDeliveryArgs,
-): Promise<{ ok: boolean }> {
-	const sent = await sendMail(args.apiKey, resumeDeliveryMessage(args));
-
-	return { ok: sent === "sent" };
 }

@@ -1,8 +1,9 @@
-// The resume rules, in the style for rules with no states (kwilson21/tally `src/rules`, Effect alone). A visitor asks for
+// The resume flows: sequences that act between decisions, so they are Effect programs that call services (not pure rules).
+// A visitor asks for
 // the resume (`requestResume`): the request is stored for seven days and the owner is emailed a single-use link. The owner
 // opens the link (`approveResume`): the PDF is emailed to the visitor and the request is deleted, only once the email
-// has gone. Each rule reads what it needs through services and fails with a named refusal that carries its sentence;
-// the route maps each refusal to its answer. The time, the id and the origin are plain inputs.
+// has gone. Each flow reads what it needs through services and fails with a named refusal; a refusal carries facts, and
+// the route words and escapes the page. The time, the id and the origin are plain inputs.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { resumeApprovalMessage, resumeDeliveryMessage } from "../../lib/resend";
@@ -56,6 +57,7 @@ export const requestResume = (submission: ResumeRequestSubmission) =>
 			note: input.note,
 		};
 
+		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
 		yield* Effect.promise(() => createResumeRequest(store, request, id, now));
 
 		const approvalUrl = new URL(
@@ -114,10 +116,12 @@ export const approveResume = (approval: ResumeApproval) =>
 		if (!id) return yield* Effect.fail(new MissingRequestId());
 
 		const store = yield* ResumeStore;
+		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
 		const stored = yield* Effect.promise(() => getResumeRequest(store, id));
 
 		if (!stored) return yield* Effect.fail(new RequestNotFound());
 
+		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
 		const pdf = yield* Effect.promise(() => loadResume(store, stored.audience));
 
 		if (!pdf) {
@@ -149,6 +153,7 @@ export const approveResume = (approval: ResumeApproval) =>
 			);
 
 		// Only delete on confirmed send success (single-use, prevents replay).
+		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
 		yield* Effect.promise(() => deleteResumeRequest(store, id));
 
 		return { audience: stored.audience, email: stored.email };

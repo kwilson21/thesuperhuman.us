@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import type { ResumeRequestInput } from "../../src/server/contact-input";
-import { approveResume, requestResume } from "../../src/server/rules/resume";
+import { approveResume, requestResume } from "../../src/server/flows/resume";
 import {
 	type MailMessage,
 	Mail,

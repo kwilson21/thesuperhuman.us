@@ -7,7 +7,7 @@ import {
 	RateLimit,
 	ResumeStore,
 	Turnstile,
-	bindingsOrDefect,
+	legacyBindingsOrDefect,
 	liveMail,
 	liveTurnstile,
 } from "../../src/server/services";
@@ -163,22 +163,17 @@ describe("liveTurnstile", () => {
 	});
 });
 
-describe("bindingsOrDefect", () => {
+describe("legacyBindingsOrDefect", () => {
 	const rate = fakeKv({ get: async () => "rate" });
 
 	it("provides each binding that is set", () => {
-		const services = bindingsOrDefect(double<Env>({ RATE_LIMIT: rate }), [
-			"RATE_LIMIT",
-		]);
+		const services = legacyBindingsOrDefect(double<Env>({ RATE_LIMIT: rate }));
 
 		expect(Context.get(services, RateLimit)).toBe(rate);
 	});
 
 	it("leaves a binding that is not set out, so a rule that reads it dies there", async () => {
-		const services = bindingsOrDefect(double<Env>({ RATE_LIMIT: rate }), [
-			"RATE_LIMIT",
-			"RESUME_STORE",
-		]);
+		const services = legacyBindingsOrDefect(double<Env>({ RATE_LIMIT: rate }));
 
 		const rateRead = RateLimit.use(() => Effect.succeed("read")).pipe(
 			Effect.provideContext(services),

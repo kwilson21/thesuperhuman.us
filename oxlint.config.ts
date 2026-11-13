@@ -50,7 +50,7 @@ export default defineConfig({
 			// Two of the Effect rules read any code as if it were Effect code: one takes every imported make... function for an
 			// Effect service constructor, and one wants Effect's Match for every chained ternary. Effect style is for the
 			// server's rules, saves and services only, so those two apply to src/server/**, where the helpers, the area rule files
-			// (src/server/rules/) and the machines (src/server/machines/) live.
+			// (src/server/flows/ and src/server/rules/) and the machines (src/server/machines/) live.
 			files: ["src/server/**"],
 			rules: {
 				"anti-slop-effect/no-service-constructor-imports": "error",

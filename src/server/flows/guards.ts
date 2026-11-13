@@ -1,5 +1,5 @@
 // The two checks every public form runs after its body has been read: the visitor has not just submitted, and the
-// captcha passed. Contact and resume request share them, in this order (the rate limit counts a submission even when the
+// captcha passed. This is a flow, not a rule: it counts, then checks, and the count is kept even when the captcha fails. Contact and resume request share them, in this order (the rate limit counts a submission even when the
 // captcha then fails, as it always has). Each refusal carries the sentence the form shows.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -28,6 +28,7 @@ export const passGuards = (visitor: Visitor) =>
 	Effect.gen(function* () {
 		const rateLimit = yield* RateLimit;
 
+		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
 		const counted = yield* Effect.promise(() =>
 			checkRateLimit(rateLimit, visitor.ip),
 		);

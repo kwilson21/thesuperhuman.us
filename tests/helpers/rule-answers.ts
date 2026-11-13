@@ -39,15 +39,12 @@ export const refuseWith = (type: string, facts: Record<string, string>) => ({
 
 /** Puts a refusal in a story's words: its sentence when it carries one, otherwise the facts it carries. */
 const refusalOf = (refusal: { readonly _tag: string }) => {
-	if ("say" in refusal && typeof refusal.say === "string") {
-		return refuse(refusal._tag, refusal.say);
-	}
+	if ("say" in refusal) return refuse(refusal._tag, String(refusal.say));
 
 	const facts = Object.fromEntries(
-		Object.entries(refusal).filter(
-			(entry): entry is [string, string] =>
-				entry[0] !== "_tag" && typeof entry[1] === "string",
-		),
+		Object.entries(refusal)
+			.filter(([name]) => name !== "_tag")
+			.map(([name, value]) => [name, String(value)]),
 	);
 
 	return refuseWith(refusal._tag, facts);

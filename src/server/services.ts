@@ -8,7 +8,6 @@ import type StripeSdk from "stripe";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import * as Match from "effect/Match";
 import type { AudioPayment } from "../lib/audio-payments";
 import { sendMail } from "../lib/resend";
 import { verifyTurnstile } from "../lib/turnstile";
@@ -99,11 +98,11 @@ export function bindingsOrUnavailable<
 }
 
 /**
- * The services for every binding that is set, and none for one that is not. The caller promises a type; `bindingsOrUnavailable`
- * has checked it, and `bindingsOrDefect` leaves it to the first read.
+ * The services for every binding that is set, and none for one that is not. `bindingsOrUnavailable` has checked the
+ * ones the route needs before it hands this over, and `legacyBindingsOrDefect` leaves a missing one to fail at the first read.
  */
 function boundServices(env: Env) {
-	// SAFETY: this starts with no services, and each binding that is set is added below with its own service class; the caller states which of them it will read.
+	// SAFETY: the empty context is typed as holding every service, and the lines below add exactly those whose binding is set; a service that was not added is absent, and reading an absent service dies with "Service not found", which is the defect `legacyBindingsOrDefect` is for and the case `bindingsOrUnavailable` has ruled out for the services a route needs.
 	let services = Context.empty() as Context.Context<ServiceOf[BindingName]>;
 
 	if (env.MUSIC_DB) services = Context.add(services, MusicDb, env.MUSIC_DB);
@@ -125,15 +124,17 @@ function boundServices(env: Env) {
 }
 
 /**
- * For a route that has never answered a missing binding itself: today's contact and resume routes read their KV
- * namespaces without checking, so a deployment missing one fails (Astro answers 500) at the first read, after the
- * checks and effects that come before it. This gives them the same: a binding that is not set is not provided, and the
- * rule that reads it dies with "Service not found" at the same point, a defect that `runRoute` rejects with.
- * `bindingsOrUnavailable` is for a route that answers a missing binding with a 503.
+ * ONLY for routes whose current answer to a missing binding is a 500 at first use: `src/pages/api/contact.ts`,
+ * `resume-request.ts` and `resume-approve.ts` read their KV namespaces without checking, so a deployment missing one
+ * fails (Astro answers 500) at the first read, after the checks and effects that come before it. This gives them the
+ * same: a binding that is not set is not provided, and the flow that reads it dies with "Service not found" at that
+ * point, a defect that `runRoute` rejects with. The type is honest about it: any service may be missing. A new route
+ * must use `bindingsOrUnavailable`, which answers a missing binding before anything runs;
+ * `tests/architecture/legacy-bindings.test.ts` fails when any other file imports this.
  */
-export function bindingsOrDefect<
-	const Needs extends readonly [BindingName, ...BindingName[]],
->(env: Env, _needs: Needs): Context.Context<ServiceOf[Needs[number]]> {
+export function legacyBindingsOrDefect(
+	env: Env,
+): Context.Context<ServiceOf[BindingName]> {
 	return boundServices(env);
 }
 
@@ -246,15 +247,19 @@ export class Turnstile extends Context.Service<
 export const liveMail = (apiKey: string) =>
 	Context.make(Mail, {
 		send: (message) =>
+			// sendMail answers every failure as an outcome, so a rejection here would be a bug: a defect is intended, as the old routes let it escape as a 500.
 			Effect.promise(() => sendMail(apiKey, message)).pipe(
 				Effect.flatMap(
-					(outcome): Effect.Effect<void, MailRefused | MailUncertain> =>
-						Match.value(outcome).pipe(
-							Match.when("sent", () => Effect.void),
-							Match.when("refused", () => Effect.fail(new MailRefused())),
-							Match.when("uncertain", () => Effect.fail(new MailUncertain())),
-							Match.exhaustive,
-						),
+					(outcome): Effect.Effect<void, MailRefused | MailUncertain> => {
+						switch (outcome) {
+							case "sent":
+								return Effect.void;
+							case "refused":
+								return Effect.fail(new MailRefused());
+							case "uncertain":
+								return Effect.fail(new MailUncertain());
+						}
+					},
 				),
 			),
 	});
@@ -263,6 +268,7 @@ export const liveMail = (apiKey: string) =>
 export const liveTurnstile = (secret: string) =>
 	Context.make(Turnstile, {
 		verify: (token, remoteIp) =>
+			// verifyTurnstile answers every failure as false, so a rejection here would be a bug: a defect is intended, as the old routes let it escape as a 500.
 			Effect.promise(() => verifyTurnstile(token, secret, remoteIp)).pipe(
 				Effect.flatMap((passed) =>
 					passed ? Effect.void : Effect.fail(new TurnstileFailed()),

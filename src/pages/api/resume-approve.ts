@@ -2,9 +2,9 @@ import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { escapeHtml } from "~/lib/email-template";
-import { approveResume } from "~/server/rules/resume";
+import { approveResume } from "~/server/flows/resume";
 import { runRoute } from "~/server/run";
-import { bindingsOrDefect, liveMail } from "~/server/services";
+import { legacyBindingsOrDefect, liveMail } from "~/server/services";
 
 export const prerender = false;
 
@@ -43,7 +43,7 @@ export const GET: APIRoute = async (context) => {
 
 	// A missing RESUME_STORE binding is a defect at its first read, as it always was (Astro answers 500).
 	const services = Context.merge(
-		bindingsOrDefect(env, ["RESUME_STORE"]),
+		legacyBindingsOrDefect(env),
 		liveMail(env.RESEND_API_KEY),
 	);
 

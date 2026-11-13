@@ -8,9 +8,13 @@ import {
 	isAllowedOrigin,
 	readJsonBody,
 } from "~/server/public-form";
-import { submitContact } from "~/server/rules/contact";
+import { submitContact } from "~/server/flows/contact";
 import { runRoute } from "~/server/run";
-import { bindingsOrDefect, liveMail, liveTurnstile } from "~/server/services";
+import {
+	legacyBindingsOrDefect,
+	liveMail,
+	liveTurnstile,
+} from "~/server/services";
 
 export const prerender = false;
 
@@ -33,7 +37,7 @@ export const POST: APIRoute = async (context) => {
 	// A missing RATE_LIMIT binding is a defect at its first read, as it always was (Astro answers 500).
 	const services = Context.merge(
 		Context.merge(
-			bindingsOrDefect(env, ["RATE_LIMIT"]),
+			legacyBindingsOrDefect(env),
 			liveTurnstile(env.TURNSTILE_SECRET_KEY),
 		),
 		liveMail(env.RESEND_API_KEY),

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { sendContactEmails } from "~/lib/resend";
+import * as Effect from "effect/Effect";
+import { submitContact } from "~/server/flows/contact";
+import { RateLimit, Turnstile, liveMail } from "~/server/services";
 import type { ContactInput } from "~/server/contact-input";
-import { double } from "../helpers/doubles";
+import { double, fakeKv } from "../helpers/doubles";
 
 const input: ContactInput = {
 	name: "Jane",
@@ -10,6 +12,34 @@ const input: ContactInput = {
 	description: "Need help with our ingestion pipeline; can pay well.",
 	turnstileToken: "tok",
 };
+
+// What the contact route sends, through the live Mail it uses: the owner's email, then the visitor's thank-you. The guards
+// are stubbed to pass, so every fetch below is a request to Resend.
+const sendContactEmails = (args: {
+	input: ContactInput;
+	apiKey: string;
+	from: string;
+	to: string;
+}) =>
+	Effect.runPromise(
+		submitContact({
+			input: args.input,
+			visitor: { ip: "203.0.113.7", turnstileToken: args.input.turnstileToken },
+			from: args.from,
+			to: args.to,
+		}).pipe(
+			Effect.provideService(
+				RateLimit,
+				fakeKv({ get: async () => null, put: async () => {} }),
+			),
+			Effect.provideService(Turnstile, { verify: () => Effect.void }),
+			Effect.provideContext(liveMail(args.apiKey)),
+			Effect.match({
+				onFailure: () => ({ ok: false }),
+				onSuccess: () => ({ ok: true }),
+			}),
+		),
+	);
 
 describe("sendContactEmails", () => {
 	let fetchMock: Mock<typeof fetch>;
@@ -36,6 +66,15 @@ describe("sendContactEmails", () => {
 
 		expect(result.ok).toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+
+		for (const call of fetchMock.mock.calls) {
+			expect(call[0]).toBe("https://api.resend.com/emails");
+			expect(call[1]?.method).toBe("POST");
+			expect(call[1]?.headers).toEqual({
+				Authorization: "Bearer key",
+				"Content-Type": "application/json",
+			});
+		}
 	});
 
 	it("primary email goes to CONTACT_TO_EMAIL with reply-to set to visitor", async () => {

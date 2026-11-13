@@ -1,5 +1,5 @@
-// The contact form's rule, in the style for rules with no states (kwilson21/tally `src/rules`, Effect alone): it reads
-// what it needs through services, and either finishes or fails with a named refusal that carries its sentence. The
+// The contact form's flow, an Effect program that calls services: it reads what it needs through them, and either
+// finishes or fails with a named refusal that carries its sentence. The
 // time, the visitor's address and the two email addresses are plain inputs. The route maps each refusal to its answer.
 //
 // What it does, in order: count the submission and check the captcha (./guards), email the owner what the visitor wrote,

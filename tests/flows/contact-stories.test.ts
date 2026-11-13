@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import type { ContactInput } from "../../src/server/contact-input";
-import { submitContact } from "../../src/server/rules/contact";
+import { submitContact } from "../../src/server/flows/contact";
 import {
 	type MailMessage,
 	Mail,
