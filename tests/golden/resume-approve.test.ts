@@ -17,6 +17,11 @@ import type { JsonObject } from "../helpers/json";
 
 // The golden corpus for GET /api/resume-approve: what the route answered, and every outside effect it made, before it
 // was converted to Effect. See recorder.ts. The fixture (fixtures/resume-approve.json) is written only with UPDATE_GOLDEN=1.
+//
+// The fixture was re-recorded once, from the route on main after PR #245 (the route before the conversion, with escaping
+// of visitor text on the three pages). Against the unescaped recording only bodies that show a name, an address or an
+// audience containing & < > " or \' differ, by escaping alone; the one other change is a stored request with no audience,
+// which main's fix now throws on (an unanswered 500) where the unescaped route printed "pdf:undefined" on a 500 page.
 
 const BASE = "https://thesuperhuman.us/api/resume-approve";
 
@@ -84,6 +89,69 @@ const cases: Case[] = [
 				...withRequest({ name: '<i>G</i> & "Co"', email: "g+x@example.com" }),
 				...withPdfs("general"),
 			},
+		},
+	},
+	{
+		name: "an approved request with markup in the name and address",
+		steps: [get("?id=abc")],
+		resumeStore: {
+			seed: {
+				...withRequest({
+					name: "<img src=x onerror=alert(1)>",
+					email: "<svg/onload=alert(1)>@x.co",
+				}),
+				...withPdfs("general"),
+			},
+		},
+	},
+	{
+		name: "a refused delivery for a request with markup in the name and address",
+		steps: [get("?id=abc")],
+		resumeStore: {
+			seed: {
+				...withRequest({
+					name: "<img src=x onerror=alert(1)>",
+					email: "<svg/onload=alert(1)>@x.co",
+				}),
+				...withPdfs("general"),
+			},
+		},
+		fetches: resend(status(400)),
+	},
+	{
+		name: "a refused delivery for a name with an apostrophe, an ampersand and quotes",
+		steps: [get("?id=abc")],
+		resumeStore: {
+			seed: {
+				...withRequest({ name: `O'Neil & "Sons" <ops>` }),
+				...withPdfs("general"),
+			},
+		},
+		fetches: resend(status(400)),
+	},
+	{
+		name: "an approved request whose stored audience has markup",
+		steps: [get("?id=abc")],
+		resumeStore: {
+			seed: {
+				...withRequest({
+					name: "<img src=x onerror=alert(1)>",
+					email: "<svg/onload=alert(1)>@x.co",
+					audience: "<b>dod</b>",
+				}),
+				"pdf:<b>dod</b>": PDF,
+			},
+		},
+	},
+	{
+		name: "a request whose stored audience has markup and whose resume is not in storage",
+		steps: [get("?id=abc")],
+		resumeStore: {
+			seed: withRequest({
+				name: "<img src=x onerror=alert(1)>",
+				email: "<svg/onload=alert(1)>@x.co",
+				audience: "<b>dod</b>",
+			}),
 		},
 	},
 	{
