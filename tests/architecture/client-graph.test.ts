@@ -1,17 +1,64 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	globSync,
+	mkdirSync,
+	symlinkSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+	ALLOWED_BROWSER_MODULES,
 	clientEntries,
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
+	hydratedDirectives,
+	type Reached,
+	serverUsesIn,
 } from "../helpers/client-graph";
 
-// Effect and src/server never reach the browser: src/scripts/** and the <script> blocks of .astro files stay plain
-// TypeScript. This walks the static import graph from those entries and fails when any module they reach imports
-// `effect`, `effect/*`, `@xstate/effect` or anything under src/server. Type-only imports are erased, so they do not count.
+// Effect, src/server and the server-only packages never reach the browser: src/scripts/** and the <script> blocks of
+// .astro files stay plain TypeScript. This walks the static import graph from those entries and fails when any module
+// they reach imports `effect`, `@xstate/effect`, `xstate`, `zod` (v4), `stripe`, `resend`, `pdf-lib` (or a package that
+// depends on one), or anything under src/server. Type-only imports are erased, so they do not count.
+//
+// "Server-only" for a src/lib module cannot be told from its path, so the rule is a reviewed allowlist of exactly the
+// src/lib (and src/data) modules a browser entry may reach. A module that is not on it, because someone imported a
+// server module from a script, fails with an instruction to split the module. Adding a name to the list is a review
+// decision: it must be pure (no binding, secret or server package) and is reviewed as such. The allowlist covers the
+// modules under src/lib and src/data; the other checks below cover every reached file and every browser entry.
+//
+// What is checked in every reached file and entry (all the code extensions the walker follows, and the <script> blocks
+// of .astro entries): no load of a Node built-in (`node:*` or a bare name like `fs`), of `cloudflare:*` or of
+// `astro:env/server` (static import, re-export, `import()`, `require`); no identifier `D1Database`, `R2Bucket` or
+// `KVNamespace`; no `.prepare(` call. All of these are read from the syntax tree, so comments, strings, property keys and
+// member names (`{ R2Bucket: 1 }`, `o.KVNamespace`) never count; a real reference, a shorthand property or a computed key does.
+//
+// By design: an npm package named like a Node built-in (`events`, `buffer`, `url`, `util`) fails the built-in rule and
+// needs an explicit allowance if it is ever wanted; an Astro virtual module such as `astro:transitions/client` fails
+// as unresolved today; and `.prepare(` is flagged on any object in browser-reachable code, not only on a D1 handle.
+//
+// The reached set includes data files a reached module imports (JSON, and anything imported with `?raw` or `?url`, such
+// as .txt, .svg or .css): they are listed, not read, so the allowlist names them too. A file of an installed package
+// reached by a relative path or an alias into node_modules (pnpm's `.pnpm/<name>@<version>/node_modules/<name>` layout
+// and symlinks included) counts as that package, so the forbidden-package and dependency checks and the package list
+// apply to it however the specifier was written.
+//
+// Hydrated framework components: a component used with a `client:*` directive is browser code this walk does not read.
+// The site installs no UI framework (astro.config.mjs lists the sitemap only; package.json has no React, Preact, Vue,
+// Svelte, Solid or Lit), so any `client:*` directive in an .astro file (read as an attribute name on a tag with
+// Astro's compiler; text and attribute values never count) fails the test outright, with a message to extend
+// the walk (take the component's frontmatter import as an entry) before such components are introduced. That is cheaper
+// and stricter than walking components that cannot exist yet.
+//
+// Known gap: a D1 handle that is typed through an owner interface other than the Cloudflare names (so no identifier
+// above appears) and run through a method other than `.prepare(` (for example `.batch(` or `.exec(`) is not found.
+// A renamed alias of the Cloudflare types with a `.prepare(` call is found. The allowlist review is the control for the
+// rest: a module added to BROWSER_MODULES must be read for server work.
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -26,8 +73,107 @@ describe("the browser's import graph", () => {
 		expect(entries.some((entry) => entry.endsWith(".astro"))).toBe(true);
 	});
 
-	it("never reaches effect, @xstate/effect or src/server", () => {
-		expect(clientGraphViolations(repository)).toEqual([]);
+	it("never reaches effect, xstate, zod, stripe, resend, pdf-lib or src/server", () => {
+		expect(clientGraphViolations(repository, ALLOWED_BROWSER_MODULES)).toEqual(
+			[],
+		);
+	});
+});
+
+// Every module under src/lib or src/data that a browser entry reaches, reviewed one by one: each is pure (constants,
+// types, validators and formatting) and imports nothing server-side. The failure message below says what to do.
+const BROWSER_MODULES = [
+	"src/data/project-stories/threadline-review.json",
+	"src/lib/agreement-client-fields.ts",
+	"src/lib/agreement-draft-fields.ts",
+	"src/lib/audio-intake.ts",
+	"src/lib/audio-peaks.ts",
+	"src/lib/business-days.ts",
+	"src/lib/home-motion.ts",
+	"src/lib/line-diff.ts",
+	"src/lib/project-story.ts",
+	"src/lib/scroll-scenes.ts",
+	"src/lib/software-inquiry.ts",
+	"src/lib/software-project-display.ts",
+	"src/lib/type-guards.ts",
+	"src/lib/waveform.ts",
+];
+
+describe("what the browser entries reach", () => {
+	const reach = () => {
+		const reached: Reached = { files: new Set(), packages: new Set() };
+
+		clientGraphViolations(repository, ALLOWED_BROWSER_MODULES, reached);
+
+		return reached;
+	};
+
+	const reachedModules = () =>
+		[...reach().files]
+			.filter(
+				(file) => file.startsWith("src/lib/") || file.startsWith("src/data/"),
+			)
+			.sort();
+
+	it("is the reviewed allowlist of src/lib modules, and nothing else", () => {
+		const reached = reachedModules();
+
+		const added = reached.filter((file) => !BROWSER_MODULES.includes(file));
+
+		expect(
+			added,
+			`A browser entry now reaches ${added.join(", ")}. Browser code may import only pure modules. Split the module: move what the browser needs into a small module with no server imports (no stripe, resend, pdf-lib, xstate, zod, effect, src/server, D1 or other bindings) and import that. Only add a module to BROWSER_MODULES when it is pure.`,
+		).toEqual([]);
+
+		const dropped = BROWSER_MODULES.filter((file) => !reached.includes(file));
+
+		expect(
+			dropped,
+			`BROWSER_MODULES lists ${dropped.join(", ")}, which no browser entry reaches any more. Remove it from the list.`,
+		).toEqual([]);
+	});
+
+	it("loads no package but astro (for astro/zod)", () => {
+		// astro/zod is Zod v3, still used by three browser validators across four modules (audio-intake, software-inquiry, agreement-client-fields,
+		// agreement-draft-fields); the Zod to Effect Schema PR removes it, and this test
+		// then expects no package at all.
+		expect([...reach().packages].sort()).toEqual(["astro"]);
+	});
+
+	it("has no hydrated framework component in any .astro file", async () => {
+		// The site installs no UI framework integration (astro.config.mjs lists the sitemap only, and package.json has no
+		// React, Preact, Vue, Svelte, Solid or Lit), so a `client:*` directive hydrates nothing today. If one appears, the
+		// component is browser code this walk does not read: extend the walk to take the component's frontmatter import as
+		// an entry before removing this check.
+		const holding = (
+			await Promise.all(
+				globSync("src/**/*.astro", { cwd: repository }).map(async (file) =>
+					(
+						await hydratedDirectives(
+							file,
+							readFileSync(join(repository, file), "utf8"),
+						)
+					).map((use) => `${file}: ${use}`),
+				),
+			)
+		).flat();
+
+		expect(
+			holding,
+			"A client:* directive hydrates a component in the browser, and the browser import graph guard does not walk it. Extend the guard (take the component's import as a browser entry) before introducing hydrated components.",
+		).toEqual([]);
+	});
+
+	it("names no Cloudflare binding type and makes no .prepare() call, in any reached file or entry", () => {
+		const holding = [...reach().files]
+			.filter((file) => /\.([cm]?[jt]sx?|astro)$/.test(file))
+			.flatMap((file) =>
+				serverUsesIn(file, readFileSync(join(repository, file), "utf8")).map(
+					(use) => `${file}: ${use}`,
+				),
+			);
+
+		expect(holding).toEqual([]);
 	});
 });
 
@@ -65,7 +211,16 @@ describe("the walker finds what it should", () => {
 				JSON.stringify(options.packageJson),
 			);
 
-		for (const name of options.packages ?? ["zod", "@effect-like/other"])
+		for (const name of options.packages ?? [
+			"zod",
+			"left-pad",
+			"@effect-like/other",
+			"stripe",
+			"resend",
+			"pdf-lib",
+			"xstate",
+			"astro",
+		])
 			mkdirSync(join(root, "node_modules", name), { recursive: true });
 
 		for (const [path, text] of Object.entries(files)) {
@@ -84,7 +239,7 @@ describe("the walker finds what it should", () => {
 	it("passes a client graph that stays plain", () => {
 		const root = scratch({
 			"src/scripts/a.ts": 'import { b } from "~/lib/b";\nexport const a = b;',
-			"src/lib/b.ts": 'import { z } from "zod";\nexport const b = z;',
+			"src/lib/b.ts": 'import { z } from "left-pad";\nexport const b = z;',
 		});
 
 		expect(clientGraphViolations(root)).toEqual([]);
@@ -475,7 +630,7 @@ describe("the walker finds what it should", () => {
 			expect(
 				found({
 					"src/pages/a.astro":
-						'---\n---\n<script ng-src="/lazy.js">import "zod";</script>',
+						'---\n---\n<script ng-src="/lazy.js">import "left-pad";</script>',
 					...lazy,
 				}),
 			).toEqual([]);
@@ -541,7 +696,7 @@ describe("the walker finds what it should", () => {
 
 		it("fails on a bare specifier that is not a package in node_modules, naming the line", () => {
 			const root = scratch({
-				"src/scripts/a.ts": 'import "zod";\nimport "#nothing";',
+				"src/scripts/a.ts": 'import "left-pad";\nimport "#nothing";',
 			});
 
 			expect(clientGraphViolations(root)).toEqual([
@@ -577,8 +732,46 @@ describe("the walker finds what it should", () => {
 			]);
 		});
 
-		it("lets a built-in module through", () => {
-			expect(found({ "src/scripts/a.ts": 'import "node:path";' })).toEqual([]);
+		it("finds a Node built-in, a cloudflare: module and astro:env/server, in every form of load", () => {
+			expect(
+				found({
+					"src/scripts/a.ts": [
+						'import "node:path";',
+						'import { randomUUID } from "node:crypto";',
+						'import fs from "fs";',
+						'export * from "node:os";',
+						'export const load = () => import("cloudflare:workers");',
+						'export const r = require("node:buffer");',
+						'import { SECRET } from "astro:env/server";',
+					].join("\n"),
+				}),
+			).toEqual([
+				"node:path",
+				"node:crypto",
+				"fs",
+				"node:os",
+				"cloudflare:workers",
+				"node:buffer",
+				"astro:env/server",
+			]);
+		});
+
+		it("finds a Node built-in in an .astro script block and in a module a script reaches", () => {
+			expect(
+				found({
+					"src/pages/a.astro":
+						'---\nimport { x } from "node:fs";\n---\n<script>import "~/lib/b";\nimport "node:crypto";</script>',
+					"src/lib/b.ts": 'import "node:path";',
+				}),
+			).toEqual(["node:crypto", "node:path"]);
+		});
+
+		it("does not count a type-only import of a built-in", () => {
+			expect(
+				found({
+					"src/scripts/a.ts": 'import type { Buffer } from "node:buffer";',
+				}),
+			).toEqual([]);
 		});
 	});
 
@@ -681,8 +874,299 @@ describe("the walker finds what it should", () => {
 
 			expect(clientGraphViolations(root)).toEqual([]);
 			expect(
-				clientGraphViolations(scratch({ "src/scripts/a.ts": 'import "zod";' })),
+				clientGraphViolations(
+					scratch({ "src/scripts/a.ts": 'import "left-pad";' }),
+				),
 			).toEqual([]);
+		});
+	});
+
+	describe("what a walk reached", () => {
+		it("lists every file and package that any client entry loads, and nothing it does not", () => {
+			const root = scratch({
+				"src/scripts/a.ts":
+					'import "~/lib/b";\nimport "left-pad";\nimport type { T } from "~/lib/types-only";',
+				"src/lib/b.ts": 'import "./c";',
+				"src/lib/c.ts": "export const c = 1;",
+				"src/lib/types-only.ts": "export type T = 1;",
+				"src/lib/unused.ts": "export const u = 1;",
+			});
+
+			const reached: Reached = { files: new Set(), packages: new Set() };
+
+			expect(clientGraphViolations(root, [], reached)).toEqual([]);
+			expect([...reached.files].sort()).toEqual([
+				"src/lib/b.ts",
+				"src/lib/c.ts",
+				"src/scripts/a.ts",
+			]);
+			expect([...reached.packages]).toEqual(["left-pad"]);
+		});
+	});
+
+	describe("server-only uses in a file's own text", () => {
+		it("finds binding types and .prepare() calls, in .ts and in .astro script blocks", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					'import type { D1Database as Db } from "x";\nlet a: R2Bucket;\nconst k: KVNamespace = 1;\ndb.prepare("select 1");',
+				),
+			).toEqual([
+				"D1Database at line 1",
+				"R2Bucket at line 2",
+				"KVNamespace at line 3",
+				".prepare() call at line 4",
+			]);
+			expect(
+				serverUsesIn(
+					"a.astro",
+					"---\nlet a: D1Database;\n---\n<script>\nlet b: R2Bucket;\n</script>",
+				),
+			).toEqual(["R2Bucket at line 5"]);
+		});
+
+		it("still counts a real reference: a type, a value, a shorthand property and a computed key", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					"let a: D1Database;\nconst b = { R2Bucket };\nconst c = { [KVNamespace]: 1 };",
+				),
+			).toEqual([
+				"D1Database at line 1",
+				"R2Bucket at line 2",
+				"KVNamespace at line 3",
+			]);
+		});
+
+		it("does not count a comment, a string, an object key or free text that says the same", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					[
+						"// the DOM node: a D1Database is not used here, nor db.prepare(x)",
+						'const note = "node: R2Bucket KVNamespace .prepare(";',
+						"const o = { node: el, prepare: 1, R2: 2, R2Bucket: 'Storage', 'KVNamespace': 1 };",
+						"const v = o.KVNamespace + o.D1Database;",
+						"interface Names { D1Database: string; R2Bucket?: number }",
+						"class C { KVNamespace = 1; D1Database() {} }",
+						"o.node = el;",
+						"const f = o.prepare;",
+						"/* import 'node:fs' */",
+					].join("\n"),
+				),
+			).toEqual([]);
+		});
+	});
+
+	describe("data files and packages reached by path", () => {
+		const reachedOf = (
+			files: Record<string, string>,
+			options?: Parameters<typeof scratch>[1],
+			allow: readonly string[] = [],
+		) => {
+			const reached: Reached = { files: new Set(), packages: new Set() };
+
+			const violations = clientGraphViolations(
+				scratch(files, options),
+				allow,
+				reached,
+			);
+
+			return { reached, violations };
+		};
+
+		it("puts a JSON, text, SVG or other data file a reached module imports in the reached set, without reading it", () => {
+			const { reached, violations } = reachedOf({
+				"src/scripts/a.ts": [
+					'import story from "~/data/story.json";',
+					'import notes from "~/lib/notes.txt?raw";',
+					'import logo from "~/lib/logo.svg?url";',
+					'import "~/lib/style.css";',
+				].join("\n"),
+				"src/data/story.json": '{ "import": "effect" }',
+				"src/lib/notes.txt": 'import "effect";',
+				"src/lib/logo.svg": "<svg/>",
+				"src/lib/style.css": "a{}",
+			});
+
+			expect(violations).toEqual([]);
+			expect([...reached.files].sort()).toEqual([
+				"src/data/story.json",
+				"src/lib/logo.svg",
+				"src/lib/notes.txt",
+				"src/lib/style.css",
+				"src/scripts/a.ts",
+			]);
+		});
+
+		it("reaches a data file through a code file, and through an alias", () => {
+			const { reached } = reachedOf(
+				{
+					"src/scripts/a.ts": 'import "@d/x.json";\nimport "~/lib/b";',
+					"src/lib/b.ts": 'import "../data/y.json";',
+					"src/data/x.json": "{}",
+					"src/data/y.json": "{}",
+				},
+				{ paths: { "@d/*": ["src/data/*"] } },
+			);
+
+			expect(
+				[...reached.files].filter((f) => f.endsWith(".json")).sort(),
+			).toEqual(["src/data/x.json", "src/data/y.json"]);
+		});
+
+		it("counts a package reached through a relative path into node_modules, whatever the specifier looked like", () => {
+			const files = {
+				"node_modules/stripe/index.js": "export const s = 1;",
+				"node_modules/left-pad/index.js": "export const p = 1;",
+				"node_modules/@effect/platform/index.js": "export const e = 1;",
+				"node_modules/.pnpm/resend@1.0.0/node_modules/resend/index.js":
+					"export const r = 1;",
+			};
+
+			for (const [specifier, name] of [
+				["../../node_modules/stripe/index.js", "stripe"],
+				["../../node_modules/@effect/platform/index.js", "@effect/platform"],
+				[
+					"../../node_modules/.pnpm/resend@1.0.0/node_modules/resend/index.js",
+					"resend",
+				],
+			])
+				expect(
+					clientGraphViolations(
+						scratch({ ...files, "src/scripts/a.ts": `import "${specifier}";` }),
+					).map((v) => v.import),
+					name,
+				).toEqual([specifier]);
+
+			const { reached, violations } = reachedOf({
+				...files,
+				"src/scripts/a.ts": 'import "../../node_modules/left-pad/index.js";',
+			});
+
+			expect(violations).toEqual([]);
+			expect([...reached.packages]).toEqual(["left-pad"]);
+		});
+
+		it("counts a package reached through a paths alias and through a symlink", () => {
+			const root = scratch(
+				{
+					"node_modules/.pnpm/stripe@1.0.0/node_modules/stripe/index.js":
+						"export const s = 1;",
+					"src/scripts/a.ts": 'import "@s";\nimport "../lib-link/index.js";',
+				},
+				{
+					paths: {
+						"@s": [
+							"node_modules/.pnpm/stripe@1.0.0/node_modules/stripe/index.js",
+						],
+					},
+				},
+			);
+
+			symlinkSync(
+				join(root, "node_modules/.pnpm/stripe@1.0.0/node_modules/stripe"),
+				join(root, "src/lib-link"),
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"@s",
+				"../lib-link/index.js",
+			]);
+		});
+
+		it("applies the dependency check to a package reached by path", () => {
+			const root = scratch(
+				{
+					"node_modules/dep/index.js": "export const d = 1;",
+					"node_modules/dep/package.json": JSON.stringify({
+						dependencies: { stripe: "1" },
+					}),
+					"src/scripts/a.ts": 'import "../../node_modules/dep/index.js";',
+				},
+				{ packages: ["stripe"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"stripe",
+			]);
+		});
+	});
+
+	describe("hydrated framework components", () => {
+		it("finds every client: directive on a component, in any attribute position", async () => {
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					[
+						"---",
+						"import Counter from '~/components/Counter.tsx';",
+						"---",
+						"<Counter client:load />",
+						"<Widget",
+						"  title='a > b'",
+						"  client:visible",
+						"/>",
+						'<Chart client:only="react" />',
+						"<Idle client:idle />",
+						'<Media client:media="(min-width: 50em)" />',
+					].join("\n"),
+				),
+			).toEqual([
+				"client:load at line 4",
+				"client:visible at line 7",
+				"client:only at line 9",
+				"client:idle at line 10",
+				"client:media at line 11",
+			]);
+		});
+
+		it("does not count a comment, frontmatter, a script or style block, text, an attribute value, or a name that is not a directive", async () => {
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					[
+						'---\nconst s = "client:load";\n---',
+						"<!-- <A client:load /> -->",
+						'<script>const s = "<A client:load />";</script>',
+						"<style>.a::after { content: 'client:idle'; }</style>",
+						"<B client:other data-client:load2 myclient:load />",
+						"<p>Use client:load</p>",
+						'<p title="client:load example">Use client:only="react"</p>',
+						"<Foo label='client:idle' data-note=\"x client:visible y\" />",
+					].join("\n"),
+				),
+			).toEqual([]);
+		});
+
+		it("finds the plain cases and the awkward ones", async () => {
+			expect(
+				await hydratedDirectives("a.astro", "<Foo client:load />"),
+			).toEqual(["client:load at line 1"]);
+			expect(
+				await hydratedDirectives("a.astro", '<Foo client:only="react" />'),
+			).toEqual(["client:only at line 1"]);
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					'<Foo\n  title="x"\n  client:idle\n/>',
+				),
+			).toEqual(["client:idle at line 3"]);
+			expect(
+				await hydratedDirectives(
+					"a.astro",
+					'<Foo title="a > b" other={1 > 0} client:visible />',
+				),
+			).toEqual(["client:visible at line 1"]);
+			// A lower-case HTML element carrying the attribute counts too: Astro does not hydrate it, but a stray directive
+			// is a mistake worth failing on.
+			expect(
+				await hydratedDirectives("a.astro", "<div client:load></div>"),
+			).toEqual(["client:load at line 1"]);
+		});
+
+		it("is empty for a file that is not .astro", async () => {
+			expect(await hydratedDirectives("a.ts", "<A client:load />")).toEqual([]);
 		});
 	});
 
@@ -692,7 +1176,64 @@ describe("the walker finds what it should", () => {
 				"effect",
 				"@effect",
 				"@xstate/effect",
+				"xstate",
+				"zod",
+				"stripe",
+				"resend",
+				"pdf-lib",
 			]);
+			expect(ALLOWED_BROWSER_MODULES).toEqual(["astro/zod"]);
+		});
+
+		it("finds each server-only package, and a package that depends on one", () => {
+			for (const name of ["xstate", "zod", "stripe", "resend", "pdf-lib"]) {
+				const root = scratch({
+					"src/scripts/a.ts": `import "${name}";\nimport "${name}/sub";`,
+				});
+
+				expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+					name,
+					`${name}/sub`,
+				]);
+			}
+
+			const root = scratch(
+				{
+					"src/scripts/a.ts": 'import "dep";',
+					"node_modules/dep/package.json": JSON.stringify({
+						dependencies: { stripe: "1" },
+					}),
+				},
+				{ packages: ["dep", "stripe"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"stripe",
+			]);
+		});
+
+		it("lets astro/zod through, with astro's own dependency on zod, and nothing else of zod", () => {
+			const files = {
+				"src/scripts/a.ts": 'import { z } from "astro/zod";',
+				"node_modules/astro/package.json": JSON.stringify({
+					dependencies: { zod: "3" },
+				}),
+			};
+
+			const options = { packages: ["astro", "zod"] };
+
+			expect(
+				clientGraphViolations(scratch(files, options), ALLOWED_BROWSER_MODULES),
+			).toEqual([]);
+			expect(
+				clientGraphViolations(scratch(files, options)).map((v) => v.import),
+			).toEqual(["zod"]);
+			expect(
+				clientGraphViolations(
+					scratch({ ...files, "src/scripts/b.ts": 'import "zod";' }, options),
+					ALLOWED_BROWSER_MODULES,
+				).map((v) => v.import),
+			).toEqual(["zod"]);
 		});
 
 		it("lets a named module through and nothing else", () => {

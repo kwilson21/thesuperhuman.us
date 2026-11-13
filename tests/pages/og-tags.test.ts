@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -12,7 +12,10 @@ let layout: Parameters<AstroContainer["renderToString"]>[0];
 let directory: string;
 
 beforeAll(async () => {
-	directory = await mkdtemp(resolve(".og-tags-render-"));
+	// Under node_modules/.cache, not the repository root: the bundle's bare imports still resolve from node_modules, and the
+	// architecture tests that walk the tree never see a scratch directory that appears and disappears.
+	await mkdir(resolve("node_modules/.cache"), { recursive: true });
+	directory = await mkdtemp(resolve("node_modules/.cache/og-tags-render-"));
 	await build({
 		entryPoints: { layout: "src/layouts/BaseLayout.astro" },
 		outdir: directory,

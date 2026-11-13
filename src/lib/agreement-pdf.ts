@@ -13,11 +13,11 @@ import {
 import {
 	agreementValues,
 	type AgreementDetails,
-	type ClientAgreement,
 	contractorSchema,
 	signatureReference,
 } from "./agreement-fields";
-import { softwareDate } from "./software-projects";
+import { type ClientAgreement } from "./agreement-client-fields";
+import { softwareDate } from "./software-project-display";
 import type { OfferTerms } from "./software-offers";
 import type { AgreementTemplate } from "./agreement-templates";
 import {

@@ -25,15 +25,6 @@ export const projectSteps = [
 	"handoff",
 ] as const;
 
-export const evidenceTypes = {
-	concept: "Concept",
-	prototype: "Prototype",
-	working_preview: "Working preview",
-	demonstration: "Demonstration",
-	investigation: "Investigation",
-	handoff: "Handoff",
-} as const;
-
 export const updateKinds = {
 	progress: "Progress",
 	direction_review: "Direction review",
@@ -188,16 +179,6 @@ export function softwareStateSentence(project: {
 		}[project.state] ?? "Getting set up."
 	);
 }
-
-export const softwareDate = (value: string) =>
-	new Date(
-		value.length === 10 ? `${value}T12:00:00Z` : value,
-	).toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		year: "numeric",
-		timeZone: "America/New_York",
-	});
 
 export async function getSoftwareProject(db: D1Database, id: string) {
 	return db

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { setupAgreementAccess } from "~/scripts/agreement-access";
-import { consentText } from "~/lib/agreement-fields";
+import { consentText } from "~/lib/agreement-client-fields";
 
 /** The fake element members the code under test reads from a query result. */
 type FakeNode = {

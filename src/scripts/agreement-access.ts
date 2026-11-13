@@ -1,5 +1,5 @@
-import { consentText } from "~/lib/agreement-fields";
-import { resolveClientDetails, states } from "~/lib/agreement-draft";
+import { consentText } from "~/lib/agreement-client-fields";
+import { resolveClientDetails, states } from "~/lib/agreement-draft-fields";
 import { openMessages } from "./form-messages";
 import type { JsonBody } from "./json-body";
 

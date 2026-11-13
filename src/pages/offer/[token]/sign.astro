@@ -17,16 +17,18 @@ import {
 	maskedAgreementEmail,
 } from "~/lib/agreement-access";
 import { offerAgreements } from "~/lib/software-agreements";
-import { consentText, intentText } from "~/lib/agreement-fields";
+import { consentText, intentText } from "~/lib/agreement-client-fields";
 import { templateVersionLabel } from "~/lib/agreement-templates";
+import {
+	loadAgreementDraft,
+	prefillAgreementDraft,
+} from "~/lib/agreement-draft";
 import {
 	businessTypes,
 	states,
 	resolveClientDetails,
-	loadAgreementDraft,
-	prefillAgreementDraft,
-} from "~/lib/agreement-draft";
-import { softwareDate } from "~/lib/software-projects";
+} from "~/lib/agreement-draft-fields";
+import { softwareDate } from "~/lib/software-project-display";
 
 const env = Astro.locals.runtime.env,
 	db = env.MUSIC_DB,
