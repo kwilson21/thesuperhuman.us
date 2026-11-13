@@ -36,6 +36,18 @@ jobs:
           echo "$RUNNER_TEMP/dafny-install/dafny" >> "$GITHUB_PATH"
       - name: LemmaScript contracts (Dafny)
         run: pnpm run verify:dafny
+      # Quint downloads its evaluator from a GitHub release with no checksum. Instead the pinned release asset (quint-co/quint,
+      # evaluator/v0.7.1, the version in @informalsystems/quint 0.33.1) is fetched over HTTPS, checked against its sha256 and
+      # placed where Quint looks (QUINT_HOME), so Quint never downloads anything.
+      - name: Install Quint evaluator 0.7.1
+        run: |
+          home="$RUNNER_TEMP/quint-home"
+          mkdir -p "$home/rust-evaluator-v0.7.1"
+          curl -fsSL -o "$RUNNER_TEMP/quint-evaluator.tar.gz" https://github.com/quint-co/quint/releases/download/evaluator/v0.7.1/quint_evaluator-x86_64-unknown-linux-gnu.tar.gz
+          echo "ce0502bdef65dc26c242a9e56379a9bb26de6f3db38f0e3989339d46a542f5eb  $RUNNER_TEMP/quint-evaluator.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/quint-evaluator.tar.gz" -C "$home/rust-evaluator-v0.7.1"
+          chmod +x "$home/rust-evaluator-v0.7.1/quint_evaluator"
+          echo "QUINT_HOME=$home" >> "$GITHUB_ENV"
       - name: Quint invoice-events model
         run: pnpm run verify:quint
       - name: Quint mutants must fail

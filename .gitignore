@@ -53,9 +53,10 @@ __pycache__/
 /.hallmark/
 /tokens.css
 
-# LemmaScript generated Dafny (docs/verification.md). Commit a module .dfy only if it ever needs a hand-written proof.
-*.dfy
-*.dfy.gen
+# LemmaScript generated Dafny (docs/verification.md): one pair of lines per module in LemmaScript-files.txt. A module that
+# ever needs a hand-written proof loses its lines here and commits its .dfy.
+src/lib/invoice-event-order.dfy
+src/lib/invoice-event-order.dfy.gen
 
 # Apalache scratch output from quint verify
 _apalache-out/

@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "verify:quint": "node scripts/verify-quint.mjs",
     "verify:quint:mutants": "node scripts/verify-quint.mjs mutants",
+    "verify:quint:exhaustive": "node scripts/verify-quint.mjs exhaustive",
     "verify:dafny": "lsc check --backend=dafny",
     "golden:diff": "node scripts/golden-diff.mjs diff",
     "golden:show": "node scripts/golden-diff.mjs show",
