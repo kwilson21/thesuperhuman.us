@@ -20,6 +20,32 @@ export async function agreementDownload(
 			headers: agreementHeaders,
 		});
 
+	// A visitor is checked before the agreement is looked up, and an unknown id answers as a known one that is not theirs,
+	// so ids cannot be told apart without signing in.
+	const denied = () =>
+		new Response("Verify your agreement email first.", {
+			status: 401,
+			headers: agreementHeaders,
+		});
+
+	const archive = owner ? null : await agreementSession(db, request, "archive"),
+		signing = owner ? null : await agreementSession(db, request, "agreement"),
+		studio = owner ? null : studioSessionFromRequest(request);
+
+	const studioIdentity = studio
+		? await db
+				.prepare(
+					"SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				)
+				.bind(
+					await (await import("./audio-client-access")).hashValue(studio),
+					new Date().toISOString(),
+				)
+				.first<{ email: string }>()
+		: null;
+
+	if (!owner && !archive && !signing && !studioIdentity) return denied();
+
 	const agreement = await db
 		.prepare(
 			"SELECT a.id,a.offer_id,a.request_id,c.recipient_email FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.status='executed' AND a.archive_closed_at IS NULL",
@@ -33,36 +59,17 @@ export async function agreementDownload(
 		}>();
 
 	if (!agreement)
-		return new Response("Not found", {
-			status: 404,
-			headers: agreementHeaders,
-		});
+		return owner
+			? new Response("Not found", {
+					status: 404,
+					headers: agreementHeaders,
+				})
+			: denied();
 
 	if (!owner) {
-		const archive = await agreementSession(db, request, "archive"),
-			signing = await agreementSession(db, request, "agreement");
-
-		const studio = studioSessionFromRequest(request),
-			project = studio
-				? await clientSoftwareProjectForSession(
-						db,
-						studio,
-						agreement.request_id,
-					)
-				: null;
-
-		const studioIdentity =
-			studio && project
-				? await db
-						.prepare(
-							"SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
-						)
-						.bind(
-							await (await import("./audio-client-access")).hashValue(studio),
-							new Date().toISOString(),
-						)
-						.first<{ email: string }>()
-				: null;
+		const project = studio
+			? await clientSoftwareProjectForSession(db, studio, agreement.request_id)
+			: null;
 
 		const projectAgreement = project
 			? await db
@@ -95,11 +102,7 @@ export async function agreementDownload(
 			(studioIdentity?.email === agreement.recipient_email &&
 				(projectAgreement?.agreement_id === id || linked?.msa_id === id));
 
-		if (!allowed)
-			return new Response("Verify your agreement email first.", {
-				status: 401,
-				headers: agreementHeaders,
-			});
+		if (!allowed) return denied();
 	}
 
 	const artifact = await db
