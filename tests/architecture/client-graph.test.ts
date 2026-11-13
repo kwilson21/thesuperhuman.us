@@ -424,6 +424,42 @@ describe("the walker finds what it should", () => {
 			).toEqual(["effect/Effect"]);
 		});
 
+		it("reads a root-relative <script src> from public/ and walks that file", () => {
+			const root = scratch({
+				"src/pages/a.astro": '---\n---\n<script src="/client.js"></script>',
+				"public/client.js": 'import "./helper.js";',
+				"public/helper.js": 'import "effect/Effect";',
+			});
+
+			expect(clientGraphViolations(root)).toEqual([
+				{
+					import: "effect/Effect",
+					chain: ["src/pages/a.astro", "public/client.js", "public/helper.js"],
+				},
+			]);
+		});
+
+		it("passes a root-relative <script src> that names a plain file in public/", () => {
+			const root = scratch({
+				"src/pages/a.astro": '---\n---\n<script src="/client.js"></script>',
+				"public/client.js": "document.title = 'x';",
+			});
+
+			expect(clientGraphViolations(root)).toEqual([]);
+		});
+
+		it("fails on a root-relative <script src> with no file in public/, naming the line", () => {
+			const root = scratch({
+				"src/pages/a.astro":
+					'---\n---\n<p>x</p>\n<script src="/missing.js"></script>',
+				"src/missing.js": "export {};",
+			});
+
+			expect(clientGraphViolations(root)).toMatchObject([
+				{ import: "/missing.js", chain: ["src/pages/a.astro"], line: 4 },
+			]);
+		});
+
 		it("does not follow a <script src> that names a URL", () => {
 			expect(
 				found({

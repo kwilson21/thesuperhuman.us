@@ -456,7 +456,8 @@ function isInstalled(name: string, from: string): boolean {
 type Resolved = { files: string[]; names: string[]; unresolved?: string };
 
 /**
- * Where a specifier goes. A relative one is resolved from the file, a root-absolute one (`/src/...`) from the root, an
+ * Where a specifier goes. A relative one is resolved from the file, a root-absolute one (`/src/...`) from the root, any
+ * other root-relative URL (`/client.js`, as in `<script src>`) from public/ (unresolved when no code file is there), an
  * aliased one (tsconfig `paths`, package.json `imports`) through EVERY target of every alias that matches, and a bare
  * one is a package. A bare name that is not forbidden must still be a directory under node_modules (a node: built-in
  * aside), or it is unresolved: an alias or an import map the walker cannot read must fail the test, not pass it.
@@ -475,8 +476,24 @@ function resolveSpecifier(
 	const names: string[] = [];
 
 	if (bare.startsWith(".")) bases.push(resolve(dirname(from), bare));
-	else if (bare.startsWith("/")) bases.push(join(root, bare));
-	else {
+	else if (bare.startsWith("/src/")) bases.push(join(root, bare));
+	else if (bare.startsWith("/")) {
+		// Any other root-relative URL is a file of public/, which Astro copies to the same path in dist/.
+		const published = join(root, "public", bare);
+
+		if (
+			!existsSync(published) ||
+			!statSync(published).isFile() ||
+			![...EXTENSIONS].some((extension) => published.endsWith(extension))
+		)
+			return {
+				files: [],
+				names: [],
+				unresolved: `"${bare}" is a root-relative URL with no code file at public${bare}`,
+			};
+
+		bases.push(published);
+	} else {
 		const targets = aliasTargets(aliases, bare);
 
 		for (const target of targets.length > 0 ? targets : [bare])

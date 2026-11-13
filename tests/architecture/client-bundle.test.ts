@@ -1,13 +1,22 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 // The independent backstop to client-graph.test.ts: that test walks the source's import graph, this one looks at what
-// the build actually shipped. It reads dist/_astro/*.js and fails when a chunk holds Effect or @xstate/effect runtime
+// the build actually shipped. It reads every browser script under dist/ (dist/_astro/ and scripts copied from public/, not the server output dist/_worker.js/) and fails when a chunk holds Effect or @xstate/effect runtime
 // code, however it got there (an import the walker cannot see, a glob, a plugin). It needs a build: run
-// `pnpm run build` first. With no dist/_astro it skips, under a name that says so, unless REQUIRE_CLIENT_BUNDLE=1 is set:
-// then a missing dist/_astro FAILS the test. CI sets it, in a step after the build (.github/workflows/validate.yml);
+// `pnpm run build` first. With no dist/ it skips, under a name that says so, unless REQUIRE_CLIENT_BUNDLE=1 is set:
+// then a missing dist/ FAILS the test. CI sets it, in a step after the build (.github/workflows/validate.yml);
 // the plain `pnpm test` step there runs before the build, so without it the test would skip in CI for good.
 //
 // The markers are string literals the libraries keep in their runtime, which a minifier cannot rename. They were
@@ -25,17 +34,29 @@ const RUNTIME_MARKERS = ["~effect/", "EffectFailure"] as const;
 const required = process.env.REQUIRE_CLIENT_BUNDLE === "1";
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const bundle = join(repository, "dist", "_astro");
+const bundle = join(repository, "dist");
 
 /** Every .js and .mjs file under `directory`. */
-function chunksUnder(directory: string): string[] {
+function chunksUnder(directory: string, skip: string): string[] {
 	return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
 		const path = join(directory, entry.name);
 
-		if (entry.isDirectory()) return chunksUnder(path);
+		if (path === skip) return [];
+
+		if (entry.isDirectory()) return chunksUnder(path, skip);
 
 		return /\.m?js$/.test(entry.name) ? [path] : [];
 	});
+}
+
+// What a build emits that is not browser code: dist/_worker.js/ is the server output (the Cloudflare Worker), which
+// holds Effect on purpose. Everything else under dist/ is served to the browser, including a script copied from public/
+// (a `<script src="/client.js">` lands at dist/client.js) and the chunks in dist/_astro/.
+const SERVER_OUTPUT = "_worker.js";
+
+/** Every .js and .mjs file a build serves to the browser: all of `dist` except the server output. */
+function browserScripts(dist: string): string[] {
+	return chunksUnder(dist, join(dist, SERVER_OUTPUT)).sort();
 }
 
 /** The markers a chunk's text holds. */
@@ -54,18 +75,56 @@ describe("the markers", () => {
 	});
 });
 
+describe("browserScripts", () => {
+	const dists: string[] = [];
+
+	afterEach(() => {
+		for (const dist of dists.splice(0))
+			rmSync(dist, { recursive: true, force: true });
+	});
+
+	it("lists the .js and .mjs files of the build, public scripts included, and not the server output", () => {
+		const dist = mkdtempSync(join(tmpdir(), "client-bundle-"));
+
+		dists.push(dist);
+
+		for (const path of [
+			"_astro/app.js",
+			"_astro/nested/chunk.mjs",
+			"client.js",
+			"vendor/lib.mjs",
+			"_worker.js/index.js",
+			"_worker.js/chunks/page.mjs",
+			"_astro/style.css",
+			"data.json",
+		]) {
+			mkdirSync(dirname(join(dist, path)), { recursive: true });
+			writeFileSync(join(dist, path), "");
+		}
+
+		expect(
+			browserScripts(dist).map((file) => file.slice(dist.length + 1)),
+		).toEqual([
+			"_astro/app.js",
+			"_astro/nested/chunk.mjs",
+			"client.js",
+			"vendor/lib.mjs",
+		]);
+	});
+});
+
 describe("the built browser bundle", () => {
 	it.skipIf(!existsSync(bundle) && !required)(
 		existsSync(bundle) || required
 			? "holds no Effect or @xstate/effect runtime code"
-			: "holds no Effect runtime code (skipped: no dist/_astro, run pnpm run build first)",
+			: "holds no Effect runtime code (skipped: no dist/, run pnpm run build first)",
 		() => {
 			expect(
 				existsSync(bundle),
-				"REQUIRE_CLIENT_BUNDLE=1 is set but dist/_astro is missing: run pnpm run build first",
+				"REQUIRE_CLIENT_BUNDLE=1 is set but dist/ is missing: run pnpm run build first",
 			).toBe(true);
 
-			const chunks = chunksUnder(bundle);
+			const chunks = browserScripts(bundle);
 
 			expect(chunks.length).toBeGreaterThan(0);
 
