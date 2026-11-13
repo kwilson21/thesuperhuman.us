@@ -43,9 +43,11 @@ import {
 //                                       schema, refused by the validation), read with messageId missing/0/-1/1.5/text/null
 //   400 "Write up to 4,000 ..."        "send": not text (number, null, boolean, array, object), empty, spaces only, 4001
 //                                       characters, a NUL or other control character, http://, www., ftp://, a javascript://
-//                                       link, a link with credentials, "https://" with no host, a link in capitals
+//                                       link, a link with credentials, "https://" with no host, a link in capitals, and a
+//                                       javascript:, vbscript:, data:, mailto:, file: or blob: address with no "//" (in any case,
+//                                       or split by a tab or newline)
 //   200 {ok:true,message}               "send": plain text, 4000 characters, trimmed, unicode, markup, https links (with
-//                                       trailing punctuation), mailto: and javascript: with no "//", tab and newline, from
+//                                       trailing punctuation), "Data: " followed by a space (prose), tab and newline, from
 //                                       every stage but complete, new or resolved requests, a blank owner email
 //   409 {ok:false}                      "send": a complete project, access revoked, a withdrawn request, losing a race
 //   200 {ok:true} (read)                "read": a client message (stamped read), an already read one (kept), an owner message,
@@ -299,12 +301,17 @@ const cases: Case[] = [
 	text("https:// with nothing after it", "see https:// for details"),
 	text("https:// followed by a dot", "see https://. now"),
 	text(
-		"mailto: with no slashes is not a link",
+		"mailto: with no slashes is refused",
 		"mail me: mailto:someone@example.com",
 	),
-	text("javascript: with no slashes is not a link", "javascript:alert(1)"),
+	text("javascript: with no slashes is refused", "javascript:alert(1)"),
+	text("JAVASCRIPT: in capitals is refused", "JAVASCRIPT:alert(1)"),
+	text("javascript: split by a tab is refused", "java\tscript:alert(1)"),
+	text("vbscript: with no slashes is refused", "vbscript:msgbox(1)"),
+	text("a file: address is refused", "file:///etc/passwd"),
+	text("Data: followed by a space is prose", "Data: the export finished"),
 	text(
-		"a data: URI with no slashes is not a link",
+		"a data: URI with no slashes is refused",
 		"data:text/html,<script>alert(1)</script>",
 	),
 	text("a link in angle brackets", "<https://example.com/a>"),
