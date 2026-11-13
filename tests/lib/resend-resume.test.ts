@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { sendResumeApprovalRequest, sendResumeDelivery } from "~/lib/resend";
+import {
+	resumeApprovalMessage,
+	resumeDeliveryMessage,
+	sendMail,
+} from "~/lib/resend";
 import type { StoredResumeRequest } from "~/lib/resume-requests";
 import { double } from "../helpers/doubles";
 
@@ -25,15 +29,24 @@ describe("sendResumeApprovalRequest", () => {
 			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
 		);
 
-		const result = await sendResumeApprovalRequest({
-			request: storedRequest,
-			apiKey: "key",
-			from: "noreply@thesuperhuman.us",
-			to: "kazon.wilson@thesuperhuman.us",
-			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
-		});
+		const result = await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: storedRequest,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
 
-		expect(result.ok).toBe(true);
+		expect(result).toBe("sent");
+
+		expect(fetchMock.mock.calls[0][0]).toBe("https://api.resend.com/emails");
+		expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
+		expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+			Authorization: "Bearer key",
+			"Content-Type": "application/json",
+		});
 
 		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
@@ -58,15 +71,17 @@ describe("sendResumeApprovalRequest", () => {
 			}),
 		);
 
-		const result = await sendResumeApprovalRequest({
-			request: storedRequest,
-			apiKey: "key",
-			from: "noreply@thesuperhuman.us",
-			to: "kazon.wilson@thesuperhuman.us",
-			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
-		});
+		const result = await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: storedRequest,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
 
-		expect(result.ok).toBe(false);
+		expect(result).toBe("uncertain");
 	});
 
 	it("omits company and note lines when those fields are empty", async () => {
@@ -80,13 +95,15 @@ describe("sendResumeApprovalRequest", () => {
 			note: "",
 		};
 
-		await sendResumeApprovalRequest({
-			request: lean,
-			apiKey: "key",
-			from: "noreply@thesuperhuman.us",
-			to: "kazon.wilson@thesuperhuman.us",
-			approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
-		});
+		await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: lean,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
 
 		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
@@ -108,17 +125,25 @@ describe("sendResumeDelivery", () => {
 
 		const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer; // "%PDF"
 
-		const result = await sendResumeDelivery({
-			apiKey: "key",
-			from: "noreply@thesuperhuman.us",
-			to: "jane@example.com",
-			name: "Jane Doe",
-			audience: "dod",
-			pdf: pdfBytes,
-			filename: "kazon-wilson-resume-dod.pdf",
-		});
+		const result = await sendMail(
+			"key",
+			resumeDeliveryMessage({
+				from: "noreply@thesuperhuman.us",
+				to: "jane@example.com",
+				name: "Jane Doe",
+				pdf: pdfBytes,
+				filename: "kazon-wilson-resume-dod.pdf",
+			}),
+		);
 
-		expect(result.ok).toBe(true);
+		expect(result).toBe("sent");
+
+		expect(fetchMock.mock.calls[0][0]).toBe("https://api.resend.com/emails");
+		expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
+		expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+			Authorization: "Bearer key",
+			"Content-Type": "application/json",
+		});
 
 		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
 
@@ -141,16 +166,17 @@ describe("sendResumeDelivery", () => {
 			}),
 		);
 
-		const result = await sendResumeDelivery({
-			apiKey: "key",
-			from: "noreply@thesuperhuman.us",
-			to: "jane@example.com",
-			name: "Jane Doe",
-			audience: "general",
-			pdf: new ArrayBuffer(4),
-			filename: "Kazon-Wilson-Resume.pdf",
-		});
+		const result = await sendMail(
+			"key",
+			resumeDeliveryMessage({
+				from: "noreply@thesuperhuman.us",
+				to: "jane@example.com",
+				name: "Jane Doe",
+				pdf: new ArrayBuffer(4),
+				filename: "Kazon-Wilson-Resume.pdf",
+			}),
+		);
 
-		expect(result.ok).toBe(false);
+		expect(result).toBe("uncertain");
 	});
 });

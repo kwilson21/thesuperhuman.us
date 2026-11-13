@@ -31,3 +31,6 @@ jobs:
       - run: pnpm run build
         env:
           PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
+      - run: pnpm exec vitest run tests/architecture/client-bundle.test.ts
+        env:
+          REQUIRE_CLIENT_BUNDLE: "1"

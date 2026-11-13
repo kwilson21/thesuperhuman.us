@@ -118,7 +118,7 @@ On the heads as first pushed (`f3413cdc`, `5355bb25`, `ffdb7fdf`, `c6f6cbd6`, `1
 - UNVERIFIED: checks and reviews on the new head that the review-fix commits create.
 - UNVERIFIED: behavior of the moved client scripts in a real browser (event timing, Turnstile, printing, sign-in with a live site key). Only the built JavaScript was compared, so the CI screenshots are the remaining check.
 - UNVERIFIED: Dependabot.
-- UNVERIFIED: post-deployment live verification.
+- UNVERIFIED: post-deployment live verification, apart from one report. The owner said in conversation on 2026-11-12 that a real payment on the live site succeeded after the deploy. That is the owner's report, not something this record observed, and it covers that one journey only.
 - UI checks: no markup or style changed; `hallmark audit` not run because no page design changed (N/A).
 
 No deployment is authorized by this record.

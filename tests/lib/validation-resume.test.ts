@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { validateResumeRequestInput } from "~/lib/validation";
+import { readResumeRequestInput } from "~/server/contact-input";
 
-describe("validateResumeRequestInput", () => {
+describe("readResumeRequestInput", () => {
 	const valid = {
 		name: "Jane",
 		email: "jane@example.com",
@@ -12,19 +12,19 @@ describe("validateResumeRequestInput", () => {
 	};
 
 	it("accepts valid input", () => {
-		const result = validateResumeRequestInput(valid);
+		const result = readResumeRequestInput(valid);
 		expect(result.ok).toBe(true);
 	});
 
 	it("rejects missing name", () => {
-		const result = validateResumeRequestInput({ ...valid, name: "" });
+		const result = readResumeRequestInput({ ...valid, name: "" });
 		expect(result.ok).toBe(false);
 
 		if (!result.ok) expect(result.errors.name).toBeDefined();
 	});
 
 	it("rejects invalid email", () => {
-		const result = validateResumeRequestInput({
+		const result = readResumeRequestInput({
 			...valid,
 			email: "not-an-email",
 		});
@@ -35,14 +35,14 @@ describe("validateResumeRequestInput", () => {
 	});
 
 	it("rejects unknown audience", () => {
-		const result = validateResumeRequestInput({ ...valid, audience: "sales" });
+		const result = readResumeRequestInput({ ...valid, audience: "sales" });
 		expect(result.ok).toBe(false);
 
 		if (!result.ok) expect(result.errors.audience).toBeDefined();
 	});
 
 	it("rejects the retired DoD variant for new requests", () => {
-		const result = validateResumeRequestInput({ ...valid, audience: "dod" });
+		const result = readResumeRequestInput({ ...valid, audience: "dod" });
 		expect(result.ok).toBe(false);
 
 		if (!result.ok) expect(result.errors.audience).toBeDefined();
@@ -50,12 +50,12 @@ describe("validateResumeRequestInput", () => {
 
 	it("rejects missing audience", () => {
 		const { audience: _drop, ...withoutAudience } = valid;
-		const result = validateResumeRequestInput(withoutAudience);
+		const result = readResumeRequestInput(withoutAudience);
 		expect(result.ok).toBe(false);
 	});
 
 	it("rejects note longer than 1000 chars", () => {
-		const result = validateResumeRequestInput({
+		const result = readResumeRequestInput({
 			...valid,
 			note: "x".repeat(1001),
 		});
@@ -64,7 +64,7 @@ describe("validateResumeRequestInput", () => {
 	});
 
 	it("accepts empty company and note", () => {
-		const result = validateResumeRequestInput({
+		const result = readResumeRequestInput({
 			...valid,
 			company: "",
 			note: "",
@@ -74,12 +74,12 @@ describe("validateResumeRequestInput", () => {
 	});
 
 	it("rejects missing turnstile token", () => {
-		const result = validateResumeRequestInput({ ...valid, turnstileToken: "" });
+		const result = readResumeRequestInput({ ...valid, turnstileToken: "" });
 		expect(result.ok).toBe(false);
 	});
 
 	it("trims string fields", () => {
-		const result = validateResumeRequestInput({
+		const result = readResumeRequestInput({
 			...valid,
 			name: "  Jane  ",
 			company: "  Acme  ",

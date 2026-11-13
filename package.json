@@ -46,13 +46,16 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@tailwindcss/vite": "^4.3.3",
+    "@xstate/effect": "1.0.0-alpha.12",
     "astro": "^5.1.0",
+    "effect": "4.1.4",
     "jose": "^6.2.12",
     "pdf-lib": "^1.17.1",
     "resend": "^4.0.1",
     "stripe": "^22.6.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
+    "xstate": "6.0.0-beta.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

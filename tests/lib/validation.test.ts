@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { validateContactInput } from "~/lib/validation";
+import { readContactInput } from "~/server/contact-input";
 
-describe("validateContactInput", () => {
+describe("readContactInput", () => {
 	const validInput = {
 		name: "Jane",
 		email: "jane@example.com",
@@ -11,19 +11,19 @@ describe("validateContactInput", () => {
 	};
 
 	it("accepts valid input", () => {
-		const result = validateContactInput(validInput);
+		const result = readContactInput(validInput);
 		expect(result.ok).toBe(true);
 	});
 
 	it("rejects missing name", () => {
-		const result = validateContactInput({ ...validInput, name: "" });
+		const result = readContactInput({ ...validInput, name: "" });
 		expect(result.ok).toBe(false);
 
 		if (!result.ok) expect(result.errors.name).toBeDefined();
 	});
 
 	it("rejects invalid email", () => {
-		const result = validateContactInput({
+		const result = readContactInput({
 			...validInput,
 			email: "not-an-email",
 		});
@@ -34,14 +34,14 @@ describe("validateContactInput", () => {
 	});
 
 	it("rejects a whitespace-only message", () => {
-		const result = validateContactInput({ ...validInput, description: "   " });
+		const result = readContactInput({ ...validInput, description: "   " });
 		expect(result.ok).toBe(false);
 
 		if (!result.ok) expect(result.errors.description).toBeDefined();
 	});
 
 	it("rejects description longer than 4000 chars", () => {
-		const result = validateContactInput({
+		const result = readContactInput({
 			...validInput,
 			description: "a".repeat(4001),
 		});
@@ -51,7 +51,7 @@ describe("validateContactInput", () => {
 
 	it("accepts a short introduction without business qualifiers", () => {
 		expect(
-			validateContactInput({
+			readContactInput({
 				name: " Jane ",
 				email: " jane@example.com ",
 				description: " Hi ",
@@ -70,12 +70,12 @@ describe("validateContactInput", () => {
 	});
 
 	it("rejects missing turnstile token", () => {
-		const result = validateContactInput({ ...validInput, turnstileToken: "" });
+		const result = readContactInput({ ...validInput, turnstileToken: "" });
 		expect(result.ok).toBe(false);
 	});
 
 	it("accepts optional fields when empty", () => {
-		const result = validateContactInput({ ...validInput, company: "" });
+		const result = readContactInput({ ...validInput, company: "" });
 		expect(result.ok).toBe(true);
 	});
 });
