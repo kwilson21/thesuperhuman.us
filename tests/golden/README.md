@@ -98,7 +98,9 @@ before the case ends). "Background" means what can be observed: work a route sta
   `committed`, `rolled-back` or `injected-failure`. Bytes arguments are recorded as length and SHA-256.
 - R2: `get`, `head`, `put`, `delete`, `list`, `createMultipartUpload`, `resumeMultipartUpload`, `uploadPart`, `complete`,
   `abort`, with keys, options and body length and SHA-256. Never raw bytes.
-- KV: `get`, `put`, `delete`, `list`.
+- KV: `get` (text, `json`, `arrayBuffer`, `stream`), `put`, `delete`, `list`. A key put with `expirationTtl` or `expiration`
+  (or seeded as `{ value, expirationTtl }`) reads as absent once the frozen clock passes it, and leaves `list` and the dump.
+- `console.error` and `console.warn` calls (not printed), in order, with each argument recorded; an Error as `Name: message`.
 - Outgoing `fetch` (Stripe, Resend, Turnstile and others): URL, method, headers, exact body text, whether it had an abort
   signal, and what the script answered.
 - Workers AI `env.AI.run` (model, input), rate-limit `limit()` calls, `ctx.waitUntil` registrations and how each settled.
@@ -109,6 +111,23 @@ before the case ends). "Background" means what can be observed: work a route sta
 
 Time and randomness are fixed per case: `Date`, `performance.now`, `crypto.randomUUID` (a hex counter),
 `crypto.getRandomValues` and `Math.random` (seeded). Two runs write identical fixtures.
+
+## More of what a case can say
+
+- A step's `path`, `json`, `body` and `headers` may be functions of what is recorded so far:
+  `path: (prior) => \`/x/${prior.answerJson(0).id}\``, or read `prior.effects` (a sign-in code from a recorded email).
+  The resolved value is what the fixture holds.
+- `body` may be text, a `Uint8Array`, `generatedBody(size, byteAt?)` or a `ReadableStream`. Bytes, and text over 64 KB
+  (a JSON body counts), are recorded as length and SHA-256.
+- `origin` (on the case or a step) sets the scheme and host: `"http://localhost:4321"`, `"https://audio.thesuperhuman.us"`.
+- R2: `uploads: { id: { key, parts: { 1: "text" } } }` seeds a started multipart upload with uploaded parts. An upload
+  that no longer exists fails with R2's error 10024 (the text `multipartUploadGone` matches). `vanishAfterHead: [key]` removes
+  an object right after a `head`, so the next `get` finds nothing.
+- Workers AI: `aiNever()` and `aiAfter(ms, value)`. A case with either runs `setTimeout` on the frozen clock (or set
+  `virtualTimers: true`): while the handler waits, the runner moves the clock to the next timer and records the move as an
+  `advance`, so a route's own timeout is recorded without waiting for it.
+- `crypto.subtle.generateKey` answers a fixed key (AES and HMAC; another type fails with its name).
+- `astro:content` resolves, in all tests, to `tests/helpers/astro-content.ts`, which reads the real collections.
 
 ## What is redacted
 
@@ -139,7 +158,9 @@ matching statement or batch throw without running. Both are written into the log
 `asClient("a@example.test")` runs the real studio sign-in before that client's first step: it calls
 `POST /api/studio/code`, reads the code from the email Resend is asked to send, calls `POST /api/studio/session` and keeps
 the `studio_session` cookie. It is off the record, but its database writes (code, session, audit, allowance rows) are real.
-The email needs an active project in the seed (a `service` owner request gets one automatically).
+The email needs an active project in the seed (a `service` owner request gets one automatically). Each distinct client
+signs in with values of its own, so two clients in one case get two sessions. The sign-in does not fire `failures` or
+`interleave` hooks and does not count their matches.
 
 ## What a corpus cannot capture yet
 
