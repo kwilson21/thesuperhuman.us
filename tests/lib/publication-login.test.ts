@@ -398,7 +398,10 @@ describe("publication consent page styling", () => {
 		const css = styleOf((await consentPage()).html);
 
 		expect(css).toMatch(
-			new RegExp(`:focus-visible\\s*\\{[^}]*outline:\\s*2px solid ${site.accent}`, "i"),
+			new RegExp(
+				`:focus-visible\\s*\\{[^}]*outline:\\s*2px solid ${site.accent}`,
+				"i",
+			),
 		);
 	});
 
@@ -431,9 +434,9 @@ describe("publication consent page styling", () => {
 			expect(src).toMatch(
 				/^\/fonts\/libron-v0\.25\/Libron-(Regular|Bold)\.woff2$/,
 			);
-			expect(
-				existsSync(new URL("../../public" + src, import.meta.url)),
-			).toBe(true);
+			expect(existsSync(new URL("../../public" + src, import.meta.url))).toBe(
+				true,
+			);
 		}
 		expect(faces.some((f) => /font-weight:\s*400/.test(f))).toBe(true);
 		expect(faces.some((f) => /font-weight:\s*700/.test(f))).toBe(true);
