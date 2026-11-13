@@ -37,6 +37,7 @@ import {
 	withoutViteVersion,
 } from "./cache.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
+import { settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
 import {
 	ACCESS_AUDIENCE,
@@ -187,6 +188,9 @@ async function capture({
 		return { context, page };
 	});
 
+	// Counts requests from the first navigation on. The page is still at about:blank until goto below.
+	const tracker = trackRequests(page);
+
 	const where = `${path} (${viewport})`;
 	page.on("console", (message) => {
 		const expected = expectedResourceError(message, [
@@ -213,10 +217,9 @@ async function capture({
 	if (response?.status() !== status)
 		errors.push(`${where}: HTTP ${response?.status()}, expected ${status}`);
 	else captured.push({ scenario: currentScenario, path });
-	// Turnstile keeps requesting in the background, so network idle is a best effort, not a requirement.
-	await timings.time(scope, "idle", () =>
-		page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {}),
-	);
+	// Turnstile's script is not counted, since it keeps requesting in the background. A page with its widget
+	// also waits for the widget to hold a token (see settle.mjs), so the image matches the drawn widget.
+	await timings.time(scope, "idle", () => settle(page, tracker));
 	await timings.time(scope, "fonts", () =>
 		page.evaluate(() => document.fonts.ready),
 	);

@@ -27,6 +27,10 @@ CI keeps each run's images and `cache.json` in the Actions cache, and the next r
 
 A reused image skips that page's console and status checks; its inputs are the same as in the run that passed them. Locally, nothing is reused unless you copy an earlier `screenshots/` folder to `.screenshots/reference`.
 
+## Settling before a capture
+
+After a page loads, `settle.mjs` decides when it is ready to photograph. A request counts while it is in flight. The page is quiet once no counted request has started or finished for 500 ms. Requests to `challenges.cloudflare.com` (Turnstile's script) never count, because that script keeps requesting in the background. If the page has a `.cf-turnstile` widget, settle also waits until every widget has an iframe and a non-empty response token, then 500 ms more so the success state paints. Settling never takes more than 5 seconds, counted from its start; at that cap the capture carries on as it is.
+
 ## Timings
 
 The capture log ends with one `Timing` line per scenario, then one for `pages` (marked `4 at once`, since four pages render together) and a `total` line. Each line gives seconds, counts such as captures and sql calls, then phases largest first: `goto`, `idle`, `fonts`, `prepare`, `screenshot` and `close` are parts of each capture, `context` is browser context and page setup, `sql`, `ownerFetch` and `stateHash` are scenario helpers, `replay` is the work of checking reused images, and `other` is the scenario's wall time that no phase covers.
