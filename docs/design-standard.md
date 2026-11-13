@@ -107,7 +107,11 @@ and `class:list={...}`, on one line or several). Markup is checked only for
 values such as `text-[#ff0000]`. HTML comments, prose and frontmatter are not scanned,
 and neither are inline `style` attributes or other TypeScript. In particular `src/lib/`
 is left out: email HTML is built there with inline styles, and email needs literal
-colours and faces because it cannot use the site's CSS variables.
+colours and faces because it cannot use the site's CSS variables. The publishing consent page in
+`src/lib/publication/oauth-login.ts` is also in `src/lib/`, so it is covered by its own test instead.
+That test checks its colours, the pill radius, the button's height, padding and line height, the tap
+highlight and the font stacks against `global.css`, and checks that its Libron faces are the two font
+files in `public/fonts/libron-v0.25/`.
 
 - quoted generic font families (`'sans-serif'` names a font that does not exist);
 - a font family that is not one of the faces the token block or an `@font-face` in
