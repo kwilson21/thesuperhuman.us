@@ -53,7 +53,7 @@ import {
 //   audio path (applyStripeInvoiceEvent)     5 event types x 7 booking starting statuses, 5 balance events, 6 other balance
 //                                            starts, event older / equal / newer than the stored time, out-of-order and
 //                                            duplicate deliveries, races (same event recorded first, paid outside Stripe,
-//                                            a newer event first)
+//                                            a newer event first); an older paid event after a newer event is applied
 //   audio conflict (known attempt)           an invoice that is not the request's but is in stripe_invoice_attempts
 //   audio recovery                           unknown invoice for each event type and installment; wrong amount, no total,
 //                                            wrong or no currency, balance before booking paid, booking paid outside Stripe,
@@ -67,6 +67,9 @@ import {
 //                                            status without an id, total, currency, retention fence, deleted references (all
 //                                            recorded as unmatched); ordering by time and by status rank; duplicates;
 //                                            hosted url, due date and customer handling; outages and races
+//   reordered deliveries                     an older invoice.paid arriving after a newer failure, void, uncollectible or
+//                                            sent event (audio booking and balance, software deposit and balance with a
+//                                            project), a redelivery of it, and a paid and a failed event in the same second
 //
 // A case that sends a Stripe call is not here: this route makes none.
 
@@ -398,7 +401,7 @@ const ordering: Case[] = [
 		audioEvent("invoice.sent", {}, { created: NOW_SECONDS - 60 }),
 	),
 	audioCase(
-		"an older paid event after a newer failure is dropped",
+		"an older paid event after a newer failure is applied",
 		{
 			...bookingInvoice("payment_failed", {
 				booking_status_updated_at: isoAt(-30),
@@ -1440,7 +1443,7 @@ const softwareOrdering: Case[] = [
 		softwareEvent("invoice.sent", {}, { created: NOW_SECONDS - 60 }),
 	),
 	softwareCase(
-		"software: an older paid event after a newer failure is dropped",
+		"software: an older paid event after a newer failure is applied",
 		siOpen({ status: "payment_failed", status_updated_at: isoAt(-30) }),
 		softwareEvent("invoice.paid", {}, { created: NOW_SECONDS - 60 }),
 	),
@@ -1738,6 +1741,143 @@ const softwareOutages: Case[] = [
 	),
 ];
 
+const at = (offset: number) => ({ created: NOW_SECONDS + offset });
+
+const audioPair = (
+	name: string,
+	first: [Parameters<typeof audioEvent>[0], number],
+	second: [Parameters<typeof audioEvent>[0], number],
+	extra: Step[] = [],
+): Case => ({
+	name,
+	music: { seed: audioSeed({ ...bookingInvoice("open") }) },
+	steps: [
+		webhookStep(audioEvent(first[0], {}, { id: "evt_first", ...at(first[1]) })),
+		webhookStep(
+			audioEvent(second[0], {}, { id: "evt_second", ...at(second[1]) }),
+		),
+		...extra,
+	],
+});
+
+const softwarePair = (
+	name: string,
+	first: [Parameters<typeof softwareEvent>[0], number],
+	second: [Parameters<typeof softwareEvent>[0], number],
+	over: {
+		invoice?: SeedRow;
+		meta?: Record<string, string>;
+		seed?: object;
+	} = {},
+): Case => ({
+	name,
+	music: {
+		seed: softwareSeed({
+			software_invoices: [over.invoice ?? siOpen()],
+			...over.seed,
+		}),
+	},
+	steps: [
+		softwareStep(
+			softwareEvent(
+				first[0],
+				{},
+				{ id: "evt_first", ...at(first[1]) },
+				over.meta,
+			),
+		),
+		softwareStep(
+			softwareEvent(
+				second[0],
+				{},
+				{ id: "evt_second", ...at(second[1]) },
+				over.meta,
+			),
+		),
+	],
+});
+
+// Stripe does not deliver in order: the older paid event arrives second, and the invoice must still end up paid.
+const reordered: Case[] = [
+	audioPair(
+		"reordered: a newer failure, then the older paid",
+		["invoice.payment_failed", -30],
+		["invoice.paid", -60],
+	),
+	audioPair(
+		"reordered: a newer void, then the older paid",
+		["invoice.voided", -30],
+		["invoice.paid", -60],
+	),
+	audioPair(
+		"reordered: a newer uncollectible, then the older paid",
+		["invoice.marked_uncollectible", -30],
+		["invoice.paid", -60],
+	),
+	audioPair(
+		"reordered: a newer sent, then the older paid, then the paid delivered again",
+		["invoice.sent", -30],
+		["invoice.paid", -60],
+		[
+			webhookStep(
+				audioEvent("invoice.paid", {}, { id: "evt_second", ...at(-60) }),
+			),
+		],
+	),
+	audioPair(
+		"reordered: a failure, then a paid event in the same second",
+		["invoice.payment_failed", -30],
+		["invoice.paid", -30],
+	),
+	audioPair(
+		"reordered: paid, then an older failure",
+		["invoice.paid", -30],
+		["invoice.payment_failed", -60],
+	),
+	{
+		name: "reordered: a newer balance failure, then the older balance paid",
+		music: { seed: audioSeed({ ...balanceInvoice("open") }) },
+		steps: [
+			webhookStep(
+				balanceEvent(
+					"invoice.payment_failed",
+					{},
+					{ id: "evt_first", ...at(-30) },
+				),
+			),
+			webhookStep(
+				balanceEvent("invoice.paid", {}, { id: "evt_second", ...at(-60) }),
+			),
+		],
+	},
+	softwarePair(
+		"software reordered: a newer sent, then the older paid",
+		["invoice.sent", -30],
+		["invoice.paid", -60],
+	),
+	softwarePair(
+		"software reordered: a newer failure, then the older paid",
+		["invoice.payment_failed", -30],
+		["invoice.paid", -60],
+	),
+	softwarePair(
+		"software reordered: a newer void, then the older paid",
+		["invoice.voided", -30],
+		["invoice.paid", -60],
+	),
+	softwarePair(
+		"software reordered: a failure, then a paid event in the same second",
+		["invoice.payment_failed", -30],
+		["invoice.paid", -30],
+	),
+	softwarePair(
+		"software reordered: a newer balance failure, then the older balance paid, with a project",
+		["invoice.payment_failed", -30],
+		["invoice.paid", -60],
+		{ invoice: balanceRow(), meta: balanceMeta, seed: withProject() },
+	),
+];
+
 const cases: Case[] = [
 	...transport,
 	...unrelated,
@@ -1752,6 +1892,7 @@ const cases: Case[] = [
 	...softwareMismatch,
 	...softwareOrdering,
 	...softwareOutages,
+	...reordered,
 ];
 
 defineCorpus("stripe-webhook", POST, cases);
