@@ -2,8 +2,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
-import { partial } from "../helpers/doubles";
-import { fakeBatch } from "../helpers/d1";
+import { double, partial } from "../helpers/doubles";
+import { fakeBatch, fakeFirst } from "../helpers/d1";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { testRuntime } from "../helpers/runtime";
 
@@ -456,3 +456,180 @@ describe.each([
 		});
 	},
 );
+
+// An audio invoice that is not linked on the row yet (the creation response has not been recorded). Two events for the
+// same real Stripe invoice can arrive close together: invoice.sent links it through recovery, or the creation response
+// links it, while invoice.paid is between its reads. The paid event is for the linked invoice, so it must apply through
+// the normal guarded path. It must never be parked as an "invoice-conflict" (Stripe answers 200 and does not retry).
+// Model: verification/invoice-events.qnt, mutant "pre-fix-link".
+
+function unlinkAudio() {
+	sql
+		.prepare(
+			"UPDATE audio_payments SET booking_invoice_id=NULL,booking_invoice_url=NULL,booking_status='not_created'",
+		)
+		.run();
+}
+
+/** What recordInvoice commits: the id, the open status and the attempt row. */
+function linkAudioInvoice() {
+	sql
+		.prepare(
+			`UPDATE audio_payments SET booking_invoice_id='in_booking',booking_invoice_url='https://invoice.stripe.com/booking',
+      booking_status='open',booking_creation_started_at=NULL
+      WHERE request_id='request-1' AND booking_invoice_id IS NULL AND booking_status='not_created'`,
+		)
+		.run();
+	sql
+		.prepare(
+			"INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at) VALUES ('in_booking','request-1','booking','now')",
+		)
+		.run();
+}
+
+/** Runs `run` just before the first statement that matches `pattern` is read, as another handler's commit would. */
+function beforeFirst(pattern: RegExp, run: () => void) {
+	const prepare = db.prepare.bind(db);
+
+	db.prepare = (query: string) => {
+		const statement = prepare(query);
+
+		if (!pattern.test(query)) return statement;
+
+		return double<D1PreparedStatement>({
+			bind: (...values: unknown[]) => {
+				const bound = statement.bind(...values);
+
+				return double<D1PreparedStatement>({
+					first: fakeFirst(() => {
+						run();
+
+						return bound.first();
+					}),
+				});
+			},
+		});
+	};
+}
+
+/** Runs `run` right after the first statement that matches `pattern` has been read. */
+function afterFirst(pattern: RegExp, run: () => void) {
+	const prepare = db.prepare.bind(db);
+
+	db.prepare = (query: string) => {
+		const statement = prepare(query);
+
+		if (!pattern.test(query)) return statement;
+
+		return double<D1PreparedStatement>({
+			bind: (...values: unknown[]) => {
+				const bound = statement.bind(...values);
+
+				return double<D1PreparedStatement>({
+					first: fakeFirst(async () => {
+						const row = await bound.first();
+
+						run();
+
+						return row;
+					}),
+				});
+			},
+		});
+	};
+}
+
+const attemptQuery = /FROM stripe_invoice_attempts WHERE invoice_id/;
+
+function expectPaidAndRecorded() {
+	expect(audioStatus()).toEqual({ status: "paid" });
+	expect(sql.prepare("SELECT id FROM stripe_webhook_events").all()).toEqual([
+		{ id: "evt_paid" },
+	]);
+	expect(
+		sql.prepare("SELECT COUNT(*) AS total FROM stripe_unmatched_events").get(),
+	).toEqual({ total: 0 });
+}
+
+describe("audio: an unlinked invoice is linked while its paid event is being handled", () => {
+	beforeEach(() => unlinkAudio());
+
+	it("applies the paid event when the link commits before the attempts check", async () => {
+		beforeFirst(attemptQuery, linkAudioInvoice);
+		verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE));
+		expect((await POST(context())).status).toBe(200);
+		expectPaidAndRecorded();
+	});
+
+	it("applies the paid event when the link commits between the attempts check and recovery's own read", async () => {
+		afterFirst(attemptQuery, linkAudioInvoice);
+		verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE));
+		expect((await POST(context())).status).toBe(200);
+		expectPaidAndRecorded();
+	});
+
+	it("still parks an event for a different Stripe invoice as a conflict", async () => {
+		beforeFirst(attemptQuery, linkAudioInvoice);
+		verify.mockResolvedValueOnce({
+			...audioEventAt("paid", "evt_other", BASE),
+			data: {
+				object: {
+					...audioEventAt("paid", "x", BASE).data.object,
+					id: "in_other",
+				},
+			},
+		});
+		expect((await POST(context())).status).toBe(200);
+		expect(audioStatus()).toEqual({ status: "open" });
+		expect(
+			sql.prepare("SELECT event_id,reason FROM stripe_unmatched_events").all(),
+		).toEqual([{ event_id: "evt_other", reason: "invoice-conflict" }]);
+	});
+});
+
+// The recovery batch applies an event through its guarded update. An event already recorded as processed (by the
+// normal path, after the invoice was linked) must not change the row again: here a later event for the same second
+// won the tie, and the stale recovery batch of the first event would put the first back.
+it("audio recovery: an event already processed does not change the row when its recovery batch runs late", async () => {
+	unlinkAudio();
+	commitBeforeNextBatch(() => {
+		linkAudioInvoice();
+		sql
+			.prepare(
+				"INSERT INTO stripe_webhook_events(id,event_type,invoice_id,occurred_at,processed_at) VALUES ('evt_open','invoice.sent','in_booking',?,'now')",
+			)
+			.run(isoOf(BASE));
+		sql
+			.prepare(
+				"UPDATE audio_payments SET booking_status='uncollectible',booking_status_updated_at=?",
+			)
+			.run(isoOf(BASE));
+	});
+	verify.mockResolvedValueOnce(audioEventAt("open", "evt_open", BASE));
+	expect((await POST(context())).status).toBe(200);
+	expect(audioStatus()).toEqual({ status: "uncollectible" });
+});
+
+// Software has no attempts check and no second read: a read that sees the invoice still being created matches, and the
+// batch's pin lets a paid event for the same Stripe invoice apply whether or not the creation response linked it first.
+it("software: a paid event applies when the creation response links the same Stripe invoice between its read and its batch", async () => {
+	seedSoftware();
+	commitBeforeNextBatch(() =>
+		sql
+			.prepare(
+				"UPDATE software_invoices SET stripe_invoice_id='in_software',status='open'",
+			)
+			.run(),
+	);
+	verify.mockResolvedValueOnce(softwareEventAt("paid", "evt_paid", BASE));
+	expect((await POST(context())).status).toBe(200);
+	expect(softwareStatus()).toEqual({ status: "paid" });
+	expect(sql.prepare("SELECT id FROM stripe_webhook_events").all()).toEqual([
+		{ id: "evt_paid" },
+	]);
+	expect(
+		sql
+			.prepare("SELECT COUNT(*) AS total FROM software_stripe_unmatched_events")
+			.get(),
+	).toEqual({ total: 0 });
+});

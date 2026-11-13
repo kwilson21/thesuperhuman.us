@@ -523,12 +523,16 @@ export async function recoverInvoiceFromWebhook(
 		totalAmountCents: number;
 		currency: string;
 	},
-): Promise<"recovered" | "discarded" | "unmatched"> {
+): Promise<"recovered" | "current" | "discarded" | "unmatched"> {
 	const payment = await getAudioPayment(db, input.requestId);
 
 	if (payment?.externalRefsDeletedAt) return "discarded";
 	const prefix = input.installment;
 	const currentId = payment?.[`${prefix}InvoiceId`];
+
+	// The row was linked to this very invoice since the webhook read it (the creation response, or an earlier event's
+	// recovery). The event belongs to the linked invoice, so the caller applies it through the normal guarded path.
+	if (payment && currentId === input.invoiceId) return "current";
 	const receivedAt = new Date().toISOString();
 	const expectedAmount = payment?.[`${prefix}AmountCents`];
 
@@ -589,6 +593,7 @@ export async function recoverInvoiceFromWebhook(
       SELECT ?,?,?,?,? WHERE EXISTS (
         SELECT 1 FROM audio_payments WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id IS NOT ?
           AND ${prefix}_status<>'paid' AND (${prefix}_status_updated_at IS NULL OR ${prefix}_status_updated_at<=?)
+          AND NOT EXISTS (SELECT 1 FROM stripe_webhook_events WHERE id=?)
       )`)
 			.bind(
 				input.requestId,
@@ -600,11 +605,13 @@ export async function recoverInvoiceFromWebhook(
 				input.invoiceId,
 				input.eventId,
 				guardTime(input.status, input.occurredAt),
+				input.eventId,
 			),
 		db
 			.prepare(`UPDATE audio_payments SET ${prefix}_status=?,${prefix}_status_updated_at=?,updated_at=?
       WHERE request_id=? AND ${prefix}_invoice_id=? AND ${prefix}_recovery_event_id IS NOT ?
-        AND ${prefix}_status<>'paid' AND (${prefix}_status_updated_at IS NULL OR ${prefix}_status_updated_at<=?)`)
+        AND ${prefix}_status<>'paid' AND (${prefix}_status_updated_at IS NULL OR ${prefix}_status_updated_at<=?)
+        AND NOT EXISTS (SELECT 1 FROM stripe_webhook_events WHERE id=?)`)
 			.bind(
 				input.status,
 				input.occurredAt,
@@ -613,6 +620,7 @@ export async function recoverInvoiceFromWebhook(
 				input.invoiceId,
 				input.eventId,
 				guardTime(input.status, input.occurredAt),
+				input.eventId,
 			),
 		db
 			.prepare(`INSERT OR IGNORE INTO stripe_invoice_attempts(invoice_id,request_id,installment,created_at)
