@@ -5,6 +5,7 @@ import { deriveWaveforms } from "../../scripts/music-waveforms.mjs";
 it("measures each aligned playback window for both waveform and loudness", async () => {
 	const readFile = vi.fn<(path: string, encoding: "utf8") => Promise<string>>();
 	const writeFile = vi.fn<(path: string, text: string) => Promise<void>>();
+
 	const spawnSync =
 		vi.fn<
 			(
@@ -13,6 +14,7 @@ it("measures each aligned playback window for both waveform and loudness", async
 				options: { maxBuffer: number },
 			) => { status: number | null; stdout: Buffer; stderr: Buffer }
 		>();
+
 	readFile
 		.mockResolvedValueOnce(
 			JSON.stringify({
