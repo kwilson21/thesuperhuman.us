@@ -109,6 +109,8 @@ before the case ends). "Background" means what can be observed: work a route sta
   full; a binary body as length and SHA-256. Streams are read to the end. A handler that throws is `rejected`.
 - With `dump` or `final`: the rows of the tables you name, in insertion order, and R2 and KV contents.
 
+The test run pins `TZ=UTC` (`test.env` in `vitest.config.ts`), as production Workers run, so a date string with no zone is read the same on every machine. `harness/zone.test.ts` checks the pin.
+
 Time and randomness are fixed per case: `Date`, `performance.now`, `crypto.randomUUID` (a hex counter),
 `crypto.getRandomValues` and `Math.random` (seeded). Two runs write identical fixtures.
 

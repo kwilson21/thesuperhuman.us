@@ -557,6 +557,7 @@ const cases: Case[] = [
 			},
 			{
 				on: /SELECT \* FROM software_projects WHERE request_id=\?/,
+				nth: 2,
 				message: "d1 down",
 			},
 		],
