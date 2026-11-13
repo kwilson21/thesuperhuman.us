@@ -18,7 +18,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Print control in the sheet footer | Pill through `.site-button` (it also carries `.site-button-outline`) |
 | `.terms-navigation` buttons | `src/components/SoftwareAgreedTerms.astro` | Back and next controls for the agreed terms | Pill through `.studio-button` |
 | `.next-step-link` | `src/components/AudioProjectUpdates.astro` | Outlined link to the owner's next step on an audio project | Pill; the label is stored text and may wrap. |
-| `button` (inside `consentStyle`) | `src/lib/publication/oauth-login.ts` | Submits "Allow and sign in with GitHub" on the standalone publishing consent page | Pill with the `.site-button` values as literals, because that response's Content-Security-Policy admits only its own hashed inline style. A test pins the literals to `global.css`. The label wraps at large text sizes. |
+| `button` (inside `consentStyle`) | `src/lib/publication/oauth-login.ts` | Submits "Allow and sign in with GitHub" on the standalone publishing consent page | Pill with the `.site-button` values as literals, because that response's Content-Security-Policy admits only its own hashed inline style. A test pins the literals to `global.css`. The label wraps whenever it does not fit on one line, at any width. |
 
 ## Stays
 
@@ -46,7 +46,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 ## Notes
 
 - Dead selectors with no markup in `src/`: `.request-work button`, `.audience-list button`, `.request-actions .danger`, `[data-review] button`. They were left as they are, apart from the shared owner rule above.
-- Most pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve. The consent page's button is the exception: its label wraps at large text sizes, so the pill never overflows.
+- Most pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve. The consent page's button is the exception: its label wraps whenever it does not fit on one line, at any width, so the pill never overflows.
 
 ## Out of scope
 

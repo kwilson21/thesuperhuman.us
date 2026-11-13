@@ -3,18 +3,19 @@
 Date: November 13, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/publishing-sign-in-style`, from `origin/main` at `fad7694e`
-Commits: `6151aa50` (style), `76f3fefb` (golden re-record for the style), then `bcfce0b0` (Libron and `font-src`), `14179d78` (label wrap), `dffc5aeb` (drift test and tap highlight), `64425f34` (design docs), `7eed2599` (golden re-record for Libron), `b9b4f37e` and `c9b1c20c` (format and lint fixes in the test file), `2fbd48ed` (heading size and word breaking, with the golden re-record), and this record.
-Pull request: see the PR description for the link.
-Target: production `https://thesuperhuman.us` after merge. The consent page is served by the Worker at `/api/publication/authorize`; its fonts come from the same origin's static assets.
+Commits: `6151aa50` (style), `76f3fefb` (golden re-record for the style), then `bcfce0b0` (Libron and `font-src`), `14179d78` (label wrap), `dffc5aeb` (drift test and tap highlight), `64425f34` (design docs), `7eed2599` (golden re-record for Libron), `b9b4f37e` and `c9b1c20c` (format and lint fixes in the test file), `2fbd48ed` (heading size and word breaking, with the golden re-record), `77c047e8` (heading minimum 1.25rem, drift test, golden re-record), and then the document commit that adds this revision.
+Pull request: #261 (see the PR description for the link).
+Target: production `https://thesuperhuman.us` after merge. The consent page is served by the Astro route `src/pages/api/publication/[...path].ts`, which returns 404 unless the request origin is `https://thesuperhuman.us` (`src/lib/publication/oauth.ts`). Its fonts are static files on the same origin (`public/fonts/libron-v0.25/`). The page is never served on the audio host.
 Reviewer: Claude Haiku 5.5 subagent, tests first. The coordinating session owns the review, the browser checks listed as UNVERIFIED, and the deployment decision. This record does not certify them.
 Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR adds no migration and writes no stored data.
+Evidence: the code, tests, golden fixtures and renders were gathered at code commit `77c047e8`. The later commit in this branch changes documents only, so the evidence applies to the code at `77c047e8`.
 
 ## Scope
 
-- The publishing consent page's HTML shell and inline CSS in `src/lib/publication/oauth-login.ts`: the page is restyled to match the site, Libron loads from the site's own font files, the button label wraps at large text sizes, and the button carries the site's tap highlight.
+- The publishing consent page's HTML shell and inline CSS in `src/lib/publication/oauth-login.ts`: the page is restyled to match the site, Libron loads from the site's own font files, the button label wraps whenever it does not fit on one line, and the button carries the site's tap highlight. The heading minimum is 1.25rem (`clamp(1.25rem, 8.2vw, 2.5rem)`), so "publishing" does not split at 320px with doubled text.
 - Its Content-Security-Policy gains two directives: `style-src 'sha256-…'` (one hash of the inline style block, computed from the constant) and `font-src 'self'`. Nothing else in the policy changes.
 - Re-recorded publication golden fixtures (`publication-oauth`, `publication-mcp`, `publication-token`). Their only differences are the consent page body and its CSP header (see Evidence).
-- New tests in `tests/lib/publication-login.test.ts`, including a drift test that reads `src/styles/global.css`.
+- Tests in `tests/lib/publication-login.test.ts`, including a drift test that reads `src/styles/global.css` for the colours, the button's outline and hover fill, the rule line, the pill radius, the button's size, padding and line height, the tap highlight and the font stacks.
 - Documents: `design.md`, `docs/design-standard.md`, `docs/design-concepts/2026-11-12/button-inventory.md`, and this record.
 - No change to logic, state, cookies, redirects, the form, the nonce or escaping. The page's client name, return address and nonce are still escaped text, and the consent POST is unchanged.
 
@@ -22,86 +23,169 @@ Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR a
 
 - "Restyle the sign in page but I want to see it": restyle the page to match the site. The owner saw the first render.
 - On seeing the first render with fallback fonts: "We should def load libron". This is the reason for the `@font-face` rules and `font-src 'self'`.
+- Not yet decided by the owner: the heading minimum change (1.25rem, from this revision). It is a small size change, shown in the 320px large-text render below. Show it to the owner before merge.
 
 ## Reviews
 
 - Commits `6151aa50` and `76f3fefb`, reviewed on 2026-11-13 by independent Claude subagents:
   - Opus correctness and security review: no must-fix. The template is identical outside the added markup; the hash equals the served style bytes in every fixture; attacker-influenced values reach only escaped text after the style element; all three golden sets differ only in the consent page body and its CSP header, and each set rebuilt back to the old body with zero mismatches (publication-oauth 53 steps, publication-mcp 60, publication-token 43). One should-fix, label overflow at large text, is fixed in `14179d78`.
   - Sonnet design review: no visual defect; confirmed the colours and button values equal the site's; asked for the drift test and the document changes, which are in this round.
-- The changes in this round (Libron, `font-src 'self'`, label wrap, drift test, tap highlight, documents, re-recorded fixtures) have not been independently reviewed yet.
+- Independent reviews of head `df3e6606` on 2026-11-13: a Claude Opus security and correctness review was clean (the policy's `font-src 'self'` resolves to `https://thesuperhuman.us` only; both fixed directives precede the request-derived origin; the style hash equals the served style bytes; all three golden sets differ only in the consent page body and its policy header, with zero residual after removing the added markup; 21 of 21 tests pass) and a Claude Sonnet design and rules review found no visual defect and asked for the document fixes made in this revision. This revision's one style change (a smaller heading minimum, for 320px with doubled text) is covered by the measurements below and by the bot reviews on the final head.
 
 ## Hallmark audit
 
-- Result: PASS, with limits. Run on 2026-11-13 by an independent Claude Sonnet reviewer, read-only, on the first two commits (`6151aa50`, `76f3fefb`), from the source and four renders (desktop, phone, focus, 320px).
-- Defects found: none.
-- Checked: contrast (body 18.21:1, muted 8.36:1, button label on accent 4.78:1, focus ring 4.78:1), visible focus, the 44px target, no horizontal overflow at 320px, the action visible in the first screen, no `transition: all`, no `outline: none`, no gradients or shadows, no em dashes.
-- Set aside, as `docs/design-standard.md` allows: the raw-hex gate (the page inlines tokens as literals under its own Content-Security-Policy; this is recorded in `design.md` and guarded by a test) and the missing-stamp findings.
-- Design choices noted for the owner, not changed: whether the consent sentence should be set in ink, how the return address is styled, and the gap above the button.
-- Not run: the structural fingerprint (not applicable to a one-form page), the slop test against pixels, and any check in Safari or Firefox.
-- After that audit the page gained Libron, the wrapping button label and the smaller heading minimum. The coordinating session viewed the renders of that round and found the heading splitting a word at 200% text; `2fbd48ed` fixes it. The audit does not cover `2fbd48ed` or later; the re-render check is in Heading fit above.
+- A first read-only Hallmark audit covered the first two commits (`6151aa50`, `76f3fefb`) and found no defect. A second read-only Hallmark audit by an independent Claude Sonnet reviewer covered head `df3e6606` from the source and five renders (desktop, phone, focus, 320px, 200% text). It found no visual defect. It found two document defects, both fixed in this revision (the `design.md` one-line button rule now records this page's exception, and the large-text render is now captured full page). It set aside the raw-hex, zero-chroma, two-line-button, `overflow-wrap`, `disabled` and stamp findings for the reasons in `docs/design-standard.md`. It sent these to the owner as design choices, unchanged here: the heading sitting on two lines on desktop, the 13px sans cancel note, whether the return address should be set in ink, and the bold client name. Not run: the structural fingerprint (not applicable), and any check in a real browser other than Chromium, on a device or in forced-colors mode.
+- Result: PASS, with limits.
 
 ## Contrast (from the first review, unchanged in this round)
 
-Body text 18.21:1, muted text 8.36:1, button label on accent 4.78:1, focus ring 4.78:1.
+Body text 18.21:1, muted text 8.36:1, button label on accent 4.78:1, focus ring 4.78:1. The colours have not changed since the first audit.
 
 ## Evidence
 
-Local runs on macOS arm64, Node 26.13.1, pnpm on the branch at `2fbd48ed`:
+Local runs on macOS arm64, Node 26.13.1, pnpm, on code commit `77c047e8`:
 
-- Test first: each new assertion was run before its change and failed for the expected reason (font faces, `font-src`, label wrap, tap highlight, and in `2fbd48ed` the h1 clamp and the absence of `overflow-wrap: anywhere`). After each change the publication login tests passed. Final: `tests/lib/publication-login.test.ts`, 21 of 21.
-- `pnpm test`: 264 files, 11,986 passed, 1 skipped.
-- `pnpm run format`: fixed 1 file (the test file). `pnpm run format:check`: no fixes, 693 files.
-- `pnpm run lint`: FAIL (pre-existing, not from this change). 64 findings in total, none in a file this PR touches. The three touched files (`src/lib/publication/oauth-login.ts`, `tests/lib/publication-login.test.ts`, `design.md`) have none; the two lint findings this PR had in its test file were fixed in `c9b1c20c`.
+- Test first: the h1 clamp assertion was changed to `1.25rem` and failed on the old value (`clamp(1.5rem …)`), then passed after the one-line change. The drift test and the test rename were added and pass. Final: `tests/lib/publication-login.test.ts`, 22 of 22.
+- `pnpm test`: 264 files, 11,987 passed, 1 skipped.
+- `pnpm run format`: no fixes, 693 files. `pnpm run format:check`: no fixes, 693 files.
+- `pnpm run lint`: FAIL (pre-existing, not from this change). 64 findings, none in a file this PR touches (`src/lib/publication/oauth-login.ts`, `tests/lib/publication-login.test.ts`, `design.md`, `docs/design-standard.md`, `docs/design-concepts/2026-11-12/button-inventory.md`).
 - `pnpm run check`: 0 errors, 0 warnings, 17 hints.
 - `pnpm run design:check`: passed, 6 gates, 12 allowlisted exceptions.
 - `pnpm run build`: exit 0, "Complete!". The built worker contains the Libron font path.
-- Golden fixtures: `UPDATE_GOLDEN=1` run once per file; then `pnpm exec vitest run` on the three files passed (publication-oauth 125 tests, publication-mcp 61, publication-token 43). `node scripts/golden-diff.mjs diff <set> origin/main`:
-  - publication-oauth: 53 cases changed; every differing path is `body` or `headers.content-security-policy`.
-  - publication-mcp: 60 cases changed; every differing path is `body` or `headers.content-security-policy`.
-  - publication-token: 42 cases changed, 43 steps changed (one case has two consent steps); every differing path is `body` or `headers.content-security-policy`.
-- Renders, from the page HTML and its real CSP header, served from the Astro dev server on `127.0.0.1:4323` (the screenshots config), with other hosts blocked, at device scale factor 2. Files are in the gitignored `.screenshots/` folder and are not attached:
+- Golden fixtures: `UPDATE_GOLDEN=1` run once per file on `77c047e8`; `pnpm exec vitest run` on the three files passed. The golden comparison below uses `node scripts/golden-diff.mjs diff <set> origin/main`, and a residual check removes the added markup from each differing body (the `style` block, `<meta name="color-scheme">`, and the `class` attributes on the return address and cancel note) and the two added CSP directives (`style-src`, `font-src`) before comparing:
+  - publication-oauth: 124 cases; 53 cases differ (52 steps in the consent step, 1 step in the callback case's first step); every differing path is `body` or `headers.content-security-policy`; residual after removing the added markup: 0.
+  - publication-mcp: 60 cases; 60 cases differ; every differing path is `body` or `headers.content-security-policy`; residual: 0.
+  - publication-token: 42 cases; 42 cases differ, 43 consent steps in total (one case has two consent steps); every differing path is `body` or `headers.content-security-policy`; residual: 0.
+- Renders, from the page HTML and its real CSP header, served from the Astro dev server on `127.0.0.1:4323` (the screenshots config, which serves the same-origin fonts), with requests to other hosts blocked, at device scale factor 2. Files are in the gitignored `.screenshots/` folder and are not attached:
   - `.screenshots/sign-in-desktop.png` (1280x800)
   - `.screenshots/sign-in-phone.png` (390x844)
   - `.screenshots/sign-in-focus.png` (1280 wide, button focused with Tab)
   - `.screenshots/sign-in-320.png` (320 wide)
-  - `.screenshots/sign-in-large-text.png` (390 wide, root font size 200%)
-- Fonts under the real policy: `document.fonts` reports `Libron 400 loaded` and `Libron 700 loaded`; the `h1` computed `font-family` starts with `Libron`; `strong` computes to weight 700.
-- Console errors: none. CSP violations: none. Blocked external requests: none.
+  - `.screenshots/sign-in-large-text.png` (390 wide, root font size 200%, full page)
+  - `.screenshots/sign-in-320-large-text.png` (320 wide, root font size 200%, full page)
+- Fonts under the real policy: `document.fonts` reports `Libron 400 loaded` and `Libron 700 loaded` in every case; the `h1` computed `font-family` starts with `Libron`; `strong` computes to weight 700. The two files are 80,848 and 82,328 bytes.
+- Console errors: none. CSP violations: none. Blocked external requests: none (0 in every case).
 - Horizontal overflow (`documentElement.scrollWidth` against `clientWidth`): 320 wide 320/320; 390 wide 390/390; 390 wide with 200% root 390/390; 320 wide with 200% root 320/320.
-- Heading fit at 200% root, golden and style checks for `2fbd48ed`: see Heading fit above. Golden diff against `origin/main` after the re-record: publication-oauth 53 of 124 cases, publication-mcp 60 of 60, publication-token 43 steps in 42 cases; every differing step path is `body` or `headers.content-security-policy` and nothing else.
+- Noindex: the consent response carries no `X-Robots-Tag` header and no robots `meta` (`src/lib/publication/oauth-login.ts`; the route file does not add one). It renders only for a valid authorization request (client, PKCE, scope and resource are checked first), so a plain crawl cannot reach it. See Remaining work.
 
-## Heading fit at large text (fixed in `2fbd48ed`)
+## Heading fit and button label at large text (measured at `77c047e8`)
 
-- The title broke inside the word "publishing" at 200% root text on a 390px phone ("publishin" and "g"). The cause was the heading's 2rem minimum (64px at a doubled root) and `overflow-wrap: anywhere` on `main`.
-- Fix: the h1 size is `clamp(1.5rem, 8.2vw, 2.5rem)`, and `main` uses `overflow-wrap: break-word`, so a word breaks only when it cannot fit on a line by itself. A very long client name still wraps and stays visible.
-- Measured in Chromium after the fix (device scale factor 2, Libron loaded, CSP as served):
+Measured in Chromium with the root font size set through `document.documentElement.style.fontSize` (not the browser's own text size setting). Lines are read from the rendered characters, and a mid-word break is two adjacent letters on different lines.
 
-| Case | h1 font size | Lines (rendered text) | Mid-word break | scrollWidth / clientWidth |
+| Case | h1 font size | h1 lines (rendered) | h1 mid-word break | scrollWidth / clientWidth |
 | --- | --- | --- | --- | --- |
-| 320px, default root | 26.24px | "Connect project " / "publishing" (2) | none | 320 / 320 |
-| 390px, default root | 31.98px | "Connect project " / "publishing" (2) | none | 390 / 390 |
-| 390px, root 200% | 48px | "Connect " / "project " / "publishing" (3) | none | 390 / 390 |
+| 1280px, default root | 40px | "Connect project" / "publishing" (2) | none | 1280 / 1280 |
+| 320px, default root | 26.24px | "Connect project" / "publishing" (2) | none | 320 / 320 |
+| 390px, default root | 31.98px | "Connect project" / "publishing" (2) | none | 390 / 390 |
+| 390px, root 200% | 40px | "Connect" / "project" / "publishing" (3) | none | 390 / 390 |
+| 320px, root 200% | 40px | "Connect" / "project" / "publishing" (3) | none | 320 / 320 |
 
-- The five renders (`.screenshots/sign-in-desktop.png`, `sign-in-phone.png`, `sign-in-focus.png`, `sign-in-320.png`, `sign-in-large-text.png`) each show the title on whole words. The focus render shows the button's focus ring.
-- Console errors: none. CSP violations: none. Blocked external requests: none. Libron 400 and 700 loaded in every case. The preview server was stopped and port 4323 was free afterwards.
-- The 200% check was emulated: the root font size was set to 200% with `document.documentElement.style.fontSize` in Chromium. It did not use the browser's own text size setting.
+At 200% the h1 is 40px, the 1.25rem minimum at a 32px root. Before this revision the minimum was 1.5rem (48px at 200%), and at 320px with 200% text the word "publishing" did not fit its 224px column.
+
+| Case | Button label lines (rendered) | Button box (w x h, css px) | Label box inside the rounded outline | Button border radius | Label mid-word break |
+| --- | --- | --- | --- | --- | --- |
+| 320px, default root | "Allow and sign in with" / "GitHub" (2) | 272 x 64.4 | yes (4 corners) | 999px | none |
+| 390px, default root | "Allow and sign in with GitHub" (1) | 281.8 x 44 | yes (4 corners) | 999px | none |
+| 390px, root 200% | "Allow and" / "sign in with" / "GitHub" (3) | 294 x 171.6 | yes (4 corners) | 999px | none |
+| 320px, root 200% | "Allow" / "and" / "sign in" / "with" / "GitHub" (5) | 224 x 261.2 | yes (4 corners) | 999px | none |
+
+The inside check compares the label's four corners with the button's rounded outline (radius clamped to half the button's smaller side, so the pill's ends are half-circles).
+
+Body text: at 320px with 200% text, the domain in the body paragraph breaks inside "thesuperhuman.us" ("thesuperhum" / "an.us."), because the token is wider than the column and `main` uses `overflow-wrap: break-word`. At 390px with 200% text the full stop of the same domain sits alone on its own line. The heading and button measurements above do not cover body text. This is recorded under Remaining work for the owner to decide, and it is not changed in this revision.
+
+What the renders show (each read as an image):
+
+- `sign-in-320-large-text.png` (320px, 200%, full page): the title sits on three lines, "Connect / project / publishing", with no word split. The body copy wraps to many short lines, and the domain breaks as described above. The return address is on three lines. The button is a tall pill (224 x 261) with the label on five lines, all inside the rounded outline. The button sits below the return address, and "Close this page to cancel." is under it. Nothing is cut off, and no text runs past the column.
+- `sign-in-large-text.png` (390px, 200%, full page): the title on three lines, the button a tall pill (294 x 172) with the label on three lines, inside the outline. The domain's full stop is on its own line in the body.
+- `sign-in-320.png` (320px): the title on two lines, "Connect project" / "publishing". The button is a two-line pill, 272 wide, and the label is complete.
+- `sign-in-phone.png` (390px): the title on two lines. The one-line button sits in the column, and the cancel note is below it.
+- `sign-in-desktop.png` (1280px): the title on two lines (a design choice the Hallmark reviewer raised, unchanged), the button on one line, the cancel note below.
+- `sign-in-focus.png` (1280px): the button with the 2px accent focus ring after one Tab press; the focused element is the BUTTON.
 
 ## Deviation from the brief
 
-- The drift test checks the cancel note's sans stack against `--font-sans` without `'Inter'`, the first family in that token. Inter is not self-hosted, and the policy admits no font host, so the note keeps the system part of the stack, as the brief asked. Adding `'Inter'` to the note is a one-line change if the owner wants it.
+- The drift test checks the cancel note's sans stack against `--font-sans` without `'Inter'`, the first family in that token. Inter is not self-hosted, and the policy admits no font host, so the note keeps the system part of the stack. Adding `'Inter'` to the note is a one-line change if the owner wants it.
 
-## UNVERIFIED until checked
+## 1. Purpose and content
 
-- Safari and Firefox, and a real phone. The renders above are Chromium only.
-- 200% text size in a real browser's own text size setting. The fit at 200% was checked only by setting the root font size to 200% in Chromium (see Heading fit).
-- Forced-colors mode.
-- The page in production with its real policy. The fonts are served from the same origin as the page; this is inferred from `wrangler.jsonc` (static assets from `./dist`, Worker route for `/api/publication/*`) and from the dev server, not observed on the live site.
-- Hallmark audit of the final head: not run on the current page (see Hallmark audit below for what was run, and on which commits).
-- Independent review of the final head (a second review of `2fbd48ed` and later is remaining work).
+- **UNVERIFIED · Project, branch, local changes, instructions and audience.** One branch from `origin/main`; the changes are the code commits listed above and the document commit. Deployment authorization: not given by this record. The owner has not yet seen the 1.25rem heading minimum (see Owner decisions).
+- **PASS · Approved design and truthful claims.** The look is the owner's approved restyle. No professional claim, copy or image changed.
+- **N/A · Explanatory copy.** No copy changed; the consent sentences are as before.
+- **N/A · First screen and next step.** This is a consent page, not a site page. Its one action is the button, which the renders show at every width measured.
+- **N/A · Navigation, footer and contact route.** The page has no navigation, footer or links; its only other destination is the form action.
 
-## Not in the Screenshots workflow
+## 2. Search and sharing
 
-The Screenshots workflow does not capture this page, because the page needs a valid authorization request. Remaining work: add a scenario in `scripts/screenshots/scenarios/` that makes one. The renders above were made locally.
+- **N/A · Titles and descriptions.** The page title "Connect project publishing" is unchanged. The page has no meta description and is not an indexable content page.
+- **N/A · Canonical URLs.** No canonical link; the page is not an indexable content page.
+- **N/A · Open Graph and social card.** The page is not shared.
+- **N/A · Favicon and Apple touch icon.** The page declares no icon; site-wide icons are unchanged.
+- **UNVERIFIED · robots.txt and sitemap.** The sitemap script (`scripts/sitemap-pages.mjs`) has no publication entry. robots.txt was not checked in this PR.
+- **UNVERIFIED · Noindex on the consent response.** The response has no `X-Robots-Tag` and no robots `meta`. It renders only for a valid authorization request, so a crawler cannot reach it through a normal link, but production headers were not observed. This PR does not add noindex. Listed under Remaining work.
+- **N/A · Preview indexing and structured data.** No preview route or structured data on this page.
+
+## 3. Accessibility and responsive behavior
+
+- **PASS · Semantic landmarks, language and heading.** `html lang="en"`, one `main`, one `h1` ("Connect project publishing"), and the button's text names the action. Evidence: markup and the test that checks the h1 and the form.
+- **N/A · Images and icon-only controls.** The page has no images and no icon-only controls.
+- **PASS · Keyboard access and visible focus.** Tab moves focus to the button (focused element `BUTTON`). The focus render shows the 2px accent ring. The page has one control, so no trap is possible.
+- **N/A · Skip link, menus, dialogs.** None on the page.
+- **N/A · Inputs and status messages.** The only form field is the hidden nonce; there are no user inputs.
+- **PASS (limits) · Contrast and touch targets.** Contrast figures are those of the first Hallmark audit (see Contrast); the colours are unchanged. Button minimum height 44px, measured 44px at 1280px and 390px. Measured at 200% text only by setting the root font size in Chromium (see Heading fit); the browser's own text size setting is UNVERIFIED.
+- **N/A · Reduced motion.** The page has no animation or transition; the button's `:active` state changes opacity only.
+- **PASS (limits) · Widths.** 320, 390 and 1280 checked, with no horizontal overflow (scrollWidth equals the viewport in every case). Tablet widths were not rendered: UNVERIFIED.
+- **UNVERIFIED · Browsers and devices.** Chromium only. Safari, Firefox, a real phone and forced-colors mode were not run.
+
+## 4. Performance and resilience
+
+- **PASS (limits) · Font weights and files.** Only the Regular and Bold faces are declared and loaded (`Libron-Regular.woff2`, `Libron-Bold.woff2`), from the same origin, with `font-display: swap`. The Italic and BoldItalic files are not referenced by the page.
+- **UNVERIFIED · LCP, CLS and INP on a mobile profile.** Not measured.
+- **N/A · Images, embeds and audio.** None on the page.
+- **UNVERIFIED · Response headers and cache behavior on production.** The code sends `Cache-Control: no-store`, the policy and the referrer policy; production responses were not observed.
+- **N/A · Async UI and recovery.** The page has no async UI. The consent POST is unchanged.
+- **N/A · Branded 404 on arbitrary paths.** Unchanged in this PR; the route's unknown-path response is a plain 404 (`src/lib/publication/oauth.ts` and `oauth-login.ts`).
+
+## 5. Forms and sensitive flows
+
+- **PASS · Form shape.** The form is unchanged: a native POST to `/api/publication/authorize` with a hidden nonce and no JavaScript. Covered by the publication login tests, which check the form, the action and the hidden nonce, and by the golden comparison, which shows no change to the POST route.
+- **PASS · No JavaScript needed.** The page has no `<script>` element (asserted by the tests) and the form posts natively. Not run in a browser with JavaScript disabled in this PR.
+- **PASS · Server-side origin, nonce and state checks.** The consent POST is unchanged. Tests cover a cross-site POST, a wrong nonce, expired browser state, and a callback with a tampered state (`tests/lib/publication-login.test.ts`, 22 of 22 pass).
+- **UNVERIFIED · Error and load paths on the live route.** Timeouts, 429, 500, network failure and duplicate-submit prevention were not run against the live route. The route's upstream behavior is unchanged.
+- **N/A · Delivery and receipt.** No email is sent by this page.
+- **PASS · Approval-gated flow.** The consent step still precedes the GitHub sign-in; no remembered approval was added (existing test coverage).
+- **N/A · Inline confirmation.** No confirmation page is involved.
+
+## 6. Privacy, legal and measurement
+
+- **PASS · Inventory.** The page loads only its own inline style and two same-origin font files. No scripts, no external hosts (0 blocked requests in every render). The cookie set is the existing short-lived, sealed login cookie, unchanged.
+- **N/A · Privacy notice.** No new personal data is collected or stored; the data flow matches `origin/main`.
+- **N/A · Consent banner.** No nonessential cookie or processing is added.
+- **N/A · Terms and legal disclosures.** Nothing added.
+- **N/A · Analytics.** None added.
+- **N/A · Monitoring.** No change to logs or monitoring.
+
+## 7. Release and final QA
+
+- **PASS · Type, test, asset and build checks.** `pnpm run check`: 0 errors, 0 warnings, 17 hints. `pnpm run design:check`: passed. `pnpm test`: 264 files, 11,987 passed, 1 skipped. `pnpm run build`: exit 0.
+- **FAIL (pre-existing, not from this change) · Lint.** 64 findings, none in a file this PR touches. Open PRs #256 to #258 remove these findings, per the closing-legal record.
+- **PASS · Exact diff.** The diff is limited to the files listed under Scope and the document commit. No secrets, no unrelated changes, no generated files committed (`.screenshots/` and `.jolli/` are not committed).
+- **UNVERIFIED · Production bindings, secrets and headers on dynamic responses.** Not deployed; no production response was observed.
+- **PASS · Rollback version.** `fad7694e`. No backup is needed: the PR writes no data and adds no migration.
+- **N/A · Post-deploy verification.** Not deployed, and this record does not authorize deployment.
+- **UNVERIFIED · Receipt and monitoring.** Not applicable until a deployment is authorized.
+
+## 8. Private owner center
+
+- **N/A · Owner center.** No owner route or owner page is changed in this PR.
+
+## Remaining work
+
+- Owner decision: the 1.25rem heading minimum (new in this revision). Show the 320px large-text render before merge.
+- Owner decision: the body domain "thesuperhuman.us" breaks inside the word at 320px with 200% text, and its full stop sits alone at 390px with 200% text (see Heading fit). A fix would change how long tokens wrap in the body copy.
+- Noindex: decide whether the consent response should carry `X-Robots-Tag: noindex`. It is not added here, because it changes behavior.
+- Follow-up outside this PR (pre-existing): reject redirect origins containing `;` or `,` when a client registers. An injected directive can only tighten the policy.
+- Remaining checks listed as UNVERIFIED above: Safari and Firefox, a real phone, the browser's own 200% text setting, forced-colors mode, tablet widths, production headers and cache behavior, and the live error paths.
+- Optional: add a Screenshots scenario in `scripts/screenshots/scenarios/` that makes a valid authorization request, so CI captures this page.
 
 ## Deployment
 
