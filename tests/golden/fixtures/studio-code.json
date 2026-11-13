@@ -7393,7 +7393,361 @@
 		"final": null
 	},
 	{
-		"name": "a resolved request still gets a code",
+		"name": "a request seeded as resolved still gets a code",
+		"steps": [
+			{
+				"request": {
+					"actor": "visitor 203.0.113.9",
+					"method": "POST",
+					"path": "/api/studio/code",
+					"body": "{\"email\":\"grace@example.test\",\"turnstileToken\":\"tok\"}"
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"content-type": "application/json"
+					},
+					"setCookies": [],
+					"body": "{\"ok\":true,\"message\":\"If this email has a studio project, a sign-in code is on its way.\"}"
+				},
+				"state": {
+					"music": {
+						"audio_client_codes": [
+							{
+								"email": "grace@example.test",
+								"code_hash": "aef3a5347948ac59ade77afeb4722f7fa339cb0b52f0f380cf17e863843b1695",
+								"attempts": 0,
+								"created_at": "2026-11-13T12:00:00.000Z",
+								"expires_at": "2026-11-13T12:10:00.000Z",
+								"used_at": null,
+								"session_token_hash": null
+							}
+						],
+						"audio_client_sessions": [],
+						"audio_client_access_audit": [
+							{
+								"id": 1,
+								"request_id": "r1",
+								"action": "code-issued",
+								"occurred_at": "2026-11-13T12:00:00.000Z"
+							}
+						],
+						"audio_client_allowances": [
+							{
+								"key": "ec7ede1814e6e2a17922379e36309c73dcfab59bfe3494a421e975525fd9c57e",
+								"window_start": "2026-11-13T12:00:00.000Z",
+								"uses": 1
+							},
+							{
+								"key": "f0bf684934c38869e9b67c9e403a299cea7a2398d2e368fa8ec8ed5b489fe8a0",
+								"window_start": "2026-11-13T12:00:00.000Z",
+								"uses": 1
+							}
+						]
+					}
+				}
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "DELETE FROM audio_client_allowances WHERE window_start<=?",
+						"args": ["2026-11-13T11:55:00.000Z"],
+						"outcome": {
+							"rows": 0,
+							"changes": 0
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)\n      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start",
+						"args": [
+							"ec7ede1814e6e2a17922379e36309c73dcfab59bfe3494a421e975525fd9c57e",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 1,
+							"changes": null
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "fetch",
+				"host": "turnstile",
+				"url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+				"method": "POST",
+				"headers": {},
+				"body": "secret=ts_test_secret&response=tok&remoteip=203.0.113.9",
+				"hasSignal": true,
+				"answered": "200",
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "DELETE FROM audio_client_allowances WHERE window_start<=?",
+						"args": ["2026-11-13T11:55:00.000Z"],
+						"outcome": {
+							"rows": 0,
+							"changes": 0
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)\n      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start",
+						"args": [
+							"f0bf684934c38869e9b67c9e403a299cea7a2398d2e368fa8ec8ed5b489fe8a0",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 1,
+							"changes": null
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)\n      SELECT ?,?,0,?,?,NULL,NULL WHERE EXISTS (SELECT p.request_id FROM (SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL) p\n  JOIN owner_requests r ON r.id=p.request_id\n  WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL)\n      ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,\n      created_at=excluded.created_at,expires_at=excluded.expires_at,used_at=NULL,session_token_hash=NULL\n      WHERE audio_client_codes.created_at<=? OR audio_client_codes.used_at IS NOT NULL OR audio_client_codes.expires_at<=?\n      RETURNING email",
+						"args": [
+							"grace@example.test",
+							"aef3a5347948ac59ade77afeb4722f7fa339cb0b52f0f380cf17e863843b1695",
+							"2026-11-13T12:00:00.000Z",
+							"2026-11-13T12:10:00.000Z",
+							"grace@example.test",
+							"2026-11-13T11:59:30.000Z",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 1,
+							"changes": null
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_access_audit(request_id,action,occurred_at)\n      SELECT p.request_id,'code-issued',? FROM (SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL) p JOIN owner_requests r ON r.id=p.request_id\n      WHERE r.email=? AND p.revoked_at IS NULL\n        AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND created_at=?)",
+						"args": [
+							"2026-11-13T12:00:00.000Z",
+							"grace@example.test",
+							"grace@example.test",
+							"aef3a5347948ac59ade77afeb4722f7fa339cb0b52f0f380cf17e863843b1695",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 0,
+							"changes": 1
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "waitUntil",
+				"id": 1,
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "fetch",
+				"host": "resend",
+				"url": "https://api.resend.com/emails",
+				"method": "POST",
+				"headers": {
+					"authorization": "[redacted]",
+					"content-type": "application/json"
+				},
+				"body": "{\"from\":\"site@example.test\",\"to\":[\"grace@example.test\"],\"subject\":\"Your studio sign-in code\",\"html\":\"<!doctype html>\\n<html lang=\\\"en\\\"><head><meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\">\\n<meta name=\\\"color-scheme\\\" content=\\\"light\\\"><meta name=\\\"supported-color-schemes\\\" content=\\\"light\\\">\\n<title>Your code</title>\\n<!--[if !mso]><!--><link href=\\\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz@6..72&display=swap\\\" rel=\\\"stylesheet\\\"><!--<![endif]-->\\n</head>\\n<body style=\\\"margin:0;padding:0;background:#FBF8F2;\\\">\\n<div style=\\\"display:none;mso-hide:all;max-height:0;overflow:hidden;opacity:0;\\\">Your studio sign-in code.</div>\\n<table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" style=\\\"background:#FBF8F2;\\\"><tr><td align=\\\"center\\\" style=\\\"padding:32px 16px;\\\">\\n<!--[if mso]><table role=\\\"presentation\\\" width=\\\"600\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\"><tr><td><![endif]-->\\n<table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" style=\\\"max-width:600px;background:#FFFDF9;border:1px solid #E8E3DA;\\\">\\n<tr><td style=\\\"padding:24px 32px 20px;border-bottom:1px solid #E8E3DA;\\\"><table role=\\\"presentation\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\"><tr><td style=\\\"padding-right:12px;\\\"><img src=\\\"https://thesuperhuman.us/apple-touch-icon.png\\\" width=\\\"40\\\" height=\\\"40\\\" alt=\\\"\\\" style=\\\"display:block;border:0;\\\"></td><td style=\\\"font-family:Newsreader, Georgia, 'Times New Roman', serif;font-size:20px;line-height:1.2;font-weight:400;color:#0E0E0E;\\\">Kazon Wilson</td></tr></table></td></tr>\\n<tr><td style=\\\"padding:32px 32px 24px;\\\">\\n<p style=\\\"margin:0 0 16px;font-family:Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;line-height:1.4;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#AE5534;\\\">Sign in</p>\\n<h1 style=\\\"margin:0 0 20px;font-family:Newsreader, Georgia, 'Times New Roman', serif;font-size:34px;line-height:1.2;font-weight:400;color:#0E0E0E;\\\">Your code</h1>\\n<table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" style=\\\"margin:8px 0 20px;\\\"><tr>\\n    <td align=\\\"center\\\" style=\\\"background:#F1ECE3;padding:22px 12px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:34px;line-height:1;font-weight:500;letter-spacing:4px;color:#0E0E0E;\\\">8483 5301</td></tr></table><p style=\\\"margin:0 0 8px;font-family:Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:13px;line-height:1.5;font-weight:400;color:#4A4A4A;\\\">This code expires in 10 minutes. If you didn’t ask for it, you can ignore this email.</p><p style=\\\"margin:4px 0 20px;\\\"><a href=\\\"https://thesuperhuman.us/studio/sign-in\\\" style=\\\"font-family:Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:16px;line-height:1.5;font-weight:400;color:#AE5534;text-decoration:underline;\\\">Open the sign-in page</a></p>\\n</td></tr>\\n<tr><td style=\\\"padding:20px 32px 28px;border-top:1px solid #E8E3DA;\\\">\\n<p style=\\\"margin:0 0 6px;font-family:Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;line-height:1.5;font-weight:400;color:#0E0E0E;\\\">The Superhuman Group LLC</p>\\n<p style=\\\"margin:0;font-family:Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;font-size:12px;line-height:1.5;font-weight:400;color:#4A4A4A;\\\">You received this because you requested a studio sign-in code.</p>\\n</td></tr></table>\\n<!--[if mso]></td></tr></table><![endif]-->\\n</td></tr></table>\\n</body></html>\",\"text\":\"Your code\\n\\n8483 5301\\n\\nThis code expires in 10 minutes. If you didn’t ask for it, you can ignore this email.\\n\\nOpen the sign-in page: https://thesuperhuman.us/studio/sign-in\\n\\nKazon\\n\\n--\\nThe Superhuman Group LLC\\nYou received this because you requested a studio sign-in code.\"}",
+				"hasSignal": true,
+				"answered": "200",
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "waitUntil-settled",
+				"id": 1,
+				"outcome": "fulfilled",
+				"error": null,
+				"step": 0,
+				"phase": "background"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a request resolved before acceptance has its project revoked",
+		"steps": [
+			{
+				"request": {
+					"actor": "visitor 203.0.113.9",
+					"method": "POST",
+					"path": "/api/studio/code",
+					"body": "{\"email\":\"grace@example.test\",\"turnstileToken\":\"tok\"}"
+				},
+				"answer": {
+					"outcome": "response",
+					"status": 200,
+					"headers": {
+						"content-type": "application/json"
+					},
+					"setCookies": [],
+					"body": "{\"ok\":true,\"message\":\"If this email has a studio project, a sign-in code is on its way.\"}"
+				},
+				"state": {
+					"music": {
+						"audio_client_codes": [],
+						"audio_client_sessions": [],
+						"audio_client_access_audit": [],
+						"audio_client_allowances": [
+							{
+								"key": "ec7ede1814e6e2a17922379e36309c73dcfab59bfe3494a421e975525fd9c57e",
+								"window_start": "2026-11-13T12:00:00.000Z",
+								"uses": 1
+							},
+							{
+								"key": "f0bf684934c38869e9b67c9e403a299cea7a2398d2e368fa8ec8ed5b489fe8a0",
+								"window_start": "2026-11-13T12:00:00.000Z",
+								"uses": 1
+							}
+						]
+					}
+				}
+			}
+		],
+		"effects": [
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "DELETE FROM audio_client_allowances WHERE window_start<=?",
+						"args": ["2026-11-13T11:55:00.000Z"],
+						"outcome": {
+							"rows": 0,
+							"changes": 0
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)\n      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start",
+						"args": [
+							"ec7ede1814e6e2a17922379e36309c73dcfab59bfe3494a421e975525fd9c57e",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 1,
+							"changes": null
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "fetch",
+				"host": "turnstile",
+				"url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+				"method": "POST",
+				"headers": {},
+				"body": "secret=ts_test_secret&response=tok&remoteip=203.0.113.9",
+				"hasSignal": true,
+				"answered": "200",
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "DELETE FROM audio_client_allowances WHERE window_start<=?",
+						"args": ["2026-11-13T11:55:00.000Z"],
+						"outcome": {
+							"rows": 0,
+							"changes": 0
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)\n      ON CONFLICT(key) DO UPDATE SET uses=uses+1 RETURNING uses,window_start",
+						"args": [
+							"f0bf684934c38869e9b67c9e403a299cea7a2398d2e368fa8ec8ed5b489fe8a0",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 1,
+							"changes": null
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			},
+			{
+				"kind": "d1-batch",
+				"db": "MUSIC_DB",
+				"result": "committed",
+				"error": null,
+				"statements": [
+					{
+						"sql": "INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)\n      SELECT ?,?,0,?,?,NULL,NULL WHERE EXISTS (SELECT p.request_id FROM (SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL) p\n  JOIN owner_requests r ON r.id=p.request_id\n  WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL)\n      ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,\n      created_at=excluded.created_at,expires_at=excluded.expires_at,used_at=NULL,session_token_hash=NULL\n      WHERE audio_client_codes.created_at<=? OR audio_client_codes.used_at IS NOT NULL OR audio_client_codes.expires_at<=?\n      RETURNING email",
+						"args": [
+							"grace@example.test",
+							"aef3a5347948ac59ade77afeb4722f7fa339cb0b52f0f380cf17e863843b1695",
+							"2026-11-13T12:00:00.000Z",
+							"2026-11-13T12:10:00.000Z",
+							"grace@example.test",
+							"2026-11-13T11:59:30.000Z",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 0,
+							"changes": null
+						}
+					},
+					{
+						"sql": "INSERT INTO audio_client_access_audit(request_id,action,occurred_at)\n      SELECT p.request_id,'code-issued',? FROM (SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL) p JOIN owner_requests r ON r.id=p.request_id\n      WHERE r.email=? AND p.revoked_at IS NULL\n        AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND created_at=?)",
+						"args": [
+							"2026-11-13T12:00:00.000Z",
+							"grace@example.test",
+							"grace@example.test",
+							"aef3a5347948ac59ade77afeb4722f7fa339cb0b52f0f380cf17e863843b1695",
+							"2026-11-13T12:00:00.000Z"
+						],
+						"outcome": {
+							"rows": 0,
+							"changes": 0
+						}
+					}
+				],
+				"step": 0,
+				"phase": "request"
+			}
+		],
+		"final": null
+	},
+	{
+		"name": "a request resolved after acceptance still gets a code",
 		"steps": [
 			{
 				"request": {

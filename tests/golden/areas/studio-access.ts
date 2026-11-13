@@ -5,6 +5,7 @@ import { hashValue, keyedHash } from "~/lib/audio-client-access";
 import {
 	DEFAULT_ENV,
 	rows,
+	uuidFor,
 	type Seed,
 	type SeedRow,
 	type World,
@@ -36,6 +37,13 @@ export async function makeToken(n: number): Promise<Token> {
 
 	return { value, hash: await hashValue(value) };
 }
+
+/** The token the first successful sign-in of a case is given: the first two UUIDs the clock hands out, joined. */
+export const FIRST_SIGN_IN_TOKEN: Token = await (async () => {
+	const value = `${uuidFor(1)}${uuidFor(2)}`;
+
+	return { value, hash: await hashValue(value) };
+})();
 
 export const T1 = await makeToken(1);
 export const T2 = await makeToken(2);

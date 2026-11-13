@@ -63,7 +63,8 @@ import {
 //                                         audio project, revoked software project, software content deleted, code under 30
 //                                         seconds old, a lost race (another request inserted the code first), project revoked
 //                                         between the allowance and the issue
-//   200 generic, mail                     audio project, software project, resolved request, two projects (two audit rows), a
+//   200 generic, mail                     audio project, software project, resolved request (a request resolved before
+//                                         acceptance has its project revoked by a trigger: no code), two projects (two audit rows), a
 //                                         withdrawn request next to an active one (audit row for both: no withdrawn filter in
 //                                         the audit insert), a code replaced after 30 seconds, a used code replaced at once, an
 //                                         expired code replaced
@@ -398,8 +399,19 @@ const cases: Case[] = [
 	open("a withdrawn request", {
 		music: { seed: audioClient("r1", GRACE, { status: "withdrawn" }) },
 	}),
-	open("a resolved request still gets a code", {
+	open("a request seeded as resolved still gets a code", {
 		music: { seed: audioClient("r1", GRACE, { status: "resolved" }) },
+	}),
+	open("a request resolved before acceptance has its project revoked", {
+		music: { seed: client },
+		setup: sql("UPDATE owner_requests SET status='resolved'"),
+	}),
+	open("a request resolved after acceptance still gets a code", {
+		music: { seed: client },
+		setup: sql(
+			"UPDATE audio_projects SET stage='in_progress' WHERE request_id='r1'",
+			"UPDATE owner_requests SET status='resolved'",
+		),
 	}),
 	open("a revoked audio project", {
 		music: { seed: client },
