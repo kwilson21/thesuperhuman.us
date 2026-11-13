@@ -1,0 +1,540 @@
+// The world one case runs in: databases with the real schema, an R2 bucket, KV namespaces, fetch, Workers AI, rate
+// limits, ctx.waitUntil, a frozen clock, and the ordered effect log they all write to. Then the runner that sends a
+// case's steps through a route handler and records what came back.
+import type { APIContext } from "astro";
+import { afterAll, describe, it, vi } from "vitest";
+import { double, partial } from "../../helpers/doubles";
+import type { JsonValue } from "../../helpers/json";
+import type { TestRuntime } from "../../helpers/runtime";
+import type { SqliteDatabase } from "../../helpers/sqlite-d1";
+import { POST as studioCode } from "~/pages/api/studio/code";
+import { POST as studioSession } from "~/pages/api/studio/session";
+import { actorLabel, asVisitor, OWNER_EMAIL, type Actor } from "./actors";
+import { dump, freshMusicDb, freshPublicationDb, seed, type Seed } from "./db";
+import { Determinism } from "./determinism";
+import {
+	recordingD1,
+	SqlHooks,
+	type InjectedFailure,
+	type Interleave,
+} from "./d1";
+import { expectRecorded, settleFixture } from "./fixtures";
+import { recordingKv, type KvSetup } from "./kv";
+import { EffectLog, type Effect } from "./log";
+import {
+	byHost,
+	json,
+	recordingAi,
+	recordingFetch,
+	recordingRateLimit,
+	type AiAnswer,
+	type Responder,
+} from "./net";
+import { byteRecord, errorText, type Recorded } from "./plain";
+import { recordingR2, type R2Setup } from "./r2";
+
+export type Handler = (context: APIContext) => Response | Promise<Response>;
+
+const ORIGIN = "https://thesuperhuman.us";
+
+/** The code key and the other env members every case gets, unless it changes or omits them. */
+export const DEFAULT_ENV: Partial<Env> = {
+	RESEND_API_KEY: "re_test_key",
+	TURNSTILE_SECRET_KEY: "ts_test_secret",
+	CONTACT_TO_EMAIL: "kazon@example.test",
+	CONTACT_FROM_EMAIL: "site@example.test",
+	SITE_ORIGIN: ORIGIN,
+	OWNER_EMAIL,
+	MUSIC_EVENTS_ENABLED: "true",
+	AUDIO_CLIENT_PORTAL_ENABLED: "true",
+	AUDIO_CLIENT_CODE_KEY: "golden-corpus-studio-code-key-0123456789",
+	STRIPE_PAYMENTS_ENABLED: "true",
+	STRIPE_SECRET_KEY: "sk_test_golden",
+	STRIPE_WEBHOOK_SECRET: "whsec_golden",
+};
+
+/** Env members that are plain text, so a case can set or drop them. */
+export type EnvText = {
+	[Name in keyof Env as Env[Name] extends string | undefined
+		? Name
+		: never]?: Env[Name];
+};
+
+export type DbSetup = {
+	/** The database is not bound at all (the env has no such member). */
+	readonly missing?: boolean;
+	readonly seed?: Seed;
+};
+
+/** Which tables to dump, per database, to record their rows. */
+export type Dump = {
+	readonly music?: readonly string[];
+	readonly publication?: readonly string[];
+	/** Record what the R2 bucket holds. */
+	readonly r2?: boolean;
+	/** Record what these KV namespaces hold. */
+	readonly kv?: readonly KvName[];
+};
+
+export type KvName = "RATE_LIMIT" | "RESUME_STORE" | "OAUTH_KV";
+
+export type RateLimitName =
+	| "BRIEF_SUGGEST_RATE_LIMIT"
+	| "BRIEF_SUGGEST_SITE_LIMIT";
+
+/** One request. */
+export type Step = {
+	/** Who sends it. Default: an anonymous visitor. */
+	readonly as?: Actor;
+	/** A different handler for this step, for a sequence that crosses routes. Default: the corpus handler. */
+	readonly handler?: Handler;
+	/** Default POST. */
+	readonly method?: string;
+	/** The path and query, such as "/api/owner/requests/r1?x=1". */
+	readonly path: string;
+	/** Astro route params, such as { id: "r1" }. */
+	readonly params?: { readonly [name: string]: string | undefined };
+	/** A JSON body. Sets content-type to application/json unless `headers` gives one. */
+	readonly json?: JsonValue;
+	/** A raw text body, for malformed JSON and other non-JSON input. */
+	readonly body?: string;
+	readonly headers?: { readonly [name: string]: string };
+	/** Move the clock this many milliseconds before the request. */
+	readonly advanceMs?: number;
+	/** Runs before the request (and after the clock move), off the record except for a marker named `label`. */
+	readonly before?: {
+		readonly label: string;
+		readonly run: (world: World) => void | Promise<void>;
+	};
+	/** Record these tables' rows after this step. */
+	readonly dump?: Dump;
+};
+
+export type Case = {
+	readonly name: string;
+	readonly steps: readonly Step[];
+	/** MUSIC_DB. Default: present, empty, with the full schema. */
+	readonly music?: DbSetup;
+	/** PUBLICATION_DB. Default: present, empty, with the full schema. */
+	readonly publication?: DbSetup;
+	readonly r2?: R2Setup;
+	/** Namespaces by name. RATE_LIMIT and RESUME_STORE are always bound unless `missing`; the others only when listed. */
+	readonly kv?: { readonly [Name in KvName]?: KvSetup };
+	/** Answers for outgoing fetches. Default: every fetch throws, and the call is recorded. */
+	readonly fetches?: Responder;
+	/** Answers for env.AI.run, in order. Omit and AI is not bound. */
+	readonly ai?: readonly AiAnswer[];
+	/** Answers for rate-limit bindings, in order. A binding that is not listed is not bound. */
+	readonly rateLimits?: {
+		readonly [Name in RateLimitName]?: readonly boolean[];
+	};
+	readonly env?: EnvText;
+	/** Env members to remove, as a deployment that never set them. */
+	readonly omit?: readonly (keyof EnvText)[];
+	/** locals.runtime.ctx is absent, as in a route that reads `runtime?.ctx`. */
+	readonly noContext?: boolean;
+	readonly interleave?: readonly Interleave[];
+	readonly failures?: readonly InjectedFailure[];
+	/** Runs once before the first step, off the record, to seed with code (raw SQL on the databases). */
+	readonly setup?: (world: World) => void | Promise<void>;
+	/** Record these tables' rows (and stores) after the last step. */
+	readonly final?: Dump;
+};
+
+export type StepRecord = {
+	request: { actor: string; method: string; path: string; body: string | null };
+	answer:
+		| {
+				outcome: "response";
+				status: number;
+				headers: { [name: string]: string };
+				setCookies: string[];
+				body: string | Recorded;
+		  }
+		| { outcome: "rejected" };
+	state: Recorded | null;
+};
+
+export type CaseRecord = {
+	name: string;
+	steps: StepRecord[];
+	effects: Effect[];
+	final: Recorded | null;
+};
+
+/** What a case can reach while it runs, in `setup`, `before` and `interleave` hooks. */
+export type World = {
+	readonly music: SqliteDatabase;
+	readonly publication: SqliteDatabase;
+	readonly log: EffectLog;
+	/** Move the clock. Recorded. */
+	advance(ms: number): void;
+};
+
+type Pending = { id: number; promise: Promise<void> };
+
+const TEXTUAL =
+	/^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|[^;]*\+(json|xml))/i;
+
+function bodyOf(step: Step) {
+	return step.json === undefined
+		? { body: step.body ?? null, contentType: null }
+		: { body: JSON.stringify(step.json), contentType: "application/json" };
+}
+
+async function readAnswer(response: Response): Promise<StepRecord["answer"]> {
+	const contentType = response.headers.get("content-type") ?? "";
+	const bytes = new Uint8Array(await response.arrayBuffer());
+
+	const headers = Object.fromEntries(
+		[...response.headers.entries()]
+			.filter(([name]) => name !== "set-cookie")
+			.sort(([a], [b]) => a.localeCompare(b)),
+	);
+
+	return {
+		outcome: "response",
+		status: response.status,
+		headers,
+		setCookies: response.headers.getSetCookie(),
+		body:
+			bytes.length === 0 || TEXTUAL.test(contentType)
+				? new TextDecoder().decode(bytes)
+				: byteRecord(bytes),
+	};
+}
+
+/** Sends every step of the case to its handler, in order, and records what they answered and did. */
+export async function runCase(handler: Handler, c: Case): Promise<CaseRecord> {
+	const log = new EffectLog();
+	const clock = new Determinism(log);
+	clock.install();
+
+	try {
+		return await runInstalled(handler, c, log, clock);
+	} finally {
+		clock.restore();
+		vi.unstubAllGlobals();
+	}
+}
+
+async function runInstalled(
+	handler: Handler,
+	c: Case,
+	log: EffectLog,
+	clock: Determinism,
+): Promise<CaseRecord> {
+	const music = freshMusicDb();
+	const publication = freshPublicationDb();
+
+	if (c.music?.seed) seed(music, c.music.seed);
+
+	if (c.publication?.seed) seed(publication, c.publication.seed);
+
+	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? []);
+	const r2 = recordingR2("AUDIO", c.r2 ?? {}, log, clock.now, clock.nextFakeId);
+
+	const kvNames: KvName[] = ["RATE_LIMIT", "RESUME_STORE", "OAUTH_KV"];
+
+	const bound = (name: KvName) =>
+		(name === "RATE_LIMIT" || name === "RESUME_STORE" || c.kv?.[name]) &&
+		!c.kv?.[name]?.missing;
+
+	const kvs = Object.fromEntries(
+		kvNames.flatMap((name) =>
+			bound(name) ? [[name, recordingKv(name, c.kv?.[name] ?? {}, log)]] : [],
+		),
+	);
+
+	const env: Partial<Env> = { ...DEFAULT_ENV, ...c.env };
+
+	for (const name of c.omit ?? []) delete env[name];
+
+	if (!c.music?.missing)
+		env.MUSIC_DB = recordingD1("MUSIC_DB", music, log, hooks);
+
+	if (!c.publication?.missing)
+		env.PUBLICATION_DB = recordingD1("PUBLICATION_DB", publication, log, hooks);
+
+	if (!c.r2?.missing) env.AUDIO = r2.binding;
+
+	if (kvs.RATE_LIMIT) env.RATE_LIMIT = kvs.RATE_LIMIT.binding;
+
+	if (kvs.RESUME_STORE) env.RESUME_STORE = kvs.RESUME_STORE.binding;
+
+	if (kvs.OAUTH_KV) env.OAUTH_KV = kvs.OAUTH_KV.binding;
+
+	if (c.ai) env.AI = recordingAi(c.ai, log);
+
+	for (const name of [
+		"BRIEF_SUGGEST_RATE_LIMIT",
+		"BRIEF_SUGGEST_SITE_LIMIT",
+	] as const) {
+		const script = c.rateLimits?.[name];
+
+		if (script) env[name] = recordingRateLimit(name, script, log);
+	}
+
+	let responder: Responder =
+		c.fetches ??
+		(() => ({ kind: "throws", message: "golden harness: no fetch scripted" }));
+
+	vi.stubGlobal(
+		"fetch",
+		recordingFetch((call) => responder(call), log),
+	);
+
+	const pending: Pending[] = [];
+	let nextWaitId = 0;
+	let drained = 0;
+
+	const ctx = double<ExecutionContext>({
+		waitUntil: (promise: Promise<void>) => {
+			const id = ++nextWaitId;
+			log.push({ kind: "waitUntil", id });
+			pending.push({ id, promise });
+		},
+		passThroughOnException: () => {},
+	});
+
+	const drain = async () => {
+		while (drained < pending.length) {
+			const batch = pending.slice(drained);
+			drained = pending.length;
+
+			const settled = await Promise.allSettled(
+				batch.map((item) => item.promise),
+			);
+
+			for (const [index, result] of settled.entries())
+				log.push({
+					kind: "waitUntil-settled",
+					id: batch[index].id,
+					outcome: result.status,
+					error:
+						result.status === "rejected" && result.reason instanceof Error
+							? errorText(result.reason)
+							: null,
+				});
+		}
+	};
+
+	const world: World = {
+		music,
+		publication,
+		log,
+		advance: (ms) => clock.advance(ms),
+	};
+
+	const runtime = (owner?: { email: string }) => {
+		const fields = partial<TestRuntime>({
+			env: partial<TestRuntime["env"]>(env),
+		});
+
+		if (!c.noContext) fields.ctx = ctx;
+
+		return partial<App.Locals>({ owner, runtime: fields });
+	};
+
+	const tokens = new Map<string, string>();
+
+	const signIn = async (email: string): Promise<string> => {
+		const known = tokens.get(email);
+
+		if (known) return known;
+
+		const token = await log.unrecorded(async () => {
+			let mailText = "";
+			const before = responder;
+
+			responder = (call) => {
+				if (call.host === "resend") mailText = call.body ?? "";
+
+				return byHost({
+					turnstile: json(200, { success: true }),
+					resend: json(200, { id: "em_signin" }),
+				})(call);
+			};
+
+			const send = async (path: string, body: JsonValue) => {
+				const request = new Request(`${ORIGIN}${path}`, {
+					method: "POST",
+					headers: { "content-type": "application/json", origin: ORIGIN },
+					body: JSON.stringify(body),
+				});
+
+				return (path === "/api/studio/code" ? studioCode : studioSession)(
+					partial<APIContext>({
+						request,
+						url: new URL(request.url),
+						params: {},
+						locals: runtime(),
+					}),
+				);
+			};
+
+			const issued = await send("/api/studio/code", {
+				email,
+				turnstileToken: "golden",
+			});
+
+			await drain();
+			responder = before;
+
+			// The email shows the code as "1234 5678".
+			const spaced = /\b(\d{4}) (\d{4})\b/.exec(
+				JSON.parse(mailText || "{}").text ?? "",
+			);
+
+			const code = spaced ? `${spaced[1]}${spaced[2]}` : undefined;
+
+			if (!code)
+				throw new Error(
+					`golden harness: no sign-in code was issued for ${email} (the code route answered ${issued.status}). Seed an active project for that email.`,
+				);
+
+			const response = await send("/api/studio/session", { email, code });
+
+			const cookie = response.headers
+				.getSetCookie()[0]
+				?.match(/studio_session=([^;]+)/)?.[1];
+
+			if (!cookie)
+				throw new Error(
+					`golden harness: sign-in did not set a session for ${email}.`,
+				);
+
+			return cookie;
+		});
+
+		clock.resetIds();
+		tokens.set(email, token);
+
+		return token;
+	};
+
+	if (c.setup) await log.unrecorded(async () => c.setup?.(world));
+
+	const stores = (dumping: Dump | undefined): Recorded | null => {
+		if (!dumping) return null;
+
+		const out: { [name: string]: Recorded } = {};
+
+		if (dumping.music) out.music = dump(music, dumping.music);
+
+		if (dumping.publication)
+			out.publication = dump(publication, dumping.publication);
+
+		if (dumping.r2) out.r2 = r2.snapshot();
+
+		if (dumping.kv)
+			out.kv = Object.fromEntries(
+				dumping.kv.map((name) => [name, kvs[name]?.snapshot() ?? null]),
+			);
+
+		return out;
+	};
+
+	const records: StepRecord[] = [];
+
+	for (const [index, step] of c.steps.entries()) {
+		log.step = index;
+		log.phase = "request";
+
+		if (step.advanceMs) clock.advance(step.advanceMs);
+
+		if (step.before) {
+			log.push({ kind: "interleave", label: step.before.label });
+			await log.unrecorded(async () => step.before?.run(world));
+		}
+
+		const actor = step.as ?? asVisitor();
+		const method = (step.method ?? "POST").toUpperCase();
+		const { body, contentType } = bodyOf(step);
+		const headers = new Headers();
+
+		if (contentType) headers.set("content-type", contentType);
+
+		if (actor.kind === "visitor") {
+			if (actor.ip) headers.set("cf-connecting-ip", actor.ip);
+
+			for (const [name, value] of Object.entries(actor.headers))
+				headers.set(name, value);
+		}
+
+		if (actor.kind === "client")
+			headers.set("cookie", `studio_session=${await signIn(actor.email)}`);
+
+		if (actor.kind === "client-cookie")
+			headers.set("cookie", `studio_session=${actor.token}`);
+
+		for (const [name, value] of Object.entries(step.headers ?? {}))
+			headers.set(name, value);
+
+		const request = new Request(`${ORIGIN}${step.path}`, {
+			method,
+			headers,
+			body: method === "GET" || method === "HEAD" ? undefined : body,
+		});
+
+		if (actor.kind === "visitor" && actor.cf)
+			Object.defineProperty(request, "cf", { value: actor.cf });
+
+		const context = partial<APIContext>({
+			request,
+			url: new URL(request.url),
+			params: step.params ?? {},
+			locals: runtime(
+				actor.kind === "owner" ? { email: actor.email } : undefined,
+			),
+		});
+
+		let answer: StepRecord["answer"];
+
+		try {
+			answer = await readAnswer(await (step.handler ?? handler)(context));
+		} catch {
+			answer = { outcome: "rejected" };
+		}
+
+		log.phase = "background";
+		await drain();
+		log.phase = "request";
+
+		records.push({
+			request: { actor: actorLabel(actor), method, path: step.path, body },
+			answer,
+			state: stores(step.dump),
+		});
+	}
+
+	return {
+		name: c.name,
+		steps: records,
+		effects: log.entries,
+		final: stores(c.final),
+	};
+}
+
+/** Defines one test per case of a corpus, and the check that the fixture holds exactly these cases. */
+export function defineCorpus(
+	area: string,
+	handler: Handler,
+	cases: readonly Case[],
+) {
+	const names = cases.map((c) => c.name);
+
+	describe(`golden corpus: ${area}`, () => {
+		it("has unique case names", () => {
+			if (new Set(names).size !== names.length)
+				throw new Error(`duplicate case names in ${area}`);
+		});
+
+		for (const c of cases)
+			it(c.name, async () => {
+				expectRecorded(area, await runCase(handler, c));
+			});
+
+		afterAll(() => settleFixture(area, names));
+	});
+}

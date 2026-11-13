@@ -8,9 +8,8 @@
 // The fixture files in tests/golden/fixtures are the answers of the routes as they were before the Effect conversion.
 // A test compares against them and never writes them. They are written only when UPDATE_GOLDEN=1, and a converted
 // route that differs from them is wrong: change the route, not the fixture.
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { APIContext } from "astro";
-import { expect, vi } from "vitest";
+import { vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
 import type { JsonValue } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";
@@ -379,47 +378,4 @@ export async function record(
 	return { name: c.name, answers, effects: log };
 }
 
-const UPDATING = process.env.UPDATE_GOLDEN === "1";
-
-function fixturePath(area: string) {
-	return new URL(`./fixtures/${area}.json`, import.meta.url);
-}
-
-function readFixture(area: string): Recorded[] {
-	const path = fixturePath(area);
-
-	if (!existsSync(path)) return [];
-
-	// SAFETY: this file is written only by `settleFixture` below, as a JSON array of Recorded.
-	return JSON.parse(readFileSync(path, "utf8")) as Recorded[];
-}
-
-const written = new Map<string, Recorded[]>();
-
-/** Compares one recorded case with the fixture (or, with UPDATE_GOLDEN=1, keeps it to be written). */
-export function expectRecorded(area: string, got: Recorded) {
-	if (UPDATING) {
-		written.set(area, [...(written.get(area) ?? []), got]);
-
-		return;
-	}
-
-	const want = readFixture(area).find((entry) => entry.name === got.name);
-
-	expect(want, `no recorded answer for "${got.name}"`).toBeDefined();
-	expect(got).toEqual(want);
-}
-
-/** With UPDATE_GOLDEN=1, writes the fixture for the area. Otherwise checks it records exactly these case names. */
-export function settleFixture(area: string, names: readonly string[]) {
-	if (UPDATING) {
-		writeFileSync(
-			fixturePath(area),
-			`${JSON.stringify(written.get(area) ?? [], null, "\t")}\n`,
-		);
-
-		return;
-	}
-
-	expect(readFixture(area).map((entry) => entry.name)).toEqual([...names]);
-}
+export { expectRecorded, settleFixture } from "./harness/fixtures";
