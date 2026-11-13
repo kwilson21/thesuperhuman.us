@@ -2,6 +2,8 @@
 // Effect stack), kept only so tests/server/validators-differential.test.ts can require the Effect version to answer
 // every input as this one does. It is not product code: nothing under src/ may import it
 // (tests/architecture/legacy-validators.test.ts), and the Effect stack's final layer deletes this directory.
+// Live imports from src: `directionFields` (which preferences each service allows, constant data) and the type
+// `RawValue`. A later edit to either moves both sides of the differential together.
 import { z } from "astro/zod";
 import type { RawValue } from "../../../src/lib/fields";
 import { directionFields } from "../../../src/lib/audio-intake";

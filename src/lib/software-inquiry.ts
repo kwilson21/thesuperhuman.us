@@ -1,4 +1,3 @@
-import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
 	type Body,
@@ -15,7 +14,7 @@ import {
 } from "./fields";
 import type { NewOwnerRequest } from "./owner-requests";
 import type { OwnerRequest } from "./owner-model";
-import { isText, isObject } from "./type-guards";
+import { isText } from "./type-guards";
 
 export const softwarePaths = {
 	website: "Website design",

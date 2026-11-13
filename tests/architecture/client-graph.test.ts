@@ -17,8 +17,10 @@ import {
 	clientEntries,
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
+	ALLOWED_SCHEMA_RUNNERS,
 	hydratedDirectives,
 	type Reached,
+	schemaRunnersIn,
 	serverUsesIn,
 	specifiersOf,
 } from "../helpers/client-graph";
@@ -174,6 +176,18 @@ describe("what the browser entries reach", () => {
 			holding,
 			"A client:* directive hydrates a component in the browser, and the browser import graph guard does not walk it. Extend the guard (take the component's import as a browser entry) before introducing hydrated components.",
 		).toEqual([]);
+	});
+
+	it("calls no asynchronous or Effect-returning Schema entry point, in any reached file or entry", () => {
+		const holding = [...reach().files]
+			.filter((file) => /\.([cm]?[jt]sx?|astro)$/.test(file))
+			.flatMap((file) =>
+				schemaRunnersIn(file, readFileSync(join(repository, file), "utf8")).map(
+					(use) => `${file}: ${use}`,
+				),
+			);
+
+		expect(holding).toEqual([]);
 	});
 
 	it("names no Cloudflare binding type and makes no .prepare() call, in any reached file or entry", () => {
@@ -1352,5 +1366,171 @@ describe("the walker finds what it should", () => {
 				clientGraphViolations(root, ["effect/Schema"]).map((v) => v.import),
 			).toEqual(["effect/Effect"]);
 		});
+	});
+});
+
+describe("schemaRunnersIn: browser code decodes synchronously", () => {
+	const found = (text: string, file = "a.ts") => schemaRunnersIn(file, text);
+
+	it("lets the synchronous run entry points through, however they are reached", () => {
+		for (const text of [
+			'import * as S from "effect/Schema";\nS.decodeUnknownResult(S.String)("x");',
+			'import * as S from "effect/Schema";\nS.decodeUnknownSync(S.String)("x");S.decodeResult(S.String)("x");S.decodeSync(S.String)("x");',
+			'import * as S from "effect/Schema";\nS.decodeUnknownOption(S.String)("x");S.decodeOption(S.String)("x");S.is(S.String)("x");',
+			'import { decodeUnknownResult as d, String as T } from "effect/Schema";\nd(T)("x");',
+			'import * as S from "effect/Schema";\nS["decodeUnknownResult"](S.String)("x");',
+		])
+			expect(found(text)).toEqual([]);
+	});
+
+	it("lets the combinators and the schemas through", () => {
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nconst a = S.String.pipe(S.decodeTo(S.String, { decode: g, encode: g }));\nconst b = S.makeFilter((v: string) => true);\nconst c = S.Unknown.check(S.isMaxLength(3));\ntype T = typeof S.String.check;\ntype U = S.Schema.Type<typeof a>;',
+			),
+		).toEqual([]);
+	});
+
+	it("fails the Promise and Effect runners", () => {
+		for (const name of [
+			"decodeUnknownPromise",
+			"decodeUnknownEffect",
+			"decodeEffect",
+			"decodePromise",
+			"decodeUnknownExit",
+			"encodeUnknownPromise",
+			"encodeUnknownEffect",
+			"encodePromise",
+			"encodeEffect",
+			"encodeUnknownSync",
+			"encodeSync",
+		])
+			expect(
+				found(`import * as S from "effect/Schema";\nS.${name}(S.String)("x");`),
+				name,
+			).toHaveLength(1);
+	});
+
+	it("fails an aliased import, a string-literal member, a destructured name and a computed member", () => {
+		expect(
+			found(
+				'import { decodeUnknownPromise as d } from "effect/Schema";\nd("x");',
+			),
+		).toHaveLength(1);
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nS["decodeUnknownPromise"](S.String)("x");',
+			),
+		).toHaveLength(1);
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nconst { decodeUnknownPromise } = S;',
+			),
+		).toHaveLength(1);
+		expect(
+			found(
+				'import * as S from "effect/Schema";\nconst run = (n: string) => S[n];',
+			),
+		).toHaveLength(1);
+		expect(
+			found('import * as S from "effect/Schema";\nexport const all = S;'),
+		).toHaveLength(1);
+	});
+
+	it("fails a re-export, a dynamic import and a require of the Schema module", () => {
+		expect(
+			found('export { decodeUnknownPromise } from "effect/Schema";'),
+		).toHaveLength(1);
+		expect(found('export * from "effect/Schema";')).toHaveLength(1);
+		expect(
+			found('export const load = () => import("effect/Schema");'),
+		).toHaveLength(1);
+		expect(found('const S = require("effect/Schema");')).toHaveLength(1);
+		expect(
+			found(
+				'export { String as T, decodeUnknownResult } from "effect/Schema";',
+			),
+		).toEqual([]);
+	});
+
+	it("does not count a comment, a string or a type-only import", () => {
+		expect(
+			found(
+				[
+					'import * as S from "effect/Schema";',
+					"// S.decodeUnknownPromise is not used here",
+					'export const note = "S.decodeUnknownPromise(S.String)";',
+					"export const o = { decodeUnknownPromise: 1 };",
+					"export const p = o.decodeUnknownPromise;",
+				].join("\n"),
+			),
+		).toEqual([]);
+		expect(
+			found(
+				'import type { decodeUnknownPromise } from "effect/Schema";\nexport type T = typeof decodeUnknownPromise;',
+			),
+		).toEqual([]);
+	});
+
+	it("does not count a function of another module that has the same name", () => {
+		expect(
+			found(
+				'import { decodeUnknownPromise } from "./mine";\ndecodeUnknownPromise("x");',
+			),
+		).toEqual([]);
+	});
+
+	it("reads the script blocks of an .astro file", () => {
+		expect(
+			found(
+				'---\nimport * as S from "effect/Schema";\nS.decodeUnknownPromise(S.String);\n---\n<script>\n\timport * as T from "effect/Schema";\n\tT.decodeUnknownPromise(T.String)("x");\n</script>',
+				"a.astro",
+			),
+		).toHaveLength(1);
+	});
+
+	it("classifies every run entry point of the installed Schema module", () => {
+		const declared = readFileSync(
+			join(repository, "node_modules/effect/dist/Schema.d.ts"),
+			"utf8",
+		);
+
+		const names = new Set(
+			[...declared.matchAll(/export declare (?:const|function) (\w+)/g)].map(
+				(match) => match[1],
+			),
+		);
+
+		// Every name the rule allows is a real export, so a rename in a new effect version fails here.
+		for (const name of ALLOWED_SCHEMA_RUNNERS)
+			expect(names.has(name)).toBe(true);
+
+		// Every export that looks like a runner and is not allowed is refused, except the combinators that apply a
+		// transformation or rename keys (they build a schema and run nothing).
+		const refused = [...names].filter(
+			(name) =>
+				found(`import * as S from "effect/Schema";\nS.${name};`).length > 0,
+		);
+
+		expect(refused).toContain("decodeUnknownPromise");
+		expect(refused).toContain("decodeUnknownEffect");
+		expect(refused).not.toContain("decodeTo");
+		expect(refused).not.toContain("makeFilter");
+		expect(refused.sort()).toEqual(
+			[...names]
+				.filter(
+					(name) =>
+						/^(decode|encode|validate|asserts)|^make.*Effect/.test(name) &&
+						!ALLOWED_SCHEMA_RUNNERS.includes(name) &&
+						![
+							"decode",
+							"decodeTo",
+							"encode",
+							"encodeTo",
+							"encodeKeys",
+						].includes(name),
+				)
+				.sort(),
+		);
 	});
 });

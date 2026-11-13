@@ -2,15 +2,66 @@
 // Effect stack), kept only so tests/server/validators-differential.test.ts can require the Effect version to answer
 // every input as this one does. It is not product code: nothing under src/ may import it
 // (tests/architecture/legacy-validators.test.ts), and the Effect stack's final layer deletes this directory.
+// Live imports from src: `softwareQuestions` and `softwareDetailKeys` (lists of field names, data), plus the type
+// `RawValue`. A later edit to those lists moves both sides of the differential together. The link checks
+// (`currentSiteHref`, `currentUrlMessage`) and the type guards contain validation logic, so they are frozen below.
 import { z } from "astro/zod";
 import type { RawValue } from "../../../src/lib/fields";
 import {
-	currentSiteHref,
-	currentUrlMessage,
 	softwareDetailKeys,
 	softwareQuestions,
 } from "../../../src/lib/software-inquiry";
-import { isObject, isText } from "../../../src/lib/type-guards";
+
+function isObject(value: RawValue): value is object {
+	return value !== null && typeof value === "object";
+}
+
+function isText<T>(value: T): value is T & string {
+	return typeof value === "string";
+}
+
+function currentSiteHref(value: RawValue): string | null {
+	if (!isText(value) || !/^https?:\/\//i.test(value) || /\s/.test(value))
+		return null;
+
+	try {
+		const url = new URL(value);
+
+		return (url.protocol === "http:" || url.protocol === "https:") &&
+			url.hostname &&
+			!url.username &&
+			!url.password
+			? url.href
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+// bareHost: dots split the host labels, so it runs in linear time; '@' is excluded, so an email address is not a host.
+const bareHost =
+	/^(\/\/)?([^\s\/:?#.@]+(\.[^\s\/:?#.@]+)+\.?|localhost)(:\d+)?([\/?#]\S*)?$/i;
+
+// Four cases, in order. A link that starts with http:// or https:// but isn't accepted as a link
+// (it doesn't parse, or has a space, username or password) is told to check the link or leave it
+// empty.
+// A mistyped or other scheme (https//x.com, https:/x.com, ftp://x) is told to start with
+// https:// or http://, unless a digit (a port, x.com:8080) or a space (a label, Website: x.com)
+// follows the colon after a scheme other than http or https.
+// A bare host, host:port or localhost is told to add https:// when that makes a valid link.
+// Anything else (none, n/a, an email address) is told to check the link or leave it empty.
+// Callers pass at most 2048 characters (the schema skips longer values); the bare host check
+// parses the URL, which is slow on very long international hosts.
+const currentUrlMessage = (value: string) =>
+	/^https?:\/\//i.test(value)
+		? "Check the link, or leave it empty."
+		: /^https?:/i.test(value) ||
+				/^https?\/\//i.test(value) ||
+				/^[a-z][a-z\d+.-]*:(?![\d\s])/i.test(value)
+			? "Use https:// or http:// at the start of the link."
+			: bareHost.test(value) && currentSiteHref("https://" + value) !== null
+				? "Add https:// to the start of the link."
+				: "Check the link, or leave it empty.";
 
 function hasKey<T extends object>(
 	record: T,

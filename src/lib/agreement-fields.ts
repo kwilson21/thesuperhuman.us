@@ -1,5 +1,8 @@
 import { z } from "astro/zod";
 import type { ClientAgreement } from "./agreement-client-fields";
+// The one value import from src/server in src/lib (tests/architecture/lib-server-imports.test.ts): server-only Zod copies of
+// three text helpers, for the owner agreement schemas of an area that is not converted to Effect Schema yet. Remove it,
+// and this comment, when the owner agreement area converts.
 import { cleanText, email, required } from "../server/agreement-zod-fields";
 import { softwareInvoiceTerms } from "./software-invoices";
 import { validProjectDate } from "./audio-project-updates";
