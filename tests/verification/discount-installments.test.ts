@@ -92,27 +92,37 @@ describe("with a discount the installments are today's installments of the lower
 
 describe("the contract, sampled (Dafny checks it for every input)", () => {
 	it("every allowed fee and discount gives whole, non-negative installments that sum to the fee less the discount", () => {
+		// Plain checks collected into one list, so the 130,000 or so cases stay fast; the list must stay empty.
+		const broken: string[] = [];
+
 		for (let usual = 100; usual <= 460; usual++)
 			for (let off = 0; usual - off >= 100; off++)
 				for (const { standard, kinds } of plans) {
-					expect(allowedMilestone(usual, off)).toBe(true);
-
+					const at = `usual ${usual}, discount ${off}, standard ${standard}`;
 					let sum = 0;
+
+					if (!allowedMilestone(usual, off)) broken.push(`${at}: refused`);
 
 					for (const kind of kinds) {
 						const amount = discountedInstallment(usual, off, standard, kind);
 
-						expect(Number.isInteger(amount)).toBe(true);
-						expect(amount).toBeGreaterThanOrEqual(standard ? 50 : 100);
-						expect(amount).toBeLessThanOrEqual(
-							installmentOf(usual, standard, kind),
-						);
+						if (
+							!Number.isInteger(amount) ||
+							amount < (standard ? 50 : 100) ||
+							amount > installmentOf(usual, standard, kind)
+						)
+							broken.push(`${at}: ${kind} ${amount}`);
 						sum += amount;
 					}
 
-					expect(sum).toBe(usual - off);
-					expect(milestoneCharged(usual, off, standard)).toBe(usual - off);
+					if (
+						sum !== usual - off ||
+						milestoneCharged(usual, off, standard) !== usual - off
+					)
+						broken.push(`${at}: sums to ${sum}`);
 				}
+
+		expect(broken).toEqual([]);
 	});
 
 	it("refuses a discount that leaves less than $1, or a usual fee over $1,000,000", () => {
