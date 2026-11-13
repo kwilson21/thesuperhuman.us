@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
 import { partial } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
@@ -12,6 +12,13 @@ vi.mock("~/lib/stripe-invoicing", () => ({ verifyStripeWebhook: verify }));
 
 import { POST } from "~/pages/api/stripe/webhook";
 import { replaceTerminalInvoice } from "~/lib/audio-payments";
+import {
+	eventTypes,
+	expectedStatus,
+	orderMatrix,
+	type Arrival,
+	type EventStatus,
+} from "../helpers/invoice-event-order";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
@@ -226,3 +233,102 @@ it.each([
 		).toEqual({ n: 1 });
 	},
 );
+
+// Delivery order. Stripe does not guarantee it. The principle (tests/helpers/invoice-event-order.ts): money received is
+// never lost to delivery order, and otherwise a stale event never undoes a newer status. Each row below delivers two
+// real events through the route: first one that applies to a fresh invoice, then a second one that is older than, the same
+// second as, or newer than the first.
+
+const BASE = 1_790_000_000;
+
+const arrivalOffset: Record<Arrival, number> = {
+	older: -60,
+	same: 0,
+	newer: 60,
+};
+
+function audioEventAt(status: EventStatus, id: string, created: number) {
+	return { ...event(eventTypes[status], id), created };
+}
+
+function seedSoftware() {
+	sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at) VALUES ('software','software','client@example.com','Tool','new','now','now');
+    INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('offer','software',1,'sent','{}','now','now');
+    INSERT INTO software_invoices(id,request_id,offer_id,milestone_index,kind,amount_cents,days_until_due,status,created_by,created_at,updated_at)
+      VALUES ('local','software','offer',0,'deposit',10000,7,'creating','owner','now','now')`);
+}
+
+function softwareEventAt(status: EventStatus, id: string, created: number) {
+	return {
+		id,
+		type: eventTypes[status],
+		created,
+		data: {
+			object: {
+				id: "in_software",
+				customer: "cus_software",
+				total: 10000,
+				currency: "usd",
+				due_date: 1790600000,
+				hosted_invoice_url: "https://example.com/pay",
+				metadata: {
+					software_request_id: "software",
+					software_offer_id: "offer",
+					software_invoice_id: "local",
+					milestone_index: "0",
+					kind: "deposit",
+				},
+			},
+		},
+	};
+}
+
+const audioStatus = () =>
+	sql.prepare("SELECT booking_status AS status FROM audio_payments").get();
+
+const softwareStatus = () =>
+	sql.prepare("SELECT status FROM software_invoices").get();
+
+describe.each(["audio", "software"] as const)("%s event order", (kind) => {
+	const make = kind === "audio" ? audioEventAt : softwareEventAt;
+	const read = kind === "audio" ? audioStatus : softwareStatus;
+	const tie = kind === "audio" ? "latest" : "rank";
+
+	it.each(orderMatrix)(
+		"first %s, then %s arriving %s",
+		async (first, second, arrival) => {
+			if (kind === "software") seedSoftware();
+			verify.mockResolvedValueOnce(make(first, "evt_first", BASE));
+			expect((await POST(context())).status).toBe(200);
+			verify.mockResolvedValueOnce(
+				make(second, "evt_second", BASE + arrivalOffset[arrival]),
+			);
+			expect((await POST(context())).status).toBe(200);
+			expect(read()).toEqual({
+				status: expectedStatus(first, second, arrival, tie),
+			});
+			expect(
+				sql
+					.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events")
+					.get(),
+			).toEqual({ total: 2 });
+		},
+	);
+
+	it("applies an older paid event that arrives after a newer invoice.payment_failed, and a redelivery changes nothing", async () => {
+		if (kind === "software") seedSoftware();
+		verify.mockResolvedValueOnce(
+			make("payment_failed", "evt_failed", BASE + 60),
+		);
+		await POST(context());
+		expect(read()).toEqual({ status: "payment_failed" });
+		verify.mockResolvedValue(make("paid", "evt_paid", BASE));
+		await POST(context());
+		expect(read()).toEqual({ status: "paid" });
+		await POST(context());
+		expect(read()).toEqual({ status: "paid" });
+		expect(
+			sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
+		).toEqual({ total: 2 });
+	});
+});
