@@ -6,7 +6,8 @@ name: Screenshots
 # static assets. Server-only code (API routes, src/lib, middleware), migrations and
 # dependency or Worker config changes don't trigger it.
 # Runs on main too, so pull requests have a recent run to reuse unchanged images from. The
-# full-screenshots label makes a pull request capture everything.
+# full-screenshots label makes a pull request capture everything. A scheduled run every three days
+# keeps that reference fresh, since GitHub deletes caches that go unused for seven days.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -44,14 +45,21 @@ on:
       - 'scripts/screenshots/**'
       - '.github/workflows/screenshots.yml'
 
+  # GitHub deletes caches that go unused for seven days, so this keeps a recent reference on main.
+  schedule:
+    - cron: '17 6 */3 * *'
+
+  workflow_dispatch:
+
 permissions:
   contents: read
 
-# A run for any other label skips its job, so it gets a group of its own instead of cancelling a
-# capture in progress.
+# A newer push no longer cancels a capture in progress: the running capture finishes and saves its
+# images for the next run to reuse. GitHub keeps only the newest waiting run in each group.
+# A run for any other label skips its job, so it gets a group of its own instead of waiting behind a capture.
 concurrency:
   group: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-screenshots' && format('screenshots-label-{0}', github.run_id) || format('screenshots-{0}', github.event.pull_request.number || github.ref) }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   capture:

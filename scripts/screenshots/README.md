@@ -5,7 +5,7 @@ CI runs these on pull requests that change the UI, and on the same changes once 
 - `screenshots.yml` runs the pull request's code with a read-only token. It captures the pages and scenarios and uploads the PNGs and `manifest.json` as an artifact.
 - `screenshots-publish.yml` runs after it via `workflow_run`, always from the default branch. It finds the pull request from run metadata and skips the run if the PR has moved on to a newer commit. It accepts only PNG files with plain names that `verify-png.mjs` fully decodes, sanitizes the manifest, pushes the images to the `screenshots` branch and writes the table into the PR description, checking the PR head once more just before it writes.
 
-Because `workflow_run` workflows only run from the default branch, a change to the publish step takes effect after it merges.
+Because `workflow_run` workflows only run from the default branch, a change to the publish step takes effect after it merges. `screenshots.yml` also runs every three days on `main`, and on demand, because GitHub deletes caches unused for seven days: that run keeps a recent reference for pull requests to reuse. A newer push no longer cancels a capture in progress, so the capture finishes and saves its images.
 
 Run locally:
 
