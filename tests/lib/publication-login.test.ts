@@ -20,7 +20,7 @@ const auth = {
 	resource: publicationResource,
 };
 
-function fixture(overrides = {}) {
+function fixture(overrides = {}, clientName = "<script>evil</script>") {
 	const complete = vi.fn<OAuthHelpers["completeAuthorization"]>(async () => ({
 		redirectTo: "https://chatgpt.com/callback?code=issued",
 	}));
@@ -39,7 +39,7 @@ function fixture(overrides = {}) {
 			lookupClient: vi.fn<OAuthHelpers["lookupClient"]>(async () =>
 				partial<NonNullable<Awaited<ReturnType<OAuthHelpers["lookupClient"]>>>>(
 					{
-						clientName: "<script>evil</script>",
+						clientName,
 					},
 				),
 			),
@@ -219,5 +219,94 @@ describe("publication consent and GitHub identity", () => {
 		expect((await publicationLogin(req(), env)).status).toBe(400);
 		clock.mockRestore();
 		expect(complete).not.toHaveBeenCalled();
+	});
+});
+
+async function consentPage(clientName?: string) {
+	const { env } =
+		clientName === undefined ? fixture() : fixture({}, clientName);
+
+	const page = await publicationLogin(
+		new Request(origin + "/api/publication/authorize"),
+		env,
+	);
+
+	return {
+		html: await page.text(),
+		policy: page.headers.get("content-security-policy")!,
+	};
+}
+
+const styleOf = (html: string) => /<style>([\s\S]*?)<\/style>/.exec(html)![1];
+
+async function sha256Base64(text: string) {
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(text),
+	);
+
+	return btoa(String.fromCharCode(...new Uint8Array(digest)));
+}
+
+describe("publication consent page styling", () => {
+	it("keeps the consent copy, the form, its action and the hidden nonce", async () => {
+		const { html } = await consentPage();
+
+		expect(html).toContain("<h1>Connect project publishing</h1>");
+		expect(html).toContain("</strong> is requesting access to threadline.");
+		expect(html).toContain(
+			"This connection can read progress and publish, correct, or permanently withdraw public progress on thesuperhuman.us.",
+		);
+		expect(html).toContain("Return address: https://chatgpt.com");
+		expect(html).toContain(
+			'<form method="post" action="/api/publication/authorize"><input type="hidden" name="nonce" value="',
+		);
+		expect(html).toMatch(
+			/name="nonce" value="[A-Za-z0-9_-]{43}"><button type="submit">Allow and sign in with GitHub<\/button><\/form>/,
+		);
+		expect(html).toContain("Close this page to cancel.");
+	});
+
+	it("styles the sign-in button as the site's primary pill", async () => {
+		const css = styleOf((await consentPage()).html);
+
+		expect(css).toMatch(/button\s*\{[^}]*border-radius:\s*999px/);
+		expect(css).toMatch(/button\s*\{[^}]*min-height:\s*44px/);
+		expect(css).toMatch(/button\s*\{[^}]*background:\s*#AE5534/i);
+		expect(css).toMatch(/button\s*\{[^}]*color:\s*#FBF8F2/i);
+	});
+
+	it("keeps a visible keyboard focus ring", async () => {
+		const css = styleOf((await consentPage()).html);
+
+		expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid #AE5534/);
+	});
+
+	it("loads no external stylesheet, script, font or image", async () => {
+		const { html } = await consentPage();
+
+		expect(html).not.toMatch(/<(script|link|img|iframe|object)\b/i);
+		expect(html).not.toContain("@import");
+		expect(html).not.toContain("url(");
+	});
+
+	it("allows exactly its own inline style under CSP, with no unsafe-inline", async () => {
+		const { policy, html } = await consentPage();
+		const hash = await sha256Base64(styleOf(html));
+
+		expect(policy).toContain(`style-src 'sha256-${hash}';`);
+		expect(policy).not.toContain("unsafe-inline");
+		expect(policy).toContain("default-src 'none'");
+		expect(policy).toContain("frame-ancestors 'none'");
+	});
+
+	it("keeps a client name that tries to close the style block as escaped text", async () => {
+		const { html } = await consentPage("</style><script>alert(1)</script>");
+
+		expect(html).not.toContain("</style><script>");
+		expect(html.split("</style>")).toHaveLength(2);
+		expect(html).toContain(
+			"&lt;/style&gt;&lt;script&gt;alert(1)&lt;/script&gt;",
+		);
 	});
 });

@@ -125,6 +125,36 @@ function redirect(url: string, token: string, age = 600) {
 	});
 }
 
+// The consent page's only stylesheet. Its values are the site's tokens from src/styles/global.css as literals, because this
+// response carries its own CSP (default-src 'none'), not the site's. That policy admits this exact block by SHA-256 hash
+// and no other inline style. Fonts are not loaded: font-src is 'none' here, so the serif and sans fall back to the stacks
+// the site declares after its own font files.
+const consentStyle = `
+html { background: #FBF8F2; color: #0E0E0E; color-scheme: light; }
+body { margin: 0; min-height: 100vh; min-height: 100svh; background: #FBF8F2; color: #0E0E0E; font: 400 1rem/1.6 'Iowan Old Style', Georgia, serif; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+main { box-sizing: border-box; max-width: 34rem; margin: 0 auto; padding: max(3rem, 12vh) 1.5rem 3rem; overflow-wrap: anywhere; }
+h1 { font: 400 clamp(2rem, 5vw, 2.5rem)/1.2 'Iowan Old Style', Georgia, serif; letter-spacing: -0.01em; color: #0E0E0E; margin: 0 0 1.5rem; text-wrap: balance; }
+p { margin: 0 0 1rem; color: #4A4A4A; text-wrap: pretty; }
+strong { color: #0E0E0E; font-weight: 600; }
+.return-address { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #E8E3DA; }
+form { margin: 0 0 1.5rem; }
+button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .55rem 1.5rem; background: #AE5534; color: #FBF8F2; border: 1px solid #AE5534; border-radius: 999px; font: inherit; line-height: 1.4; white-space: nowrap; cursor: pointer; }
+button:active { opacity: .78; }
+@media (max-width: 380px) { button { white-space: normal; text-align: center; } }
+@media (hover: hover) and (pointer: fine) { button:hover { background: #0E0E0E; border-color: #0E0E0E; } }
+:focus-visible { outline: 2px solid #AE5534; outline-offset: 2px; }
+.cancel { margin: 0; font: .8125rem/1.5 system-ui, -apple-system, sans-serif; color: #4A4A4A; }
+`;
+
+async function sha256Base64(text: string) {
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(text),
+	);
+
+	return btoa(String.fromCharCode(...new Uint8Array(digest)));
+}
+
 /** Explicit client consent precedes GitHub sign-in; no remembered blanket approval. */
 export async function publicationLogin(
 	request: Request,
@@ -172,11 +202,11 @@ export async function publicationLogin(
 			};
 
 			return new Response(
-				`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect project publishing</title><body><main>
+				`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"><title>Connect project publishing</title><style>${consentStyle}</style><body><main>
         <h1>Connect project publishing</h1><p><strong>${escape(client.clientName || auth.clientId)}</strong> is requesting access to ${escape(auth.scope.map((s) => s.slice(12)).join(", "))}.</p>
         <p>This connection can read progress and publish, correct, or permanently withdraw public progress on thesuperhuman.us.</p>
-        <p>Return address: ${escape(new URL(auth.redirectUri).origin)}</p>
-        <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${state.nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p>Close this page to cancel.</p>
+        <p class="return-address">Return address: ${escape(new URL(auth.redirectUri).origin)}</p>
+        <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${state.nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p class="cancel">Close this page to cancel.</p>
         </main></body></html>`,
 				{
 					headers: {
@@ -186,7 +216,7 @@ export async function publicationLogin(
 						"Set-Cookie": cookie(await seal(state, env)),
 						"Referrer-Policy": "same-origin",
 						// Browsers also enforce form-action on the POST's redirect destination.
-						"Content-Security-Policy": `default-src 'none'; form-action 'self' https://github.com/login/oauth/authorize ${new URL(auth.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
+						"Content-Security-Policy": `default-src 'none'; style-src 'sha256-${await sha256Base64(consentStyle)}'; form-action 'self' https://github.com/login/oauth/authorize ${new URL(auth.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
 					},
 				},
 			);
