@@ -1,17 +1,31 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+	ALLOWED_BROWSER_MODULES,
 	clientEntries,
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
+	type Reached,
 } from "../helpers/client-graph";
 
-// Effect and src/server never reach the browser: src/scripts/** and the <script> blocks of .astro files stay plain
-// TypeScript. This walks the static import graph from those entries and fails when any module they reach imports
-// `effect`, `effect/*`, `@xstate/effect` or anything under src/server. Type-only imports are erased, so they do not count.
+// Effect, src/server and the server-only packages never reach the browser: src/scripts/** and the <script> blocks of
+// .astro files stay plain TypeScript. This walks the static import graph from those entries and fails when any module
+// they reach imports `effect`, `@xstate/effect`, `xstate`, `zod` (v4), `stripe`, `resend`, `pdf-lib` (or a package that
+// depends on one), or anything under src/server. Type-only imports are erased, so they do not count.
+//
+// "Server-only" for a src/lib module cannot be told from its path, so the rule is a reviewed allowlist of exactly the
+// src/lib (and src/data) modules a browser entry may reach. A module that is not on it, because someone imported a
+// server module from a script, fails with an instruction to split the module. Adding a name to the list is a review
+// decision: it must be pure (no binding, secret or server package) and is reviewed as such.
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -26,8 +40,82 @@ describe("the browser's import graph", () => {
 		expect(entries.some((entry) => entry.endsWith(".astro"))).toBe(true);
 	});
 
-	it("never reaches effect, @xstate/effect or src/server", () => {
-		expect(clientGraphViolations(repository)).toEqual([]);
+	it("never reaches effect, xstate, zod, stripe, resend, pdf-lib or src/server", () => {
+		expect(clientGraphViolations(repository, ALLOWED_BROWSER_MODULES)).toEqual(
+			[],
+		);
+	});
+});
+
+// Every module under src/lib or src/data that a browser entry reaches, reviewed one by one: each is pure (constants,
+// types, validators and formatting) and imports nothing server-side. The failure message below says what to do.
+const BROWSER_MODULES = [
+	"src/lib/agreement-client-fields.ts",
+	"src/lib/agreement-draft-fields.ts",
+	"src/lib/audio-intake.ts",
+	"src/lib/audio-peaks.ts",
+	"src/lib/business-days.ts",
+	"src/lib/home-motion.ts",
+	"src/lib/line-diff.ts",
+	"src/lib/project-story.ts",
+	"src/lib/scroll-scenes.ts",
+	"src/lib/software-inquiry.ts",
+	"src/lib/software-project-display.ts",
+	"src/lib/type-guards.ts",
+	"src/lib/waveform.ts",
+];
+
+describe("what the browser entries reach", () => {
+	const reach = () => {
+		const reached: Reached = { files: new Set(), packages: new Set() };
+
+		clientGraphViolations(repository, ALLOWED_BROWSER_MODULES, reached);
+
+		return reached;
+	};
+
+	const reachedModules = () =>
+		[...reach().files]
+			.filter(
+				(file) => file.startsWith("src/lib/") || file.startsWith("src/data/"),
+			)
+			.sort();
+
+	it("is the reviewed allowlist of src/lib modules, and nothing else", () => {
+		const reached = reachedModules();
+
+		const added = reached.filter((file) => !BROWSER_MODULES.includes(file));
+
+		expect(
+			added,
+			`A browser entry now reaches ${added.join(", ")}. Browser code may import only pure modules. Split the module: move what the browser needs into a small module with no server imports (no stripe, resend, pdf-lib, xstate, zod, effect, src/server, D1 or other bindings) and import that. Only add a module to BROWSER_MODULES when it is pure.`,
+		).toEqual([]);
+
+		const dropped = BROWSER_MODULES.filter((file) => !reached.includes(file));
+
+		expect(
+			dropped,
+			`BROWSER_MODULES lists ${dropped.join(", ")}, which no browser entry reaches any more. Remove it from the list.`,
+		).toEqual([]);
+	});
+
+	it("loads no package but astro (for astro/zod)", () => {
+		// astro/zod is Zod v3, still used by three browser validators; the Zod to Effect Schema PR removes it, and this test
+		// then expects no package at all.
+		expect([...reach().packages].sort()).toEqual(["astro"]);
+	});
+
+	it("reaches no module that names a Cloudflare binding, a Cloudflare or Node module, or server-only Astro env", () => {
+		const server =
+			/cloudflare:|astro:env\/server|\bD1Database\b|\bR2Bucket\b|\bKVNamespace\b|\bnode:/;
+
+		const holding = reachedModules()
+			.filter((file) => /\.(m?ts|mjs)$/.test(file))
+			.filter((file) =>
+				server.test(readFileSync(join(repository, file), "utf8")),
+			);
+
+		expect(holding).toEqual([]);
 	});
 });
 
@@ -65,7 +153,16 @@ describe("the walker finds what it should", () => {
 				JSON.stringify(options.packageJson),
 			);
 
-		for (const name of options.packages ?? ["zod", "@effect-like/other"])
+		for (const name of options.packages ?? [
+			"zod",
+			"left-pad",
+			"@effect-like/other",
+			"stripe",
+			"resend",
+			"pdf-lib",
+			"xstate",
+			"astro",
+		])
 			mkdirSync(join(root, "node_modules", name), { recursive: true });
 
 		for (const [path, text] of Object.entries(files)) {
@@ -84,7 +181,7 @@ describe("the walker finds what it should", () => {
 	it("passes a client graph that stays plain", () => {
 		const root = scratch({
 			"src/scripts/a.ts": 'import { b } from "~/lib/b";\nexport const a = b;',
-			"src/lib/b.ts": 'import { z } from "zod";\nexport const b = z;',
+			"src/lib/b.ts": 'import { z } from "left-pad";\nexport const b = z;',
 		});
 
 		expect(clientGraphViolations(root)).toEqual([]);
@@ -475,7 +572,7 @@ describe("the walker finds what it should", () => {
 			expect(
 				found({
 					"src/pages/a.astro":
-						'---\n---\n<script ng-src="/lazy.js">import "zod";</script>',
+						'---\n---\n<script ng-src="/lazy.js">import "left-pad";</script>',
 					...lazy,
 				}),
 			).toEqual([]);
@@ -541,7 +638,7 @@ describe("the walker finds what it should", () => {
 
 		it("fails on a bare specifier that is not a package in node_modules, naming the line", () => {
 			const root = scratch({
-				"src/scripts/a.ts": 'import "zod";\nimport "#nothing";',
+				"src/scripts/a.ts": 'import "left-pad";\nimport "#nothing";',
 			});
 
 			expect(clientGraphViolations(root)).toEqual([
@@ -681,8 +778,33 @@ describe("the walker finds what it should", () => {
 
 			expect(clientGraphViolations(root)).toEqual([]);
 			expect(
-				clientGraphViolations(scratch({ "src/scripts/a.ts": 'import "zod";' })),
+				clientGraphViolations(
+					scratch({ "src/scripts/a.ts": 'import "left-pad";' }),
+				),
 			).toEqual([]);
+		});
+	});
+
+	describe("what a walk reached", () => {
+		it("lists every file and package that any client entry loads, and nothing it does not", () => {
+			const root = scratch({
+				"src/scripts/a.ts":
+					'import "~/lib/b";\nimport "left-pad";\nimport "node:path";\nimport type { T } from "~/lib/types-only";',
+				"src/lib/b.ts": 'import "./c";',
+				"src/lib/c.ts": "export const c = 1;",
+				"src/lib/types-only.ts": "export type T = 1;",
+				"src/lib/unused.ts": "export const u = 1;",
+			});
+
+			const reached: Reached = { files: new Set(), packages: new Set() };
+
+			expect(clientGraphViolations(root, [], reached)).toEqual([]);
+			expect([...reached.files].sort()).toEqual([
+				"src/lib/b.ts",
+				"src/lib/c.ts",
+				"src/scripts/a.ts",
+			]);
+			expect([...reached.packages]).toEqual(["left-pad"]);
 		});
 	});
 
@@ -692,7 +814,64 @@ describe("the walker finds what it should", () => {
 				"effect",
 				"@effect",
 				"@xstate/effect",
+				"xstate",
+				"zod",
+				"stripe",
+				"resend",
+				"pdf-lib",
 			]);
+			expect(ALLOWED_BROWSER_MODULES).toEqual(["astro/zod"]);
+		});
+
+		it("finds each server-only package, and a package that depends on one", () => {
+			for (const name of ["xstate", "zod", "stripe", "resend", "pdf-lib"]) {
+				const root = scratch({
+					"src/scripts/a.ts": `import "${name}";\nimport "${name}/sub";`,
+				});
+
+				expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+					name,
+					`${name}/sub`,
+				]);
+			}
+
+			const root = scratch(
+				{
+					"src/scripts/a.ts": 'import "dep";',
+					"node_modules/dep/package.json": JSON.stringify({
+						dependencies: { stripe: "1" },
+					}),
+				},
+				{ packages: ["dep", "stripe"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"stripe",
+			]);
+		});
+
+		it("lets astro/zod through, with astro's own dependency on zod, and nothing else of zod", () => {
+			const files = {
+				"src/scripts/a.ts": 'import { z } from "astro/zod";',
+				"node_modules/astro/package.json": JSON.stringify({
+					dependencies: { zod: "3" },
+				}),
+			};
+
+			const options = { packages: ["astro", "zod"] };
+
+			expect(
+				clientGraphViolations(scratch(files, options), ALLOWED_BROWSER_MODULES),
+			).toEqual([]);
+			expect(
+				clientGraphViolations(scratch(files, options)).map((v) => v.import),
+			).toEqual(["zod"]);
+			expect(
+				clientGraphViolations(
+					scratch({ ...files, "src/scripts/b.ts": 'import "zod";' }, options),
+					ALLOWED_BROWSER_MODULES,
+				).map((v) => v.import),
+			).toEqual(["zod"]);
 		});
 
 		it("lets a named module through and nothing else", () => {

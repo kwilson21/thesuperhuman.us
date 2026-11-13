@@ -1,4 +1,4 @@
-import { evidenceTypes, softwareDate } from "~/lib/software-projects";
+import { evidenceTypes, softwareDate } from "~/lib/software-project-display";
 import { addBusinessDays } from "~/lib/business-days";
 
 export function setupSoftwareComposer() {

@@ -1,9 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import {
-	requiresEarlierStartAgreement,
-	softwareDate,
-} from "~/lib/software-projects";
+import { requiresEarlierStartAgreement } from "~/lib/software-projects";
+import { softwareDate } from "~/lib/software-project-display";
 import { newYorkTime } from "~/lib/agreement-artifacts";
 
 it("uses the site date formats for signing metadata", () => {

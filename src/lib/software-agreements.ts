@@ -8,11 +8,13 @@ import { softwareGuard } from "./software-projects";
 import {
 	agreementValues,
 	validateAgreementDetails,
-	clientAgreementSchema,
 	contractorSchema,
+} from "./agreement-fields";
+import {
+	clientAgreementSchema,
 	consentText,
 	intentText,
-} from "./agreement-fields";
+} from "./agreement-client-fields";
 import {
 	renderAgreement,
 	templateVersionLabel,
@@ -377,7 +379,7 @@ export async function signAgreements(
 		.first<{ values_json: string }>();
 
 	if (draft) {
-		const { resolveClientDetails } = await import("./agreement-draft");
+		const { resolveClientDetails } = await import("./agreement-draft-fields");
 
 		const resolved = resolveClientDetails(
 			JSON.parse(draft.values_json),

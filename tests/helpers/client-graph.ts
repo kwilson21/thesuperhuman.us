@@ -40,7 +40,22 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 	"effect",
 	"@effect",
 	"@xstate/effect",
+	"xstate",
+	"zod",
+	"stripe",
+	"resend",
+	"pdf-lib",
 ];
+
+/**
+ * Zod v3 through `astro/zod` still validates in the browser in three modules (audio intake, software inquiry, agreement
+ * client details). It is the one named exception, until the Zod to Effect Schema PR removes it and this entry with it.
+ * `astro` depends on `zod`, so the exception also covers the dependency walk for this specifier only.
+ */
+export const ALLOWED_BROWSER_MODULES: readonly string[] = ["astro/zod"];
+
+/** What a walk reached: every file (paths relative to the root) and every package (by name) any client entry loads. */
+export type Reached = { files: Set<string>; packages: Set<string> };
 
 // An opening tag may hold a ">" inside a quoted attribute value.
 const SCRIPT_BLOCK =
@@ -697,6 +712,7 @@ export function clientEntries(root: string): string[] {
 export function clientGraphViolations(
 	root: string,
 	allow: readonly string[] = [],
+	reached?: Reached,
 ): (ClientGraphViolation | UnresolvedLoad)[] {
 	const aliases = aliasesOf(root);
 	const violations: (ClientGraphViolation | UnresolvedLoad)[] = [];
@@ -719,6 +735,7 @@ export function clientGraphViolations(
 
 			if (!current || seen.has(`${entry}|${current.file}`)) continue;
 			seen.add(`${entry}|${current.file}`);
+			reached?.files.add(shown(current.file));
 
 			for (const load of loadsOf(current.file, clientText(current.file))) {
 				if (load.kind === "unresolved") {
@@ -741,6 +758,9 @@ export function clientGraphViolations(
 
 				const text = load.kind === "module" ? load.specifier : load.pattern;
 
+				for (const name of found.names)
+					if (!isBuiltin(name)) reached?.packages.add(packageOf(name));
+
 				if (found.unresolved !== undefined)
 					violations.push({
 						import: text,
@@ -758,7 +778,12 @@ export function clientGraphViolations(
 
 				// An installed package browser code imports must not depend on Effect either: its own imports are in the bundle.
 				for (const name of found.names) {
-					if (isForbiddenPackage(name, allow) || isBuiltin(name)) continue;
+					if (
+						isForbiddenPackage(name, allow) ||
+						allow.includes(name) ||
+						isBuiltin(name)
+					)
+						continue;
 
 					const directory = packageDirectory(packageOf(name), current.file);
 
