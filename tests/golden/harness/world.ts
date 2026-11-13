@@ -229,9 +229,6 @@ const TEXTUAL =
 /** Text over this many bytes is recorded as a length and a digest, not in full. */
 const TEXT_LIMIT = 64 * 1024;
 
-const isGenerated = (body: StepBody): body is GeneratedBody =>
-	typeof body === "object" && "generated" in body;
-
 type Sent = {
 	/** What the fixture holds for the body. */
 	record: string | ByteRecord | null;

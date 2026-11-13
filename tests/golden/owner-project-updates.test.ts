@@ -7,7 +7,6 @@ import {
 	defineCorpus,
 	rows,
 	type Case,
-	type Step,
 } from "./harness";
 import {
 	act,
