@@ -617,7 +617,7 @@ const outages: Case[] = [
 			],
 		},
 	),
-	own("form: outage: resetting the deliveries", delivered("failed"), body(), {
+	ownForm("outage: resetting the deliveries", delivered("failed"), body(), {
 		...smallPackets,
 		failures: [
 			{

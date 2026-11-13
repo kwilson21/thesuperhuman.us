@@ -294,7 +294,7 @@ const cases: Case[] = [
 	{
 		name: "a form with a prototype key",
 		steps: [
-			asForm({ action: "access-cleanup", confirmed: "on", __proto__: "x" }),
+			asForm({ action: "access-cleanup", confirmed: "on", ["__proto__"]: "x" }),
 		],
 	},
 	{

@@ -578,7 +578,7 @@ const outages: Case[] = [
 		/UPDATE software_agreement_deliveries SET status=\?/,
 		{ ...stored, fetches: resendOk, omit: [] },
 	),
-	own("form: outage: the claim of the MSA packet", executed(), body(), {
+	ownForm("outage: the claim of the MSA packet", executed(), body(), {
 		failures: [
 			{
 				on: /UPDATE software_agreement_artifacts SET status='rendering'/,

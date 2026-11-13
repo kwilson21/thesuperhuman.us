@@ -391,8 +391,8 @@ const endOld = (name: string, sc: Scene, extra: Partial<Case> = {}) =>
 
 const reuse: Case[] = [
 	endOld("end an MSA that a sent offer reuses", reusedBy()),
-	own(
-		"form: end an MSA that a sent offer reuses",
+	ownForm(
+		"end an MSA that a sent offer reuses",
 		reusedBy(),
 		end("2026-11-13", {}, OLD_MSA_ID),
 		{},

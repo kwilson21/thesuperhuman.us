@@ -1206,7 +1206,8 @@ const sequenceCases: Case[] = [
 	},
 	{
 		name: "save a draft with details and an attachment, then clear the details and remove the attachment",
-		music: { seed: withAttachmentRow(), ...bucket },
+		music: { seed: withAttachmentRow() },
+		...bucket,
 		steps: [
 			step(
 				d({ agreementDetails: details({ attachments: [attachment()] }) }),
