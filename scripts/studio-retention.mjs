@@ -1,31 +1,40 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { openMusicDatabase } from './music-analytics.mjs';
-import { renderMusicReport } from './music-report-view.mjs';
-import { finishedPaymentTerms } from './owner-retention.mjs';
-import { parseJsonc } from './screenshots/config.mjs';
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { openMusicDatabase } from "./music-analytics.mjs";
+import { renderMusicReport } from "./music-report-view.mjs";
+import { finishedPaymentTerms } from "./owner-retention.mjs";
+import { parseJsonc } from "./screenshots/config.mjs";
 
-const quote = value => `'${String(value).replaceAll("'", "''")}'`;
-const hash = value => createHash('sha256').update(value).digest('hex');
-const cutoff = (now, days) => new Date(now.getTime() - days * 86400000).toISOString();
-const ids = rows => rows.length ? rows.map(row => quote(row[0])).join(',') : "''";
-const snapshot = sql => `SELECT json_group_array(json_array(${sql.columns.split(',').map(column => column.trim().split('.').pop()).join(',')})) AS snapshot FROM
+const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
+const hash = (value) => createHash("sha256").update(value).digest("hex");
+
+const cutoff = (now, days) =>
+	new Date(now.getTime() - days * 86400000).toISOString();
+
+const ids = (rows) =>
+	rows.length ? rows.map((row) => quote(row[0])).join(",") : "''";
+
+const snapshot = (sql) => `SELECT json_group_array(json_array(${sql.columns
+	.split(",")
+	.map((column) => column.trim().split(".").pop())
+	.join(",")})) AS snapshot FROM
   (SELECT ${sql.columns} FROM ${sql.from} WHERE ${sql.where} ORDER BY ${sql.order} LIMIT ${sql.limit})`;
 
 export function studioRetentionProjectPredicate(now) {
-  const old = quote(cutoff(now, 30));
-  return `p.content_deleted_at IS NULL
+	const old = quote(cutoff(now, 30));
+
+	return `p.content_deleted_at IS NULL
     AND NOT EXISTS(SELECT 1 FROM audio_project_uploads upload WHERE upload.request_id=p.request_id)
     AND ((r.status IN ('withdrawn','resolved')
       AND COALESCE(r.resolved_at,r.updated_at)<=${old}
       AND NOT EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
         AND f.version='final' AND f.published_at IS NOT NULL)
       AND NOT EXISTS(SELECT 1 FROM audio_payments pay WHERE pay.request_id=p.request_id
-        AND NOT (${finishedPaymentTerms('pay')})))
+        AND NOT (${finishedPaymentTerms("pay")})))
       OR ((p.stage IN ('final_files_ready','complete') OR (p.stage='in_progress'
           AND EXISTS(SELECT 1 FROM audio_project_files f WHERE f.request_id=p.request_id
             AND f.version='final' AND f.status='revoked')
@@ -43,75 +52,233 @@ export function studioRetentionProjectPredicate(now) {
       ))`;
 }
 
-
 export function softwareRetentionProjectPredicate(now) {
-  const days=`COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.project_retention_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),365)`;
-  const handoffDays=`COALESCE((SELECT json_extract(a.values_json,'$.owner.handoff_access_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.handoff_access_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),30)`;
-  return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_project_updates h WHERE h.request_id=software_projects.request_id AND h.kind='handoff' AND h.status='shared' AND julianday(h.shared_at)+${handoffDays}>julianday(${quote(now.toISOString())})) AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
+	const days = `COALESCE((SELECT json_extract(a.values_json,'$.owner.project_retention_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.project_retention_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),365)`;
+	const handoffDays = `COALESCE((SELECT json_extract(a.values_json,'$.owner.handoff_access_days') FROM software_agreements a WHERE a.id=software_projects.agreement_id AND a.status='executed'),(SELECT json_extract(o.agreement_details_json,'$.handoff_access_days') FROM software_offers o WHERE o.id=software_projects.offer_id AND o.sent_at IS NOT NULL),30)`;
+
+	return `content_deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM software_project_updates h WHERE h.request_id=software_projects.request_id AND h.kind='handoff' AND h.status='shared' AND julianday(h.shared_at)+${handoffDays}>julianday(${quote(now.toISOString())})) AND NOT EXISTS(SELECT 1 FROM software_invoices i WHERE i.request_id=software_projects.request_id AND i.status IN ('creating','open','payment_failed','uncollectible')) AND ((completed_at IS NOT NULL AND julianday(completed_at)+${days}<=julianday(${quote(now.toISOString())}))
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
+
 async function softwareSources(database, now) {
-  const exists = (await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'")).length;
-  const invoices=(await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'")).length;
-  const empty = "SELECT '[]' AS snapshot";
-  return {
-    softwareProjects: exists ? snapshot({ columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json', from:'software_projects', where:softwareRetentionProjectPredicate(now), order:'request_id',limit:25 }) : empty,
-    softwareInvoiceRefs: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`external_refs_deleted_at IS NULL AND request_id IN (SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)} OR content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
-    softwareInvoicesOld: invoices ? snapshot({columns:'id,request_id,updated_at',from:'software_invoices',where:`created_at<${quote(cutoff(now,730))} AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.content_deleted_at IS NOT NULL)`,order:'id',limit:1000}) : empty,
-    softwareAudit: exists ? snapshot({columns:'id,occurred_at',from:'software_project_audit',where:`occurred_at<${quote(cutoff(now,730))}`,order:'id',limit:1000}) : empty,
-  };
+	const exists = (
+		await database.query(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'",
+		)
+	).length;
+
+	const invoices = (
+		await database.query(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='software_invoices'",
+		)
+	).length;
+
+	const empty = "SELECT '[]' AS snapshot";
+
+	return {
+		softwareProjects: exists
+			? snapshot({
+					columns:
+						"request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json",
+					from: "software_projects",
+					where: softwareRetentionProjectPredicate(now),
+					order: "request_id",
+					limit: 25,
+				})
+			: empty,
+		softwareInvoiceRefs: invoices
+			? snapshot({
+					columns: "id,request_id,updated_at",
+					from: "software_invoices",
+					where: `external_refs_deleted_at IS NULL AND request_id IN (SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(now)} OR content_deleted_at IS NOT NULL)`,
+					order: "id",
+					limit: 1000,
+				})
+			: empty,
+		softwareInvoicesOld: invoices
+			? snapshot({
+					columns: "id,request_id,updated_at",
+					from: "software_invoices",
+					where: `created_at<${quote(cutoff(now, 730))} AND EXISTS(SELECT 1 FROM software_projects p WHERE p.request_id=software_invoices.request_id AND p.content_deleted_at IS NOT NULL)`,
+					order: "id",
+					limit: 1000,
+				})
+			: empty,
+		softwareAudit: exists
+			? snapshot({
+					columns: "id,occurred_at",
+					from: "software_project_audit",
+					where: `occurred_at<${quote(cutoff(now, 730))}`,
+					order: "id",
+					limit: 1000,
+				})
+			: empty,
+	};
 }
-const softwareContentSnapshot = (table, projects) => snapshot({columns:'id,request_id,updated_at,notification_status,notification_attempted_at,notification_sent_at',from:table,where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
+
+const softwareContentSnapshot = (table, projects) =>
+	snapshot({
+		columns:
+			"id,request_id,updated_at,notification_status,notification_attempted_at,notification_sent_at",
+		from: table,
+		where: `request_id IN (${ids(projects)})`,
+		order: "request_id,id",
+		limit: 5000,
+	});
+
 async function softwareValues(database, now, listObjects) {
-  const queries = await softwareSources(database,now), values = {};
-  for (const [name,query] of Object.entries(queries)) values[name] = await readSource(database,query);
-  const projects = values.softwareProjects;
-  if (projects.length && !listObjects) throw new Error('Software cleanup requires a private bucket prefix listing before review or deletion.');
-  if (projects.length) {
-    queries.softwareUpdates = softwareContentSnapshot('software_project_updates',projects);
-    queries.softwareMessages = snapshot({columns:'id,request_id,created_at,read_at',from:'software_project_messages',where:`request_id IN (${ids(projects)})`,order:'request_id,id',limit:5000});
-    queries.softwarePayments = snapshot({columns:'request_id,milestone_index,paid_recorded_at,recorded_by',from:'software_milestone_payments',where:`request_id IN (${ids(projects)})`,order:'request_id,milestone_index',limit:5000});
-    queries.softwareDeposits = snapshot({columns:'request_id,milestone_index,paid_recorded_at,recorded_by',from:'software_milestone_deposits',where:`request_id IN (${ids(projects)})`,order:'request_id,milestone_index',limit:5000});
-    for (const name of ['softwareUpdates','softwareMessages','softwarePayments','softwareDeposits']) {
-      values[name] = await readSource(database,queries[name]);
-      if (values[name].length===5000) throw new Error('Software content batch reached its limit. Reduce project batch size.');
-    }
-  } else { values.softwareUpdates=[]; values.softwareMessages=[]; values.softwarePayments=[]; values.softwareDeposits=[]; }
-  values.softwareObjects=[];
-  for (const [id] of projects) {
-    const keys = await listObjects(`software/${id}/`);
-    for (const key of keys) {
-      if (!key.startsWith(`software/${id}/`) || !/^software\/[a-z0-9-]{1,100}\/[a-z0-9-]{1,100}\/[a-z0-9-]+\.(png|jpg|webp)$/.test(key)) throw new Error('Unexpected software object key.');
-      values.softwareObjects.push([key]);
-    }
-  }
-  values.softwareObjects.sort((a,b)=>a[0].localeCompare(b[0]));
-  return {queries,values};
+	const queries = await softwareSources(database, now),
+		values = {};
+
+	for (const [name, query] of Object.entries(queries))
+		values[name] = await readSource(database, query);
+	const projects = values.softwareProjects;
+
+	if (projects.length && !listObjects)
+		throw new Error(
+			"Software cleanup requires a private bucket prefix listing before review or deletion.",
+		);
+
+	if (projects.length) {
+		queries.softwareUpdates = softwareContentSnapshot(
+			"software_project_updates",
+			projects,
+		);
+		queries.softwareMessages = snapshot({
+			columns: "id,request_id,created_at,read_at",
+			from: "software_project_messages",
+			where: `request_id IN (${ids(projects)})`,
+			order: "request_id,id",
+			limit: 5000,
+		});
+		queries.softwarePayments = snapshot({
+			columns: "request_id,milestone_index,paid_recorded_at,recorded_by",
+			from: "software_milestone_payments",
+			where: `request_id IN (${ids(projects)})`,
+			order: "request_id,milestone_index",
+			limit: 5000,
+		});
+		queries.softwareDeposits = snapshot({
+			columns: "request_id,milestone_index,paid_recorded_at,recorded_by",
+			from: "software_milestone_deposits",
+			where: `request_id IN (${ids(projects)})`,
+			order: "request_id,milestone_index",
+			limit: 5000,
+		});
+
+		for (const name of [
+			"softwareUpdates",
+			"softwareMessages",
+			"softwarePayments",
+			"softwareDeposits",
+		]) {
+			values[name] = await readSource(database, queries[name]);
+
+			if (values[name].length === 5000)
+				throw new Error(
+					"Software content batch reached its limit. Reduce project batch size.",
+				);
+		}
+	} else {
+		values.softwareUpdates = [];
+		values.softwareMessages = [];
+		values.softwarePayments = [];
+		values.softwareDeposits = [];
+	}
+
+	values.softwareObjects = [];
+
+	for (const [id] of projects) {
+		const keys = await listObjects(`software/${id}/`);
+
+		for (const key of keys) {
+			if (
+				!key.startsWith(`software/${id}/`) ||
+				!/^software\/[a-z0-9-]{1,100}\/[a-z0-9-]{1,100}\/[a-z0-9-]+\.(png|jpg|webp)$/.test(
+					key,
+				)
+			)
+				throw new Error("Unexpected software object key.");
+			values.softwareObjects.push([key]);
+		}
+	}
+
+	values.softwareObjects.sort((a, b) => a[0].localeCompare(b[0]));
+
+	return { queries, values };
 }
 
 function sources(now) {
-  const old = quote(cutoff(now, 30));
-  const auditOld = quote(cutoff(now, 730));
-  const projectWhere = studioRetentionProjectPredicate(now);
-  const projects = snapshot({ columns: 'p.request_id,p.updated_at', from: 'audio_projects p JOIN owner_requests r ON r.id=p.request_id', where: projectWhere, order: 'p.request_id', limit: 25 });
-  const codes = snapshot({ columns: 'email,created_at', from: 'audio_client_codes', where: `COALESCE(used_at,expires_at)<${old}`, order: 'email', limit: 1000 });
-  const sessions = snapshot({ columns: 'token_hash,last_seen_at', from: 'audio_client_sessions',
-    where: `expires_at<${old} OR revoked_at<${old} OR last_seen_at<${old}`, order: 'token_hash', limit: 1000 });
-  const accessAudit = snapshot({ columns: 'id,occurred_at', from: 'audio_client_access_audit', where: `occurred_at<${auditOld}`, order: 'id', limit: 1000 });
-  const projectAudit = snapshot({ columns: 'id,occurred_at', from: 'audio_project_audit', where: `occurred_at<${auditOld}`, order: 'id', limit: 1000 });
-  return { projects, codes, sessions, accessAudit, projectAudit, old };
+	const old = quote(cutoff(now, 30));
+	const auditOld = quote(cutoff(now, 730));
+	const projectWhere = studioRetentionProjectPredicate(now);
+
+	const projects = snapshot({
+		columns: "p.request_id,p.updated_at",
+		from: "audio_projects p JOIN owner_requests r ON r.id=p.request_id",
+		where: projectWhere,
+		order: "p.request_id",
+		limit: 25,
+	});
+
+	const codes = snapshot({
+		columns: "email,created_at",
+		from: "audio_client_codes",
+		where: `COALESCE(used_at,expires_at)<${old}`,
+		order: "email",
+		limit: 1000,
+	});
+
+	const sessions = snapshot({
+		columns: "token_hash,last_seen_at",
+		from: "audio_client_sessions",
+		where: `expires_at<${old} OR revoked_at<${old} OR last_seen_at<${old}`,
+		order: "token_hash",
+		limit: 1000,
+	});
+
+	const accessAudit = snapshot({
+		columns: "id,occurred_at",
+		from: "audio_client_access_audit",
+		where: `occurred_at<${auditOld}`,
+		order: "id",
+		limit: 1000,
+	});
+
+	const projectAudit = snapshot({
+		columns: "id,occurred_at",
+		from: "audio_project_audit",
+		where: `occurred_at<${auditOld}`,
+		order: "id",
+		limit: 1000,
+	});
+
+	return { projects, codes, sessions, accessAudit, projectAudit, old };
 }
 
-const fileSnapshot = projectIds => snapshot({
-  columns: 'id,request_id,object_key,status,expires_at', from: 'audio_project_files',
-  where: `request_id IN (${ids(projectIds)})`, order: 'request_id,id', limit: 1000,
-});
-const contentSnapshot = (table, projectIds) => snapshot({
-  columns: 'id,request_id,created_at', from: table,
-  where: `request_id IN (${ids(projectIds)})`, order: 'request_id,id', limit: 5000,
-});
-const unwrap = rows => JSON.parse(rows[0].snapshot);
-async function readSource(database, query) { return unwrap(await database.query(query)); }
+const fileSnapshot = (projectIds) =>
+	snapshot({
+		columns: "id,request_id,object_key,status,expires_at",
+		from: "audio_project_files",
+		where: `request_id IN (${ids(projectIds)})`,
+		order: "request_id,id",
+		limit: 1000,
+	});
+
+const contentSnapshot = (table, projectIds) =>
+	snapshot({
+		columns: "id,request_id,created_at",
+		from: table,
+		where: `request_id IN (${ids(projectIds)})`,
+		order: "request_id,id",
+		limit: 5000,
+	});
+
+const unwrap = (rows) => JSON.parse(rows[0].snapshot);
+
+async function readSource(database, query) {
+	return unwrap(await database.query(query));
+}
 
 /**
  * The database and bucket a Wrangler config points at. Retention records this in the reviewed
@@ -119,228 +286,604 @@ async function readSource(database, query) { return unwrap(await database.query(
  * same environment.
  */
 export function studioStorageIdentity(config) {
-  const database = config?.d1_databases?.find(item => item.binding === 'MUSIC_DB');
-  const bucket = config?.r2_buckets?.find(item => item.binding === 'AUDIO');
-  if (!database?.database_id || !bucket?.bucket_name) throw new Error('The selected Wrangler config needs MUSIC_DB and AUDIO bindings.');
-  return { accountId: config.account_id ?? null, databaseId: database.database_id,
-    bucket: bucket.bucket_name, jurisdiction: bucket.jurisdiction ?? null };
+	const database = config?.d1_databases?.find(
+		(item) => item.binding === "MUSIC_DB",
+	);
+
+	const bucket = config?.r2_buckets?.find((item) => item.binding === "AUDIO");
+
+	if (!database?.database_id || !bucket?.bucket_name)
+		throw new Error(
+			"The selected Wrangler config needs MUSIC_DB and AUDIO bindings.",
+		);
+
+	return {
+		accountId: config.account_id ?? null,
+		databaseId: database.database_id,
+		bucket: bucket.bucket_name,
+		jurisdiction: bucket.jurisdiction ?? null,
+	};
 }
 
 export async function readStudioStorageIdentity(configPath) {
-  if (!/\.jsonc?$/.test(configPath)) throw new Error('Studio retention reads JSON or JSONC Wrangler configs only.');
-  return studioStorageIdentity(parseJsonc(await readFile(resolve(configPath), 'utf8')));
+	if (!/\.jsonc?$/.test(configPath))
+		throw new Error(
+			"Studio retention reads JSON or JSONC Wrangler configs only.",
+		);
+
+	return studioStorageIdentity(
+		parseJsonc(await readFile(resolve(configPath), "utf8")),
+	);
 }
 
-const sameStorage = (a, b) => ['accountId', 'databaseId', 'bucket', 'jurisdiction'].every(key => a?.[key] === b?.[key]);
+const sameStorage = (a, b) =>
+	["accountId", "databaseId", "bucket", "jurisdiction"].every(
+		(key) => a?.[key] === b?.[key],
+	);
 
 async function ensureSchema(database) {
-  const rows = await database.query('PRAGMA table_info(audio_projects)');
-  if (!rows.some(row => row.name === 'content_deleted_at')) throw new Error('Apply studio retention migration 0014 before running retention.');
-  const messages = await database.query('PRAGMA table_info(audio_project_messages)');
-  if (!messages.some(row => row.name === 'review_decision')) throw new Error('Apply review decisions migration 0018 before running retention.');
+	const rows = await database.query("PRAGMA table_info(audio_projects)");
+
+	if (!rows.some((row) => row.name === "content_deleted_at"))
+		throw new Error(
+			"Apply studio retention migration 0014 before running retention.",
+		);
+
+	const messages = await database.query(
+		"PRAGMA table_info(audio_project_messages)",
+	);
+
+	if (!messages.some((row) => row.name === "review_decision"))
+		throw new Error(
+			"Apply review decisions migration 0018 before running retention.",
+		);
 }
 
-export async function previewStudioRetention(database, environment, storage, now = new Date(), listObjects) {
-  if (!storage?.databaseId || !storage.bucket) throw new Error('Studio retention needs the selected database and bucket.');
-  await ensureSchema(database);
-  const software = await softwareValues(database,now,listObjects);
-  const sql = sources(now);
-  const projects = await readSource(database, sql.projects);
-  const files = await readSource(database, fileSnapshot(projects));
-  const messages = await readSource(database, contentSnapshot('audio_project_messages', projects));
-  const updates = await readSource(database, contentSnapshot('audio_project_updates', projects));
-  if (files.length === 1000 || messages.length === 5000 || updates.length === 5000) {
-    throw new Error('The reviewed content batch reached its limit. Reduce the project batch size before cleanup.');
-  }
-  const codes = await readSource(database, sql.codes);
-  const sessions = await readSource(database, sql.sessions);
-  const accessAudit = await readSource(database, sql.accessAudit);
-  const projectAudit = await readSource(database, sql.projectAudit);
-  return {
-    version: 2, environment, storage, generatedAt: now.toISOString(),
-    sources: { ...Object.fromEntries(Object.entries(software.values).map(([name,rows])=>[name,hash(JSON.stringify(rows))])), projects: hash(JSON.stringify(projects)), files: hash(JSON.stringify(files)),
-      messages: hash(JSON.stringify(messages)), updates: hash(JSON.stringify(updates)),
-      codes: hash(JSON.stringify(codes)), sessions: hash(JSON.stringify(sessions)),
-      accessAudit: hash(JSON.stringify(accessAudit)), projectAudit: hash(JSON.stringify(projectAudit)) },
-    counts: { ...Object.fromEntries(Object.entries(software.values).map(([name,rows])=>[name,rows.length])), projects: projects.length, objects: files.length, messages: messages.length, updates: updates.length,
-      codes: codes.length, sessions: sessions.length,
-      accessAudit: accessAudit.length, projectAudit: projectAudit.length },
-    notes: 'Preview contains counts and source hashes only. Apply the matching manifest within 24 hours. Object deletion precedes atomic database cleanup; if it fails, client access remains closed and a fresh preview can be applied after the storage issue is fixed. Run owner request retention separately after studio cleanup.',
-  };
+export async function previewStudioRetention(
+	database,
+	environment,
+	storage,
+	now = new Date(),
+	listObjects,
+) {
+	if (!storage?.databaseId || !storage.bucket)
+		throw new Error("Studio retention needs the selected database and bucket.");
+	await ensureSchema(database);
+	const software = await softwareValues(database, now, listObjects);
+	const sql = sources(now);
+	const projects = await readSource(database, sql.projects);
+	const files = await readSource(database, fileSnapshot(projects));
+
+	const messages = await readSource(
+		database,
+		contentSnapshot("audio_project_messages", projects),
+	);
+
+	const updates = await readSource(
+		database,
+		contentSnapshot("audio_project_updates", projects),
+	);
+
+	if (
+		files.length === 1000 ||
+		messages.length === 5000 ||
+		updates.length === 5000
+	) {
+		throw new Error(
+			"The reviewed content batch reached its limit. Reduce the project batch size before cleanup.",
+		);
+	}
+
+	const codes = await readSource(database, sql.codes);
+	const sessions = await readSource(database, sql.sessions);
+	const accessAudit = await readSource(database, sql.accessAudit);
+	const projectAudit = await readSource(database, sql.projectAudit);
+
+	return {
+		version: 2,
+		environment,
+		storage,
+		generatedAt: now.toISOString(),
+		sources: {
+			...Object.fromEntries(
+				Object.entries(software.values).map(([name, rows]) => [
+					name,
+					hash(JSON.stringify(rows)),
+				]),
+			),
+			projects: hash(JSON.stringify(projects)),
+			files: hash(JSON.stringify(files)),
+			messages: hash(JSON.stringify(messages)),
+			updates: hash(JSON.stringify(updates)),
+			codes: hash(JSON.stringify(codes)),
+			sessions: hash(JSON.stringify(sessions)),
+			accessAudit: hash(JSON.stringify(accessAudit)),
+			projectAudit: hash(JSON.stringify(projectAudit)),
+		},
+		counts: {
+			...Object.fromEntries(
+				Object.entries(software.values).map(([name, rows]) => [
+					name,
+					rows.length,
+				]),
+			),
+			projects: projects.length,
+			objects: files.length,
+			messages: messages.length,
+			updates: updates.length,
+			codes: codes.length,
+			sessions: sessions.length,
+			accessAudit: accessAudit.length,
+			projectAudit: projectAudit.length,
+		},
+		notes:
+			"Preview contains counts and source hashes only. Apply the matching manifest within 24 hours. Object deletion precedes atomic database cleanup; if it fails, client access remains closed and a fresh preview can be applied after the storage issue is fixed. Run owner request retention separately after studio cleanup.",
+	};
 }
 
 export function studioRetentionCompletion(counts) {
-  return `Removed ${counts.projects} audio projects, ${counts.softwareProjects} software projects and ${counts.objects + counts.softwareObjects} stored files. Run owner request retention next.`;
+	return `Removed ${counts.projects} audio projects, ${counts.softwareProjects} software projects and ${counts.objects + counts.softwareObjects} stored files. Run owner request retention next.`;
 }
 
-export async function applyStudioRetention(database, review, environment, storage, deleteObject, now = new Date(), listObjects) {
-  if (!sameStorage(review?.storage, storage)) {
-    throw new Error('Studio retention review was generated for another database or bucket. Nothing was changed.');
-  }
-  if (review?.version !== 2 || review.environment !== environment ||
-    !Number.isFinite(Date.parse(review.generatedAt)) ||
-    now.getTime() < Date.parse(review.generatedAt) || now.getTime() - Date.parse(review.generatedAt) > 86400000) {
-    throw new Error('Studio retention review is invalid, for another environment, or older than 24 hours.');
-  }
-  await ensureSchema(database);
-  const software = await softwareValues(database,new Date(review.generatedAt),listObjects);
-  for (const [name,rows] of Object.entries(software.values)) {
-    if (hash(JSON.stringify(rows))!==review.sources?.[name] || rows.length!==review.counts?.[name]) throw new Error('Software retention source changed. Generate a fresh preview.');
-  }
-  const sql = sources(new Date(review.generatedAt));
-  const queries = { projects: sql.projects, codes: sql.codes, sessions: sql.sessions,
-    accessAudit: sql.accessAudit, projectAudit: sql.projectAudit };
-  const values = {};
-  for (const [name, query] of Object.entries(queries)) values[name] = await readSource(database, query);
-  values.files = await readSource(database, fileSnapshot(values.projects));
-  values.messages = await readSource(database, contentSnapshot('audio_project_messages', values.projects));
-  values.updates = await readSource(database, contentSnapshot('audio_project_updates', values.projects));
-  for (const [name, rows] of Object.entries(values)) {
-    if (hash(JSON.stringify(rows)) !== review.sources?.[name] || rows.length !== review.counts?.[name === 'files' ? 'objects' : name]) {
-      throw new Error('Studio retention source changed or review was already applied. Generate a fresh preview.');
-    }
-  }
-  const projectIds = ids(values.projects);
-  const objectRows = values.files;
-  for (const [, requestId, key] of objectRows) {
-    if (!/^studio\/projects\/[a-z0-9-]{1,100}\/[a-z0-9-]{1,100}\.(mp3|wav)$/.test(key) ||
-      !key.startsWith(`studio/projects/${requestId}/`)) throw new Error('Unexpected private object key; no database content was removed.');
-  }
-  const guard = (query, rows) => `SELECT CASE WHEN (${query})=${quote(JSON.stringify(rows))} THEN 1 ELSE json_extract('changed','$') END`;
-  const fileIds = ids(objectRows);
-  const softwareIds=ids(software.values.softwareProjects);
-  const softwareStatements = software.values.softwareProjects.length ? [
-    `UPDATE software_offer_links SET revoked_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds}) AND revoked_at IS NULL`,
-    `UPDATE software_agreement_sessions SET revoked_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND revoked_at IS NULL`,
-    `UPDATE software_agreement_links SET used_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND used_at IS NULL`,
-    `DELETE FROM software_agreement_events WHERE offer_id IN (SELECT p.offer_id FROM software_projects p WHERE p.request_id IN (${softwareIds}) AND p.signature_source='external') AND agreement_id IS NULL`,
-    `DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
-    `DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
-    `DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
-    `DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_offers SET terms_json='{}',sent_by=NULL,recipient_email_snapshot=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN recipient_email_snapshot ELSE NULL END,agreement_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN agreement_details_json ELSE NULL END WHERE request_id IN (${softwareIds})`,
-    `UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',start_details_json=NULL,external_signature_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_projects.offer_id) THEN external_signature_details_json ELSE NULL END,content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
-    `INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
-  ] : [];
-  if (software.values.softwareInvoiceRefs.length) softwareStatements.push(`UPDATE software_invoices SET stripe_customer_id=NULL,hosted_invoice_url=NULL,created_by='',creation_started_at=NULL,external_refs_deleted_at=${quote(now.toISOString())} WHERE id IN (${ids(software.values.softwareInvoiceRefs)})`);
-  if (software.values.softwareInvoicesOld.length) softwareStatements.push(
-    `DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)}))`,
-    `DELETE FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)})`);
-  if (software.values.softwareAudit.length) softwareStatements.push(`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`);
-  const statements = [
-    ...Object.entries(software.queries).filter(([name])=>!['softwareProjects','softwareInvoiceRefs','softwareInvoicesOld'].includes(name)).map(([name,query])=>guard(query,software.values[name])),
-    ...(software.values.softwareProjects.length ? [guard(snapshot({columns:'request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json',from:'software_projects',where:`request_id IN (${softwareIds})`,order:'request_id',limit:25}),software.values.softwareProjects)] : []),
-    ...softwareStatements,
-    ...Object.entries(queries).map(([name, query]) => guard(query, values[name])),
-    guard(fileSnapshot(values.projects), values.files),
-    guard(contentSnapshot('audio_project_messages', values.projects), values.messages),
-    guard(contentSnapshot('audio_project_updates', values.projects), values.updates),
-    `SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id IN (${projectIds}) AND revoked_at IS NULL)
+export async function applyStudioRetention(
+	database,
+	review,
+	environment,
+	storage,
+	deleteObject,
+	now = new Date(),
+	listObjects,
+) {
+	if (!sameStorage(review?.storage, storage)) {
+		throw new Error(
+			"Studio retention review was generated for another database or bucket. Nothing was changed.",
+		);
+	}
+
+	if (
+		review?.version !== 2 ||
+		review.environment !== environment ||
+		!Number.isFinite(Date.parse(review.generatedAt)) ||
+		now.getTime() < Date.parse(review.generatedAt) ||
+		now.getTime() - Date.parse(review.generatedAt) > 86400000
+	) {
+		throw new Error(
+			"Studio retention review is invalid, for another environment, or older than 24 hours.",
+		);
+	}
+
+	await ensureSchema(database);
+
+	const software = await softwareValues(
+		database,
+		new Date(review.generatedAt),
+		listObjects,
+	);
+
+	for (const [name, rows] of Object.entries(software.values)) {
+		if (
+			hash(JSON.stringify(rows)) !== review.sources?.[name] ||
+			rows.length !== review.counts?.[name]
+		)
+			throw new Error(
+				"Software retention source changed. Generate a fresh preview.",
+			);
+	}
+
+	const sql = sources(new Date(review.generatedAt));
+
+	const queries = {
+		projects: sql.projects,
+		codes: sql.codes,
+		sessions: sql.sessions,
+		accessAudit: sql.accessAudit,
+		projectAudit: sql.projectAudit,
+	};
+
+	const values = {};
+
+	for (const [name, query] of Object.entries(queries))
+		values[name] = await readSource(database, query);
+	values.files = await readSource(database, fileSnapshot(values.projects));
+	values.messages = await readSource(
+		database,
+		contentSnapshot("audio_project_messages", values.projects),
+	);
+	values.updates = await readSource(
+		database,
+		contentSnapshot("audio_project_updates", values.projects),
+	);
+
+	for (const [name, rows] of Object.entries(values)) {
+		if (
+			hash(JSON.stringify(rows)) !== review.sources?.[name] ||
+			rows.length !== review.counts?.[name === "files" ? "objects" : name]
+		) {
+			throw new Error(
+				"Studio retention source changed or review was already applied. Generate a fresh preview.",
+			);
+		}
+	}
+
+	const projectIds = ids(values.projects);
+	const objectRows = values.files;
+
+	for (const [, requestId, key] of objectRows) {
+		if (
+			!/^studio\/projects\/[a-z0-9-]{1,100}\/[a-z0-9-]{1,100}\.(mp3|wav)$/.test(
+				key,
+			) ||
+			!key.startsWith(`studio/projects/${requestId}/`)
+		)
+			throw new Error(
+				"Unexpected private object key; no database content was removed.",
+			);
+	}
+
+	const guard = (query, rows) =>
+		`SELECT CASE WHEN (${query})=${quote(JSON.stringify(rows))} THEN 1 ELSE json_extract('changed','$') END`;
+
+	const fileIds = ids(objectRows);
+	const softwareIds = ids(software.values.softwareProjects);
+
+	const softwareStatements = software.values.softwareProjects.length
+		? [
+				`UPDATE software_offer_links SET revoked_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds}) AND revoked_at IS NULL`,
+				`UPDATE software_agreement_sessions SET revoked_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND revoked_at IS NULL`,
+				`UPDATE software_agreement_links SET used_at=${quote(now.toISOString())} WHERE purpose='agreement' AND offer_id IN (SELECT id FROM software_offers WHERE request_id IN (${softwareIds})) AND used_at IS NULL`,
+				`DELETE FROM software_agreement_events WHERE offer_id IN (SELECT p.offer_id FROM software_projects p WHERE p.request_id IN (${softwareIds}) AND p.signature_source='external') AND agreement_id IS NULL`,
+				`DELETE FROM software_project_messages WHERE request_id IN (${softwareIds})`,
+				`DELETE FROM software_project_updates WHERE request_id IN (${softwareIds})`,
+				`DELETE FROM software_milestone_deposits WHERE request_id IN (${softwareIds})`,
+				`DELETE FROM software_milestone_payments WHERE request_id IN (${softwareIds})`,
+				`UPDATE software_offers SET terms_json='{}',sent_by=NULL,recipient_email_snapshot=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN recipient_email_snapshot ELSE NULL END,agreement_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_offers.id) THEN agreement_details_json ELSE NULL END WHERE request_id IN (${softwareIds})`,
+				`UPDATE software_projects SET terms_json='{}',waiting_for='',started_by='',start_details_json=NULL,external_signature_details_json=CASE WHEN EXISTS(SELECT 1 FROM software_agreements a WHERE a.offer_id=software_projects.offer_id) THEN external_signature_details_json ELSE NULL END,content_deleted_at=${quote(now.toISOString())} WHERE request_id IN (${softwareIds})`,
+				`INSERT INTO software_project_audit(request_id,action,actor,occurred_at) SELECT request_id,'content-deleted','retention',${quote(now.toISOString())} FROM software_projects WHERE request_id IN (${softwareIds})`,
+			]
+		: [];
+
+	if (software.values.softwareInvoiceRefs.length)
+		softwareStatements.push(
+			`UPDATE software_invoices SET stripe_customer_id=NULL,hosted_invoice_url=NULL,created_by='',creation_started_at=NULL,external_refs_deleted_at=${quote(now.toISOString())} WHERE id IN (${ids(software.values.softwareInvoiceRefs)})`,
+		);
+
+	if (software.values.softwareInvoicesOld.length)
+		softwareStatements.push(
+			`DELETE FROM stripe_webhook_events WHERE invoice_id IN (SELECT stripe_invoice_id FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)}))`,
+			`DELETE FROM software_invoices WHERE id IN (${ids(software.values.softwareInvoicesOld)})`,
+		);
+
+	if (software.values.softwareAudit.length)
+		softwareStatements.push(
+			`DELETE FROM software_project_audit WHERE id IN (${ids(software.values.softwareAudit)})`,
+		);
+
+	const statements = [
+		...Object.entries(software.queries)
+			.filter(
+				([name]) =>
+					![
+						"softwareProjects",
+						"softwareInvoiceRefs",
+						"softwareInvoicesOld",
+					].includes(name),
+			)
+			.map(([name, query]) => guard(query, software.values[name])),
+		...(software.values.softwareProjects.length
+			? [
+					guard(
+						snapshot({
+							columns:
+								"request_id,updated_at,invitation_status,invitation_attempted_at,invitation_sent_at,start_details_json,external_signature_details_json",
+							from: "software_projects",
+							where: `request_id IN (${softwareIds})`,
+							order: "request_id",
+							limit: 25,
+						}),
+						software.values.softwareProjects,
+					),
+				]
+			: []),
+		...softwareStatements,
+		...Object.entries(queries).map(([name, query]) =>
+			guard(query, values[name]),
+		),
+		guard(fileSnapshot(values.projects), values.files),
+		guard(
+			contentSnapshot("audio_project_messages", values.projects),
+			values.messages,
+		),
+		guard(
+			contentSnapshot("audio_project_updates", values.projects),
+			values.updates,
+		),
+		`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id IN (${projectIds}) AND revoked_at IS NULL)
       THEN 1 ELSE json_extract('access-open','$') END`,
-    `DELETE FROM audio_client_codes WHERE email IN (${ids(values.codes)})`,
-    `DELETE FROM audio_client_sessions WHERE token_hash IN (${ids(values.sessions)})`,
-    `DELETE FROM audio_client_access_audit WHERE id IN (${ids(values.accessAudit)})`,
-    `DELETE FROM audio_project_audit WHERE id IN (${ids(values.projectAudit)})`,
-    `DELETE FROM audio_project_file_access WHERE file_id IN (${fileIds})`,
-    `DELETE FROM audio_project_updates WHERE request_id IN (${projectIds})`,
-    `DELETE FROM audio_project_messages WHERE request_id IN (${projectIds})`,
-    `DELETE FROM audio_project_files WHERE request_id IN (${projectIds})`,
-    `UPDATE audio_projects SET content_deleted_at=${quote(now.toISOString())}
+		`DELETE FROM audio_client_codes WHERE email IN (${ids(values.codes)})`,
+		`DELETE FROM audio_client_sessions WHERE token_hash IN (${ids(values.sessions)})`,
+		`DELETE FROM audio_client_access_audit WHERE id IN (${ids(values.accessAudit)})`,
+		`DELETE FROM audio_project_audit WHERE id IN (${ids(values.projectAudit)})`,
+		`DELETE FROM audio_project_file_access WHERE file_id IN (${fileIds})`,
+		`DELETE FROM audio_project_updates WHERE request_id IN (${projectIds})`,
+		`DELETE FROM audio_project_messages WHERE request_id IN (${projectIds})`,
+		`DELETE FROM audio_project_files WHERE request_id IN (${projectIds})`,
+		`UPDATE audio_projects SET content_deleted_at=${quote(now.toISOString())}
       WHERE request_id IN (${projectIds}) AND revoked_at IS NOT NULL AND content_deleted_at IS NULL`,
-  ];
-  if (statements.some(statement => Buffer.byteLength(statement) > 90_000)) throw new Error('Reviewed studio retention batch is too large. Reduce batch limits.');
-  if (values.projects.length) {
-    await database.batch([
-      guard(sql.projects, values.projects),
-      guard(fileSnapshot(values.projects), values.files),
-      guard(contentSnapshot('audio_project_messages', values.projects), values.messages),
-      guard(contentSnapshot('audio_project_updates', values.projects), values.updates),
-      `UPDATE audio_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())})
+	];
+
+	if (statements.some((statement) => Buffer.byteLength(statement) > 90_000))
+		throw new Error(
+			"Reviewed studio retention batch is too large. Reduce batch limits.",
+		);
+
+	if (values.projects.length) {
+		await database.batch([
+			guard(sql.projects, values.projects),
+			guard(fileSnapshot(values.projects), values.files),
+			guard(
+				contentSnapshot("audio_project_messages", values.projects),
+				values.messages,
+			),
+			guard(
+				contentSnapshot("audio_project_updates", values.projects),
+				values.updates,
+			),
+			`UPDATE audio_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())})
         WHERE request_id IN (${projectIds}) AND content_deleted_at IS NULL`,
-    ]);
-  }
-  if (software.values.softwareProjects.length || software.values.softwareInvoiceRefs.length || software.values.softwareInvoicesOld.length) await database.batch([
-    ...Object.entries(software.queries).map(([name,query])=>guard(query,software.values[name])),
-    `UPDATE software_invoices SET retention_fenced_at=COALESCE(retention_fenced_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds}) OR id IN (${ids([...software.values.softwareInvoiceRefs,...software.values.softwareInvoicesOld])})`,
-    `UPDATE software_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds})`,
-  ]);
-  for (const [key] of software.values.softwareObjects) await deleteObject(key);
-  for (const [, , key] of objectRows) await deleteObject(key);
-  await database.batch(statements);
-  return review.counts;
+		]);
+	}
+
+	if (
+		software.values.softwareProjects.length ||
+		software.values.softwareInvoiceRefs.length ||
+		software.values.softwareInvoicesOld.length
+	)
+		await database.batch([
+			...Object.entries(software.queries).map(([name, query]) =>
+				guard(query, software.values[name]),
+			),
+			`UPDATE software_invoices SET retention_fenced_at=COALESCE(retention_fenced_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds}) OR id IN (${ids([...software.values.softwareInvoiceRefs, ...software.values.softwareInvoicesOld])})`,
+			`UPDATE software_projects SET revoked_at=COALESCE(revoked_at,${quote(now.toISOString())}) WHERE request_id IN (${softwareIds})`,
+		]);
+
+	for (const [key] of software.values.softwareObjects) await deleteObject(key);
+
+	for (const [, , key] of objectRows) await deleteObject(key);
+	await database.batch(statements);
+
+	return review.counts;
 }
 
 export function remoteObjectDeleteArgs(key, storage, configPath) {
-  // Wrangler takes the bucket from the object path, so it must come from the reviewed identity.
-  const args = ['node_modules/wrangler/bin/wrangler.js', 'r2', 'object', 'delete', `${storage.bucket}/${key}`, '--remote'];
-  if (storage.jurisdiction) args.push('--jurisdiction', storage.jurisdiction);
-  if (configPath) args.push('--config', resolve(configPath));
-  return args;
+	// Wrangler takes the bucket from the object path, so it must come from the reviewed identity.
+	const args = [
+		"node_modules/wrangler/bin/wrangler.js",
+		"r2",
+		"object",
+		"delete",
+		`${storage.bucket}/${key}`,
+		"--remote",
+	];
+
+	if (storage.jurisdiction) args.push("--jurisdiction", storage.jurisdiction);
+
+	if (configPath) args.push("--config", resolve(configPath));
+
+	return args;
 }
 
 async function remoteObjectDeleter(key, storage, configPath) {
-  const temporary = await mkdtemp(resolve('.private/studio-retention-'));
-  try {
-    const args = remoteObjectDeleteArgs(key, storage, configPath);
-    const result = spawnSync(process.execPath, args, {
-      encoding: 'utf8', env: { ...process.env, WRANGLER_LOG_PATH: resolve(temporary, 'wrangler.log') },
-    });
-    if (result.status !== 0 || /Operation cancelled/i.test(result.stdout)) throw new Error('Private object deletion failed. Retention stopped; inspect R2 and generate a fresh preview.');
-  } finally { await rm(temporary, { recursive: true, force: true }); }
+	const temporary = await mkdtemp(resolve(".private/studio-retention-"));
+
+	try {
+		const args = remoteObjectDeleteArgs(key, storage, configPath);
+
+		const result = spawnSync(process.execPath, args, {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				WRANGLER_LOG_PATH: resolve(temporary, "wrangler.log"),
+			},
+		});
+
+		if (result.status !== 0 || /Operation cancelled/i.test(result.stdout))
+			throw new Error(
+				"Private object deletion failed. Retention stopped; inspect R2 and generate a fresh preview.",
+			);
+	} finally {
+		await rm(temporary, { recursive: true, force: true });
+	}
 }
 
 async function main() {
-  const args = process.argv.slice(2);
-  const remote = args.includes('--remote'), applyIndex = args.indexOf('--apply'), configIndex = args.indexOf('--config');
-  const reviewPath = applyIndex < 0 ? '.private/studio-retention-review.json' : args[applyIndex + 1];
-  const configPath = configIndex < 0 ? undefined : args[configIndex + 1];
-  const allowed = new Set(['--remote', '--apply', '--config', ...(applyIndex < 0 ? [] : [reviewPath]), ...(configPath ? [configPath] : [])]);
-  if (!reviewPath || (configIndex >= 0 && (!remote || !configPath)) || args.some(arg => !allowed.has(arg))) {
-    throw new Error('Usage: node scripts/studio-retention.mjs [--remote --config path] [--apply .private/studio-retention-review.json]');
-  }
-  await mkdir('.private', { recursive: true });
-  const environment = remote ? (configPath ? `Remote ${configPath}` : 'Production') : 'Local test data';
-  const storage = await readStudioStorageIdentity(remote ? configPath ?? 'wrangler.jsonc' : '.private/wrangler-music-preview.json');
-  const database = await openMusicDatabase(remote, configPath);
-  // A remote prefix listing uses only the selected AUDIO binding through Wrangler's
-  // existing platform proxy. It never falls back to another bucket or local storage.
-  const softwareTable = await database.query("SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'");
-  const needsSoftwareObjects = softwareTable.length && (await database.query(`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(new Date())} LIMIT 1`)).length;
-  const needsProxy = needsSoftwareObjects || (!remote && applyIndex >= 0);
-  const proxyDirectory = remote && needsProxy ? await mkdtemp(resolve('.private/software-retention-')) : null;
-  let proxy;
-  try {
-    let proxyConfig = resolve('.private/wrangler-music-preview.json');
-    if (remote && needsProxy) {
-      const selected = parseJsonc(await readFile(resolve(configPath ?? 'wrangler.jsonc'),'utf8'));
-      proxyConfig = resolve(proxyDirectory,'wrangler.json');
-      await writeFile(proxyConfig,JSON.stringify({name:'software-retention-list',compatibility_date:selected.compatibility_date,
-        ...(storage.accountId ? {account_id:storage.accountId} : {}),
-        r2_buckets:[{binding:'AUDIO',bucket_name:storage.bucket,remote:true,...(storage.jurisdiction ? {jurisdiction:storage.jurisdiction} : {})}]}),{mode:0o600});
-    }
-    if (needsProxy) proxy = await (await import('wrangler')).getPlatformProxy({configPath:proxyConfig,envFiles:[],
-      remoteBindings:remote,persist:remote ? false : {path:'.wrangler/state/v3'}});
-  } catch (error) { if (proxyDirectory) await rm(proxyDirectory,{recursive:true,force:true}); await database.close(); throw error; }
-  const listObjects = proxy ? async prefix => {
-    const keys=[]; let cursor;
-    do { const page=await proxy.env.AUDIO.list({prefix,cursor}); keys.push(...page.objects.map(object=>object.key)); cursor=page.truncated ? page.cursor : undefined; } while(cursor);
-    return keys;
-  } : undefined;
-  try {
-    if (applyIndex >= 0) {
-      const review = JSON.parse(await readFile(resolve(reviewPath), 'utf8'));
-      const counts = await applyStudioRetention(database, review, environment, storage,
-        key => remote ? remoteObjectDeleter(key, storage, configPath) : proxy.env.AUDIO.delete(key), new Date(), listObjects);
-      console.log(studioRetentionCompletion(counts));
-    } else {
-      const review = await previewStudioRetention(database, environment, storage, new Date(), listObjects);
-      await writeFile(reviewPath, JSON.stringify(review, null, 2), { mode: 0o600 });
-      await writeFile('.private/studio-retention-review.html', renderMusicReport('Studio retention review',
-        `${environment} · ${review.generatedAt}`, review.notes, { Counts: review.counts }), { mode: 0o600 });
-      console.log(`Preview only: ${review.counts.projects} closed projects and ${review.counts.objects} private objects are eligible. Review .private/studio-retention-review.html before apply.`);
-    }
-  } finally { await proxy?.dispose(); if (proxyDirectory) await rm(proxyDirectory,{recursive:true,force:true}); await database.close(); }
+	const args = process.argv.slice(2);
+
+	const remote = args.includes("--remote"),
+		applyIndex = args.indexOf("--apply"),
+		configIndex = args.indexOf("--config");
+
+	const reviewPath =
+		applyIndex < 0
+			? ".private/studio-retention-review.json"
+			: args[applyIndex + 1];
+
+	const configPath = configIndex < 0 ? undefined : args[configIndex + 1];
+
+	const allowed = new Set([
+		"--remote",
+		"--apply",
+		"--config",
+		...(applyIndex < 0 ? [] : [reviewPath]),
+		...(configPath ? [configPath] : []),
+	]);
+
+	if (
+		!reviewPath ||
+		(configIndex >= 0 && (!remote || !configPath)) ||
+		args.some((arg) => !allowed.has(arg))
+	) {
+		throw new Error(
+			"Usage: node scripts/studio-retention.mjs [--remote --config path] [--apply .private/studio-retention-review.json]",
+		);
+	}
+
+	await mkdir(".private", { recursive: true });
+
+	const environment = remote
+		? configPath
+			? `Remote ${configPath}`
+			: "Production"
+		: "Local test data";
+
+	const storage = await readStudioStorageIdentity(
+		remote
+			? (configPath ?? "wrangler.jsonc")
+			: ".private/wrangler-music-preview.json",
+	);
+
+	const database = await openMusicDatabase(remote, configPath);
+
+	// A remote prefix listing uses only the selected AUDIO binding through Wrangler's
+	// existing platform proxy. It never falls back to another bucket or local storage.
+	const softwareTable = await database.query(
+		"SELECT name FROM sqlite_master WHERE type='table' AND name='software_projects'",
+	);
+
+	const needsSoftwareObjects =
+		softwareTable.length &&
+		(
+			await database.query(
+				`SELECT request_id FROM software_projects WHERE ${softwareRetentionProjectPredicate(new Date())} LIMIT 1`,
+			)
+		).length;
+
+	const needsProxy = needsSoftwareObjects || (!remote && applyIndex >= 0);
+
+	const proxyDirectory =
+		remote && needsProxy
+			? await mkdtemp(resolve(".private/software-retention-"))
+			: null;
+
+	let proxy;
+
+	try {
+		let proxyConfig = resolve(".private/wrangler-music-preview.json");
+
+		if (remote && needsProxy) {
+			const selected = parseJsonc(
+				await readFile(resolve(configPath ?? "wrangler.jsonc"), "utf8"),
+			);
+
+			proxyConfig = resolve(proxyDirectory, "wrangler.json");
+
+			const proxyWrangler = {
+				name: "software-retention-list",
+				compatibility_date: selected.compatibility_date,
+			};
+
+			if (storage.accountId) proxyWrangler.account_id = storage.accountId;
+
+			const audioBucket = {
+				binding: "AUDIO",
+				bucket_name: storage.bucket,
+				remote: true,
+			};
+
+			if (storage.jurisdiction) audioBucket.jurisdiction = storage.jurisdiction;
+			proxyWrangler.r2_buckets = [audioBucket];
+
+			await writeFile(proxyConfig, JSON.stringify(proxyWrangler), {
+				mode: 0o600,
+			});
+		}
+
+		if (needsProxy)
+			proxy = await (await import("wrangler")).getPlatformProxy({
+				configPath: proxyConfig,
+				envFiles: [],
+				remoteBindings: remote,
+				persist: remote ? false : { path: ".wrangler/state/v3" },
+			});
+	} catch (error) {
+		if (proxyDirectory)
+			await rm(proxyDirectory, { recursive: true, force: true });
+		await database.close();
+		throw error;
+	}
+
+	const listObjects = proxy
+		? async (prefix) => {
+				const keys = [];
+				let cursor;
+
+				do {
+					const page = await proxy.env.AUDIO.list({ prefix, cursor });
+					keys.push(...page.objects.map((object) => object.key));
+					cursor = page.truncated ? page.cursor : undefined;
+				} while (cursor);
+
+				return keys;
+			}
+		: undefined;
+
+	try {
+		if (applyIndex >= 0) {
+			const review = JSON.parse(await readFile(resolve(reviewPath), "utf8"));
+
+			const counts = await applyStudioRetention(
+				database,
+				review,
+				environment,
+				storage,
+				(key) =>
+					remote
+						? remoteObjectDeleter(key, storage, configPath)
+						: proxy.env.AUDIO.delete(key),
+				new Date(),
+				listObjects,
+			);
+
+			console.log(studioRetentionCompletion(counts));
+		} else {
+			const review = await previewStudioRetention(
+				database,
+				environment,
+				storage,
+				new Date(),
+				listObjects,
+			);
+
+			await writeFile(reviewPath, JSON.stringify(review, null, 2), {
+				mode: 0o600,
+			});
+			await writeFile(
+				".private/studio-retention-review.html",
+				renderMusicReport(
+					"Studio retention review",
+					`${environment} · ${review.generatedAt}`,
+					review.notes,
+					{ Counts: review.counts },
+				),
+				{ mode: 0o600 },
+			);
+			console.log(
+				`Preview only: ${review.counts.projects} closed projects and ${review.counts.objects} private objects are eligible. Review .private/studio-retention-review.html before apply.`,
+			);
+		}
+	} finally {
+		await proxy?.dispose();
+
+		if (proxyDirectory)
+			await rm(proxyDirectory, { recursive: true, force: true });
+		await database.close();
+	}
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main().catch(error => {
-  console.error(error.message); process.exitCode = 1;
-});
+
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+)
+	main().catch((error) => {
+		console.error(error.message);
+		process.exitCode = 1;
+	});

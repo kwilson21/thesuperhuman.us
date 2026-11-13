@@ -75,6 +75,11 @@
   --accent: #AE5534;
   /* Form field edges need 3:1 against paper (WCAG 1.4.11); --rule stays for hairlines. About 3.4:1. */
   --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper));
+  /* The closing panel: the site's one soft surface, a half mix of rule and paper. */
+  --panel: color-mix(in srgb, var(--rule) 50%, var(--paper));
+  /* Corner radii: panels take 32px, buttons are pills. Fields and pictures keep 3px. */
+  --radius-panel: 32px;
+  --radius-button: 999px;
 }
 
 @layer base {
@@ -244,15 +249,21 @@
   @media (hover: hover) and (pointer: fine) {
     .site-link:hover span { transform: translateX(3px); }
   }
-  .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; }
+  .site-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; padding: .55rem 1.5rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: var(--radius-button); line-height: 1.4; white-space: nowrap; }
+  /* Reflow (WCAG 1.4.10): on the narrowest phones a long label may wrap instead of pushing past the gutter. */
+  @media (max-width: 380px) { .site-button { white-space: normal; text-align: center; } }
+
+  .site-button-large { min-height: 52px; font-size: 1.0625rem; padding-inline: 1.75rem; gap: .6rem; }
+  .site-button-large span { transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-button:hover:not(:disabled) { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+    .site-button-large:hover span { transform: translateX(3px); }
     .context-disclosure > summary:hover { color: var(--accent); }
   }
   .site-button-outline { background: transparent; color: var(--ink); }
   @media (prefers-reduced-motion: reduce) {
-    .site-link span { transition: none; }
-    .site-link span { transform: none; }
+    .site-link span, .site-link:hover span { transition: none; transform: none; }
+    .site-button-large span, .site-button-large:hover span { transition: none; transform: none; }
   }
   @media (prefers-reduced-motion: no-preference) {
     @view-transition { navigation: auto; }
@@ -286,10 +297,6 @@
   .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
   .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
-  .page-connect { border-top: 1px solid var(--rule); padding-block: 2.5rem; margin-top: var(--site-section-space); display: flex; justify-content: space-between; align-items: center; gap: 2rem; }
-  .page-connect h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.15; letter-spacing: -.025em; }
-  .page-connect p:not(.page-kicker) { color: var(--muted); font-size: 1.125rem; margin-top: .6rem; }
-  .page-connect > .site-button { flex-shrink: 0; }
   .context-disclosure { margin-top: 1.75rem; }
   .context-disclosure > summary { display: inline-flex; align-items: baseline; gap: .8rem; border-bottom: 1px solid var(--accent); cursor: pointer; list-style: none; min-height: 32px; }
   .context-disclosure > summary::-webkit-details-marker { display: none; }
@@ -298,7 +305,6 @@
   .context-disclosure > div { padding-top: 1rem; }
   .context-disclosure > div > p + p { margin-top: 1rem; }
   .context-disclosure > div > .site-link { margin-top: 1rem; }
-  @media(max-width: 800px) { .page-connect { flex-direction: column; align-items: flex-start; } }
 }
 
 /* Shared form presentation for contact, resume and structured audio inquiries. */

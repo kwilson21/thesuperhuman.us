@@ -1,78 +1,74 @@
-import type { APIRoute } from 'astro';
-import { validateContactInput } from '~/lib/validation';
-import { verifyTurnstile } from '~/lib/turnstile';
-import { checkRateLimit } from '~/lib/rate-limit';
-import { sendContactEmails } from '~/lib/resend';
+import type { APIRoute } from "astro";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { readContactInput } from "~/server/contact-input";
+import {
+	forbidden,
+	invalidJson,
+	isAllowedOrigin,
+	readJsonBody,
+} from "~/server/public-form";
+import { submitContact } from "~/server/flows/contact";
+import { runRoute } from "~/server/run";
+import {
+	legacyBindingsOrDefect,
+	liveMail,
+	liveTurnstile,
+} from "~/server/services";
 
 export const prerender = false;
 
-const ALLOWED_ORIGINS = [
-  'https://thesuperhuman.us',
-  'https://www.thesuperhuman.us',
-];
-
-function isAllowedOrigin(origin: string | null): boolean {
-  if (!origin) return false;
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-  // Cloudflare Pages preview deployments
-  if (/^https:\/\/[a-z0-9-]+\.thesuperhuman-us\.pages\.dev$/.test(origin)) return true;
-  return false;
-}
-
 export const POST: APIRoute = async (context) => {
-  const { request, locals } = context;
-  const env = (locals as any).runtime.env as Env;
+	const { request, locals } = context;
+	const env = locals.runtime.env;
 
-  // Origin check
-  const origin = request.headers.get('origin');
-  if (!isAllowedOrigin(origin)) {
-    return Response.json({ ok: false, error: 'Forbidden' }, { status: 403 });
-  }
+	if (!isAllowedOrigin(request.headers.get("origin"))) return forbidden();
 
-  // Parse JSON
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ ok: false, error: 'Invalid JSON' }, { status: 400 });
-  }
+	const parsed = await readJsonBody(request);
 
-  // Validate
-  const validation = validateContactInput(body);
-  if (!validation.ok) {
-    return Response.json({ ok: false, errors: validation.errors }, { status: 400 });
-  }
-  const input = validation.value;
+	if (!parsed.ok) return invalidJson();
 
-  // Rate limit by IP
-  const ip = request.headers.get('cf-connecting-ip') ?? '0.0.0.0';
-  const rl = await checkRateLimit(env.RATE_LIMIT, ip);
-  if (!rl.allowed) {
-    return Response.json(
-      { ok: false, error: 'Please wait a few minutes before submitting again.' },
-      { status: 429 },
-    );
-  }
+	const input = readContactInput(parsed.body);
 
-  // Turnstile
-  const turnstileOk = await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip);
-  if (!turnstileOk) {
-    return Response.json({ ok: false, error: 'Captcha failed.' }, { status: 403 });
-  }
+	if (!input.ok) {
+		return Response.json({ ok: false, errors: input.errors }, { status: 400 });
+	}
 
-  // Send emails
-  const send = await sendContactEmails({
-    input,
-    apiKey: env.RESEND_API_KEY,
-    from: env.CONTACT_FROM_EMAIL,
-    to: env.CONTACT_TO_EMAIL,
-  });
-  if (!send.ok) {
-    return Response.json(
-      { ok: false, error: 'We could not confirm email delivery. Please email kazon.wilson@thesuperhuman.us directly.' },
-      { status: 500 },
-    );
-  }
+	// A missing RATE_LIMIT binding is a defect at its first read, as it always was (Astro answers 500).
+	const services = Context.merge(
+		Context.merge(
+			legacyBindingsOrDefect(env),
+			liveTurnstile(env.TURNSTILE_SECRET_KEY),
+		),
+		liveMail(env.RESEND_API_KEY),
+	);
 
-  return Response.json({ ok: true });
+	return runRoute(
+		services,
+		submitContact({
+			input: input.value,
+			visitor: {
+				ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+				turnstileToken: input.value.turnstileToken,
+			},
+			from: env.CONTACT_FROM_EMAIL,
+			to: env.CONTACT_TO_EMAIL,
+		}).pipe(
+			Effect.map(() => Response.json({ ok: true })),
+			Effect.catchTags({
+				RateLimited: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 429 }),
+					),
+				CaptchaFailed: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 403 }),
+					),
+				ContactNotDelivered: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 500 }),
+					),
+			}),
+		),
+	);
 };

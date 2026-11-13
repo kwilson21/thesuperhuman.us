@@ -1,256 +1,887 @@
-import type { OfferTerms } from '~/lib/software-offers';
-const editableSections = () => [...document.querySelectorAll<HTMLElement>('[data-software-action], [data-request-note], [data-software-editor]')];
-export const hasUnsavedRequestChanges = (submitted?: HTMLElement) => editableSections().some(section => section !== submitted && section.dataset.dirty === 'true');
-export const markRequestPageClean = () => editableSections().forEach(section => { section.dataset.dirty = 'false'; });
+import type { OfferTerms } from "~/lib/software-offers";
+
+const editableSections = () => [
+	...document.querySelectorAll<HTMLElement>(
+		"[data-software-action], [data-request-note], [data-software-editor]",
+	),
+];
+
+export const hasUnsavedRequestChanges = (submitted?: HTMLElement) =>
+	editableSections().some(
+		(section) => section !== submitted && section.dataset.dirty === "true",
+	);
+
+export const markRequestPageClean = () =>
+	editableSections().forEach((section) => {
+		section.dataset.dirty = "false";
+	});
+
+// Own-key lookup for a label or name table. Returns undefined for any other key.
+const ownValue = (table: Record<string, string>, key: string) =>
+	Object.hasOwn(table, key) ? table[key] : undefined;
+
 export function setupSoftwareOffers() {
-  const sessionValue = (key: string, value?: string | null) => {
-    try {
-      if (value === undefined) return sessionStorage.getItem(key);
-      if (value === null) sessionStorage.removeItem(key); else sessionStorage.setItem(key, value);
-      return value;
-    } catch { /* The link remains usable in this page when browser storage is disabled. */ }
-    return null;
-  };
-  class TransportError extends Error {}
-  const post = async (endpoint: string, body: unknown) => {
-    let response: Response;
-    try { response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); }
-    catch { throw new TransportError('The request didn’t finish. Check the activity log or Resend before sending again.'); }
-    let parsed: unknown;
-    try { parsed = await response.json(); }
-    catch { throw new Error(response.status === 401 || response.status === 403 ? 'Your owner session ended. Reload the page to sign in again.' : 'Something went wrong. Nothing was saved. Try again.'); }
-    const result = parsed as { message?: string; errors?: Record<string,string>; version: number; updatedAt: string; sentAt?: string; linkCreatedAt: string; link: string; emailSent: boolean; uncertain?: boolean; copySent?: boolean; attachmentCleanupPending?: boolean };
-    if (!response.ok) {
-      if (response.status === 409 && (body as { action?: string }).action === 'draft' && 'updatedAt' in result) {
-        const editor = document.querySelector<HTMLElement>('[data-software-editor]');
-        if (editor) editor.dataset.updated = result.updatedAt ?? '';
-      }
-      const form = document.querySelector<HTMLElement>('[data-offer-form]');
-      const messages = Object.entries(result.errors ?? {}).map(([path, message]) => {
-        const parts = path.split('.');
-        const milestone = parts[0] === 'milestones' && /^\d+$/.test(parts[1] ?? '');
-        const scope = milestone ? document.querySelectorAll<HTMLElement>('[data-milestone]')[Number(parts[1])] : form;
-        const field = parts.at(-1)!;
-        const names: Record<string, string> = { name: 'milestoneName', feeCents: 'fee', label: 'checkpointLabel', cancellationPercent: 'checkpointPercent', lowCents: 'rangeLow', highCents: 'rangeHigh' };
-        if (path.startsWith('agreement.')) {
-          scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${path}"]`).forEach(input => input.setAttribute('aria-invalid','true'));
-          return `${path.slice(10).replaceAll('_',' ')}: ${message}`;
-        }
-        const key = milestone ? parts[2] === 'checkpoint' ? parts[3] : parts[2] : field;
-        const labels: Record<string, string> = { outcome: 'Outcome', summary: 'Summary', milestones: 'Milestones', name: 'name', deliverables: 'deliverables', acceptance: 'acceptance examples', feeCents: 'fee', label: 'checkpoint label', cancellationPercent: 'checkpoint percent', clientInputs: 'What you need from them', exclusions: 'Outside this offer', timing: 'Timing', paymentMode: 'Payment mode', lowCents: 'Range low', highCents: 'Range high' };
-        scope?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[name="${names[key] ?? key}"]`).forEach(input => input.setAttribute('aria-invalid', 'true'));
-        return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ''}${labels[key] ?? 'Offer'}: ${message}`;
-      });
-      throw new Error([result.message, messages.join('\n')].filter(Boolean).join('\n') || 'Could not save. Try again.');
-    }
-    return result;
-  };
-  const editableForms = [...document.querySelectorAll<HTMLFormElement>('[data-software-action], [data-request-note]')];
-  editableForms.forEach(form => form.addEventListener('input', () => {
-    form.dataset.dirty = 'true';
-    form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
-  }));
-  const setSending = (page: HTMLElement, sending: boolean) => {
-    if (sending) page.setAttribute('inert', ''); else page.removeAttribute('inert');
-    if (sending) page.setAttribute('aria-busy', 'true'); else page.removeAttribute('aria-busy');
-    page.dataset.offerSending = String(sending);
-    page.dataset.busy = String(sending);
-  };
-  let reloading = false;
-  const hasUnsavedChanges = () => hasUnsavedRequestChanges();
-  const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
-    if (hasUnsavedChanges() && !confirm('You have unsaved changes in another section. Continue and lose them?')) return;
-    reloading = true;
-    sessionValue(`software-flash:${submitted?.dataset.endpoint ?? document.querySelector<HTMLElement>('[data-software-editor]')?.dataset.endpoint}`, status.textContent);
-    location.reload();
-  };
-  window.addEventListener('beforeunload', event => {
-    if (!reloading && hasUnsavedChanges()) event.preventDefault();
-  });
-  document.querySelectorAll<HTMLFormElement>('[data-software-action]').forEach(form => {
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      const requestPage = document.querySelector<HTMLElement>('[data-request-id]');
-      if (requestPage?.dataset.offerSending === 'true') return;
-      const action = form.dataset.softwareAction!, data = new FormData(form), status = form.querySelector<HTMLElement>('[data-software-status]')!;
-      if (action === 'decline' && !confirm('Send this message and decline the inquiry?')) return;
-      const button = form.querySelector<HTMLButtonElement>('button')!; button.disabled = true;
-      const revision = form.dataset.revision;
-      const sendingPage = action === 'question' || action === 'decline' ? requestPage ?? form : null;
-      if (sendingPage) setSending(sendingPage, true);
-      try {
-        const result = await post(form.dataset.endpoint!, { action, ...Object.fromEntries(data), expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated });
-        if (action === 'fit' && requestPage) requestPage.dataset.requestUpdated = result.updatedAt;
-        status.textContent = result.copySent === false ? 'Sent to the client. The owner copy didn’t send.' : action === 'fit' ? 'Fit review saved.' : 'Sent.';
-        if (form.dataset.revision === revision) form.dataset.dirty = 'false';
-        reload(status, form);
-      } catch (error) {
-        status.textContent = (error as Error).message;
-        if (error instanceof TransportError && (action === 'question' || action === 'decline')) button.textContent = 'Send again';
-      }
-      finally { button.disabled = false; if (sendingPage) setSending(sendingPage, false); }
-    });
-  });
-  const root = document.querySelector<HTMLElement>('[data-software-editor]');
-  if (!root) return;
-  const status = root.querySelector<HTMLElement>('[data-software-status]')!;
-  const endpoint = root.dataset.endpoint!;
-  const flashKey = `software-flash:${endpoint}`;
-  const flash = sessionValue(flashKey);
-  if (flash) { status.textContent = flash; sessionValue(flashKey, null); }
-  let link = '';
-  let changed = false;
-  let updateControls = () => {};
-  const linkInput = root.querySelector<HTMLInputElement>('[data-client-link]')!;
-  linkInput.addEventListener('focus', () => linkInput.select());
-  root.querySelector('[data-copy-link]')!.addEventListener('click', async () => {
-    try { if (!link || root.dataset.revoked === 'true') { status.textContent = 'The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.'; return; } await navigator.clipboard.writeText(link); status.textContent = 'Client link copied.'; }
-    catch { status.textContent = 'Clipboard unavailable. Select and copy the link in the Client link field.'; }
-  });
-  root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.addEventListener('click', async event => {
-    if (!confirm('Revoke the client link? Anyone using it will lose access.')) return;
-    const button = event.currentTarget as HTMLButtonElement; button.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { await post(endpoint, { action: 'revoke', expectedLinkCreatedAt: button.dataset.linkCreatedAt }); link = ''; root.dataset.revoked = 'true'; linkInput.value = ''; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = true;
-      root.querySelector<HTMLElement>('[data-link-state]')!.textContent = 'Client link revoked.'; button.hidden = true;
-      status.textContent = 'Client link revoked.'; updateControls(); reload(status); }
-    catch (error) { status.textContent = (error as Error).message; }
-    finally { button.disabled = root.dataset.revoked === 'true'; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; }
-  });
-  if (!root.querySelector('[data-offer-form]')) return;
-  const form = root.querySelector<HTMLFormElement>('[data-offer-form]')!, list = root.querySelector<HTMLElement>('[data-milestones]')!;
-  const attachmentBlock=form.querySelector<HTMLElement>('[data-agreement-attachments]');if(attachmentBlock)setupAgreementAttachments(attachmentBlock);
-  const send = root.querySelector<HTMLButtonElement>('[data-send-offer]')!, preview = root.querySelector<HTMLAnchorElement>('[data-preview-offer]')!;
-  let saved = Boolean(root.dataset.updated), inputRevision = 0;
-  const get = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)!.value.trim();
-  const checked = (element: HTMLElement, name: string) => element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
-  const lines = (value: string) => value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-  const amount = (value: string) => value ? Math.round(Number(value) * 100) : NaN;
-  const terms = (): OfferTerms => ({
-    outcome: get(form, 'outcome'), summary: get(form, 'summary'),
-    milestones: [...list.querySelectorAll<HTMLElement>('[data-milestone]')].map(row => ({ name: get(row, 'milestoneName'), deliverables: lines(get(row, 'deliverables')), acceptance: lines(get(row, 'acceptance')), feeCents: amount(get(row, 'fee')),
-      ...(checked(row, 'hasCheckpoint') ? { checkpoint: { label: get(row, 'checkpointLabel'), cancellationPercent: Number(get(row, 'checkpointPercent')) } } : {}) })),
-    clientInputs: get(form, 'clientInputs'), exclusions: get(form, 'exclusions'), timing: get(form, 'timing'),
-    paymentMode: form.querySelector<HTMLInputElement>('[name="paymentMode"]:checked')!.value as OfferTerms['paymentMode'],
-    ...(checked(form, 'hasRange') ? { projectRange: { lowCents: amount(get(form, 'rangeLow')), highCents: amount(get(form, 'rangeHigh')) } } : {}),
-  });
-  updateControls = () => {
-    root.dataset.dirty = String(changed);
-    root.querySelector<HTMLButtonElement>('[data-add-milestone]')!.disabled = list.children.length >= 3;
-    list.querySelectorAll<HTMLButtonElement>('[data-remove-milestone]').forEach(button => { button.disabled = list.children.length <= 1; });
-    list.querySelectorAll<HTMLElement>('[data-milestone]').forEach((row, index) => {
-      row.querySelector('legend')!.textContent = `Milestone ${index + 1}`;
-      row.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[name]').forEach(input => {
-        input.id = `milestone-${index + 1}-${input.name}`;
-        if (input.hasAttribute('aria-describedby')) input.setAttribute('aria-describedby', `${input.id}-hint`);
-      });
-      row.querySelectorAll<HTMLElement>('[data-hint]').forEach(hint => { hint.id = `milestone-${index + 1}-${hint.dataset.hint}-hint`; });
-      const active = checked(row, 'hasCheckpoint'), block = row.querySelector<HTMLElement>('[data-checkpoint]')!;
-      block.hidden = !active;
-      block.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !active; input.required = active; });
-    });
-    const rangeActive = checked(form, 'hasRange'), range = root.querySelector<HTMLElement>('[data-range]')!; range.hidden = !rangeActive; range.querySelectorAll<HTMLInputElement>('input').forEach(input => { input.disabled = !rangeActive; input.required = rangeActive; });
-    send.disabled = changed || !(saved || (root.dataset.sentVersion && root.dataset.revoked === 'true'));
-    preview.hidden = !saved || changed;
-  };
-  form.addEventListener('input', event => {
-    const input = event.target as HTMLInputElement;
-    input?.removeAttribute('aria-invalid');
-    if (input?.type === 'radio') form.querySelectorAll<HTMLInputElement>(`[name="${input.name}"]`).forEach(radio => radio.removeAttribute('aria-invalid'));
-    changed = true; inputRevision++; updateControls();
-  });
-  form.addEventListener('change', updateControls);
-  root.querySelector('[data-add-milestone]')!.addEventListener('click', () => {
-    if (list.children.length >= 3) return;
-    list.appendChild(root.querySelector<HTMLTemplateElement>('[data-milestone-template]')!.content.cloneNode(true));
-    const agreementRows=form.querySelector('[data-agreement-milestones]');if(agreementRows){const row=agreementRows.firstElementChild!.cloneNode(true) as HTMLElement;const index=agreementRows.children.length;row.dataset.agreementMilestone=String(index);row.querySelector('legend')!.textContent=`Milestone ${index+1} agreement details`;row.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[name]').forEach(input=>{input.name=input.name.replace(/milestones\.\d+\./,`milestones.${index}.`);input.value=input.name.endsWith('handoff')||input.type==='date'?'':'None';});agreementRows.appendChild(row);} changed = true; inputRevision++; updateControls();
-    list.lastElementChild!.querySelector<HTMLInputElement>('input')!.focus();
-    status.textContent = `Milestone ${list.children.length} added.`;
-  });
-  list.addEventListener('click', event => {
-    const button = (event.target as HTMLElement).closest('[data-remove-milestone]');
-    if (!button || list.children.length <= 1) return;
-    const row = button.closest('[data-milestone]')!;
-    const neighbor = row.nextElementSibling ?? row.previousElementSibling;
-    const index=Array.from(list.children).indexOf(row);const agreementRows=form.querySelector('[data-agreement-milestones]');agreementRows?.children[index]?.remove();agreementRows?.querySelectorAll<HTMLElement>('[data-agreement-milestone]').forEach((item,i)=>{item.querySelector('legend')!.textContent=`Milestone ${i+1} agreement details`;item.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('[name]').forEach(input=>input.name=input.name.replace(/milestones\.\d+\./,`milestones.${i}.`));});
-    row.remove(); changed = true; inputRevision++; updateControls();
-    (neighbor?.querySelector<HTMLInputElement>('input') ?? root.querySelector<HTMLButtonElement>('[data-add-milestone]'))!.focus();
-    status.textContent = 'Milestone removed.';
-  });
-  form.addEventListener('submit', async event => {
-    event.preventDefault(); const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!; button.disabled = true;
-    const revision = inputRevision;
-    const removedAttachmentKeys:string[]=JSON.parse(attachmentBlock?.dataset.removedKeys ?? '[]');
-    try { const result = await post(endpoint, { action: 'draft', terms: terms(), ...agreementDetails(form), removedAttachmentKeys, expectedUpdatedAt: root.dataset.updated || null });
-      if (attachmentBlock && !result.attachmentCleanupPending) attachmentBlock.dataset.removedKeys=JSON.stringify((JSON.parse(attachmentBlock.dataset.removedKeys??'[]') as string[]).filter(key=>!removedAttachmentKeys.includes(key)));
-      root.dataset.updated = result.updatedAt; root.dataset.version = String(result.version); saved = true; changed = inputRevision !== revision;
-      root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = root.dataset.sentVersion ? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress` : `Draft v${result.version} · Not sent`; status.textContent = result.attachmentCleanupPending ? 'Draft saved. Save again to retry attachment cleanup.' : changed ? 'Draft saved. Your newer edits still need saving.' : 'Draft saved. Nothing has been sent.'; updateControls();
-    } catch (error) { status.textContent = (error as Error).message; } finally { button.disabled = false; }
-  });
-  send.addEventListener('click', async () => {
-    if (changed || send.disabled) return;
-    const version = Number(saved ? root.dataset.version : root.dataset.sentVersion);
-    if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
-    const requestPage = document.querySelector<HTMLElement>('[data-request-id]') ?? root;
-    setSending(requestPage, true);
-    send.disabled = true; root.setAttribute('inert', ''); root.setAttribute('aria-busy', 'true'); root.dataset.busy = 'true';
-    try { const result = await post(endpoint, { action: 'send', version, expectedUpdatedAt: saved ? root.dataset.updated : root.dataset.sentUpdated });
-      root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.dataset.linkCreatedAt = result.linkCreatedAt;
-      link = result.link; linkInput.value = link; root.querySelector<HTMLElement>('[data-client-link-field]')!.hidden = false;
-      status.textContent = result.uncertain ? `Offer v${version} is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.` : result.emailSent ? `Offer v${version} sent.${result.copySent ? '' : ' The owner copy didn’t send.'}` : `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
-      root.dataset.sentDate = new Date(result.sentAt ?? new Date().toISOString()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' });
-      saved = false; root.dataset.updated = ''; root.dataset.sentVersion = String(version); root.dataset.sentUpdated = result.updatedAt; root.dataset.revoked = 'false';
-      root.querySelector<HTMLElement>('[data-link-actions]')!.hidden = false; root.querySelector<HTMLElement>('[data-copy-link]')!.hidden = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.disabled = false; root.querySelector<HTMLButtonElement>('[data-revoke-link]')!.hidden = false;
-      root.querySelector<HTMLElement>('[data-link-state]')!.textContent = ''; root.querySelector<HTMLElement>('[data-offer-state]')!.textContent = `v${version} sent ${root.dataset.sentDate} · no changes since`; updateControls();
-      const versions = root.querySelector<HTMLElement>('[data-offer-versions]')!, versionList = root.querySelector<HTMLElement>('[data-version-list]')!;
-      versions.hidden = false;
-      versionList.querySelectorAll<HTMLElement>('[data-version-status]').forEach(value => { if (value.textContent === 'sent') value.textContent = 'superseded'; });
-      let entry = versionList.querySelector<HTMLElement>(`[data-version="${version}"]`);
-      if (!entry) {
-        entry = document.createElement('li'); entry.dataset.version = String(version);
-        const anchor = document.createElement('a'); anchor.href = `${root.dataset.preview}?version=${version}`; anchor.target = '_blank'; anchor.rel = 'noopener'; anchor.textContent = `Offer v${version}`;
-        entry.appendChild(anchor); entry.appendChild(document.createTextNode(` · ${root.dataset.sentDate} · `));
-        const state = document.createElement('span'); state.dataset.versionStatus = ''; entry.appendChild(state); versionList.insertBefore(entry, versionList.firstChild);
-      }
-      entry.querySelector<HTMLElement>('[data-version-status]')!.textContent = 'sent';
-      root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false';
-    } catch (error) { status.textContent = (error as Error).message; root.removeAttribute('inert'); root.removeAttribute('aria-busy'); root.dataset.busy = 'false'; updateControls(); }
-    finally { setSending(requestPage, false); }
-  });
-  updateControls();
+	const sessionValue = (key: string, value?: string | null) => {
+		try {
+			if (value === undefined) return sessionStorage.getItem(key);
+
+			if (value === null) sessionStorage.removeItem(key);
+			else sessionStorage.setItem(key, value);
+
+			return value;
+		} catch {
+			/* The link remains usable in this page when browser storage is disabled. */
+		}
+
+		return null;
+	};
+
+	class TransportError extends Error {}
+
+	const post = async <T extends { action: string }>(
+		endpoint: string,
+		body: T,
+	) => {
+		let response: Response;
+
+		try {
+			response = await fetch(endpoint, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			});
+		} catch {
+			throw new TransportError(
+				"The request didn’t finish. Check the activity log or Resend before sending again.",
+			);
+		}
+
+		let parsed: unknown;
+
+		try {
+			parsed = await response.json();
+		} catch {
+			throw new Error(
+				response.status === 401 || response.status === 403
+					? "Your owner session ended. Reload the page to sign in again."
+					: "Something went wrong. Nothing was saved. Try again.",
+			);
+		}
+
+		// SAFETY: parsed is JSON from the owner software API. Its error bodies carry message and errors (both optional here), and the required fields below are read only on success or after the !response.ok branch checks for updatedAt with "in".
+		const result = parsed as {
+			message?: string;
+			errors?: Record<string, string>;
+			version: number;
+			updatedAt: string;
+			sentAt?: string;
+			linkCreatedAt: string;
+			link: string;
+			emailSent: boolean;
+			uncertain?: boolean;
+			copySent?: boolean;
+			attachmentCleanupPending?: boolean;
+		};
+
+		if (!response.ok) {
+			if (
+				response.status === 409 &&
+				body.action === "draft" &&
+				"updatedAt" in result
+			) {
+				const editor = document.querySelector<HTMLElement>(
+					"[data-software-editor]",
+				);
+
+				if (editor) editor.dataset.updated = result.updatedAt ?? "";
+			}
+
+			const form = document.querySelector<HTMLElement>("[data-offer-form]");
+
+			const messages = Object.entries(result.errors ?? {}).map(
+				([path, message]) => {
+					const parts = path.split(".");
+
+					const milestone =
+						parts[0] === "milestones" && /^\d+$/.test(parts[1] ?? "");
+
+					const scope = milestone
+						? document.querySelectorAll<HTMLElement>("[data-milestone]")[
+								Number(parts[1])
+							]
+						: form;
+
+					const field = parts.at(-1)!;
+
+					const names = {
+						name: "milestoneName",
+						feeCents: "fee",
+						label: "checkpointLabel",
+						cancellationPercent: "checkpointPercent",
+						lowCents: "rangeLow",
+						highCents: "rangeHigh",
+					};
+
+					if (path.startsWith("agreement.")) {
+						scope
+							?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+								`[name="${path}"]`,
+							)
+							.forEach((input) => input.setAttribute("aria-invalid", "true"));
+
+						return `${path.slice(10).replaceAll("_", " ")}: ${message}`;
+					}
+
+					const key = milestone
+						? parts[2] === "checkpoint"
+							? parts[3]
+							: parts[2]
+						: field;
+
+					const labels = {
+						outcome: "Outcome",
+						summary: "Summary",
+						milestones: "Milestones",
+						name: "name",
+						deliverables: "deliverables",
+						acceptance: "acceptance examples",
+						feeCents: "fee",
+						label: "checkpoint label",
+						cancellationPercent: "checkpoint percent",
+						clientInputs: "What you need from them",
+						exclusions: "Outside this offer",
+						timing: "Timing",
+						paymentMode: "Payment mode",
+						lowCents: "Range low",
+						highCents: "Range high",
+					};
+
+					scope
+						?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+							`[name="${ownValue(names, key) ?? key}"]`,
+						)
+						.forEach((input) => input.setAttribute("aria-invalid", "true"));
+
+					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${ownValue(labels, key) ?? "Offer"}: ${message}`;
+				},
+			);
+
+			throw new Error(
+				[result.message, messages.join("\n")].filter(Boolean).join("\n") ||
+					"Could not save. Try again.",
+			);
+		}
+
+		return result;
+	};
+
+	const editableForms = [
+		...document.querySelectorAll<HTMLFormElement>(
+			"[data-software-action], [data-request-note]",
+		),
+	];
+
+	editableForms.forEach((form) =>
+		form.addEventListener("input", () => {
+			form.dataset.dirty = "true";
+			form.dataset.revision = String(Number(form.dataset.revision ?? 0) + 1);
+		}),
+	);
+
+	const setSending = (page: HTMLElement, sending: boolean) => {
+		if (sending) page.setAttribute("inert", "");
+		else page.removeAttribute("inert");
+
+		if (sending) page.setAttribute("aria-busy", "true");
+		else page.removeAttribute("aria-busy");
+		page.dataset.offerSending = String(sending);
+		page.dataset.busy = String(sending);
+	};
+
+	let reloading = false;
+	const hasUnsavedChanges = () => hasUnsavedRequestChanges();
+
+	const reload = (status: HTMLElement, submitted?: HTMLFormElement) => {
+		if (
+			hasUnsavedChanges() &&
+			!confirm(
+				"You have unsaved changes in another section. Continue and lose them?",
+			)
+		)
+			return;
+		reloading = true;
+		sessionValue(
+			`software-flash:${submitted?.dataset.endpoint ?? document.querySelector<HTMLElement>("[data-software-editor]")?.dataset.endpoint}`,
+			status.textContent,
+		);
+		location.reload();
+	};
+
+	window.addEventListener("beforeunload", (event) => {
+		if (!reloading && hasUnsavedChanges()) event.preventDefault();
+	});
+	document
+		.querySelectorAll<HTMLFormElement>("[data-software-action]")
+		.forEach((form) => {
+			form.addEventListener("submit", async (event) => {
+				event.preventDefault();
+
+				const requestPage =
+					document.querySelector<HTMLElement>("[data-request-id]");
+
+				if (requestPage?.dataset.offerSending === "true") return;
+
+				const action = form.dataset.softwareAction!,
+					data = new FormData(form),
+					status = form.querySelector<HTMLElement>("[data-software-status]")!;
+
+				if (
+					action === "decline" &&
+					!confirm("Send this message and decline the inquiry?")
+				)
+					return;
+				const button = form.querySelector<HTMLButtonElement>("button")!;
+				button.disabled = true;
+				const revision = form.dataset.revision;
+
+				const sendingPage =
+					action === "question" || action === "decline"
+						? (requestPage ?? form)
+						: null;
+
+				if (sendingPage) setSending(sendingPage, true);
+
+				try {
+					const result = await post(form.dataset.endpoint!, {
+						action,
+						...Object.fromEntries(data),
+						expectedRequestUpdatedAt: requestPage?.dataset.requestUpdated,
+					});
+
+					if (action === "fit" && requestPage)
+						requestPage.dataset.requestUpdated = result.updatedAt;
+					status.textContent =
+						result.copySent === false
+							? "Sent to the client. The owner copy didn’t send."
+							: action === "fit"
+								? "Fit review saved."
+								: "Sent.";
+
+					if (form.dataset.revision === revision) form.dataset.dirty = "false";
+					reload(status, form);
+				} catch (error) {
+					status.textContent =
+						error instanceof Error ? error.message : String(error);
+
+					if (
+						error instanceof TransportError &&
+						(action === "question" || action === "decline")
+					)
+						button.textContent = "Send again";
+				} finally {
+					button.disabled = false;
+
+					if (sendingPage) setSending(sendingPage, false);
+				}
+			});
+		});
+	const root = document.querySelector<HTMLElement>("[data-software-editor]");
+
+	if (!root) return;
+	const status = root.querySelector<HTMLElement>("[data-software-status]")!;
+	const endpoint = root.dataset.endpoint!;
+	const flashKey = `software-flash:${endpoint}`;
+	const flash = sessionValue(flashKey);
+
+	if (flash) {
+		status.textContent = flash;
+		sessionValue(flashKey, null);
+	}
+
+	let link = "";
+	let changed = false;
+	let updateControls = () => {};
+	const linkInput = root.querySelector<HTMLInputElement>("[data-client-link]")!;
+	linkInput.addEventListener("focus", () => linkInput.select());
+	root
+		.querySelector("[data-copy-link]")!
+		.addEventListener("click", async () => {
+			try {
+				if (!link || root.dataset.revoked === "true") {
+					status.textContent =
+						"The client link is in your copy of the offer email. To issue a new one, revoke this link and send again.";
+
+					return;
+				}
+
+				await navigator.clipboard.writeText(link);
+				status.textContent = "Client link copied.";
+			} catch {
+				status.textContent =
+					"Clipboard unavailable. Select and copy the link in the Client link field.";
+			}
+		});
+	const button = root.querySelector<HTMLButtonElement>("[data-revoke-link]")!;
+	button.addEventListener("click", async () => {
+		if (!confirm("Revoke the client link? Anyone using it will lose access."))
+			return;
+		button.disabled = true;
+		root.setAttribute("inert", "");
+		root.setAttribute("aria-busy", "true");
+		root.dataset.busy = "true";
+
+		try {
+			await post(endpoint, {
+				action: "revoke",
+				expectedLinkCreatedAt: button.dataset.linkCreatedAt,
+			});
+			link = "";
+			root.dataset.revoked = "true";
+			linkInput.value = "";
+			root.querySelector<HTMLElement>("[data-client-link-field]")!.hidden =
+				true;
+			root.querySelector<HTMLElement>("[data-link-state]")!.textContent =
+				"Client link revoked.";
+			button.hidden = true;
+			status.textContent = "Client link revoked.";
+			updateControls();
+			reload(status);
+		} catch (error) {
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
+		} finally {
+			button.disabled = root.dataset.revoked === "true";
+			root.removeAttribute("inert");
+			root.removeAttribute("aria-busy");
+			root.dataset.busy = "false";
+		}
+	});
+
+	if (!root.querySelector("[data-offer-form]")) return;
+
+	const form = root.querySelector<HTMLFormElement>("[data-offer-form]")!,
+		list = root.querySelector<HTMLElement>("[data-milestones]")!;
+
+	const attachmentBlock = form.querySelector<HTMLElement>(
+		"[data-agreement-attachments]",
+	);
+
+	if (attachmentBlock) setupAgreementAttachments(attachmentBlock);
+
+	const send = root.querySelector<HTMLButtonElement>("[data-send-offer]")!,
+		preview = root.querySelector<HTMLAnchorElement>("[data-preview-offer]")!;
+
+	let saved = Boolean(root.dataset.updated),
+		inputRevision = 0;
+
+	const get = (element: HTMLElement, name: string) =>
+		element
+			.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+				`[name="${name}"]`,
+			)!
+			.value.trim();
+
+	const checked = (element: HTMLElement, name: string) =>
+		element.querySelector<HTMLInputElement>(`[name="${name}"]`)!.checked;
+
+	const lines = (value: string) =>
+		value
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean);
+
+	const amount = (value: string) =>
+		value ? Math.round(Number(value) * 100) : NaN;
+
+	const terms = (): OfferTerms => {
+		// SAFETY: the paymentMode radios in src/components/owner/SoftwareOfferEditor.astro (input name="paymentMode", line 102) render only the values "standard" and "invoice", the enum in src/lib/software-offers.ts.
+		const offer: OfferTerms = {
+			outcome: get(form, "outcome"),
+			summary: get(form, "summary"),
+			milestones: [
+				...list.querySelectorAll<HTMLElement>("[data-milestone]"),
+			].map((row) => {
+				const milestone: OfferTerms["milestones"][number] = {
+					name: get(row, "milestoneName"),
+					deliverables: lines(get(row, "deliverables")),
+					acceptance: lines(get(row, "acceptance")),
+					feeCents: amount(get(row, "fee")),
+				};
+
+				if (checked(row, "hasCheckpoint"))
+					milestone.checkpoint = {
+						label: get(row, "checkpointLabel"),
+						cancellationPercent: Number(get(row, "checkpointPercent")),
+					};
+
+				return milestone;
+			}),
+			clientInputs: get(form, "clientInputs"),
+			exclusions: get(form, "exclusions"),
+			timing: get(form, "timing"),
+			paymentMode: form.querySelector<HTMLInputElement>(
+				'[name="paymentMode"]:checked',
+			)!.value as OfferTerms["paymentMode"],
+		};
+
+		if (checked(form, "hasRange"))
+			offer.projectRange = {
+				lowCents: amount(get(form, "rangeLow")),
+				highCents: amount(get(form, "rangeHigh")),
+			};
+
+		return offer;
+	};
+
+	updateControls = () => {
+		root.dataset.dirty = String(changed);
+		root.querySelector<HTMLButtonElement>("[data-add-milestone]")!.disabled =
+			list.children.length >= 3;
+		list
+			.querySelectorAll<HTMLButtonElement>("[data-remove-milestone]")
+			.forEach((button) => {
+				button.disabled = list.children.length <= 1;
+			});
+		list
+			.querySelectorAll<HTMLElement>("[data-milestone]")
+			.forEach((row, index) => {
+				row.querySelector("legend")!.textContent = `Milestone ${index + 1}`;
+				row
+					.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[name]")
+					.forEach((input) => {
+						input.id = `milestone-${index + 1}-${input.name}`;
+
+						if (input.hasAttribute("aria-describedby"))
+							input.setAttribute("aria-describedby", `${input.id}-hint`);
+					});
+				row.querySelectorAll<HTMLElement>("[data-hint]").forEach((hint) => {
+					hint.id = `milestone-${index + 1}-${hint.dataset.hint}-hint`;
+				});
+
+				const active = checked(row, "hasCheckpoint"),
+					block = row.querySelector<HTMLElement>("[data-checkpoint]")!;
+
+				block.hidden = !active;
+				block.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
+					input.disabled = !active;
+					input.required = active;
+				});
+			});
+
+		const rangeActive = checked(form, "hasRange"),
+			range = root.querySelector<HTMLElement>("[data-range]")!;
+
+		range.hidden = !rangeActive;
+		range.querySelectorAll<HTMLInputElement>("input").forEach((input) => {
+			input.disabled = !rangeActive;
+			input.required = rangeActive;
+		});
+		send.disabled =
+			changed ||
+			!(saved || (root.dataset.sentVersion && root.dataset.revoked === "true"));
+		preview.hidden = !saved || changed;
+	};
+
+	form.addEventListener("input", (event) => {
+		// SAFETY: input events on the editor form come from its form controls: the inputs and textareas of SoftwareOfferEditor.astro and the selects of the embedded SoftwareAgreementDetails.astro (agreement.po_requirement, reusedMsaId). All three types have name, type and removeAttribute, which the code below uses.
+		const input = event.target as
+			| HTMLInputElement
+			| HTMLTextAreaElement
+			| HTMLSelectElement;
+
+		input?.removeAttribute("aria-invalid");
+
+		if (input?.type === "radio")
+			form
+				.querySelectorAll<HTMLInputElement>(`[name="${input.name}"]`)
+				.forEach((radio) => radio.removeAttribute("aria-invalid"));
+		changed = true;
+		inputRevision++;
+		updateControls();
+	});
+	form.addEventListener("change", updateControls);
+	root.querySelector("[data-add-milestone]")!.addEventListener("click", () => {
+		if (list.children.length >= 3) return;
+		list.appendChild(
+			root
+				.querySelector<HTMLTemplateElement>("[data-milestone-template]")!
+				.content.cloneNode(true),
+		);
+		const agreementRows = form.querySelector("[data-agreement-milestones]");
+
+		if (agreementRows) {
+			// SAFETY: the first child of [data-agreement-milestones] is a milestone row element that the owner template renders (src/components/owner/SoftwareAgreementDetails.astro, line 58), so the clone is an HTMLElement.
+			const row = agreementRows
+				.querySelector<HTMLElement>(":scope > *")!
+				.cloneNode(true) as HTMLElement;
+
+			const index = agreementRows.children.length;
+			row.dataset.agreementMilestone = String(index);
+			row.querySelector("legend")!.textContent =
+				`Milestone ${index + 1} agreement details`;
+			row
+				.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[name]")
+				.forEach((input) => {
+					input.name = input.name.replace(
+						/milestones\.\d+\./,
+						`milestones.${index}.`,
+					);
+					input.value =
+						input.name.endsWith("handoff") || input.type === "date"
+							? ""
+							: "None";
+				});
+			agreementRows.appendChild(row);
+		}
+
+		changed = true;
+		inputRevision++;
+		updateControls();
+		list.lastElementChild!.querySelector<HTMLInputElement>("input")!.focus();
+		status.textContent = `Milestone ${list.children.length} added.`;
+	});
+	list.addEventListener("click", (event) => {
+		// SAFETY: click events on the milestone list come from elements inside it, so event.target is an Element with closest().
+		const button = (event.target as Element).closest("[data-remove-milestone]");
+
+		if (!button || list.children.length <= 1) return;
+		const row = button.closest("[data-milestone]")!;
+		const neighbor = row.nextElementSibling ?? row.previousElementSibling;
+		const index = Array.from(list.children).indexOf(row);
+		const agreementRows = form.querySelector("[data-agreement-milestones]");
+		agreementRows?.children[index]?.remove();
+		agreementRows
+			?.querySelectorAll<HTMLElement>("[data-agreement-milestone]")
+			.forEach((item, i) => {
+				item.querySelector("legend")!.textContent =
+					`Milestone ${i + 1} agreement details`;
+				item
+					.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[name]")
+					.forEach(
+						(input) =>
+							(input.name = input.name.replace(
+								/milestones\.\d+\./,
+								`milestones.${i}.`,
+							)),
+					);
+			});
+		row.remove();
+		changed = true;
+		inputRevision++;
+		updateControls();
+		(neighbor?.querySelector<HTMLInputElement>("input") ??
+			root.querySelector<HTMLButtonElement>("[data-add-milestone]"))!.focus();
+		status.textContent = "Milestone removed.";
+	});
+	form.addEventListener("submit", async (event) => {
+		event.preventDefault();
+		const button = form.querySelector<HTMLButtonElement>('[type="submit"]')!;
+		button.disabled = true;
+		const revision = inputRevision;
+
+		const removedAttachmentKeys: string[] = JSON.parse(
+			attachmentBlock?.dataset.removedKeys ?? "[]",
+		);
+
+		try {
+			const result = await post(endpoint, {
+				action: "draft",
+				terms: terms(),
+				...agreementDetails(form),
+				removedAttachmentKeys,
+				expectedUpdatedAt: root.dataset.updated || null,
+			});
+
+			if (attachmentBlock && !result.attachmentCleanupPending)
+				// SAFETY: dataset.removedKeys is written only as JSON.stringify of a string array (this file, in the setup for attachment removal and in setupAgreementAttachments), so parsing it yields string[].
+				attachmentBlock.dataset.removedKeys = JSON.stringify(
+					(
+						JSON.parse(attachmentBlock.dataset.removedKeys ?? "[]") as string[]
+					).filter((key) => !removedAttachmentKeys.includes(key)),
+				);
+			root.dataset.updated = result.updatedAt;
+			root.dataset.version = String(result.version);
+			saved = true;
+			changed = inputRevision !== revision;
+			root.querySelector<HTMLElement>("[data-offer-state]")!.textContent = root
+				.dataset.sentVersion
+				? `v${root.dataset.sentVersion} sent ${root.dataset.sentDate} · Draft v${result.version} in progress`
+				: `Draft v${result.version} · Not sent`;
+			status.textContent = result.attachmentCleanupPending
+				? "Draft saved. Save again to retry attachment cleanup."
+				: changed
+					? "Draft saved. Your newer edits still need saving."
+					: "Draft saved. Nothing has been sent.";
+			updateControls();
+		} catch (error) {
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
+		} finally {
+			button.disabled = false;
+		}
+	});
+	send.addEventListener("click", async () => {
+		if (changed || send.disabled) return;
+
+		const version = Number(
+			saved ? root.dataset.version : root.dataset.sentVersion,
+		);
+
+		if (!confirm(`Send offer v${version} to ${root.dataset.email}?`)) return;
+
+		const requestPage =
+			document.querySelector<HTMLElement>("[data-request-id]") ?? root;
+
+		setSending(requestPage, true);
+		send.disabled = true;
+		root.setAttribute("inert", "");
+		root.setAttribute("aria-busy", "true");
+		root.dataset.busy = "true";
+
+		try {
+			const result = await post(endpoint, {
+				action: "send",
+				version,
+				expectedUpdatedAt: saved
+					? root.dataset.updated
+					: root.dataset.sentUpdated,
+			});
+
+			root.querySelector<HTMLButtonElement>(
+				"[data-revoke-link]",
+			)!.dataset.linkCreatedAt = result.linkCreatedAt;
+			link = result.link;
+			linkInput.value = link;
+			root.querySelector<HTMLElement>("[data-client-link-field]")!.hidden =
+				false;
+			status.textContent = result.uncertain
+				? `Offer v${version} is saved as sent. The email service didn’t confirm delivery. Check Resend before sending the link yourself.`
+				: result.emailSent
+					? `Offer v${version} sent.${result.copySent ? "" : " The owner copy didn’t send."}`
+					: `Offer v${version} is saved as sent, but the email didn’t go out. Copy the link and send it yourself.`;
+			root.dataset.sentDate = new Date(
+				result.sentAt ?? new Date().toISOString(),
+			).toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				timeZone: "America/New_York",
+			});
+			saved = false;
+			root.dataset.updated = "";
+			root.dataset.sentVersion = String(version);
+			root.dataset.sentUpdated = result.updatedAt;
+			root.dataset.revoked = "false";
+			root.querySelector<HTMLElement>("[data-link-actions]")!.hidden = false;
+			root.querySelector<HTMLElement>("[data-copy-link]")!.hidden = false;
+			root.querySelector<HTMLButtonElement>("[data-revoke-link]")!.disabled =
+				false;
+			root.querySelector<HTMLButtonElement>("[data-revoke-link]")!.hidden =
+				false;
+			root.querySelector<HTMLElement>("[data-link-state]")!.textContent = "";
+			root.querySelector<HTMLElement>("[data-offer-state]")!.textContent =
+				`v${version} sent ${root.dataset.sentDate} · no changes since`;
+			updateControls();
+
+			const versions = root.querySelector<HTMLElement>(
+					"[data-offer-versions]",
+				)!,
+				versionList = root.querySelector<HTMLElement>("[data-version-list]")!;
+
+			versions.hidden = false;
+			versionList
+				.querySelectorAll<HTMLElement>("[data-version-status]")
+				.forEach((value) => {
+					if (value.textContent === "sent") value.textContent = "superseded";
+				});
+
+			let entry = versionList.querySelector<HTMLElement>(
+				`[data-version="${version}"]`,
+			);
+
+			if (!entry) {
+				entry = document.createElement("li");
+				entry.dataset.version = String(version);
+				const anchor = document.createElement("a");
+				anchor.href = `${root.dataset.preview}?version=${version}`;
+				anchor.target = "_blank";
+				anchor.rel = "noopener";
+				anchor.textContent = `Offer v${version}`;
+				entry.appendChild(anchor);
+				entry.appendChild(
+					document.createTextNode(` · ${root.dataset.sentDate} · `),
+				);
+				const state = document.createElement("span");
+				state.dataset.versionStatus = "";
+				entry.appendChild(state);
+				versionList.insertBefore(entry, versionList.firstChild);
+			}
+
+			entry.querySelector<HTMLElement>("[data-version-status]")!.textContent =
+				"sent";
+			root.removeAttribute("inert");
+			root.removeAttribute("aria-busy");
+			root.dataset.busy = "false";
+		} catch (error) {
+			status.textContent =
+				error instanceof Error ? error.message : String(error);
+			root.removeAttribute("inert");
+			root.removeAttribute("aria-busy");
+			root.dataset.busy = "false";
+			updateControls();
+		} finally {
+			setSending(requestPage, false);
+		}
+	});
+	updateControls();
 }
 
-function agreementDetails(form:HTMLFormElement) {
- if(!form.querySelector('[data-agreement-details]'))return {};
- const details:Record<string,unknown>={milestones:[]};
- for(const [key,value] of new FormData(form)) {
-  if(!key.startsWith('agreement.'))continue;
-  const parts=key.slice(10).split('.');
-  if(parts[0]==='milestones') {const milestones=details.milestones as Record<string,unknown>[];const i=Number(parts[1]);milestones[i]??={};milestones[i][parts[2]]=String(value);}
-  else if(parts[0]==='attachments')details.attachments=JSON.parse(String(value));
-  else if(['invoice_first_duration','review_business_days','correction_calendar_days','project_retention_days','handoff_access_days'].includes(parts[0]))details[parts[0]]=value===''?null:Number(value);
-  else details[parts[0]]=String(value);
- }
- details.longer_review_confirmed=new FormData(form).has('agreement.longer_review_confirmed');
- return {agreementDetails:details,reusedMsaId:new FormData(form).get('reusedMsaId')||null,confirmMsaReuse:new FormData(form).has('confirmMsaReuse')};
+// Agreement fields posted as a draft. The server validates them with agreementDetailsSchema (src/lib/agreement-fields.ts).
+function agreementDetails(form: HTMLFormElement) {
+	if (!form.querySelector("[data-agreement-details]")) return {};
+	const milestones: Partial<Record<string, string>>[] = [];
+
+	const details = new Map<
+		string,
+		string | number | boolean | null | Partial<Record<string, string>>[]
+	>([["milestones", milestones]]);
+
+	for (const [key, value] of new FormData(form)) {
+		if (!key.startsWith("agreement.")) continue;
+		const parts = key.slice(10).split(".");
+
+		if (parts[0] === "milestones") {
+			const i = Number(parts[1]);
+			milestones[i] ??= {};
+			milestones[i][parts[2]] = String(value);
+		} else if (parts[0] === "attachments")
+			details.set("attachments", JSON.parse(String(value)));
+		else if (
+			[
+				"invoice_first_duration",
+				"review_business_days",
+				"correction_calendar_days",
+				"project_retention_days",
+				"handoff_access_days",
+			].includes(parts[0])
+		)
+			details.set(parts[0], value === "" ? null : Number(value));
+		else details.set(parts[0], String(value));
+	}
+
+	details.set(
+		"longer_review_confirmed",
+		new FormData(form).has("agreement.longer_review_confirmed"),
+	);
+
+	return {
+		agreementDetails: Object.fromEntries(details),
+		reusedMsaId: new FormData(form).get("reusedMsaId") || null,
+		confirmMsaReuse: new FormData(form).has("confirmMsaReuse"),
+	};
 }
 
-export function setupAgreementAttachments(block:HTMLElement) {
- block.addEventListener('click',event=>{
-   const button=(event.target as HTMLElement).closest<HTMLButtonElement>('[data-remove-attachment]');
-   if(!button)return;
-   const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!;
-   field.value=JSON.stringify(JSON.parse(field.value).filter((attachment:{key:string})=>attachment.key!==button.dataset.removeAttachment));
-   block.dataset.removedKeys=JSON.stringify([...new Set([...JSON.parse(block.dataset.removedKeys??'[]'),button.dataset.removeAttachment])]);
-   button.closest('li')!.remove();field.dispatchEvent(new Event('input',{bubbles:true}));
- });
- const upload=block.querySelector<HTMLButtonElement>('[data-upload-attachment]')!;
- upload.addEventListener('click',async()=>{
- if(upload.disabled)return;
- const file=block.querySelector<HTMLInputElement>('[data-attachment-file]')!.files?.[0],version=block.querySelector<HTMLInputElement>('[data-attachment-version]')!.value,date=block.querySelector<HTMLInputElement>('[data-attachment-date]')!.value;
- const field=block.querySelector<HTMLInputElement>('[name="agreement.attachments"]')!,attachments=JSON.parse(field.value),status=block.closest('[data-software-editor]')!.querySelector<HTMLElement>('[data-software-status]')!;
- if(!file||!version||!date||attachments.length>=5){status.textContent='Choose a PDF, version and date. Up to five attachments.';return;}
- upload.disabled=true;
- try{const query=new URLSearchParams({filename:file.name,version,date}),response=await fetch(`${block.dataset.uploadEndpoint}?${query}`,{method:'PUT',headers:{'content-type':'application/pdf'},body:file}),result=await response.json() as {error:string;attachment:{filename:string;version:string;date:string;key:string}};if(!response.ok)throw new Error(result.error);field.value=JSON.stringify([...JSON.parse(field.value),result.attachment]);field.dispatchEvent(new Event('input',{bubbles:true}));const item=document.createElement('li');item.textContent=`${result.attachment.filename} · ${version} · ${date} `;const remove=document.createElement('button');remove.type='button';remove.className='studio-quiet';remove.dataset.removeAttachment=result.attachment.key;remove.textContent='Remove';item.appendChild(remove);block.querySelector('[data-attachment-list]')!.appendChild(item);status.textContent='Attachment saved. Save the offer draft to include it.';}catch(e){status.textContent=(e as Error).message;}finally{upload.disabled=false;}
-});
+export function setupAgreementAttachments(block: HTMLElement) {
+	block.addEventListener("click", (event) => {
+		// SAFETY: click events on the attachment block come from elements inside it, so event.target is an Element with closest().
+		const button = (event.target as Element).closest<HTMLButtonElement>(
+			"[data-remove-attachment]",
+		);
 
+		if (!button) return;
+
+		const field = block.querySelector<HTMLInputElement>(
+			'[name="agreement.attachments"]',
+		)!;
+
+		field.value = JSON.stringify(
+			JSON.parse(field.value).filter(
+				(attachment: { key: string }) =>
+					attachment.key !== button.dataset.removeAttachment,
+			),
+		);
+		block.dataset.removedKeys = JSON.stringify([
+			...new Set([
+				...JSON.parse(block.dataset.removedKeys ?? "[]"),
+				button.dataset.removeAttachment,
+			]),
+		]);
+		button.closest("li")!.remove();
+		field.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+
+	const upload = block.querySelector<HTMLButtonElement>(
+		"[data-upload-attachment]",
+	)!;
+
+	upload.addEventListener("click", async () => {
+		if (upload.disabled) return;
+
+		const file = block.querySelector<HTMLInputElement>(
+				"[data-attachment-file]",
+			)!.files?.[0],
+			version = block.querySelector<HTMLInputElement>(
+				"[data-attachment-version]",
+			)!.value,
+			date = block.querySelector<HTMLInputElement>(
+				"[data-attachment-date]",
+			)!.value;
+
+		const field = block.querySelector<HTMLInputElement>(
+				'[name="agreement.attachments"]',
+			)!,
+			attachments = JSON.parse(field.value),
+			status = block
+				.closest("[data-software-editor]")!
+				.querySelector<HTMLElement>("[data-software-status]")!;
+
+		if (!file || !version || !date || attachments.length >= 5) {
+			status.textContent =
+				"Choose a PDF, version and date. Up to five attachments.";
+
+			return;
+		}
+
+		upload.disabled = true;
+
+		try {
+			// SAFETY: src/pages/api/owner/requests/[id]/agreement-attachments.ts answers PUT with JSON: { ok: true, attachment } on success and { ok: false } (403, 503, 404) or { ok: false, error } (400s, 500s) on failure, so error is optional here. result.error is read only in the !response.ok branch, and result.attachment only after that throw.
+			const query = new URLSearchParams({ filename: file.name, version, date }),
+				response = await fetch(`${block.dataset.uploadEndpoint}?${query}`, {
+					method: "PUT",
+					headers: { "content-type": "application/pdf" },
+					body: file,
+				}),
+				result = (await response.json()) as {
+					error?: string;
+					attachment: {
+						filename: string;
+						version: string;
+						date: string;
+						key: string;
+					};
+				};
+
+			if (!response.ok) throw new Error(result.error);
+			field.value = JSON.stringify([
+				...JSON.parse(field.value),
+				result.attachment,
+			]);
+			field.dispatchEvent(new Event("input", { bubbles: true }));
+			const item = document.createElement("li");
+			item.textContent = `${result.attachment.filename} · ${version} · ${date} `;
+			const remove = document.createElement("button");
+			remove.type = "button";
+			remove.className = "studio-quiet";
+			remove.dataset.removeAttachment = result.attachment.key;
+			remove.textContent = "Remove";
+			item.appendChild(remove);
+			block.querySelector("[data-attachment-list]")!.appendChild(item);
+			status.textContent =
+				"Attachment saved. Save the offer draft to include it.";
+		} catch (e) {
+			status.textContent = e instanceof Error ? e.message : String(e);
+		} finally {
+			upload.disabled = false;
+		}
+	});
 }

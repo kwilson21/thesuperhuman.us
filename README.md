@@ -14,13 +14,15 @@ Personal site for Kazon Wilson · software engineer building useful software · 
 
 ## Development
 
+Use the Node version in `.nvmrc` and the pnpm version in `package.json`'s `packageManager` field.
+
 ```bash
-npm install
-npm run dev       # local Astro dev server on http://localhost:4321
-npm test          # run Vitest unit tests
-npm run check     # Astro type-check
-npm run build     # production build into dist/
-npm run preview   # serve the built Worker locally after npm run build
+pnpm install
+pnpm run dev       # local Astro dev server on http://localhost:4321
+pnpm test          # run Vitest unit tests
+pnpm run check     # Astro type-check
+pnpm run build     # production build into dist/
+pnpm run preview   # serve the built Worker locally after pnpm run build
 ```
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
@@ -122,14 +124,14 @@ mkdir -p /secure/private/resume-backups
 BACKUP_DIR="$(mktemp -d /secure/private/resume-backups/resume.XXXXXX)"
 
 # Preserve the bytes currently served before overwriting the canonical key.
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
 # Wrangler may exit successfully when a key is missing; require a PDF backup.
 test "$(head -c 5 "$BACKUP_DIR/pdf-general.before.pdf")" = "%PDF-"
 shasum -a 256 "$BACKUP_DIR/pdf-general.before.pdf"
 
 # Upload the candidate, download the stored bytes, and require an exact match.
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
 cmp "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 shasum -a 256 "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 ```
@@ -139,8 +141,8 @@ If it does not match, restore the saved `*.before.pdf` to the same key, read it
 back again, and confirm the restored bytes with `cmp`:
 
 ```bash
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
 cmp "$BACKUP_DIR/pdf-general.before.pdf" "$BACKUP_DIR/pdf-general.restored.pdf"
 ```
 
@@ -163,9 +165,9 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 ### Security headers
 
-`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). It also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a general `Content-Security-Policy-Report-Only` policy. The CSP is report-only; it does not block scripts, and no report collector is configured, so violations are not centrally collected.
 
-Cloudflare applies `_headers` only to static assets, so `src/middleware.ts` adds the same four headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the four. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
+Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the same five headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the five. Before enforcing the CSP, configure an approved reporting destination, triage reports, audit routes and inline scripts/handlers, and then change the directive in both locations. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
 
 ## Resume request flow
 
@@ -183,13 +185,13 @@ Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remain
 Audio files are stored in the `superhuman-audio` R2 bucket, bound to the Worker as `AUDIO`. Create the bucket once:
 
 ```bash
-npx wrangler r2 bucket create superhuman-audio
+pnpm exec wrangler r2 bucket create superhuman-audio
 ```
 
 Upload a track (stores it at `tracks/<basename>` in the bucket):
 
 ```bash
-npm run audio:upload path/to/track.mp3
+pnpm run audio:upload path/to/track.mp3
 ```
 
 ### Audio tracks content collection
@@ -225,7 +227,7 @@ node scripts/og-video/render.mjs --sheet --at=0,2500 services  # also saves thos
 
 Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation, steps one clock at 30 fps and renders each scene in its own Chromium with the switches of Chromium's deterministic mode, so each frame finishes drawing before its screenshot and frames and posters repeat from run to run, even on a busy machine. MP4 bytes also depend on the ffmpeg build and the CPU, so a scene whose frames and encoder settings have not changed keeps its committed video. Chromium very rarely anti-aliases a few pixels differently, so when a scene's files and the encoder settings are unchanged but its frames differ, it is captured once more before its video is replaced. Render only the scenes you changed. Each manifest entry records the local files its scene loaded and a hash of them, and `tests/lib/og-media.test.ts` fails when a scene, the kit or an image changes without a new render. `tests/scripts/og-video-copy.test.ts` fails when any line of two or more words in a scene (statuses included), or a price in a scene or its alt text, no longer matches the site; a short list of composite labels in that test is exempt. The renderer refuses a scene whose fonts did not load, whose content overflows the frame, whose unwrapped text is wider than its box, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Posters are PNG; a photographic scene sets `data-poster="jpeg"` on `<html>` for a JPEG poster instead. Files are named by content hash (`public/og/<scene>-<hash>.png` or `.jpg`, and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
 
-Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`npm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
+Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`pnpm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
 
 After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and `curl -s -o /dev/null -D - -H 'Range: bytes=0-1' https://thesuperhuman.us/og/<file>.mp4` should give 206 with `content-range: bytes 0-1/<size>`. (A HEAD request ignores `Range`, so the second check needs GET.) Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
 
@@ -301,8 +303,9 @@ the required schema is applied.
 
 ### Agreement template labels
 
-Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `npm run owner:health -- --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
+Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `pnpm run owner:health --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
 
 ## Credits
 
-- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `npm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.
+- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `pnpm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.
+- **[anti-slop](https://github.com/dmmulroy/anti-slop)** by dmmulroy is published under the MIT license. Its Oxlint rules are vendored at `tools/oxlint/anti-slop/` from commit `13909c9e07590f5a85d93c62712259fe14a883f7` (October 13, 2026), with its `LICENSE` and an `UPSTREAM.md` that records the changes made here (none). The rules include code from [eslint-stylistic](https://github.com/eslint-stylistic/eslint-stylistic), published under the MIT license by the OpenJS Foundation and other contributors, vendored at `tools/oxlint/anti-slop/vendor/eslint-stylistic/` with its `LICENSE` and an `UPSTREAM.md` that lists the local adaptations. They are registered in `oxlint.config.ts`.

@@ -1,34 +1,121 @@
 export function setupOwnerPaymentActions() {
-  const panel = document.querySelector<HTMLElement>('[data-payment-panel]');
-  const status = panel?.querySelector<HTMLElement>('[data-payment-status]');
-  const requestId = panel?.dataset.requestId;
-  if (!panel || !status || !requestId) return;
-  async function send(payload: Record<string, unknown>, button: HTMLButtonElement) {
-    button.disabled = true; status!.textContent = '';
-    try {
-      const response = await fetch(`/api/owner/requests/${requestId}/payment`, { method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload) });
-      if (!response.ok) {
-        const result = await response.clone().json().catch(() => ({})) as { recoveryPending?: boolean };
-        status!.textContent = payload.action === 'approve' ? 'Those terms were not saved. Check the price and acceptance, then try again.'
-          : payload.action === 'record-payment-received' ? 'That payment was not recorded. Refresh the payment status before trying again.'
-          : result.recoveryPending ? 'Stripe may have sent the invoice. Check Stripe and wait for webhook recovery before taking another action.'
-            : response.status === 503 ? 'Stripe invoicing is unavailable. Refresh the payment status before trying again.' : 'That invoice was not created. Refresh the payment status before trying again.';
-        button.disabled=false; return;
-      }
-      location.reload();
-    } catch { status!.textContent='Connection lost. Refresh before trying again so an invoice is not duplicated.'; button.disabled=false; }
-  }
-  panel.querySelector<HTMLFormElement>('[data-payment-approval]')?.addEventListener('submit',event=>{
-    event.preventDefault(); const form=event.currentTarget as HTMLFormElement; const data=new FormData(form); const amount=String(data.get('totalAmount')??'').trim();
-    if (!/^\d+(\.\d{1,2})?$/.test(amount)) { status.textContent='Enter the fixed project price with no more than two decimal places.'; return; }
-    const [dollars,decimal='']=amount.split('.'); const totalAmountCents=Number(dollars)*100+Number(decimal.padEnd(2,'0'));
-    void send({action:'approve',approvedService:String(data.get('approvedService')??''),totalAmountCents,offerAccepted:data.get('offerAccepted')==='on'},form.querySelector<HTMLButtonElement>('button[type="submit"]')!);
-  });
-  panel.querySelector<HTMLFormElement>('[data-payment-received]')?.addEventListener('submit',event=>{
-    event.preventDefault(); const form=event.currentTarget as HTMLFormElement; const data=new FormData(form);
-    const installment=form.dataset.installment;
-    if (!confirm(`Record the ${installment} as paid outside Stripe? This cannot be undone.`)) return;
-    void send({action:'record-payment-received',installment,method:String(data.get('method')??''),reference:String(data.get('reference')??'').trim()||undefined,received:data.get('received')==='on'},form.querySelector<HTMLButtonElement>('button[type="submit"]')!);
-  });
-  panel.querySelectorAll<HTMLButtonElement>('[data-payment-action]').forEach(button=>button.addEventListener('click',()=>{ void send({action:button.dataset.paymentAction},button); }));
+	const panel = document.querySelector<HTMLElement>("[data-payment-panel]");
+	const status = panel?.querySelector<HTMLElement>("[data-payment-status]");
+	const requestId = panel?.dataset.requestId;
+
+	if (!panel || !status || !requestId) return;
+
+	async function send<T extends { action?: string }>(
+		payload: T,
+		button: HTMLButtonElement,
+	) {
+		button.disabled = true;
+		status!.textContent = "";
+
+		try {
+			const response = await fetch(`/api/owner/requests/${requestId}/payment`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+
+			if (!response.ok) {
+				// SAFETY: the payment endpoint answers errors with JSON, or {} when the body is not JSON (catch above); recoveryPending is optional and read only in this !response.ok branch.
+				const result = (await response
+					.clone()
+					.json()
+					.catch(() => ({}))) as { recoveryPending?: boolean };
+
+				status!.textContent =
+					payload.action === "approve"
+						? "Those terms were not saved. Check the price and acceptance, then try again."
+						: payload.action === "record-payment-received"
+							? "That payment was not recorded. Refresh the payment status before trying again."
+							: result.recoveryPending
+								? "Stripe may have sent the invoice. Check Stripe and wait for webhook recovery before taking another action."
+								: response.status === 503
+									? "Stripe invoicing is unavailable. Refresh the payment status before trying again."
+									: "That invoice was not created. Refresh the payment status before trying again.";
+				button.disabled = false;
+
+				return;
+			}
+
+			location.reload();
+		} catch {
+			status!.textContent =
+				"Connection lost. Refresh before trying again so an invoice is not duplicated.";
+			button.disabled = false;
+		}
+	}
+
+	const approval = panel.querySelector<HTMLFormElement>(
+		"[data-payment-approval]",
+	);
+
+	approval?.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const form = approval;
+
+		const data = new FormData(form);
+		const amount = String(data.get("totalAmount") ?? "").trim();
+
+		if (!/^\d+(\.\d{1,2})?$/.test(amount)) {
+			status.textContent =
+				"Enter the fixed project price with no more than two decimal places.";
+
+			return;
+		}
+
+		const [dollars, decimal = ""] = amount.split(".");
+
+		const totalAmountCents =
+			Number(dollars) * 100 + Number(decimal.padEnd(2, "0"));
+
+		void send(
+			{
+				action: "approve",
+				approvedService: String(data.get("approvedService") ?? ""),
+				totalAmountCents,
+				offerAccepted: data.get("offerAccepted") === "on",
+			},
+			form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
+		);
+	});
+
+	const received = panel.querySelector<HTMLFormElement>(
+		"[data-payment-received]",
+	);
+
+	received?.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const form = received;
+
+		const data = new FormData(form);
+		const installment = form.dataset.installment;
+
+		if (
+			!confirm(
+				`Record the ${installment} as paid outside Stripe? This cannot be undone.`,
+			)
+		)
+			return;
+		void send(
+			{
+				action: "record-payment-received",
+				installment,
+				method: String(data.get("method") ?? ""),
+				reference: String(data.get("reference") ?? "").trim() || undefined,
+				received: data.get("received") === "on",
+			},
+			form.querySelector<HTMLButtonElement>('button[type="submit"]')!,
+		);
+	});
+	panel
+		.querySelectorAll<HTMLButtonElement>("[data-payment-action]")
+		.forEach((button) =>
+			button.addEventListener("click", () => {
+				void send({ action: button.dataset.paymentAction }, button);
+			}),
+		);
 }

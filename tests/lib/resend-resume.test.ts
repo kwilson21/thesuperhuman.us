@@ -1,123 +1,182 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-  sendResumeApprovalRequest,
-  sendResumeDelivery,
-} from '~/lib/resend';
-import type { StoredResumeRequest } from '~/lib/resume-requests';
+	resumeApprovalMessage,
+	resumeDeliveryMessage,
+	sendMail,
+} from "~/lib/resend";
+import type { StoredResumeRequest } from "~/lib/resume-requests";
+import { double } from "../helpers/doubles";
 
 const storedRequest: StoredResumeRequest = {
-  name: 'Jane Doe',
-  email: 'jane@example.com',
-  company: 'Acme Corp',
-  audience: 'dod',
-  note: 'Reviewing your background for a staff role.',
-  ts: 1700000000000,
+	name: "Jane Doe",
+	email: "jane@example.com",
+	company: "Acme Corp",
+	audience: "dod",
+	note: "Reviewing your background for a staff role.",
+	ts: 1700000000000,
 };
 
-describe('sendResumeApprovalRequest', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
+let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
-  it('emails the operator with the approval link', async () => {
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'em' }) });
+describe("sendResumeApprovalRequest", () => {
+	beforeEach(() => {
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
+	});
 
-    const result = await sendResumeApprovalRequest({
-      request: storedRequest,
-      apiKey: 'key',
-      from: 'noreply@thesuperhuman.us',
-      to: 'kazon.wilson@thesuperhuman.us',
-      approvalUrl: 'https://thesuperhuman.us/api/resume-approve?id=abc',
-    });
-    expect(result.ok).toBe(true);
+	it("emails the operator with the approval link", async () => {
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
 
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.to).toEqual(['kazon.wilson@thesuperhuman.us']);
-    expect(body.subject).toContain('Jane Doe');
-    expect(body.subject).toContain('dod');
-    expect(body.text).toContain('jane@example.com');
-    expect(body.text).toContain('Acme Corp');
-    expect(body.text).toContain('Reviewing your background');
-    expect(body.text).toContain('https://thesuperhuman.us/api/resume-approve?id=abc');
-    expect(body.reply_to).toBe('jane@example.com');
-  });
+		const result = await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: storedRequest,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
 
-  it('returns ok=false when send fails', async () => {
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
-    const result = await sendResumeApprovalRequest({
-      request: storedRequest,
-      apiKey: 'key',
-      from: 'noreply@thesuperhuman.us',
-      to: 'kazon.wilson@thesuperhuman.us',
-      approvalUrl: 'https://thesuperhuman.us/api/resume-approve?id=abc',
-    });
-    expect(result.ok).toBe(false);
-  });
+		expect(result).toBe("sent");
 
-  it('omits company and note lines when those fields are empty', async () => {
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'em' }) });
-    const lean: StoredResumeRequest = { ...storedRequest, company: '', note: '' };
-    await sendResumeApprovalRequest({
-      request: lean,
-      apiKey: 'key',
-      from: 'noreply@thesuperhuman.us',
-      to: 'kazon.wilson@thesuperhuman.us',
-      approvalUrl: 'https://thesuperhuman.us/api/resume-approve?id=abc',
-    });
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.text).not.toContain('Company:');
-    expect(body.text).not.toContain('Note:');
-  });
+		expect(fetchMock.mock.calls[0][0]).toBe("https://api.resend.com/emails");
+		expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
+		expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+			Authorization: "Bearer key",
+			"Content-Type": "application/json",
+		});
+
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+
+		expect(body.to).toEqual(["kazon.wilson@thesuperhuman.us"]);
+		expect(body.subject).toContain("Jane Doe");
+		expect(body.subject).toContain("dod");
+		expect(body.text).toContain("jane@example.com");
+		expect(body.text).toContain("Acme Corp");
+		expect(body.text).toContain("Reviewing your background");
+		expect(body.text).toContain(
+			"https://thesuperhuman.us/api/resume-approve?id=abc",
+		);
+		expect(body.reply_to).toBe("jane@example.com");
+	});
+
+	it("returns ok=false when send fails", async () => {
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
+
+		const result = await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: storedRequest,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
+
+		expect(result).toBe("uncertain");
+	});
+
+	it("omits company and note lines when those fields are empty", async () => {
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
+
+		const lean: StoredResumeRequest = {
+			...storedRequest,
+			company: "",
+			note: "",
+		};
+
+		await sendMail(
+			"key",
+			resumeApprovalMessage({
+				request: lean,
+				from: "noreply@thesuperhuman.us",
+				to: "kazon.wilson@thesuperhuman.us",
+				approvalUrl: "https://thesuperhuman.us/api/resume-approve?id=abc",
+			}),
+		);
+
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+
+		expect(body.text).not.toContain("Company:");
+		expect(body.text).not.toContain("Note:");
+	});
 });
 
-describe('sendResumeDelivery', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
+describe("sendResumeDelivery", () => {
+	beforeEach(() => {
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
+	});
 
-  it('emails the requester with the PDF attached', async () => {
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ id: 'em' }) });
+	it("emails the requester with the PDF attached", async () => {
+		fetchMock.mockResolvedValue(
+			double<Response>({ ok: true, json: async () => ({ id: "em" }) }),
+		);
 
-    const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer; // "%PDF"
+		const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer; // "%PDF"
 
-    const result = await sendResumeDelivery({
-      apiKey: 'key',
-      from: 'noreply@thesuperhuman.us',
-      to: 'jane@example.com',
-      name: 'Jane Doe',
-      audience: 'dod',
-      pdf: pdfBytes,
-      filename: 'kazon-wilson-resume-dod.pdf',
-    });
-    expect(result.ok).toBe(true);
+		const result = await sendMail(
+			"key",
+			resumeDeliveryMessage({
+				from: "noreply@thesuperhuman.us",
+				to: "jane@example.com",
+				name: "Jane Doe",
+				pdf: pdfBytes,
+				filename: "kazon-wilson-resume-dod.pdf",
+			}),
+		);
 
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.to).toEqual(['jane@example.com']);
-    expect(body.subject).toContain('resume');
-    expect(body.text).toContain('Jane Doe');
-    expect(body.html).toContain('Here’s the resume you asked for.');
-    expect(body.attachments).toHaveLength(1);
-    expect(body.attachments[0].filename).toBe('kazon-wilson-resume-dod.pdf');
-    // "%PDF" base64-encoded = "JVBERg=="
-    expect(body.attachments[0].content).toBe('JVBERg==');
-  });
+		expect(result).toBe("sent");
 
-  it('returns ok=false when send fails', async () => {
-    const fetchMock = fetch as unknown as ReturnType<typeof vi.fn>;
-    fetchMock.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
-    const result = await sendResumeDelivery({
-      apiKey: 'key',
-      from: 'noreply@thesuperhuman.us',
-      to: 'jane@example.com',
-      name: 'Jane Doe',
-      audience: 'general',
-      pdf: new ArrayBuffer(4),
-      filename: 'kazon-wilson-resume.pdf',
-    });
-    expect(result.ok).toBe(false);
-  });
+		expect(fetchMock.mock.calls[0][0]).toBe("https://api.resend.com/emails");
+		expect(fetchMock.mock.calls[0][1]?.method).toBe("POST");
+		expect(fetchMock.mock.calls[0][1]?.headers).toEqual({
+			Authorization: "Bearer key",
+			"Content-Type": "application/json",
+		});
+
+		const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+
+		expect(body.to).toEqual(["jane@example.com"]);
+		expect(body.subject).toContain("resume");
+		expect(body.text).toContain("Jane Doe");
+		expect(body.html).toContain("Here’s the resume you asked for.");
+		expect(body.attachments).toHaveLength(1);
+		expect(body.attachments[0].filename).toBe("kazon-wilson-resume-dod.pdf");
+		// "%PDF" base64-encoded = "JVBERg=="
+		expect(body.attachments[0].content).toBe("JVBERg==");
+	});
+
+	it("returns ok=false when send fails", async () => {
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
+
+		const result = await sendMail(
+			"key",
+			resumeDeliveryMessage({
+				from: "noreply@thesuperhuman.us",
+				to: "jane@example.com",
+				name: "Jane Doe",
+				pdf: new ArrayBuffer(4),
+				filename: "Kazon-Wilson-Resume.pdf",
+			}),
+		);
+
+		expect(result).toBe("uncertain");
+	});
 });

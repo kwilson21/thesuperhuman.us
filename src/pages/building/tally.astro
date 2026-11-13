@@ -1,19 +1,36 @@
 ---
-import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import ProjectTimeline from '~/components/ProjectTimeline.astro';
-import { tallyStory, tallyMilestones, tallyDecisionHighlights } from '~/data/project-stories/tally';
-const highlightedEntries = tallyDecisionHighlights.map(decision => ({
-  decision,
-  entries: decision.entries.map(source => {
-    const entry = tallyMilestones.find(entry => entry.id === source.entry);
-    if (!entry) throw new Error(`Tally highlight cites a missing journal entry: ${source.entry}`);
-    return entry;
-  }),
+import ProjectLayout from "~/layouts/ProjectLayout.astro";
+import ProjectTimeline from "~/components/ProjectTimeline.astro";
+import {
+	tallyStory,
+	tallyMilestones,
+	tallyDecisionHighlights,
+} from "~/data/project-stories/tally";
+
+const highlightedEntries = tallyDecisionHighlights.map((decision) => ({
+	decision,
+	entries: decision.entries.map((source) => {
+		const entry = tallyMilestones.find((entry) => entry.id === source.entry);
+
+		if (!entry)
+			throw new Error(
+				`Tally highlight cites a missing journal entry: ${source.entry}`,
+			);
+
+		return entry;
+	}),
 }));
-const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+const date = (day: string) =>
+	new Date(day + "T12:00:00Z").toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
 ---
 <ProjectLayout title={tallyStory.title} subtitle={tallyStory.subtitle} description={tallyStory.description} status={tallyStory.status} journalHref="#tally-updates-title">
-  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones} selectedId="tally-home-screen">
+  <ProjectTimeline id="tally-updates" title="Development journal" entries={tallyMilestones}>
     <div slot="highlights" class="decision-highlights">
       {highlightedEntries.map(({ decision, entries }) => {
         const artifact = entries[0].artifacts?.[0];
@@ -41,6 +58,7 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
       })}
     </div>
   </ProjectTimeline>
+  <p class="source-link"><a class="site-link" href="https://tally-demo.thesuperhuman.us">Try the public demo <span aria-hidden="true">↗</span></a></p>
   <p class="source-link"><a class="site-link" href="https://github.com/kwilson21/tally">Tally on GitHub <span aria-hidden="true">↗</span></a></p>
 </ProjectLayout>
 <style>

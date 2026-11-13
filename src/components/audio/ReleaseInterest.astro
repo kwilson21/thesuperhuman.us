@@ -1,11 +1,17 @@
 ---
-import { MERCHANDISE } from '~/lib/music-demand';
-import PersonalName from '~/components/PersonalName.astro';
-import merchConcepts from '~/assets/site/old-news-merch-concepts.webp';
-interface Props { releaseId: string; artwork?: string; merchandiseConcept?: boolean }
+import { MERCHANDISE } from "~/lib/music-demand";
+import PersonalName from "~/components/PersonalName.astro";
+import merchConcepts from "~/assets/site/old-news-merch-concepts.webp";
+
+interface Props {
+	releaseId: string;
+	artwork?: string;
+	merchandiseConcept?: boolean;
+}
+
 const { releaseId, merchandiseConcept = false } = Astro.props;
 const env = Astro.locals.runtime.env;
-const key = env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const key = env.PUBLIC_TURNSTILE_SITE_KEY ?? "";
 const available = Boolean(key && env.MUSIC_DB && env.TURNSTILE_SECRET_KEY);
 ---
 <section class="music-interest music-section" id="interest" aria-labelledby="interest-title">
@@ -57,19 +63,7 @@ const available = Boolean(key && env.MUSIC_DB && env.TURNSTILE_SECRET_KEY);
 </section>
 {available && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>}
 <script>
-  import { setupFormSubmission } from '~/scripts/form-submission';
-  const form = document.querySelector<HTMLFormElement>('#release-interest');
-  if (form) {
-    const merchandise = form.querySelector<HTMLFieldSetElement>('[data-merch-fields]')!;
-    const update = () => {
-      const enabled = new FormData(form).get('interest') !== 'song';
-      merchandise.hidden = !enabled; merchandise.disabled = !enabled;
-    };
-    form.querySelectorAll('[name="interest"]').forEach(input => input.addEventListener('change', update));
-    update();
-    setupFormSubmission({ form, endpoint: '/api/music-interest', success: document.getElementById('interest-success')!, payload: data => ({
-      releaseId: form.dataset.releaseId, email: String(data.get('email') ?? ''), interest: data.get('interest'),
-      merchandise: data.getAll('merchandise').map(String), suggestion: String(data.get('suggestion') ?? ''), consent: data.get('consent') === 'on',
-    }) });
-  }
+  import { setupReleaseInterest } from '~/scripts/release-interest';
+
+  setupReleaseInterest();
 </script>

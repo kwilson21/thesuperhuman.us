@@ -20,7 +20,7 @@ pass [image QA](docs/generated-image-qa.md).
 - **Professional background:** Python, ETL pipelines, data engineering, backend API development. This establishes credibility; do not advertise data engineering as his desired next specialization.
 - **Regulated industry experience:** Healthcare credentialing, insurance document systems
 - **Website design:** Page structure, visual storytelling and responsive implementation. The personal website redesign is the current portfolio example; do not imply a history of client design projects.
-- **Also works in:** Ruby on Rails, TypeScript, Django, Flask, Dagster, PostgreSQL, AWS
+- **Also works in:** Ruby on Rails, TypeScript, Django, Flask, PostgreSQL, AWS
 - **Infrastructure depth:** Docker Swarm, Traefik, Tailscale, Cloudflare, OPNsense, self-hosted everything
 - **Side projects:** Kaillera-next (retro gaming netplay platform), Kova (custom ETL programming language), Frigate NVR, personal home cluster
 - **Audio engineering:** Undergraduate degree in audio production from MTSU, still actively practiced (RME Babyface Pro, Sennheiser HD 650s, UAD Luna + Pro Tools)
@@ -68,7 +68,7 @@ Software rate context lives in `CLAUDE.local.md` (gitignored). Keep software rat
 
 These describe prior capabilities, not a service menu to promote. Lead with the current building direction and preserve specific experience as supporting evidence.
 
-1. **ETL Pipeline Architecture & Development**: Dagster, Python, multi-source ingestion
+1. **ETL Pipeline Architecture & Development**: Python, multi-source ingestion
 2. **Backend API Development**: Django, Flask, Python, REST, gRPC
 3. **Data Systems & Infrastructure**: PostgreSQL, MySQL, AWS, data platform builds
 4. **Healthcare & Regulated Industry Systems**: credentialing pipelines, insurance document systems
@@ -102,6 +102,20 @@ Design-choice findings go to Kazon as alternatives; never change them silently.
 [docs/design-standard.md](docs/design-standard.md) has the triage, where records go and
 how to update the vendored copy.
 
+## Back-end rules
+
+Owner decisions, 2026-11-12. The back end is being converted, one complete area at a time, to the form in kwilson21/tally (its `docs/decisions.md` rows 170, 190, 192 to 196, 201, 206 and 209 say why). The shared helpers are in `src/server/`.
+
+- Business logic does not live in SQL strings. A rule is written in one of three styles: XState alone where the rule is states and moves (asked through `next()` in `src/server/machines/next.ts`), the `@xstate/effect` bridge where a move waits on outside work (Stripe, Resend, R2), and Effect alone where there are no states (`rule` in `src/server/terms.ts`). SQL keeps only the compare-and-set guard.
+- Effect `Schema` is the single input validator on the server. Many files still import Zod today; each area is moved to `Schema` as it is converted. When the conversion is finished, Zod remains only where a library requires it: `src/lib/publication/mcp.ts` and `src/pages/api/mcp-probe.ts` (the MCP SDK) and `src/content/config.ts` (Astro content collections).
+- Effect and `src/server/**` never reach the browser. `src/scripts/**` and `.astro` script blocks stay plain TypeScript. Two tests guard it: `tests/architecture/client-graph.test.ts` walks the source import graph from every browser entry (`src/scripts/**` and every `.astro` file with a `<script>`, including its `src=`) and fails on any load (static import, re-export, `import()`, `require`, `import.meta.glob`, `new URL(..., import.meta.url)`, a `tsconfig.json` `paths` alias with any of its targets, a `package.json` `imports` entry) of `effect`, `@effect/*`, `@xstate/effect` or `src/server/**`, on a load it cannot resolve statically, on a bare specifier that is not a package under `node_modules`, and on an imported package whose `dependencies`, `peerDependencies` or `optionalDependencies` (followed transitively) include `effect`, `@effect/*` or `@xstate/effect`; a root-relative `<script src="/x.js">` is read from `public/`; `tests/architecture/client-bundle.test.ts` reads every built browser script under `dist/` (`.js` and `.mjs`, including scripts copied from `public/`, but not the server output `dist/_worker.js/`) and fails on the `~effect/` marker or `EffectFailure`. It skips when there is no build, so run `pnpm run build` first; CI runs it in a step after the build with `REQUIRE_CLIENT_BUNDLE=1`, which makes a missing `dist/` fail. Neither alone is the guarantee.
+- Import each Effect module by its own path (`effect/Effect`, `effect/Schema`), never from `effect`; `tests/architecture/effect-imports.test.ts` fails on a bare `effect` import.
+- Where code goes, for every area after the first (the contact and resume routes are the model). (a) A decision over facts that are all read before it is a pure rule in `src/server/rules/`, written with `rule({ given, refusals, writes })` from `src/server/terms.ts`, with no effects. (b) A sequence that must act between decisions (for example rate-limit count, then captcha, then send, then delete) is a separate Effect program in `src/server/flows/`, which only calls services and pure rules and builds no response text. (c) Storage or an outside call whose failure the route must answer goes through a named service using `Effect.tryPromise` with a `Data.TaggedError`; `Effect.promise` is used only where a defect (an unanswered 500) is intended, with a comment saying so. (d) The route maps every refusal with `Effect.catchTags`, so the program reaches `runRoute` with error type `never`. (e) Only `catchTags` and `Effect.ignore` on named failures; never a catch-all. (f) A `Data.TaggedError` never has a field named `name`, `message`, `stack` or `cause` (`tests/architecture/tagged-errors.test.ts` fails on one) and carries no HTML; text is escaped where the page is built. (g) `legacyBindingsOrDefect` in `src/server/services.ts` is only for `src/pages/api/contact.ts`, `resume-request.ts` and `resume-approve.ts`, whose current answer to a missing binding is a 500 at first use; every later route uses `bindingsOrUnavailable` (`tests/architecture/legacy-bindings.test.ts` fails on any other importer).
+- No ratchets and no legacy lists. An area is converted completely, or it is not started.
+- Five database triggers still write (tracked in issue #242). Each is named in its area's rule file until it is moved.
+- New features and plans use XState diagrams, Quint models for flows over time and LemmaScript contracts for pure money rules, following Tally's `docs/verification.md`.
+- Pins, exact: `effect` 4.1.4, `@xstate/effect` 1.0.0-alpha.12, `xstate` 6.0.0-beta.1. This is an owner-approved exception to the rule in [docs/coding-approach.md](docs/coding-approach.md) against new dependencies.
+
 ## Things to Never Do
 
 - Never display Kazon's personal home address anywhere on the site
@@ -122,7 +136,7 @@ how to update the vendored copy.
 - Keep privacy front of mind: registered agent address for business, never personal
 - Ensure all contact flows go through the approval-gated system
 - Keep Tailwind classes clean and consistent with existing design system
-- Run `npm run check` before committing any Astro changes
-- Run `npm test` before committing any TypeScript logic changes
+- Run `pnpm run check` before committing any Astro changes
+- Run `pnpm test` before committing any TypeScript logic changes
 - UI PRs need screenshots. The Screenshots workflow captures every page at 1280×800 and 390×844 and writes them into the PR description; look at them before asking for review. A PR that adds a stateful flow (sign-in, a multi-step owner action, a client journey) adds a scenario in `scripts/screenshots/scenarios/` so CI captures each step. Stacked PRs only get the workflow once their branch contains it, so merge main into the bottom of the stack
 - Every PR gets a code review before it merges. If Greptile has not reviewed the PR's current head, run independent review subagents on the diff (for example, one for correctness and security, one for UI, copy and the rules in this file). Whichever reviewer ran, verify each finding against the code, fix the real ones, push, and review the new head again. Repeat until a pass finds nothing, then merge once CI is green. Two exceptions: never merge publicist PRs (publicist hard rule 1), and since merging to `main` deploys production, follow the Website deployment gate in AGENTS.md. Findings that need a product or design decision go to Kazon instead of being fixed silently

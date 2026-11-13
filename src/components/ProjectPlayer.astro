@@ -1,11 +1,18 @@
 ---
-import '~/styles/studio.css';
-import { parsePeaks, waveformRects } from '~/lib/audio-peaks';
+import "~/styles/studio.css";
+import { parsePeaks, waveformRects } from "~/lib/audio-peaks";
 
-type Props = { src: string; name: string; label: string; peaks: string | null; downloadHref?: string };
+type Props = {
+	src: string;
+	name: string;
+	label: string;
+	peaks: string | null;
+	downloadHref?: string;
+};
+
 const { src, name, label, peaks, downloadHref } = Astro.props;
 const bars = parsePeaks(peaks);
-const wave = bars ? waveformRects(bars) : '';
+const wave = bars ? waveformRects(bars) : "";
 ---
 <div class="player" data-project-player>
   <audio preload="metadata" src={src}></audio>

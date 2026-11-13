@@ -1,20 +1,64 @@
 ---
-import { softwareDate, softwareClientRevisionBody, softwareVersionLabel, softwareVersionNumber } from '~/lib/software-projects';
-import { formatUSD } from '~/lib/software-offers';
-import type { ClientSoftwareInvoice } from '~/lib/software-invoices';
-import type { ClientSoftwareUpdate } from '~/lib/software-projects';
-type Props = { update: ClientSoftwareUpdate; checks: string[]; deliverables?: string[]; missingDeliverables?: {label:string;index:number}[]; inaccessibleDeliverables?: {label:string;index:number}[]; milestoneName: string; endpoint: string; readonly?: boolean; canAccept?: boolean; paymentLine?: string; invoice?: ClientSoftwareInvoice };
-const {update,checks,deliverables=[],missingDeliverables=[],inaccessibleDeliverables=[],milestoneName,endpoint,readonly=false,canAccept=true,paymentLine,invoice}=Astro.props;
-const version=softwareVersionLabel(update);
-const direction=update.kind==='direction_review';
-const evidence: string[] = JSON.parse(update.criteria_json ?? '[]');
-const checkEvidence = checks.map((check,index) => {
-  const text = evidence[index] ?? '';
-  if (!text.startsWith(check)) return text;
-  const remainder=text.slice(check.length);
-  return remainder.startsWith(': ') ? remainder.slice(2).trim() : /[.!?]$/.test(check) && /^\s/.test(remainder) ? remainder.trim() : text;
+import {
+	softwareDate,
+	softwareClientRevisionBody,
+	softwareVersionLabel,
+	softwareVersionNumber,
+} from "~/lib/software-projects";
+import { formatUSD } from "~/lib/software-offers";
+import type { ClientSoftwareInvoice } from "~/lib/software-invoices";
+import type { ClientSoftwareUpdate } from "~/lib/software-projects";
+
+type Props = {
+	update: ClientSoftwareUpdate;
+	checks: string[];
+	deliverables?: string[];
+	missingDeliverables?: { label: string; index: number }[];
+	inaccessibleDeliverables?: { label: string; index: number }[];
+	milestoneName: string;
+	endpoint: string;
+	readonly?: boolean;
+	canAccept?: boolean;
+	paymentLine?: string;
+	invoice?: ClientSoftwareInvoice;
+};
+
+const {
+	update,
+	checks,
+	deliverables = [],
+	missingDeliverables = [],
+	inaccessibleDeliverables = [],
+	milestoneName,
+	endpoint,
+	readonly = false,
+	canAccept = true,
+	paymentLine,
+	invoice,
+} = Astro.props;
+
+const version = softwareVersionLabel(update);
+const direction = update.kind === "direction_review";
+const evidence: string[] = JSON.parse(update.criteria_json ?? "[]");
+
+const checkEvidence = checks.map((check, index) => {
+	const text = evidence[index] ?? "";
+
+	if (!text.startsWith(check)) return text;
+	const remainder = text.slice(check.length);
+
+	return remainder.startsWith(": ")
+		? remainder.slice(2).trim()
+		: /[.!?]$/.test(check) && /^\s/.test(remainder)
+			? remainder.trim()
+			: text;
 });
-const decisionBody=softwareClientRevisionBody(update.decision_body,checks,deliverables);
+
+const decisionBody = softwareClientRevisionBody(
+	update.decision_body,
+	checks,
+	deliverables,
+);
 ---
 <section class="software-review">
   <h2>{update.decision ? 'Your decision' : direction ? 'Does this match how you work?' : 'Try these'}</h2>

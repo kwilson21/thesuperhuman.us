@@ -3,14 +3,15 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@12.20.0",
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
-    "prebuild": "npm run assets:check && npm run copy:check && npm run design:check && npm run publicist:gate",
+    "prebuild": "pnpm run assets:check && pnpm run copy:check && pnpm run design:check && pnpm run publicist:gate",
     "assets:check": "node scripts/check-asset-qa.mjs",
     "copy:check": "node scripts/check-copy.mjs",
     "design:check": "node scripts/check-design.mjs",
@@ -18,6 +19,9 @@
     "publicist:sync": "node scripts/publicist/sync.mjs",
     "preview": "wrangler dev --local",
     "check": "astro check",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
     "screenshots:preview": "node scripts/screenshots/preview.mjs",
@@ -42,23 +46,29 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@tailwindcss/vite": "^4.3.3",
+    "@xstate/effect": "1.0.0-alpha.12",
     "astro": "^5.1.0",
+    "effect": "4.1.4",
     "jose": "^6.2.12",
     "pdf-lib": "^1.17.1",
     "resend": "^4.0.1",
     "stripe": "^22.6.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
+    "xstate": "6.0.0-beta.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@astrojs/compiler": "2.13.1",
+    "@biomejs/biome": "2.5.14",
     "@cloudflare/workers-types": "^5.20261010.1",
+    "@oxlint/plugins": "1.93.0",
+    "esbuild": "0.27.7",
+    "oxlint": "1.93.0",
+    "parse5": "7.3.0",
     "playwright": "^1.63.0",
     "sharp": "^0.35.5",
     "vitest": "^5.0.3",
     "wrangler": "4.146.0"
-  },
-  "overrides": {
-    "vite": "^6.4.4"
   }
 }

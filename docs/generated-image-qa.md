@@ -3,8 +3,8 @@
 Required by the owner, September 10, 2026. Applies to every generated or
 AI-edited image intended for the website, including decorative art, covers,
 icons, social previews, and responsive variants. This is a production requirement;
-the automated inventory/hash checks now run through `npm run assets:check` and
-automatically before `npm run build`. They do not perform visual inspection.
+the automated inventory/hash checks now run through `pnpm run assets:check` and
+automatically before `pnpm run build`. They do not perform visual inspection.
 
 An approved layout study establishes a visual direction. It does not clear its
 embedded objects or text for production. Existing studies remain concept-only
