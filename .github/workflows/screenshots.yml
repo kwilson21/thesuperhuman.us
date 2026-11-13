@@ -54,8 +54,8 @@ on:
 permissions:
   contents: read
 
-# A newer push no longer cancels a capture in progress: the running capture finishes and saves its
-# images for the next run to reuse. GitHub keeps only the newest waiting run in each group.
+# A newer push waits for the capture in progress, which finishes and saves its images; GitHub keeps only
+# the newest waiting run per group.
 # A run for any other label skips its job, so it gets a group of its own instead of waiting behind a capture.
 concurrency:
   group: ${{ github.event.action == 'labeled' && github.event.label.name != 'full-screenshots' && format('screenshots-label-{0}', github.run_id) || format('screenshots-{0}', github.event.pull_request.number || github.ref) }}

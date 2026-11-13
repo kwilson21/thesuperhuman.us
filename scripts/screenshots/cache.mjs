@@ -16,7 +16,7 @@ import { DatabaseSync } from "node:sqlite";
 
 /**
  * Bump to discard every stored reference after changing what a key covers.
- * 2: scenarios read the pinned clock (clock.mjs) instead of the date, so references from before are discarded.
+ * 2: scenario inputs no longer include a date.
  */
 export const CACHE_VERSION = 2;
 export const REFERENCE = ".screenshots/reference";

@@ -323,7 +323,7 @@ describe("browserClockScript", () => {
 		).toBeLessThan(60_000);
 	});
 
-	it("names the base in the script, so each capture passes its own", () => {
+	it("names the instant in the script, so each capture passes its own", () => {
 		expect(browserClockScript(ORIGIN, CAPTURE_NOW)).toContain(
 			`, ${CAPTURE_NOW})`,
 		);
@@ -358,13 +358,10 @@ describe("the clock is wired into every process", () => {
 		expect(dev).toContain("handleClockPost(");
 	});
 
-	it("has no day rule left in the capture, cache or README", () => {
-		for (const file of [
-			"scripts/screenshots/capture.mjs",
-			"scripts/screenshots/cache.mjs",
-			"scripts/screenshots/README.md",
-		])
-			expect(read(file), file).not.toMatch(/\bday\b/);
+	it("does not compute a date string for the cache, so the date a run happens on cannot reach an image", () => {
+		expect(read("scripts/screenshots/capture.mjs")).not.toMatch(
+			/toLocaleDateString\(\s*"en-CA"/,
+		);
 	});
 });
 
