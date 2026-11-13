@@ -2,7 +2,7 @@
 id: tally-planned-expenses-li
 source: tally-planned-expenses
 platform: linkedin
-slot: 2026-11-12T17:30-05:00
+slot: 2026-11-17T17:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-planned-expenses
 media: src/assets/projects/tally/planned-expenses-annotated.webp

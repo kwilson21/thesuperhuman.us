@@ -2,7 +2,7 @@
 id: kaillera-next-reconnects-and-input-audit-li
 source: kaillera-next-reconnects-and-input-audit
 platform: linkedin
-slot: 2026-11-09T13:00-05:00
+slot: 2026-11-14T11:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/kaillera-next#kaillera-next-reconnects-and-input-audit
 media: src/assets/projects/kaillera-next/reconnects-diagram.webp

@@ -2,7 +2,7 @@
 id: tally-clef-vs-jev-li
 source: tally-clef-vs-jev
 platform: linkedin
-slot: 2026-11-11T09:30-05:00
+slot: 2026-11-16T09:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-clef-vs-jev
 media: src/assets/projects/tally/clef-vs-jev-chart.webp

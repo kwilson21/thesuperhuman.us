@@ -2,7 +2,7 @@
 id: tally-exclusions-x-v2
 source: tally-exclusions
 platform: x
-slot: 2026-11-10T17:30-05:00
+slot: 2026-11-15T16:00-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/tally#tally-exclusions
 media: publicist/media/tally-exclusions.mp4

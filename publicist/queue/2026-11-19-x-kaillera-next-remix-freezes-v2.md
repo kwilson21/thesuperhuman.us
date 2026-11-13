@@ -2,7 +2,7 @@
 id: kaillera-next-remix-freezes-x-v2
 source: kaillera-next-remix-freezes
 platform: x
-slot: 2026-11-14T11:00-05:00
+slot: 2026-11-19T13:00-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/kaillera-next#kaillera-next-remix-freezes
 media: src/assets/projects/kaillera-next/remix-freezes-diagram.webp

@@ -2,7 +2,7 @@
 id: tally-suggestions-review-bsky
 source: tally-suggestions-review
 platform: bluesky
-slot: 2026-11-14T11:00-05:00
+slot: 2026-11-19T09:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-suggestions-review
 media: src/assets/projects/tally/suggestions-review-annotated.webp

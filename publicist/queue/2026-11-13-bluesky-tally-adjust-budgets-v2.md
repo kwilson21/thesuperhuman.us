@@ -2,7 +2,7 @@
 id: tally-adjust-budgets-bsky-v2
 source: tally-adjust-budgets
 platform: bluesky
-slot: 2026-11-08T16:00-05:00
+slot: 2026-11-13T17:30-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/tally#tally-adjust-budgets
 media: publicist/media/tally-adjust-budgets.mp4

@@ -2,7 +2,7 @@
 id: tally-sorting-on-workflows-li
 source: tally-sorting-on-workflows
 platform: linkedin
-slot: 2026-11-14T16:00-05:00
+slot: 2026-11-19T17:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-sorting-on-workflows
 media: src/assets/projects/tally/sorting-workflow-diagram.webp

@@ -2,7 +2,7 @@
 id: website-hallmark-design-li
 source: website-hallmark-design
 platform: linkedin
-slot: 2026-11-10T13:00-05:00
+slot: 2026-11-15T11:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/personal-website#website-hallmark-design
 media: src/assets/projects/website/hallmark-services-404-annotated.webp

@@ -2,7 +2,7 @@
 id: tally-settings-pages-and-edit-panel-li
 source: tally-settings-pages-and-edit-panel
 platform: linkedin
-slot: 2026-11-13T09:30-05:00
+slot: 2026-11-18T09:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-settings-pages-and-edit-panel
 media: src/assets/projects/tally/settings-panel-card-annotated.webp

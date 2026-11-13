@@ -2,7 +2,7 @@
 id: tally-finding-your-way-x
 source: tally-finding-your-way
 platform: x
-slot: 2026-11-12T09:30-05:00
+slot: 2026-11-17T09:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-finding-your-way
 media: publicist/media/tally-finding-your-way.mp4

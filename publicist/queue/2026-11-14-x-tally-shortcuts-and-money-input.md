@@ -2,7 +2,7 @@
 id: tally-shortcuts-and-money-input-x
 source: tally-shortcuts-and-money-input
 platform: x
-slot: 2026-11-09T09:30-05:00
+slot: 2026-11-14T11:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-shortcuts-and-money-input
 media: publicist/media/tally-shortcuts-and-money-input.mp4

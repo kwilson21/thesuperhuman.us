@@ -2,7 +2,7 @@
 id: tally-rules-ask-first-bsky
 source: tally-rules-ask-first
 platform: bluesky
-slot: 2026-11-10T09:30-05:00
+slot: 2026-11-15T11:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-rules-ask-first
 media: publicist/media/tally-rules-ask-first.mp4

@@ -2,7 +2,7 @@
 id: tally-how-diagrams-x-v2
 source: tally-how-diagrams
 platform: x
-slot: 2026-11-11T17:30-05:00
+slot: 2026-11-16T17:30-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/tally#tally-how-diagrams
 media: publicist/media/tally-how-diagrams.mp4

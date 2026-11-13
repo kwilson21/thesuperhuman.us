@@ -2,7 +2,7 @@
 id: tally-apple-card-upload-li
 source: tally-apple-card-upload
 platform: linkedin
-slot: 2026-11-08T11:00-05:00
+slot: 2026-11-13T09:30-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-apple-card-upload
 media: publicist/media/tally-apple-card-upload.mp4

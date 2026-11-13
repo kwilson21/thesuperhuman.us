@@ -2,7 +2,7 @@
 id: tally-home-safe-to-spend-bsky-v2
 source: tally-home-safe-to-spend
 platform: bluesky
-slot: 2026-11-13T17:30-05:00
+slot: 2026-11-18T17:30-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/tally#tally-home-safe-to-spend
 media: src/assets/projects/tally/home-safe-to-spend-annotated.webp

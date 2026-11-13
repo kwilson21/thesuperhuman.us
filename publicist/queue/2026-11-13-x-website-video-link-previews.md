@@ -2,7 +2,7 @@
 id: website-video-link-previews-x
 source: website-video-link-previews
 platform: x
-slot: 2026-11-08T11:00-05:00
+slot: 2026-11-13T13:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/personal-website#website-video-link-previews
 media: publicist/media/website-video-link-previews.mp4

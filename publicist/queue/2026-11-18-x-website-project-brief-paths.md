@@ -2,7 +2,7 @@
 id: website-project-brief-paths-x
 source: website-project-brief-paths
 platform: x
-slot: 2026-11-13T13:00-05:00
+slot: 2026-11-18T13:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/personal-website#website-project-brief-paths
 media: src/assets/projects/website/brief-paths-annotated.webp

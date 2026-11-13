@@ -2,7 +2,7 @@
 id: kaillera-next-landing-page-bsky-v2
 source: kaillera-next-landing-page
 platform: bluesky
-slot: 2026-11-12T13:00-05:00
+slot: 2026-11-17T13:00-05:00
 kind: backfill
 link: https://thesuperhuman.us/building/kaillera-next#kaillera-next-landing-page
 media: src/assets/projects/kaillera-next/landing-page-annotated.webp

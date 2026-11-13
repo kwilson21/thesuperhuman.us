@@ -2,7 +2,7 @@
 id: website-ab-waveforms-bsky
 source: website-ab-waveforms
 platform: bluesky
-slot: 2026-11-11T13:00-05:00
+slot: 2026-11-16T13:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/personal-website#website-ab-waveforms
 media: src/assets/projects/website/ab-waveforms-annotated.webp

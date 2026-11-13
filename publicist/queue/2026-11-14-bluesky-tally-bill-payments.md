@@ -2,7 +2,7 @@
 id: tally-bill-payments-bsky
 source: tally-bill-payments
 platform: bluesky
-slot: 2026-11-09T17:30-05:00
+slot: 2026-11-14T16:00-05:00
 kind: new
 link: https://thesuperhuman.us/building/tally#tally-bill-payments
 media: publicist/media/tally-bill-payments.mp4
