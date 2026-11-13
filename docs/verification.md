@@ -4,14 +4,14 @@ Read this before writing a flow where order or timing matters, and before adding
 
 ## Why this exists
 
-Stripe sends invoice events in any order, can send one twice, and our handlers run at the same time. In PR 251 an older `invoice.paid` was dropped because the rule ignored every event older than the stored one. Review then found two more holes by reading: a stale read race (the guard was chosen from a time read before a newer event committed), and a paid event overwriting a concurrently linked, different Stripe invoice id. A model that tries every order finds all three without anyone having to think of them. The `invoice-events` model below does that, and its mutants are those three bugs.
+Stripe sends invoice events in any order, can send one twice, and our handlers run at the same time. In PR 251 an older `invoice.paid` was dropped because the rule ignored every event older than the stored one. Review then found two more holes by reading: a stale read race (the guard was chosen from a time read before a newer event committed), and a paid event overwriting a concurrently linked, different Stripe invoice id. The model below finds all three without anyone having to think of them, and when it was extended to the audio path where the invoice is not linked yet, it found two more in code that was live: a paid event parked as a conflict because the invoice was linked a moment earlier, and a late recovery batch undoing a tie. Both are fixed (see "What the model found").
 
 ## When to use which
 
 | Tool | Use it when | It checks |
 |---|---|---|
 | XState diagram | The rule is states and moves | Which moves exist. Draw it first (the diagram below is the invoice status one). |
-| Quint model | Order, timing, retries or interleaving matter: webhooks, queues, anything that reads, waits, then writes | Properties hold after every order of events and steps it tries, up to a bound |
+| Quint model | Order, timing, retries or interleaving matter: webhooks, queues, anything that reads, waits, then writes | Properties hold after the orders of events and steps it searches, up to a bound (see "What is checked") |
 | LemmaScript contract | A pure function decides something about money | The code meets a stated rule for every input inside a stated bound |
 | Ordinary test | Everything else, and always alongside the above | The cases someone thought of |
 
@@ -21,93 +21,149 @@ A Quint model is written before the code exists, from the design. A LemmaScript 
 
 ```mermaid
 stateDiagram-v2
-    [*] --> open: invoice created
+    [*] --> not_created: audio row starts here
+    [*] --> creating: software row starts here
+    not_created --> open: creation response links the invoice
+    creating --> open: creation response links the invoice
     state "Not paid" as NotPaid {
         open
         payment_failed
         void
         uncollectible
     }
+    not_created --> NotPaid: an event links the invoice first (recovery)
+    creating --> NotPaid: an event links the invoice first
     NotPaid --> NotPaid: a newer event, or a same-second tie the tie rule allows
     NotPaid --> paid: invoice.paid, however old the event is
+    not_created --> paid: invoice.paid links the invoice first
+    creating --> paid: invoice.paid links the invoice first
     paid --> paid: every later event is ignored
 ```
 
-An older non-paid event is ignored. Audio: the later arrival wins a same-second tie. Software: the higher rank wins (paid, void, uncollectible, payment_failed, open).
+An older non-paid event is ignored. Audio: the later arrival wins a same-second tie. Software: the higher rank wins (paid, void, uncollectible, payment_failed, open). An event for a different Stripe invoice than the linked one never changes the row.
 
-Each delivery of an event is two steps with other deliveries in between:
+Each delivery of an event is several steps with other deliveries in between. Audio (software skips the attempts and recovery steps):
 
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> done: read finds a different Stripe id (unmatched) or an event already recorded (duplicate)
-    idle --> read: read the row
-    read --> done: write batch, one compare-and-set against the row as it is now
+    idle --> apply_read: first read finds the event's own invoice
+    idle --> attempt: first read finds no id, or a different one
+    attempt --> done: a known attempt and the row has a different id (unmatched)
+    attempt --> apply_read: a known attempt and the row now has the event's id
+    attempt --> recover_read: not a known attempt
+    recover_read --> apply_read: the row now has the event's id
+    recover_read --> done: another id or a paid row (unmatched)
+    recover_read --> recover_write: no id yet
+    recover_write --> done: batch links or applies, records processed or unmatched
+    apply_read --> done: the event is already recorded (duplicate)
+    apply_read --> apply_write: read for the decision
+    apply_write --> done: batch is processed, or rolls back on a duplicate key and Stripe retries (failed)
     done --> [*]
 ```
+
+## What is checked
+
+Be exact about the strength of each check:
+
+- **CI, every run:** `quint run` random simulation. Each of the two models (audio, software) runs 100,000 random executions of up to 20 steps with a fixed seed, and every property must hold in every state of every execution. This is strong evidence, not a proof: a rare interleaving can be missed. The mutants (below) are what show it finds real bugs.
+- **By hand, before changing the rule:** `pnpm run verify:quint:exhaustive` runs Apalache, which searches every order of events and steps up to a step bound, with 3 events, 3 timestamps, 2 Stripe invoice ids and 3 handler runs. It needs Java 17 or newer, downloads Apalache on first use, and is slow, so CI does not run it. Run it when the rule or the model changes, and say the bound and the result in the PR. Recorded results are in "Exhaustive runs" below.
+- **LemmaScript and Dafny, every CI run:** a proof, for every input, of the contract on the pure decision (see "Verified modules").
 
 ## Tools and pins
 
 - **Quint** (`@informalsystems/quint` 0.33.1, pinned exactly). Dev and CI only; it never reaches the Worker.
 - **LemmaScript** (`lemmascript` 0.6.6, pinned exactly, the same as Tally) reads ordinary TypeScript with `//@` comments, which do nothing when the app runs.
 - **Dafny** 4.9.0 (the same as Tally; ships its own Z3 prover) does the checking for `lsc`. It is not an npm package. CI downloads it by version and checksum. To run it locally, unpack the 4.9.0 release for your machine and put its folder on `PATH`.
+- **Quint's Rust evaluator** 0.7.1 (the version Quint 0.33.1 expects). By default Quint downloads it from a GitHub release over the unauthenticated API with no checksum. CI instead downloads the exact release asset by URL (`https://github.com/quint-co/quint/releases/download/evaluator/v0.7.1/quint_evaluator-x86_64-unknown-linux-gnu.tar.gz`), checks its sha256 (`ce0502bd...f5eb`, the same value GitHub publishes for the asset and the value computed from the downloaded file) and places it under `QUINT_HOME`, where Quint looks first, so Quint downloads nothing. No `actions/cache` step is used: the file is under 1 MB, and a cache would add a copy that is not checked against the digest. When Quint is upgraded, update the version, URL and digest together.
 
 | Command | What it does |
 |---|---|
-| `pnpm run verify:quint` | The current rule keeps every property, for the audio and software domains (200,000 random runs of up to 14 steps each, fixed seed) |
-| `pnpm run verify:quint:mutants` | Each mutant must break its property; the command fails if one does not |
+| `pnpm run verify:quint` | The current rule keeps every property, for the audio and software domains |
+| `pnpm run verify:quint:mutants` | Every mutant breaks the property named for it, every equivalent mutant keeps them all, and every property has a mutant; fails otherwise |
+| `pnpm run verify:quint:exhaustive` | Manual: Apalache search of both domains (see above) |
 | `pnpm run verify:dafny` | `lsc check --backend=dafny` on the files in `LemmaScript-files.txt` |
 
-`quint run` samples random executions, so a green run is strong evidence and not a proof, and the bound is small (3 events, 3 timestamps, 4 handler runs). A wider search by hand is `pnpm exec quint verify verification/invoice-events.qnt --main audio --init init --step step --invariant allProperties --max-steps 9`, which runs Apalache (needs Java 17 or newer, downloads Apalache on first use). It is slow, so CI does not run it.
+The driver (`scripts/verify-quint.mjs`, result parsing in `scripts/lib/quint-run.mjs`, tested in `tests/scripts/quint-run.test.ts`) counts a model run as passing only on exit status 0 and the exact line `[ok] No violation found`. A mutant counts as breaking its property only on a non-zero exit with the lines `[violation] Found an issue` and `error: Invariant violated` for the named property. A parse error, a crash, a missing evaluator or truncated output is a failure, never a pass: Quint also prints `[ok] Rust evaluator installed at: ...` when it fetches its evaluator, and that line is ignored.
 
 ## The invoice-events model
 
 File: `verification/invoice-events.qnt`. One invoice row.
 
-**State.** The stored status, the stored status time (0 means none yet, as SQL NULL), the stored Stripe invoice id (0 means none), the event ids recorded as processed, the event ids recorded as unmatched, the events Stripe has sent (status, created time, Stripe invoice id), and up to four handler runs.
+**State.** The stored row (status, status time with 0 meaning SQL NULL, Stripe invoice id with 0 meaning none, and the event that linked it by recovery), the invoice ids in the attempts table (audio), the event ids recorded as processed, the event ids recorded as unmatched, the events Stripe has sent (status, created time, Stripe invoice id) and up to four handler runs, each remembering what it read.
+
+**Start states.** Audio rows start `not_created` with no id; software rows start `creating` with no id. Software's match at read requires `creating` when no id is stored.
 
 **Actions.**
-- `link`: the creation response links the real Stripe invoice id (`recordSoftwareInvoice`: `id IS NULL OR id = ?`).
-- `read(d, e)`: a handler run starts for event `e` (a first delivery or a redelivery) and reads the row. It finishes at once when the stored id is a different Stripe invoice (unmatched) or the event is already recorded (duplicate); otherwise it keeps what it read and waits to write.
-- `write(d)`: the handler's batch, one atomic step against the row as it is when the batch runs, guarded as the SQL is: not paid, the id pin, the time guard. Audio also needs its stale-read decision (`invoiceEventDecision`) to say apply.
+- `link`: the creation response links the real Stripe invoice id. Audio (`recordInvoice`): only while the row has no id and is `not_created`, and it inserts the attempt row with it. Software (`recordSoftwareInvoice`): while the row has no id or this id; `creating` becomes `open`.
+- Audio, the webhook's steps: the first read of the row; the known-attempt check (a known attempt whose invoice is now linked to the event's id goes on to apply, any other known attempt is a conflict); recovery's own read (same rule); recovery's batch (link the row if it has no id and is not paid, else apply through the guarded update; record the attempt and the processed event if the row has the event's id, or the event as unmatched if it has another); and the apply path (duplicate check and row read, then the write batch).
+- Software: the read (match, then duplicate check) and the write batch.
+- The write batch is one atomic step against the row as it is when the batch runs, guarded as the SQL is: not paid, the id pin, the time guard. Audio's apply path also needs its stale-read decision (`invoiceEventDecision`) to say apply, and a duplicate event id at write time rolls the whole batch back (the primary key), so the webhook answers 500 and Stripe retries; that retry is a later delivery of the same event. Software's write-time duplicate returns processed and leaves the row alone.
 
-Events are created up front with any status, one of three times and one of two Stripe invoice ids. Delivery order, redelivery and interleaving are chosen freely, so two handlers can both read before either writes. Both domains are checked: `audio` (later arrival wins a same-second tie; the decision is made on the read) and `software` (higher rank wins; the SQL guard alone decides).
+Events are created up front with any status, one of three times and one of two Stripe invoice ids. Delivery order, redelivery and interleaving are chosen freely, so any number of handlers can have read before any writes.
 
-**Properties** (all must hold in every reachable state):
+**Properties** (all must hold in every state; `allProperties` is their conjunction):
 1. `paidAbsorbing`: once the stored status is paid it never changes.
-2. `moneyNotLost`: when every started handler run has finished, a processed paid event for the linked Stripe invoice means the stored status is paid.
+2. `moneyNotLost`: when every started delivery has finished, a delivered paid event for the linked Stripe invoice always ends paid, and its delivery does not end unmatched.
 3. `noStaleOverwrite`: a non-paid event older than the stored time never replaces a non-paid status.
 4. `idNeverOverwritten`: a stored Stripe invoice id is never replaced by a different one, and an event for a different id never changes the status.
-5. `oneOutcome`: every finished run ends as exactly one of processed, unmatched or duplicate, and no event is both processed and unmatched.
+5. `oneOutcome`: every finished delivery ends in exactly one of processed, unmatched, duplicate or (audio) failed-and-retried; the outcome agrees with what was recorded; an event is never both processed and unmatched, including across a retry.
 6. `realStoredTime`: the stored time is 0 or the time of a real event, never the far-future guard value.
+7. `tieRule`: a same-second tie between two non-paid events resolves by the domain's rule (audio: the later arrival applies; software: the higher rank applies).
+8. `redeliveryInert`: an event already recorded as processed never changes the row again.
+9. `differentIdUnmatched`: an event for a different Stripe invoice than the stored one ends unmatched and never processed.
 
-Properties 1, 3 and 4 use flags that a write step sets from the row as it really is at write time, not from the stale read, so a rule that trusts a stale read cannot hide its own mistake.
+Properties 3, 4, 7 and 8 use flags that a write step sets from the row as it really is at write time, not from the stale read, so a rule that trusts a stale read cannot hide its own mistake.
 
 ### Mutants: proof that the model has teeth
 
-Each mutant is a module that changes one thing about the rule. `pnpm run verify:quint:mutants` runs them and fails if any property still holds.
+Each mutant is a module (`audioX` and `softwareX`) that changes one thing. The driver fails if a mutant does not break its property, and it fails if any property in `allProperties` has no mutant.
 
-| Module (audio and software) | The bug | Breaks |
+| Mutant | The change | Breaks |
 |---|---|---|
-| `OldRule` | The original rule: ignore any event older than the stored time, even a paid one | `moneyNotLost` |
-| `StaleGuard` | The guard time is chosen from the stale read: far future only if the read time was newer than the event | `moneyNotLost` |
-| `NoIdPin` | The write guard does not pin the Stripe invoice id | `idNeverOverwritten` |
+| `OldRule` | PR 251 bug a: ignore any event older than the stored time, even a paid one | `moneyNotLost` |
+| `StaleGuard` | PR 251 bug b: the guard time is chosen from the stale read | `moneyNotLost` |
+| `NoIdPin` (software) | PR 251 bug c: the write guard does not pin the Stripe invoice id | `idNeverOverwritten` |
+| `PreFixLink` (audio) | The unlinked-invoice bug: an event whose id equals the id just linked is parked as a conflict | `moneyNotLost` |
+| `RecoverNoDupGuard` (audio) | The recovery batch's guarded update does not refuse an event already processed | `redeliveryInert` |
 | `NoTimeGuard` | The write guard has no time comparison | `noStaleOverwrite` |
 | `OverwritePaid` | The write guard does not refuse a paid row | `paidAbsorbing` |
+| `NoDupDetection` (audio) | A recorded event is not recognised again, at read or at write | `redeliveryInert` |
+| `NoRank` (software) | A same-second tie never applies (the rank tie-break is gone) | `tieRule` |
+| `RankGe` (software) | A tie applies on equal rank (`>=` for `>`) | `tieRule` |
+| `AudioLt` (audio) | The write guard is `<` instead of `<=` | `tieRule` |
+| `NeverUnmatched` | An event for a different Stripe invoice is not recorded as unmatched | `differentIdUnmatched` |
+| `ProcessedOnMismatch` (software) | Processed is recorded even though the id no longer matches | `oneOutcome` |
+| `StoreGuardTime` | The guard time is stored as the event time | `realStoredTime` |
 
-The first three are the real bugs. The last two keep properties 1 and 3 from being vacuous. A new property needs a mutant that breaks it.
+**Equivalent mutants** keep every property, and the driver checks that they do. Each is a real change to the code that cannot be seen from outside this model, for the reason given:
+- `audioNoDecision`: audio ignores its stale-read decision. The stored time only moves forward (and a paid row never changes), so whatever the read said is ignore, the write guard refuses too. The decision is a second line of defence.
+- `audioNoIdPin`: audio's write guard does not pin the invoice id. An audio row's id never changes once set (invoice replacement is not modelled), so the pin cannot matter here. It would matter with replacement.
+- `softwareNoDupDetection`: software without duplicate detection. A software event applied twice leaves the same row, because the rank rule only moves forward and a repeat is a tie of equal rank.
+- `softwareNoReadUnmatched`: no unmatched check at read. The write batch records the event as unmatched for the same reason.
+
+### What the model found
+
+- **A paid event parked as a conflict when the invoice was linked at the same moment** (audio, live; model mutant `PreFixLink`). `invoice.sent` and `invoice.paid` for the same Stripe invoice arrive before the creation response is recorded. The webhook reads the row (no id), then the first event's recovery or the creation response links the invoice and inserts its attempt row; the paid event then finds a known attempt, or recovery's own read finds a stored id, and records the event as an `invoice-conflict` unmatched event. Stripe got 200 and does not retry, so the row stayed linked to the right invoice but not paid. Fixed: an id equal to the event's is applied through the normal guarded path; a different id is still a conflict. The webhook re-reads the row after a known attempt, and recovery returns `current` when the row already has the event's invoice.
+- **A late recovery batch undoing a tie** (audio, live; mutant `RecoverNoDupGuard`). The recovery batch's guarded update did not refuse an event that was already recorded as processed. If the first event's recovery batch ran after the invoice was linked, the event had been processed through the normal path and a later event had won the same second, the stale batch put the first event back. Fixed with a `NOT EXISTS` on the processed table in that update and its audit row.
+- **Software is not affected by the first.** Its read matches a row that is still `creating` and its write guard accepts a row with no id or the same id, so a paid event for the right invoice applies whether or not the creation response linked it first (test: "software: a paid event applies when the creation response links the same Stripe invoice between its read and its batch").
 
 ### What it does not cover
 
 - Refunds, voids of a paid invoice, amount or currency changes, partial payments. The site does not handle refunds, and Stripe cannot void or mark a paid invoice.
-- Retention deleting external references (`external_refs_deleted_at`, `retention_fenced_at`).
-- The invoice creation flow itself (`creating`, retries, known invoice attempts). `link` stands in for the creation response.
-- The audio recovery path is folded in: an event may link the row when no id is stored. In code that is the software write pin (`IS NULL OR =?`) and audio's `recoverInvoiceFromWebhook`, which differ in detail.
-- If an event for a different Stripe invoice arrives first and links itself, that id stays and the real invoice's events are unmatched. The model checks that nothing is overwritten, not that the owner is told; reconciliation covers that.
+- Invoice replacement (`replaceTerminalInvoice`): a void invoice's id is cleared and a new one created. The stored id never changes once set in the model, so the audio id pin is unexercised (`audioNoIdPin`).
+- Retention deleting external references (`external_refs_deleted_at`, `retention_fenced_at`), and the balance needing the booking paid.
+- The rest of the creation flow (`creating` timeouts, creation retries). `link` stands in for the creation response and is atomic.
+- Amounts and currency checks in recovery (`invalidInvoice` other than a paid row), and an audio row that is paid with no invoice id (a manual payment).
+- A stored id that is not the real invoice (an event for a different Stripe invoice arrived first and linked itself): the model checks that nothing is overwritten, not that the owner is told; reconciliation covers that.
 - Two invoices at once, owner actions, and anything outside the invoice row (audit rows, milestone payments).
-- Bounds larger than 3 events, 3 timestamps and 4 handler runs.
+- Bounds larger than 3 events, 3 timestamps, 2 invoice ids and 4 handler runs (3 for the exhaustive run).
 
 If the code changes shape (a new status, a new guard), update the model in the same PR and check that the mutants still fail.
+
+### Exhaustive runs
+
+See the PR description for the latest. Bound: 3 events, 3 timestamps, 2 Stripe invoice ids, 3 handler runs, steps as stated.
 
 ## Verified modules
 
@@ -115,16 +171,28 @@ Tally's four questions decide whether a function carries a contract: is it pure,
 
 | Module | Rule (one sentence) |
 |---|---|
-| `src/lib/invoice-event-order.ts` `decideByOrder` (spec helper `rankOf`) | For any stored and incoming status and any time relation (none, older, same, newer): a paid invoice is never changed; a paid event applies to any invoice that is not paid; otherwise an event applies exactly when it is the first, or newer, or in a same-second tie the tie rule allows (audio: always; software: higher rank). |
+| `src/lib/invoice-event-order.ts` `decideByOrder` (spec helper `rankOf`) | For any stored and incoming status and any time relation (first, older, same, newer): a paid invoice is never changed; a paid event applies to any invoice that is not paid; otherwise an event applies exactly when it is the first, or newer, or in a same-second tie the tie rule allows (audio: always; software: higher rank). |
+| `nextStatus`, `statusAfter` | Lemmas by induction over a sequence of events, not restatements of the body: a paid invoice stays paid whatever follows, and a sequence of events that contains a paid event ends paid in whatever order the events arrive (so for any two events where one is paid, both orders end paid). |
+| `redeliveryChangesNothing` | Handling an event a second time, once it was handled, leaves the status as it was. This holds for any deterministic rule of this shape, so it is a sanity check of the definitions; whether redelivery changes the row in the real handlers is `redeliveryInert` in the model. |
 
-The contract is stated over the time relation, not two time strings. `invoiceEventDecision` computes the relation with `relateTimes` (`//@ skip`: ISO timestamps compare as strings, which the prover does not model; the 75-row matrix in `tests/lib/invoice-event-order.test.ts` covers it) and calls `decideByOrder`. That split is a behaviour-preserving rewrite for the tool, and the status ranks moved from a `Map` to `rankOf` for the same reason. There is no numeric bound: the function only compares statuses as strings (an unknown status ranks 0).
+The contract is stated over the time relation, not two time strings. `invoiceEventDecision` computes the relation with `relateTimes` and calls `decideByOrder`. That split is a behaviour-preserving rewrite for the tool, and the status ranks moved from a `Map` to `rankOf` for the same reason. The relation is named `first` (not `none`) because the tool's generated Dafny already has a `None`.
 
-Planted bugs the prover rejected (a contract that passes on broken code proves nothing): the original bug (ignoring an older paid event before the paid shortcut), letting a newer event change a paid invoice, removing the paid shortcut, and a rank tie that applies on equal rank. Each fails with "a postcondition could not be proved".
+`relateTimes` and `invoiceEventDecision` stay `//@ skip`. LemmaScript does read the string comparison (as a lexicographic order), and a contract was tried, but proving that two times are "same" only when equal needs a hand-written Dafny lemma about that recursive order, which would mean committing a `.dfy` file. The 75-row matrix in `tests/lib/invoice-event-order.test.ts` covers the composed function instead.
+
+LemmaScript cannot express the whole delivery flow (reads, writes, interleaving, two tables), so what remains for Quint is: redelivery against the real handlers, the stale read race, concurrent linking, the id pin, and the outcome of every delivery.
+
+`rankOf` has a second copy in the SQL of `applySoftwareInvoiceEvent` (the `eligible` clause). `tests/lib/invoice-rank-sql.test.ts` reads both `CASE` expressions out of `src/lib/software-invoices.ts`, runs them on sqlite for every status and compares them with `rankOf`, so the copies cannot drift.
+
+Planted bugs the prover rejected (a contract that passes on broken code proves nothing): the original bug (ignoring an older paid event before the paid shortcut), letting a newer event change a paid invoice, removing the paid shortcut (fails the paid-sequence lemma too), and a rank tie that applies on equal rank. Each fails with "a postcondition could not be proved".
 
 ## How a verified module is written
 
-Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verified functions with `//@ verify` (once any function in a file has it, only marked ones are checked); use `//@ skip` for code the tool cannot read, with a one-line reason; never `//@ assume`; keep the production code natural. `lsc check` leaves a `.dfy` and `.dfy.gen` beside the module (git-ignored). Delete them before re-checking a changed function, because with a stale `.dfy` present `lsc` stops before Dafny runs. Inline object types in a parameter list do not translate; use a named type or separate arguments.
+Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verified functions with `//@ verify` (once any function in a file has it, only marked ones are checked); use `//@ skip` for code the tool cannot read, with a one-line reason; never `//@ assume`; keep the production code natural. `lsc check` leaves a `.dfy` and `.dfy.gen` beside the module. `.gitignore` names them per module (one pair of lines per file in `LemmaScript-files.txt`); a module that ever needs a hand-written proof loses its lines and commits its `.dfy`. Delete them before re-checking a changed function, because with a stale `.dfy` present `lsc` stops before Dafny runs. Inline object types in a parameter list do not translate; use a named type or separate arguments.
+
+## Supply chain and install size
+
+`lemmascript` depends on `lemmascript-claimcheck`, which pulls `claimcheck` and the Anthropic SDKs; Tally's lockfile has the same chain, so the roughly 190 added dev packages are not specific to this repository. `lsc check` does not use them. A pnpm override `lemmascript-claimcheck: "-"` in `pnpm-workspace.yaml` removes that chain (in a scratch project, `lemmascript` alone went from 133 to 28 installed packages and `lsc` still ran). It is not applied here, to stay identical to Tally; apply it to both repositories together if the install size matters.
 
 ## CI
 
-`.github/workflows/validate.yml` installs Dafny 4.9.0 by version and checksum (the same download Tally's CI uses), then runs `verify:dafny`, `verify:quint` and `verify:quint:mutants`. No new GitHub Action is used.
+`.github/workflows/validate.yml` installs Dafny 4.9.0 and Quint's evaluator by version and checksum, then runs `verify:dafny`, `verify:quint` and `verify:quint:mutants`. No new GitHub Action is used.
