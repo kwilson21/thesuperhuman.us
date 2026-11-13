@@ -49,8 +49,6 @@ const { kind } = Astro.props;
   .continuity { border-top: 1px solid var(--diagram-rule); margin-top: 1.5625rem; padding-top: 1.25rem; font-size: .9375rem; line-height: 1.5; color: var(--muted); }
   figcaption { font-size: .75rem; color: var(--muted); margin-top: .65rem; }
   @media(max-width: 400px) { .responsibility, .analyst { padding: 1.1rem; }.diagram-flow { font-size: .95rem; gap: .5rem; } }
-  /* Large text: stack the flow into one column, with the arrow pointing down. */
-  @media (max-width: 18rem) { .diagram-flow { grid-template-columns: minmax(0, 1fr); } .diagram-flow > [aria-hidden] { justify-self: center; transform: rotate(90deg); } }
   /* Builds once as it arrives (scroll-scenes.ts): before, then after; each step of the timeline in turn. */
   @media screen and (prefers-reduced-motion: no-preference) {
     :global(.motion) .work-diagram :is(.responsibility > div, .timeline li, .continuity) { transition: opacity 700ms var(--ease-site), transform 700ms var(--ease-site); }

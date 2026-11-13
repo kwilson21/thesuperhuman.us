@@ -15,20 +15,10 @@ it("lets the single-column story track shrink below its widest child", () => {
 	expect(work).not.toMatch(/grid-template-columns: 1fr;/);
 });
 
-it("lets the diagram flow tracks shrink and stacks it in rem", () => {
+it("lets the diagram flow tracks shrink", () => {
 	expect(diagram).toContain(
 		".diagram-flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.2fr);",
 	);
-	expect(diagram).toMatch(
-		/@media \(max-width: 18rem\) \{[^}]*\.diagram-flow \{ grid-template-columns: minmax\(0, 1fr\);/,
-	);
-});
-
-it("points the flow arrow down when the flow is stacked", () => {
-	expect(diagram).toMatch(
-		/@media \(max-width: 18rem\) \{[^@]*\.diagram-flow > \[aria-hidden\] \{[^}]*transform: rotate\(90deg\);/,
-	);
-	expect(diagram).toContain('<span aria-hidden="true">→</span>');
 });
 
 it("breaks long words only as a last resort in the diagram and timeline text", () => {
