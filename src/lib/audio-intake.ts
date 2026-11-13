@@ -153,6 +153,15 @@ const oneLine = Schema.makeFilter((value: string) =>
 	/[\r\n]/.test(value) ? "Invalid input" : true,
 );
 
+// Text a visitor typed holds no control character, so it cannot swell the stored request (a control character takes six
+// characters of JSON) or reach an email as more than text. A line break and a tab are allowed where text runs over
+// several lines. The sentence is the one the software inquiry and the agreement forms give.
+const noControl = Schema.makeFilter((value: string) =>
+	/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(value)
+		? "Remove control characters."
+		: true,
+);
+
 const linkSentence = "Use a complete HTTPS link, or leave this blank.";
 
 const httpsLink = Schema.makeFilter((value: string) => {
@@ -169,7 +178,8 @@ const httpsLink = Schema.makeFilter((value: string) => {
 	}
 });
 
-const optionalLink = () => stringField(kinds, tooLong(2048), httpsLink);
+const optionalLink = () =>
+	stringField(kinds, tooLong(2048), httpsLink, noControl);
 
 const choice = <const V extends readonly [string, ...string[]]>(values: V) => {
 	const expected = values.map((value) => `'${value}'`).join(" | ");
@@ -219,17 +229,19 @@ const fields = {
 		tooLong(120),
 		Schema.isMinLength(1, { message: "Add a song or project title." }),
 		oneLine,
+		noControl,
 	),
 	direction: choice(["judgment", "preferences", "specific"]),
 	preferences,
-	preserve: stringField(kinds, tooLong(1200)),
+	preserve: stringField(kinds, tooLong(1200), noControl),
 	referenceUrl: optionalLink(),
-	referenceNote: stringField(kinds, tooLong(2000)),
+	referenceNote: stringField(kinds, tooLong(2000), noControl),
 	name: stringField(
 		kinds,
 		tooLong(100),
 		Schema.isMinLength(1, { message: "Add your name." }),
 		oneLine,
+		noControl,
 	),
 	email: stringField(
 		kinds,
