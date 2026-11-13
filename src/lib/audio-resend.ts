@@ -16,15 +16,17 @@ const ENDPOINT = "https://api.resend.com/emails";
 function cleanHeaders<
 	P extends { from: string; to: string[]; subject: string; reply_to?: string },
 >(payload: P): P {
-	return {
+	const clean = {
 		...payload,
 		from: stripControls(payload.from),
 		to: payload.to.map(stripControls),
 		subject: headerText(payload.subject),
-		...(payload.reply_to === undefined
-			? {}
-			: { reply_to: stripControls(payload.reply_to) }),
 	};
+
+	if (payload.reply_to !== undefined)
+		clean.reply_to = stripControls(payload.reply_to);
+
+	return clean;
 }
 
 export async function sendAudioMessage({

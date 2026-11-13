@@ -12,7 +12,7 @@ export type Failure =
  * anything else, which is a fault of the site: the route answers its fixed sentence at 500 and logs it with
  * `logUnexpected`.
  */
-export function classifyFailure(error: unknown): Failure {
+export function classifyFailure<T>(error: T): Failure {
 	if (error instanceof ReaderMessage)
 		return { kind: "sentence", say: error.message };
 
@@ -27,7 +27,7 @@ export function classifyFailure(error: unknown): Failure {
 }
 
 /** Logs a fault of the site without its message, which can hold input or database detail. */
-export function logUnexpected(route: string, error: unknown) {
+export function logUnexpected<T>(route: string, error: T) {
 	console.error(
 		`${route} failed unexpectedly:`,
 		error instanceof Error ? error.name : "UnknownError",

@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import * as Effect from "effect/Effect";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
+import { issueAgreementLink } from "~/lib/agreement-access";
+import { POST as musicInterest } from "~/pages/api/music-interest";
 import { passGuards } from "~/server/flows/guards";
 import { RateLimit, Turnstile, TurnstileFailed } from "~/server/services";
 import { fakeKv, partial } from "../helpers/doubles";
@@ -14,19 +16,21 @@ import { sqliteD1 } from "../helpers/sqlite-d1";
 // without bound), the captcha, and last the visitor's own allowance. A request that fails the captcha therefore never
 // uses up the allowance of the visitor who sends the real one.
 
-const hoisted = vi.hoisted(() => ({ verifyTurnstile: vi.fn() }));
+// The captcha service is the one outside call these routes make before sending anything; a stub of fetch stands in for it.
+const captcha = vi.fn();
 
-vi.mock("~/lib/turnstile", () => ({
-	verifyTurnstile: hoisted.verifyTurnstile,
-}));
-
-const { issueAgreementLink } = await import("~/lib/agreement-access");
-const { POST: musicInterest } = await import("~/pages/api/music-interest");
+const answerCaptcha = (passes: boolean) => {
+	captcha.mockReset();
+	captcha.mockImplementation(
+		async () => new Response(JSON.stringify({ success: passes })),
+	);
+	vi.stubGlobal("fetch", captcha);
+};
 
 const IP = "203.0.113.7";
 
 afterEach(() => {
-	hoisted.verifyTurnstile.mockReset();
+	vi.unstubAllGlobals();
 });
 
 // The flow: contact and resume request.
@@ -137,8 +141,8 @@ function interestRequest() {
 	});
 }
 
-async function interest(captcha: boolean) {
-	hoisted.verifyTurnstile.mockResolvedValue(captcha);
+async function interest(passes: boolean) {
+	answerCaptcha(passes);
 	const store = new Map<string, string>();
 	const keys: string[] = [];
 
@@ -210,7 +214,7 @@ const allowanceRows = () =>
 	sql.prepare("SELECT count(*) AS n FROM audio_client_allowances").get().n;
 
 it("agreement link: a failed captcha counts the address allowance and not the email's", async () => {
-	hoisted.verifyTurnstile.mockResolvedValue(false);
+	answerCaptcha(false);
 
 	const response = await issueAgreementLink(linkEnv(), linkRequest(), {
 		turnstileToken: "t",
@@ -222,14 +226,14 @@ it("agreement link: a failed captcha counts the address allowance and not the em
 });
 
 it("agreement link: the address allowance refuses before the captcha is asked", async () => {
-	hoisted.verifyTurnstile.mockResolvedValue(true);
+	answerCaptcha(true);
 
 	for (let use = 0; use < 20; use++)
 		await issueAgreementLink(linkEnv(), linkRequest(), {
 			turnstileToken: "t",
 			email: `client${use}@example.com`,
 		});
-	hoisted.verifyTurnstile.mockClear();
+	captcha.mockClear();
 
 	const response = await issueAgreementLink(linkEnv(), linkRequest(), {
 		turnstileToken: "t",
@@ -237,5 +241,5 @@ it("agreement link: the address allowance refuses before the captcha is asked", 
 	});
 
 	expect(response.status).toBe(429);
-	expect(hoisted.verifyTurnstile).not.toHaveBeenCalled();
+	expect(captcha).not.toHaveBeenCalled();
 });

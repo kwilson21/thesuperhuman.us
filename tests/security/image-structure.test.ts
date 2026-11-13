@@ -9,7 +9,7 @@ const bytes = (name: keyof typeof tinyImages) =>
 	Uint8Array.from(atob(tinyImages[name]), (c) => c.charCodeAt(0));
 
 const accepts = (data: Uint8Array, type: string) =>
-	softwareVisualMatches(data.buffer.slice(0) as ArrayBuffer, type);
+	softwareVisualMatches(data.slice().buffer, type);
 
 const withExtra = (data: Uint8Array, extra: number[]) =>
 	Uint8Array.from([...data, ...extra]);

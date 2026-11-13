@@ -265,11 +265,7 @@ export async function applyAgreementRetention(
 	now = new Date(),
 ) {
 	// The manifest is whatever the owner's page sent back; one that is missing or not an object is stale, not a fault.
-	if (
-		!manifest ||
-		typeof manifest !== "object" ||
-		!Array.isArray(manifest.agreements)
-	)
+	if (!manifest || !Array.isArray(manifest.agreements))
 		throw new ReaderMessage("Review is stale or belongs to different storage.");
 	const age = now.getTime() - Date.parse(manifest.created_at);
 

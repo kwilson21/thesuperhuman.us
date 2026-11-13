@@ -127,6 +127,7 @@ const pngOfSize = (size: number) => {
 const jpegOfSize = (size: number) => {
 	const jpeg = real["image/jpeg"],
 		segments: number[][] = [];
+
 	let remaining = size - jpeg.length;
 
 	while (remaining > 0) {

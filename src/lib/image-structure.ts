@@ -29,6 +29,7 @@ function completePng(b: Uint8Array) {
 	if (b.length < 8 || !signature.every((value, i) => b[i] === value))
 		return false;
 	const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+
 	let position = 8,
 		first = true,
 		data = false;
@@ -66,6 +67,7 @@ function completePng(b: Uint8Array) {
 
 function completeJpeg(b: Uint8Array) {
 	if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return false;
+
 	let position = 2,
 		frame = false,
 		scan = false;
@@ -113,6 +115,7 @@ function completeJpeg(b: Uint8Array) {
 					if (next !== 0x00 && next !== 0xff && !(next >= 0xd0 && next <= 0xd7))
 						break;
 				}
+
 				position++;
 			}
 		}
@@ -127,12 +130,14 @@ function completeWebp(b: Uint8Array) {
 	const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
 
 	if (view.getUint32(4, true) + 8 !== b.length) return false;
+
 	let position = 12,
 		first = true,
 		image = false;
 
 	while (position < b.length) {
 		if (position + 8 > b.length) return false;
+
 		const type = ascii(b, position, 4),
 			length = view.getUint32(position + 4, true),
 			end = position + 8 + length + (length & 1);

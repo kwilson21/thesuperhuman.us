@@ -107,6 +107,7 @@ const termsJson = JSON.stringify(terms, null, 2),
 const visualBytes = Uint8Array.from(atob(tinyImages.png), (c) =>
 	c.charCodeAt(0),
 );
+
 const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn(), list: vi.fn() };
 
 function request(

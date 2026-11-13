@@ -1,4 +1,4 @@
-import { isText } from "./type-guards";
+import { isObject, isText } from "./type-guards";
 
 /**
  * The one check for a link a person typed and the site stores or shows: an https address with a host and no
@@ -6,7 +6,7 @@ import { isText } from "./type-guards";
  * `href`, or null. `http:`, `javascript:`, `data:`, `mailto:`, a protocol-relative `//host`, a relative path and any
  * address written with leading whitespace or a control character are all null.
  */
-export function safeHttpsUrl(value: unknown): string | null {
+export function safeHttpsUrl<T>(value: T): string | null {
 	if (!isText(value) || /[\u0000- \u007f-\u009f]/.test(value)) return null;
 
 	try {
@@ -67,11 +67,11 @@ export function safeReferences(
 
 	if (!Array.isArray(list)) return [];
 
-	return list.flatMap((item: unknown) => {
-		if (typeof item !== "object" || item === null) return [];
-		const label: unknown = "label" in item ? item.label : undefined,
-			url: unknown = "url" in item ? item.url : undefined,
-			href = safeHttpsUrl(url);
+	return list.flatMap((item) => {
+		if (!isObject(item)) return [];
+
+		const label = "label" in item ? item.label : undefined,
+			href = safeHttpsUrl("url" in item ? item.url : undefined);
 
 		return isText(label) && label.trim() && href ? [{ label, href }] : [];
 	});
