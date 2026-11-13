@@ -15,7 +15,7 @@ import {
 } from "~/lib/agreement-templates";
 import {
 	validateAgreementDetails,
-	contractorSchema,
+	parseContractor,
 } from "~/lib/agreement-fields";
 import {
 	parseClientAgreement,
@@ -525,7 +525,7 @@ it("enforces dates, milestone counts, invoice duration and owner default semanti
 	).toThrow();
 	expect(() => parseClientAgreement({ ...client, naming: true })).toThrow();
 	expect(() =>
-		contractorSchema.parse({
+		parseContractor({
 			...contractor,
 			registered_agent_confirmed: false,
 		}),
@@ -1258,7 +1258,7 @@ it("runs private source templates through one, two and three milestones in both 
 				purchase,
 				filled,
 				parseClientAgreement(client),
-				contractorSchema.parse(contractor),
+				parseContractor(contractor),
 				{
 					effective_on: "2026-09-30",
 					msa_version: "2026-09-30 / template 1",
@@ -3728,7 +3728,7 @@ it("maps unfamiliar draft validation issues to a generic message on the field", 
 });
 
 it("renders cumulative checkpoint payments and invoice-identical odd-cent installments", async () => {
-	const { agreementValues, agreementDetailsSchema } = await import(
+	const { agreementValues, parseAgreementDetails } = await import(
 		"~/lib/agreement-fields"
 	);
 
@@ -3749,7 +3749,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 
 	const values = agreementValues(
 		purchased,
-		agreementDetailsSchema.parse({
+		parseAgreementDetails({
 			...details,
 			milestones: [
 				details.milestones[0],
@@ -3762,7 +3762,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 			],
 		}),
 		parseClientAgreement(client),
-		contractorSchema.parse(contractor),
+		parseContractor(contractor),
 		{
 			effective_on: "2026-10-01",
 			msa_version: "2026-10-01 / template 1",

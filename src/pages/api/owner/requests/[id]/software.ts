@@ -6,9 +6,10 @@ import { signingEnabled } from "~/lib/agreement-access";
 import { currentTemplate } from "~/lib/agreement-templates";
 import {
 	validateAgreementDetails,
-	agreementDetailsSchema,
-	contractorSchema,
+	parseAgreementAttachments,
+	parseContractor,
 } from "~/lib/agreement-fields";
+import { FieldsRefused } from "~/lib/fields";
 import { musicRequest } from "~/lib/music-request";
 import { softwareGuard } from "~/lib/software-projects";
 import { depositOfferBlock, depositOfferGuard } from "~/lib/software-invoices";
@@ -191,24 +192,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 	// Attachment acquisition and archive closure serialize in D1 before either side performs R2 work.
 	const attachmentGuards = (details: StoredAttachmentSource) =>
-		agreementDetailsSchema
-			.innerType()
-			.shape.attachments.parse(details?.attachments)
-			.map((attachment) =>
-				guard(
-					`SELECT 1 FROM software_agreement_attachments f WHERE f.request_id=? AND f.object_key=? AND f.sha256=? AND f.bytes=? AND f.filename=? AND f.version=? AND f.document_date=?
+		parseAgreementAttachments(details?.attachments).map((attachment) =>
+			guard(
+				`SELECT 1 FROM software_agreement_attachments f WHERE f.request_id=? AND f.object_key=? AND f.sha256=? AND f.bytes=? AND f.filename=? AND f.version=? AND f.document_date=?
       AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE a.archive_closed_at IS NOT NULL AND json_extract(m.value,'$.key')=f.object_key)`,
-					[
-						record.id,
-						attachment.key,
-						attachment.sha256,
-						attachment.bytes,
-						attachment.filename,
-						attachment.version,
-						attachment.date,
-					],
-				),
-			);
+				[
+					record.id,
+					attachment.key,
+					attachment.sha256,
+					attachment.bytes,
+					attachment.filename,
+					attachment.version,
+					attachment.date,
+				],
+			),
+		);
 
 	const requestGuard = (updatedAt = record.updatedAt) =>
 		guard(
@@ -650,9 +648,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						400,
 					);
 
-				const contractor = contractorSchema.parse(
-					JSON.parse(config.values_json),
-				);
+				const contractor = parseContractor(JSON.parse(config.values_json));
 
 				if (
 					offer.reused_msa_id &&
@@ -727,7 +723,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					message: "Complete and validate Agreement details before sending.",
 				};
 
-				if (error instanceof z.ZodError) {
+				if (error instanceof z.ZodError || error instanceof FieldsRefused) {
 					failure.errors = Object.fromEntries(
 						error.issues.map((issue) => [
 							`agreement.${issue.path.join(".")}`,

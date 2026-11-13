@@ -8,7 +8,7 @@ import { softwareGuard } from "./software-projects";
 import {
 	agreementValues,
 	validateAgreementDetails,
-	contractorSchema,
+	parseContractor,
 } from "./agreement-fields";
 import {
 	parseClientAgreement,
@@ -124,7 +124,7 @@ export async function reviewAgreements(
 			JSON.parse(offer.agreement_details_json!),
 			terms,
 		),
-		contractor = contractorSchema.parse(
+		contractor = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),
@@ -599,7 +599,7 @@ export async function countersignAgreements(
 
 	const at = new Date().toISOString(),
 		receipt = crypto.randomUUID(),
-		config = contractorSchema.parse(
+		config = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),

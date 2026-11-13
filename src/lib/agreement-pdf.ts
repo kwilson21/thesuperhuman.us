@@ -13,7 +13,7 @@ import {
 import {
 	agreementValues,
 	type AgreementDetails,
-	contractorSchema,
+	type Contractor,
 	signatureReference,
 } from "./agreement-fields";
 import { type ClientAgreement } from "./agreement-client-fields";
@@ -380,7 +380,7 @@ export async function preflightAgreementPacket(
 	env: Env,
 	terms: OfferTerms,
 	details: AgreementDetails,
-	contractor: ReturnType<typeof contractorSchema.parse>,
+	contractor: Contractor,
 	templates: AgreementTemplate[],
 	reusedMsaId: string | null,
 ) {

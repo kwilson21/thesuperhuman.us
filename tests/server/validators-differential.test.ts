@@ -1,12 +1,23 @@
+import { ZodError } from "astro/zod";
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vitest";
 import { validateIntake } from "../../src/lib/audio-intake";
 import {
-	cleanTextField,
-	emailField,
 	parseClientAgreement,
 	readClientAgreement,
-	requiredField,
 } from "../../src/lib/agreement-client-fields";
+import {
+	parseAgreementAttachments,
+	parseContractor,
+	readAgreementDetails,
+	readContractor,
+	validateAgreementDetails,
+} from "../../src/lib/agreement-fields";
+import {
+	readAttachmentQuery,
+	readOwnerAgreementAction,
+} from "../../src/lib/agreement-owner-input";
+import type { OfferTerms } from "../../src/lib/software-offers";
 import {
 	businessTypes,
 	parseDraft,
@@ -14,19 +25,16 @@ import {
 	resolveClientDetails,
 	states,
 } from "../../src/lib/agreement-draft-fields";
-import { type Body, type RawValue, readFields } from "../../src/lib/fields";
+import { type Body, FieldsRefused, type RawValue } from "../../src/lib/fields";
 import { validateSoftwareInquiry } from "../../src/lib/software-inquiry";
+import { legacyClientAgreementSchema } from "../fixtures/legacy-validators/agreement-client-fields";
 import {
-	cleanText as zodCleanText,
-	email as zodEmail,
-	required as zodRequired,
-} from "../../src/server/agreement-zod-fields";
-import {
-	legacyCleanText,
-	legacyClientAgreementSchema,
-	legacyEmail,
-	legacyRequired,
-} from "../fixtures/legacy-validators/agreement-client-fields";
+	legacyAgreementDetailsSchema,
+	legacyAttachmentQuery,
+	legacyContractorSchema,
+	legacyOwnerAgreementAction,
+	legacyValidateAgreementDetails,
+} from "../fixtures/legacy-validators/agreement-fields";
 import {
 	legacyDraftFieldErrors,
 	legacyDraftSchema,
@@ -828,92 +836,766 @@ describe("the agreement client details against the frozen Zod 3 validators", () 
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The server-only Zod copy of the three small helpers
+// The owner agreement details, the contractor's details and the owner's agreement requests
 
-describe("the server-only Zod copy of cleanText, required and email", () => {
-	const maxima = [1, 2, 3, 10, 80, 200, 320, 1000];
+type Issues = readonly {
+	path: readonly (string | number)[];
+	message: string;
+}[];
 
-	const same = (
-		copy: {
-			safeParse: (value: RawValue) => { success: boolean; data?: RawValue };
-		},
-		oracle: {
-			safeParse: (value: RawValue) => { success: boolean; data?: RawValue };
-		},
-		value: RawValue,
-	) => {
-		const a = copy.safeParse(value);
-		const b = oracle.safeParse(value);
+/** What the owner request route shows for a rejected payload: each failed path with its last sentence, in order. */
+const errorsOf = (issues: Issues) =>
+	Object.fromEntries(
+		issues.map((issue) => [`agreement.${issue.path.join(".")}`, issue.message]),
+	);
 
-		return (
-			a.success === b.success &&
-			JSON.stringify(a.data) === JSON.stringify(b.data)
-		);
+type Answer =
+	| { ok: true; value: RawValue }
+	| { ok: false; errors: Record<string, string> };
+
+describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
+	const attachment = {
+		filename: "Statement of requirements.pdf",
+		version: "v2",
+		date: "2027-02-10",
+		sha256: "a".repeat(64),
+		key: "agreements/attachments/123e4567-e89b-42d3-a456-426614174000.pdf",
+		bytes: 1234,
 	};
 
-	it("is the Zod cleanText the browser validators used, on every input of a shared table", () => {
-		let count = 0;
+	const milestone = {
+		start: "2027-03-01",
+		target: "2027-03-20",
+		handoff: "Repository and notes",
+	};
 
-		for (const max of maxima)
-			for (const value of [...texts(max), ...notStrings]) {
-				count += 1;
-				expect(same(zodCleanText(max), legacyCleanText(max), value)).toBe(true);
-				expect(same(zodRequired(max), legacyRequired(max), value)).toBe(true);
+	const details = {
+		planned_start: "2027-03-01",
+		planned_end: "2027-04-15",
+		environment: "Staging and production on the client's account",
+		operating_responsibilities: "The client hosts and monitors it",
+		update_rhythm: "Weekly",
+		milestones: [milestone],
+	};
+
+	const full = {
+		...details,
+		update_channel: "Email",
+		milestones: [
+			{
+				...milestone,
+				checkpoint_criteria: "Login works",
+				checkpoint_evidence: "Demo",
+			},
+			{
+				start: "2027-03-21",
+				target: "2027-04-10",
+				handoff: "Everything",
+				checkpoint_criteria: "None",
+				checkpoint_evidence: "None",
+			},
+		],
+		visual_approvals: "Home page",
+		invoice_first_duration: 20,
+		review_business_days: 35,
+		longer_review_confirmed: true,
+		correction_calendar_days: 60,
+		po_requirement: "before_start",
+		expenses_taxes: "Client pays",
+		recurring_charges: "None",
+		ai_permission: "Not allowed",
+		sensitive_addenda: "None",
+		support: "30 days",
+		msa_changes: "None",
+		data_retention: "Keep 90 days after the project page closes",
+		project_retention_days: 90,
+		handoff_access: "Keep for 45 days",
+		handoff_access_days: 45,
+		attachments: [attachment, { ...attachment, bytes: 10 * 1024 * 1024 }],
+	};
+
+	const contractor = {
+		legal_name: "The Superhuman Group LLC",
+		entity_jurisdiction: "Wyoming",
+		signer_name: "Kazon Wilson",
+		signer_title: "Manager",
+		notice_email: "notices@example.com",
+		business_address: "1 Registered Agent Way",
+		registered_agent_confirmed: true,
+	};
+
+	const numbers: RawValue[] = [
+		0,
+		1,
+		-1,
+		4,
+		5,
+		6,
+		29,
+		30,
+		31,
+		35,
+		60,
+		89,
+		90,
+		91,
+		364,
+		365,
+		366,
+		3649,
+		3650,
+		3651,
+		10485760,
+		10485761,
+		1.5,
+		-0.5,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+		1e21,
+		"5",
+		"",
+		" 5 ",
+		null,
+		true,
+		false,
+		[],
+		[5],
+		{},
+		undefined,
+	];
+
+	const dates = [
+		"2027-03-01",
+		"2027-03-20",
+		"2027-04-15",
+		"2027-04-16",
+		"2027-02-29",
+		"2028-02-29",
+		"2027-13-01",
+		"0000-01-01",
+		"2027-3-1",
+		"2027-03-01 ",
+		" 2027-03-01",
+		"2027-03-01\n",
+		"",
+		"soon",
+		"2027-03-01T00:00:00Z",
+		"2026-12-31",
+		"2027-06-30",
+		...notStrings,
+	];
+
+	const attachmentPool: RawValue[] = [
+		attachment,
+		{ ...attachment, extra: 1 },
+		{ ...attachment, filename: "" },
+		{ ...attachment, filename: "x".repeat(201) },
+		{ ...attachment, filename: "a\u0000b" },
+		{ ...attachment, version: "v".repeat(81) },
+		{ ...attachment, date: "2027-02-30" },
+		{ ...attachment, sha256: "A".repeat(64) },
+		{ ...attachment, sha256: "a".repeat(63) },
+		{ ...attachment, sha256: undefined },
+		{ ...attachment, key: "agreements/attachments/x.pdf" },
+		{ ...attachment, key: "agreements/attachments/abc-123.pdf" },
+		{ ...attachment, key: "agreements/attachments/abc-123.pdf\n" },
+		{ ...attachment, bytes: 0 },
+		{ ...attachment, bytes: 10485760 },
+		{ ...attachment, bytes: 10485761 },
+		{ ...attachment, bytes: 1.5 },
+		{ ...attachment, bytes: "5" },
+		{ ...attachment, bytes: Number.NaN },
+		null,
+		"x",
+		5,
+		[],
+	];
+
+	const attachmentLists: RawValue[] = [
+		undefined,
+		null,
+		[],
+		[attachment],
+		[attachment, attachment, attachment, attachment, attachment],
+		[attachment, attachment, attachment, attachment, attachment, attachment],
+		[
+			{ ...attachment, bytes: 9 * 1024 * 1024 },
+			{ ...attachment, bytes: 9 * 1024 * 1024 },
+			{ ...attachment, bytes: 9 * 1024 * 1024 },
+		],
+		[
+			{ ...attachment, bytes: 10485760 },
+			{ ...attachment, bytes: 10485760 },
+			{ ...attachment, bytes: 5242880 },
+		],
+		[
+			{ ...attachment, bytes: 10485760 },
+			{ ...attachment, bytes: 10485760 },
+			{ ...attachment, bytes: 5242881 },
+		],
+		"x",
+		5,
+		{},
+		{ 0: attachment, length: 1 },
+		...attachmentPool.map((item) => [item]),
+		...attachmentPool.map((item) => [attachment, item]),
+	];
+
+	const random = seeded(20261119);
+
+	const milestoneVariants = (): RawValue[] => {
+		const one = (): Body => {
+			const base: Body = {
+				...milestone,
+				checkpoint_criteria: "Login works",
+				checkpoint_evidence: "Demo",
+			};
+
+			const pools = {
+				start: dates,
+				target: dates,
+				handoff: [...texts(4000), ...notStrings],
+				checkpoint_criteria: [...texts(4000), ...notStrings],
+				checkpoint_evidence: [...texts(4000), ...notStrings],
+			};
+
+			const [name, values] = random.pick(Object.entries(pools));
+			const picked = random.pick(values);
+
+			return random.chance(0.15)
+				? { ...base, extra: "x" }
+				: random.chance(0.1)
+					? Object.fromEntries(Object.entries(base).filter(([k]) => k !== name))
+					: { ...base, [name]: picked };
+		};
+
+		const out: RawValue[] = [
+			[],
+			[milestone],
+			[milestone, milestone],
+			[milestone, milestone, milestone],
+			[milestone, milestone, milestone, milestone],
+			null,
+			"x",
+			{},
+			[null],
+			[5],
+			["x"],
+			[[]],
+		];
+
+		for (let i = 0; i < 600; i += 1)
+			out.push(Array.from({ length: 1 + random.below(3) }, one));
+
+		return out;
+	};
+
+	const retentionTexts = [
+		"MSA default, including one year for the private project page",
+		"Keep 90 days",
+		"90",
+		"x90y",
+		"90.5",
+		"1.90",
+		"90,5",
+		"٩٠",
+		"ninety",
+		"",
+		" ",
+		"Keep 365 days",
+		"MSA default",
+		"MSA default 30",
+		"for 45 days",
+		"45",
+		"a45",
+		"45a",
+		"1 year (365)",
+	];
+
+	const detailPools = {
+		planned_start: dates,
+		planned_end: dates,
+		environment: [...texts(4000), ...notStrings],
+		operating_responsibilities: [...texts(4000), ...notStrings],
+		update_channel: [...texts(500), ...notStrings],
+		update_rhythm: [...texts(500), ...notStrings],
+		milestones: milestoneVariants(),
+		visual_approvals: [...texts(4000), ...notStrings],
+		invoice_first_duration: numbers,
+		review_business_days: numbers,
+		longer_review_confirmed: [
+			true,
+			false,
+			"true",
+			1,
+			0,
+			null,
+			undefined,
+			"",
+			[],
+			{},
+		],
+		correction_calendar_days: numbers,
+		po_requirement: [
+			"not_required",
+			"before_start",
+			"NOT_REQUIRED",
+			" before_start",
+			"",
+			"x",
+			"toString",
+			"__proto__",
+			...notStrings,
+		],
+		expenses_taxes: [...texts(4000), ...notStrings],
+		recurring_charges: [...texts(4000), ...notStrings],
+		ai_permission: [...texts(4000), ...notStrings],
+		sensitive_addenda: [...texts(4000), ...notStrings],
+		support: [...texts(4000), ...notStrings],
+		msa_changes: [...texts(4000), ...notStrings],
+		data_retention: [...retentionTexts, ...texts(4000), ...notStrings],
+		project_retention_days: numbers,
+		handoff_access: [...retentionTexts, ...texts(4000), ...notStrings],
+		handoff_access_days: numbers,
+		attachments: attachmentLists,
+	} satisfies Pools;
+
+	const detailsAnswer = (input: RawValue): Answer => {
+		const read = readAgreementDetails(input);
+
+		return read.ok
+			? { ok: true, value: read.value }
+			: { ok: false, errors: errorsOf(read.issues) };
+	};
+
+	const legacyDetailsAnswer = (input: RawValue): Answer => {
+		const read = legacyAgreementDetailsSchema.safeParse(input);
+
+		return read.success
+			? { ok: true, value: read.data }
+			: { ok: false, errors: errorsOf(read.error.issues) };
+	};
+
+	const answerLine = (answer: Answer) => fingerprint(answer, true);
+
+	it("answers the agreement details as the Zod schema did: values in order, and every failed path with its sentence", () => {
+		const found = differential(legacyDetailsAnswer, detailsAnswer, answerLine);
+
+		for (const body of bodies([details, full], detailPools, 20261120, 9000))
+			found.run(body);
+
+		// Several fields wrong at once, so the order of paths and the stopping rules show.
+		const entries = Object.entries(detailPools);
+
+		for (let i = 0; i < 6000; i += 1) {
+			const set: [string, RawValue][] = [];
+
+			for (let n = 2 + random.below(5); n > 0; n -= 1) {
+				const [name, values] = random.pick(entries);
+				set.push([name, random.pick(values)]);
 			}
 
-		for (const value of [...emails, ...notStrings]) {
-			count += 1;
-			expect(same(zodEmail, legacyEmail, value)).toBe(true);
+			found.run(shuffled(changed(random.pick([details, full]), set), random));
 		}
 
-		expect(count).toBeGreaterThan(900);
+		// The inputs reach both sides of the schema: many accepted, and many different sets of failures (including
+		// the checks across fields, which run only when nothing stopped the details).
+		const outcomes = { accepted: 0, kinds: new Set<string>() };
+
+		for (const body of bodies([details, full], detailPools, 20261120, 3000)) {
+			const answer = legacyDetailsAnswer(body);
+
+			if (answer.ok) outcomes.accepted += 1;
+			else outcomes.kinds.add(Object.keys(answer.errors).join("|"));
+		}
+
+		expect(outcomes.accepted).toBeGreaterThan(50);
+		expect(outcomes.kinds.size).toBeGreaterThan(300);
+		expect(found.count).toBeGreaterThan(19000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`agreementDetails differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
 	});
 
-	it("agrees with the Effect cleanText, required and email fields on a shared table", () => {
-		let count = 0;
+	it("answers the attachments alone as the Zod array did, missing as none", () => {
+		const oracle = (input: RawValue): Answer => {
+			const read = legacyAgreementDetailsSchema
+				.innerType()
+				.shape.attachments.safeParse(input);
 
-		for (const max of maxima) {
-			const fields = { text: cleanTextField(max), needed: requiredField(max) };
+			return read.success
+				? { ok: true, value: read.data }
+				: { ok: false, errors: errorsOf(read.error.issues) };
+		};
 
-			for (const value of [...texts(max), ...notStrings]) {
-				count += 1;
+		const subject = (input: RawValue): Answer => {
+			try {
+				return { ok: true, value: parseAgreementAttachments(input) };
+			} catch (error) {
+				return {
+					ok: false,
+					errors: errorsOf(error instanceof FieldsRefused ? error.issues : []),
+				};
+			}
+		};
 
-				const read = readFields(
-					fields,
-					{ text: value, needed: value },
-					{
-						winner: "last",
-					},
-				);
+		const found = differential(oracle, subject, answerLine);
 
-				const expectedText = zodCleanText(max).safeParse(value);
-				const expectedNeeded = zodRequired(max).safeParse(value);
+		for (const list of attachmentLists) found.run(list);
 
-				if (read.ok) {
-					expect(expectedText.success).toBe(true);
-					expect(expectedNeeded.success).toBe(true);
-					expect(read.value.text).toBe(expectedText.data);
-					expect(read.value.needed).toBe(expectedNeeded.data);
-				} else {
-					expect(read.errors.text !== undefined).toBe(!expectedText.success);
-					expect(read.errors.needed !== undefined).toBe(
-						!expectedNeeded.success,
-					);
-				}
+		for (let i = 0; i < 1500; i += 1)
+			found.run(
+				Array.from({ length: random.below(7) }, () =>
+					random.pick(attachmentPool),
+				),
+			);
+
+		expect(found.count).toBeGreaterThan(1500);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`agreementAttachments differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	});
+
+	it("throws from validateAgreementDetails exactly where the Zod version did, with the same sentences and the same plain errors", () => {
+		// SAFETY: the function reads only the payment mode and each milestone's checkpoint; the rest of an offer's terms is not read.
+		const termsFor = (count: number, mode: string, checkpoints: boolean[]) =>
+			({
+				paymentMode: mode,
+				milestones: Array.from({ length: count }, (_, i) =>
+					checkpoints[i] ? { checkpoint: { label: "x" } } : {},
+				),
+			}) as OfferTerms;
+
+		const outcome = (run: () => RawValue): Answer => {
+			try {
+				return { ok: true, value: run() };
+			} catch (error) {
+				if (error instanceof FieldsRefused || error instanceof ZodError)
+					return {
+						ok: false,
+						errors: {
+							...errorsOf(error.issues),
+							kind: error.message.startsWith("[") ? "[" : error.message,
+						},
+					};
+
+				return {
+					ok: false,
+					errors: { plain: error instanceof Error ? error.message : "?" },
+				};
+			}
+		};
+
+		const found = differential(
+			(input: [RawValue, OfferTerms]) =>
+				outcome(() => legacyValidateAgreementDetails(input[0], input[1])),
+			(input: [RawValue, OfferTerms]) =>
+				outcome(() => validateAgreementDetails(input[0], input[1])),
+			answerLine,
+		);
+
+		const termsList = [
+			termsFor(1, "standard", [false]),
+			termsFor(1, "invoice", [false]),
+			termsFor(1, "standard", [true]),
+			termsFor(2, "standard", [true, false]),
+			termsFor(2, "invoice", [false, true]),
+			termsFor(3, "standard", [true, true, true]),
+			termsFor(3, "invoice", [false, false, false]),
+		];
+
+		for (const body of bodies([details, full], detailPools, 20261121, 2500))
+			found.run([body, random.pick(termsList)]);
+
+		for (const terms of termsList) {
+			found.run([details, terms]);
+			found.run([full, terms]);
+			found.run([{ ...full, invoice_first_duration: 1 }, terms]);
+			found.run([{ ...full, invoice_first_duration: 90 }, terms]);
+			found.run([{ ...full, invoice_first_duration: null }, terms]);
+		}
+
+		// Larger than 64 KiB.
+		found.run([{ ...details, environment: "x".repeat(70000) }, termsList[0]]);
+
+		expect(found.count).toBeGreaterThan(2500);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`validateAgreementDetails differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	});
+
+	const contractorPools = {
+		legal_name: [...texts(200), ...notStrings],
+		entity_jurisdiction: [...texts(200), ...notStrings],
+		signer_name: [...texts(200), ...notStrings],
+		signer_title: [...texts(200), ...notStrings],
+		notice_email: [...emails, ...notStrings],
+		business_address: [...texts(1000), ...notStrings],
+		registered_agent_confirmed: [
+			true,
+			false,
+			"true",
+			1,
+			0,
+			null,
+			undefined,
+			[],
+			{},
+			"",
+		],
+	} satisfies Pools;
+
+	it("answers the contractor's details as the Zod schema did", () => {
+		const subject = (input: RawValue): Answer => {
+			const read = readContractor(input);
+
+			return read.ok
+				? { ok: true, value: read.value }
+				: { ok: false, errors: errorsOf(read.issues) };
+		};
+
+		const oracle = (input: RawValue): Answer => {
+			const read = legacyContractorSchema.safeParse(input);
+
+			return read.success
+				? { ok: true, value: read.data }
+				: { ok: false, errors: errorsOf(read.error.issues) };
+		};
+
+		const found = differential(oracle, subject, answerLine);
+
+		for (const body of bodies([contractor], contractorPools, 20261122, 4000))
+			found.run(body);
+
+		let threw = 0;
+
+		for (const body of bodies([contractor], contractorPools, 20261123, 600)) {
+			let message: string | undefined;
+
+			try {
+				parseContractor(body);
+			} catch (error) {
+				message = error instanceof Error ? error.message : "";
+			}
+
+			expect(message !== undefined).toBe(
+				!legacyContractorSchema.safeParse(body).success,
+			);
+
+			if (message !== undefined) {
+				threw += 1;
+				expect(message.startsWith("[")).toBe(true);
 			}
 		}
 
-		for (const value of [...emails, ...notStrings]) {
-			count += 1;
+		expect(found.count).toBeGreaterThan(4500);
+		expect(threw).toBeGreaterThan(300);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`contractor differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	});
 
-			const read = readFields({ email: emailField }, { email: value });
-			const expected = zodEmail.safeParse(value);
+	describe("the owner's agreement requests", () => {
+		const id = "123e4567-e89b-42d3-a456-426614174000";
+		const hash = "b".repeat(64);
+		const docs = [{ id, hash }];
 
-			expect(read.ok).toBe(expected.success);
+		const bases: Body[] = [
+			{
+				action: "countersign",
+				documents: docs,
+				typed_name: "Kazon Wilson",
+				consent: true,
+			},
+			{
+				action: "abandon",
+				documents: [...docs, { id, hash }],
+				reason: "Client withdrew",
+				confirmed: true,
+			},
+			{ action: "retry-artifact", agreement_id: id },
+			{
+				action: "retry-copy",
+				agreement_id: id,
+				confirmedNotSent: true,
+				expectedAttempt: id,
+				confirmedStale: true,
+			},
+			{
+				action: "record-alternate-copy",
+				agreement_id: id,
+				role: "client",
+				method: "Printed",
+				confirmed: true,
+			},
+			{ action: "hold", agreement_id: id, held: true },
+			{
+				action: "end",
+				agreement_id: id,
+				ended_on: "2027-05-01",
+				confirmed: true,
+			},
+		];
 
-			if (read.ok) expect(read.value.email).toBe(expected.data);
-		}
+		const actionPools = {
+			action: [
+				"countersign",
+				"abandon",
+				"retry-artifact",
+				"retry-copy",
+				"record-alternate-copy",
+				"hold",
+				"end",
+				"Countersign",
+				" hold",
+				"toString",
+				"__proto__",
+				"constructor",
+				"",
+				"other",
+				...notStrings,
+			],
+			documents: [
+				docs,
+				[],
+				[docs[0], docs[0], docs[0]],
+				[{ id, hash, extra: 1 }],
+				[{ id: "x", hash }],
+				[{ id, hash: "B".repeat(64) }],
+				[{ id }],
+				[null],
+				[5],
+				"x",
+				null,
+				undefined,
+				{},
+			],
+			typed_name: [...texts(200), ...notStrings],
+			reason: [...texts(1000), ...notStrings],
+			method: [...texts(200), ...notStrings],
+			consent: [true, false, "true", 1, null, undefined, [], {}],
+			confirmed: [true, false, "true", 1, null, undefined, [], {}],
+			confirmedNotSent: [true, false, "true", 1, null, undefined, [], {}],
+			confirmedStale: [true, false, "true", 1, null, undefined, [], {}],
+			held: [true, false, "true", 1, null, undefined, [], {}],
+			role: [
+				"client",
+				"contractor",
+				"Client",
+				" client",
+				"",
+				"owner",
+				"toString",
+				...notStrings,
+			],
+			agreement_id: [id, id.toUpperCase(), ` ${id}`, "x", "", ...notStrings],
+			expectedAttempt: [
+				id,
+				id.toUpperCase(),
+				"x",
+				"",
+				null,
+				undefined,
+				...notStrings,
+			],
+			ended_on: [
+				"2027-05-01",
+				"2027-5-1",
+				"2027-02-30",
+				"2027-05-01\n",
+				" 2027-05-01",
+				"",
+				"x",
+				...notStrings,
+			],
+		} satisfies Pools;
 
-		expect(count).toBeGreaterThan(900);
+		it("answers the action union as the Zod discriminated union did", () => {
+			const oracle = (input: RawValue): Answer => {
+				const read = legacyOwnerAgreementAction.safeParse(input);
+
+				return read.success
+					? { ok: true, value: read.data }
+					: { ok: false, errors: {} };
+			};
+
+			const subject = (input: RawValue): Answer => {
+				const read = readOwnerAgreementAction(input);
+
+				return read.ok
+					? { ok: true, value: read.value }
+					: { ok: false, errors: {} };
+			};
+
+			const found = differential(oracle, subject, (answer) =>
+				fingerprint(answer),
+			);
+
+			for (const body of bodies(bases, actionPools, 20261124, 6000))
+				found.run(body);
+
+			expect(found.count).toBeGreaterThan(6000);
+			expect(take(found)).toEqual(noMismatch(found));
+			console.info(
+				`ownerAgreementAction differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+			);
+		});
+
+		it("answers the attachment upload's query as the Zod object did", () => {
+			const oracle = (input: RawValue): Answer => {
+				const read = legacyAttachmentQuery.safeParse(input);
+
+				return read.success
+					? { ok: true, value: read.data }
+					: { ok: false, errors: {} };
+			};
+
+			const subject = (input: RawValue): Answer => {
+				const read = readAttachmentQuery(input);
+
+				return read.ok
+					? { ok: true, value: read.value }
+					: { ok: false, errors: {} };
+			};
+
+			const found = differential(oracle, subject, (answer) =>
+				fingerprint(answer, true),
+			);
+
+			const base = { filename: "SOW.pdf", version: "v1", date: "2027-01-31" };
+
+			const pools = {
+				filename: [
+					...texts(200),
+					"a/b.pdf",
+					"a\\b.pdf",
+					"/",
+					"\\",
+					" / ",
+					"a\u0000/b",
+					...notStrings,
+				],
+				version: [...texts(80), ...notStrings],
+				date: dates,
+			} satisfies Pools;
+
+			for (const body of bodies([base], pools, 20261125, 4000)) found.run(body);
+
+			// A query string gives only text.
+			for (const [name, values] of Object.entries(pools))
+				for (const value of values)
+					if (Predicate.isString(value)) found.run({ ...base, [name]: value });
+
+			expect(found.count).toBeGreaterThan(3000);
+			expect(take(found)).toEqual(noMismatch(found));
+			console.info(
+				`attachmentQuery differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+			);
+		});
 	});
 });

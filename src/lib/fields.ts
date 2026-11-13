@@ -31,27 +31,35 @@ export function plainErrors(errors: {
 	);
 }
 
+/** One thing wrong with a body: where (the names and positions down to the field) and the sentence. */
+export type Issue = {
+	readonly path: readonly (string | number)[];
+	readonly message: string;
+};
+
 /**
- * What `parse` functions throw: the fields that failed and their sentences. The message is the JSON of the failures, so
- * it starts with `[` as the message of a Zod error did (the review route shows a message to the visitor unless it starts
- * with `[`).
+ * What `parse` functions throw: the failures, each with its path and sentence (`issues`, as a Zod error had) and by field
+ * (`errors`, the last sentence for each path joined with "."). The message is the JSON of the failures, so it starts with
+ * `[` as the message of a Zod error did (the review route shows a message to the visitor unless it starts with `[`).
  */
 export class FieldsRefused extends Error {
+	readonly issues: readonly Issue[];
 	readonly errors: Record<string, string>;
 
-	constructor(errors: Record<string, string>) {
-		super(
-			JSON.stringify(
-				Object.entries(errors).map(([field, message]) => ({
+	constructor(failures: Record<string, string> | readonly Issue[]) {
+		const issues: readonly Issue[] = Array.isArray(failures)
+			? failures
+			: Object.entries(failures).map(([field, message]) => ({
 					path: [field],
 					message,
-				})),
-				null,
-				2,
-			),
-		);
+				}));
+
+		super(JSON.stringify(issues, null, 2));
 		this.name = "FieldsRefused";
-		this.errors = errors;
+		this.issues = issues;
+		this.errors = Object.fromEntries(
+			issues.map((issue) => [issue.path.join("."), issue.message]),
+		);
 	}
 }
 
@@ -353,8 +361,8 @@ function formSentence<Input>(
 	return kind === "object" ? undefined : notObject[kind];
 }
 
-/** The sentence one field gives: the one `winner` picks from every check that failed. */
-function sentenceOf<S extends Schema.ConstraintDecoder<unknown>, Input>(
+/** Reads one value with one schema: its typed value, or the sentence the `winner` check gives (see `ReadFieldsOptions`). */
+export function readOne<S extends Schema.ConstraintDecoder<unknown>, Input>(
 	schema: S,
 	input: Input,
 	winner: "first" | "last",
@@ -405,7 +413,7 @@ function readEach<F extends FieldSchemas<F>, Input>(
 			continue;
 		}
 
-		const read = sentenceOf(fields[name], given, winner);
+		const read = readOne(fields[name], given, winner);
 
 		if (read.ok) values.push([name, read.value]);
 		else errors.push([name, read.say]);

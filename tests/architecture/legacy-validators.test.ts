@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// The frozen Zod 3 copies of the three browser-and-server validators (tests/fixtures/legacy-validators) are reference
+// The frozen Zod 3 copies of the validators converted in layer 7 (tests/fixtures/legacy-validators) are reference
 // copies for the differential tests, kept for the Effect stack's layer 7 only. They are test fixtures, not product
 // code: no file under src/ or scripts/ may import them, and each says so at the top. The stack's final layer deletes
 // the directory and this test with it.
@@ -16,10 +16,11 @@ describe("the frozen Zod validators", () => {
 		cwd: repository,
 	});
 
-	it("are the four reference copies", () => {
+	it("are the five reference copies", () => {
 		expect(frozen.map((file) => file.split("/").pop()).sort()).toEqual([
 			"agreement-client-fields.ts",
 			"agreement-draft-fields.ts",
+			"agreement-fields.ts",
 			"audio-intake.ts",
 			"software-inquiry.ts",
 		]);

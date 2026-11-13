@@ -4,6 +4,7 @@ import {
 	choiceField,
 	emailPattern,
 	FieldsRefused,
+	type KindSentences,
 	fieldOf,
 	type FormErrors,
 	type FieldValues,
@@ -33,12 +34,36 @@ export const requiredMessage = "This answer is required.";
 /** The signal for an address that is not an email address. */
 export const emailMessage = "Add a valid email address.";
 
-const kinds = { missing: checkMessage, wrongType: () => checkMessage };
+/** The sentences a text field gives for what is not text and for text that is too long. */
+export type TextSentences = {
+	readonly kinds: KindSentences;
+	readonly tooLong: (max: number) => string;
+};
+
+/** The signals the client and draft readers use: every such failure is the one "Check this field." signal. */
+const signals: TextSentences = {
+	kinds: { missing: checkMessage, wrongType: () => checkMessage },
+	tooLong: () => checkMessage,
+};
+
+/**
+ * The sentences Zod 3 gave, for the owner agreement schemas, whose failures a person reads word for word ("Required",
+ * "Expected string, received number", "String must contain at most 200 character(s)").
+ */
+export const zodSentences: TextSentences = {
+	kinds: {
+		missing: "Required",
+		wrongType: (received) => `Expected string, received ${received}`,
+	},
+	tooLong: (max) => `String must contain at most ${max} character(s)`,
+};
+
+const kinds = signals.kinds;
 
 /** The sentence for text that is too long or holds a control character: the length is asked first, and a text that is too long is not read for control characters (as Zod's refine after its `max` was not). */
-const clean = (max: number) =>
+export const cleanCheck = (max: number, sentences: TextSentences = signals) =>
 	Schema.makeFilter((value: string) => {
-		if (value.length > max) return checkMessage;
+		if (value.length > max) return sentences.tooLong(max);
 
 		return /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(value)
 			? controlMessage
@@ -49,15 +74,18 @@ const clean = (max: number) =>
  * Text that is trimmed, no longer than `max` (counted before normalising), free of control characters, and normalised
  * to NFC. A check that fails stops the normalising, as it stopped Zod's transform.
  */
-export const cleanTextField = (max: number) =>
-	afterwards(stringField(kinds, clean(max)), (value) => value.normalize("NFC"));
+export const cleanTextField = (max: number, sentences = signals) =>
+	afterwards(
+		stringField(sentences.kinds, cleanCheck(max, sentences)),
+		(value) => value.normalize("NFC"),
+	);
 
 /** Clean text that is not blank. */
-export const requiredField = (max: number) =>
+export const requiredField = (max: number, sentences = signals) =>
 	afterwards(
 		stringField(
-			kinds,
-			clean(max),
+			sentences.kinds,
+			cleanCheck(max, sentences),
 			Schema.isMinLength(1, { message: requiredMessage }),
 		),
 		(value) => value.normalize("NFC"),

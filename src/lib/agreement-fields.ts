@@ -1,100 +1,154 @@
-import { z } from "astro/zod";
 import type { ClientAgreement } from "./agreement-client-fields";
-// The one value import from src/server in src/lib (tests/architecture/lib-server-imports.test.ts): server-only Zod copies of
-// three text helpers, for the owner agreement schemas of an area that is not converted to Effect Schema yet. Remove it,
-// and this comment, when the owner agreement area converts.
-import { cleanText, email, required } from "../server/agreement-zod-fields";
-import { softwareInvoiceTerms } from "./software-invoices";
+import {
+	cleanTextField,
+	requiredField,
+	zodSentences,
+} from "./agreement-client-fields";
+import type { RawValue } from "./fields";
 import { validProjectDate } from "./audio-project-updates";
+import {
+	alwaysTrue,
+	dateText,
+	emailText,
+	integer,
+	list,
+	nullable,
+	oneOf,
+	parseWith,
+	patternText,
+	readWith,
+	record,
+	refined,
+	text,
+	truth,
+	type Value,
+	withDefault,
+} from "./readers";
+import { softwareInvoiceTerms } from "./software-invoices";
 import { formatUSD, offerTotal, type OfferTerms } from "./software-offers";
 
-const date = z.string().refine(validProjectDate, "Choose a valid date.");
+// The owner agreement details and the contractor's details, read with Effect Schema (src/lib/readers.ts). Their failures
+// are shown to the owner word for word, so they keep the sentences, the paths, the order and the stopping rules Zod 3
+// gave them, which tests/server/validators-differential.test.ts holds them to.
 
-export const contractorSchema = z
-	.object({
+const date = dateText(validProjectDate, "Choose a valid date.");
+
+/** Required text of at most `max` characters, trimmed and normalised. */
+const required = (max: number) => text(requiredField(max, zodSentences), true);
+
+/** Text of at most `max` characters, trimmed and normalised, that may be blank. */
+const clean = (max: number) => text(cleanTextField(max, zodSentences), false);
+
+const contractorReader = record(
+	{
 		legal_name: required(200),
 		entity_jurisdiction: required(200),
 		signer_name: required(200),
 		signer_title: required(200),
-		notice_email: email,
+		notice_email: emailText,
 		business_address: required(1000),
-		registered_agent_confirmed: z.literal(true),
-	})
-	.strict();
+		registered_agent_confirmed: alwaysTrue,
+	},
+	{ strict: true },
+);
 
-export const agreementDetailsSchema = z
-	.object({
-		planned_start: date,
-		planned_end: date,
-		environment: required(4000),
-		operating_responsibilities: required(4000),
-		update_channel: required(500).default("Private project page and email"),
-		update_rhythm: required(500),
-		milestones: z
-			.array(
-				z
-					.object({
+export type Contractor = Value<typeof contractorReader>;
+
+/** The contractor's details, or a thrown `FieldsRefused` that lists every failed field. */
+export function parseContractor(input: RawValue): Contractor {
+	return parseWith(contractorReader, input);
+}
+
+export function readContractor(input: RawValue) {
+	return readWith(contractorReader, input);
+}
+
+const attachmentReader = record(
+	{
+		filename: required(200),
+		version: required(80),
+		date,
+		sha256: patternText(/^[a-f0-9]{64}$/),
+		key: patternText(/^agreements\/attachments\/[a-f0-9-]+\.pdf$/),
+		bytes: integer(["int", { above: 0 }, { most: 10 * 1024 * 1024 }]),
+	},
+	{ strict: true },
+);
+
+const attachmentsReader = withDefault(list(attachmentReader, { max: 5 }), []);
+
+/** The attachments of the details (up to five, each strict), or a thrown `FieldsRefused`; missing reads as none. */
+export function parseAgreementAttachments(input: RawValue) {
+	return parseWith(attachmentsReader, input);
+}
+
+const detailsReader = refined(
+	record(
+		{
+			planned_start: date,
+			planned_end: date,
+			environment: required(4000),
+			operating_responsibilities: required(4000),
+			update_channel: withDefault(
+				required(500),
+				"Private project page and email",
+			),
+			update_rhythm: required(500),
+			milestones: list(
+				record(
+					{
 						start: date,
 						target: date,
 						handoff: required(4000),
-						checkpoint_criteria: cleanText(4000).default("None"),
-						checkpoint_evidence: cleanText(4000).default("None"),
-					})
-					.strict(),
-			)
-			.min(1)
-			.max(3),
-		visual_approvals: cleanText(4000).default("None"),
-		invoice_first_duration: z
-			.number()
-			.int()
-			.positive()
-			.max(90)
-			.nullable()
-			.default(null),
-		review_business_days: z.number().int().min(5).max(365).default(5),
-		longer_review_confirmed: z.boolean().default(false),
-		correction_calendar_days: z.number().int().min(30).max(365).default(30),
-		po_requirement: z
-			.enum(["not_required", "before_start"])
-			.default("not_required"),
-		expenses_taxes: cleanText(4000).default("None"),
-		recurring_charges: cleanText(4000).default("None"),
-		ai_permission: cleanText(4000).default("None"),
-		sensitive_addenda: cleanText(4000).default("None"),
-		support: cleanText(4000).default("None"),
-		msa_changes: cleanText(4000).default("None"),
-		data_retention: cleanText(4000).default(
-			"MSA default, including one year for the private project page",
-		),
-		project_retention_days: z.number().int().min(1).max(3650).default(365),
-		handoff_access: cleanText(4000).default("MSA default"),
-		handoff_access_days: z.number().int().min(30).max(3650).default(30),
-		attachments: z
-			.array(
-				z
-					.object({
-						filename: required(200),
-						version: required(80),
-						date,
-						sha256: z.string().regex(/^[a-f0-9]{64}$/),
-						key: z.string().regex(/^agreements\/attachments\/[a-f0-9-]+\.pdf$/),
-						bytes: z
-							.number()
-							.int()
-							.positive()
-							.max(10 * 1024 * 1024),
-					})
-					.strict(),
-			)
-			.max(5)
-			.default([]),
-	})
-	.strict()
-	.superRefine((v, c) => {
-		const issue = (path: string, message: string) =>
-			c.addIssue({ code: "custom", path: [path], message });
-
+						checkpoint_criteria: withDefault(clean(4000), "None"),
+						checkpoint_evidence: withDefault(clean(4000), "None"),
+					},
+					{ strict: true },
+				),
+				{ min: 1, max: 3 },
+			),
+			visual_approvals: withDefault(clean(4000), "None"),
+			invoice_first_duration: withDefault(
+				nullable(integer(["int", { above: 0 }, { most: 90 }])),
+				null,
+			),
+			review_business_days: withDefault(
+				integer(["int", { least: 5 }, { most: 365 }]),
+				5,
+			),
+			longer_review_confirmed: withDefault(truth, false),
+			correction_calendar_days: withDefault(
+				integer(["int", { least: 30 }, { most: 365 }]),
+				30,
+			),
+			po_requirement: withDefault(
+				oneOf(["not_required", "before_start"]),
+				"not_required",
+			),
+			expenses_taxes: withDefault(clean(4000), "None"),
+			recurring_charges: withDefault(clean(4000), "None"),
+			ai_permission: withDefault(clean(4000), "None"),
+			sensitive_addenda: withDefault(clean(4000), "None"),
+			support: withDefault(clean(4000), "None"),
+			msa_changes: withDefault(clean(4000), "None"),
+			data_retention: withDefault(
+				clean(4000),
+				"MSA default, including one year for the private project page",
+			),
+			project_retention_days: withDefault(
+				integer(["int", { least: 1 }, { most: 3650 }]),
+				365,
+			),
+			handoff_access: withDefault(clean(4000), "MSA default"),
+			handoff_access_days: withDefault(
+				integer(["int", { least: 30 }, { most: 3650 }]),
+				30,
+			),
+			attachments: attachmentsReader,
+		},
+		{ strict: true },
+	),
+	(v, issue) => {
 		const span =
 			(Date.parse(v.planned_end) - Date.parse(v.planned_start)) / 86400000;
 
@@ -144,14 +198,24 @@ export const agreementDetailsSchema = z
 
 		if (v.attachments.reduce((s, a) => s + a.bytes, 0) > 25 * 1024 * 1024)
 			issue("attachments", "Keep attachments under 25 MiB combined.");
-	});
+	},
+);
 
-export type AgreementDetails = z.infer<typeof agreementDetailsSchema>;
+export type AgreementDetails = Value<typeof detailsReader>;
 
-export function validateAgreementDetails(input: unknown, terms: OfferTerms) {
+/** The agreement details, or a thrown `FieldsRefused` that lists every failed field. */
+export function parseAgreementDetails(input: RawValue): AgreementDetails {
+	return parseWith(detailsReader, input);
+}
+
+export function readAgreementDetails(input: RawValue) {
+	return readWith(detailsReader, input);
+}
+
+export function validateAgreementDetails(input: RawValue, terms: OfferTerms) {
 	if (new TextEncoder().encode(JSON.stringify(input)).length > 65536)
 		throw new Error("Agreement details exceed 64 KiB.");
-	const v = agreementDetailsSchema.parse(input);
+	const v = parseAgreementDetails(input);
 
 	if (v.milestones.length !== terms.milestones.length)
 		throw new Error("Complete details for every purchased milestone.");
@@ -189,7 +253,7 @@ export function agreementValues(
 	terms: OfferTerms,
 	details: AgreementDetails,
 	client: ClientAgreement,
-	contractor: z.infer<typeof contractorSchema> & { config_version?: number },
+	contractor: Contractor & { config_version?: number },
 	system: {
 		effective_on: string;
 		msa_version: string;
