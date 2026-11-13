@@ -5,9 +5,12 @@
 //   2. Otherwise a stale event never undoes a newer status: an older event is ignored and a newer one applies.
 //   3. Two events with the same created second are a tie. Audio payments apply the later arrival ("latest"); software
 //      invoices apply the higher-ranked status ("rank").
-// The SQL that stores the result keeps only the compare-and-set guard for this rule, so a race between two deliveries
-// cannot undo it. The guard compares the stored time with a bound time; guardTime gives that bound, which lets an older
-// paid event pass.
+// The SQL that stores the result keeps only a compare-and-set guard. What is guaranteed: a paid event applies to any
+// invoice that is not paid when its batch runs, even if a newer event committed after the handler read the invoice (the
+// guard never depends on the time that was read), and a paid invoice is never overwritten. What is not: for events that
+// are not paid, the decision uses the stored time read earlier, and the guard compares times again at write time, so two
+// near-simultaneous non-paid events settle by the write-time guard only. The software copy of the non-paid tie-break lives
+// in the SQL of applySoftwareInvoiceEvent; keep the two in step.
 
 const statusRank = new Map([
 	["paid", 5],
@@ -45,18 +48,9 @@ export function invoiceEventDecision(input: {
 const LATEST_TIME = "9999-12-31T23:59:59.999Z";
 
 /**
- * The time to bind to a "stored time is not after this" guard. It is the event's own time, except for a paid event that is
- * older than the stored time: that one is bound later than any stored time, so the guard passes while the invoice is not
- * paid. (Only the stale-read case needs this; the guard's `status<>'paid'` still keeps a paid invoice paid.)
+ * The time to bind to a "stored time is not after this" guard: the event's own time, except for a paid event, which is
+ * bound later than any stored time so the guard cannot drop it. The bound value is never stored.
  */
-export function guardTime(input: {
-	incomingStatus: string;
-	incomingAt: string;
-	storedAt: string | null;
-}): string {
-	return input.incomingStatus === "paid" &&
-		input.storedAt &&
-		input.incomingAt < input.storedAt
-		? LATEST_TIME
-		: input.incomingAt;
+export function guardTime(status: string, occurredAt: string): string {
+	return status === "paid" ? LATEST_TIME : occurredAt;
 }

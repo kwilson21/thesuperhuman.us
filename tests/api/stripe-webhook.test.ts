@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
 import { partial } from "../helpers/doubles";
+import { fakeBatch } from "../helpers/d1";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { testRuntime } from "../helpers/runtime";
 
@@ -331,4 +332,77 @@ describe.each(["audio", "software"] as const)("%s event order", (kind) => {
 			sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
 		).toEqual({ total: 2 });
 	});
+});
+
+// Concurrent delivery. The invoice.paid handler reads the invoice, then writes in one batch. A newer non-paid event for the
+// same invoice can commit between the two. The paid event must still apply: the guard in its batch must not depend on the
+// time the handler read. (What is guaranteed: a paid event applies to any invoice that is not paid when its batch runs.)
+
+const isoOf = (seconds: number) => new Date(seconds * 1000).toISOString();
+
+function commitBeforeNextBatch(run: () => void) {
+	const original = db.batch.bind(db);
+
+	db.batch = fakeBatch(async (statements) => {
+		run();
+
+		return original(statements);
+	});
+}
+
+it("audio: an older paid event applies when a newer failure commits between its read and its batch", async () => {
+	sql
+		.prepare(
+			"UPDATE audio_payments SET booking_status_updated_at=? WHERE request_id='request-1'",
+		)
+		.run(isoOf(BASE - 3600));
+	commitBeforeNextBatch(() =>
+		sql
+			.prepare(
+				"UPDATE audio_payments SET booking_status='payment_failed',booking_status_updated_at=? WHERE request_id='request-1'",
+			)
+			.run(isoOf(BASE)),
+	);
+	verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE - 60));
+	expect((await POST(context())).status).toBe(200);
+	expect(audioStatus()).toEqual({ status: "paid" });
+	expect(
+		sql
+			.prepare(
+				"SELECT COUNT(*) AS total FROM owner_request_audit WHERE action='booking-payment-updated'",
+			)
+			.get(),
+	).toEqual({ total: 1 });
+});
+
+it("software: an older paid event applies when a newer failure commits between its read and its batch", async () => {
+	seedSoftware();
+	commitBeforeNextBatch(() =>
+		sql
+			.prepare(
+				"UPDATE software_invoices SET status='payment_failed',status_updated_at=?,stripe_invoice_id='in_software'",
+			)
+			.run(isoOf(BASE)),
+	);
+	verify.mockResolvedValueOnce(softwareEventAt("paid", "evt_paid", BASE - 60));
+	expect((await POST(context())).status).toBe(200);
+	expect(softwareStatus()).toEqual({ status: "paid" });
+});
+
+it("audio recovery: an older paid event applies when a newer failure links the invoice first", async () => {
+	sql
+		.prepare(
+			"UPDATE audio_payments SET booking_invoice_id=NULL,booking_invoice_url=NULL,booking_status='not_created'",
+		)
+		.run();
+	commitBeforeNextBatch(() =>
+		sql
+			.prepare(
+				"UPDATE audio_payments SET booking_invoice_id='in_booking',booking_status='payment_failed',booking_status_updated_at=?,booking_recovery_event_id='evt_failed'",
+			)
+			.run(isoOf(BASE)),
+	);
+	verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE - 60));
+	expect((await POST(context())).status).toBe(200);
+	expect(audioStatus()).toEqual({ status: "paid" });
 });
