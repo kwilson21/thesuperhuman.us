@@ -133,3 +133,106 @@ describe("GET /api/resume-approve", () => {
 		expect(kv.delete).not.toHaveBeenCalled();
 	});
 });
+
+describe("GET /api/resume-approve escapes visitor text", () => {
+	const hostileRequest = {
+		...sampleRequest,
+		name: "<img src=x onerror=alert(1)>",
+		email: "<svg/onload=alert(1)>@x.co",
+	};
+
+	// SAFETY: the route reads `audience` back from KV without checking it against the audience union; this fake stores the hostile string as written so the test exercises that path.
+	const hostileAudienceRequest = {
+		...hostileRequest,
+		audience: "<b>dod</b>" as typeof sampleRequest.audience,
+	};
+
+	function expectEscaped(text: string, raw: string[], escaped: string[]) {
+		for (const markup of raw) {
+			expect(text).not.toContain(markup);
+		}
+
+		for (const entity of escaped) {
+			expect(text).toContain(entity);
+		}
+	}
+
+	it("escapes the name and email on the Resume not sent page", async () => {
+		const pdf = new ArrayBuffer(4);
+		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": hostileRequest });
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
+		const res = await GET(makeContext("abc", kv));
+		expect(res.status).toBe(500);
+
+		expectEscaped(
+			await res.text(),
+			["<img", "<svg"],
+			[
+				"Request is for &lt;img src=x onerror=alert(1)&gt; (&lt;svg/onload=alert(1)&gt;@x.co).",
+			],
+		);
+	});
+
+	it("escapes the audience and email on the Resume sent page", async () => {
+		const pdf = new ArrayBuffer(4);
+
+		const kv = makeBinaryKv(
+			{ "pdf:<b>dod</b>": pdf },
+			{ "req:abc": hostileAudienceRequest },
+		);
+
+		const res = await GET(makeContext("abc", kv));
+		expect(res.status).toBe(200);
+
+		expectEscaped(
+			await res.text(),
+			["<b>", "<svg", "<img"],
+			[
+				"Delivered the <strong>&lt;b&gt;dod&lt;/b&gt;</strong> resume to <strong>&lt;svg/onload=alert(1)&gt;@x.co</strong>.",
+			],
+		);
+	});
+
+	it("escapes the audience on the Resume not in storage page", async () => {
+		const kv = makeBinaryKv({}, { "req:abc": hostileAudienceRequest });
+
+		const res = await GET(makeContext("abc", kv));
+		expect(res.status).toBe(500);
+
+		expectEscaped(
+			await res.text(),
+			["<b>"],
+			["<code>pdf:&lt;b&gt;dod&lt;/b&gt;</code>"],
+		);
+	});
+
+	it("shows an apostrophe and an ampersand in a name as escaped text", async () => {
+		const pdf = new ArrayBuffer(4);
+
+		const kv = makeBinaryKv(
+			{ "pdf:dod": pdf },
+			{ "req:abc": { ...sampleRequest, name: "O'Neil & Sons" } },
+		);
+
+		fetchMock.mockResolvedValue(
+			double<Response>({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			}),
+		);
+		const res = await GET(makeContext("abc", kv));
+
+		expectEscaped(
+			await res.text(),
+			["O'Neil & Sons"],
+			["Request is for O&#39;Neil &amp; Sons (jane@example.com)."],
+		);
+	});
+});
