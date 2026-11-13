@@ -67,7 +67,7 @@ it('keeps the global pill button used by the closing panel', () => {
 });
 
 const quiet = ['src/pages/index.astro', 'src/pages/privacy.astro', 'src/pages/404.astro', 'src/pages/software/start.astro', 'src/components/audio/AudioFooter.astro'];
-const invitation = ['src/pages/building.astro', 'src/pages/writing/index.astro', 'src/pages/writing/ai-gives-you-speed.astro', 'src/layouts/ProjectLayout.astro'];
+const invitation = ['src/pages/building.astro', 'src/pages/writing/ai-gives-you-speed.astro', 'src/layouts/ProjectLayout.astro'];
 
 it('gives quiet pages the quiet panel', () => {
   for (const path of quiet) expect(read(path), path).toMatch(/<Footer variant="quiet"( slot="footer")? \/>/);
@@ -80,6 +80,13 @@ it('gives invitation pages the default panel', () => {
 it('moves the Work and About endings into the panel, word for word', () => {
   expect(read('src/pages/work.astro')).toContain('<Footer heading="Have a problem worth exploring?" line="I’d love to hear about it." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
   expect(read('src/pages/about.astro')).toContain('<Footer id="contact" heading="Let’s talk." line="An idea, a shared interest, or an opportunity worth discussing." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
+});
+
+it('moves the Writing index ending into the panel, word for word', () => {
+  const writing = read('src/pages/writing/index.astro');
+  expect(writing).toContain('<Footer heading="Have something to discuss?" line="Ideas, opportunities, or a conversation worth having." buttonLabel="Get in touch" buttonPath="/#contact" slot="footer" />');
+  expect(writing.match(/class="writing-invitation"/g)).toHaveLength(1);
+  expect(writing).not.toContain('<h2>Have something to discuss?</h2>');
 });
 
 it('removes page-connect and the compact prop everywhere', () => {

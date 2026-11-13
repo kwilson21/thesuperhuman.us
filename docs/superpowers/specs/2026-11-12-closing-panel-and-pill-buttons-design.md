@@ -192,6 +192,12 @@ owner's yes or no on the pull request.
 4. `.next-step-link` (the owner's next step on an audio project) was missing from the
    known members and is a pill.
 
+5. The Writing index carries its own ending in the panel, like Work and About:
+   "Have something to discuss?" / "Ideas, opportunities, or a conversation worth
+   having." / "Get in touch" to `/#contact`. Its separate closing section is removed,
+   so the page no longer ends on two invitations. Owner, in conversation, 2026-11-12:
+   "Yes, move it".
+
 ## Calls made by the designer, for the owner to check
 
 1. The default line reuses the hub's live sentence instead of new copy.
