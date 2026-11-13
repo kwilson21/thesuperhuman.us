@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { BROWSER_MODULES } from "../helpers/browser-modules";
 import {
 	ALLOWED_BROWSER_MODULES,
 	clientEntries,
@@ -80,24 +81,13 @@ describe("the browser's import graph", () => {
 	});
 });
 
-// Every module under src/lib or src/data that a browser entry reaches, reviewed one by one: each is pure (constants,
-// types, validators and formatting) and imports nothing server-side. The failure message below says what to do.
-const BROWSER_MODULES = [
-	"src/data/project-stories/threadline-review.json",
-	"src/lib/agreement-client-fields.ts",
-	"src/lib/agreement-draft-fields.ts",
-	"src/lib/audio-intake.ts",
-	"src/lib/audio-peaks.ts",
-	"src/lib/business-days.ts",
-	"src/lib/home-motion.ts",
-	"src/lib/line-diff.ts",
-	"src/lib/project-story.ts",
-	"src/lib/scroll-scenes.ts",
-	"src/lib/software-inquiry.ts",
-	"src/lib/software-project-display.ts",
-	"src/lib/type-guards.ts",
-	"src/lib/waveform.ts",
-];
+// What the source walk reaches under src/lib and src/data: the modules the bundler puts in browser code
+// (BROWSER_MODULES, reviewed in tests/helpers/browser-modules.ts and checked against the real client build in
+// client-bundle.test.ts) plus those it only imports. The walker follows every import; the bundler drops what no
+// shipped code uses, so the walker reaches this JSON file (src/lib/project-story.ts imports it, but the one
+// function that reads it is not used by any browser script, and the bundler tree-shakes the file away).
+const WALKER_ONLY = ["src/data/project-stories/threadline-review.json"];
+const WALKED_MODULES = [...BROWSER_MODULES, ...WALKER_ONLY].sort();
 
 describe("what the browser entries reach", () => {
 	const reach = () => {
@@ -118,14 +108,14 @@ describe("what the browser entries reach", () => {
 	it("is the reviewed allowlist of src/lib modules, and nothing else", () => {
 		const reached = reachedModules();
 
-		const added = reached.filter((file) => !BROWSER_MODULES.includes(file));
+		const added = reached.filter((file) => !WALKED_MODULES.includes(file));
 
 		expect(
 			added,
 			`A browser entry now reaches ${added.join(", ")}. Browser code may import only pure modules. Split the module: move what the browser needs into a small module with no server imports (no stripe, resend, pdf-lib, xstate, zod, effect, src/server, D1 or other bindings) and import that. Only add a module to BROWSER_MODULES when it is pure.`,
 		).toEqual([]);
 
-		const dropped = BROWSER_MODULES.filter((file) => !reached.includes(file));
+		const dropped = WALKED_MODULES.filter((file) => !reached.includes(file));
 
 		expect(
 			dropped,
