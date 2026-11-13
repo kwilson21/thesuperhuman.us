@@ -28,6 +28,11 @@ export type Entry = {
 	body?: string;
 };
 
+// What Astro's glob loader reads for each collection type: a file such as .gitkeep is not an entry, so an empty collection
+// loads as empty. Only the formats this repository's collections use are parsed here (JSON for data, Markdown for content).
+const DATA_FILES = [".json"];
+const CONTENT_FILES = [".md", ".mdx"];
+
 const root = fileURLToPath(new URL("../../src/content/", import.meta.url));
 
 function frontMatter(text: string) {
@@ -68,8 +73,14 @@ async function load(name: string): Promise<Entry[]> {
 
 	const directory = `${root}${name}/`;
 
+	const extensions = config.type === "data" ? DATA_FILES : CONTENT_FILES;
+
 	return readdirSync(directory)
-		.filter((file) => statSync(`${directory}${file}`).isFile())
+		.filter(
+			(file) =>
+				extensions.includes(extname(file)) &&
+				statSync(`${directory}${file}`).isFile(),
+		)
 		.sort()
 		.map((file) => {
 			const text = readFileSync(`${directory}${file}`, "utf8");

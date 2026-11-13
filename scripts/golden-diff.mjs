@@ -28,32 +28,60 @@ function fromDisk(fixture) {
 	return parse(existsSync(path) ? readFileSync(path) : undefined);
 }
 
-function gitShow(revision, path, cwd) {
-	return execFileSync("git", ["show", `${revision}:${path}`], {
+function git(args, cwd) {
+	return execFileSync("git", args, {
 		cwd,
 		maxBuffer: 1 << 30,
-		stdio: ["ignore", "pipe", "ignore"],
+		stdio: ["ignore", "pipe", "pipe"],
 	});
+}
+
+/** The bytes of `path` at `revision`, or undefined when that revision is valid and has no such path. */
+function gitShow(revision, path, cwd) {
+	try {
+		git(["rev-parse", "--verify", "--quiet", `${revision}^{commit}`], cwd);
+	} catch {
+		throw new Error(
+			`golden:diff: "${revision}" is not a revision git can find.`,
+		);
+	}
+
+	try {
+		git(["cat-file", "-e", `${revision}:${path}`], cwd);
+	} catch {
+		return undefined;
+	}
+
+	return git(["show", `${revision}:${path}`], cwd);
+}
+
+function parseAt(revision, path, buffer, compressed) {
+	try {
+		return JSON.parse(
+			(compressed ? gunzipSync(buffer) : buffer).toString("utf8"),
+		);
+	} catch (error) {
+		throw new Error(
+			`golden:diff: ${path} at ${revision} cannot be read (${error.message}).`,
+		);
+	}
 }
 
 /**
  * The cases of a fixture at a git revision. Three older fixtures were plain `.json` before the corpus was compressed, so
- * when the `.json.gz` does not exist at the revision the `.json` of the same name is read instead.
+ * when the `.json.gz` does not exist at the revision the `.json` of the same name is read instead. A path that does not
+ * exist at a valid revision reads as no cases; a revision git cannot find, or a fixture that cannot be read, throws.
  */
 export function fromRevision(fixture, revision, cwd = process.cwd()) {
-	try {
-		return parse(gitShow(revision, pathOf(fixture), cwd));
-	} catch {
-		// Not compressed at that revision, or absent.
-	}
+	const path = pathOf(fixture);
+	const packed = gitShow(revision, path, cwd);
 
-	try {
-		const plain = pathOf(fixture).replace(/\.gz$/, "");
+	if (packed) return parseAt(revision, path, packed, true);
 
-		return JSON.parse(gitShow(revision, plain, cwd).toString("utf8"));
-	} catch {
-		return [];
-	}
+	const plainPath = path.replace(/\.gz$/, "");
+	const plain = gitShow(revision, plainPath, cwd);
+
+	return plain ? parseAt(revision, plainPath, plain, false) : [];
 }
 
 function show(value) {
@@ -159,9 +187,14 @@ function main([mode, fixture, ...rest]) {
 		process.exit(2);
 	}
 
-	if (mode === "diff") diff(fixture, rest[0] ?? "HEAD", rest[1]);
-	else if (mode === "show") showCases(fixture, rest[0]);
-	else throw new Error(`unknown mode "${mode}"`);
+	try {
+		if (mode === "diff") diff(fixture, rest[0] ?? "HEAD", rest[1]);
+		else if (mode === "show") showCases(fixture, rest[0]);
+		else throw new Error(`unknown mode "${mode}"`);
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exit(1);
+	}
 }
 
 if (import.meta.url === `file://${process.argv[1]}`)
