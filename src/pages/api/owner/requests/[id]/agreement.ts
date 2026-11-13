@@ -1,5 +1,4 @@
 import type { APIRoute } from "astro";
-import { z } from "astro/zod";
 import {
 	nativeAgreementRoute,
 	agreementRequest,
@@ -13,7 +12,7 @@ import {
 	closeObsoleteAgreementNotifications,
 } from "~/lib/software-agreements";
 import { agreementEvent } from "~/lib/agreement-events";
-import { cleanText } from "~/lib/agreement-client-fields";
+import { readOwnerAgreementAction } from "~/lib/agreement-owner-input";
 import {
 	prepareAgreementArtifact,
 	deliverAgreementCopies,
@@ -25,56 +24,6 @@ import { softwareGuard } from "~/lib/software-projects";
 import type { SoftwareOffer } from "~/lib/software-offers";
 
 export const prerender = false;
-
-const documents = z
-	.array(
-		z.object({
-			id: z.string().uuid(),
-			hash: z.string().regex(/^[a-f0-9]{64}$/),
-		}),
-	)
-	.min(1)
-	.max(2);
-
-const schema = z.discriminatedUnion("action", [
-	z.object({
-		action: z.literal("countersign"),
-		documents,
-		typed_name: cleanText(200).refine(Boolean),
-		consent: z.literal(true),
-	}),
-	z.object({
-		action: z.literal("abandon"),
-		documents,
-		reason: cleanText(1000).refine(Boolean),
-		confirmed: z.literal(true),
-	}),
-	z.object({
-		action: z.enum(["retry-artifact", "retry-copy"]),
-		agreement_id: z.string().uuid(),
-		confirmedNotSent: z.boolean().default(false),
-		expectedAttempt: z.string().uuid().optional(),
-		confirmedStale: z.boolean().default(false),
-	}),
-	z.object({
-		action: z.literal("record-alternate-copy"),
-		agreement_id: z.string().uuid(),
-		role: z.enum(["client", "contractor"]),
-		method: cleanText(200).refine(Boolean),
-		confirmed: z.literal(true),
-	}),
-	z.object({
-		action: z.literal("hold"),
-		agreement_id: z.string().uuid(),
-		held: z.boolean(),
-	}),
-	z.object({
-		action: z.literal("end"),
-		agreement_id: z.string().uuid(),
-		ended_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-		confirmed: z.literal(true),
-	}),
-]);
 
 const depositBlockMessage = "Void or refund the deposit invoice first.";
 
@@ -96,15 +45,15 @@ const post: APIRoute = async ({ request, locals, params }) => {
 	const body = await agreementRequest(request);
 
 	if (body instanceof Response) return body;
-	const parsed = schema.safeParse(body);
+	const parsed = readOwnerAgreementAction(body);
 
-	if (!parsed.success)
+	if (!parsed.ok)
 		return agreementJson(
 			{ ok: false, error: "Complete the required confirmations." },
 			400,
 		);
 
-	const c = parsed.data,
+	const c = parsed.value,
 		at = new Date().toISOString();
 
 	const offer = await db

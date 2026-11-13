@@ -226,7 +226,7 @@ describe("readFields options", () => {
 	it("names undefined as a kind of its own and never refuses an object by a sentence for another kind", () => {
 		const notObject = {
 			undefined: "u",
-			other: "o",
+			bigint: "o",
 			array: "a",
 		};
 

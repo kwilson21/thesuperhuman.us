@@ -13,7 +13,7 @@ import {
 import {
 	agreementValues,
 	type AgreementDetails,
-	contractorSchema,
+	type Contractor,
 	signatureReference,
 } from "./agreement-fields";
 import { type ClientAgreement } from "./agreement-client-fields";
@@ -335,7 +335,7 @@ export async function renderAgreementPacket(
 
 	const renderedEnd = pdf.getPageCount();
 
-	// SAFETY: attachment_manifest_json is JSON.stringify of the attachments that agreementDetailsSchema (agreement-fields.ts) validated; its writers are the software_agreements INSERT in software-agreements.ts and the preflightAgreementPacket row in this file, and every item has a key and a sha256 string.
+	// SAFETY: attachment_manifest_json is JSON.stringify of the attachments that parseAgreementDetails (agreement-fields.ts) validated; its writers are the software_agreements INSERT in software-agreements.ts and the preflightAgreementPacket row in this file, and every item has a key and a sha256 string.
 	const attachments: { key: string; sha256: string }[] = JSON.parse(
 		documents[documents.length - 1].attachment_manifest_json,
 	);
@@ -380,7 +380,7 @@ export async function preflightAgreementPacket(
 	env: Env,
 	terms: OfferTerms,
 	details: AgreementDetails,
-	contractor: ReturnType<typeof contractorSchema.parse>,
+	contractor: Contractor,
 	templates: AgreementTemplate[],
 	reusedMsaId: string | null,
 ) {

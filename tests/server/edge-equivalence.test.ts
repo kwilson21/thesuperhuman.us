@@ -1,43 +1,24 @@
 import * as Predicate from "effect/Predicate";
-import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vitest";
-import { directionFields, validateIntake } from "../../src/lib/audio-intake";
-import {
-	currentSiteHref,
-	currentUrlMessage,
-	softwareDetailKeys,
-	softwareQuestions,
-	validateSoftwareInquiry,
-} from "../../src/lib/software-inquiry";
-import {
-	type Body,
-	choiceField,
-	fieldOf,
-	readFields,
-	readVariants,
-	receivedKind,
-	stringField,
-} from "../../src/server/edge";
+import { validateIntake } from "../../src/lib/audio-intake";
+import { validateSoftwareInquiry } from "../../src/lib/software-inquiry";
 import { readContactInput } from "../../src/server/contact-input";
 import { isObject, isText } from "../../src/lib/type-guards";
+import { legacyValidateIntake } from "../fixtures/legacy-validators/audio-intake";
+import { legacyValidateSoftwareInquiry } from "../fixtures/legacy-validators/software-inquiry";
 import type { JsonValue } from "../helpers/json";
 
-// What these tests show, and what they do not. Layer 2 will convert routes whose answers the site's current validators
-// define. Each describe block below takes one real validator (validateContactInput, validateIntake,
-// validateSoftwareInquiry), calls it on every input in a list, and requires the schemas written here, with the edge
-// helpers only, to answer exactly as it does: the ok flag, every value on success, every message on failure, and the
-// order of the error keys. The expected answers are never copied strings; they are what the real validator returns.
+// What these tests show, and what they do not. The contact validator was converted to the edge helpers in layer 2: its
+// describe block takes the real validator as it was (kept here as `validateContactInput`, the oracle) and requires the
+// schema the route now reads with (src/server/contact-input.ts) to answer exactly as it does. validateIntake and
+// validateSoftwareInquiry were converted in this layer: their blocks take the frozen Zod 3 copies
+// (tests/fixtures/legacy-validators) and require the Effect versions in src/lib to answer exactly as they do. Every
+// block compares the ok flag, every value on success, every message on failure, and the order of the error keys, on a
+// hand-picked list of inputs chosen to hit every field, every message and every key-order case. The generated tables
+// (tens of thousands of inputs per validator) are in validators-differential.test.ts.
 //
-// Shown: that the helpers CAN express these three validators for the listed inputs (31 contact, 72 intake, 66 software
-// inquiry), including Zod's own sentences (they are written into the test's schemas, the way a route's layer will write
-// them), Zod's email and uuid patterns, a message that depends on the value received, one set of fields per `path`, and
-// the raw-body line checks merged over the field errors.
-//
-// Not shown: that the inputs cover every input a person can send (they are examples, chosen to hit every field, every
-// message and every key-order case); anything about the routes themselves; how a body reaches the validator (JSON
-// parsing and the size limit are the route's). A value the validator changes after parsing (the software inquiry blanks
-// `approverRole` unless `approver` is "other") is plain code after the read, written in the test as the route will. A body
-// that is `undefined` is the only non-object kind of "other" tested; a bigint or a symbol cannot come from JSON.
+// Not shown: that the inputs cover every input a person can send; anything about the routes themselves; how a body
+// reaches the validator (JSON parsing and the size limit are the route's).
 
 type LegacyContactResult =
 	| { ok: true; value: Record<string, string> }
@@ -205,20 +186,6 @@ describe("readFields against validateContactInput", () => {
 	});
 });
 
-// Zod's own sentences, which both validators below answer with. A route's layer will write the ones its form uses.
-const zodMax = (max: number) =>
-	`String must contain at most ${max} character(s)`;
-
-const zodNotString = (received: string) =>
-	`Expected string, received ${received}`;
-
-// Zod 3's own patterns (astro/zod bundles zod 3.25), copied from its source: they are not the contact form's.
-const ZOD_EMAIL =
-	/^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
-
-const ZOD_UUID =
-	/^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/i;
-
 /** Both validators compare the answer, every value, every message and the order of the error keys. */
 function expectSameAnswer(
 	read:
@@ -238,175 +205,7 @@ function expectSameAnswer(
 	}
 }
 
-describe("readFields against validateIntake", () => {
-	const kinds = { missing: "Required", wrongType: zodNotString };
-	const oneLine = (value: string) => !/[\r\n]/.test(value) || "Invalid input";
-
-	const httpsLink = (value: string) => {
-		if (!value) return true;
-
-		try {
-			const url = new URL(value);
-
-			return url.protocol === "https:" && !url.username && !url.password
-				? true
-				: "Use a complete HTTPS link, or leave this blank.";
-		} catch {
-			return "Use a complete HTTPS link, or leave this blank.";
-		}
-	};
-
-	const link = (max: number) =>
-		stringField(
-			kinds,
-			Schema.isMaxLength(max, { message: zodMax(max) }),
-			Schema.makeFilter(httpsLink),
-		);
-
-	const choice = <const V extends readonly [string, ...string[]]>(
-		values: V,
-	) => {
-		const expected = values.map((value) => `'${value}'`).join(" | ");
-
-		return choiceField(values, {
-			missing: "Required",
-			wrongType: (received) => `Expected ${expected}, received ${received}`,
-			notOneOf: (received) =>
-				`Invalid enum value. Expected ${expected}, received '${received}'`,
-		});
-	};
-
-	// z.record(z.string().max(30), z.string().max(30)): the sentence is the last issue Zod raises, a key's before its value's.
-	const preferences = fieldOf<Record<string, string>>((raw) => {
-		if (raw === undefined) return { value: {} };
-
-		if (!Predicate.isObject(raw))
-			return { say: `Expected object, received ${receivedKind(raw)}` };
-
-		const said: string[] = [];
-		const copy: Record<string, string> = {};
-
-		for (const [key, choice] of Object.entries(raw)) {
-			if (key.length > 30) said.push(zodMax(30));
-
-			if (!Predicate.isString(choice))
-				said.push(
-					choice === undefined
-						? "Required"
-						: zodNotString(receivedKind(choice)),
-				);
-			else {
-				if (choice.length > 30) said.push(zodMax(30));
-				copy[key] = choice;
-			}
-		}
-
-		return said.length > 0 ? { say: said[said.length - 1] } : { value: copy };
-	});
-
-	const fields = {
-		service: choice(["vocal-mix", "mastering", "bundle", "custom"]),
-		title: stringField(
-			kinds,
-			Schema.isMaxLength(120, { message: zodMax(120) }),
-			Schema.isMinLength(1, { message: "Add a song or project title." }),
-			Schema.makeFilter(oneLine),
-		),
-		direction: choice(["judgment", "preferences", "specific"]),
-		preferences,
-		preserve: stringField(
-			kinds,
-			Schema.isMaxLength(1200, { message: zodMax(1200) }),
-		),
-		referenceUrl: link(2048),
-		referenceNote: stringField(
-			kinds,
-			Schema.isMaxLength(2000, { message: zodMax(2000) }),
-		),
-		name: stringField(
-			kinds,
-			Schema.isMaxLength(100, { message: zodMax(100) }),
-			Schema.isMinLength(1, { message: "Add your name." }),
-			Schema.makeFilter(oneLine),
-		),
-		email: stringField(
-			kinds,
-			Schema.isMaxLength(120, { message: zodMax(120) }),
-			Schema.isPattern(ZOD_EMAIL, { message: "Add a valid email address." }),
-		),
-		permission: fieldOf<true>((raw) =>
-			raw === true
-				? { value: true }
-				: { say: "Allow access to the files for this review." },
-		),
-		turnstileToken: stringField(
-			{ ...kinds, trim: false },
-			Schema.isMinLength(1, { message: "Complete the security check." }),
-			Schema.isMaxLength(2048, { message: zodMax(2048) }),
-		),
-		fileLink: link(2048),
-	};
-
-	const readIntake = <Input>(input: Input) =>
-		readFields(fields, input, {
-			// Zod keeps the last failing message of a field.
-			winner: "last",
-			defaults: {
-				preferences: {},
-				preserve: "",
-				referenceUrl: "",
-				referenceNote: "",
-				fileLink: "",
-			},
-			notObject: {
-				null: "Expected object, received null",
-				string: "Expected object, received string",
-				number: "Expected object, received number",
-				boolean: "Expected object, received boolean",
-				array: "Expected object, received array",
-				undefined: "Required",
-				other: "Required",
-			},
-			// Run only after every field passed, as validateIntake's own checks do.
-			after: (value) => {
-				const errors: Partial<Record<keyof typeof fields, string>> = {};
-
-				const allowed = directionFields(value.service);
-
-				for (const [key, choice] of Object.entries(value.preferences)) {
-					const field = allowed.find((f) => f.id === key);
-
-					if (
-						!field ||
-						(choice !== "decide" &&
-							!field.options.some((o) => o.value === choice))
-					)
-						errors.preferences =
-							"These preferences do not match your selected service.";
-				}
-
-				if (
-					value.direction === "judgment" &&
-					Object.values(value.preferences).some((v) => v !== "decide")
-				)
-					errors.preferences =
-						"Choose a preference path to include specific settings.";
-
-				if (value.service !== "custom" && !value.fileLink)
-					errors.fileLink = "Provide your files before submitting for review.";
-
-				if (value.direction === "specific" && !value.referenceNote)
-					errors.referenceNote =
-						"Describe the specific direction you have in mind.";
-
-				if (value.service === "custom" && !value.referenceNote)
-					errors.referenceNote =
-						"Briefly describe your project and what you need.";
-
-				return errors;
-			},
-		});
-
+describe("validateIntake (Effect Schema) against the Zod validator it replaced", () => {
 	const base = {
 		service: "vocal-mix",
 		title: "Song",
@@ -622,252 +421,13 @@ describe("readFields against validateIntake", () => {
 	});
 
 	for (const [label, input] of inputs) {
-		it(`answers ${label} as validateIntake does`, () => {
-			expectSameAnswer(readIntake(input), validateIntake(input));
+		it(`answers ${label} as the Zod validateIntake did`, () => {
+			expectSameAnswer(validateIntake(input), legacyValidateIntake(input));
 		});
 	}
 });
 
-describe("readVariants against validateSoftwareInquiry", () => {
-	const required = {
-		missing: "This answer is required.",
-		wrongType: () => "This answer is required.",
-	};
-
-	const single = (max: number) =>
-		stringField(
-			required,
-			Schema.isMaxLength(max, {
-				message: `Keep this under ${max} characters.`,
-			}),
-		);
-
-	const needed = (max: number) =>
-		stringField(
-			required,
-			Schema.isMaxLength(max, {
-				message: `Keep this under ${max} characters.`,
-			}),
-			Schema.isMinLength(1, { message: "This answer is required." }),
-		);
-
-	const chooseOne = <const V extends readonly [string, ...string[]]>(
-		values: V,
-	) =>
-		choiceField(values, {
-			missing: "Choose one.",
-			wrongType: () => "Choose one.",
-			notOneOf: () => "Choose one.",
-		});
-
-	const common = {
-		name: stringField(
-			required,
-			Schema.isMaxLength(100, { message: "Keep this under 100 characters." }),
-			Schema.isMinLength(1, { message: "Add your name." }),
-		),
-		email: stringField(
-			required,
-			Schema.isMaxLength(120, { message: "Keep this under 120 characters." }),
-			Schema.isPattern(ZOD_EMAIL, { message: "Add a valid email address." }),
-		),
-		company: single(120),
-		timing: chooseOne(["flexible", "month", "quarter", "date", "asap"]),
-		timingDate: stringField(
-			{ ...required, trim: false },
-			Schema.isPattern(/^$|^\d{4}-\d{2}-\d{2}$/, { message: "Add a date." }),
-		),
-		timingReason: single(500),
-		budgetStatus: chooseOne(["", "approved", "pending", "exploring", "unsure"]),
-		budgetNote: single(200),
-		approver: chooseOne(["", "self", "other", "unsure"]),
-		approverRole: single(120),
-		turnstileToken: stringField(
-			{ ...required, trim: false },
-			Schema.isMinLength(1, { message: "Complete the security check." }),
-			Schema.isMaxLength(2048, { message: "Keep this under 2048 characters." }),
-		),
-		submissionId: stringField(
-			{ ...required, trim: false },
-			Schema.isPattern(ZOD_UUID, { message: "Invalid submission ID." }),
-		),
-	};
-
-	const variants = {
-		workflow: {
-			...common,
-			today: needed(2000),
-			audience: single(1000),
-			firstResult: single(2000),
-		},
-		idea: {
-			...common,
-			idea: needed(1000),
-			audienceToday: single(1000),
-			firstVersion: single(1000),
-			signal: single(500),
-		},
-		website: {
-			...common,
-			purpose: needed(2000),
-			// The sentence depends on the value received.
-			currentUrl: stringField(
-				required,
-				Schema.isMaxLength(2048, {
-					message: "Keep this under 2048 characters.",
-				}),
-				Schema.makeFilter((value: string) =>
-					value.length > 2048 || value === "" || currentSiteHref(value) !== null
-						? true
-						: currentUrlMessage(value),
-				),
-			),
-			existing: single(2000),
-			updates: chooseOne(["self", "help", "unsure"]),
-		},
-		webapp: {
-			...common,
-			appGoal: needed(1000),
-			firstVersion: single(1000),
-		},
-	};
-
-	/** The body's own value for a key, as a Map read it. */
-	const own = (input: Body, key: string) =>
-		Object.hasOwn(input, key) ? input[key] : undefined;
-
-	// The checks validateSoftwareInquiry makes on the raw body before its schema: a later entry for a key replaces an
-	// earlier one and keeps its place.
-	const lineChecks = (input: Body) => {
-		const entries: [string, string][] = [];
-		const timingDate = own(input, "timingDate");
-
-		if (
-			Object.hasOwn(input, "timingDate") &&
-			own(input, "timing") === "date" &&
-			(!Predicate.isString(timingDate) ||
-				!/^\d{4}-\d{2}-\d{2}$/.test(timingDate) ||
-				!Number.isFinite(Date.parse(timingDate)) ||
-				new Date(timingDate).toISOString().slice(0, 10) !== timingDate)
-		)
-			entries.push(["timingDate", "Add a valid date."]);
-
-		for (const key of [
-			"name",
-			"email",
-			"company",
-			"timingReason",
-			"budgetNote",
-			"approverRole",
-		]) {
-			const value = own(input, key);
-
-			if (Predicate.isString(value) && /[\r\n]/.test(value))
-				entries.push([key, "Use one line."]);
-		}
-
-		const currentUrl = own(input, "currentUrl");
-
-		if (
-			own(input, "path") === "website" &&
-			Predicate.isString(currentUrl) &&
-			/[\r\n]/.test(currentUrl)
-		)
-			entries.push(["currentUrl", "Use one line."]);
-
-		const path = own(input, "path");
-
-		const questions =
-			Object.entries(softwareQuestions).find(([name]) => name === path)?.[1] ??
-			[];
-
-		for (const key of [...questions, ...softwareDetailKeys]) {
-			const value = own(input, key);
-
-			if (
-				Predicate.isString(value) &&
-				/[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value)
-			)
-				entries.push([key, "Remove control characters."]);
-		}
-
-		return Object.fromEntries(entries);
-	};
-
-	const readInquiry = <Input>(input: Input) => {
-		const read = readVariants("path", variants, input, {
-			unknownVariant: "Choose a starting point.",
-			notObject: {
-				null: "Please send the form again.",
-				string: "Please send the form again.",
-				number: "Please send the form again.",
-				boolean: "Please send the form again.",
-				array: "Please send the form again.",
-				undefined: "Please send the form again.",
-				other: "Please send the form again.",
-			},
-			defaults: {
-				workflow: {
-					company: "",
-					timingDate: "",
-					timingReason: "",
-					budgetStatus: "",
-					budgetNote: "",
-					approver: "",
-					approverRole: "",
-					audience: "",
-					firstResult: "",
-				},
-				idea: {
-					company: "",
-					timingDate: "",
-					timingReason: "",
-					budgetStatus: "",
-					budgetNote: "",
-					approver: "",
-					approverRole: "",
-					audienceToday: "",
-					firstVersion: "",
-					signal: "",
-				},
-				website: {
-					company: "",
-					timingDate: "",
-					timingReason: "",
-					budgetStatus: "",
-					budgetNote: "",
-					approver: "",
-					approverRole: "",
-					currentUrl: "",
-					existing: "",
-				},
-				webapp: {
-					company: "",
-					timingDate: "",
-					timingReason: "",
-					budgetStatus: "",
-					budgetNote: "",
-					approver: "",
-					approverRole: "",
-					firstVersion: "",
-				},
-			},
-			alongside: lineChecks,
-		});
-
-		// What the validator does to a good value after parsing is plain code after the read.
-		return read.ok
-			? {
-					ok: true as const,
-					value: {
-						...read.value,
-						approverRole:
-							read.value.approver !== "other" ? "" : read.value.approverRole,
-					},
-				}
-			: read;
-	};
-
+describe("validateSoftwareInquiry (Effect Schema) against the Zod validator it replaced", () => {
 	const id = "123e4567-e89b-42d3-a456-426614174000";
 
 	const common_ = {
@@ -1062,7 +622,7 @@ describe("readVariants against validateSoftwareInquiry", () => {
 	it("covers at least 40 inputs, each path included", () => {
 		expect(inputs.length).toBeGreaterThanOrEqual(40);
 
-		for (const path of Object.keys(variants))
+		for (const path of ["workflow", "idea", "website", "webapp"])
 			expect(
 				inputs.some(
 					([, input]) => Predicate.isObject(input) && input.path === path,
@@ -1071,8 +631,11 @@ describe("readVariants against validateSoftwareInquiry", () => {
 	});
 
 	for (const [label, input] of inputs) {
-		it(`answers ${label} as validateSoftwareInquiry does`, () => {
-			expectSameAnswer(readInquiry(input), validateSoftwareInquiry(input));
+		it(`answers ${label} as the Zod validateSoftwareInquiry did`, () => {
+			expectSameAnswer(
+				validateSoftwareInquiry(input),
+				legacyValidateSoftwareInquiry(input),
+			);
 		});
 	}
 });

@@ -8,10 +8,10 @@ import { softwareGuard } from "./software-projects";
 import {
 	agreementValues,
 	validateAgreementDetails,
-	contractorSchema,
+	parseContractor,
 } from "./agreement-fields";
 import {
-	clientAgreementSchema,
+	parseClientAgreement,
 	consentText,
 	intentText,
 } from "./agreement-client-fields";
@@ -118,13 +118,13 @@ export async function reviewAgreements(
 	session: AgreementSession,
 	input: unknown,
 ) {
-	const client = clientAgreementSchema.parse(input),
+	const client = parseClientAgreement(input),
 		terms = offerTermsSchema.parse(JSON.parse(offer.terms_json)),
 		details = validateAgreementDetails(
 			JSON.parse(offer.agreement_details_json!),
 			terms,
 		),
-		contractor = contractorSchema.parse(
+		contractor = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),
@@ -367,7 +367,7 @@ export async function signAgreements(
 	}
 
 	const values = JSON.parse(toSign[0].values_json),
-		client = clientAgreementSchema.parse(values.client),
+		client = parseClientAgreement(values.client),
 		at = new Date().toISOString(),
 		receipt = crypto.randomUUID();
 
@@ -599,7 +599,7 @@ export async function countersignAgreements(
 
 	const at = new Date().toISOString(),
 		receipt = crypto.randomUUID(),
-		config = contractorSchema.parse(
+		config = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),

@@ -7,7 +7,7 @@ import {
 } from "~/lib/agreement-access";
 import { getLinkedOffer } from "~/lib/software-offers";
 import { saveAgreementDraft } from "~/lib/agreement-draft";
-import { draftSchema, draftFieldErrors } from "~/lib/agreement-draft-fields";
+import { readDraft } from "~/lib/agreement-draft-fields";
 
 export const prerender = false;
 
@@ -34,25 +34,25 @@ export const POST: APIRoute = async ({ request, locals, params }) => {
 			},
 			401,
 		);
-	// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to draftSchema.safeParse, so neither is used unchecked. The cast does not check that the body is an object: a JSON null body gets through and throws at the csrf_nonce read below, which is answered as a server error, as before.
+	// SAFETY: this names the two body fields the route reads; csrf_nonce is compared to the session value and values goes to readDraft, so neither is used unchecked. The cast does not check that the body is an object: a JSON null body gets through and throws at the csrf_nonce read below, which is answered as a server error, as before.
 	const input = body as { csrf_nonce?: unknown; values?: unknown };
 
 	if (input.csrf_nonce !== session.csrf_nonce)
 		return agreementJson({ ok: false, error: "Reload and try again." }, 403);
-	const parsed = draftSchema.safeParse(input.values);
+	const parsed = readDraft(input.values);
 
-	if (!parsed.success)
+	if (!parsed.ok)
 		return agreementJson(
 			{
 				ok: false,
 				error: "Check the highlighted details.",
-				errors: draftFieldErrors(parsed.error.issues),
+				errors: parsed.errors,
 			},
 			400,
 		);
 
 	try {
-		await saveAgreementDraft(db, offer, session, parsed.data);
+		await saveAgreementDraft(db, offer, session, parsed.value);
 
 		return agreementJson({ ok: true });
 	} catch {

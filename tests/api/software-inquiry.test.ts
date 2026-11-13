@@ -17,7 +17,6 @@ import {
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
 import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
-import { expectSource } from "../helpers/source-text";
 import type { OwnerRequest } from "~/lib/owner-model";
 import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
@@ -211,13 +210,7 @@ it("stores and returns only the selected idea questions, including the optional 
 	);
 });
 
-it("gives the updates choice a plain message without an error map, which some zod builds ignore", () => {
-	const lib = readFileSync("src/lib/software-inquiry.ts", "utf8");
-	expectSource(lib).toContain(
-		"updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })",
-	);
-	expect(lib).not.toMatch(/updates:\s*z\.enum\([^)]*errorMap/);
-
+it("gives the updates choice a plain message, whatever was sent", () => {
 	const site = {
 		...base,
 		path: "website",

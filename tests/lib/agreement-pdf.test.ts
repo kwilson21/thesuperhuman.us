@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import interBase64 from "~/assets/agreement-fonts/Inter-400.base64?raw";
 import libronBase64 from "~/assets/agreement-fonts/Libron-400.base64?raw";
 import {
-	agreementDetailsSchema,
-	contractorSchema,
+	parseAgreementDetails,
+	parseContractor,
 	agreementValues,
 } from "~/lib/agreement-fields";
 import {
@@ -221,7 +221,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		timing: "",
 	};
 
-	const details = agreementDetailsSchema.parse({
+	const details = parseAgreementDetails({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
 		environment: "Browser",
@@ -232,7 +232,7 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		],
 	});
 
-	const contractor = contractorSchema.parse({
+	const contractor = parseContractor({
 		legal_name: "Example LLC",
 		entity_jurisdiction: "Wyoming LLC",
 		signer_name: "Owner",
@@ -450,7 +450,7 @@ async function checkTemplatePacket(
 		timing: "Agreed dates",
 	};
 
-	const details = agreementDetailsSchema.parse({
+	const details = parseAgreementDetails({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
 		environment: "Browser prototype",
@@ -465,7 +465,7 @@ async function checkTemplatePacket(
 		],
 	});
 
-	const contractor = contractorSchema.parse({
+	const contractor = parseContractor({
 		legal_name: "Example Contractor LLC",
 		entity_jurisdiction: "Wyoming LLC",
 		signer_name: "Example Owner",
