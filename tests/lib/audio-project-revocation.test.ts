@@ -42,9 +42,17 @@ function fixture() {
     VALUES ('session-hash','artist@example.com',?,?,?)`)
 		.run(now.toISOString(), "2026-10-01T12:00:00Z", now.toISOString());
 	sql
-		.prepare(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at)
-    VALUES ('artist@example.com','code-hash',?,?)`)
-		.run(now.toISOString(), "2026-10-01T12:00:00Z");
+		.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at)
+    VALUES ('nonce-1','artist@example.com','code-hash',?,?),('nonce-2','artist@example.com','code-hash-2',?,?),
+      ('nonce-3','other@example.com','code-hash-3',?,?)`)
+		.run(
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+		);
 
 	return { sql, db };
 }
@@ -126,7 +134,10 @@ it("closes project access, invalidates sessions and codes, and writes one audit 
 			)
 			.get(),
 	).toEqual({ revoked_at: now.toISOString() });
-	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([]);
+	// Every code for the closed address goes, whichever browser asked for it; another address keeps its code.
+	expect(
+		sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
+	).toEqual([{ email: "other@example.com" }]);
 	expect(
 		sql
 			.prepare(

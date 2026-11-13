@@ -39,7 +39,7 @@ export const studioCodeEmail = (code: string, origin?: string) =>
 		heading: "Your code",
 		paragraphs: [],
 		code,
-		note: "This code expires in 10 minutes. If you didn’t ask for it, you can ignore this email.",
+		note: "This code expires in 10 minutes. Enter it in the browser where you asked for it. If you didn’t ask for it, you can ignore this email.",
 		link: { label: "Open the sign-in page", href: studioSignIn(origin) },
 		reason: "You received this because you requested a studio sign-in code.",
 	});

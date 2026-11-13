@@ -47,8 +47,19 @@ export async function keyedHash(
 	);
 }
 
-const codeHash = (email: string, code: string, secret: string) =>
-	keyedHash(secret, `${email}:${code}`);
+// A code belongs to the browser that asked for it. The browser holds a random value (the pending sign-in cookie); the
+// stored row is keyed by its hash and the code's hash covers it, so a code only works with the cookie it was issued to.
+const codeHash = (
+	email: string,
+	nonceHash: string,
+	code: string,
+	secret: string,
+) => keyedHash(secret, `${email}:${nonceHash}:${code}`);
+
+const pendingFormat = /^[0-9a-f]{64}$/;
+const resendPause = 30_000;
+// Two allowance windows of codes (3 emails per five minutes, ten-minute lifetime); see verification/signin-codes.qnt.
+const liveCodesPerAddress = 6;
 
 function newCode(): string {
 	const values = new Uint32Array(1);
@@ -57,71 +68,115 @@ function newCode(): string {
 	return String(values[0] % 100_000_000).padStart(8, "0");
 }
 
+/** A fresh random pending sign-in value: 256 bits, hex. */
+export function newPendingNonce(): string {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+		"",
+	);
+}
+
 const studioProjects = `(SELECT request_id,revoked_at FROM audio_projects UNION ALL SELECT request_id,revoked_at FROM software_projects WHERE content_deleted_at IS NULL)`;
 
 const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
   JOIN owner_requests r ON r.id=p.request_id
   WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`;
 
+/**
+ * Issues a code bound to a new pending value, which the caller sets as the browser's cookie. `pending` is the value the
+ * browser already holds, if any: its own earlier code is replaced, and a request inside thirty seconds of it changes
+ * nothing. Other browsers' codes for the address are never touched. Returns null when the address has no project, the
+ * browser asked a moment ago, or the address already has the most live codes.
+ */
 export async function issueClientCode(
 	db: D1Database,
 	email: string,
 	secret: string,
 	now = new Date(),
-): Promise<string | null> {
+	pending: string | null = null,
+): Promise<{ code: string; nonce: string } | null> {
 	const code = newCode();
-	const digest = await codeHash(email, code, secret);
+	const nonce = newPendingNonce();
+	const nonceHash = await hashValue(nonce);
+
+	const previousHash =
+		pending !== null && pendingFormat.test(pending)
+			? await hashValue(pending)
+			: "";
+
+	const digest = await codeHash(email, nonceHash, code, secret);
 	const issuedAt = now.toISOString();
 	const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();
 
-	const [stored] = await db.batch([
+	const [, stored] = await db.batch([
 		db
-			.prepare(`INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
-      SELECT ?,?,0,?,?,NULL,NULL WHERE EXISTS (${activeProjects})
-      ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash,attempts=0,
-      created_at=excluded.created_at,expires_at=excluded.expires_at,used_at=NULL,session_token_hash=NULL
-      WHERE audio_client_codes.created_at<=? OR audio_client_codes.used_at IS NOT NULL OR audio_client_codes.expires_at<=?
-      RETURNING email`)
+			.prepare("DELETE FROM audio_client_signin_codes WHERE expires_at<=?")
+			.bind(issuedAt),
+		db
+			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
+      SELECT ?,?,?,0,?,?,NULL,NULL WHERE EXISTS (${activeProjects})
+        AND NOT EXISTS (SELECT 1 FROM audio_client_signin_codes WHERE email=? AND nonce_hash=?
+          AND used_at IS NULL AND expires_at>? AND created_at>?)
+        AND (SELECT COUNT(*) FROM audio_client_signin_codes WHERE email=? AND nonce_hash<>?
+          AND used_at IS NULL AND expires_at>?)<?
+      RETURNING nonce_hash`)
 			.bind(
+				nonceHash,
 				email,
 				digest,
 				issuedAt,
 				expiresAt,
 				email,
-				new Date(now.getTime() - 30_000).toISOString(),
+				email,
+				previousHash,
 				issuedAt,
+				new Date(now.getTime() - resendPause).toISOString(),
+				email,
+				previousHash,
+				issuedAt,
+				liveCodesPerAddress,
 			),
+		db
+			.prepare(
+				`DELETE FROM audio_client_signin_codes WHERE email=? AND nonce_hash=?
+      AND EXISTS (SELECT 1 FROM audio_client_signin_codes WHERE nonce_hash=?)`,
+			)
+			.bind(email, previousHash, nonceHash),
 		db
 			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT p.request_id,'code-issued',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
-        AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND created_at=?)`)
-			.bind(issuedAt, email, email, digest, issuedAt),
+        AND EXISTS(SELECT 1 FROM audio_client_signin_codes WHERE nonce_hash=? AND code_hash=? AND created_at=?)`)
+			.bind(issuedAt, email, nonceHash, digest, issuedAt),
 	]);
 
-	return stored.results.length ? code : null;
+	return stored.results.length ? { code, nonce } : null;
 }
 
 export async function discardUndeliveredCode(
 	db: D1Database,
 	email: string,
 	code: string,
+	nonce: string,
 	secret: string,
 	now = new Date(),
 ): Promise<void> {
-	const digest = await codeHash(email, code, secret);
+	const nonceHash = await hashValue(nonce);
+	const digest = await codeHash(email, nonceHash, code, secret);
 	await db.batch([
 		db
 			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT p.request_id,'code-delivery-failed',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
       WHERE r.email=? AND p.revoked_at IS NULL
-        AND EXISTS(SELECT 1 FROM audio_client_codes WHERE email=? AND code_hash=? AND used_at IS NULL)`)
-			.bind(now.toISOString(), email, email, digest),
+        AND EXISTS(SELECT 1 FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL)`)
+			.bind(now.toISOString(), email, email, nonceHash, digest),
 		db
 			.prepare(
-				"DELETE FROM audio_client_codes WHERE email=? AND code_hash=? AND used_at IS NULL",
+				"DELETE FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL",
 			)
-			.bind(email, digest),
+			.bind(email, nonceHash, digest),
 	]);
 }
 
@@ -149,15 +204,24 @@ export async function listStudioSignInFailures(
 	}));
 }
 
+/**
+ * Completes sign-in for the browser holding `nonce` (its pending sign-in cookie). Without a well-formed value nothing is
+ * read or written. With one, only the row bound to it is charged an attempt, before the code is compared, and only that
+ * row can accept the code.
+ */
 export async function completeClientCode(
 	db: D1Database,
 	email: string,
 	code: string,
+	nonce: string | null,
 	secret: string,
 	now = new Date(),
 ): Promise<string | null> {
 	if (!/^\d{8}$/.test(code)) return null;
-	const digest = await codeHash(email, code, secret);
+
+	if (nonce === null || !pendingFormat.test(nonce)) return null;
+	const nonceHash = await hashValue(nonce);
+	const digest = await codeHash(email, nonceHash, code, secret);
 	const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
 	const tokenHash = await hashValue(token);
 	const at = now.toISOString();
@@ -167,18 +231,18 @@ export async function completeClientCode(
 	// Concurrent guesses each spend one of the code's five attempts before any comparison.
 	const [, used] = await db.batch([
 		db
-			.prepare(`UPDATE audio_client_codes SET attempts=attempts+1
-      WHERE email=? AND used_at IS NULL AND expires_at>? AND attempts<5`)
-			.bind(email, at),
+			.prepare(`UPDATE audio_client_signin_codes SET attempts=attempts+1
+      WHERE email=? AND nonce_hash=? AND used_at IS NULL AND expires_at>? AND attempts<5`)
+			.bind(email, nonceHash, at),
 		db
-			.prepare(`UPDATE audio_client_codes SET used_at=?,session_token_hash=?
-      WHERE email=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1 AND EXISTS (${activeProjects})
-      RETURNING email`)
-			.bind(at, tokenHash, email, digest, at, email),
+			.prepare(`UPDATE audio_client_signin_codes SET used_at=?,session_token_hash=?
+      WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1 AND EXISTS (${activeProjects})
+      RETURNING nonce_hash`)
+			.bind(at, tokenHash, email, nonceHash, digest, at, email),
 		db
 			.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
-      SELECT ?,email,?,?,? FROM audio_client_codes WHERE email=? AND session_token_hash=?`)
-			.bind(tokenHash, at, expiresAt, at, email, tokenHash),
+      SELECT ?,email,?,?,? FROM audio_client_signin_codes WHERE nonce_hash=? AND session_token_hash=?`)
+			.bind(tokenHash, at, expiresAt, at, nonceHash, tokenHash),
 		db
 			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT p.request_id,'signed-in',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
@@ -375,6 +439,23 @@ export async function clientProjectsForSession(
 
 export function studioSessionCookie(token: string, secure: boolean): string {
 	return `studio_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
+}
+
+/** The pending sign-in cookie: set when a code is requested, so only this browser can use the code. */
+export function pendingSignInCookie(nonce: string, secure: boolean): string {
+	return `studio_pending=${nonce}; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=${codeLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
+}
+
+export function clearPendingSignInCookie(secure: boolean): string {
+	return `studio_pending=; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+}
+
+export function pendingSignInFromRequest(request: Request): string | null {
+	const match = request.headers
+		.get("cookie")
+		?.match(/(?:^|;\s*)studio_pending=([0-9a-f]{64})(?:;|$)/);
+
+	return match?.[1] ?? null;
 }
 
 export async function revokeClientSession(

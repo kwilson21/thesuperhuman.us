@@ -487,10 +487,14 @@ async function runOn(
 					})(call);
 				};
 
-				const send = async (path: string, body: JsonValue) => {
+				const send = async (path: string, body: JsonValue, cookie?: string) => {
 					const request = new Request(`${ORIGIN}${path}`, {
 						method: "POST",
-						headers: { "content-type": "application/json", origin: ORIGIN },
+						headers: {
+							"content-type": "application/json",
+							origin: ORIGIN,
+							...(cookie ? { cookie } : {}),
+						},
 						body: JSON.stringify(body),
 					});
 
@@ -524,11 +528,22 @@ async function runOn(
 						`golden harness: no sign-in code was issued for ${email} (the code route answered ${issued.status}). Seed an active project for that email.`,
 					);
 
-				const response = await send("/api/studio/session", { email, code });
+				// The browser that asked for the code sends back its pending sign-in cookie, as a real browser does.
+				const pending = issued.headers
+					.getSetCookie()
+					.map((value) => value.match(/^(studio_pending=[0-9a-f]{64})/)?.[1])
+					.find(Boolean);
+
+				const response = await send(
+					"/api/studio/session",
+					{ email, code },
+					pending,
+				);
 
 				const cookie = response.headers
-					.getSetCookie()[0]
-					?.match(/studio_session=([^;]+)/)?.[1];
+					.getSetCookie()
+					.map((value) => value.match(/^studio_session=([^;]+)/)?.[1])
+					.find(Boolean);
 
 				if (!cookie)
 					throw new Error(

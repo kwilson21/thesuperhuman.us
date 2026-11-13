@@ -19,7 +19,7 @@ const requiredSchema = [
 	"stripe_invoice_attempts",
 	"stripe_unmatched_events",
 	"audio_projects",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 	"audio_client_sessions",
 	"audio_client_access_audit",
 	"audio_project_messages",
@@ -128,7 +128,7 @@ function healthyFixture() {
 
 			if (sql.includes("stripe_unmatched_events")) return [{ total: 0 }];
 
-			if (sql.includes("audio_client_codes")) return [{ total: 0 }];
+			if (sql.includes("audio_client_signin_codes")) return [{ total: 0 }];
 
 			return [{ total: 2 }];
 		},
@@ -231,7 +231,7 @@ it("reports attention when the request audit trigger is missing", async () => {
 	);
 });
 
-it("detects incomplete schemas and passes only after 0026", async () => {
+it("detects incomplete schemas and passes only after 0027", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
 
@@ -352,6 +352,19 @@ it("detects incomplete schemas and passes only after 0026", async () => {
 			"utf8",
 		),
 	);
+	// 0027 adds the sign-in codes table the sign-in routes read.
+	expect((await ownerHealth(fixture)).checks).toContainEqual(
+		expect.objectContaining({ id: "schema", status: "attention" }),
+	);
+	db.exec(
+		readFileSync(
+			new URL(
+				"../../migrations/music/0027_audio_client_signin_codes.sql",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({ id: "schema", status: "pass" }),
 	);
@@ -408,7 +421,7 @@ it("flags overdue studio cleanup without revealing client details", async () => 
 	const fixture = healthyFixture();
 	const baseQuery = fixture.query;
 	fixture.query = async (sql: string) =>
-		sql.includes("audio_client_codes") ? [{ total: 3 }] : baseQuery(sql);
+		sql.includes("audio_client_signin_codes") ? [{ total: 3 }] : baseQuery(sql);
 	const report = await ownerHealth(fixture);
 	expect(report.checks).toContainEqual(
 		expect.objectContaining({ id: "studio-retention", status: "attention" }),
@@ -423,7 +436,7 @@ it("counts eligible software projects alongside audio retention items", async ()
 	const fixture = healthyFixture();
 	const baseQuery = fixture.query;
 	fixture.query = (sql) =>
-		sql.includes("audio_client_codes")
+		sql.includes("audio_client_signin_codes")
 			? Promise.resolve(db.prepare(sql).all())
 			: baseQuery(sql);
 
@@ -510,7 +523,7 @@ it.each(["creating", "open", "payment_failed", "uncollectible"])(
 			base = fixture.query;
 
 		fixture.query = (sql) =>
-			sql.includes("audio_client_codes")
+			sql.includes("audio_client_signin_codes")
 				? Promise.resolve(db.prepare(sql).all())
 				: base(sql);
 		expect((await ownerHealth(fixture)).checks).toContainEqual(

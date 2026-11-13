@@ -34,7 +34,7 @@ const requiredSchema = [
 	"stripe_invoice_attempts",
 	"stripe_unmatched_events",
 	"audio_projects",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 	"audio_client_sessions",
 	"audio_client_access_audit",
 	"audio_project_messages",
@@ -384,7 +384,7 @@ export async function ownerHealth({
 		const old = new Date(now.getTime() - 30 * 86400000).toISOString();
 
 		const rows = await query(`SELECT
-      (SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')
+      (SELECT COUNT(*) FROM audio_client_signin_codes WHERE COALESCE(used_at,expires_at)< '${old}')
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
       +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
         WHERE ${studioRetentionProjectPredicate(now)})

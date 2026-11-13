@@ -4,7 +4,10 @@ import {
 	clientPortalEnabled,
 	discardUndeliveredCode,
 	issueClientCode,
+	newPendingNonce,
 	normalizeClientEmail,
+	pendingSignInCookie,
+	pendingSignInFromRequest,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
 import { sendAudioMessage } from "~/lib/audio-resend";
@@ -108,13 +111,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 429 },
 			);
 
-		const code = await issueClientCode(
+		const pending = pendingSignInFromRequest(request);
+
+		const issued = await issueClientCode(
 			env.MUSIC_DB,
 			email,
 			env.AUDIO_CLIENT_CODE_KEY,
+			new Date(),
+			pending,
 		);
 
-		if (code)
+		if (issued) {
+			const { code, nonce } = issued;
+
 			locals.runtime.ctx.waitUntil(
 				(async () => {
 					const sent = await sendAudioMessage({
@@ -134,6 +143,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							env.MUSIC_DB!,
 							email,
 							code,
+							nonce,
 							env.AUDIO_CLIENT_CODE_KEY!,
 						);
 				})().catch(() => {
@@ -141,8 +151,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					console.error("Studio code delivery or cleanup failed.");
 				}),
 			);
+		}
 
-		return Response.json(generic);
+		// Every answer sets the cookie, so the response does not show whether the address has a project: a new value when
+		// a code was issued, the browser's own value when it asked a moment ago, an unused random value otherwise.
+		return Response.json(generic, {
+			headers: {
+				"set-cookie": pendingSignInCookie(
+					issued?.nonce ?? pending ?? newPendingNonce(),
+					new URL(request.url).protocol === "https:",
+				),
+			},
+		});
 	} catch {
 		return Response.json(
 			{ ok: false, error: "Studio sign-in is temporarily unavailable." },

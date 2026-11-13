@@ -250,7 +250,7 @@ export function world(parts: Parts = {}): Pick<Case, "music" | "setup"> {
 
 	if (parts.sessions?.length) seed.audio_client_sessions = parts.sessions;
 
-	if (parts.codes?.length) seed.audio_client_codes = parts.codes;
+	if (parts.codes?.length) seed.audio_client_signin_codes = parts.codes;
 
 	const requestId = String(request?.id ?? "r1");
 	const full: Seed = seed;

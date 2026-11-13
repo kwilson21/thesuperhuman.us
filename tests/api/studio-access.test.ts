@@ -29,6 +29,7 @@ vi.mock("~/lib/audio-resend", () => ({
 }));
 
 const email = "Artist@Example.com";
+const nonce = "a1".repeat(32);
 
 type StudioContext = APIContext & { pending: Promise<unknown>[] };
 
@@ -36,6 +37,7 @@ function context(
 	path: string,
 	body: JsonObject,
 	enabled = true,
+	cookie?: string,
 ): StudioContext {
 	const pending: Promise<unknown>[] = [];
 
@@ -45,6 +47,7 @@ function context(
 			headers: {
 				origin: "https://thesuperhuman.us",
 				"content-type": "application/json",
+				...(cookie ? { cookie } : {}),
 			},
 			body: JSON.stringify(body),
 		}),
@@ -81,7 +84,7 @@ describe("studio access routes", () => {
 	it("keeps project existence out of the code-request response", async () => {
 		vi.mocked(issueClientCode)
 			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce("12345678");
+			.mockResolvedValueOnce({ code: "12345678", nonce });
 
 		const unknown = await requestCode(
 			context("/api/studio/code", { email, turnstileToken: "challenge" }),
@@ -111,7 +114,7 @@ describe("studio access routes", () => {
 	});
 
 	it("responds without waiting for email delivery", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce("12345678");
+		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
 		let finishDelivery!: (result: { ok: boolean }) => void;
 		vi.mocked(sendAudioMessage).mockReturnValueOnce(
 			new Promise((resolve) => {
@@ -156,11 +159,16 @@ describe("studio access routes", () => {
 		vi.mocked(completeClientCode).mockResolvedValueOnce("0".repeat(72));
 
 		const response = await completeCode(
-			context("/api/studio/session", { email, code: "12345678" }),
+			context(
+				"/api/studio/session",
+				{ email, code: "12345678" },
+				true,
+				`studio_pending=${nonce}`,
+			),
 		);
 
 		expect(response.status).toBe(200);
-		const cookie = response.headers.get("set-cookie");
+		const cookie = response.headers.getSetCookie()[0];
 		expect(cookie).toContain("HttpOnly");
 		expect(cookie).toContain("SameSite=Lax");
 		expect(cookie).toContain("Secure");
@@ -168,7 +176,7 @@ describe("studio access routes", () => {
 	});
 
 	it("invalidates an undelivered code and revokes the current session on sign-out", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce("12345678");
+		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
 		vi.mocked(sendAudioMessage).mockResolvedValueOnce({ ok: false });
 
 		const codeContext = context("/api/studio/code", {
@@ -190,7 +198,7 @@ describe("studio access routes", () => {
 	});
 
 	it("keeps a code whose delivery is uncertain, since the email may still arrive", async () => {
-		vi.mocked(issueClientCode).mockResolvedValueOnce("12345678");
+		vi.mocked(issueClientCode).mockResolvedValueOnce({ code: "12345678", nonce });
 		vi.mocked(sendAudioMessage).mockResolvedValueOnce({
 			ok: false,
 			uncertain: true,
@@ -219,7 +227,12 @@ describe("studio access routes", () => {
 		expect(
 			(
 				await completeCode(
-					context("/api/studio/session", { email, code: "12345678" }),
+					context(
+						"/api/studio/session",
+						{ email, code: "12345678" },
+						true,
+						`studio_pending=${nonce}`,
+					),
 				)
 			).status,
 		).toBe(429);

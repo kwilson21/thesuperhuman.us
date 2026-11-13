@@ -726,7 +726,7 @@ export function softwareAccessRevocation(
 			)
 			.bind(at, id, at),
 		db
-			.prepare(`DELETE FROM audio_client_codes WHERE email=(${closedEmail})`)
+			.prepare(`DELETE FROM audio_client_signin_codes WHERE email=(${closedEmail})`)
 			.bind(id, at),
 	];
 }

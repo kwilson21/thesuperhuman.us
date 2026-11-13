@@ -47,9 +47,10 @@ function fixture() {
         ('active','client','active-session','Still working','2028-01-01');
     INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
       VALUES ('delivered','progress','Private update','owner@example.com','2026-12-01');
-    INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at)
-      VALUES ('old@example.com','hash-old','2027-10-01','2027-10-01'),
-        ('recent@example.com','hash-recent','2028-01-01','2028-01-01');
+    INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at)
+      VALUES ('nonce-old','old@example.com','hash-old','2027-10-01','2027-10-01'),
+        ('nonce-recent','recent@example.com','hash-recent','2028-01-01','2028-01-01'),
+        ('nonce-old-same-address','recent@example.com','hash-old-2','2027-10-01','2027-10-01');
     INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       VALUES ('old-session','old@example.com','2027-10-01','2027-10-15','2027-10-01'),
         ('recent-session','recent@example.com','2028-01-01','2028-01-30','2028-01-01');
@@ -96,7 +97,7 @@ it("previews without private values and removes only eligible closed project con
 	expect(review.counts).toMatchObject({
 		projects: 2,
 		objects: 2,
-		codes: 1,
+		codes: 2,
 		sessions: 1,
 		accessAudit: 1,
 	});
@@ -141,9 +142,10 @@ it("previews without private values and removes only eligible closed project con
 		{ request_id: "delivered", removed: 1, closed: 1 },
 		{ request_id: "withdrawn", removed: 1, closed: 1 },
 	]);
-	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([
-		{ email: "recent@example.com" },
-	]);
+	// Only the old code goes; a live code for the same address stays.
+	expect(
+		sql.prepare("SELECT nonce_hash FROM audio_client_signin_codes").all(),
+	).toEqual([{ nonce_hash: "nonce-recent" }]);
 	expect(
 		sql.prepare("SELECT token_hash FROM audio_client_sessions").all(),
 	).toEqual([{ token_hash: "recent-session" }]);

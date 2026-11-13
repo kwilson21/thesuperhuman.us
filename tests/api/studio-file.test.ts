@@ -68,7 +68,8 @@ beforeEach(async () => {
 	token = (await completeClientCode(
 		db,
 		"artist@example.com",
-		code,
+		code.code,
+		code.nonce,
 		secret,
 		now,
 	))!;

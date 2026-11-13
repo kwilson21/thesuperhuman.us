@@ -44,7 +44,7 @@ const partialSignOut = Astro.url.searchParams.get("signout") === "partial";
       </form>
       <form id="studio-code-verify" hidden>
         <h2>Check your email</h2>
-        <p class="studio-intro small">We sent an eight-digit code. It expires in 10 minutes.</p>
+        <p class="studio-intro small">We sent an eight-digit code. It expires in 10 minutes. Enter it in this browser.</p>
         <fieldset class="code-boxes" data-code-boxes>
           <legend>Eight-digit code</legend>
           {Array.from({ length: 8 }, (_, index) => <input class="code-box" type="text" inputmode="numeric" maxlength="1" pattern="[0-9]" autocomplete={index === 0 ? 'one-time-code' : 'off'} aria-label={`Digit ${index + 1} of 8`} />)}

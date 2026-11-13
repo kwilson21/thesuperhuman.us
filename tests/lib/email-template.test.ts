@@ -35,6 +35,7 @@ describe("renderEmail", () => {
 		expect(html).toContain("4827 1936");
 		expect(text).toContain("4827 1936");
 		expect(text).toContain("expires in 10 minutes");
+		expect(text).toContain("Enter it in the browser where you asked for it.");
 	});
 
 	it("keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader", () => {

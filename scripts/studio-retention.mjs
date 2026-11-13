@@ -221,10 +221,10 @@ function sources(now) {
 	});
 
 	const codes = snapshot({
-		columns: "email,created_at",
-		from: "audio_client_codes",
+		columns: "nonce_hash,email,created_at",
+		from: "audio_client_signin_codes",
 		where: `COALESCE(used_at,expires_at)<${old}`,
-		order: "email",
+		order: "nonce_hash",
 		limit: 1000,
 	});
 
@@ -598,7 +598,7 @@ export async function applyStudioRetention(
 		),
 		`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id IN (${projectIds}) AND revoked_at IS NULL)
       THEN 1 ELSE json_extract('access-open','$') END`,
-		`DELETE FROM audio_client_codes WHERE email IN (${ids(values.codes)})`,
+		`DELETE FROM audio_client_signin_codes WHERE nonce_hash IN (${ids(values.codes)})`,
 		`DELETE FROM audio_client_sessions WHERE token_hash IN (${ids(values.sessions)})`,
 		`DELETE FROM audio_client_access_audit WHERE id IN (${ids(values.accessAudit)})`,
 		`DELETE FROM audio_project_audit WHERE id IN (${ids(values.projectAudit)})`,
