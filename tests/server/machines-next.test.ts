@@ -88,6 +88,27 @@ describe("next and compound states", () => {
 	});
 });
 
+describe("sourcesOf and compound states", () => {
+	const nested = setup({}).createMachine({
+		id: "nested",
+		initial: "idle",
+		states: {
+			idle: { on: { START: { target: "running" } } },
+			running: {
+				initial: "warm",
+				states: { warm: {}, hot: {} },
+				on: { STOP: { target: "idle" } },
+			},
+		},
+	});
+
+	it("refuses a machine with a compound state instead of listing the parent as a source", () => {
+		expect(() => sourcesOf(nested, "STOP")).toThrow(
+			/state "running" of machine "nested" is a compound state/i,
+		);
+	});
+});
+
 describe("a row's own context", () => {
 	const gated = setup({}).createMachine({
 		id: "gated",

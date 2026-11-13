@@ -33,6 +33,19 @@ describe("failureOf", () => {
 		).toThrow();
 	});
 
+	it("gives the first of two typed failures in one Cause", () => {
+		const first = new Refused();
+		const second = new Refused();
+
+		expect(
+			failureOf({
+				error: new EffectFailure(
+					Cause.combine(Cause.fail(first), Cause.fail(second)),
+				),
+			}),
+		).toBe(first);
+	});
+
 	it("throws an error the bridge did not wrap, and a failure that is not tagged", () => {
 		expect(() => failureOf({ error: new Error("plain") })).toThrow("plain");
 		expect(() =>
