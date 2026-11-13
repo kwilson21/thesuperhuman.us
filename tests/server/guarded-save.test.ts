@@ -5,13 +5,14 @@ import {
 	ChangedSinceRead,
 	decideAndSave,
 	guardedSave,
-	isGuardRaised,
 	isUniqueViolation,
+	raisedByJsonGuard,
 	rowOrChanged,
+	SaveKeptChanging,
 } from "../../src/server/guarded-save";
 import { DatabaseSync } from "../helpers/sqlite-d1";
 
-describe("isGuardRaised", () => {
+describe("raisedByJsonGuard", () => {
 	it("recognizes the batch guard's own failure", () => {
 		const database = new DatabaseSync(":memory:");
 
@@ -23,26 +24,28 @@ describe("isGuardRaised", () => {
 				.all();
 			expect.unreachable("the guard should raise");
 		} catch (error) {
-			expect(error instanceof Error && isGuardRaised(error)).toBe(true);
+			expect(error instanceof Error && raisedByJsonGuard(error)).toBe(true);
 		}
 	});
 
 	it("recognizes D1's wording and a wrapped cause", () => {
 		expect(
-			isGuardRaised(new Error("D1_ERROR: malformed JSON: SQLITE_ERROR")),
+			raisedByJsonGuard(new Error("D1_ERROR: malformed JSON: SQLITE_ERROR")),
 		).toBe(true);
 		expect(
-			isGuardRaised(
+			raisedByJsonGuard(
 				new Error("batch failed", { cause: new Error("malformed JSON") }),
 			),
 		).toBe(true);
 	});
 
 	it("does not take another failure for the guard", () => {
-		expect(isGuardRaised(new Error("UNIQUE constraint failed: a.b"))).toBe(
+		expect(raisedByJsonGuard(new Error("UNIQUE constraint failed: a.b"))).toBe(
 			false,
 		);
-		expect(isGuardRaised(new Error("D1_ERROR: no such table: x"))).toBe(false);
+		expect(raisedByJsonGuard(new Error("D1_ERROR: no such table: x"))).toBe(
+			false,
+		);
 	});
 });
 
@@ -83,15 +86,18 @@ describe("rowOrChanged", () => {
 
 describe("guardedSave", () => {
 	it("gives what the save answered", async () => {
-		await expect(Effect.runPromise(guardedSave(async () => 7))).resolves.toBe(
-			7,
-		);
+		await expect(
+			Effect.runPromise(guardedSave(async () => 7, raisedByJsonGuard)),
+		).resolves.toBe(7);
 	});
 
 	it("turns the guard's error into ChangedSinceRead", async () => {
 		const failure = await Effect.runPromise(
 			Effect.flip(
-				guardedSave(async () => Promise.reject(new Error("malformed JSON"))),
+				guardedSave(
+					async () => Promise.reject(new Error("malformed JSON")),
+					raisedByJsonGuard,
+				),
 			),
 		);
 
@@ -104,6 +110,7 @@ describe("guardedSave", () => {
 				guardedSave(
 					async () =>
 						Promise.reject(new Error("UNIQUE constraint failed: t.name")),
+					raisedByJsonGuard,
 					() => "taken" as const,
 				),
 			),
@@ -115,13 +122,17 @@ describe("guardedSave", () => {
 	it("is a defect for any other failure", async () => {
 		await expect(
 			Effect.runPromise(
-				guardedSave(async () => Promise.reject(new Error("disk"))),
+				guardedSave(
+					async () => Promise.reject(new Error("disk")),
+					raisedByJsonGuard,
+				),
 			),
 		).rejects.toThrow("disk");
 		await expect(
 			Effect.runPromise(
-				guardedSave(async () =>
-					Promise.reject(new Error("UNIQUE constraint failed")),
+				guardedSave(
+					async () => Promise.reject(new Error("UNIQUE constraint failed")),
+					raisedByJsonGuard,
 				),
 			),
 		).rejects.toThrow("UNIQUE");
@@ -139,7 +150,6 @@ describe("decideAndSave", () => {
 			((facts: number) => Effect.succeed(Option.some(`w${facts}`))),
 		save:
 			overrides.save ?? ((write: string) => Effect.succeed(`saved ${write}`)),
-		gaveUp: "gave up",
 	});
 
 	it("reads, decides and saves", async () => {
@@ -183,7 +193,6 @@ describe("decideAndSave", () => {
 					++saves < 3
 						? Effect.fail(new ChangedSinceRead())
 						: Effect.succeed(write),
-				gaveUp: "gave up",
 			}),
 		);
 
@@ -191,7 +200,25 @@ describe("decideAndSave", () => {
 		expect(answer.saved).toBe(3);
 	});
 
-	it("gives up as a defect after three tries in all", async () => {
+	it("fails with the named SaveKeptChanging after three tries in all", async () => {
+		let reads = 0;
+
+		const failure = await Effect.runPromise(
+			Effect.flip(
+				decideAndSave({
+					facts: Effect.sync(() => ++reads),
+					decide: (facts) => Effect.succeed(Option.some(facts)),
+					save: () => Effect.fail(new ChangedSinceRead()),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SaveKeptChanging);
+		expect(failure._tag).toBe("SaveKeptChanging");
+		expect(reads).toBe(3);
+	});
+
+	it("neither retries nor maps a defect from the save", async () => {
 		let reads = 0;
 
 		await expect(
@@ -199,12 +226,11 @@ describe("decideAndSave", () => {
 				decideAndSave({
 					facts: Effect.sync(() => ++reads),
 					decide: (facts) => Effect.succeed(Option.some(facts)),
-					save: () => Effect.fail(new ChangedSinceRead()),
-					gaveUp: "Could not save after three tries.",
+					save: () => Effect.die(new Error("disk")),
 				}),
 			),
-		).rejects.toThrow("Could not save after three tries.");
-		expect(reads).toBe(3);
+		).rejects.toThrow("disk");
+		expect(reads).toBe(1);
 	});
 
 	it("passes a rule's refusal through without retrying", async () => {
@@ -216,12 +242,67 @@ describe("decideAndSave", () => {
 					facts: Effect.sync(() => ++reads),
 					decide: () => Effect.fail({ _tag: "Refused" as const }),
 					save: () => Effect.succeed("x"),
-					gaveUp: "gave up",
 				}),
 			),
 		);
 
 		expect(failure._tag).toBe("Refused");
 		expect(reads).toBe(1);
+	});
+});
+
+describe("the caller's recogniser", () => {
+	const jsonEachOverText = "SELECT value FROM json_each('not json at all')";
+
+	const raised = (sql: string) => {
+		const database = new DatabaseSync(":memory:");
+
+		try {
+			database.prepare(sql).all();
+		} catch (error) {
+			if (error instanceof Error) return error;
+		}
+
+		throw new Error("the statement should have raised");
+	};
+
+	it("does not take a json_each over non-JSON text for a guard when the recogniser says so", async () => {
+		const error = raised(jsonEachOverText);
+
+		await expect(
+			Effect.runPromise(
+				guardedSave(
+					async () => Promise.reject(error),
+					() => false,
+				),
+			),
+		).rejects.toThrow("malformed JSON");
+	});
+
+	it("takes the same error for a guard under the provided default, which is its documented limit", async () => {
+		const error = raised(jsonEachOverText);
+
+		expect(raisedByJsonGuard(error)).toBe(true);
+
+		const failure = await Effect.runPromise(
+			Effect.flip(
+				guardedSave(async () => Promise.reject(error), raisedByJsonGuard),
+			),
+		);
+
+		expect(failure._tag).toBe("ChangedSinceRead");
+	});
+
+	it("runs the recogniser it is given, not a built-in one", async () => {
+		const failure = await Effect.runPromise(
+			Effect.flip(
+				guardedSave(
+					async () => Promise.reject(new Error("custom guard text")),
+					(error) => error.message === "custom guard text",
+				),
+			),
+		);
+
+		expect(failure._tag).toBe("ChangedSinceRead");
 	});
 });
