@@ -2,7 +2,7 @@
 
 A golden corpus proves that a route behaves the same after it is converted to Effect. It is a table of requests run
 against the route as it is now. For each request the test records the status, headers, exact body and every outside
-effect the route makes, in order. The record is saved as a JSON fixture and committed. After the conversion the same test
+effect the route makes, in order. The record is saved as a compressed JSON fixture (`tests/golden/fixtures/<route>.json.gz`) and committed. After the conversion the same test
 must pass with the fixture untouched.
 
 Three older routes (contact, resume-request, resume-approve) use `recorder.ts`. Everything else uses `harness/`. The
@@ -22,6 +22,22 @@ UPDATE_GOLDEN=1 pnpm exec vitest run tests/golden/<route>.test.ts
 
 A plain `pnpm test` compares and never writes. Always `git diff` the fixtures after re-recording, and check the other
 golden fixtures did not change.
+
+## Reviewing a fixture change
+
+A fixture is gzip-compressed (`.json.gz`, marked `binary` in `.gitattributes`), so GitHub and `git diff` show only that
+the file changed. Compression is deterministic (fixed level, no timestamp, no name), so re-recording unchanged behaviour
+leaves the file byte for byte the same, and any byte change in the file is a change in what was recorded. Read it with:
+
+```
+pnpm run golden:diff <fixture> [<from> [<to>]]   # differing cases between two git revisions
+pnpm run golden:show <fixture> [<case name>]     # list the cases of a fixture, or print one in full
+```
+
+`golden:diff` defaults to `HEAD` against the working tree; `<from>` and `<to>` are any revisions, for example
+`golden:diff contact origin/main HEAD`. It prints each added, removed or changed case with the path of every difference
+and the two values. Paste its output in the PR description of an intended fixture change. A failing comparison in a test
+prints the differing case in the same way (name, first differing path, expected and actual).
 
 ## Adding a corpus
 

@@ -1,9 +1,15 @@
 // Reads, compares and (only with UPDATE_GOLDEN=1) writes the fixture files in tests/golden/fixtures.
 //
+// A fixture file is gzip-compressed JSON (`<area>.json.gz`): the recorded cases are large and repetitive, and the
+// compressed file is about a tenth of the size. The compression is deterministic (fixed level, mtime 0, no file name,
+// fixed operating-system byte), so recording unchanged behaviour again produces the same bytes. A change to a fixture
+// is reviewed with `pnpm run golden:diff` (see tests/golden/README.md), because GitHub cannot show a diff of it.
+//
 // A fixture is the answer of a route as it was before its conversion. A test compares against it and never writes it.
 // The comparison is on JSON: the record is round-tripped through JSON first, so what is compared is exactly what a
 // fixture file can hold, and a field the code stopped producing is a difference, not an absence that `toEqual` skips.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { crc32, deflateRawSync, gunzipSync } from "node:zlib";
 import { expect } from "vitest";
 
 /** Anything recorded for a fixture: a named case. */
@@ -12,16 +18,44 @@ export type Named = { readonly name: string };
 export const UPDATING = process.env.UPDATE_GOLDEN === "1";
 
 function fixturePath(area: string) {
-	return new URL(`../fixtures/${area}.json`, import.meta.url);
+	return new URL(`../fixtures/${area}.json.gz`, import.meta.url);
 }
 
+/** gzip with a fixed header (no mtime, no name, unix) so the same text always gives the same bytes. */
+export function gzipFixture(text: string): Buffer {
+	const data = Buffer.from(text, "utf8");
+	const header = Buffer.from([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 2, 3]);
+	const trailer = Buffer.alloc(8);
+
+	trailer.writeUInt32LE(crc32(data), 0);
+	trailer.writeUInt32LE(data.length % 2 ** 32, 4);
+
+	return Buffer.concat([
+		header,
+		deflateRawSync(data, { level: 9, memLevel: 9 }),
+		trailer,
+	]);
+}
+
+const read = new Map<string, Named[]>();
+
 function readFixture(area: string): Named[] {
+	const cached = read.get(area);
+
+	if (cached) return cached;
+
 	const path = fixturePath(area);
 
 	if (!existsSync(path)) return [];
 
 	// SAFETY: this file is written only by `settleFixture` below, as a JSON array of recorded cases, each with a name.
-	return JSON.parse(readFileSync(path, "utf8")) as Named[];
+	const cases = JSON.parse(
+		gunzipSync(readFileSync(path)).toString("utf8"),
+	) as Named[];
+
+	read.set(area, cases);
+
+	return cases;
 }
 
 const written = new Map<string, Named[]>();
@@ -57,7 +91,7 @@ export function settleFixture(area: string, names: readonly string[]) {
 	if (UPDATING) {
 		writeFileSync(
 			fixturePath(area),
-			`${JSON.stringify(written.get(area) ?? [], null, "\t")}\n`,
+			gzipFixture(`${JSON.stringify(written.get(area) ?? [], null, "\t")}\n`),
 		);
 
 		return;

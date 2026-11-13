@@ -24,6 +24,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "golden:diff": "node scripts/golden-diff.mjs diff",
+    "golden:show": "node scripts/golden-diff.mjs show",
     "screenshots:preview": "node scripts/screenshots/preview.mjs",
     "screenshots": "node scripts/screenshots/capture.mjs",
     "audio:upload": "node scripts/upload-audio.mjs",

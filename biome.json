@@ -19,6 +19,7 @@
 			"!scripts/og-video/kit.js",
 			"!scripts/og-video/kit.css",
 			"!src/data/og-media.json",
+			"!tests/golden/fixtures",
 			"!**/*.css"
 		]
 	},
