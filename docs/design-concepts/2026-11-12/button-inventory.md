@@ -18,6 +18,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 | `.sheet-footnote button` | `src/layouts/ServiceSheet.astro` | Print control in the sheet footer | Pill through `.site-button` (it also carries `.site-button-outline`) |
 | `.terms-navigation` buttons | `src/components/SoftwareAgreedTerms.astro` | Back and next controls for the agreed terms | Pill through `.studio-button` |
 | `.next-step-link` | `src/components/AudioProjectUpdates.astro` | Outlined link to the owner's next step on an audio project | Pill; the label is stored text and may wrap. |
+| `button` (inside `consentStyle`) | `src/lib/publication/oauth-login.ts` | Submits "Allow and sign in with GitHub" on the standalone publishing consent page | Pill with the `.site-button` values as literals, because that response's Content-Security-Policy admits only its own hashed inline style. A test pins the literals to `global.css`. The label wraps at large text sizes. |
 
 ## Stays
 
@@ -41,12 +42,11 @@ This is the list of every button style in `src/` that was checked for the pill s
 | Selector or element | File | Why it is unsure |
 | --- | --- | --- |
 | `.saved-reference` | `src/pages/owner/requests/[id]/update.astro` (line 171) | Each saved link is a bordered card with a title and a web address. It fills a field rather than leading somewhere, so it may be a card (stays) or a pill. |
-| `<button type="submit">Allow and sign in with GitHub</button>` | `src/lib/publication/oauth-login.ts` (line 66) | A standalone sign-in page with no style rule in `src/`. It uses the browser's default button look. The owner decides whether it should match the site. |
 
 ## Notes
 
 - Dead selectors with no markup in `src/`: `.request-work button`, `.audience-list button`, `.request-actions .danger`, `[data-review] button`. They were left as they are, apart from the shared owner rule above.
-- Pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve.
+- Most pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve. The consent page's button is the exception: its label wraps at large text sizes, so the pill never overflows.
 
 ## Out of scope
 

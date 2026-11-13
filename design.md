@@ -57,6 +57,7 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
 ```
 New colours are named tokens. Illustrations may keep local colour tokens in their own
 component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
+The publishing consent page (`src/lib/publication/oauth-login.ts`) is a standalone page with its own Content-Security-Policy, so it inlines the tokens as literals and loads Libron from the site's own font files; a test checks those literals against `global.css`.
 
 ## Typography
 - Libron (`--font-serif`) sets headings, body and public interface text at 14px or
@@ -213,6 +214,8 @@ Kazon revised the panel after seeing the built pages: "it feels like there's two
 Kazon chose how the closing panel's legal line wraps on a narrow phone, from four options
 shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
 is unchanged where it fits on one line.
+
+Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
