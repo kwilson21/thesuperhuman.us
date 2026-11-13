@@ -30,7 +30,7 @@ All in conversation on November 12, 2026.
 - On where the pinned button appears: "Phones only".
 - After seeing screenshots of the built panel and pinned button on a local copy: "Looks right".
 - On the essay's "Get in touch" text link sitting directly above the panel's button: "Yes, remove it". Removed in `e89e9d09`; the essay keeps "Back to Writing".
-- Merge authorization: not yet given when this record was written. Merging to `main` deploys production.
+- Merge authorization: asked "Do you authorize merging PR #233 once CI and the reviews are clean?", the owner answered "Yes, merge it". Merging to `main` deploys production.
 
 Changes made during review that depart from the approved brief are listed in the brief under "Amendments from review". The owner has seen the list and has not objected; none has been explicitly accepted.
 
@@ -68,7 +68,7 @@ Limits:
 
 ## 1. Purpose and content
 
-- **PASS · Project, branch, changes, instructions and audience.** One branch from `main`; the site instructions and audience are unchanged. Deployment authorization: **UNVERIFIED**, see Owner decisions.
+- **PASS · Project, branch, changes, instructions and audience.** One branch from `main`; the site instructions and audience are unchanged. Deployment authorization: given, see Owner decisions.
 - **PASS · Approved design, truthful claims, placeholders and media.** The look follows the owner's picks and his "Looks right". No professional claim changes. No new images.
 - **PASS · Explanatory copy.** The only copy change is removals: the closing sections on Work ("Have a problem worth exploring?"), About ("Let’s talk.") and Writing ("Have something to discuss?") are gone, replaced by the "Get in touch" button.
 - **PASS · First screen and next step.** First screens are unchanged. The pinned button is the sticky CTA this checklist allows when the journey justifies it: below 980px the header shows "Menu" in place of the "Work with me" button.
@@ -120,7 +120,6 @@ Limits:
 
 ## Remaining work
 
-- Owner's merge authorization.
 - CI and bot reviews on the final head.
 - Two controls the inventory left unsorted: `.saved-reference` picker cards and the GitHub sign-in submit.
 - Production checks after deploy (section 7).
