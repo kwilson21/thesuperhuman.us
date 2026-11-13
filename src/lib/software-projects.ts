@@ -1,4 +1,5 @@
 import { z } from "astro/zod";
+import { safeHttpsUrl } from "./link-check";
 import { offerTermsSchema } from "./software-offers";
 import { validProjectDate } from "./audio-project-updates";
 import { sendAudioMessage } from "./audio-resend";
@@ -60,17 +61,10 @@ export const updateInput = z.object({
 		"handoff",
 	]),
 	visual_alt: text(300),
-	preview_url: text(2000).refine((value) => {
-		if (!value) return true;
-
-		try {
-			const url = new URL(value);
-
-			return url.protocol === "https:" && !url.username && !url.password;
-		} catch {
-			return false;
-		}
-	}, "Use an HTTPS link the client is allowed to open."),
+	preview_url: text(2000).refine(
+		(value) => !value || safeHttpsUrl(value) !== null,
+		"Use an HTTPS link the client is allowed to open.",
+	),
 	what_changed: text(1000),
 	checks_limitations: text(1000),
 	next_step: text(300),

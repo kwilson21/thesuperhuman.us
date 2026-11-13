@@ -1,4 +1,5 @@
 import { hashValue } from "./audio-client-access";
+import { nonHttpsLinkText } from "./link-check";
 import { isText } from "./type-guards";
 
 export type ProjectMessage = {
@@ -30,6 +31,8 @@ export function validateProjectMessage(value: unknown): string | null {
 		/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(body)
 	)
 		return null;
+
+	if (nonHttpsLinkText(body)) return null;
 
 	for (const match of body.matchAll(
 		/(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s<>"']+/gi,

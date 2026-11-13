@@ -1,4 +1,4 @@
-import { isText } from "./type-guards";
+import { safeHttpsUrl } from "./link-check";
 
 export const ownerRequestKinds = [
 	"purchase",
@@ -19,15 +19,7 @@ export type OwnerRequestKind = (typeof ownerRequestKinds)[number];
 export type OwnerRequestStatus = (typeof ownerRequestStatuses)[number];
 
 export function safeExternalUrl(value: unknown) {
-	if (!isText(value)) return null;
-
-	try {
-		const url = new URL(value);
-
-		return url.protocol === "https:" ? url.href : null;
-	} catch {
-		return null;
-	}
+	return safeHttpsUrl(value);
 }
 
 export type OwnerRequest = {
