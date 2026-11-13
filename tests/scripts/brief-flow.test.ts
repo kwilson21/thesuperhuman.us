@@ -1,9 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-
-vi.mock("~/scripts/brief-suggestion-pass", () => ({
-	setupSuggestionPass: () => async () => true,
-}));
+import type { setupSuggestionPass } from "~/scripts/brief-suggestion-pass";
 
 class Node extends EventTarget {
 	dataset: Record<string, string> = {};
@@ -163,7 +160,13 @@ const backToStart = () => {
 
 const visibleDots = () => dots.map((item) => item.hidden);
 
-async function setup(requestedPath?: string) {
+/** The silent pass, granted at once unless a test supplies its own. */
+const grantedPass: typeof setupSuggestionPass = () => async () => true;
+
+async function setup(
+	requestedPath?: string,
+	startSuggestionPass = grantedPass,
+) {
 	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
 	steps = Array.from({ length: 9 }, () => new Node());
@@ -384,7 +387,7 @@ async function setup(requestedPath?: string) {
 	);
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
 	// SAFETY: setupSoftwareInquiry and the helpers it passes form to read only dataset, id, elements, getAttribute, querySelector, querySelectorAll and addEventListener from form; the fake Node supplies each except id, which reads undefined, and its elements is a plain array, so form cannot be typed as an HTMLFormElement.
-	setupSoftwareInquiry(form as never);
+	setupSoftwareInquiry(form as never, startSuggestionPass);
 }
 
 // Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
@@ -783,34 +786,19 @@ it.each(["different", "invalid", "missing"])(
 );
 
 it("offers no suggestion when the silent pass requires interaction", async () => {
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(async () => false);
-
-	await setup();
+	await setup(undefined, () => async () => false);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	fill("today", "We track new clients");
 	await vi.advanceTimersByTimeAsync(400);
 	expect(fetch).not.toHaveBeenCalled();
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(true);
-	mock.mockRestore();
 });
 
 it("renews an expired pass once and retries the current suggestion", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
 
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(pass);
-
-	await setup();
+	await setup(undefined, () => pass);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	vi.mocked(fetch).mockResolvedValueOnce(
@@ -821,20 +809,12 @@ it("renews an expired pass once and retries the current suggestion", async () =>
 	expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 	expect(fetch).toHaveBeenCalledTimes(2);
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
-	mock.mockRestore();
 });
 
 it("allows a later suggestion after typing cancels a successfully renewed retry", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
 
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(pass);
-
-	await setup();
+	await setup(undefined, () => pass);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	vi.mocked(fetch)
@@ -859,7 +839,6 @@ it("allows a later suggestion after typing cancels a successfully renewed retry"
 	expect(fetch).toHaveBeenCalledTimes(3);
 	expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
-	mock.mockRestore();
 });
 
 it.each(["check fails", "retry still expired", "retry throws"])(
@@ -869,14 +848,7 @@ it.each(["check fails", "retry still expired", "retry throws"])(
 			async (renew = false) => !renew || failure !== "check fails",
 		);
 
-		const mock = vi
-			.spyOn(
-				await import("~/scripts/brief-suggestion-pass"),
-				"setupSuggestionPass",
-			)
-			.mockReturnValue(pass);
-
-		await setup();
+		await setup(undefined, () => pass);
 		vi.useFakeTimers();
 		choose("path", "workflow");
 		vi.mocked(fetch).mockImplementation(async () =>
@@ -898,7 +870,6 @@ it.each(["check fails", "retry still expired", "retry throws"])(
 		expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 		expect(steps[1].nodes["[data-accept]"].hidden).toBe(true);
 		expect(form.nodes["[data-form-status]"].textContent).toBe("");
-		mock.mockRestore();
 	},
 );
 

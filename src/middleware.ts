@@ -25,9 +25,12 @@ function withOwnerHeaders(response: Response) {
 	return response;
 }
 
+type VerifyOwner = typeof verifyOwnerAccess;
+
 async function handle(
 	context: APIContext,
 	next: MiddlewareNext,
+	verifyOwner: VerifyOwner,
 ): Promise<Response> {
 	const { request, url } = context;
 
@@ -71,7 +74,7 @@ async function handle(
 		throw new Error("Studio routes must be server-rendered.");
 
 	if (!context.isPrerendered && ownerBoundary) {
-		const owner = await verifyOwnerAccess(request, context.locals.runtime.env);
+		const owner = await verifyOwner(request, context.locals.runtime.env);
 
 		if (!owner)
 			return new Response("Owner access required.", {
@@ -183,6 +186,11 @@ async function handle(
 	return response;
 }
 
-export const onRequest = defineMiddleware(async (context, next) =>
-	withSecurityHeaders(await handle(context, next)),
-);
+/** The middleware with its owner check supplied. Astro runs `onRequest` below, which uses the Cloudflare Access check. */
+export function createOnRequest(verifyOwner: VerifyOwner) {
+	return defineMiddleware(async (context, next) =>
+		withSecurityHeaders(await handle(context, next, verifyOwner)),
+	);
+}
+
+export const onRequest = createOnRequest(verifyOwnerAccess);

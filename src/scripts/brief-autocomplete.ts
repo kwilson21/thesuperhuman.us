@@ -1,4 +1,4 @@
-import { setupSuggestionPass } from "./brief-suggestion-pass";
+import type { setupSuggestionPass } from "./brief-suggestion-pass";
 
 function isSuggestionText(value: unknown): value is string {
 	return typeof value === "string";
@@ -7,8 +7,9 @@ function isSuggestionText(value: unknown): value is string {
 export function setupBriefAutocomplete(
 	form: HTMLFormElement,
 	earlier: () => Record<string, string>,
+	startSuggestionPass: typeof setupSuggestionPass,
 ) {
-	const startPass = setupSuggestionPass(form);
+	const startPass = startSuggestionPass(form);
 	const resizeAnswers: (() => void)[] = [];
 
 	const start = () => {
