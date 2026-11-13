@@ -1,6 +1,6 @@
 import type { APIContext, MiddlewareNext } from "astro";
 import { describe, it, expect, vi } from "vitest";
-import { createOnRequest } from "~/middleware";
+import { createOnRequest, onRequest as realOnRequest } from "~/middleware";
 import { securityHeaders } from "~/lib/security-headers";
 import { double } from "./helpers/doubles";
 import { fakeLocals } from "./helpers/runtime";
@@ -531,4 +531,71 @@ it("adds the _headers security headers to redirects returned by routes", async (
 		"https://thesuperhuman.us/next",
 	);
 	expectSecurityHeaders(response);
+});
+
+// The real onRequest, with the real Cloudflare Access check. A missing token is refused before any network call, and a
+// malformed token fails to decode before any key is fetched, so these need no network and no signing key.
+describe("middleware.onRequest with the real owner check", () => {
+	const accessEnv = {
+		SITE_ORIGIN: "https://thesuperhuman.us",
+		OWNER_ACCESS_TEAM_DOMAIN: "https://owner.example.cloudflareaccess.com",
+		OWNER_ACCESS_AUD: "audience",
+		OWNER_EMAIL: "owner@example.com",
+	};
+
+	function realContext(path: string, token?: string) {
+		const url = `https://thesuperhuman.us${path}`;
+		const headers = new Headers();
+
+		if (token !== undefined) headers.set("cf-access-jwt-assertion", token);
+
+		return double<APIContext>({
+			url: new URL(url),
+			request: new Request(url, { headers }),
+			locals: fakeLocals(accessEnv),
+			rewrite: vi.fn<APIContext["rewrite"]>(),
+		});
+	}
+
+	const protectedPaths = [
+		"/owner",
+		"/owner/requests",
+		"/api/owner",
+		"/api/owner/campaigns",
+	];
+
+	it.each(protectedPaths)(
+		"refuses %s without an access token",
+		async (path) => {
+			const next = vi.fn(async () => new Response("private content"));
+			const response = responseOf(await realOnRequest(realContext(path), next));
+
+			expect(response.status).toBe(403);
+			expect(response.headers.get("cache-control")).toBe("private, no-store");
+			expect(next).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(protectedPaths)("refuses %s with a malformed token", async (path) => {
+		const next = vi.fn(async () => new Response("private content"));
+
+		const response = responseOf(
+			await realOnRequest(realContext(path, "not-a-jwt"), next),
+		);
+
+		expect(response.status).toBe(403);
+		expect(next).not.toHaveBeenCalled();
+	});
+
+	it("passes an unprotected path through without a token", async () => {
+		const next = vi.fn(async () => new Response("public content"));
+
+		const response = responseOf(
+			await realOnRequest(realContext("/about"), next),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("public content");
+		expect(next).toHaveBeenCalledOnce();
+	});
 });
