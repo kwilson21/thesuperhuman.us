@@ -17,7 +17,12 @@ function world(known: boolean) {
 					partial<D1PreparedStatement>({
 						first: async () =>
 							known && /FROM software_agreements a JOIN/.test(query)
-								? { id: "a1", offer_id: "o1", request_id: "r1", recipient_email: "a@example.test" }
+								? {
+										id: "a1",
+										offer_id: "o1",
+										request_id: "r1",
+										recipient_email: "a@example.test",
+									}
 								: null,
 					}),
 			});
