@@ -23,7 +23,14 @@ const LABEL_LINES_MAX = { 320: 2, 360: 2, 375: 2, 390: 2, 414: 2, 430: 2 };
 // script doubles the root by style to stand in for it. The page is laid out by its content (flex
 // wrapping, viewport-capped padding and gutters), so it must reflow without pushing past the
 // phone's edge, and a word may break inside itself only when it cannot fit a line of its own.
-let current = null;
+// Every page this run opens stays in this set until its checks finish, so a failure can
+// still be photographed.
+const openPages = new Set();
+
+async function closePage(page) {
+	openPages.delete(page);
+	await page.close();
+}
 
 async function openWork(browser, width, rootSize, { openDetails = true } = {}) {
 	const page = await browser.newPage({
@@ -32,7 +39,7 @@ async function openWork(browser, width, rootSize, { openDetails = true } = {}) {
 		reducedMotion: "reduce",
 	});
 
-	current = page;
+	openPages.add(page);
 
 	await page.goto(new URL("/work", targetUrl).href, {
 		waitUntil: "domcontentloaded",
@@ -46,10 +53,14 @@ async function openWork(browser, width, rootSize, { openDetails = true } = {}) {
 		}, rootSize);
 	}
 
-	// The experience rows live in <details>; open them all so their text is measured too.
+	// The content <details> (the experience rows and others) are opened so their text is measured.
+	// The header's .mobile-menu is a <details> too, but it stays closed: when it is open the
+	// pinned contact bar is hidden (Footer.astro), so the bar could not be measured.
 	if (openDetails)
 		await page.evaluate(() => {
-			for (const details of document.querySelectorAll("details"))
+			for (const details of document.querySelectorAll(
+				"details:not(.mobile-menu)",
+			))
 				details.open = true;
 		});
 
@@ -118,11 +129,19 @@ async function checkLargeText(browser, width) {
 			};
 		}
 
+		// The button's content box: its border box minus its computed padding.
+		const buttonStyle = getComputedStyle(button);
+		const buttonRect = button.getBoundingClientRect();
+
 		return {
 			lines: tops.size,
 			labelRects,
 			arrowBox,
-			buttonBox: box(button.getBoundingClientRect()),
+			buttonBox: box(buttonRect),
+			buttonContent: {
+				left: buttonRect.left + parseFloat(buttonStyle.paddingLeft),
+				right: buttonRect.right - parseFloat(buttonStyle.paddingRight),
+			},
 			contentBox,
 		};
 	});
@@ -159,6 +178,46 @@ async function checkLargeText(browser, width) {
 		"the closing button is not in the closing panel",
 	);
 
+	// The label's lines are centred on each other, the arrow is centred on the label's block
+	// vertically, sits to the right of it and at the button's content edge. The label is not
+	// centred between the button edge and the arrow: its box fills the space left of the arrow
+	// minus the flex gap, so the gap grows with the screen (a pending owner decision, see the
+	// release record). The label's lines still agree on their centre within 2px.
+	const lineCentres = closing.labelRects.map(
+		(rect) => (rect.left + rect.right) / 2,
+	);
+
+	const labelTop = Math.min(...closing.labelRects.map((rect) => rect.top));
+
+	const labelBottom = Math.max(
+		...closing.labelRects.map((rect) => rect.bottom),
+	);
+
+	const labelRight = Math.max(...closing.labelRects.map((rect) => rect.right));
+
+	assert.ok(
+		Math.max(...lineCentres) - Math.min(...lineCentres) <= 2,
+		`the closing label's lines are not centred on each other at ${width}px with a 200% root: centres ${lineCentres.map((v) => v.toFixed(2)).join(", ")}`,
+	);
+
+	if (closing.arrowBox) {
+		const arrowCentre = (closing.arrowBox.top + closing.arrowBox.bottom) / 2;
+		const labelCentre = (labelTop + labelBottom) / 2;
+
+		assert.ok(
+			Math.abs(arrowCentre - labelCentre) <= 2,
+			`the closing arrow is not centred beside the label at ${width}px with a 200% root: arrow centre ${arrowCentre.toFixed(2)}, label centre ${labelCentre.toFixed(2)}`,
+		);
+		assert.ok(
+			closing.arrowBox.left >= labelRight - 0.5,
+			`the closing arrow is not to the right of the label at ${width}px with a 200% root`,
+		);
+		assert.ok(
+			Math.abs(closing.buttonContent.right - closing.arrowBox.right) <= 2,
+			`the closing arrow is not at the button's end at ${width}px with a 200% root: arrow ends ${closing.arrowBox.right.toFixed(2)}, content ends ${closing.buttonContent.right.toFixed(2)}`,
+		);
+	}
+
 	const { buttonBox, contentBox } = closing;
 	const tolerance = 0.5;
 
@@ -176,18 +235,12 @@ async function checkLargeText(browser, width) {
 		`the closing button is not centred in its panel at ${width}px with a 200% root: ${freeLeft.toFixed(2)}px free on the left, ${freeRight.toFixed(2)}px on the right`,
 	);
 
-	// The pinned contact bar is shown only on scroll; the check reveals it to measure the layout.
-	// It is measured on a page with the <details> closed: with them open the bar is not rendered.
-	const pinnedPage = await openWork(browser, width, "200%", {
-		openDetails: false,
-	});
-
-	const pinned = await pinnedPage.evaluate(() => {
+	// The pinned contact bar is measured on the same page, with the content <details> open. The
+	// bar renders there because only the header's mobile menu hides it.
+	const pinned = await large.evaluate(() => {
 		const bar = document.querySelector("[data-pinned-contact]");
 
-		if (!bar) return null;
-
-		bar.hidden = false;
+		if (!bar || bar.hidden) return null;
 
 		const button = bar.querySelector(".site-button");
 
@@ -231,9 +284,7 @@ async function checkLargeText(browser, width) {
 		};
 	});
 
-	await pinnedPage.context().close();
-
-	assert.ok(pinned, "/work has no pinned contact bar");
+	assert.ok(pinned, "/work has no visible pinned contact bar");
 	assert.ok(
 		pinned.button.right > pinned.button.left && pinned.labelRects.length > 0,
 		`the pinned contact button is not rendered at ${width}px with a 200% root`,
@@ -281,10 +332,15 @@ async function checkLargeText(browser, width) {
 	}
 
 	const splitWords = await large.evaluate(() => {
-		// The line a word must fit: the flow's width inside a diagram flow, otherwise the
-		// content box of the element that holds the word.
+		// The line a piece must fit: the flow's width inside a diagram flow, otherwise the content
+		// box of the nearest block-level ancestor (an inline element such as <strong> has no
+		// width of its own, so its clientWidth is 0).
 		const lineWidth = (element) => {
-			const box = element.closest(".diagram-flow") || element;
+			let box = element.closest(".diagram-flow") || element;
+
+			while (getComputedStyle(box).display === "inline" && box.parentElement)
+				box = box.parentElement;
+
 			const style = getComputedStyle(box);
 
 			return (
@@ -324,31 +380,34 @@ async function checkLargeText(browser, width) {
 			let node;
 
 			while ((node = walker.nextNode())) {
-				const re = /\S+/g;
-				let match;
+				const text = node.textContent || "";
 
-				while ((match = re.exec(node.textContent || ""))) {
-					// A hyphen or dash is a line-break opportunity, so a word that contains one may wrap there.
-					if (/[-\u2010-\u2015]/.test(match[0])) continue;
+				for (const word of text.matchAll(/\S+/g)) {
+					// A dash is a line-break opportunity. Each piece runs up to and including its dash,
+					// so a break right after a dash is not a split, but a break inside a piece is.
+					for (const piece of word[0].matchAll(
+						/[^\-\u2010-\u2015]*[\-\u2010-\u2015]+|[^\-\u2010-\u2015]+/g,
+					)) {
+						const start = word.index + piece.index;
+						const range = document.createRange();
+						range.setStart(node, start);
+						range.setEnd(node, start + piece[0].length);
 
-					const range = document.createRange();
-					range.setStart(node, match.index);
-					range.setEnd(node, match.index + match[0].length);
+						const tops = new Set(
+							[...range.getClientRects()].flatMap((rect) =>
+								rect.width > 0 ? [Math.round(rect.top)] : [],
+							),
+						);
 
-					const tops = new Set(
-						[...range.getClientRects()].flatMap((rect) =>
-							rect.width > 0 ? [Math.round(rect.top)] : [],
-						),
-					);
+						const element = node.parentElement;
 
-					const element = node.parentElement;
-
-					// Only a word that would fit on a line of its own counts as broken.
-					if (
-						tops.size > 1 &&
-						wordWidth(element, match[0]) <= lineWidth(element)
-					)
-						found.push(match[0]);
+						// Only a piece that would fit on a line of its own counts as broken.
+						if (
+							tops.size > 1 &&
+							wordWidth(element, piece[0]) <= lineWidth(element)
+						)
+							found.push(piece[0]);
+					}
 				}
 			}
 		}
@@ -362,7 +421,7 @@ async function checkLargeText(browser, width) {
 		`words break inside themselves at ${width}px with a 200% root`,
 	);
 
-	await large.close();
+	await closePage(large);
 }
 
 (async () => {
@@ -403,10 +462,15 @@ async function checkLargeText(browser, width) {
 				);
 			}
 
-			await normal.close();
+			await closePage(normal);
 		}
 	} catch (error) {
-		await current
+		// The newest page still open is the one that failed. If none is open, open one to show the page.
+		const failed =
+			[...openPages].reverse().find((page) => !page.isClosed()) ??
+			(await openWork(browser, 390, null).catch(() => null));
+
+		await failed
 			?.screenshot({
 				path: path.join(artifactDir, "_failure-text-scale.png"),
 				fullPage: true,

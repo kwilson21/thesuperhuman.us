@@ -3,24 +3,24 @@
 Date: November 13, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/large-text-reflow`, merged with `origin/main` (a merge commit, never a rebase)
-Commits: `06c52fd1`, `0878fce9`, `d7c8317e` (reverted `0878fce9`) and `b8f74bd3` from the earlier work; then `11ceb0c9` (merge of `origin/main` at `57e26842`, with the design note), `5077befc` (button wrap query and padding), `0737ea2e` (browser check and tests), `2dca2376` (the first record), `b85f77a8` (the record's commit list), `415ff8e3` (merge of `origin/main` at `7de68720`), `0d2a90b8` (the closing buttons, the Work page text, the browser check's width sweep, the workflow path, the documents), and `abe5fe28` (the release record for that revision). This revision, which fixes the failing CI step on `abe5fe28`, is the commit that adds this record, directly after `abe5fe28`
+Commits: `06c52fd1`, `0878fce9`, `d7c8317e` (reverted `0878fce9`) and `b8f74bd3` from the earlier work; then `11ceb0c9` (merge of `origin/main` at `57e26842`, with the design note), `5077befc` (button wrap query and padding), `0737ea2e` (browser check and tests), `2dca2376` (the first record), `b85f77a8` (the record's commit list), `415ff8e3` (merge of `origin/main` at `7de68720`), `0d2a90b8` (the closing buttons, the Work page text, the browser check's width sweep, the workflow path, the documents), and `abe5fe28` (the release record for that revision), `76230c49` (the footer gutter cap and the closing label; the head that the round 4 review covered), `1211dc25` (merge of `origin/main` at `7f28f299`), and then the commit that adds the below-320px footer floor, the browser check fixes, the wording and this record. That commit is "this revision" below
 Pull request: [#263](https://github.com/kwilson21/thesuperhuman.us/pull/263)
 Target: production `https://thesuperhuman.us` after merge. The shared footer also renders on `audio.thesuperhuman.us`.
-Reviewers: Claude Haiku 5.5 subagent (implementation, test first). The independent reviews listed under Evidence and limits ran on `b8f74bd3`, `b85f77a8` and `abe5fe28`. This revision has not been independently reviewed.
+Reviewers: Claude Haiku 5.5 subagent (implementation, test first). The independent reviews listed under Evidence and limits ran on `b8f74bd3`, `b85f77a8`, `abe5fe28` and `76230c49`. This revision has not been independently reviewed.
 Rollback revision: `7de68720`, `origin/main`'s tip at the time this branch merged it (`origin/main` still points there after `git fetch origin`). The earlier rollback point was `57e26842`. The PR adds no migration and writes no stored data.
 
 ## CI status
 
-CI run `43520072156` failed on head `abe5fe28` at the new step "Check large text reflow": `the closing button leaves its panel at 320px with a 200% root`. The check measured the button against the panel's border box, and the button overlapped the panel's right padding by 20.4px at 320px. The closing label was also three lines from 320px to 356px. The earlier claims in this record that everything stays inside its box, and that the browser check passes on the final tree, were made before that run and were wrong for `abe5fe28`.
+CI run `43520072156` failed on head `abe5fe28` at the new step "Check large text reflow": `the closing button leaves its panel at 320px with a 200% root`. The check measured the button against the panel's border box: at 320px the button needed about 204px in a 184px content box, so it overhung the panel's right padding by 20.4px. The closing label was also three lines from 320px to 356px. The earlier claims in this record that everything stays inside its box, and that the browser check passes on the final tree, were made before that run and were wrong for `abe5fe28`.
 
-This revision changes the cause: the footer's side gutter is capped by the viewport (see Scope), so the closing panel keeps its content width at enlarged text, and the label is two lines at every width measured from 320px to 430px. The browser check is tightened (see Browser check). Its result on this revision is recorded below; CI has not yet run on this revision.
+`76230c49` changed the cause: the footer's side gutter is capped by the viewport (see Scope), so the closing panel keeps its content width at enlarged text, and the label is two lines at every width measured from 320px to 430px. This revision adds the 24px floor below 320px and fixes the browser check (see Browser check). Its result on this revision is recorded below; CI has not yet run on this revision.
 
 ## Scope
 
-- `src/pages/work.astro`: the single-column story track may shrink below its widest child (`minmax(0, 1fr)`, and `minmax(0, ...)` in the two-column grid). Long words in the lede, the work evidence, the story text, the experience headings and the list items break only when they cannot fit a line (`overflow-wrap: break-word` on `.page-lede`, `.work-evidence` and `.experience-groups`). The Work evidence link's flex row may wrap, so its arrow can go to its own line.
+- `src/pages/work.astro`: the single-column story track may shrink below its widest child (`minmax(0, 1fr)`, and `minmax(0, ...)` in the two-column grid). Long words in the lede, the work evidence, the experience headings and the list items break only when they cannot fit a line (`overflow-wrap: break-word` on `.page-lede`, `.work-evidence` and `.experience-groups`). The Work evidence link's flex row may wrap, so its arrow can go to its own line.
 - `src/components/WorkDiagram.astro`: the diagram flow wraps by content (`flex-wrap: wrap`, parts share a row 1 : 1.2), and timeline and phase text may break inside a word only when the word cannot fit a line.
 - `src/components/Footer.astro`: three rules, all scoped to the footer.
-  - The footer's side gutter is `min(var(--site-gutter), 7.5vw)` on `.compact-footer`. `--site-gutter` is `clamp(1.5rem, 5vw, 3.5rem)`, a rem value that doubles with the text. The cap equals the site gutter from 320px wide up at the default text size (both are 24px at 320px, and the 5vw term takes over above 480px), so nothing changes at the default size from 320px up. At a doubled root the gutter stays at the viewport cap instead of 48px, which gives the closing panel about 48px more width at 320px.
+  - The footer's side gutter is `min(var(--site-gutter), max(24px, 7.5vw))` on `.compact-footer`. `--site-gutter` is `clamp(1.5rem, 5vw, 3.5rem)`, a rem value that doubles with the text. The cap equals the site gutter from 320px wide up at the default text size (both are 24px at 320px, and the 5vw term takes over above 480px), so nothing changes at the default size from 320px up. Below 320px the `max(24px, …)` floor keeps the default-size gutter at 24px (the cap alone gave 21px at 280px). At a doubled root the gutter stays at the viewport cap instead of 48px, which gives the closing panel about 48px more width at 320px.
   - The closing panel's side padding is `min(1.25rem, 6.25vw)` at 600px wide and below, as before.
   - The large "Get in touch" button of the closing panel may wrap its label at any width when it does not fit (`.closing-panel .site-button-large { white-space: normal; text-align: center; }`). The pinned contact button has no rule of its own; at 380px and below the global query wraps it, and above 380px its label fits on one line (see Browser check).
 - `src/styles/global.css`: `.site-button-large` padding, `min(1.75rem, 8.75vw)`, and `overflow-wrap: break-word` on `.page-lede` (every page's lede, when a word cannot fit its line). The `.site-button` wrap query stays at `@media (max-width: 380px)`, as on `main`.
@@ -41,7 +41,15 @@ No copy, route, binding, migration or dependency change. Nothing changes at the 
 
 Local runs on macOS arm64, Node 26.13.1, pnpm from the repository lockfile, Chromium through Playwright. Enlarged text was emulated by setting the root font size to 200% (`document.documentElement.style.fontSize`), because the site pins `html { font-size: 16px }`; this stands in for text-only zoom and is not the same thing. External requests were blocked. Only Inter falls back to a local font in these renders; Libron and the name's font are served locally.
 
-### This revision: doubled root, 320 to 430px on `/work` (step 2, every `<details>` open)
+### This revision: default size and doubled root
+
+Measured on the preview against the `origin/main` footer rule, injected on the same page at each width (`.compact-footer { padding-inline: var(--site-gutter) }`; `origin/main` has no footer padding rule of its own):
+
+- Default text size, 240 to 1440px in steps of 4, on `/work` and `/` (602 measurements): the largest movement of the footer, the panel, the large button, the legal line, the footer's nav links and name is 0.000px, and no line count changed. The default-size gutter is 24px in both versions below 320px, so nothing moves there.
+- Doubled root, 320 to 430px in steps of 2 on `/work`, every content `<details>` open (56 widths): the footer's side padding is 24.0px at 320, 28.1px at 375 (28.125px) and 32.3px at 430 (32.25px), the same as `76230c49`. The injected `origin/main` rule gives 48px at all three widths. At every width the `scrollWidth` equals the viewport, the label is two lines, and the button is inside the panel's content box without tolerance.
+- The gap between the label and the arrow at a doubled root: 30.4px at 320, 45.6px at 375, 60.7px at 430. At the default size it is 9.6px, the flex gap, which is 19.2px at a doubled root.
+
+### Doubled root, 320 to 430px on `/work` (step 2, every `<details>` open)
 
 Measured on the preview with the footer gutter cap in place. All 56 widths give the same result:
 
@@ -101,14 +109,21 @@ Not changed, by design: the global `.site-button` rule and its `@media (max-widt
 
 Run against the preview on 127.0.0.1:4324 (`MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json`, the dev config). The check covers 320, 360, 375, 390, 414 and 430px at a 200% root. It opens every `<details>` first.
 
-- Closing button: its label, its arrow and the button are inside the button and the panel's content box (border box minus computed padding), with a 0.5px tolerance; the button is centred (left and right free space within 1px); the label is at most two lines at each width.
-- Pinned contact button: measured on a page with the `<details>` closed, because with them open the bar is not rendered (observed on this branch; not investigated further here). It must be rendered, and its label must be inside the button's content box with the 0.5px tolerance.
-- Split words: checked in the lede, the story text, the experience text, the diagram, and the closing button. A word may break inside itself only when it cannot fit a line of its container. A word that contains a hyphen or dash may break there, because that is a line-break opportunity.
+- Closing button: its label, its arrow and the button are inside the button and the panel's content box (border box minus computed padding), with a 0.5px tolerance; the button is centred (left and right free space within 1px); the label is at most two lines at each width. The label's lines are centred on each other within 2px; the arrow's vertical centre is within 2px of the label's; the arrow is to the right of the label and ends at the button's content edge within 2px. The label is not asserted centred between the button's edge and the arrow: its box fills the space left of the arrow minus the flex gap, so it sits about half a gap left of centre (9px at 320px with a 200% root).
+- Pinned contact button: measured on the same page, with the content `<details>` open. The header's `.mobile-menu` is a `<details>` too and stays closed, because `Footer.astro` hides the pinned bar while that menu is open, as on `main`. With only the content details open the bar renders from 320 to 430px. It must be rendered, and its label must be inside the button's content box with the 0.5px tolerance.
+- Split words: checked in the lede, the selected stories, the experience text, the diagram, and the closing button. A word may break inside itself only when it cannot fit a line of its container. A word that contains a hyphen or dash is split into pieces at its dashes: a break right after a dash is allowed, and a break inside a piece is not. A piece must fit the nearest block-level ancestor, so text in `<strong>`, `<em>` or a plain link is measured too.
 - Sideways scroll, flows stacked, and the pinned button inside the viewport are checked as before.
 
-Results on the final tree:
+Results on the final tree (`76230c49` merged with `origin/main`, plus this revision):
 
 - `text scale browser checks: PASS`.
+
+Mutants for this revision, injected by a wrapper so that no tracked file changes:
+
+- Arrow top-aligned (`.closing-panel .site-button-large { align-items: flex-start }`): FAIL, `the closing arrow is not centred beside the label at 320px with a 200% root: arrow centre 54702.59, label centre 54725.59`.
+- Words with a dash split inside themselves in the lede (the dash words in `.page-lede` wrapped in `word-break: break-all`): FAIL, `words break inside themselves at 360px with a 200% root`, the piece `time`.
+- Words split inside `<strong>` in the experience rows (`#experience strong { word-break: break-all }`): FAIL, `words break inside themselves at 320px with a 200% root`, pieces such as `migration.` and `reservation`.
+- Forced failure late in the script (`.diagram-flow { flex-direction: column }`, which fails the one-row check at 390px after the large-text checks): FAIL, `diagram flow parts are not on one row at 390px`, and the failure screenshot `_failure-text-scale.png` is written (1.07 MB). Before this revision the failure handler could point at a page that was already closed, so a later failure could lose its screenshot.
 
 Mutants, each restored byte for byte and confirmed with `cmp`:
 
@@ -122,6 +137,7 @@ Earlier mutants from the previous revision and the independent review (run on ea
 
 ### Other reviews
 
+- `76230c49`: an independent Claude Opus review, round 4, 2026-11-13. Default size: unchanged from 320 to 1440px in steps of 4 on six pages (1,686 measurements, largest movement 0.000px, no line-count change). Doubled root, 320 to 430px in steps of 1, details open and closed: no sideways scroll, the button inside the panel's content box, a two-line label, and the arrow's vertical centre 0.80px from the label's. It found the below-320px footer change, the browser check's gaps and the stale wording; this revision fixes them. It also found the two design consequences listed under Remaining work, for the owner to decide.
 - `abe5fe28`: an independent Claude Opus review, 2026-11-13, swept the widths above and the header. Its findings: `scrollWidth` equals the viewport at 320 to 430px in steps of 2 with every `<details>` open, and at 480, 600, 768 and 800px; at 1024px and 1280px the page scrolls because of the desktop navigation and the "Work with me" button (out of scope). The same review swept the shared header's name from 280 to 1440px in steps of 1 on ten pages: it never wraps and is identical to the old rule (it first wraps at 196px). It found zero differences for the Work-page text rules from 320 to 1440px at the default size. It found the closing-button defect and the check gaps this revision fixes.
 - `b8f74bd3`: an independent Claude Opus correctness review, and a Sonnet design and rules review with a read-only Hallmark audit. Set aside, per `docs/design-standard.md`: the two-line clickable text finding (a recorded reflow exception and the owner's choice) and the stamp findings. Design choices noted for the owner and unchanged: the arrow after "Support" still points right when the next part stacks below it, and "After ·" can end a line with the dot dangling.
 - `b85f77a8`: an independent Claude Opus run of the browser check's mutants (listed above).
@@ -131,10 +147,10 @@ UNVERIFIED until checked:
 - This revision (the commit that adds this record) has not been independently reviewed.
 - CI on this revision: the "Check large text reflow" step must pass on the PR.
 - Firefox and Safari text-only zoom, a second browser engine, a real phone, and text sizes above 200%. Only Chromium with a doubled root was run.
-- Widths below 320px. The footer gutter cap is `min(var(--site-gutter), 7.5vw)`, so below 320px the footer's side gutter is smaller than before (21px at 280px instead of 24px). Not measured here beyond the default-size comparison from 320px up.
+- Widths below 320px. Below 320px the footer's default-size gutter is 24px, from the `max(24px, …)` floor. Measured at the default size from 240px (zero movement, see the first section above). A doubled root below 320px was not measured.
 - Widths above 430px at a 200% root were not swept in this revision; the review's sweep covered 480, 600, 768 and 800px for the document width only.
 - "Automating" in a timeline heading on `/work` can split inside the word at 200% because it cannot fit a line of its own. The browser check counts this as allowed by its rule. A shorter heading or a smaller size would avoid it; this is not changed.
-- The pinned contact bar is not rendered while the experience `<details>` are open (observed at the default size and at 200%, on this branch). The browser check measures it with the details closed. Whether this matches `origin/main` and whether it is a defect was not investigated.
+- The pinned contact bar is hidden while the header's mobile menu is open (`Footer.astro`, as on `main`). The content `<details>` do not hide it; the browser check no longer opens the mobile menu.
 - Other pages are out of scope and were not re-measured in this revision. In the earlier repro they still scrolled sideways: `/audio` 538px, `/audio/services` 502px, `/services` 453px outside the diagram, `/writing` 400px, measured at 375px.
 - The site pins `html { font-size: 16px }`, so a visitor's browser default text size does not enlarge the site's text. This is a separate owner decision.
 - Production behaviour after an authorized merge.
@@ -178,8 +194,8 @@ UNVERIFIED until checked:
 
 ## 7. Release and final QA
 
-- **PASS · Type, test, format and build checks on this revision.** `pnpm test` (269 files, 12,038 passed, 1 skipped), `pnpm run check` (0 errors, 0 warnings, 17 hints), `pnpm run design:check` (6 Hallmark gates, 12 allowlisted exceptions), `pnpm run format:check` and `pnpm run build` (exit 0) pass.
-- **FAIL (pre-existing, not from this change) · Lint.** `pnpm run lint` exits non-zero with 60 findings, all `anti-slop` rules, in directories this change does not touch: `src/lib`, `src/lib/publication`, `src/components/owner`, `src/pages/owner/requests`, `tests/api`, `tests/lib`, `tests/scripts`, and `tests/middleware.test.ts`. None is in a file this change touches. Three findings in the browser check's new code were fixed (blank-line spacing) before this count was taken. The same kind of findings are recorded in `docs/prelaunch-qa-2026-11-13-closing-legal-balance.md`; they are not fixed here.
+- **PASS · Type, test, format and build checks on this revision.** `pnpm test` (271 files, 12,052 passed, 1 skipped), `pnpm run check` (0 errors, 0 warnings, 17 hints), `pnpm run design:check` (6 Hallmark gates, 12 allowlisted exceptions), `pnpm run format:check` and `pnpm run build` (exit 0) pass, on the tree after merging `origin/main` at `7f28f299`.
+- **FAIL (pre-existing, not from this change) · Lint.** `pnpm run lint` exits non-zero with 53 `anti-slop` findings after the merge with `origin/main`, in files this change does not touch. None is in `Footer.astro`, `tests/browser/text-scale.cjs`, `tests/components/large-text-reflow.test.ts` or `design.md`. Three blank-line findings in the browser check's new code were fixed before this count was taken. The same kind of findings are recorded in `docs/prelaunch-qa-2026-11-13-closing-legal-balance.md`; they are not fixed here.
 - **PASS · Diff review.** `git diff --stat origin/main` lists only the scope above. No secrets, no dependency changes, no generated files committed. `.jolli/` is untracked and `.screenshots/` is gitignored; neither is committed.
 - **N/A · Bindings, secrets, migrations.** None change.
 - **N/A · HTTPS, host routing, cache behaviour and response headers.** No route, header, redirect, host or cache change.
@@ -196,5 +212,7 @@ UNVERIFIED until checked:
 - An independent review of this revision (correctness and security, and UI, copy and rules).
 - CI green on the PR head with the "Check large text reflow" step passing; Greptile and Codex reviews on the head.
 - Firefox, Safari, a real phone, and text above 200% (UNVERIFIED above).
-- Owner decisions: the arrow after "Support" when the next part stacks below it, the "After ·" dot at a line end, the three-line case if any width needs it, and whether the pinned bar's disappearance with `<details>` open is a defect.
+- Owner decisions: the arrow after "Support" when the next part stacks below it, the "After ·" dot at a line end, and the three-line case if any width needs it.
+- Owner decision, pending: at a doubled root the footer panel's left edge sits to the left of the main content's (24.0px against 48px at 320px wide, 28.1 against 48 at 375, 32.3 against 48 at 430).
+- Owner decision, pending: because the button fills the panel, the gap between the label and the arrow grows with the screen (30px at 320, 46px at 375, 61px at 430 at a doubled root; 9.6px at the default size).
 - Production check after an authorized merge (section 7). Merging deploys production.

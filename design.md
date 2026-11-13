@@ -114,8 +114,10 @@ files; a test checks those literals against `global.css`.
   (WCAG 1.4.10). A word breaks inside itself only when it cannot fit a line. The large
   button's and the phone closing panel's side padding are capped by the viewport
   (`min(1.75rem, 8.75vw)`, `min(1.25rem, 6.25vw)`), and the footer's side gutter is capped
-  too (`min(var(--site-gutter), 7.5vw)`). Each cap equals its rem value at 320px wide and
-  above at the default text size, so the closing panel keeps its width when text is enlarged.
+  too (`min(var(--site-gutter), max(24px, 7.5vw))`). Each cap equals its rem value at 320px
+  wide and above at the default text size; the `max(24px, …)` floor keeps the footer's gutter
+  at its default value below 320px. The footer's side gutter stops growing with the text,
+  which gives the closing panel room for its button when text is enlarged.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),

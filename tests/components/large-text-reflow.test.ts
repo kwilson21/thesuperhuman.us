@@ -79,9 +79,9 @@ it("lets a long word in the page lede break only when it cannot fit a line", () 
 	);
 });
 
-it("caps the footer's side gutter by the viewport, so the closing panel is wider at enlarged text", () => {
+it("caps the footer's side gutter by the viewport, with a 24px floor below 320px, so the closing panel is wider at enlarged text", () => {
 	expect(footer).toMatch(
-		/\.compact-footer \{[^}]*padding-inline: min\(var\(--site-gutter\), 7\.5vw\);/,
+		/\.compact-footer \{[^}]*padding-inline: min\(var\(--site-gutter\), max\(24px, 7\.5vw\)\);/,
 	);
 	expect(global).toContain("--site-gutter: clamp(1.5rem, 5vw, 3.5rem);");
 	expect(global).toMatch(
