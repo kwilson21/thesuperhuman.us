@@ -45,6 +45,14 @@ it("puts the legal line after the nav", () => {
 	);
 });
 
+it("balances the legal line when it wraps, with markup unchanged", () => {
+	expect(footer).toMatch(/\.closing-legal \{[^}]*text-wrap: balance;[^}]*\}/);
+	expect(footer.split('<p class="closing-legal">').length - 1).toBe(1);
+	expect(footer).toContain(
+		'<p class="closing-legal">The Superhuman Group LLC · {year}</p>',
+	);
+});
+
 it("keeps Work with me in the links in both variants", () => {
 	expect(footer).toContain("<a href={hireHref}>Work with me</a>");
 	expect(footer).not.toContain("variant === 'quiet' && <a href={hireHref}>");
