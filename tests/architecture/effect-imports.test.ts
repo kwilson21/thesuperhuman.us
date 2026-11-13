@@ -64,7 +64,7 @@ function isExcluded(path: string, excluded: typeof EXCLUDED): boolean {
  * - A file or directory that is not tracked by Git and has vanished since it was listed is skipped. A tracked path that
  *   vanishes still fails the test with the system's own error: tracked source must always be readable.
  *
- * `tracked` is the set of tracked files (relative, "/"-separated); outside a Git checkout it is empty.
+ * `tracked` is the set of tracked files (relative, "/"-separated); outside a Git checkout the scan fails, it never guesses.
  */
 type Walk = {
 	excluded: typeof EXCLUDED;
@@ -73,22 +73,35 @@ type Walk = {
 	list: (directory: string) => Dirent[];
 };
 
-/** The files Git tracks under `root`, relative and "/"-separated, or none when `root` is not a checkout. */
+/**
+ * The files Git tracks under `root`, relative and "/"-separated. Fails loudly when `git ls-files` cannot run or lists
+ * nothing: without the list every root dot-directory would be skipped as scratch, and the scan would pass over real
+ * source without saying so.
+ */
 function trackedFiles(root: string): Set<string> {
+	let listing: string;
+
 	try {
-		return new Set(
-			execFileSync("git", ["ls-files", "-z"], {
-				cwd: root,
-				encoding: "utf8",
-				stdio: ["ignore", "pipe", "ignore"],
-				maxBuffer: 64 * 1024 * 1024,
-			})
-				.split("\0")
-				.filter(Boolean),
+		listing = execFileSync("git", ["ls-files", "-z"], {
+			cwd: root,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			maxBuffer: 64 * 1024 * 1024,
+		});
+	} catch (error) {
+		throw new Error(
+			`The Effect import scan needs \`git ls-files\` to tell tracked source from scratch directories, and it failed in ${root} (is it a Git checkout, and is git installed?): ${error instanceof Error ? error.message : String(error)}`,
 		);
-	} catch {
-		return new Set();
 	}
+
+	const files = listing.split("\0").filter(Boolean);
+
+	if (files.length === 0)
+		throw new Error(
+			`The Effect import scan needs \`git ls-files\` to tell tracked source from scratch directories, and it listed no file in ${root}.`,
+		);
+
+	return new Set(files);
 }
 
 /** True when a tracked file is `path` or is under it. */
@@ -264,7 +277,11 @@ describe("how Effect is imported", () => {
 			);
 		}
 
-		expect(offendersUnder(root, EXCLUDED).sort()).toEqual([
+		expect(
+			offendersUnder(root, EXCLUDED, {
+				tracked: new Set(["src/a.ts"]),
+			}).sort(),
+		).toEqual([
 			"astro.config.mjs",
 			"oxlint.config.ts",
 			"src/a.ts",
@@ -324,6 +341,89 @@ describe("how Effect is imported", () => {
 		expect(() =>
 			offendersUnder(root, EXCLUDED, { tracked: gone, list: vanishing }),
 		).toThrow(/ENOENT/);
+	});
+
+	it("skips a root dot-directory with no tracked file, scans one with tracked files, and only at the root", () => {
+		const root = mkdtempSync(join(tmpdir(), "effect-imports-"));
+
+		roots.push(root);
+		const bare = 'import { Effect } from "effect";';
+
+		for (const path of [
+			".scratch/a.ts",
+			".kept/a.ts",
+			".kept/untracked-sibling.ts",
+			"src/.hidden/b.ts",
+			"src/a.ts",
+		]) {
+			mkdirSync(dirname(join(root, path)), { recursive: true });
+			writeFileSync(join(root, path), bare);
+		}
+
+		const tracked = new Set([".kept/a.ts", "src/a.ts"]);
+
+		expect(offendersUnder(root, EXCLUDED, { tracked }).sort()).toEqual([
+			".kept/a.ts",
+			".kept/untracked-sibling.ts",
+			"src/.hidden/b.ts",
+			"src/a.ts",
+		]);
+	});
+
+	it("tolerates an untracked file that vanishes between listing and reading, and not a tracked one", () => {
+		const root = mkdtempSync(join(tmpdir(), "effect-imports-"));
+
+		roots.push(root);
+		mkdirSync(join(root, "src"));
+
+		for (const name of ["kept.ts", "untracked.ts", "tracked.ts"])
+			writeFileSync(join(root, "src", name), "export const a = 1;");
+
+		const removing = (name: string) => (directory: string) => {
+			const entries = readdirSync(directory, { withFileTypes: true });
+
+			if (directory === join(root, "src"))
+				rmSync(join(root, "src", name), { force: true });
+
+			return entries;
+		};
+
+		const tracked = new Set(["src/kept.ts", "src/tracked.ts"]);
+
+		expect(
+			offendersUnder(root, EXCLUDED, {
+				tracked,
+				list: removing("untracked.ts"),
+			}),
+		).toEqual([]);
+
+		expect(() =>
+			offendersUnder(root, EXCLUDED, {
+				tracked,
+				list: removing("tracked.ts"),
+			}),
+		).toThrow(/ENOENT/);
+	});
+
+	it("fails with a clear message when the folder is not a Git checkout", () => {
+		const root = mkdtempSync(join(tmpdir(), "effect-imports-"));
+
+		roots.push(root);
+		writeFileSync(join(root, "a.ts"), "export const a = 1;");
+
+		expect(() => offendersUnder(root, EXCLUDED)).toThrow(
+			/needs `git ls-files`.*failed/,
+		);
+	});
+
+	it("fails with a clear message when Git lists no file", () => {
+		const root = mkdtempSync(join(tmpdir(), "effect-imports-"));
+
+		roots.push(root);
+		execFileSync("git", ["init", "-q"], { cwd: root });
+		writeFileSync(join(root, "a.ts"), "export const a = 1;");
+
+		expect(() => offendersUnder(root, EXCLUDED)).toThrow(/listed no file/);
 	});
 
 	it("never imports from the bare effect specifier", () => {

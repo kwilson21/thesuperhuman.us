@@ -1,5 +1,7 @@
 import {
+	globSync,
 	mkdirSync,
+	symlinkSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
@@ -14,6 +16,7 @@ import {
 	clientEntries,
 	clientGraphViolations,
 	FORBIDDEN_MODULES,
+	hydratedDirectives,
 	type Reached,
 	serverUsesIn,
 } from "../helpers/client-graph";
@@ -32,8 +35,24 @@ import {
 // What is checked in every reached file and entry (all the code extensions the walker follows, and the <script> blocks
 // of .astro entries): no load of a Node built-in (`node:*` or a bare name like `fs`), of `cloudflare:*` or of
 // `astro:env/server` (static import, re-export, `import()`, `require`); no identifier `D1Database`, `R2Bucket` or
-// `KVNamespace`; no `.prepare(` call. All of these are read from the syntax tree, so comments, strings and object keys
-// never count.
+// `KVNamespace`; no `.prepare(` call. All of these are read from the syntax tree, so comments, strings, property keys and
+// member names (`{ R2Bucket: 1 }`, `o.KVNamespace`) never count; a real reference, a shorthand property or a computed key does.
+//
+// By design: an npm package named like a Node built-in (`events`, `buffer`, `url`, `util`) fails the built-in rule and
+// needs an explicit allowance if it is ever wanted; an Astro virtual module such as `astro:transitions/client` fails
+// as unresolved today; and `.prepare(` is flagged on any object in browser-reachable code, not only on a D1 handle.
+//
+// The reached set includes data files a reached module imports (JSON, and anything imported with `?raw` or `?url`, such
+// as .txt, .svg or .css): they are listed, not read, so the allowlist names them too. A file of an installed package
+// reached by a relative path or an alias into node_modules (pnpm's `.pnpm/<name>@<version>/node_modules/<name>` layout
+// and symlinks included) counts as that package, so the forbidden-package and dependency checks and the package list
+// apply to it however the specifier was written.
+//
+// Hydrated framework components: a component used with a `client:*` directive is browser code this walk does not read.
+// The site installs no UI framework (astro.config.mjs lists the sitemap only; package.json has no React, Preact, Vue,
+// Svelte, Solid or Lit), so any `client:*` directive in an .astro file fails the test outright, with a message to extend
+// the walk (take the component's frontmatter import as an entry) before such components are introduced. That is cheaper
+// and stricter than walking components that cannot exist yet.
 //
 // Known gap: a D1 handle that is typed through an owner interface other than the Cloudflare names (so no identifier
 // above appears) and run through a method other than `.prepare(` (for example `.batch(` or `.exec(`) is not found.
@@ -63,6 +82,7 @@ describe("the browser's import graph", () => {
 // Every module under src/lib or src/data that a browser entry reaches, reviewed one by one: each is pure (constants,
 // types, validators and formatting) and imports nothing server-side. The failure message below says what to do.
 const BROWSER_MODULES = [
+	"src/data/project-stories/threadline-review.json",
 	"src/lib/agreement-client-fields.ts",
 	"src/lib/agreement-draft-fields.ts",
 	"src/lib/audio-intake.ts",
@@ -113,17 +133,39 @@ describe("what the browser entries reach", () => {
 	});
 
 	it("loads no package but astro (for astro/zod)", () => {
-		// astro/zod is Zod v3, still used by three browser validators; the Zod to Effect Schema PR removes it, and this test
+		// astro/zod is Zod v3, still used by three browser validators across four modules (audio-intake, software-inquiry, agreement-client-fields,
+		// agreement-draft-fields); the Zod to Effect Schema PR removes it, and this test
 		// then expects no package at all.
 		expect([...reach().packages].sort()).toEqual(["astro"]);
 	});
 
-	it("names no Cloudflare binding type and makes no .prepare() call, in any reached file or entry", () => {
-		const holding = [...reach().files].flatMap((file) =>
-			serverUsesIn(file, readFileSync(join(repository, file), "utf8")).map(
-				(use) => `${file}: ${use}`,
-			),
+	it("has no hydrated framework component in any .astro file", () => {
+		// The site installs no UI framework integration (astro.config.mjs lists the sitemap only, and package.json has no
+		// React, Preact, Vue, Svelte, Solid or Lit), so a `client:*` directive hydrates nothing today. If one appears, the
+		// component is browser code this walk does not read: extend the walk to take the component's frontmatter import as
+		// an entry before removing this check.
+		const holding = globSync("src/**/*.astro", { cwd: repository }).flatMap(
+			(file) =>
+				hydratedDirectives(
+					file,
+					readFileSync(join(repository, file), "utf8"),
+				).map((use) => `${file}: ${use}`),
 		);
+
+		expect(
+			holding,
+			"A client:* directive hydrates a component in the browser, and the browser import graph guard does not walk it. Extend the guard (take the component's import as a browser entry) before introducing hydrated components.",
+		).toEqual([]);
+	});
+
+	it("names no Cloudflare binding type and makes no .prepare() call, in any reached file or entry", () => {
+		const holding = [...reach().files]
+			.filter((file) => /\.([cm]?[jt]sx?|astro)$/.test(file))
+			.flatMap((file) =>
+				serverUsesIn(file, readFileSync(join(repository, file), "utf8")).map(
+					(use) => `${file}: ${use}`,
+				),
+			);
 
 		expect(holding).toEqual([]);
 	});
@@ -877,6 +919,19 @@ describe("the walker finds what it should", () => {
 			).toEqual(["R2Bucket at line 5"]);
 		});
 
+		it("still counts a real reference: a type, a value, a shorthand property and a computed key", () => {
+			expect(
+				serverUsesIn(
+					"a.ts",
+					"let a: D1Database;\nconst b = { R2Bucket };\nconst c = { [KVNamespace]: 1 };",
+				),
+			).toEqual([
+				"D1Database at line 1",
+				"R2Bucket at line 2",
+				"KVNamespace at line 3",
+			]);
+		});
+
 		it("does not count a comment, a string, an object key or free text that says the same", () => {
 			expect(
 				serverUsesIn(
@@ -884,13 +939,199 @@ describe("the walker finds what it should", () => {
 					[
 						"// the DOM node: a D1Database is not used here, nor db.prepare(x)",
 						'const note = "node: R2Bucket KVNamespace .prepare(";',
-						"const o = { node: el, prepare: 1, R2: 2 };",
+						"const o = { node: el, prepare: 1, R2: 2, R2Bucket: 'Storage', 'KVNamespace': 1 };",
+						"const v = o.KVNamespace + o.D1Database;",
+						"interface Names { D1Database: string; R2Bucket?: number }",
+						"class C { KVNamespace = 1; D1Database() {} }",
 						"o.node = el;",
 						"const f = o.prepare;",
 						"/* import 'node:fs' */",
 					].join("\n"),
 				),
 			).toEqual([]);
+		});
+	});
+
+	describe("data files and packages reached by path", () => {
+		const reachedOf = (
+			files: Record<string, string>,
+			options?: Parameters<typeof scratch>[1],
+			allow: readonly string[] = [],
+		) => {
+			const reached: Reached = { files: new Set(), packages: new Set() };
+
+			const violations = clientGraphViolations(
+				scratch(files, options),
+				allow,
+				reached,
+			);
+
+			return { reached, violations };
+		};
+
+		it("puts a JSON, text, SVG or other data file a reached module imports in the reached set, without reading it", () => {
+			const { reached, violations } = reachedOf({
+				"src/scripts/a.ts": [
+					'import story from "~/data/story.json";',
+					'import notes from "~/lib/notes.txt?raw";',
+					'import logo from "~/lib/logo.svg?url";',
+					'import "~/lib/style.css";',
+				].join("\n"),
+				"src/data/story.json": '{ "import": "effect" }',
+				"src/lib/notes.txt": 'import "effect";',
+				"src/lib/logo.svg": "<svg/>",
+				"src/lib/style.css": "a{}",
+			});
+
+			expect(violations).toEqual([]);
+			expect([...reached.files].sort()).toEqual([
+				"src/data/story.json",
+				"src/lib/logo.svg",
+				"src/lib/notes.txt",
+				"src/lib/style.css",
+				"src/scripts/a.ts",
+			]);
+		});
+
+		it("reaches a data file through a code file, and through an alias", () => {
+			const { reached } = reachedOf(
+				{
+					"src/scripts/a.ts": 'import "@d/x.json";\nimport "~/lib/b";',
+					"src/lib/b.ts": 'import "../data/y.json";',
+					"src/data/x.json": "{}",
+					"src/data/y.json": "{}",
+				},
+				{ paths: { "@d/*": ["src/data/*"] } },
+			);
+
+			expect(
+				[...reached.files].filter((f) => f.endsWith(".json")).sort(),
+			).toEqual(["src/data/x.json", "src/data/y.json"]);
+		});
+
+		it("counts a package reached through a relative path into node_modules, whatever the specifier looked like", () => {
+			const files = {
+				"node_modules/stripe/index.js": "export const s = 1;",
+				"node_modules/left-pad/index.js": "export const p = 1;",
+				"node_modules/@effect/platform/index.js": "export const e = 1;",
+				"node_modules/.pnpm/resend@1.0.0/node_modules/resend/index.js":
+					"export const r = 1;",
+			};
+
+			for (const [specifier, name] of [
+				["../../node_modules/stripe/index.js", "stripe"],
+				["../../node_modules/@effect/platform/index.js", "@effect/platform"],
+				[
+					"../../node_modules/.pnpm/resend@1.0.0/node_modules/resend/index.js",
+					"resend",
+				],
+			])
+				expect(
+					clientGraphViolations(
+						scratch({ ...files, "src/scripts/a.ts": `import "${specifier}";` }),
+					).map((v) => v.import),
+					name,
+				).toEqual([specifier]);
+
+			const { reached, violations } = reachedOf({
+				...files,
+				"src/scripts/a.ts": 'import "../../node_modules/left-pad/index.js";',
+			});
+
+			expect(violations).toEqual([]);
+			expect([...reached.packages]).toEqual(["left-pad"]);
+		});
+
+		it("counts a package reached through a paths alias and through a symlink", () => {
+			const root = scratch(
+				{
+					"node_modules/.pnpm/stripe@1.0.0/node_modules/stripe/index.js":
+						"export const s = 1;",
+					"src/scripts/a.ts": 'import "@s";\nimport "../lib-link/index.js";',
+				},
+				{
+					paths: {
+						"@s": [
+							"node_modules/.pnpm/stripe@1.0.0/node_modules/stripe/index.js",
+						],
+					},
+				},
+			);
+
+			symlinkSync(
+				join(root, "node_modules/.pnpm/stripe@1.0.0/node_modules/stripe"),
+				join(root, "src/lib-link"),
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"@s",
+				"../lib-link/index.js",
+			]);
+		});
+
+		it("applies the dependency check to a package reached by path", () => {
+			const root = scratch(
+				{
+					"node_modules/dep/index.js": "export const d = 1;",
+					"node_modules/dep/package.json": JSON.stringify({
+						dependencies: { stripe: "1" },
+					}),
+					"src/scripts/a.ts": 'import "../../node_modules/dep/index.js";',
+				},
+				{ packages: ["stripe"] },
+			);
+
+			expect(clientGraphViolations(root).map((v) => v.import)).toEqual([
+				"stripe",
+			]);
+		});
+	});
+
+	describe("hydrated framework components", () => {
+		it("finds every client: directive on a component, in any attribute position", () => {
+			expect(
+				hydratedDirectives(
+					"a.astro",
+					[
+						"---",
+						"import Counter from '~/components/Counter.tsx';",
+						"---",
+						"<Counter client:load />",
+						"<Widget",
+						"  title='a > b'",
+						"  client:visible",
+						"/>",
+						'<Chart client:only="react" />',
+						"<Idle client:idle />",
+						'<Media client:media="(min-width: 50em)" />',
+					].join("\n"),
+				),
+			).toEqual([
+				"client:load at line 4",
+				"client:visible at line 7",
+				"client:only at line 9",
+				"client:idle at line 10",
+				"client:media at line 11",
+			]);
+		});
+
+		it("does not count a comment, frontmatter, a script or style block, or a name that is not a directive", () => {
+			expect(
+				hydratedDirectives(
+					"a.astro",
+					[
+						'---\nconst s = "client:load";\n---',
+						"<!-- <A client:load /> -->",
+						'<script>const s = "<A client:load />";</script>',
+						"<style>.a::after { content: 'client:idle'; }</style>",
+						"<B client:other data-client:load2 myclient:load />",
+					].join("\n"),
+				),
+			).toEqual([]);
+		});
+
+		it("is empty for a file that is not .astro", () => {
+			expect(hydratedDirectives("a.ts", "<A client:load />")).toEqual([]);
 		});
 	});
 

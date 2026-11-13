@@ -48,8 +48,8 @@ export const FORBIDDEN_MODULES: readonly string[] = [
 ];
 
 /**
- * Zod v3 through `astro/zod` still validates in the browser in three modules (audio intake, software inquiry, agreement
- * client details). It is the one named exception, until the Zod to Effect Schema PR removes it and this entry with it.
+ * Zod v3 through `astro/zod` still validates in the browser: three validators (audio intake, software inquiry, agreement client
+ * details) across four modules (`audio-intake`, `software-inquiry`, `agreement-client-fields`, `agreement-draft-fields`). It is the one named exception, until the Zod to Effect Schema PR removes it and this entry with it.
  * `astro` depends on `zod`, so the exception also covers the dependency walk for this specifier only.
  */
 export const ALLOWED_BROWSER_MODULES: readonly string[] = ["astro/zod"];
@@ -72,12 +72,30 @@ const BINDING_TYPES: ReadonlySet<string> = new Set([
 	"KVNamespace",
 ]);
 
+/** True when the identifier only names a property or member (a label), and does not refer to anything. */
+function isLabel(node: ts.Identifier): boolean {
+	const parent = node.parent;
+
+	return (
+		((ts.isPropertyAssignment(parent) ||
+			ts.isPropertyAccessExpression(parent) ||
+			ts.isPropertySignature(parent) ||
+			ts.isMethodSignature(parent) ||
+			ts.isPropertyDeclaration(parent) ||
+			ts.isMethodDeclaration(parent)) &&
+			parent.name === node) ||
+		(ts.isBindingElement(parent) && parent.propertyName === node)
+	);
+}
+
 /**
  * The server-only uses in a browser module's own text: an identifier naming a Cloudflare binding type (`D1Database`,
  * `R2Bucket`, `KVNamespace`) and a `.prepare(` call (how D1 runs SQL). Read from the syntax tree of the file's script
- * text (the whole file for .ts, the <script> blocks for .astro), so comments, strings and object keys never count. A D1
- * handle reached through a renamed type-only alias and run through another method name is not found: the reviewed
- * allowlist of modules is the control for that.
+ * text (the whole file for .ts, the <script> blocks for .astro), so comments and strings never count, and neither does a
+ * name that is only a label: a non-computed property key (`{ R2Bucket: 1 }`), a member name (`o.KVNamespace`), an
+ * interface or class member name and a destructuring key. A real reference counts: a type, a value, a shorthand
+ * property (`{ R2Bucket }`), a computed key (`{ [R2Bucket]: 1 }`) and an import name. A D1 handle typed through some
+ * other interface and run through another method name is not found: the reviewed allowlist of modules is the control.
  */
 export function serverUsesIn(file: string, text: string): string[] {
 	const source = ts.createSourceFile(
@@ -93,7 +111,7 @@ export function serverUsesIn(file: string, text: string): string[] {
 		const line =
 			source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 
-		if (ts.isIdentifier(node) && BINDING_TYPES.has(node.text))
+		if (ts.isIdentifier(node) && BINDING_TYPES.has(node.text) && !isLabel(node))
 			found.push(`${node.text} at line ${line}`);
 
 		if (
@@ -109,6 +127,34 @@ export function serverUsesIn(file: string, text: string): string[] {
 	visit(source);
 
 	return found;
+}
+
+// A hydration directive: `client:load`, `client:idle`, `client:visible`, `client:media` or `client:only`.
+const HYDRATION = /(?<![\w:-])client:(load|idle|visible|media|only)\b/g;
+
+const STYLE_BLOCK = /<style\b[^>]*>[\s\S]*?<\/style>/g;
+
+const HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
+/**
+ * Every `client:*` hydration directive in an .astro file's markup, with its line. A component hydrated with one runs in
+ * the browser, and the import graph walk reads only `src/scripts/**` and `<script>` blocks, so it would never see that
+ * component's imports. The frontmatter, comments, `<script>` and `<style>` blocks are blanked first, so none of them
+ * counts. Any other file gives none.
+ */
+export function hydratedDirectives(file: string, text: string): string[] {
+	if (!file.endsWith(".astro")) return [];
+
+	const markup = text
+		.replace(FRONTMATTER, blank)
+		.replace(HTML_COMMENT, blank)
+		.replace(SCRIPT_BLOCK, blank)
+		.replace(STYLE_BLOCK, blank);
+
+	return [...markup.matchAll(HYDRATION)].map(
+		(match) =>
+			`client:${match[1]} at line ${markup.slice(0, match.index).split("\n").length}`,
+	);
 }
 
 /** What a walk reached: every file (paths relative to the root) and every package (by name) any client entry loads. */
@@ -540,6 +586,13 @@ function codeFileAt(base: string): string | undefined {
 	);
 }
 
+/** True for a file the walker reads as code (and an .astro file). */
+function isCodeFile(file: string): boolean {
+	return [...EXTENSIONS, ".astro"].some((extension) =>
+		file.endsWith(extension),
+	);
+}
+
 /** True for a specifier that names something fetched from elsewhere (a URL, a data: URI): never part of the bundle. */
 function isExternal(specifier: string) {
 	return /^(https?:|data:|\/\/)/.test(specifier);
@@ -631,6 +684,24 @@ function dependencyOnForbidden(
 	return undefined;
 }
 
+/** The package a path inside a node_modules directory belongs to (the last node_modules segment names it), or undefined. */
+function packageOfPath(path: string): string | undefined {
+	const parts = path.split(sep).join("/").split("/");
+	const index = parts.lastIndexOf("node_modules");
+
+	if (index === -1 || index + 1 >= parts.length) return undefined;
+	const [first, second] = parts.slice(index + 1);
+
+	if (first === undefined || first.startsWith(".")) return undefined;
+
+	return first.startsWith("@") && second ? `${first}/${second}` : first;
+}
+
+/** The package a file belongs to, by its path or, when it is reached through a symlink, by its real path. */
+function packageOfFile(file: string): string | undefined {
+	return packageOfPath(file) ?? packageOfPath(realpathSync(file));
+}
+
 /** What one specifier leads to: files to walk, bare names to judge, and a reason when it cannot be followed. */
 type Resolved = { files: string[]; names: string[]; unresolved?: string };
 
@@ -680,12 +751,16 @@ function resolveSpecifier(
 	}
 
 	// A file under src/server is server code whatever its extension, so it is reported even when no walker reads it.
+	// A file that is not code (JSON, text, SVG, CSS, imported with or without `?raw` or `?url`) is still part of what the
+	// browser loads, so it is a reached file; it is listed, not read.
 	const files = bases.flatMap((base) => {
 		const code = codeFileAt(base);
 
 		if (code !== undefined) return [code];
 
-		return isServerFile(base, root) ? [base] : [];
+		if (isServerFile(base, root)) return [base];
+
+		return existsSync(base) && statSync(base).isFile() ? [base] : [];
 	});
 
 	const notInstalled = names.find(
@@ -820,7 +895,24 @@ export function clientGraphViolations(
 					continue;
 				}
 
-				for (const name of found.names)
+				// A file of an installed package reached by a relative path or an alias is that package's code, however the
+				// specifier was written: it is judged as a package, and not walked.
+				const projectFiles: string[] = [];
+
+				const named: { name: string; from: string }[] = found.names.map(
+					(name) => ({ name, from: current.file }),
+				);
+
+				for (const file of found.files) {
+					const owner = isServerFile(file, root)
+						? undefined
+						: packageOfFile(file);
+
+					if (owner === undefined) projectFiles.push(file);
+					else named.push({ name: owner, from: file });
+				}
+
+				for (const { name } of named)
 					if (!isBuiltin(name)) reached?.packages.add(packageOf(name));
 
 				if (found.unresolved !== undefined)
@@ -832,14 +924,14 @@ export function clientGraphViolations(
 					});
 
 				const forbidden =
-					[text, ...found.names].some((name) =>
+					[text, ...named.map(({ name }) => name)].some((name) =>
 						isForbiddenPackage(name, allow),
 					) || found.files.some((file) => isServerFile(file, root));
 
 				if (forbidden) violations.push({ import: text, chain: current.chain });
 
 				// An installed package browser code imports must not depend on Effect either: its own imports are in the bundle.
-				for (const name of found.names) {
+				for (const { name, from } of named) {
 					if (
 						isForbiddenPackage(name, allow) ||
 						allow.includes(name) ||
@@ -847,7 +939,7 @@ export function clientGraphViolations(
 					)
 						continue;
 
-					const directory = packageDirectory(packageOf(name), current.file);
+					const directory = packageDirectory(packageOf(name), from);
 
 					if (directory === undefined) continue;
 					const key = realpathSync(directory);
@@ -855,7 +947,7 @@ export function clientGraphViolations(
 					if (!dependencies.has(key))
 						dependencies.set(
 							key,
-							dependencyOnForbidden(name, current.file, allow, new Set()),
+							dependencyOnForbidden(name, from, allow, new Set()),
 						);
 
 					const dependency = dependencies.get(key);
@@ -870,9 +962,13 @@ export function clientGraphViolations(
 						});
 				}
 
-				for (const file of found.files)
-					if (!isServerFile(file, root) && !file.endsWith(".astro"))
+				for (const file of projectFiles) {
+					if (isServerFile(file, root)) continue;
+
+					if (!isCodeFile(file)) reached?.files.add(shown(file));
+					else if (!file.endsWith(".astro"))
 						queue.push({ file, chain: [...current.chain, shown(file)] });
+				}
 			}
 		}
 	}
