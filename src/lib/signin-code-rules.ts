@@ -14,11 +14,25 @@ export type SigninProject = {
 	readonly withdrawn: boolean;
 };
 
+/** A stored sign-in code row, as read: the browser's value (hashed), its address, when it was used and when it expires. */
+export type IssueCode = {
+	readonly nonceHash: string;
+	readonly email: string;
+	readonly usedAt: string | null;
+	readonly expiresAt: string;
+};
+
 export type IssueFacts = {
+	/** The address the code is asked for. */
+	readonly address: string;
+	/** The hash of the browser's own cookie value. */
+	readonly ownNonceHash: string;
+	/** ISO time of the request. */
+	readonly now: string;
 	/** Every project of the address whose access is not closed (a withdrawn one included). */
 	readonly projects: readonly SigninProject[];
-	/** Live codes (unused, unexpired) of the address other than the browser's own. */
-	readonly liveOthers: number;
+	/** The address's code rows and the browser's own row, whatever its address. */
+	readonly codes: readonly IssueCode[];
 };
 
 export type IssueDecision =
@@ -28,28 +42,47 @@ export type IssueDecision =
 			readonly auditRequestIds: readonly string[];
 			/** The write's guard: the address's other live codes must still be fewer than this. */
 			readonly liveOthersBelow: number;
+			readonly clearEarlierEmail: string | null;
 	  }
 	| {
 			readonly kind: "refuse";
 			readonly refusal: "NoOpenProject" | "AddressFull";
+			readonly clearEarlierEmail: string | null;
 	  };
 
 /**
- * Issue a code, or refuse. Refuses (in this order) when the address has no project that is open (none, or every one is
- * withdrawn), and when it already has `cap` live codes other than the browser's own. Both refusals are answered like
- * any other: the person is told nothing about which it was.
+ * Issue a code, or refuse. A code is live when it is unused and expires after `now` (the instant of expiry is expired).
+ * Refuses (in this order) when the address has no project that is open (none, or every one is withdrawn), and when it
+ * already has `cap` live codes other than the browser's own. Both refusals are answered like any other: the person is told
+ * nothing about which it was. Whatever the answer, the browser's earlier code is to be deleted when it is for a different
+ * address (`clearEarlierEmail` names that address), so asking for any other address always ends the earlier code; an earlier
+ * code for the same address is left alone by a refusal.
  */
 export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
-	if (!facts.projects.some((project) => !project.withdrawn))
-		return { kind: "refuse", refusal: "NoOpenProject" };
+	const own = facts.codes.find((code) => code.nonceHash === facts.ownNonceHash);
 
-	if (facts.liveOthers >= cap)
-		return { kind: "refuse", refusal: "AddressFull" };
+	const clearEarlierEmail =
+		own !== undefined && own.email !== facts.address ? own.email : null;
+
+	if (!facts.projects.some((project) => !project.withdrawn))
+		return { kind: "refuse", refusal: "NoOpenProject", clearEarlierEmail };
+
+	const liveOthers = facts.codes.filter(
+		(code) =>
+			code.email === facts.address &&
+			code.nonceHash !== facts.ownNonceHash &&
+			code.usedAt === null &&
+			code.expiresAt > facts.now,
+	).length;
+
+	if (liveOthers >= cap)
+		return { kind: "refuse", refusal: "AddressFull", clearEarlierEmail };
 
 	return {
 		kind: "issue",
 		auditRequestIds: facts.projects.map((project) => project.requestId),
 		liveOthersBelow: cap,
+		clearEarlierEmail,
 	};
 }
 
@@ -109,6 +142,27 @@ export function decideComplete(
 		accept:
 			sameHash(code.codeHash, request.digest) &&
 			facts.projects.some((project) => !project.withdrawn),
+		auditRequestIds: facts.projects.map((project) => project.requestId),
+	};
+}
+
+export type DiscardDecision =
+	| { readonly kind: "discard"; readonly auditRequestIds: readonly string[] }
+	| { readonly kind: "refuse"; readonly refusal: "NothingToDiscard" };
+
+/**
+ * Discard an undelivered code: only a code that is still unused (the row exists and has no use time). The failed delivery is
+ * audited for every project that is not closed.
+ */
+export function decideDiscard(facts: {
+	readonly code: { readonly usedAt: string | null } | null;
+	readonly projects: readonly SigninProject[];
+}): DiscardDecision {
+	if (facts.code === null || facts.code.usedAt !== null)
+		return { kind: "refuse", refusal: "NothingToDiscard" };
+
+	return {
+		kind: "discard",
 		auditRequestIds: facts.projects.map((project) => project.requestId),
 	};
 }

@@ -16,9 +16,11 @@ import { verifyTurnstile } from "~/lib/turnstile";
 import { studioCodeEmail } from "~/lib/client-emails";
 
 // A code request issues a code bound to the browser that asked (the pending sign-in cookie, see audio-client-access.ts).
-// Two requests from one browser at the same moment (two tabs) each get a code and an email, and the later cookie wins, so
-// the earlier tab's email will not open there. That is accepted: the email allowance (3 per five minutes) bounds it and
-// the browser's earlier code is deleted by whichever request commits last.
+// A browser that sent its cookie gets the same value back whatever the outcome. Two requests from one browser at the same
+// moment (two tabs) therefore both answer with that one value and each writes its code in place of the other's: both are
+// emailed, only the code written last opens, and the cookie opens it whichever response arrives last. The earlier email's
+// code does not work. That is accepted: the email allowance (3 per five minutes) bounds it. A browser that sent no cookie
+// and sends two requests at once has no value to share, so its responses can overwrite each other and it asks again.
 export const prerender = false;
 
 const inputSchema = z.object({
