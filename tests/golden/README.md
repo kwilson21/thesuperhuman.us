@@ -40,37 +40,72 @@ pnpm run golden:neutral <fixture|--all> [<from> [<to>]] [--allow-renames <file>]
 ```
 
 compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the working tree, `--all` runs every fixture)
-and exits 0 only when every case that existed before is neutral. For each such case and each step, these must be
-byte-identical before and after:
+and exits 0 only when every case that existed before is neutral. It prints the two commits it resolved, how many fixtures
+and cases it compared, and refuses (exit 2) a fixture that exists in neither revision, a revision git cannot find, an
+unknown flag, extra arguments, a malformed allow file, and a run that compared no case. For each case and each step,
+these must be byte-identical before and after:
 
 - the request, and the response: status, headers, every set-cookie value, and the body;
-- what the step dumped of the databases, R2 and KV, and the final dump (every table, row and column the harness dumps, in
-  its order);
+- what the step dumped of the databases, R2 and KV, and the final dump;
+- the digests (see "Fixture format 2" below): after every step and at the end, a row count and SHA-256 of every table of
+  both databases, and the contents of R2 and KV, so a write to a table the case does not dump is seen;
 - every effect that is not a D1 statement, in order, with its step and phase: outgoing HTTP (Stripe, Resend, Turnstile)
   with method, URL, headers and body, Workers AI calls, R2 and KV operations, `console.error` and `console.warn`,
-  `waitUntil` registrations and how they settled, rate-limit calls, clock moves and interleave markers.
+  `waitUntil` registrations and how they settled, rate-limit calls, clock moves, interleave markers and trigger-hit
+  markers (which operation and table an injected failure or interleave hit).
 
 Only the D1 entries may differ: SQL text, binds, how many statements, where the batches begin and end, and each
 statement's result. The tool removes the D1 entries from both logs and requires what is left to be identical.
 
 **Order against D1.** An email that was sent after the write and is now sent before it is a behaviour change, so the
-tool also looks, per step, at where each non-D1 effect sits among the writes: before the first D1 write, between the
-first and the last, after the last, or in a step with no write. A write is an INSERT, UPDATE, DELETE, REPLACE or schema
-statement that ran; a statement that threw, and a batch that did not commit, wrote nothing. If an effect's place changed,
-the case is reported as a moved effect and the run FAILS, unless the case is named, with a reason, in the file given to
-`--allow-positions` (`{ "<fixture>": { "<case name>": "<reason>" } }`, the name being the case's name after the
-conversion). An allowance that matches no moved effect also fails, so the list cannot go stale.
+tool checks what state existed when each outside effect happened. Only a committed write that changed at least one row
+counts: a read, a write that changed no row, a statement that threw and a batch that did not commit are ignored, so a
+conversion may split one statement into a read and a guarded write. Each such write is read as (operation, table, phase),
+for example `UPDATE owner_requests request`. Two checks follow, and a difference in either FAILS the run:
+
+1. For every outside effect, the writes that came before it in its step, as a multiset: which tables had been changed, by
+   which operation, in which phase, and how many times, but not in what order, so writes to different tables that sit
+   between the same two effects may be reordered. (`--ordered` makes the order count too; on every re-record in this
+   repository's history it gave the same result.)
+2. For every step, all its writes with their phase, so a write that moved across the response boundary (from `request` to
+   `background` or back) is caught.
+
+A failure is listed with the effect it concerns (`step 0: fetch POST https://api.resend.com/emails #1`, numbered when an
+effect repeats; the per-step check is `step 0: writes by phase`). It passes only when that exact effect is named, with a
+reason, in the file given to `--allow-positions`: `{ "<fixture>": { "<case name, after the conversion>": { "<effect>":
+"<reason>" } } }`. One entry covers one effect. What this does not see: a write that changed no row, the order of writes
+within one effect's window, what the written values were (the digests see that), and a write whose SQL the reader cannot
+attribute to a table (that is an error, not a pass).
 
 **Cases.** An added case is listed and does not fail (it has no earlier record to compare). A removed case fails. A
 renamed case is a removed case and an added one unless `--allow-renames` maps it (`{ "<fixture>": { "<old name>":
-"<new name>" } }`); a mapped pair is compared as one case and must itself be neutral. A mapping that names no case is an
-error.
+"<new name>" } }`). The map must be one to one: every source exists in the earlier revision and no longer exists in the
+later one, every destination exists in the later revision and not in the earlier one, and no two sources share a
+destination. A mapped pair is compared as one case and must itself be neutral. Both allow files are checked in full
+before anything runs: a fixture or case or effect named in either that matches nothing actually compared is an error or a
+failure, in single-fixture and `--all` runs alike, so an allowance cannot go stale.
 
 The tool prints, per fixture, how many cases are identical, neutral with D1 changes, NOT neutral (each with the first
-differing field and both values, shortened), added, removed and renamed, then `golden:neutral: NEUTRAL` or `NOT
-NEUTRAL`. Exit codes: 0 neutral, 1 not neutral, 2 usage or read error. Two judgement calls: a write is recognised from
-the SQL text (its first keyword, or the statement a `WITH` ends in), and a write that ran but changed no row still counts
-as a write. If a conversion needs a case's input changed, that is not a conversion: record it as a fix.
+differing field and both values, shortened), NOT COMPARABLE, added, removed and renamed, then `golden:neutral: NEUTRAL`,
+`golden:neutral: identical, N cases` or `NOT NEUTRAL`. Exit codes: 0 neutral, 1 not neutral (or not comparable), 2 usage
+or read error. Judgement calls: a write is recognised from the SQL text (its first keyword, or the statement a `WITH`
+ends in) and attributed to its table (INSERT INTO, UPDATE, DELETE FROM); a write run through `first()` or `all()` (with
+RETURNING) counts when it returned a row. If a conversion needs a case's input changed, that is not a conversion: record
+it as a fix.
+
+**Fixture format 2.** Each case records `format: 2`, a `digest` after every step (one SHA-256 per database, one for R2 and
+one for KV), and at the end a `finalState`: for each database a digest over all its tables and, per table that holds rows,
+the row count and SHA-256 of its rows (read in primary key order, or rowid order for a table without one, all columns,
+with a type tag for NULL, numbers, text and blobs); R2 and KV in full (keys with size and digest). A fixture from before
+format 2 (no `format` field) cannot be compared with a format 2 one: the digests exist on one side only, so the tool says
+NOT COMPARABLE and exits 1, because neutrality cannot be shown across the change. The three older recorder fixtures
+(contact, resume-request and resume-approve) have no database and stay as they are. `pnpm exec node
+scripts/golden-format-proof.mjs <from> [<to>]` proves a format change only added fields.
+
+**In CI.** On a pull request, the `validate` workflow runs `golden:neutral --all` between the merge base and the head and
+writes the result to the job summary. It never fails the job for a result that is not neutral, because a behaviour fix
+legitimately changes fixtures, but it fails on a usage or read error (exit 2). Reviewers read that summary: a conversion
+pull request's summary must say NEUTRAL, and a fix's must list exactly the cases the fix is meant to change.
 
 ## Reviewing a fixture change
 
@@ -205,15 +240,20 @@ matching statement or batch throw without running. Both are written into the log
 `fails` make a named operation reject.
 
 A declared trigger that never fires fails the case, when recording and when checking, with a message naming it and its
-pattern (`d1 failure on /UPDATE .../ (seen 0 times, declared 1)`). The triggers are: each `failures` and `interleave`
+pattern (`d1 failure on /UPDATE .../ (seen 0 times, declared 1)`). A trigger that fires more often than declared: an `nth`
+trigger fires once, on its n-th match, so it cannot; R2, KV, fetch and AI failures fire on every matching call by design.
+A control that proves a statement is never reached lists its trigger in `mustNotFire: [{ trigger, reason }]`, and the case
+fails if it does fire. The triggers are: each `failures` and `interleave`
 entry (which must match `nth` times), each R2 and KV `fails` entry, each `byHost` fetch answer that throws, and each AI
 answer that throws or never answers (a hand-written responder declares nothing). Without this a conversion that changes
 the SQL a hook matches would leave a case recording the happy path under the name of an outage or a race. A trigger
-that may legitimately stay quiet, such as a control that proves a statement is never reached, is listed in the case's
-`optionalTriggers: [{ trigger: "<the text the failure message prints>", reason: "..." }]`; an entry with no reason, or
-one that matches no trigger, fails too. Work done off the record (sign-in, `setup`, hooks) never counts as a firing.
+that may legitimately stay quiet is listed in the case's `optionalTriggers: [{ trigger: "<the text the failure message
+prints>", reason: "..." }]`; an entry with no reason, or one that matches no trigger, fails too. Each time a D1 failure
+or interleave fires, the log gets a `trigger-hit` entry naming the operation, table and access (read or write) of the
+statement it hit, never its SQL, so after a conversion a trigger that hits a different table or a read shows up as a
+non-neutral difference. Work done off the record (sign-in, `setup`, hooks) never counts as a firing.
 
-Every generated case has a 60 second time limit (`CASE_TIMEOUT_MS`, set once in `defineCorpus`), because cases that render
+Every generated case has a 20 second time limit (`CASE_TIMEOUT_MS`, set once in `defineCorpus`), because cases that render
 PDFs come close to the 5 second default when several suites run at once.
 
 ## Signing in a client

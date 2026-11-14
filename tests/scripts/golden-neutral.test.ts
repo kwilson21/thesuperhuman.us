@@ -6,11 +6,8 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, describe, expect, it } from "vitest";
 import type { JsonObject, JsonValue } from "../helpers/json";
-import {
-	compareCase,
-	compareFixture,
-	isWriteSql,
-} from "../../scripts/golden-neutral.mjs";
+import { compareCase, compareFixture } from "../../scripts/golden-neutral.mjs";
+import { statementOf } from "../../scripts/sql-effects.mjs";
 
 // Hand-built cases in the shape the golden harness records. What a conversion may change is the D1 entries and nothing
 // else; each test below changes one thing.
@@ -301,117 +298,301 @@ describe("compareCase: what is not neutral", () => {
 	});
 });
 
-describe("compareCase: where a non-D1 effect sits among the writes", () => {
-	const after = (effects: Json[]) => make("a case", { effects });
+describe("compareCase: which tables had been changed when an outside effect happened", () => {
+	const table = (name: string, changes = 1, extra: Json = {}) =>
+		write(`UPDATE ${name} SET x = 1`, {
+			outcome: { rows: 0, changes },
+			...extra,
+		});
+
+	const log = (effects: Json[]) => make("a case", { effects });
+	const wasLog = (effects: Json[]) => make("a case", { effects });
+
+	const shifts = (was: Json[], now: Json[], ordered = false) =>
+		compareCase(wasLog(was), log(now), { ordered }).shifts;
 
 	it("an email that went out after the write and now goes out before it is reported", () => {
-		const got = compare(
-			after([email(), read("SELECT 1"), write("UPDATE items SET value = 'b'")]),
+		const got = shifts(
+			[read("SELECT 1"), table("items"), email()],
+			[email(), read("SELECT 1"), table("items")],
 		);
 
-		expect(got.status).toBe("d1-only");
-		expect(got.shifts).toEqual([
+		expect(got).toEqual([
 			{
-				step: 0,
-				effect: "fetch POST https://api.resend.com/emails",
-				from: "after the last write",
-				to: "before the first write",
+				id: "step 0: fetch POST https://api.resend.com/emails #1",
+				was: ["UPDATE items request"],
+				now: [],
 			},
 		]);
 	});
 
-	it("an email between two writes that is now after both is reported", () => {
-		const was = make("a case", {
-			effects: [
-				write("UPDATE a SET x = 1"),
-				email(),
-				write("UPDATE b SET x = 1"),
-			],
-		});
+	it("a zero-row write does not count, so moving the email past the real write is caught", () => {
+		// [0-row UPDATE, real UPDATE, email, 0-row UPDATE] became [0-row UPDATE, email, real UPDATE, 0-row UPDATE].
+		const got = shifts(
+			[table("a", 0), table("t"), email(), table("a", 0)],
+			[table("a", 0), email(), table("t"), table("a", 0)],
+		);
 
-		const now = make("a case", {
-			effects: [
-				write("UPDATE a SET x = 1"),
-				write("UPDATE b SET x = 1"),
-				email(),
-			],
-		});
-
-		expect(compareCase(was, now).shifts[0]).toMatchObject({
-			from: "between the first and last write",
-			to: "after the last write",
-		});
+		expect(got).toHaveLength(1);
+		expect(got[0]?.was).toEqual(["UPDATE t request"]);
+		expect(got[0]?.now).toEqual([]);
 	});
 
-	it("a write that became a read-only statement moves the email into a step with no write", () => {
-		const got = compare(after([read("SELECT 1"), email()]));
+	it("an email that moved from between the first and second write to between the second and third is caught", () => {
+		const got = shifts(
+			[table("a"), email(), table("b"), table("c")],
+			[table("a"), table("b"), email(), table("c")],
+		);
 
-		expect(got.shifts[0]).toMatchObject({
-			from: "after the last write",
-			to: "in a step with no write",
-		});
+		expect(got).toHaveLength(1);
+		expect(got[0]?.was).toEqual(["UPDATE a request"]);
+		expect(got[0]?.now).toEqual(["UPDATE a request", "UPDATE b request"]);
 	});
 
-	it("a failed write and a rolled-back batch are not writes", () => {
-		const was = make("a case", {
-			effects: [
-				write("UPDATE items SET v = 1", { outcome: { threw: "d1 down" } }),
+	it("a write that moved from the request phase to the background phase is caught", () => {
+		const got = shifts(
+			[email(), table("a")],
+			[email(), table("a", 1, { phase: "background" })],
+		);
+
+		expect(got).toEqual([
+			{
+				id: "step 0: writes by phase",
+				was: ["UPDATE a request"],
+				now: ["UPDATE a background"],
+			},
+		]);
+	});
+
+	it("a write in the background that the email now precedes is caught as a changed effect position", () => {
+		const got = shifts(
+			[table("a"), email()],
+			[table("a", 1, { phase: "background" }), email()],
+		);
+
+		expect(got.map((item) => item.id)).toContain("step 0: writes by phase");
+	});
+
+	it("reads, zero-row writes, failed statements and uncommitted batches are ignored", () => {
+		const rolledBack = {
+			kind: "d1-batch",
+			db: "MUSIC_DB",
+			result: "rolled-back",
+			error: "x",
+			statements: [
+				{ sql: "UPDATE z SET x = 1", args: [], outcome: { threw: "x" } },
+			],
+			step: 0,
+			phase: "request",
+		};
+
+		const got = shifts(
+			[table("a"), email()],
+			[
+				read("SELECT * FROM a"),
+				table("q", 0),
+				table("r", 1, { outcome: { threw: "d1 down" } }),
+				rolledBack,
+				table("a"),
 				email(),
 			],
-		});
+		);
 
-		const now = make("a case", {
-			effects: [
+		expect(got).toEqual([]);
+	});
+
+	it("one statement that became a read plus a guarded write of the same table is not a shift", () => {
+		expect(
+			shifts(
+				[table("a"), email()],
+				[read("SELECT x FROM a WHERE id = ?"), table("a"), email()],
+			),
+		).toEqual([]);
+	});
+
+	it("a write run through first() with RETURNING counts when it returned a row", () => {
+		const returning = (rows: number) =>
+			write("UPDATE a SET x = 1 RETURNING id", {
+				via: "first",
+				outcome: { rows, changes: null },
+			});
+
+		expect(
+			shifts([returning(1), email()], [email(), returning(1)]),
+		).toHaveLength(1);
+		expect(shifts([returning(0), email()], [email(), returning(0)])).toEqual(
+			[],
+		);
+	});
+
+	it("a committed batch counts each statement that changed a row", () => {
+		const batch = (changes: number) => ({
+			kind: "d1-batch",
+			db: "MUSIC_DB",
+			result: "committed",
+			error: null,
+			statements: [
 				{
-					kind: "d1-batch",
-					db: "MUSIC_DB",
-					result: "rolled-back",
-					error: "x",
-					statements: [
-						{
-							sql: "UPDATE items SET v = 1",
-							args: [],
-							outcome: { threw: "x" },
-						},
-					],
-					step: 0,
-					phase: "request",
+					sql: "INSERT INTO log (a) VALUES (1)",
+					args: [],
+					outcome: { rows: 0, changes },
 				},
-				email(),
 			],
+			step: 0,
+			phase: "request",
 		});
 
-		expect(compareCase(was, now).shifts).toEqual([]);
+		expect(shifts([batch(1), email()], [email(), batch(1)])).toHaveLength(1);
+		expect(shifts([batch(0), email()], [email(), batch(0)])).toEqual([]);
 	});
 
-	it("moving D1 reads around without moving a write is not a shift", () => {
-		const got = compare(
-			after([
-				write("UPDATE items SET value = 'b'"),
-				read("SELECT 1"),
-				read("SELECT 2"),
-				email(),
+	it("writes to different tables that sit between the same two effects may be reordered, unless the order is asked for", () => {
+		const was = [table("a"), table("b"), email()];
+		const now = [table("b"), table("a"), email()];
+
+		expect(shifts(was, now)).toEqual([]);
+		expect(shifts(was, now, true).length).toBeGreaterThan(0);
+	});
+
+	it("which table was changed matters: an UPDATE of another table before the email is a shift", () => {
+		expect(
+			shifts([table("a"), email()], [table("b"), email()]).length,
+		).toBeGreaterThan(0);
+	});
+
+	it("an extra write to another table before an email is a shift", () => {
+		expect(
+			shifts([table("a"), email()], [table("a"), table("audit"), email()])
+				.length,
+		).toBeGreaterThan(0);
+	});
+
+	it("each outside effect gets its own id, numbered when it repeats", () => {
+		const got = shifts(
+			[table("a"), email(), email()],
+			[email(), email(), table("a")],
+		);
+
+		expect(got.map((item) => item.id)).toEqual([
+			"step 0: fetch POST https://api.resend.com/emails #1",
+			"step 0: fetch POST https://api.resend.com/emails #2",
+		]);
+	});
+
+	it("an effect in an older recorder case (no kind, no D1) is read too", () => {
+		const legacy = (extra: Json = {}): Json => ({
+			name: "legacy",
+			answers: [{ outcome: "response", status: 200, headers: {}, body: "" }],
+			effects: [
+				{ step: 0, kv: "RATE_LIMIT", op: "get", key: "k", type: null },
+				{
+					step: 0,
+					fetch: { url: "https://api.resend.com/emails", method: "POST" },
+				},
+			],
+			...extra,
+		});
+
+		expect(compareCase(legacy(), legacy()).status).toBe("identical");
+
+		const got = compareCase(
+			legacy(),
+			legacy({ effects: [{ step: 0, kv: "RATE_LIMIT", op: "put", key: "k" }] }),
+		);
+
+		expect(got.status).toBe("non-neutral");
+	});
+
+	it("harness markers (interleave, trigger-hit, advance) are compared but never read as outside effects", () => {
+		const marker = (extra: Json = {}) => ({
+			kind: "trigger-hit",
+			trigger: "failure",
+			name: "d1 down",
+			db: "MUSIC_DB",
+			hits: [{ op: "UPDATE", table: "a", access: "write" }],
+			step: 0,
+			phase: "request",
+			...extra,
+		});
+
+		expect(
+			shifts([marker(), table("a"), email()], [marker(), email(), table("a")]),
+		).toHaveLength(1);
+
+		const hitsRead = compareCase(
+			wasLog([marker(), table("a")]),
+			log([
+				marker({ hits: [{ op: "SELECT", table: "a", access: "read" }] }),
+				table("a"),
 			]),
 		);
 
-		expect(got.shifts).toEqual([]);
+		expect(hitsRead.status).toBe("non-neutral");
 	});
 });
 
-describe("isWriteSql", () => {
+describe("compareCase: the fixture format", () => {
+	const v2 = (extra: Json = {}) => ({ ...base, format: 2, ...extra });
+
+	it("format 1 against format 2 is not comparable", () => {
+		const got = compareCase(base, v2());
+
+		expect(got.status).toBe("not-comparable");
+		expect(got.difference).toMatchObject({ expected: 1, actual: 2 });
+	});
+
+	it("two format 2 cases are compared, digests included", () => {
+		const step = (digest: string) => ({
+			...base.steps[0],
+			digest: { music: digest },
+		});
+
+		const got = compareCase(
+			v2({ steps: [step("a")] }),
+			v2({ steps: [step("b")] }),
+		);
+
+		expect(got.status).toBe("non-neutral");
+		expect(got.difference?.area).toBe("table, R2 and KV digests");
+	});
+
+	it("a changed final digest of an undumped table is not neutral", () => {
+		const final = (sha: string) =>
+			v2({
+				finalState: {
+					music: {
+						sha256: "x",
+						tables: { audit_log: { rows: 1, sha256: sha } },
+					},
+				},
+			});
+
+		expect(compareCase(final("a"), final("b")).difference?.area).toBe(
+			"table, R2 and KV digests",
+		);
+	});
+});
+
+describe("statementOf", () => {
 	it.each([
-		["INSERT INTO t VALUES (1)", true],
-		["  update t set a = 1", true],
-		["DELETE FROM t", true],
-		["REPLACE INTO t VALUES (1)", true],
-		["CREATE TABLE t (a)", true],
-		["-- note\nUPDATE t SET a = 1", true],
-		["WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", true],
-		["SELECT replace(a, 'x', 'y') FROM t", false],
-		["SELECT updated_at FROM t WHERE a = 'delete me'", false],
-		["WITH x AS (SELECT 1) SELECT * FROM x", false],
-	])("%s", (sql, expected) => {
-		expect(isWriteSql(sql)).toBe(expected);
+		["INSERT INTO t VALUES (1)", "INSERT", "t", true],
+		['INSERT OR IGNORE INTO "t" (a) VALUES (1)', "INSERT", "t", true],
+		["  update t set a = 1", "UPDATE", "t", true],
+		["UPDATE OR ROLLBACK t SET a = 1", "UPDATE", "t", true],
+		["DELETE FROM t WHERE a = 1", "DELETE", "t", true],
+		["REPLACE INTO t VALUES (1)", "REPLACE", "t", true],
+		["WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x", "INSERT", "t", true],
+		["SELECT a FROM t JOIN u ON t.a = u.a", "SELECT", "t", false],
+		["SELECT replace(a, 'x', 'y') FROM t", "SELECT", "t", false],
+		["WITH x AS (SELECT 1) SELECT * FROM x", "SELECT", "x", false],
+		["SELECT 1", "SELECT", null, false],
+		["-- note\nUPDATE t SET a = 'delete from nothing'", "UPDATE", "t", true],
+	])("%s", (sql, op, table, write) => {
+		expect(statementOf(sql)).toEqual({ op, table, write });
+	});
+
+	it("a write whose table cannot be read throws, never a shared unknown table", () => {
+		expect(() => statementOf("UPDATE")).toThrow(/cannot read the table/);
 	});
 });
 
@@ -494,7 +675,7 @@ describe("compareFixture", () => {
 		expect(result.neutral).toBe(false);
 	});
 
-	it("a mapping that names no case, or a name taken twice, is an error", () => {
+	it("a rename map must name real cases and keep every old name's case", () => {
 		expect(() =>
 			compareFixture([named("a")], [named("b")], { renames: { zzz: "b" } }),
 		).toThrow(/names no case in the earlier revision/);
@@ -507,50 +688,103 @@ describe("compareFixture", () => {
 			compareFixture([named("a"), named("b")], [named("b")], {
 				renames: { a: "b" },
 			}),
-		).toThrow(/earlier revision has that name too/);
+		).toThrow(/earlier revision has a case of that name too/);
+
+		expect(() =>
+			compareFixture([named("a")], [named("a"), named("b")], {
+				renames: { a: "b" },
+			}),
+		).toThrow(/later revision still has a case of that name/);
 	});
 
-	describe("the relative-position class", () => {
-		const moved = [named("mail"), named("other")];
-
-		const movedAfter = [
-			named("mail", {
-				effects: [email(), write("UPDATE items SET value = 'b'")],
+	it("two old cases mapped to one new case is an error, since one would be hidden", () => {
+		expect(() =>
+			compareFixture([named("a"), named("b")], [named("z")], {
+				renames: { a: "z", b: "z" },
 			}),
-			named("other"),
+		).toThrow(/two earlier cases are mapped to it/);
+	});
+
+	describe("the position rule and its allowances", () => {
+		const mail = (url: string) => email({ url });
+		const place = (name: string, effects: Json[]) => make(name, { effects });
+
+		const was = [
+			place("mail", [
+				write("UPDATE items SET v = 1"),
+				mail("https://api.resend.com/one"),
+				mail("https://api.resend.com/two"),
+			]),
+			place("other", [write("UPDATE items SET v = 1"), email()]),
 		];
 
-		it("fails when the case is not allowed", () => {
-			const result = compareFixture(moved, movedAfter);
+		const now = [
+			place("mail", [
+				mail("https://api.resend.com/one"),
+				mail("https://api.resend.com/two"),
+				write("UPDATE items SET v = 1"),
+			]),
+			named("other", {
+				effects: [write("UPDATE items SET v = 1"), email()],
+			}),
+		];
 
-			expect(result.shifted).toHaveLength(1);
-			expect(result.shifted[0]?.reason).toBeNull();
+		const one = "step 0: fetch POST https://api.resend.com/one #1";
+		const two = "step 0: fetch POST https://api.resend.com/two #1";
+
+		it("fails when no effect is allowed", () => {
+			const result = compareFixture(was, now);
+
+			expect(result.shifted[0]?.items.map((item) => item.id)).toEqual([
+				one,
+				two,
+			]);
 			expect(result.neutral).toBe(false);
 		});
 
-		it("passes when the case is allowed with a reason", () => {
-			const result = compareFixture(moved, movedAfter, {
+		it("one allowance covers one effect only, so the second moved email still fails", () => {
+			const result = compareFixture(was, now, {
 				allowShifts: {
-					mail: "the mail now waits for the claim, owner decided 2026-11-13",
+					mail: { [one]: "the first mail now waits for the claim" },
 				},
 			});
 
-			expect(result.shifted[0]?.reason).toContain("owner decided");
+			expect(result.neutral).toBe(false);
+
+			expect(
+				result.shifted[0]?.items.map((item) => [item.id, item.reason]),
+			).toEqual([
+				[one, "the first mail now waits for the claim"],
+				[two, null],
+			]);
+		});
+
+		it("passes when every moved effect has its own reason", () => {
+			const result = compareFixture(was, now, {
+				allowShifts: {
+					mail: { [one]: "first reason", [two]: "second reason" },
+				},
+			});
+
 			expect(result.neutral).toBe(true);
 		});
 
 		it("an allowance with no reason is an error", () => {
 			expect(() =>
-				compareFixture(moved, movedAfter, { allowShifts: { mail: " " } }),
+				compareFixture(was, now, { allowShifts: { mail: { [one]: " " } } }),
 			).toThrow(/has no reason/);
 		});
 
-		it("an allowance for a case that did not move fails, so the list cannot go stale", () => {
-			const result = compareFixture(moved, moved, {
-				allowShifts: { other: "stale" },
+		it("an allowance for an effect that did not move, or a case not compared, fails", () => {
+			const result = compareFixture(was, was, {
+				allowShifts: { mail: { [one]: "stale" }, ghost: { [one]: "stale" } },
 			});
 
-			expect(result.unusedAllowances).toEqual(["other"]);
+			expect(result.unusedAllowances).toEqual([
+				`mail: ${one} (moved no effect)`,
+				"ghost (no such compared case)",
+			]);
+
 			expect(result.neutral).toBe(false);
 		});
 	});
@@ -579,6 +813,9 @@ describe("golden:neutral on the command line", () => {
 			encoding: "utf8",
 		});
 
+	const file = (name: string, content: JsonValue) =>
+		writeFileSync(join(folder, name), JSON.stringify(content));
+
 	mkdirSync(fixtures, { recursive: true });
 
 	for (const args of [
@@ -591,6 +828,8 @@ describe("golden:neutral on the command line", () => {
 
 	save("one", [make("a"), make("b")]);
 	save("two", [make("c")]);
+	save("three", [{ ...make("d"), format: 1 }]);
+	save("empty", []);
 	git("add", "-A");
 	git("commit", "-q", "-m", "before");
 	git("tag", "before");
@@ -601,26 +840,32 @@ describe("golden:neutral on the command line", () => {
 	]);
 
 	save("two", [make("c", { answer: answer({ status: 500 }) })]);
+	save("three", [{ ...make("d"), format: 2 }]);
 	git("add", "-A");
 	git("commit", "-q", "-m", "after");
 
-	writeFileSync(
-		join(folder, "renames.json"),
-		JSON.stringify({ one: { b: "b2" } }),
-	);
-
-	writeFileSync(join(folder, "empty.json"), "{}");
+	file("renames.json", { one: { b: "b2" } });
+	file("array.json", [1]);
+	file("unknown-fixture.json", { nosuch: { x: { "step 0: y #1": "why" } } });
+	file("stale-case.json", { one: { zzz: { "step 0: x #1": "stale" } } });
+	file("shape.json", { one: { a: "not an object" } });
 
 	afterAll(() => rmSync(folder, { recursive: true, force: true }));
 
-	it("exits 0 and says NEUTRAL when every case is neutral (a rename mapped)", () => {
-		const got = run("one", "before", "HEAD", "--allow-renames", "renames.json");
+	const mapped = ["--allow-renames", "renames.json"];
+
+	it("exits 0 and says NEUTRAL when every case is neutral (a rename mapped), with both commits and the counts", () => {
+		const got = run("one", "before", "HEAD", ...mapped);
 
 		expect(got.status).toBe(0);
+		expect(got.stdout).toMatch(
+			/from before \([0-9a-f]{12}\) to HEAD \([0-9a-f]{12}\)/,
+		);
 		expect(got.stdout).toContain(
 			"1 identical, 1 neutral with D1 changes, 0 NOT neutral",
 		);
 		expect(got.stdout).toContain("renamed case: b -> b2 (identical)");
+		expect(got.stdout).toContain("compared 1 fixture and 2 cases");
 		expect(got.stdout).toContain("golden:neutral: NEUTRAL");
 	});
 
@@ -632,35 +877,115 @@ describe("golden:neutral on the command line", () => {
 	});
 
 	it("--all runs every fixture, prints the first differing field and exits 1", () => {
-		const got = run(
-			"--all",
-			"before",
-			"HEAD",
-			"--allow-renames",
-			"renames.json",
-		);
+		const got = run("--all", "before", "HEAD", ...mapped);
 
 		expect(got.status).toBe(1);
 		expect(got.stdout).toContain(
 			"two: 0 identical, 0 neutral with D1 changes, 1 NOT neutral",
 		);
 		expect(got.stdout).toContain("case.steps[0].answer.status");
-		expect(got.stdout).toContain("2 of 2 fixtures differ");
+	});
+
+	it("format 1 against format 2 is NOT COMPARABLE: loud, and exit 1", () => {
+		const got = run("three", "before", "HEAD");
+
+		expect(got.status).toBe(1);
+		expect(got.stdout).toContain("NOT COMPARABLE");
+		expect(got.stdout).toContain(
+			"neutrality cannot be shown across a format change",
+		);
+		expect(got.stdout).toContain("golden:neutral: NOT NEUTRAL");
+	});
+
+	it("a fixture identical in both revisions says so and exits 0", () => {
+		const got = run("one", "HEAD", "HEAD");
+
+		expect(got.status).toBe(0);
+		expect(got.stdout).toContain("golden:neutral: identical, 2 cases");
 	});
 
 	it("--all leaves out a fixture that did not change", () => {
 		const got = run("--all", "HEAD", "HEAD");
 
 		expect(got.status).toBe(0);
-		expect(got.stdout).toContain("0 of 2 fixtures differ");
+		expect(got.stdout).toContain("0 of 4 fixtures differ");
 	});
 
-	it("exits 2 with a message for a bad revision, a bad allow file and a missing argument", () => {
-		expect(run("one", "no-such-branch").status).toBe(2);
-		expect(run("one", "--allow-renames").status).toBe(2);
+	it("refuses a fixture name that exists in neither revision (a misspelling)", () => {
+		const got = run("onne", "before", "HEAD");
+
+		expect(got.status).toBe(2);
+		expect(got.stderr).toContain('no fixture named "onne" in either revision');
+	});
+
+	it("refuses an unknown flag, such as a misspelled --all, and extra arguments", () => {
+		expect(run("--al", "before", "HEAD").status).toBe(2);
+		expect(run("one", "before", "HEAD", "--allow-position", "x").status).toBe(
+			2,
+		);
+		expect(run("one", "before", "HEAD", "extra").status).toBe(2);
+		expect(run("--all", "before", "HEAD", "extra").status).toBe(2);
+		expect(run("one", "before", "--all").status).toBe(2);
+	});
+
+	it("refuses a revision that does not resolve", () => {
+		const got = run("one", "no-such-branch", "HEAD");
+
+		expect(got.status).toBe(2);
+		expect(got.stderr).toContain('"no-such-branch" is not a revision');
+	});
+
+	it("exits 2 when no case was compared (an empty fixture)", () => {
+		const got = run("empty", "before", "HEAD");
+
+		expect(got.status).toBe(2);
+		expect(got.stderr).toContain("no case was compared");
+	});
+
+	it("refuses an allow file that is an array, has a wrong shape or cannot be read", () => {
+		expect(
+			run("one", "before", "HEAD", "--allow-positions", "array.json").status,
+		).toBe(2);
+		expect(
+			run("one", "before", "HEAD", "--allow-positions", "shape.json").status,
+		).toBe(2);
 		expect(
 			run("one", "before", "HEAD", "--allow-renames", "missing.json").stderr,
 		).toContain("cannot read");
+	});
+
+	it("refuses an allow file that names a fixture that was not compared, in both modes", () => {
+		for (const args of [
+			["one", "before", "HEAD"],
+			["--all", "before", "HEAD"],
+		]) {
+			const got = run(...args, "--allow-positions", "unknown-fixture.json");
+
+			expect(got.status).toBe(2);
+			expect(got.stderr).toContain("is not a fixture that was compared");
+		}
+
+		expect(
+			run("two", "before", "HEAD", "--allow-renames", "renames.json").status,
+		).toBe(2);
+	});
+
+	it("an allowance for a case that was not compared fails, in single-fixture and --all modes alike, even for an unchanged fixture", () => {
+		for (const args of [
+			["one", "before", "HEAD", ...mapped],
+			["one", "HEAD", "HEAD"],
+			["--all", "HEAD", "HEAD"],
+		]) {
+			const got = run(...args, "--allow-positions", "stale-case.json");
+
+			expect(got.status).toBe(1);
+			expect(got.stdout).toContain(
+				"FAILS: allowance for zzz (no such compared case)",
+			);
+		}
+	});
+
+	it("exits 2 with a message when there is no argument", () => {
 		expect(run().status).toBe(2);
 	});
 });

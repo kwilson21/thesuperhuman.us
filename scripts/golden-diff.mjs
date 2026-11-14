@@ -123,6 +123,19 @@ function diff(fixture, from, to) {
 	const names = [...new Set([...before, ...after].map((entry) => entry.name))];
 	let changed = 0;
 
+	const formats = (list) => [
+		...new Set(list.map((entry) => entry.format ?? 1)),
+	];
+
+	if (before.length > 0 && after.length > 0) {
+		const [was, now] = [formats(before), formats(after)];
+
+		if (was.join() !== now.join())
+			console.log(
+				`note: fixture format ${was.join("+")} before, ${now.join("+")} after; fields a newer format adds (format, finalState, digest, trigger-hit entries) are listed as differences below, and golden:neutral cannot compare across formats`,
+			);
+	}
+
 	for (const name of names) {
 		const old = before.find((entry) => entry.name === name);
 		const next = after.find((entry) => entry.name === name);

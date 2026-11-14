@@ -9,6 +9,7 @@
 // just before the n-th statement that matches (another request got there first), and an `InjectedFailure` makes the
 // n-th matching statement or batch throw without running. Both appear in the log, so a fixture shows them.
 import type { SQLInputValue } from "node:sqlite";
+import { statementOf } from "../../../scripts/sql-effects.mjs";
 import { double } from "../../helpers/doubles";
 import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
 import type { D1Outcome, D1Statement } from "./log";
@@ -72,10 +73,17 @@ export class SqlHooks {
 		}
 	}
 
-	private hit(trigger: SqlTrigger, db: string, sqls: readonly string[]) {
-		if (trigger.db !== undefined && trigger.db !== db) return false;
+	/** The statements the trigger matched, when this is the match it fires on; otherwise null. */
+	private hit(
+		trigger: SqlTrigger,
+		db: string,
+		sqls: readonly string[],
+	): string[] | null {
+		if (trigger.db !== undefined && trigger.db !== db) return null;
 
-		if (!sqls.some((sql) => trigger.on.test(sql))) return false;
+		const matching = sqls.filter((sql) => trigger.on.test(sql));
+
+		if (matching.length === 0) return null;
 
 		const count = (this.seen.get(trigger) ?? 0) + 1;
 		this.seen.set(trigger, count);
@@ -84,7 +92,27 @@ export class SqlHooks {
 
 		if (id !== undefined) this.triggers.see(id);
 
-		return count === (trigger.nth ?? 1);
+		return count === (trigger.nth ?? 1) ? matching : null;
+	}
+
+	private marker(
+		log: EffectLog,
+		trigger: "failure" | "interleave",
+		name: string,
+		db: string,
+		matching: readonly string[],
+	) {
+		log.push({
+			kind: "trigger-hit",
+			trigger,
+			name,
+			db,
+			hits: matching.map((sql) => {
+				const { op, table, write } = statementOf(sql);
+
+				return { op, table, access: write ? "write" : "read" };
+			}),
+		});
 	}
 
 	/** Runs the interleaves due before these statements, and returns the failure to throw, if one is due. */
@@ -97,9 +125,12 @@ export class SqlHooks {
 		if (this.paused > 0) return null;
 
 		for (const interleave of this.interleaves) {
-			if (!this.hit(interleave, db, sqls)) continue;
+			const matching = this.hit(interleave, db, sqls);
+
+			if (!matching) continue;
 
 			log.push({ kind: "interleave", label: interleave.label });
+			this.marker(log, "interleave", interleave.label, db, matching);
 			interleave.run(sqlite);
 		}
 
@@ -107,8 +138,14 @@ export class SqlHooks {
 		// earlier trigger fails the same call. The first trigger due supplies the message.
 		let due: string | null = null;
 
-		for (const failure of this.failures)
-			if (this.hit(failure, db, sqls)) due ??= failure.message;
+		for (const failure of this.failures) {
+			const matching = this.hit(failure, db, sqls);
+
+			if (!matching) continue;
+
+			this.marker(log, "failure", failure.message, db, matching);
+			due ??= failure.message;
+		}
 
 		return due;
 	}

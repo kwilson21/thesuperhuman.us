@@ -2,6 +2,7 @@
 // limits, ctx.waitUntil, a frozen clock, and the ordered effect log they all write to. Then the runner that sends a
 // case's steps through a route handler and records what came back.
 import type { APIContext } from "astro";
+import { createHash } from "node:crypto";
 import { afterAll, describe, it, vi } from "vitest";
 import { isText } from "~/lib/type-guards";
 import { double, partial } from "../../helpers/doubles";
@@ -40,7 +41,8 @@ import {
 	type Recorded,
 } from "./plain";
 import { recordingR2, type R2Setup } from "./r2";
-import { Triggers, type OptionalTrigger } from "./triggers";
+import { digestDatabase, type DatabaseDigest } from "./digest";
+import { Triggers, type MustNotFire, type OptionalTrigger } from "./triggers";
 
 export type Handler = (context: APIContext) => Response | Promise<Response>;
 
@@ -188,10 +190,31 @@ export type Case = {
 	 * that may legitimately stay quiet: the text is the one the failure message prints, and the reason is required.
 	 */
 	readonly optionalTriggers?: readonly OptionalTrigger[];
+	/**
+	 * Declared triggers that must stay quiet: a control proving a statement or call is never reached. The case fails if one
+	 * fires (an `nth` trigger fires when its n-th match comes).
+	 */
+	readonly mustNotFire?: readonly MustNotFire[];
 	/** Runs once before the first step, off the record, to seed with code (raw SQL on the databases). */
 	readonly setup?: (world: World) => void | Promise<void>;
 	/** Record these tables' rows (and stores) after the last step. */
 	readonly final?: Dump;
+};
+
+/** The digest of every database, R2 and KV after a step (see digest.ts): a write to any table shows here. */
+export type StateDigest = {
+	music: string;
+	publication: string;
+	r2: string;
+	kv: string;
+};
+
+/** The state at the end of a case: per-table digests of both databases, and the whole of R2 and KV. */
+export type FinalState = {
+	music: DatabaseDigest;
+	publication: DatabaseDigest;
+	r2: Recorded;
+	kv: { [name: string]: Recorded };
 };
 
 export type StepRecord = {
@@ -211,13 +234,17 @@ export type StepRecord = {
 		  }
 		| { outcome: "rejected" };
 	state: Recorded | null;
+	digest: StateDigest;
 };
 
 export type CaseRecord = {
 	name: string;
+	/** Fixture format. 2 adds `digest` to every step, `finalState`, and the `trigger-hit` entries of the effect log. */
+	format: 2;
 	steps: StepRecord[];
 	effects: Effect[];
 	final: Recorded | null;
+	finalState: FinalState;
 };
 
 /** What a case can reach while it runs, in `setup`, `before` and `interleave` hooks. */
@@ -595,6 +622,21 @@ async function runOn(
 		return out;
 	};
 
+	const sha = (value: Recorded) =>
+		createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+	const kvStates = () =>
+		Object.fromEntries(
+			kvNames.map((name) => [name, kvs[name]?.snapshot() ?? null]),
+		);
+
+	const digest = (): StateDigest => ({
+		music: digestDatabase(music).sha256,
+		publication: digestDatabase(publication).sha256,
+		r2: sha(r2.snapshot()),
+		kv: sha(kvStates()),
+	});
+
 	const records: StepRecord[] = [];
 
 	const prior: Prior = {
@@ -691,10 +733,11 @@ async function runOn(
 			request: { actor: actorLabel(actor), method, path, body: record },
 			answer,
 			state: stores(step.dump),
+			digest: digest(),
 		});
 	}
 
-	const unfired = triggers.problems(c.optionalTriggers);
+	const unfired = triggers.problems(c.optionalTriggers, c.mustNotFire);
 
 	if (unfired.length > 0)
 		throw new Error(
@@ -703,9 +746,16 @@ async function runOn(
 
 	return {
 		name: c.name,
+		format: 2,
 		steps: records,
 		effects: log.entries,
 		final: stores(c.final),
+		finalState: {
+			music: digestDatabase(music),
+			publication: digestDatabase(publication),
+			r2: r2.snapshot(),
+			kv: kvStates(),
+		},
 	};
 }
 

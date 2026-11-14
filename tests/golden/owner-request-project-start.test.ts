@@ -833,7 +833,7 @@ const cases: Case[] = [
 				{ on: NOTICE_CLAIM, message: "d1 down" },
 				{ on: NOTICE_FINAL, message: "d1 down" },
 			],
-			optionalTriggers: [
+			mustNotFire: [
 				{
 					trigger: `d1 failure on ${NOTICE_FINAL}`,
 					reason:

@@ -36,6 +36,19 @@ export type EffectBody =
 			kind: "interleave";
 			label: string;
 	  }
+	/**
+	 * Which statement an injected failure or an interleave hit: the operation, the table and whether it reads or writes,
+	 * never the SQL text, the pattern or `nth`, which a conversion legitimately edits. The hook fires before the statement
+	 * runs (an injected failure never runs it), so whether a write changed a row is not known here.
+	 */
+	| {
+			kind: "trigger-hit";
+			trigger: "failure" | "interleave";
+			/** The failure's message or the interleave's label. */
+			name: string;
+			db: string;
+			hits: { op: string; table: string | null; access: "read" | "write" }[];
+	  }
 	| {
 			kind: "r2";
 			bucket: string;
