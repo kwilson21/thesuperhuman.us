@@ -5,14 +5,14 @@ Repository: `kwilson21/thesuperhuman.us`
 Branches: a stack of three, bottom to top: `claude/lint-zero-1-source`, `claude/lint-zero-2-tests`, `claude/lint-zero-3-enforce`
 Pull requests: #256, #257 and #258, linked as GitHub stack 259 (`https://github.com/kwilson21/thesuperhuman.us/stack/259`)
 Target: production `https://thesuperhuman.us`
-Reviewer: the code was written by Claude Haiku subagents from briefs and committed by the coordinating Claude session, whose trailer the commits carry; reviewed by independent Claude Opus and Sonnet subagents (one for correctness and security, one for repository rules, each round). Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
+Reviewer: built with Claude Code and reviewed in several independent AI review rounds, then by Greptile and Codex on the pull requests. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: the production revision at merge time. When this record was last updated that was `origin/main` `07d2613d` (pull request #267), which the stack is built on; re-check with `git fetch` before merge. After merge, the rollback for each layer is its merge commit's first parent; reverting one merge commit undoes only that layer.
 
 ## Scope
 
-`origin/main` at `07d2613d` has 51 Oxlint findings and no lint step in CI: 16 `no-module-mocking` in 11 route test files, and 35 in request-body readers, stored-details types and label maps (15 `no-unknown-parameters`, 10 `no-unsafe-dictionary-type`, 7 `require-safety-comment-for-type-assertion`, 3 `no-known-value-widening`). The counts are from the coordinating session's `oxlint` run on `07d2613d` (53 on the earlier bases, before #273 removed two mocks with the music area). This stack fixes all 51 and adds `pnpm run lint` to the Validate workflow. No baseline, ignore list, disable comment or override was added, and `oxlint.config.ts` and `tools/oxlint/` are unchanged.
+`origin/main` at `07d2613d` has 51 Oxlint findings and no lint step in CI: 16 `no-module-mocking` in 11 route test files, and 35 in request-body readers, stored-details types and label maps (15 `no-unknown-parameters`, 10 `no-unsafe-dictionary-type`, 7 `require-safety-comment-for-type-assertion`, 3 `no-known-value-widening`). The counts are from the builder's `oxlint` run on `07d2613d` (53 on the earlier bases, before #273 removed two mocks with the music area). This stack fixes all 51 and adds `pnpm run lint` to the Validate workflow. No baseline, ignore list, disable comment or override was added, and `oxlint.config.ts` and `tools/oxlint/` are unchanged.
 
-This stack was first built on an older `main` (64 findings) and reviewed there in four rounds. `main` then moved in four steps: #262 and #264 converted several validators to Effect Schema and removed 7 module mocks another way; then #266; then #265; then, overnight, #270, #273 and #267 (#273 converted the public music routes to rules, flows and services and deleted `tests/api/music-demand.test.ts`). The stack was rebuilt on the new `main`: files `main` had not touched carried over, and the files both sides changed were fixed again against `main`'s code. Where `main` had already solved the same thing (the middleware, the two music scripts, the brief suggestion pass, the publication website reader, and the music demand route test that #273 replaced), `main`'s version stands and this stack's was dropped.
+This stack was first built on an older `main` (64 findings) and reviewed there in four review rounds. `main` then moved in four steps: #262 and #264 converted several validators to Effect Schema and removed 7 module mocks another way; then #266; then #265; then, overnight, #270, #273 and #267 (#273 converted the public music routes to rules, flows and services and deleted `tests/api/music-demand.test.ts`). The stack was rebuilt on the new `main`: files `main` had not touched carried over, and the files both sides changed were fixed again against `main`'s code. Where `main` had already solved the same thing (the middleware, the two music scripts, the brief suggestion pass, the publication website reader, and the music demand route test that #273 replaced), `main`'s version stands and this stack's was dropped.
 
 - Layer 1, source (35 findings): a reader of whatever arrived takes `RawValue` from `src/lib/fields.ts`, the form the converted validators already use; a reader whose callers all pass a known type takes that type (`normalizeClientEmail`, `agreementJson`, `paymentDefaults`, `detailValue`); stored request details have a named type (`RequestDetails` in `src/lib/owner-model.ts`) over one JSON value type (`src/lib/json-value.ts`); label maps keep their keys and are read through one own-key lookup (`ownLabel` in `src/lib/type-guards.ts`, which replaces two local copies in the browser scripts).
 - Layer 2, tests only (16 findings): every remaining `vi.mock` is replaced by the real modules over an in-memory SQLite D1 with the real schema, and stand-ins for Stripe, Resend, Turnstile and Cloudflare Access that refuse any other host (`tests/helpers/stripe-fetch.ts`, `resend-fetch.ts`, `owner-access.ts`, `publication-d1.ts`, and `supplyEntries` in `tests/helpers/astro-content.ts`).
@@ -27,13 +27,13 @@ No page copy, markup, style, route, migration, binding, secret or dependency cha
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: fix every finding before enforcing; no ratchet.
-- Owner, 2026-11-13, as relayed in the task brief: fix the deferred findings and make the lint check enforce a clean result.
+- Owner, 2026-11-13, as relayed to the builder: fix the deferred findings and make the lint check enforce a clean result.
 - Owner, in conversation, 2026-11-13, after `main` moved: rebase the stack rather than close it.
-- Delegated, 2026-11-14: the owner left the open questions to the session that coordinates this work. Its decisions, which are not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
+- Delegated, 2026-11-14: the owner left the open questions to the party coordinating this work. Its decisions, which are not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
 
 ## Behaviour
 
-No production behaviour change for any input that can reach the code. What the reviewer subagents reported (their scripts were not committed and no logs were kept):
+No production behaviour change for any input that can reach the code. What the independent reviews reported (their scripts were not committed and no logs were kept):
 
 - TypeScript types were stripped with esbuild from `main`'s and this stack's version of the 25 changed files under `src/lib` and `src/scripts`. The JavaScript differs in 8, in these ways only: `ownLabel` lookups in place of direct indexing on label maps; a `?? ""` on one `textContent` assignment that could be `undefined` (the same empty text); a narrowing in `src/lib/agreement-request.ts` over values that are always text at that point; statement order in the owner request row mapping; a comment; and the new `ownLabel` function.
 - Label maps: a lookup by a key that names an inherited property (`constructor`, `toString`, `__proto__`) now gives nothing where it gave a function. Every call site was traced: the keys come from fixed lists, schema field names or a database `CHECK`, so no request can send such a key. Known and unknown keys give the same output as before.
@@ -43,7 +43,7 @@ No production behaviour change for any input that can reach the code. What the r
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26.13.1, made by the coordinating session; no logs retained.
+All runs are local on macOS arm64, Node 26.13.1, made by the builder; no logs retained.
 
 Top of the stack, on `07d2613d`:
 
@@ -63,10 +63,10 @@ Enforcement: a reviewer's throwaway finding made `oxlint` exit 1; on the older b
 
 ## Reviews
 
-- On the older base: four rounds of independent Claude review; Greptile and Codex raised five P2 findings on the first pushed heads. Four were fixed there and the fixes carried over (manual payment tested with Stripe on, a review seeded in the future, the invitation template not pinned, test databases not closed). The fifth, a symlinked launch of the two music scripts, no longer applies, because `main`'s versions of those scripts stand. All five threads (one on #256, four on #257) have since been answered and resolved one at a time: four as fixed, the symlink one as superseded.
-- On the new base: one round by an Opus and a Sonnet subagent found no blocker; its should-fix items were fixed (use `RawValue`, restore the text check in `currentSiteHref` and its tests, leave the frozen validator copy frozen, port three agreement tests, build the Resend stand-in on the golden harness). A second round by two Sonnet subagents on those fixes and the #266 merge found one should-fix (an inferred type left in a test helper) and nits, all fixed.
-- A Sonnet subagent then reviewed the catch-up to `07d2613d`, the pushed layers and this record: the code and layering were clean; this record was corrected from its findings, and that correction was not reviewed again.
-- A third round by two Sonnet subagents on the last commit of nits, the clean merge of #265, the pushed layers and this record: the code check was clean; this record was corrected from its findings and that last correction was not reviewed again.
+- On the older base: four independent review rounds. Greptile and Codex raised five P2 findings on the first pushed heads. Four were fixed there and the fixes carried over (manual payment tested with Stripe on, a review seeded in the future, the invitation template not pinned, test databases not closed). The fifth, a symlinked launch of the two music scripts, no longer applies, because `main`'s versions of those scripts stand. All five threads (one on #256, four on #257) have since been answered and resolved one at a time: four as fixed, the symlink one as superseded.
+- On the new base: the first review round found no blocker; its should-fix items were fixed (use `RawValue`, restore the text check in `currentSiteHref` and its tests, leave the frozen validator copy frozen, port three agreement tests, build the Resend stand-in on the golden harness). The second review round, on those fixes and the #266 merge, found one should-fix (an inferred type left in a test helper) and nits, all fixed.
+- An independent review of the catch-up to `07d2613d`, the pushed layers and this record found the code and layering clean; this record was corrected from its findings, and that correction was not reviewed again.
+- A third review round, on the last commit of nits, the clean merge of #265, the pushed layers and this record, found the code check clean; this record was corrected from its findings, and that last correction was not reviewed again.
 - Greptile's check passed on the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`) when read. Codex did not review those heads (its last reviews are of the first pushed heads); a fresh Codex review was requested on the heads pushed with this update.
 - The catch-up to `07d2613d` was a merge with one conflict, `tests/api/music-demand.test.ts`, which `main` deleted and this stack had rewritten; `main`'s deletion was taken. `src/lib/music-request.ts` merged without conflict. The esbuild comparison above was made before this catch-up; for the two source files `main` also changed since (`src/lib/music-request.ts`, `src/lib/music-catalog.ts`), a reviewer read the diff and found the stack's change is a type import and a signature type only.
 
@@ -76,7 +76,7 @@ Enforcement: a reviewer's throwaway finding made `oxlint` exit 1; on the older b
 - Two older tests still replace a function on an imported module with `vi.spyOn` (`tests/lib/software-projects.test.ts`, `tests/api/software-inquiry.test.ts`). The lint rule does not flag them.
 - `pnpm run format:check` is not run in CI.
 - `src/scripts/json-body.ts` has its own `JsonValue` that also admits `File`; the name is shared with `src/lib/json-value.ts`.
-- Not covered by any test, before or after: the studio code-email and session-ip allowances.
+- Not covered by any test, before or after: the studio code-email and sign-in IP allowances.
 
 ## Checklist
 
@@ -158,6 +158,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-This record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the coordinating session, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
+This record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the party coordinating this work, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
