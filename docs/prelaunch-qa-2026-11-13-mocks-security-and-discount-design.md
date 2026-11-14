@@ -17,10 +17,10 @@ Rollback revision: for #264 the parent of `7f28f299`, for #266 the parent of `41
 3. Pull request #265, merged to main as `0a296a0a`: the discount design. It adds a plan, a Quint model and a LemmaScript contract, and no file under `src/`.
 4. The conversion proof (this branch, pull request 270): tests, tooling and documentation only. It adds:
    - `pnpm run golden:neutral` (`scripts/golden-neutral.mjs`, `scripts/sql-effects.mjs`; tests in `tests/scripts/golden-neutral.test.ts`), which decides from two revisions of a golden fixture whether a conversion left behaviour alone. The rule is in `tests/golden/README.md` ("A conversion is neutral when") and in the Back-end rules of `CLAUDE.md` and `AGENTS.md`.
-   - Fixture format 2: after every step and at the end of every case, a row count and SHA-256 of every table of both databases, and the contents of R2 and KV, so a write to a table a case does not dump is seen. All 74 database fixtures were re-recorded in their own commit on unchanged `src/`; `scripts/golden-format-proof.mjs` shows the only differences are the added fields. The three older recorder fixtures are unchanged.
+   - Fixture format 3: a digest of every table of both databases, and of R2 and KV with each key's expiry and metadata, after every step; both databases as they were when the response had been read; and both databases as they were at every outside effect (so the state an email went out in is compared); at the end the per-table digests; and the real change count of every D1 statement. All 74 database fixtures were re-recorded in their own commit on unchanged `src/`; `scripts/golden-format-proof.mjs` shows the only differences are the added fields. The three older recorder fixtures are unchanged and carry no digests.
    - A harness check that a failure, outage or race a golden case declares actually fires, with `optionalTriggers` (one case) and `mustNotFire` (three control cases) for the exceptions, and a `trigger-hit` log entry naming the operation and table each injected failure or interleave hit.
    - One 20 second time limit per generated golden case, set once in `defineCorpus`, replacing eleven per-file 60 second limits.
-   - A pull request step in `validate.yml` that writes `golden:neutral --all` to the job summary and fails only on a usage or read error.
+   - A `Golden neutrality` workflow (`.github/workflows/golden-neutrality.yml`) that runs on every pull request and again when a label is added or removed, writes `golden:neutral --all` to the job summary, and fails a pull request carrying the `conversion` label unless every case is neutral (and any pull request on a usage or read error). `validate.yml` is unchanged.
    - This record.
 
    `git diff origin/main --stat -- src` is empty (checked locally). No pre-existing field of any golden fixture changed.
@@ -55,31 +55,34 @@ Pull request #265 (as reported; not re-observed here):
 - Live pages answered 200.
 - No file under `src/` changed.
 
-Review round on the conversion proof (as reported to the builder; not re-observed): an independent Claude review, Greptile and Codex on head `484a1685` found that D1 writes to undumped tables were invisible, that the position rule missed the moves it exists to catch, that a misspelled fixture name or flag passed, that allowances went stale silently, that renames could hide a dropped case, and that trigger hits could silently move to another statement. The commits after that head close each of them, tests first. Review of those commits: not yet.
+Review rounds on the conversion proof (as reported to the builder; not re-observed): round 1 (independent Claude review, Greptile and Codex on head `484a1685`) found that D1 writes to undumped tables were invisible, that the position rule missed the moves it exists to catch, that a misspelled fixture name or flag passed, that allowances went stale silently, that renames could hide a dropped case, and that trigger hits could silently move to another statement. Round 2 (head `3f5e3980`) found that two writes to one table swapping places around an email passed as neutral, that a write run through `first()` or `all()` recorded no change count, and several digest precision gaps; this series closes them. Review of the commits after round 2: not yet.
 
 Conversion proof, local, macOS arm64, Node 26, pnpm 12.20.0, in this worktree. No logs retained.
 
 - `pnpm exec biome format .`: no fixes applied.
 - `pnpm run build`: `Complete!`
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `pnpm test`, run twice: 285 test files and 12,429 tests passed, 1 skipped, both times; vitest `Duration` 59.7 s and 55.1 s (the earlier head, before the digests: 58.9 s and 69.7 s); no case timed out; `git status` clean and the fixtures byte-identical between the two runs.
-- Fixture re-record, proof script: 77 fixtures before and after, 9,014 cases; stored size 3,041,562 bytes before and 4,279,661 after (141%); as JSON text 60.9 MB before and 73.3 MB after (121%); the only differences are `format`, `finalState`, the per-step `digest` and the `trigger-hit` log entries.
-- Slowest golden case: about 1.9 s alone and about 4.8 s with three golden suites running at once (all PDF cases of `owner-request-software-offer-signing`), so the 20 second limit leaves more than four times the headroom measured under that load.
-- `golden:neutral --all 05b669ce^1 05b669ce` (pull request 251, old format on both sides): 3 of 77 fixtures differ; exactly one case is reported NOT neutral (`delivery out of order: the older paid arrives after a newer sent`), and the two cases the fix renamed are reported removed. No false position finding.
-- `golden:neutral --all origin/main HEAD` (format 1 against format 2): every database fixture reported NOT COMPARABLE, `NOT NEUTRAL`, exit 1, as designed.
-- The position rule over the 26 most recent commits that re-recorded fixtures: no finding on any commit that changed no behaviour. It reported 292 moved effects in `0234f63f` (the captcha-before-allowance reorder, a deliberate behaviour change) and 9 in `1ac7c584` (an allowance row now written before the Turnstile call in six `offer-draft` cases, in a commit named for header cleaning), which the owner may want to look at. The ordered and the order-insensitive modes gave identical results on all of them.
+- `pnpm test`, run twice: 285 test files and 12,440 tests passed, 1 skipped, both times; vitest `Duration` 65.6 s and 64.7 s (the format 2 head: 59.7 s and 55.1 s; before any digests: 58.9 s and 69.7 s); no case timed out; `git status` clean and the fixtures byte-identical between the two runs.
+- Digest cost: the database digest is recomputed only when SQLite's `total_changes()`, schema version or AUTOINCREMENT counters have moved. Running every fixture once with `GOLDEN_VERIFY_DIGESTS=1`, which also computes every cached answer in full and compares, passed for all 9,091 cases; it found one hole in the first version of the cache (an ignored INSERT moves an AUTOINCREMENT counter without changing a row), now covered by the stamp and by a test.
+- Format proof from `3f5e3980` to this head: 77 fixtures, 9,014 cases; stored size 4,279,661 bytes before and 4,691,264 after (110%); as JSON text 73.3 MB before and 77.7 MB after (106%); the only differences are `format`, `finalState`, the per-step `digest`, the per-effect `state`, `trigger-hit` entries and the real count in place of a null `changes`. Against `origin/main`: 3,041,562 bytes to 4,691,264 (154%).
+- `golden:neutral --all 05b669ce^1 05b669ce` (pull request 251, old format on both sides): 3 of 77 fixtures differ; exactly one case is reported NOT neutral.
+- `golden:neutral --all origin/main HEAD` (format 1 against format 3): every database fixture NOT COMPARABLE, `NOT NEUTRAL`, exit 1, as designed.
 - `pnpm run verify:quint:all`, `pnpm run publicist:gate`, `pnpm exec oxlint` (53 findings) and `pnpm run check`: results in the hand-off report.
 
-Limits, after the fixes:
+What each mechanism catches is listed in `tests/golden/README.md`. The write-order rule of the first two versions was removed: with the digest at every outside effect and at the response it caught nothing they miss, and it failed legitimate rewrites (one UPDATE as a DELETE and an INSERT, INSERT OR REPLACE, an upsert as an UPDATE).
 
-- Where the tool has no evidence: the history above holds almost no real conversion, so how often the position rule flags a legitimate conversion is untested; the order-insensitive default and the `--ordered` option are chosen from reasoning, not from data.
-- The position rule reads writes from the SQL text and a row count. A write that changed no row, the order of writes between two effects, and the written values (the digests see those) are not part of it; a statement form the reader cannot attribute to a table is an error.
-- The five database triggers that still write (issue 242) change rows without the statement saying so; they show in the digests, not in the position rule.
+Limits, after this round:
+
+- The digests see the state at the step boundaries, at the response and at every outside effect. They do not see where in time a write happened between two of those points, or a write whose effect is undone before the next digest.
+- A conversion that changes the state at an outside effect for a reason that is not a behaviour change (for example an extra bookkeeping row written before an email) is reported NOT neutral and has no allowance: it has to be recorded as a fix.
+- The history holds almost no real conversion, so how often the digests flag a legitimate conversion is untested.
+- The five database triggers that still write (issue 242) change rows without the statement saying so; they show in the digests.
 - The trigger check covers D1 failures and interleaves, R2 and KV `fails`, `byHost` fetch answers that throw and AI answers that throw or never answer, and KV failures in the older recorder. A hand-written fetch responder declares nothing, and rate-limit refusals are not checked.
 - The `trigger-hit` marker says which operation and table were hit, not whether a write changed a row (the hook fires before the statement runs).
+- The three older recorder fixtures (contact, resume-request, resume-approve) are outside the digests: they use their own record shape, so moving them would rename every pre-existing field; their routes use KV and fetch only, and every KV operation and fetch is a compared effect.
 - A fixture format change cannot be shown neutral; the next change of format needs the same proof script and the same separate commit.
-- The CI step is UNVERIFIED until it runs on a pull request: it needs the checkout to be a merge ref with two commits. It reports; it does not gate.
-- The schema script seeds one row with SQLite's wall clock; the harness now fixes it, which is the only change to what a route can read. The publication database defaults `published_at` to the wall clock when an insert leaves it out; no case does today, and a case that did would fail the determinism check.
+- The `Golden neutrality` workflow is UNVERIFIED until it runs on a pull request, and enforcement depends on the `conversion` label being applied; the workflow is not a required check unless the owner makes it one.
+- The schema script seeds one row with SQLite's wall clock; the harness fixes it, which is the only change to what a route can read. The publication database defaults `published_at` to the wall clock when an insert leaves it out; no case does today, and a case that did would fail the determinism check.
 - Whether a case's inputs changed in a conversion is still the reviewer's check.
 
 ## Checklist
@@ -120,7 +123,7 @@ Limits, after the fixes:
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks: for #264, #266 and #265, Workers Builds succeeded on each merge commit and, for #265, CI `validate` including the Dafny contracts and the pooled Quint step passed (all as reported). For the conversion proof, the local gates above; CI on its head is UNVERIFIED.
-- UNVERIFIED, 7.2 Exact diff review and independent code and security review: #266 had three independent review rounds (as reported). The reviews of #264 and #265 are not recorded here. The conversion proof had one review round (independent Claude review, Greptile and Codex, as reported), whose findings are closed in later commits; those commits have not been reviewed yet.
+- UNVERIFIED, 7.2 Exact diff review and independent code and security review: #266 had three independent review rounds (as reported). The reviews of #264 and #265 are not recorded here. The conversion proof had two review rounds (independent Claude review, with Greptile and Codex in round 1, as reported), whose findings are closed in later commits; the latest commits have not been reviewed yet.
 - UNVERIFIED, 7.3 Production bindings, secrets, HTTPS, host routing and response headers: no binding, secret or migration changed in the conversion proof or #265; the same is not claimed for #264 and #266. Nothing deployed from this branch.
 - PASS, 7.4 Rollback is the previous deployed revision: the parents of `7f28f299`, `416eb8d1` and `0a296a0a` (as reported); for the conversion proof, re-check `origin/main` with `git fetch` before merge.
 - PASS, 7.5 for #264, #266 and #265 (as reported): the live pages named above answered 200 after deployment, and the #266 refusals answered as listed. UNVERIFIED for the conversion proof: nothing deployed; to be completed after merge (Workers Builds result on the merge commit, and `/`, `/software/start` and `/work` answering 200).
