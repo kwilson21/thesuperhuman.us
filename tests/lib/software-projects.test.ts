@@ -3,6 +3,7 @@ import type { APIContext } from "astro";
 import { partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { fakeR2Bucket } from "../helpers/r2";
+import { stripeFake } from "../helpers/stripe-fetch";
 import * as invoiceLib from "~/lib/software-invoices";
 import { POST as invoicePost } from "~/pages/api/owner/requests/[id]/invoices";
 import { createRequire } from "node:module";
@@ -3403,8 +3404,8 @@ it("cannot restore invoice references when retention runs between webhook lookup
 
 it("authorizes invoice creation and preserves a recoverable attempt after provider failure", async () => {
 	env.STRIPE_PAYMENTS_ENABLED = "true";
-	env.STRIPE_SECRET_KEY = "test";
-	env.STRIPE_WEBHOOK_SECRET = "test";
+	env.STRIPE_SECRET_KEY = "sk_test_fake";
+	env.STRIPE_WEBHOOK_SECRET = "whsec_fake";
 
 	const body = {
 		offer_id: "software-offer",
@@ -3420,49 +3421,67 @@ it("authorizes invoice creation and preserves a recoverable attempt after provid
 	expect(
 		sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
 	).toEqual({ n: 0 });
-	const provider = vi.spyOn(invoiceLib, "createSoftwareInvoice");
-	provider.mockRejectedValueOnce(new Error("Provider uncertain"));
-	provider.mockResolvedValueOnce({
-		stripeCustomerId: "cus_test",
-		invoiceId: "in_test",
-		hostedInvoiceUrl: "https://example.com/pay",
-		dueAt: "2026-10-07T12:00:00Z",
-		status: "open",
+
+	// Stripe refuses the first invoice creation, so the provider fails after the attempt is reserved.
+	const stripe = stripeFake({
+		invoiceIds: ["in_test"],
+		refuseFirstInvoices: 1,
+		dueDate: "2026-10-07T12:00:00Z",
 	});
 
-	try {
-		expect((await call(invoicePost, body)).status).toBe(502);
-		const row = sql.prepare("SELECT * FROM software_invoices").get();
-		expect(row.status).toBe("creating");
-		sql.exec("UPDATE software_invoices SET creation_started_at=NULL");
+	vi.stubGlobal("fetch", stripe.fetch);
+
+	expect((await call(invoicePost, body)).status).toBe(502);
+	const row = sql.prepare("SELECT * FROM software_invoices").get();
+	expect(row.status).toBe("creating");
+	expect(
+		sql.prepare("SELECT allow_card,attempt FROM software_invoices").get(),
+	).toEqual({ allow_card: 1, attempt: 0 });
+	sql.exec("UPDATE software_invoices SET creation_started_at=NULL");
+	expect(
+		(
+			await call(invoicePost, {
+				...body,
+				allow_card: false,
+				retry_id: row.id,
+			})
+		).status,
+	).toBe(200);
+
+	const creates = stripe
+		.calls()
+		.filter(
+			(request) => request.method === "POST" && request.path === "/v1/invoices",
+		);
+
+	expect(creates).toHaveLength(2);
+
+	for (const create of creates) {
+		expect(create.idempotencyKey).toMatch(/:attempt-0:invoice$/);
+		expect(create.form.get("metadata[software_invoice_id]")).toBe(row.id);
 		expect(
-			(
-				await call(invoicePost, {
-					...body,
-					allow_card: false,
-					retry_id: row.id,
-				})
-			).status,
-		).toBe(200);
-		expect(provider.mock.calls[0][3]).toMatchObject({
-			id: row.id,
-			allow_card: 1,
-			attempt: 0,
-		});
-		expect(provider.mock.calls[1][3]).toMatchObject({
-			id: row.id,
-			allow_card: 1,
-			attempt: 0,
-		});
-		expect(
-			sql.prepare("SELECT status,due_at FROM software_invoices").get(),
-		).toEqual({ status: "open", due_at: "2026-10-07T12:00:00Z" });
-		expect(
-			sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
-		).toEqual({ n: 1 });
-	} finally {
-		provider.mockRestore();
+			[...create.form.entries()].flatMap(([key, value]) =>
+				key.startsWith("payment_settings[payment_method_types]") ? [value] : [],
+			),
+		).toEqual(["us_bank_account", "card"]);
 	}
+
+	expect(creates[1].idempotencyKey).toBe(creates[0].idempotencyKey);
+	expect(
+		sql
+			.prepare(
+				"SELECT status,stripe_invoice_id,hosted_invoice_url,due_at FROM software_invoices",
+			)
+			.get(),
+	).toEqual({
+		status: "open",
+		stripe_invoice_id: "in_test",
+		hosted_invoice_url: "https://invoice.stripe.com/in_test",
+		due_at: "2026-10-07T12:00:00.000Z",
+	});
+	expect(
+		sql.prepare("SELECT count(*) AS n FROM software_invoices").get(),
+	).toEqual({ n: 1 });
 });
 
 it("requires prior full payment before advancing an Invoice Terms milestone", async () => {
