@@ -4,8 +4,8 @@ Date: November 14, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
-Branch: `claude/followup-spy`, stacked on `claude/lint-zero-3-enforce` (pull request #258)
-Rollback revision: the production revision at merge time; after merge, the merge commit's first parent. Reverting the merge commit undoes only this change.
+Branch: `claude/followup-spy` (pull request #278), built on the lint stack (#256 to #258, merged as `440b28ef`)
+Rollback revision: the production revision when this reaches `main`; after that, its merge commit's first parent. Reverting the merge commit undoes only this change.
 
 ## Scope
 
@@ -15,7 +15,7 @@ One module spy remains: `tests/api/software-inquiry.test.ts` replaces `softwareB
 
 ## Owner decisions
 
-- The owner approved rewriting the two older tests as a tests-only follow-up (reported by the party coordinating this work, 2026-11-14).
+- The owner approved a tests-only follow-up to remove the two module spies (approval relayed to the pull request author, 2026-11-14; not recorded here in the owner's own words). One test is rewritten here; the second spy is left for the owner's decision.
 
 ## Evidence and limits
 
@@ -23,10 +23,10 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 - What the test proved before and proves now: the first provider call fails, the route answers 502 and the invoice row stays `creating` with `allow_card` 1 and `attempt` 0; the retry reuses that reserved attempt even though it asks for no card. The new assertions read the two recorded Stripe requests (same idempotency key ending `:attempt-0:invoice`, same invoice id in metadata, both payment methods offered) and the database row.
 - The failure is now a definite Stripe refusal (400) where the spy rejected with an uncertain error. A reviewer read the route and `src/lib/software-invoices.ts` and found both take the same path. A connection failure, which the Stripe SDK retries, is not covered by this test, as before.
-- Mutations by the builder and a reviewer, each restored afterwards: a fresh idempotency key on retry, and honouring the retry's `allow_card`, each make the test fail.
-- `oxlint --deny-warnings` exit 0; `biome format .` no fixes; `astro check` 0 errors; `vitest run tests/lib/software-projects.test.ts tests/api/software-inquiry.test.ts tests/helpers`: 18 files, 248 tests passed, also in shuffled order. The full suite and build passed on the branch stacked above this one (298 files, 12,758 tests).
+- Mutations by the author and a reviewer, each restored afterwards: a fresh idempotency key on retry, and honouring the retry's `allow_card`, each make the test fail.
+- `oxlint --deny-warnings` exit 0; `biome format .` no fixes; `astro check` 0 errors; `vitest run tests/lib/software-projects.test.ts tests/api/software-inquiry.test.ts tests/helpers`: 18 files, 248 tests passed, also in shuffled order. The full suite on this head, without a build: 298 files, 12,747 tests passed, 3 skipped. The build passed on the branch stacked above this one.
 - One independent review round for correctness and one for repository rules: no blocker or should-fix item; nits applied.
-- UNVERIFIED: `validate`, Greptile and Codex on the pull request.
+- UNVERIFIED: `validate`, Greptile and Codex on the pull request. UNVERIFIED: no Stripe test-mode run; the test uses a stand-in for Stripe.
 
 ## Checklist
 
@@ -64,12 +64,16 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - UNVERIFIED, 7.5 Post-deployment verification: not deployed.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
 
+### Software agreement signing
+
+- N/A: no agreement, signing, template or retention code changed.
+
 ### 8. Private owner center
 
-- N/A, 8.1 to 8.15: no owner center, payment, retention or studio code changed. The test covers a software invoice action with a stand-in for Stripe; UNVERIFIED in Stripe test mode.
+- N/A, 8.1 to 8.15: no owner center, payment, retention or studio code changed. The test covers a software invoice action with a stand-in for Stripe.
 
 ## Delivery status
 
-Not merged. Depends on pull request #258. This record authorizes neither merge nor deployment.
+Not merged. This record authorizes neither merge nor deployment.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
