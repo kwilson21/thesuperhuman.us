@@ -426,6 +426,12 @@ describe("two requests on one cookie for different addresses", () => {
 
 	type Step = "read" | "clear" | "write";
 
+	type Seen = {
+		status: number;
+		body: { ok: boolean; message?: string; error?: string };
+		cookie: string[];
+	};
+
 	/** A database that holds each batch of one request until the script says it is that request's turn. */
 	function scripted(who: string, script: string[]) {
 		const real = db;
@@ -434,11 +440,13 @@ describe("two requests on one cookie for different addresses", () => {
 			const first = boundStatement(items[0]).query;
 
 			if (first.includes("AS requestId")) return "read";
+
 			if (
 				/^\s*DELETE FROM audio_client_signin_codes/i.test(first) &&
 				items.length === 2
 			)
 				return "clear";
+
 			if (/^\s*SELECT CASE WHEN \?=0/i.test(first)) return "write";
 
 			return null;
@@ -542,7 +550,7 @@ describe("two requests on one cookie for different addresses", () => {
 
 		const seen = async (response: Response) => ({
 			status: response.status,
-			body: await response.json(),
+			body: await readJson<Seen["body"]>(response),
 			cookie: response.headers.getSetCookie(),
 		});
 
@@ -589,7 +597,7 @@ describe("two requests on one cookie for different addresses", () => {
 			const attackerAddress =
 				attacker === "client" ? address : "stranger-a@example.com";
 
-			const answers: Record<string, unknown> = {};
+			const answers: Record<string, { first: Seen; second: Seen }> = {};
 
 			for (const [name, targetAddress] of Object.entries(targets)) {
 				const { first, second } = await run(
