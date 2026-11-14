@@ -50,6 +50,23 @@ describe("astro:content in tests", () => {
 		);
 	});
 
+	it("returns the entries a test supplies in place of a collection's files, until they are cleared", async () => {
+		const supplied = { id: "test-entry", collection: "recordings", data: {} };
+
+		stand.supplyEntries("recordings", [supplied]);
+
+		try {
+			expect(await getCollection("recordings")).toEqual([supplied]);
+			expect(await getEntry("recordings", "test-entry")).toEqual(supplied);
+		} finally {
+			stand.clearSuppliedEntries();
+		}
+
+		expect(
+			(await getCollection("recordings")).map((entry) => entry.id),
+		).not.toContain("test-entry");
+	});
+
 	it("names a collection that does not exist", async () => {
 		await expect(stand.getCollection("not-a-collection")).rejects.toThrow(
 			/not-a-collection/,

@@ -1,7 +1,6 @@
-import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendStudioSignInNotice } from "~/lib/audio-resend";
+import { createRequire } from "node:module";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	defaultFirstUpdate,
 	deliverProjectUpdateNotice,
@@ -11,11 +10,8 @@ import {
 	validProjectDate,
 } from "~/lib/audio-project-updates";
 import { partial } from "../helpers/doubles";
+import { stubResend } from "../helpers/resend-fetch";
 import { sqliteD1 } from "../helpers/sqlite-d1";
-
-vi.mock("~/lib/audio-resend", () => ({
-	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
-}));
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -26,8 +22,12 @@ const baseline = readFileSync(
 
 const now = new Date("2026-09-22T12:00:00Z");
 
+/** Databases opened by the current test, closed after it even when an assertion fails. */
+const openDatabases: { close(): void }[] = [];
+
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
+	openDatabases.push(sql);
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
@@ -41,7 +41,10 @@ function fixture() {
 	return { sql, db };
 }
 
-beforeEach(() => vi.clearAllMocks());
+afterEach(() => {
+	for (const sql of openDatabases.splice(0)) sql.close();
+	vi.unstubAllGlobals();
+});
 
 describe("project updates", () => {
 	it("records only one acceptance when two stale actions share a millisecond", async () => {
@@ -76,7 +79,6 @@ describe("project updates", () => {
 				)
 				.get(),
 		).toEqual({ count: 1 });
-		sql.close();
 	});
 
 	it("accepts a reviewed project, starts paid work, and records a later date with its reason", async () => {
@@ -181,7 +183,6 @@ describe("project updates", () => {
 			{ action: "stage-changed" },
 			{ action: "date-changed" },
 		]);
-		sql.close();
 	});
 
 	it("keeps the saved update when email fails and allows only a failed delivery to retry", async () => {
@@ -203,7 +204,7 @@ describe("project updates", () => {
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		});
 
-		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
+		const emails = stubResend({ resend: [{ status: 422 }] });
 		await deliverProjectUpdateNotice(db, update.id, env);
 		expect(
 			sql
@@ -217,10 +218,8 @@ describe("project updates", () => {
 		);
 		await deliverProjectUpdateNotice(db, update.id, env);
 		await deliverProjectUpdateNotice(db, update.id, env);
-		expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
-		expect(vi.mocked(sendStudioSignInNotice).mock.calls[1]).not.toContain(
-			"We are set.",
-		);
+		expect(emails).toHaveLength(2);
+		expect(JSON.stringify(emails[1])).not.toContain("We are set.");
 		expect(
 			sql
 				.prepare(
@@ -231,7 +230,6 @@ describe("project updates", () => {
 		expect(await queueProjectNoticeForDelivery(db, "song-1", update.id)).toBe(
 			false,
 		);
-		sql.close();
 	});
 
 	it("moves an agreed review into revision and closes only a paid, published final", async () => {
@@ -354,7 +352,6 @@ describe("project updates", () => {
 			{ action: "stage-changed" },
 			{ action: "completed" },
 		]);
-		sql.close();
 	});
 
 	it("requires an explicit owner check before retrying a stale unconfirmed delivery", async () => {
@@ -376,10 +373,7 @@ describe("project updates", () => {
 			CONTACT_FROM_EMAIL: "noreply@example.com",
 		});
 
-		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
-			ok: false,
-			uncertain: true,
-		});
+		const emails = stubResend({ resend: [{ status: 500 }] });
 		await deliverProjectUpdateNotice(db, update.id, env);
 		expect(
 			sql
@@ -407,7 +401,7 @@ describe("project updates", () => {
 			),
 		).toBe(true);
 		await deliverProjectUpdateNotice(db, update.id, env);
-		expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
+		expect(emails).toHaveLength(2);
 		expect(
 			sql
 				.prepare(
@@ -415,7 +409,6 @@ describe("project updates", () => {
 				)
 				.get(update.id),
 		).toEqual({ notification_status: "sent" });
-		sql.close();
 	});
 
 	it("does not email a queued update after project access is revoked", async () => {
@@ -436,6 +429,7 @@ describe("project updates", () => {
 			now,
 		))!;
 
+		const emails = stubResend();
 		sql
 			.prepare(
 				"UPDATE audio_projects SET revoked_at=? WHERE request_id='song-1'",
@@ -449,11 +443,10 @@ describe("project updates", () => {
 				CONTACT_FROM_EMAIL: "noreply@example.com",
 			}),
 		);
-		expect(sendStudioSignInNotice).not.toHaveBeenCalled();
+		expect(emails).toHaveLength(0);
 		expect(await queueProjectNoticeForDelivery(db, "song-1", update.id)).toBe(
 			false,
 		);
-		sql.close();
 	});
 	it("takes a revision on a booked request the owner marked resolved, but not a withdrawn one", async () => {
 		const { sql, db } = fixture();
@@ -494,7 +487,6 @@ describe("project updates", () => {
 				.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'")
 				.get(),
 		).toEqual({ stage: "revision_in_progress" });
-		sql.close();
 	});
 
 	it("completes a paid, delivered project after the owner marks the request resolved", async () => {
@@ -530,7 +522,6 @@ describe("project updates", () => {
 				.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'")
 				.get(),
 		).toEqual({ stage: "complete" });
-		sql.close();
 	});
 });
 
