@@ -70,7 +70,7 @@ Review round 2 changed four of those cases and added ten, for the key-bounded na
 
 - Rules: `src/server/rules/publication-commit.ts`, `publication-feed.ts`, `publication-access.ts`, `publication-token.ts`, `publication-login.ts`.
 - Flows: `src/server/flows/publication-commit.ts`, `publication-feed.ts`, `publication-tools.ts`, `publication-login.ts`, `work-feed.ts`.
-- Store and services: `src/server/publication-store.ts`, `publication-services.ts` (the OAuth grant store and GitHub), `publication-cookie.ts` (the sealed login cookie), `publication-login.ts` (the handler), `publication-oauth.ts` (the route), `publication-kv.ts` (the key-bounded KV namespace the OAuth library is given; it decides nothing about business state, so it is a service detail and not a rule, and it is the same file on A), `publication-feed.ts` (`websiteFeed`), `bounded-body.ts`.
+- Store and services: `src/server/publication-store.ts`, `publication-services.ts` (the OAuth grant store and GitHub), `publication-cookie.ts` (the sealed login cookie), `publication-login.ts` (the handler), `publication-oauth.ts` (the route), `publication-kv.ts` (the key-bounded KV namespace the OAuth library is given; it decides nothing about business state, so it is a service detail and not a rule; on A the same code is `src/lib/publication/key-bounded-kv.ts`, because `src/lib` may not load a value from `src/server` and the route is still in `src/lib` there), `publication-feed.ts` (`websiteFeed`), `bounded-body.ts`.
 - Shared: `src/server/digest.ts` (one SHA-256 helper, used by the commit hash, the token comparison, the consent style hash and the PKCE challenge; none existed in `src/server/` before), `src/server/publication-mcp.ts` (the tools as the transport calls them: one place that catches a defect, logs it through `logUnexpected` and answers the documented word).
 - Routes: `src/pages/api/work-feed.ts`, `src/pages/api/publication/[...path].ts`, `src/pages/.well-known/[...path].ts`, `src/pages/api/mcp-probe.ts`.
 - Left in `src/lib/publication/`: `contract.ts` (types and the Effect Schema reader, which accepts only an object's own enumerable members, as the old validator did), `canonical.ts`, `read.ts` (the feed's types, which the browser feed script imports as types), `mcp.ts` (Zod tool inputs and the transport; its `try/finally` is resource clean-up, closing the MCP server after the transport answers, not error handling, and `src/pages/api/mcp-probe.ts` has the same), `oauth-login.ts` (the consent page).
@@ -135,29 +135,29 @@ There is no (c) and no (d): every decision that was in the old INSERT's WHERE, C
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Results are filled in below from the last runs at each tip.
 
-Branch A at `d1c16fe2` (on `origin/main` at `3561a541`; results from the final run at that tip, except that the format check, oxlint and `check` were rerun after the last test-typing commit and the full suite ran one commit earlier, `aff13a87`, which differs only in a type annotation in one test file).
+Branch A at `7d92482b` (on `origin/main` at `3561a541`), after review round 2. Every step ran at this tip.
 
-- `pnpm run format:check`: `Checked 757 files in 87ms. No fixes applied.`
+- `pnpm run format:check`: `Checked 759 files in 113ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 293 test files, 12,709 tests passed, 1 skipped; `git status` unchanged by the run.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 294 test files, 12,731 tests passed, 1 skipped; `git status` unchanged by the run.
+- `pnpm run golden:neutral --all origin/main`: NOT NEUTRAL, on purpose: `work-feed` 8 not neutral, `publication-oauth` 10 not neutral (the eighteen cases above), and 18 added cases (`publication-oauth` 4, `publication-token` 13, `publication-mcp` 1); compared 77 fixtures and 9,016 cases. Nothing else differs.
 - `QUINT_JOBS=4 pnpm run verify:quint:all`: 44 lines, every one `ok`.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 51 problems, the same as `origin/main` (counted from its output lines).
-- `pnpm run check`: `Result (783 files): 0 errors, 0 warnings, 17 hints`.
-- `pnpm run golden:neutral --all origin/main`: NOT NEUTRAL, on purpose: `work-feed` 8 not neutral, `publication-oauth` 10 not neutral (the eighteen cases above), and 8 added cases (`publication-oauth` 4, `publication-token` 3, `publication-mcp` 1); compared 77 fixtures and 9,016 cases.
+- `pnpm run check`: `Result (785 files): 0 errors, 0 warnings, 17 hints`.
 
-Branch B at the merge of A's tip (the record and any later commit are documentation only):
+Branch B, evidence head `9e3f8651` (the merge of A's tip `7d92482b`); a documentation-only commit that holds this record follows it. Every step ran at the evidence head.
 
-- `pnpm run format:check`: `Checked 777 files in 91ms. No fixes applied.`
+- `pnpm run format:check`: `Checked 779 files in 90ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 296 test files, 12,730 tests passed, 1 skipped; `git status` unchanged by the run.
-- `pnpm run golden:neutral --all <A tip> HEAD`: `publication-mcp` 43 identical, 18 neutral with D1 changes; `publication-token` 41 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,024 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commits.
-- `QUINT_JOBS=4 pnpm run verify:quint:all`: 52 lines, every one `ok`; wall time about 46 s on a machine shared with two other builders.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 297 test files, 12,756 tests passed, 1 skipped; `git status` unchanged by the run.
+- `pnpm run golden:neutral --all <A tip> HEAD`: `publication-mcp` 43 identical, 18 neutral with D1 changes; `publication-token` 51 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,034 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commits.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: 52 lines, every one `ok`.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 48 problems (51 on A): the remaining findings in this area are the unknown-typed inputs of `canonical.ts`, `contract.ts` (`parsePublication`) and the frozen copy; `delivery.ts`'s finding and the two module mocks went with their files.
-- `pnpm run check`: `Result (803 files): 0 errors, 0 warnings, 17 hints`.
+- `pnpm run check`: `Result (805 files): 0 errors, 0 warnings, 17 hints`.
 - Differential test against the frozen validator: 6,000 seeded inputs plus the fixed pool plus 18 non-plain, odd-key, deep and very long inputs, zero differences, key order included; the new inputs fail against the previous reader.
 
 Limits: the sign-in against a real GitHub and the real OAuth library on a deployed Worker were not run; the corpus drives the library on a fake KV. The consent page was not seen in a browser (its markup and policy are byte-identical in the corpus). UNVERIFIED: any live call (no live publication endpoint was called). The Quint model is checked by random simulation, not by Apalache.
