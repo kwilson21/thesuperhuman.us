@@ -95,42 +95,16 @@ function consoleArg(arg: Passed): Recorded {
 	}
 }
 
-/** What setTimeout returns on real timers: enough of a Node Timeout for the code that holds one. */
-class QueuedTimeout {
-	ref() {
-		return this;
-	}
-
-	unref() {
-		return this;
-	}
-
-	hasRef() {
-		return false;
-	}
-
-	refresh() {
-		return this;
-	}
-}
-
-/** The WebCrypto operations that run on a thread, so they finish on a later macrotask. */
-const THREADED = [
-	"digest",
-	"sign",
-	"verify",
-	"encrypt",
-	"decrypt",
-	"deriveBits",
-	"deriveKey",
-] as const;
+// The real timers, kept before any case replaces the global ones: a queued timer's handle is a real, already cleared Timeout.
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
 
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
 	virtualTimers = false;
 
 	private queued: {
-		handle: QueuedTimeout;
+		handle: NodeJS.Timeout;
 		due: number;
 		order: number;
 		callback: () => void;
@@ -216,14 +190,18 @@ export class Determinism {
 
 	/**
 	 * Makes the asynchronous work that leaves the microtask queue visible to the runner: WebCrypto operations that run on a
-	 * thread (digest, sign, verify, encrypt, decrypt, key derivation) and, on real timers, setTimeout. Each counts as in
+	 * thread (digest, sign, verify, encrypt, decrypt, deriveBits) and, on real timers, setTimeout. Each counts as in
 	 * flight until it ends (EffectLog.begin), and the macrotask it comes back on is a boundary (EffectLog.boundary).
 	 * Returns what puts the originals back.
 	 */
 	private trackAsyncWork(): (() => void)[] {
 		const restores: (() => void)[] = [];
 
-		const replace = (target: object, name: string, value: unknown) => {
+		const replace = <Owner extends object, Name extends keyof Owner & string>(
+			target: Owner,
+			name: Name,
+			value: Owner[Name],
+		) => {
 			const original = Reflect.getOwnPropertyDescriptor(target, name);
 
 			Object.defineProperty(target, name, {
@@ -234,31 +212,35 @@ export class Determinism {
 
 			restores.push(() => {
 				if (original) Object.defineProperty(target, name, original);
-				else Reflect.deleteProperty(target, name);
 			});
 		};
 
-		for (const name of THREADED) {
-			const real = Reflect.get(crypto.subtle, name);
-
-			replace(crypto.subtle, name, (...args: unknown[]) => {
+		const tracked =
+			<Args extends unknown[], Result>(
+				work: (...args: Args) => Promise<Result>,
+			) =>
+			(...args: Args): Promise<Result> => {
 				const end = this.log.begin();
-				const promise = Reflect.apply(real, crypto.subtle, args);
+				const promise = work(...args);
 
-				promise.then(
-					() => {
-						this.log.boundary();
-						end();
-					},
-					() => {
-						this.log.boundary();
-						end();
-					},
-				);
+				const settle = () => {
+					this.log.boundary();
+					end();
+				};
+
+				promise.then(settle, settle);
 
 				return promise;
-			});
-		}
+			};
+
+		const subtle = crypto.subtle;
+
+		replace(subtle, "digest", tracked(subtle.digest.bind(subtle)));
+		replace(subtle, "sign", tracked(subtle.sign.bind(subtle)));
+		replace(subtle, "verify", tracked(subtle.verify.bind(subtle)));
+		replace(subtle, "encrypt", tracked(subtle.encrypt.bind(subtle)));
+		replace(subtle, "decrypt", tracked(subtle.decrypt.bind(subtle)));
+		replace(subtle, "deriveBits", tracked(subtle.deriveBits.bind(subtle)));
 
 		// On real timers a route's setTimeout is queued, not scheduled: the runner fires it when nothing else can make
 		// progress (fireNextTimer), in the order of its due time. How long the machine takes never decides when it fires.
@@ -266,35 +248,42 @@ export class Determinism {
 			this.queued.length = 0;
 			this.logical = 0;
 
+			const queue = (
+				callback: (...args: unknown[]) => void,
+				ms?: number,
+				...args: unknown[]
+			) => {
+				const handle = realSetTimeout(() => {}, 0);
+
+				realClearTimeout(handle);
+
+				this.queued.push({
+					handle,
+					due: this.logical + Math.max(0, Number(ms) || 0),
+					order: this.created,
+					callback: () => callback(...args),
+				});
+
+				this.created += 1;
+				this.log.onChange?.();
+
+				return handle;
+			};
+
+			// SAFETY: queue answers the call signature of setTimeout; its `__promisify__` helper is not used by any route.
+			replace(globalThis, "setTimeout", queue as typeof setTimeout);
+
 			replace(
 				globalThis,
-				"setTimeout",
-				(
-					callback: (...args: unknown[]) => void,
-					ms?: number,
-					...args: unknown[]
-				) => {
-					const handle = new QueuedTimeout();
+				"clearTimeout",
+				(handle: number | string | NodeJS.Timeout | null | undefined) => {
+					const index = this.queued.findIndex((timer) =>
+						Object.is(timer.handle, handle),
+					);
 
-					this.queued.push({
-						handle,
-						due: this.logical + Math.max(0, Number(ms) || 0),
-						order: this.created,
-						callback: () => callback(...args),
-					});
-
-					this.created += 1;
-					this.log.onChange?.();
-
-					return handle;
+					if (index >= 0) this.queued.splice(index, 1);
 				},
 			);
-
-			replace(globalThis, "clearTimeout", (handle: unknown) => {
-				const index = this.queued.findIndex((timer) => timer.handle === handle);
-
-				if (index >= 0) this.queued.splice(index, 1);
-			});
 		}
 
 		return restores;
