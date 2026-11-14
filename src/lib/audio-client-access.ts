@@ -57,8 +57,6 @@ const codeHash = (
 ) => keyedHash(secret, `${email}:${nonceHash}:${code}`);
 
 const pendingFormat = /^[0-9a-f]{64}$/;
-const resendPause = 30_000;
-
 // Two allowance windows of codes (3 emails per five minutes, ten-minute lifetime); see verification/signin-codes.qnt.
 const liveCodesPerAddress = 6;
 
@@ -87,9 +85,8 @@ const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
 
 /**
  * Issues a code bound to a new pending value, which the caller sets as the browser's cookie. `pending` is the value the
- * browser already holds, if any: its own earlier code is replaced, and a request inside thirty seconds of it changes
- * nothing. Other browsers' codes for the address are never touched. Returns null when the address has no project, the
- * browser asked a moment ago, or the address already has the most live codes.
+ * browser already holds, if any: its own earlier code is replaced. Other browsers' codes for the address are never
+ * touched. Returns null when the address has no project or already has the most live codes.
  */
 export async function issueClientCode(
 	db: D1Database,
@@ -118,8 +115,6 @@ export async function issueClientCode(
 		db
 			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
       SELECT ?,?,?,0,?,?,NULL,NULL WHERE EXISTS (${activeProjects})
-        AND NOT EXISTS (SELECT 1 FROM audio_client_signin_codes WHERE email=? AND nonce_hash=?
-          AND used_at IS NULL AND expires_at>? AND created_at>?)
         AND (SELECT COUNT(*) FROM audio_client_signin_codes WHERE email=? AND nonce_hash<>?
           AND used_at IS NULL AND expires_at>?)<?
       RETURNING nonce_hash`)
@@ -130,10 +125,6 @@ export async function issueClientCode(
 				issuedAt,
 				expiresAt,
 				email,
-				email,
-				previousHash,
-				issuedAt,
-				new Date(now.getTime() - resendPause).toISOString(),
 				email,
 				previousHash,
 				issuedAt,

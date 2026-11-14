@@ -96,10 +96,7 @@ describe("audio client access", () => {
 			now,
 		))!;
 
-		// The same browser asking again inside thirty seconds changes nothing.
-		expect(
-			await issueClientCode(db, "artist@example.com", secret, now, first.nonce),
-		).toBeNull();
+		// The same browser asking again replaces its own earlier code.
 		const afterCooldown = new Date(now.getTime() + 31_000);
 
 		const second = (await issueClientCode(

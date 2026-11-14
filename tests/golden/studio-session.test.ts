@@ -45,9 +45,13 @@ import {
 //   400 "Check the email and ..."         null, array, no email, no code, code not text, empty, 7 digits, 9 digits, letters,
 //                                         a space in the middle (as the email prints it), spaces around, a trailing newline,
 //                                         non-ASCII digits, an invalid email, an email over 320
+//   no pending cookie                     401 with the same sentence before anything is read, charged or counted: no cookie,
+//                                         a cookie that names no code, is not 64 lower-case hex digits or has one digit
+//                                         changed, thirty guesses in a row without it; another browser's code does not open
+//                                         this browser's code, and a stranger's wrong guesses on their own code leave it alone
 //   takeStudioAllowance
-//   429 "Too many attempts"               session-ip at 20 uses (the email allowance is then not taken), session-requester at 10 (one browser's own count)
-//                                         (the ip allowance was spent); 19 and 9 pass; stale windows pruned; sequence of 11
+//   429 "Too many attempts"               session-ip at 20 uses (the requester allowance is then not taken),
+//                                         session-requester at 10 (one browser's own count; the ip allowance was spent); 19 and 9 pass; stale windows pruned; sequence of 11
 //                                         tries, where the eleventh is refused even with the right code
 //   completeClientCode
 //   401 "invalid or expired"              no code row, wrong code, wrong code at the fifth attempt, the right code after five

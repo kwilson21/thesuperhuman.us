@@ -267,7 +267,7 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 		sql.close();
 	});
 
-	it("lets a browser ask again after thirty seconds without using up a second place", async () => {
+	it("lets a browser ask again, even at once, without using up a second place", async () => {
 		const { sql, db } = fixture();
 		let pending: string | null = null;
 
@@ -276,7 +276,7 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 				db,
 				address,
 				secret,
-				later(index * 40),
+				later(index),
 				pending,
 			);
 

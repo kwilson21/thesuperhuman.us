@@ -11,7 +11,7 @@
 //   emails per window   EMAILS 2  (code: 3, the "code-email" allowance)
 //   window              WINDOW 2 ticks (code: 5 minutes)
 //   code lifetime       LIFE 4 ticks   (code: 10 minutes, two windows)
-//   same-browser pause  THROTTLE 1 tick (code: 30 seconds)
+//   pause               THROTTLE 1 tick: the 30 second pause of the code before this fix, kept only by the mutants that model it
 //   live codes per address CAP 3 (code: 6 = 2 x 3). The model's cap is lower than 2 x EMAILS so that a random search reaches it;
 //   what is checked is that the cap holds and is never made room for by dropping another browser's live code.
 //
@@ -91,21 +91,20 @@ module signinCodes {
   }
 
   // ---- Asking for a code (code.ts, issueClientCode) ----------------------------------------------------------------
-  // The browser sends its pending cookie, if any. The allowance counts first (a fixed window opened by its first use). The
-  // browser's own live row, if it is younger than the pause, answers "sent" without a new code. Otherwise a new row bound to
-  // this browser is added, and the browser's own earlier row is removed, if the address has room (refused silently when it
-  // does not: the same answer as an address with no project).
+  // The browser sends its pending cookie, if any. The allowance counts first (a fixed window opened by its first use). A new
+  // row bound to this browser is added, and the browser's own earlier row is removed, if the address has room (refused
+  // silently when it does not: the same answer as an address with no project).
   action request(b: int): bool = {
     val c = cookie.get(b)
-    val own = if (c != 0) rows.get(c) else blank
     val windowOpen = winUses > 0 and now - winStart < WINDOW
     val usesNow = if (windowOpen) winUses else 0
     val allowed = MUTANT == "no-allowance" or usesNow < EMAILS
     val liveIds = rows.keys().filter(i => isLive(rows.get(i), now))
     val liveOthers = liveIds.filter(i => i != c).size()
-    val ownYoung = isLive(own, now) and own.created + THROTTLE > now
     val anyYoung = liveIds.exists(i => rows.get(i).created + THROTTLE > now)
-    val throttled = if (MUTANT == "single-row" or MUTANT == "replace-live") anyYoung else ownYoung
+    // The code before this fix answered "sent" without a new code when the address's row was under 30 seconds old. The
+    // fixed code has no pause: a browser that asks again replaces its own row, and the email allowance bounds the mail.
+    val throttled = (MUTANT == "single-row" or MUTANT == "replace-live") and anyYoung
     val room = MUTANT == "no-row-cap" or MUTANT == "evict-oldest" or liveOthers < CAP
     val oldest = minOf(liveIds.filter(i => i != c))
     val fresh: Row = {

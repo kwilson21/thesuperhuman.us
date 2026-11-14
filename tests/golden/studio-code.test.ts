@@ -64,14 +64,18 @@ import {
 //                                         an object with no success; the ip allowance is already spent, the email one is not
 //   issueClientCode
 //   200 generic, no mail                  unknown email, request with no project (purchase kind), withdrawn request, revoked
-//                                         audio project, revoked software project, software content deleted, code under 30
-//                                         seconds old, a lost race (another request inserted the code first), project revoked
-//                                         between the allowance and the issue
+//                                         audio project, revoked software project, software content deleted, the address
+//                                         already has six live codes, project revoked between the allowance and the issue
 //   200 generic, mail                     audio project, software project, resolved request (a request resolved before
 //                                         acceptance has its project revoked by a trigger: no code), two projects (two audit rows), a
 //                                         withdrawn request next to an active one (audit row for both: no withdrawn filter in
-//                                         the audit insert), a code replaced after 30 seconds, a used code replaced at once, an
-//                                         expired code replaced
+//                                         the audit insert), the same browser's earlier code replaced (at once or later), a used
+//                                         code and an expired code left or swept, another browser's code kept (a lost race
+//                                         with another request, a live code seeded for another browser), five live codes (the
+//                                         sixth is issued)
+//   cookie                                every answer that reaches the issue sets studio_pending to a fresh random value,
+//                                         whether or not a code was issued; a code is bound to that value (it is read back
+//                                         by the sign-in steps through the cookie jar)
 //   mail outcomes (background)            200 sent; 4xx and 429 discard the code (audit "code-delivery-failed", row deleted);
 //                                         5xx, network down keep it; the discard batch failing is swallowed (console.error,
 //                                         which a corpus does not capture); SITE_ORIGIN unset and custom
@@ -465,7 +469,7 @@ const cases: Case[] = [
 		music: { seed: audioClient("r1", OTHER) },
 	}),
 	// an existing code
-	open("a code issued 10 seconds ago is not replaced", {
+	open("a code issued 10 seconds ago to this browser is replaced", {
 		music: {
 			seed: mergeSeeds(client, {
 				audio_client_signin_codes: [
@@ -616,7 +620,7 @@ const cases: Case[] = [
 			}),
 		},
 	}),
-	open("two requests 10 seconds apart: the second is not replaced", {
+	open("two requests 10 seconds apart: the second replaces the first", {
 		steps: [form(), form({ advanceMs: 10_000 })],
 	}),
 	open("two requests 31 seconds apart: the second replaces the first", {

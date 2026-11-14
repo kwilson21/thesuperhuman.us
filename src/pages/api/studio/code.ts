@@ -153,12 +153,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			);
 		}
 
-		// Every answer sets the cookie, so the response does not show whether the address has a project: a new value when
-		// a code was issued, the browser's own value when it asked a moment ago, an unused random value otherwise.
+		// Every answer sets the cookie to a fresh random value, whether or not a code was issued for it, so the response
+		// does not show whether the address has a project (a value sent with the request is never echoed).
 		return Response.json(generic, {
 			headers: {
 				"set-cookie": pendingSignInCookie(
-					issued?.nonce ?? pending ?? newPendingNonce(),
+					issued?.nonce ?? newPendingNonce(),
 					new URL(request.url).protocol === "https:",
 				),
 			},
