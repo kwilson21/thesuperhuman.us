@@ -5,8 +5,9 @@
 //
 // For every fixture, in either revision, and every case, the later case must equal the earlier one field for field,
 // apart from the allowed differences. Prints the number of fixtures and cases, the size of all fixtures before and after
-// (compressed as stored, and as JSON text), how many recorded change counts changed and in which fixtures, and exits 1 on
-// any other difference.
+// (compressed as stored, and as JSON text), how many recorded change counts changed and in which fixtures, how many of the
+// digests at the response and waitUntil states that changed are checked by exact comparison, every value that could not
+// be anchored (listed, not accepted silently), and exits 1 on any other difference.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { differences, fromDisk, fromRevision } from "./golden-diff.mjs";
@@ -53,16 +54,19 @@ export const ALLOWED = {
  *
  * Everything else (requests, answers, the digest after each step, dumps, the final state) is compared exactly.
  *
- * In a step that holds a relabel, the later recording must also agree with itself: the digest at the response is the
- * state recorded at the step's last request effect, and a waitUntil entry's state is the state recorded before it in
- * its step, unless a request statement (for the digest) or a statement before the entry (for a waitUntil) may have written
- * rows in between. Then the state may differ, but its touched tables may only grow. Those writes are read from the SQL
- * (`statementOf`); a statement the tool cannot read counts as a write.
+ * In a step that holds a relabel, the digest at the response and each waitUntil state that may differ are checked against
+ * the state the step's phases imply (`impliedState`), from the effects that carry a state and are not waitUntil entries
+ * (a waitUntil state is the very value a forgery would change, so it never vouches for anything). The phase label is the
+ * only order the recording keeps for statements: a D1 entry is logged when its statement completes, not when it runs, so
+ * its place among the other effects says nothing about when it ran. So a value is checked only when no statement that
+ * could have changed the rows lies in its phase: with no request statement writing a row, every request state equals the
+ * state the step started in; with no background statement writing a row, every background state equals the response's.
+ * Any other value is reported as UNANCHORED and printed. It is not accepted silently, and it is not checked.
+ * Those statements are read from the SQL (`statementOf`); a statement the tool cannot read counts as a write.
  *
- * What this cannot see (a limit of the proof): a relabel of a step's LAST awaited effect, when that effect does not
- * change the databases, is indistinguishable from an allowed suffix. The later recording then implies the same digest and
- * states as before the relabel, so the proof accepts it. Such an effect (a fetch, a KV or R2 call, an AI call) is
- * compared only through its own recorded fields, which the proof keeps exact.
+ * What this cannot see (a limit of the proof): a relabel of a step's LAST awaited effect that changes no row is
+ * indistinguishable from an allowed suffix, because the state it would change is the same before and after. Such an
+ * effect (a fetch, a KV, R2 or AI call) is compared only through its own recorded fields, which the proof keeps exact.
  */
 export const ALLOWED_PHASES = {
 	fromFormat: 4,
@@ -110,96 +114,90 @@ const stateKey = (state) =>
 	json([state.music, state.publication, state.touched]);
 
 /**
- * What the digest at the response of a relabelled step must be, derived from the later recording alone: the state
- * recorded at the step's last effect that is still request (or the state at the start of the step, from the step before,
- * with no tables touched yet). A write by a request statement after that point may have changed the state; then the
- * digest may differ, but the touched tables may only grow. Returns { exact: state } or { after: state } or undefined when
- * the step has no earlier state to derive from.
+ * The database state that the later recording implies for relabelled step `s` at the response (`at` is "response") or at
+ * a waitUntil entry of that phase (`at` is "request" or "background"). Phases are the only order the recording keeps for
+ * statements (see the header), so the rules use them alone:
+ *   - a request value: when no request statement wrote a row, every request state is the state the step started in (the
+ *     previous step's digest, with no table touched; step 0 has none), so any request effect's state gives it;
+ *   - the response: the request rule when no request statement wrote a row; otherwise, when no background statement
+ *     wrote a row, any background effect's state (they all equal the response's state);
+ *   - a background waitUntil entry: the response's state when no background statement wrote a row.
+ * Returns undefined when none of these holds: the value is then reported as unanchored, never accepted silently.
  */
-function responseExpectation(next, s, previous) {
-	let candidate = -1;
+function impliedState(next, s, previous, at) {
+	const inStep = [];
 
 	next.effects.forEach((entry, index) => {
-		if (entry.step === s && entry.phase === "request" && entry.state)
-			candidate = index;
+		if (entry.step === s) inStep.push(index);
 	});
 
-	let base;
+	const writesIn = (phase) =>
+		inStep.filter(
+			(index) =>
+				next.effects[index].phase === phase &&
+				isD1(next.effects[index]) &&
+				mayWrite(next.effects[index]),
+		);
 
-	if (candidate >= 0) base = next.effects[candidate].state;
-	else if (s > 0)
-		base = {
-			music: previous.digest.music,
-			publication: previous.digest.publication,
-			touched: [],
-		};
-	else return undefined;
+	const anchorIn = (phase) =>
+		inStep.find(
+			(index) =>
+				next.effects[index].phase === phase &&
+				next.effects[index].kind !== "waitUntil" &&
+				next.effects[index].state !== undefined,
+		);
 
-	const writesLater = next.effects.some(
-		(entry, index) =>
-			index > candidate &&
-			entry.step === s &&
-			entry.phase === "request" &&
-			isD1(entry) &&
-			mayWrite(entry),
-	);
+	const start = previous
+		? {
+				music: previous.digest.music,
+				publication: previous.digest.publication,
+				touched: [],
+			}
+		: undefined;
 
-	return writesLater ? { after: base } : { exact: base };
-}
+	// No statement of the request phase wrote a row: every state the request phase saw is the state the step started in.
+	const fromRequest = () => {
+		if (writesIn("request").length > 0) return undefined;
 
-/**
- * What a waitUntil entry's state must be, derived from the later recording alone: the state of the nearest earlier entry of
- * its step that carries a state, and any write by a statement between the two. Undefined where there is no such entry.
- */
-function waitStateExpectation(next, index, previous) {
-	const at = next.effects[index];
-	let prior = -1;
+		const anchor = anchorIn("request");
 
-	for (let back = index - 1; back >= 0; back -= 1) {
-		const entry = next.effects[back];
+		return anchor === undefined ? start : next.effects[anchor].state;
+	};
 
-		if (entry.step === at.step && entry.state) {
-			prior = back;
-			break;
+	if (at === "response") {
+		const direct = fromRequest();
+
+		if (direct !== undefined) return direct;
+
+		// No statement of the background phase wrote a row: every background state is the response's state.
+		if (writesIn("background").length === 0) {
+			const anchor = anchorIn("background");
+
+			if (anchor !== undefined) return next.effects[anchor].state;
 		}
+
+		return undefined;
 	}
 
-	let base;
+	if (at === "request") return fromRequest();
 
-	if (prior >= 0) base = next.effects[prior].state;
-	else if (at.step > 0)
-		base = {
-			music: previous.digest.music,
-			publication: previous.digest.publication,
-			touched: [],
-		};
-	else return undefined;
+	// A waitUntil entry of the background phase: its state is the response's state when no background statement wrote.
+	if (writesIn("background").length > 0) return undefined;
 
-	const writesBetween = next.effects.some(
-		(entry, between) =>
-			between > prior &&
-			between < index &&
-			entry.step === at.step &&
-			isD1(entry) &&
-			mayWrite(entry),
-	);
-
-	return writesBetween ? { after: base } : { exact: base };
+	return impliedState(next, s, previous, "response");
 }
 
-/** Checks a derived expectation against a recorded state; a touched set may only grow where a write was allowed. */
-function matchesExpectation(expected, state) {
-	if (expected.exact) return stateKey(expected.exact) === stateKey(state);
-
-	return (
-		expected.after.music !== undefined &&
-		Array.isArray(state.touched) &&
-		expected.after.touched.every((name) => state.touched.includes(name))
-	);
-}
-
-function provePhases(old, next, problems) {
-	const stats = { relabelled: 0, atResponse: 0, waitUntilState: 0, moved: 0 };
+function provePhases(old, next, problems, unanchored) {
+	const stats = {
+		relabelled: 0,
+		atResponse: 0,
+		waitUntilState: 0,
+		moved: 0,
+		exactAtResponse: 0,
+		exactWaitUntilState: 0,
+		unanchoredAtResponse: 0,
+		unanchoredWaitUntilState: 0,
+	};
 
 	const fail = (what) => {
 		problems.push(`${old.name}: ${what}`);
@@ -266,6 +264,9 @@ function provePhases(old, next, problems) {
 				`effect ${index} (${effect.kind}) went from ${effect.phase} to ${after.phase}`,
 			);
 	}
+
+	/** The later waitUntil entries whose state differs from the earlier recording. */
+	const changedWaitUntil = new Set();
 
 	for (const [index, effect] of writtenOld.entries()) {
 		const after = writtenNext[index];
@@ -336,6 +337,7 @@ function provePhases(old, next, problems) {
 				`waitUntil ${index} changed its state in step ${effect.step}, which holds no relabelled effect`,
 			);
 
+		changedWaitUntil.add(after);
 		stats.waitUntilState += 1;
 	}
 
@@ -361,33 +363,57 @@ function provePhases(old, next, problems) {
 		stats.atResponse += 1;
 	}
 
-	// In a relabelled step the digest at the response and the state of each waitUntil entry must be the state the later
-	// recording implies at that point (responseExpectation, waitStateExpectation). A step with no earlier state to derive
-	// from is not checked (step 0 before any state-carrying effect).
+	// Every digest at the response of a relabelled step must be the state its position implies (stateAt). A value no anchor
+	// can give is listed as unanchored, and counted when it is one of the changed values.
 	for (const s of relabelledSteps) {
-		const at = next.steps[s]?.digest?.atResponse;
-		const expected = responseExpectation(next, s, next.steps[s - 1]);
+		const changed = atResponseChanged.includes(s);
+		const expected = impliedState(next, s, next.steps[s - 1], "response");
 
-		if (at && expected && !matchesExpectation(expected, at))
+		if (expected === undefined) {
+			unanchored.push(`${old.name}: the digest at the response of step ${s}`);
+
+			if (changed) stats.unanchoredAtResponse += 1;
+
+			continue;
+		}
+
+		if (stateKey(expected) !== stateKey(next.steps[s].digest.atResponse))
 			return fail(
 				`step ${s}: the digest at the response is not the state its request effects imply`,
 			);
+
+		if (changed) stats.exactAtResponse += 1;
 	}
 
+	// Every waitUntil entry of a relabelled step must carry the state its position implies (stateAt), by the same rule.
 	for (const [index, entry] of next.effects.entries()) {
 		if (entry.kind !== "waitUntil" || !relabelledSteps.has(entry.step))
 			continue;
 
-		const expected = waitStateExpectation(
+		const changed = changedWaitUntil.has(entry);
+		const expected = impliedState(
 			next,
-			index,
+			entry.step,
 			next.steps[entry.step - 1],
+			entry.phase,
 		);
 
-		if (expected && !matchesExpectation(expected, entry.state))
+		if (expected === undefined) {
+			unanchored.push(
+				`${old.name}: waitUntil ${entry.id} in step ${entry.step}`,
+			);
+
+			if (changed) stats.unanchoredWaitUntilState += 1;
+
+			continue;
+		}
+
+		if (stateKey(expected) !== stateKey(entry.state))
 			return fail(
 				`waitUntil ${entry.id} in step ${entry.step} has a state that its position does not imply`,
 			);
+
+		if (changed) stats.exactWaitUntilState += 1;
 	}
 
 	if (layout(old.effects) !== layout(next.effects)) stats.moved += 1;
@@ -500,12 +526,14 @@ function acceptCounts(old, next) {
 }
 
 /**
- * The differences between two revisions of one fixture's cases, as { problems, counts }: `counts` is how many recorded
- * D1 change counts changed, all of them reads that now say 0.
+ * The differences between two revisions of one fixture's cases, as { problems, counts, unanchored, ... }: `counts` is how
+ * many recorded D1 change counts changed, all of them reads that now say 0; `unanchored` lists every value that no anchor
+ * could give (reported, not checked).
  */
 export function proveFixtureDetailed(before, after) {
 	const problems = [];
 	const touched = [];
+	const unanchored = [];
 
 	const phases = {
 		cases: 0,
@@ -513,6 +541,10 @@ export function proveFixtureDetailed(before, after) {
 		atResponse: 0,
 		waitUntilState: 0,
 		moved: 0,
+		exactAtResponse: 0,
+		exactWaitUntilState: 0,
+		unanchoredAtResponse: 0,
+		unanchoredWaitUntilState: 0,
 	};
 
 	let counts = 0;
@@ -545,7 +577,7 @@ export function proveFixtureDetailed(before, after) {
 			old.format === ALLOWED_PHASES.fromFormat &&
 			next.format === ALLOWED_PHASES.toFormat
 		) {
-			const stats = provePhases(old, next, problems);
+			const stats = provePhases(old, next, problems, unanchored);
 
 			if (Object.values(stats).some((count) => count > 0)) phases.cases += 1;
 
@@ -609,7 +641,7 @@ export function proveFixtureDetailed(before, after) {
 			);
 	}
 
-	return { problems, counts, touched, phases };
+	return { problems, counts, touched, phases, unanchored };
 }
 
 /** The problems only (see `proveFixtureDetailed`). */
@@ -650,6 +682,7 @@ function main([from, to]) {
 	const before = new Set(names(from));
 	const after = new Set(names(to));
 	const problems = [];
+	const unanchored = [];
 	let cases = 0;
 	let storedBefore = 0;
 	let storedAfter = 0;
@@ -681,6 +714,8 @@ function main([from, to]) {
 		if (proved.touched.length > 0) changedSets.set(fixture, proved.touched);
 
 		if (proved.phases.cases > 0) changedPhases.set(fixture, proved.phases);
+
+		for (const label of proved.unanchored) unanchored.push(`${fixture}: ${label}`);
 
 		for (const problem of proved.problems)
 			problems.push(`${fixture}: ${problem}`);
@@ -738,8 +773,16 @@ function main([from, to]) {
 				.join("")}`,
 		);
 
+	if (changedPhases.size > 0)
+		console.log(
+			`format 4 to 5 values checked by exact comparison: ${sum("exactAtResponse")} of ${sum("atResponse")} digests at the response and ${sum("exactWaitUntilState")} of ${sum("waitUntilState")} waitUntil states; unanchored: ${sum("unanchoredAtResponse")} digests and ${sum("unanchoredWaitUntilState")} waitUntil states`,
+		);
+
 	for (const problem of problems.slice(0, 20))
 		console.log(`  DIFFERENT: ${problem}`);
+
+	for (const label of unanchored.slice(0, 40))
+		console.log(`  UNANCHORED: ${label}`);
 
 	console.log(
 		problems.length === 0

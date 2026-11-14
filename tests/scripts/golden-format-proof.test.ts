@@ -90,12 +90,17 @@ describe("golden format proof, format 3 to 4", () => {
 			problems: [],
 			counts: 1,
 			touched: [],
+			unanchored: [],
 			phases: {
 				cases: 0,
 				relabelled: 0,
 				atResponse: 0,
 				waitUntilState: 0,
 				moved: 0,
+				exactAtResponse: 0,
+				exactWaitUntilState: 0,
+				unanchoredAtResponse: 0,
+				unanchoredWaitUntilState: 0,
 			},
 		});
 	});
@@ -377,16 +382,16 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 		five(effects, { format: 4, ...over });
 
 	it("accepts a relabel from request to background, with the digest at the response and a waitUntil state", () => {
-		const was = four(log("request"), {
+		const was = four([wait(stateOf("early", ["a"])), mail(stateOf("m", ["a"]))], {
 			steps: [step(digestOf("early", ["a"]))],
 		});
 
 		const now = five(
 			[
-				wait(stateOf("before", ["a"])),
+				wait(stateOf("m", ["a"])),
 				{ ...mail(stateOf("m", ["a"])), phase: "background" },
 			],
-			{ steps: [step(digestOf("before", ["a"]))] },
+			{ steps: [step(digestOf("m", ["a"]))] },
 		);
 
 		const got = proveFixtureDetailed([was], [now]);
@@ -398,6 +403,10 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 			relabelled: 1,
 			atResponse: 1,
 			waitUntilState: 1,
+			exactAtResponse: 1,
+			exactWaitUntilState: 0,
+			unanchoredAtResponse: 0,
+			unanchoredWaitUntilState: 1,
 			moved: 0,
 		});
 	});
@@ -692,7 +701,7 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 				[was],
 				[
 					five([mail(stateOf("m", ["a"])), wait(made), late("background")], {
-						steps: steps(made),
+						steps: steps(end),
 					}),
 				],
 			);
@@ -700,5 +709,127 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 			expect(got).toHaveLength(1);
 			expect(got[0]).toContain("does not imply");
 		});
+	});
+});
+
+describe("golden format proof, format 4 to 5: the state at the response and at each waitUntil is anchored, never another such value", () => {
+	// Anchors are effects whose state the proof keeps exact, never a waitUntil entry: a forgery that changes a waitUntil
+	// state and the digest at the response together must not be able to vouch for itself. The forgeries are garbage, the
+	// state after the background writes (a kv effect's state), and the final digest (the state after the background writes
+	// again, taken for the response).
+	const cased = (format: number, effects: object[], steps: object[]) => ({
+		...oldCase(),
+		format,
+		effects,
+		steps,
+	});
+
+	const dig = (final: string, atResponse: string) => ({
+		...digestOf(final),
+		atResponse: stateOf(atResponse),
+	});
+
+	const wait = (state: JsonObject, at = 0) => ({
+		kind: "waitUntil",
+		id: 1,
+		step: at,
+		phase: "request",
+		state,
+	});
+
+	const fetchAt = (name: string, at = 0, phase = "request") => ({
+		...mail(stateOf(name)),
+		step: at,
+		phase,
+	});
+
+	const write = (at = 0, phase = "background") => ({
+		...d1("UPDATE a SET x = 1", 1),
+		step: at,
+		phase,
+	});
+
+	const kvAt = (name: string, at = 0, phase = "background") => ({
+		kind: "kv",
+		namespace: "RATE_LIMIT",
+		op: "put",
+		key: "k",
+		detail: {},
+		step: at,
+		phase,
+		state: stateOf(name),
+	});
+
+	// The layout that a self-anchored proof gets wrong: a request statement writes a row, then the route calls waitUntil
+	// (no effect between them), and the floating kv put that follows is background. The response and the waitUntil state
+	// are both "post" here (the state after the write, which the background kv put records). The waitUntil entry's own
+	// state must not be able to vouch for itself.
+	const stepZero = (format: number, name: string, label: string) =>
+		cased(
+			format,
+			[
+				fetchAt("end"),
+				write(0, "request"),
+				wait(stateOf(name)),
+				kvAt("post", 0, label),
+			],
+			[step(dig("post", name))],
+		);
+
+	// The same layout in step 1, after a step 0 that ends in state "end".
+	const stepOne = (format: number, name: string, label: string) =>
+		cased(
+			format,
+			[
+				fetchAt("end", 0),
+				fetchAt("end", 1),
+				write(1, "request"),
+				wait(stateOf(name), 1),
+				kvAt("post", 1, label),
+			],
+			[step(digestOf("end")), step(dig("post", name))],
+		);
+
+	const was0 = stepZero(4, "post", "request");
+	const was1 = stepOne(4, "post", "request");
+
+	it("step 0: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
+		expect(proveFixture([was0], [stepZero(5, "post", "background")])).toEqual([]);
+
+		for (const forged of ["X", "end"])
+			expect(
+				proveFixture([was0], [stepZero(5, forged, "background")]),
+				`forgery ${forged}`,
+			).toHaveLength(1);
+	});
+
+	it("a later step: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
+		expect(proveFixture([was1], [stepOne(5, "post", "background")])).toEqual([]);
+
+		for (const forged of ["X", "end"])
+			expect(
+				proveFixture([was1], [stepOne(5, forged, "background")]),
+				`forgery ${forged}`,
+			).toHaveLength(1);
+	});
+
+	it("a step with no anchor it can use is reported as unanchored, not silently accepted", () => {
+		const was = cased(
+			4,
+			[wait(stateOf("pre")), write(0, "request"), write(0, "request")],
+			[step(dig("end", "pre"))],
+		);
+
+		const now = cased(
+			5,
+			[wait(stateOf("pre")), write(0, "request"), write(0, "background")],
+			[step(dig("end", "pre"))],
+		);
+
+		const got = proveFixtureDetailed([was], [now]);
+
+		expect(got.problems).toEqual([]);
+		expect(got.unanchored).toHaveLength(2);
+		expect(got.unanchored[0]).toContain("step 0");
 	});
 });
