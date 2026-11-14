@@ -53,7 +53,8 @@ import { allowanceRow } from "./areas/studio-access";
 //   400 "Complete the security check."  null, array, missing or non-text email, email over 320, missing/empty/over-long token
 //   issueAgreementLink
 //   404 {ok:false}                      request origin is not SITE_ORIGIN (another host, an invalid SITE_ORIGIN), host header differs
-//   503 unavailable                     no MUSIC_DB, code key, Resend key, from address, Turnstile secret (and the empty string)
+//   503 unavailable                     no MUSIC_DB, code key (or one under 32 characters), Resend key, from address, Turnstile secret
+//                                       (and the empty string)
 //   400 "Enter a valid email address."  after the schema: not an address, empty, spaces, markup, unicode
 //   403 security check again            Turnstile success false, HTTP 500, network down, answer not JSON (after the address allowance, before the email's)
 //   429 "wait a few minutes"            archive-link-ip at 20 uses (before the security check), archive-link-email at 3 uses (after it); 19 and 2 pass; windows five minutes old are pruned
@@ -63,8 +64,9 @@ import { allowanceRow } from "./areas/studio-access";
 //   200 receipt, mail                   an executed agreement: link row, event row, email with the greeting from the signature
 //   mail outcomes                       200 consumes the older unused links; 4xx (the link is marked used, the answer is still the
 //                                       receipt); 5xx and network down are "uncertain" (older links consumed, answer the receipt)
-//   503 catch                           every statement that is not the link batch throwing (allowances, cooldown, executed lookup,
-//                                       name lookup, the final used_at update, which can happen after the email was sent)
+//   500 "Agreement sign-in is temporarily unavailable."  every statement that is not the link batch throwing (allowances, cooldown,
+//                                       executed lookup, name lookup, the final used_at update, which can happen after the email was sent);
+//                                       logged through logUnexpected, without the error's text
 //   303 /agreements?email=sent          form success (with the 200 receipt or after the email)
 //   greeting                            the first word of the signature name, "there" with none, markup and unicode escaped in html
 //                                       and left raw in the text part

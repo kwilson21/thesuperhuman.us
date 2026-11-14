@@ -6,7 +6,11 @@ import {
 	agreementRequest,
 } from "~/lib/agreement-request";
 
+import { logUnexpected } from "~/server/failure";
+
 export const prerender = false;
+
+const ROUTE = "/api/agreements/link";
 
 const post: APIRoute = async ({ request, locals }) => {
 	const body = await agreementRequest(request, 4096);
@@ -49,10 +53,13 @@ const post: APIRoute = async ({ request, locals }) => {
 		}
 
 		return response;
-	} catch {
+	} catch (error) {
+		// An unexpected failure (a database, KV or mail error) is a 500 with the route's sentence, logged without its text.
+		logUnexpected(ROUTE, error);
+
 		return agreementJson(
 			{ ok: false, error: "Agreement sign-in is temporarily unavailable." },
-			503,
+			500,
 		);
 	}
 };

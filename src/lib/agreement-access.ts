@@ -23,8 +23,11 @@ export const agreementHeaders = {
 	"referrer-policy": "no-referrer",
 };
 
-export const agreementJson = (body: unknown, status = 200) =>
-	Response.json(body, { status, headers: agreementHeaders });
+// Every agreement answer is an object with an `ok` flag; the body is typed by its caller and sent as given.
+export const agreementJson = <Body extends { readonly ok: boolean }>(
+	body: Body,
+	status = 200,
+) => Response.json(body, { status, headers: agreementHeaders });
 
 export function canonicalAgreementRequest(env: Env, request: Request) {
 	try {
@@ -141,6 +144,9 @@ export async function issueAgreementLink(
 	if (
 		!db ||
 		!env.AUDIO_CLIENT_CODE_KEY ||
+		// A key too short to hash with is the same unavailable sign-in as a missing one. Checked here for the archive path
+		// only, so the signing path keeps its order of reads.
+		(!token && env.AUDIO_CLIENT_CODE_KEY.length < 32) ||
 		!env.RESEND_API_KEY ||
 		!env.CONTACT_FROM_EMAIL ||
 		!env.TURNSTILE_SECRET_KEY
