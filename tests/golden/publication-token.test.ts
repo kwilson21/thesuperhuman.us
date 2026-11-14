@@ -2,6 +2,7 @@ import { ALL } from "~/pages/api/publication/[...path]";
 import {
 	fromJson,
 	REDIRECT,
+	RESOURCE,
 	SCOPES,
 	toolCall,
 	VERIFIER,
@@ -26,6 +27,23 @@ const { run, oc, connect, withKv } = oauthKit(ALL);
 // ---------------------------------------------------------------- token and refresh
 
 const JSON_HEADERS = { "content-type": "application/json" };
+const FORM_HEADERS = { "content-type": "application/x-www-form-urlencoded" };
+
+/** A form body that may repeat or empty a field, as URLSearchParams writes it. */
+const pairs = (fields: [string, string][]) =>
+	new URLSearchParams(fields).toString();
+
+/** A client assertion for `issuer`: a JWT the library can read the issuer from, with a signature it never reaches. */
+const assertion = (issuer: string) => {
+	const part = (value: { [name: string]: string }) =>
+		btoa(JSON.stringify(value)).replaceAll("=", "");
+
+	return [
+		part({ alg: "RS256", typ: "JWT" }),
+		part({ iss: issuer, sub: issuer }),
+		"c2ln",
+	].join(".");
+};
 const REFRESH_TTL = 2_592_001_000;
 const CODE_LIFETIME = 600_000;
 
@@ -165,7 +183,7 @@ const tokenCases: Case[] = [
 		"token: a code too long to be a key",
 		run((f, c) => [
 			...connect(f, c).slice(0, 4),
-			c.token({ code: "1:2:" + "3".repeat(600) }),
+			c.token({ code: "c".repeat(600) + ":2:3" }),
 		]),
 	),
 	oc(
@@ -173,6 +191,136 @@ const tokenCases: Case[] = [
 		run((f, c) => [
 			...connect(f, c).slice(0, 4),
 			c.token({ client_id: "c".repeat(600) }),
+		]),
+	),
+	oc(
+		"token: a client id too long to be a key, with an empty one before it",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["grant_type", "authorization_code"],
+						["code", "~code~"],
+						["client_id", ""],
+						["client_id", "c".repeat(600)],
+					]),
+				},
+			),
+		]),
+	),
+	oc(
+		"token: an empty client id before the real one",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["grant_type", "authorization_code"],
+						["code", "~code~"],
+						["code_verifier", VERIFIER],
+						["redirect_uri", REDIRECT],
+						["resource", RESOURCE],
+						["client_id", ""],
+						["client_id", "~client~"],
+					]),
+				},
+			),
+		]),
+	),
+	oc(
+		"token: the code sent twice",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["grant_type", "authorization_code"],
+						["code", "~code~"],
+						["code", "other"],
+						["client_id", "~client~"],
+					]),
+				},
+			),
+		]),
+	),
+	...[
+		["just under the old limit on a header", "Basic ", 700],
+		["well over the old limit on a header", "Basic ", 2000],
+		["a lower case scheme", "basic ", 700],
+		["a tab after the scheme", "Basic\t", 2000],
+	].map(([how, scheme, size]) =>
+		oc(
+			`token: a client id too long to be a key in a Basic header, ${how}`,
+			run((f, c) => [
+				...connect(f, c).slice(0, 4),
+				c.token(
+					{},
+					{
+						headers: {
+							...FORM_HEADERS,
+							authorization: `${scheme}${btoa(`${"a".repeat(Number(size))}:secret`)}`,
+						},
+						body: pairs([
+							["grant_type", "authorization_code"],
+							["code", "~code~"],
+						]),
+					},
+				),
+			]),
+		),
+	),
+	oc(
+		"token: a client assertion whose issuer is too long to be a key",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["grant_type", "authorization_code"],
+						["code", "~code~"],
+						[
+							"client_assertion_type",
+							"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+						],
+						["client_assertion", assertion("i".repeat(600))],
+					]),
+				},
+			),
+		]),
+	),
+	oc(
+		"token: a revocation of a token too long to be a key",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["token", "t".repeat(600) + ":2:3"],
+						["client_id", "~client~"],
+					]),
+				},
+			),
+		]),
+	),
+	oc(
+		"token: a revocation of a made-up token",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token(
+				{},
+				{
+					body: pairs([
+						["token", "1:2:3"],
+						["client_id", "~client~"],
+					]),
+				},
+			),
 		]),
 	),
 	oc(
@@ -322,7 +470,7 @@ const tokenCases: Case[] = [
 		"refresh: a refresh token too long to be a key",
 		run((f, c) => [
 			...connect(f, c),
-			c.refresh({ refresh_token: "1:2:" + "3".repeat(600) }),
+			c.refresh({ refresh_token: "r".repeat(600) + ":2:3" }),
 		]),
 	),
 	oc(
