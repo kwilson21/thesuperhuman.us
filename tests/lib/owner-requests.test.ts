@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	changeOwnerRequest,
@@ -47,6 +48,31 @@ const purchase = {
 };
 
 describe("owner requests", () => {
+	it("returns the stored request without reading it back", async () => {
+		const { db } = fixture();
+		const reads: string[] = [];
+		const watched = double<D1Database>({
+			prepare: (query: string) => {
+				if (query.trimStart().toUpperCase().startsWith("SELECT"))
+					reads.push(query);
+
+				return db.prepare(query);
+			},
+			batch: (statements) => db.batch(statements),
+		});
+		const request = await saveOwnerRequest(watched, {
+			...purchase,
+			details: { format: "digital", nested: { keep: [1, "two"] } },
+			name: "  Fan  ",
+			releaseId: undefined,
+		});
+
+		expect(reads).toEqual([]);
+		expect(request).toEqual(
+			await getOwnerRequest(db, request.id),
+		);
+	});
+
 	it("stores a request and its creation audit atomically", async () => {
 		const { db, sql } = fixture();
 		const request = await saveOwnerRequest(db, purchase);

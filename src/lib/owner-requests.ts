@@ -113,7 +113,27 @@ export async function saveOwnerRequest(
 			.bind(id, validActor(actor), now),
 	]);
 
-	return (await getOwnerRequest(db, id))!;
+	// The row as the batch stored it. Nothing is read back: a read that fails after the insert would make a stored request
+	// look unsaved, and a retry would store it twice.
+	// SAFETY: details is the JSON.stringify of a plain object (input.details ?? {}), so JSON.parse gives back the same record the database returns on a read.
+	return {
+		id,
+		kind: input.kind,
+		releaseId: input.releaseId ?? null,
+		serviceId: input.serviceId ?? null,
+		campaignId: input.campaignId ?? null,
+		name: input.name?.trim() ?? "",
+		email: input.email.trim().toLowerCase(),
+		cityRegion: input.cityRegion?.trim() ?? "",
+		summary: input.summary.trim(),
+		details: JSON.parse(details) as Record<string, unknown>,
+		status: "new",
+		privateNote: "",
+		createdAt: now,
+		updatedAt: now,
+		resolvedAt: null,
+		contactDeleteAfter: null,
+	};
 }
 
 export async function getOwnerRequest(
