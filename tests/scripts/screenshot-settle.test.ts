@@ -10,6 +10,7 @@ import {
 	trackRequests,
 	WIDGET_PAINT_MS,
 	WIDGET_STABLE_MS,
+	widgetBoxes,
 	widgetsHoldTokens,
 } from "../../scripts/screenshots/settle.mjs";
 
@@ -486,8 +487,58 @@ describe("settle", () => {
 		expect(page.waitForFunction.mock.calls[0][2]).toEqual({
 			timeout: SETTLE_CAP_MS,
 		});
-		// The widget's box must also hold still for WIDGET_STABLE_MS before the paint pause.
-		expect(clock.now()).toBe(WIDGET_STABLE_MS + WIDGET_PAINT_MS);
+		// The paint window is the wait: the widget's box must hold still through it, so it ends at WIDGET_PAINT_MS.
+		expect(clock.now()).toBe(WIDGET_PAINT_MS);
+	});
+
+	it("sees a widget resize that happens during the paint window, and waits a stable window after it", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		let boxReads = 0;
+
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) => {
+				if (script === countVisibleWidgets) return 1;
+
+				if (script === widgetBoxes) {
+					boxReads += 1;
+
+					return clock.now() >= 400 ? "300x90" : "300x80";
+				}
+
+				return true;
+			}),
+			waitForFunction: vi.fn(async () => true),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"quiet",
+		);
+		// The resize at 400 ms is inside the paint window, so the box must hold still until 400 + WIDGET_STABLE_MS.
+		expect(clock.now()).toBe(400 + WIDGET_STABLE_MS);
+		expect(boxReads).toBeGreaterThan(0);
+	});
+
+	it("reports the paint cap, not a size change, when the token arrives too late to confirm a still box", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) =>
+				script === countVisibleWidgets ? 1 : "300x80",
+			),
+			waitForFunction: vi.fn(async () => {
+				// The token arrives 100 ms before the cap.
+				await clock.pause(SETTLE_CAP_MS - 100);
+
+				return true;
+			}),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: turnstile paint",
+		);
+		expect(clock.now()).toBe(SETTLE_CAP_MS);
 	});
 
 	it("reports the cap when a widget never gets its token, and carries on", async () => {

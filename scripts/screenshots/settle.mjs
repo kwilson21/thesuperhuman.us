@@ -158,19 +158,25 @@ export function widgetBoxes() {
 }
 
 /**
- * Waits until the drawn widgets' boxes hold still for WIDGET_STABLE_MS, reading them every WIDGET_POLL_MS.
- * Resolves true when they do, and false at the cap (`left()` gives the time left). `now` and `pause` are
- * injectable so tests can move a fake clock.
+ * Waits until the drawn widgets' boxes have held still for WIDGET_STABLE_MS and at least `minimum` ms have
+ * passed since the call, reading them every WIDGET_POLL_MS. A change restarts the stable window, and the wait
+ * extends past `minimum` while the box keeps changing. Resolves:
+ * - "held" when the box is still for the window and `minimum` has passed;
+ * - "moving" at the cap when the box changed during the wait;
+ * - "no time" at the cap when the box never changed but the cap left too little time to confirm it.
+ * `left()` gives the time left before the cap. `now` and `pause` are injectable so tests can move a fake clock.
  */
 export async function waitForWidgetBoxes(
 	page,
-	{ left, pause = sleep, now = () => performance.now() },
+	{ left, minimum = 0, pause = sleep, now = () => performance.now() },
 ) {
 	let last = await page.evaluate(widgetBoxes);
-	let since = now();
+	const started = now();
+	let since = started;
+	let moved = false;
 
 	for (;;) {
-		if (left() <= 0) return false;
+		if (left() <= 0) return moved ? "moving" : "no time";
 
 		await pause(Math.min(WIDGET_POLL_MS, left()));
 
@@ -179,7 +185,9 @@ export async function waitForWidgetBoxes(
 		if (current !== last) {
 			last = current;
 			since = now();
-		} else if (now() - since >= WIDGET_STABLE_MS) return true;
+			moved = true;
+		} else if (now() - since >= WIDGET_STABLE_MS && now() - started >= minimum)
+			return "held";
 	}
 }
 
@@ -225,8 +233,9 @@ async function capReason(page, tracker) {
 
 /**
  * Resolves with why settle stopped waiting: "quiet", "cap: N requests in flight, first <url>" (with
- * "; turnstile token missing" added when a drawn widget has no token) or "cap: turnstile token" when the
- * cap ran out waiting for a token. It never throws. A page that closes while settling stops it with
+ * "; turnstile token missing" added when a drawn widget has no token), "cap: turnstile token" when the
+ * cap ran out waiting for a token, "cap: turnstile size" when a widget's box was still changing at the cap, or
+ * "cap: turnstile paint" when the token came too late to see the box still. It never throws. A page that closes while settling stops it with
  * "stopped: <message>". `pause` is injectable so tests can move a fake clock.
  */
 export async function settle(
@@ -252,12 +261,19 @@ export async function settle(
 			timeout: Math.max(1, left()),
 		});
 
-		if (!(await waitForWidgetBoxes(page, { left, pause, now: tracker.now })))
-			return "cap: turnstile size";
+		// The paint pause is the minimum of this wait, so a resize during it is seen and the box must be still at the end.
+		const outcome = await waitForWidgetBoxes(page, {
+			left,
+			minimum: WIDGET_PAINT_MS,
+			pause,
+			now: tracker.now,
+		});
 
-		if (left() > 0) await pause(Math.min(WIDGET_PAINT_MS, left()));
+		if (outcome === "held") return "quiet";
 
-		return "quiet";
+		return outcome === "moving"
+			? "cap: turnstile size"
+			: "cap: turnstile paint";
 	} catch (error) {
 		if (error?.name === "TimeoutError") return "cap: turnstile token";
 
