@@ -73,7 +73,11 @@ goes out), so each outside effect and the response also record the SET of tables
 step: table names only, no operation and no count. A table is in the set when a committed write changed a row of it,
 whoever wrote it: the statement itself (taken when it reports a changed row, which includes a same-value UPDATE) or a
 database trigger (found by comparing the digest of every table before and after each committed write). So a rule moved from
-a trigger into code leaves the same state and the same set, and is neutral. What each mechanism catches:
+a trigger into code leaves the same state and the same set, and is neutral, when the trigger's write changes a row's
+stored value. A trigger write that sets a value to what it already was, or changes a row and changes it back, leaves the
+trigger's table OUT of the set (no digest moves, and the statement's own table is the other one), while the same write in
+code puts it IN: that pair is reported NOT neutral, and so is the reverse move. It is a false alarm, in the safe direction:
+the tool never calls such a pair neutral. What each mechanism catches:
 
 - the step and final digests: any change to any table, R2 or KV by the end of a step or the case, including a write to a
   table the case does not dump, one more column set, a dropped background write, a changed AUTOINCREMENT counter or a
@@ -92,12 +96,19 @@ replaced by a DELETE and an INSERT of the same row, an INSERT OR REPLACE, an ups
 split into a read and a guarded write, and writes to different tables reordered between the same two effects are all
 neutral: the state and the set of tables written at every effect are the same.
 
-What is not seen, by design, and is a limit of this tool: a write that changed no row, moved across an effect (it holds
+What is not seen, by design, and is a limit of this tool (besides the trigger case above): a write that changed no row, moved across an effect (it holds
 no state and no table); an effect moved past a read only (a read changes nothing, so nothing differs at the effect);
 where in time a write happened between two effects, or between the last effect and the end of the step; a write whose
 effect on state is undone and whose table was already in the set; and the order of two writes to the same table between
 the same two effects. A change count recorded as a number does not make a write that changes no row visible, because a
 zero-row write is not a write to this tool.
+
+Two more limits. A statement's own table comes from SQLite itself (the authorizer it calls while compiling the statement),
+not from reading the SQL, so no spelling can hide it; the SQL text is read only to name what an injected failure or an
+interleave hit (a write whose table cannot be read is an error there) and, with `GOLDEN_VERIFY_COUNTS`, to decide whether a
+statement is a write (an unreadable one is taken as a write). And the digest cache relies on the fake D1 to report a
+ROLLBACK or a failed statement: a harness hook that ran `ROLLBACK` on the raw handle after a mid-transaction digest would
+leave the cache stale. `GOLDEN_VERIFY_DIGESTS`, which CI sets, computes every cached answer in full and fails on it.
 
 **Cases.** An added case is listed and does not fail (it has no earlier record to compare). A removed case fails. A
 renamed case is a removed case and an added one unless `--allow-renames` maps it (`{ "<fixture>": { "<old name>":
@@ -118,7 +129,8 @@ it as a fix.
 - on every outside effect (not a D1 statement or a harness marker), `state`: one SHA-256 per database as it was when the
   effect happened, and `touched`, the sorted names of the tables whose rows had changed so far in the step (by a
   committed statement, or by a trigger it fired). They are noted when the statement runs, and a batch's when it commits, so
-  `state` and `touched` always describe the same instant, whatever order parallel calls settle in;
+  `state` and `touched` always describe the same instant, whatever order parallel calls settle in; a statement that fails
+  part way (`UPDATE OR FAIL`) still notes the tables whose rows it changed;
 - after every step, `digest`: one SHA-256 per database, one for R2 and one for KV (with each key's expiry and metadata),
   and `atResponse`, the same as an effect's `state` taken when the response had been read, before any background work;
 - at the end, `finalState`: for each database a digest over all its tables and, per table that holds rows, the row count
@@ -143,9 +155,10 @@ only the allowed things (see its header): trigger-hit entries and the older dige
 count may change only for a read that now says 0.
 
 A recording from before format 4 (formats 1 to 3: no table sets, and in format 3 counts that could belong to another
-statement) cannot show that an effect did not move across a write. So `golden:neutral` reports such a case NOT COMPARABLE
-(exit 1, never NEUTRAL) whenever its D1 statements differ between the two revisions, and compares it field for field,
-D1 entries included, as "identical" when they do not.
+statement) cannot show that an effect did not move across a write. So `golden:neutral` reports every case of such a
+recording that has D1 entries and is not byte-identical as NOT COMPARABLE (exit 1, never NEUTRAL), whatever differs: a
+changed response, a changed effect, or an email that moved across a write with its D1 entries unchanged. The tool still
+prints where the first difference is. A case with no D1 entries at all (the older recorder's) is judged on what it records.
 
 The three older recorder fixtures (contact, resume-request and resume-approve) stay on the older recorder. They use their
 own record shape (`answers` and a flat effect list, without steps, effect kinds or digests) and have no D1 entries, so the

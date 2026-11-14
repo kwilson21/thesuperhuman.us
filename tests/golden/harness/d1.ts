@@ -10,6 +10,7 @@
 // n-th matching statement or batch throw without running. Both appear in the log, so a fixture shows them.
 import type { SQLInputValue, StatementSync } from "node:sqlite";
 import { statementOf } from "../../../scripts/sql-effects.mjs";
+import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
 import type { D1Outcome, D1Statement } from "./log";
@@ -155,6 +156,19 @@ export class SqlHooks {
 /** With GOLDEN_VERIFY_COUNTS=1 every RECORDED count is compared with SQLite's `total_changes()` measured around the statement. */
 const VERIFY_COUNTS = process.env.GOLDEN_VERIFY_COUNTS === "1";
 
+// What SQLite's authorizer reports (sqlite3.h): the actions that write, and those that name a table being written.
+const AUTHORIZE = 0;
+
+const TABLE_WRITES = new Set([9, 18, 23]); // DELETE, INSERT, UPDATE
+
+const WRITING = new Set([
+	...Array.from({ length: 18 }, (_, index) => index + 1), // CREATE_* (1 to 8), DELETE, DROP_* (10 to 17), INSERT
+	23, // UPDATE
+	26, // ALTER_TABLE
+	29, // CREATE_VTABLE
+	30, // DROP_VTABLE
+]);
+
 /** What the meter learned about one statement as it ran. */
 type Measure = {
 	/** SQLite's `changes()` after it: the rows the statement itself changed (0 for a read). */
@@ -278,9 +292,50 @@ class ChangeMeter {
 		if (VERIFY_COUNTS) verifyCount(this.sqlite, sql, recorded, measure.delta);
 	}
 
-	private watch(sql: string, statement: StatementSync): StatementSync {
-		const write = writes(sql);
+	/** The tables whose digest moved since `before`, SQLite's own AUTOINCREMENT counter table aside. */
+	private changedSince(before: ReadonlyMap<string, string>): Set<string> {
+		const tables = new Set<string>();
 
+		for (const [name, digest] of this.digester.perTable())
+			if (before.get(name) !== digest && name !== "sqlite_sequence")
+				tables.add(name);
+
+		return tables;
+	}
+
+	/**
+	 * Prepares the statement and asks SQLite what it writes: the authorizer SQLite calls while compiling it names every
+	 * table it inserts into, updates or deletes from (outside any trigger), so the statement's own table never depends on
+	 * reading the SQL text.
+	 */
+	private compile(sql: string) {
+		const own = new Set<string>();
+		let write = false;
+
+		this.sqlite.setAuthorizer(
+			(action, first, _second, _database, inTrigger) => {
+				if (inTrigger === null && WRITING.has(action)) {
+					write = true;
+
+					if (TABLE_WRITES.has(action) && isText(first)) own.add(first);
+				}
+
+				return AUTHORIZE;
+			},
+		);
+
+		try {
+			return { statement: this.sqlite.prepare(sql), write, own };
+		} finally {
+			this.sqlite.setAuthorizer(null);
+		}
+	}
+
+	private watch(
+		statement: StatementSync,
+		write: boolean,
+		own: ReadonlySet<string>,
+	): StatementSync {
 		const measured = <T>(work: () => T): T => {
 			const before = write ? this.digester.perTable() : undefined;
 			const totalBefore = VERIFY_COUNTS ? this.total() : 0;
@@ -289,8 +344,15 @@ class ChangeMeter {
 			try {
 				result = work();
 			} catch (error) {
-				// A statement that failed part way puts its rows back without moving total_changes().
+				// A statement that failed part way (UPDATE OR FAIL) keeps the rows it changed, and puts others back without
+				// moving total_changes(): forget the cached digests and note the tables whose rows really changed.
 				this.digester.invalidate();
+
+				this.measures.push({
+					count: 0,
+					delta: 0,
+					tables: before ? [...this.changedSince(before)].sort() : [],
+				});
 
 				throw error;
 			}
@@ -299,25 +361,9 @@ class ChangeMeter {
 				? Number(this.sqlite.prepare("SELECT changes() AS n").get()?.n ?? 0)
 				: 0;
 
-			const tables = new Set<string>();
+			const tables = before ? this.changedSince(before) : new Set<string>();
 
-			if (before) {
-				const after = this.digester.perTable();
-
-				for (const [name, digest] of after)
-					if (before.get(name) !== digest && name !== "sqlite_sequence")
-						tables.add(name);
-
-				if (count > 0) {
-					try {
-						const own = statementOf(sql).table;
-
-						if (own) tables.add(own);
-					} catch {
-						// An unattributable write: the digests above are what is known.
-					}
-				}
-			}
+			if (count > 0) for (const name of own) tables.add(name);
 
 			this.measures.push({
 				count,
@@ -342,7 +388,11 @@ class ChangeMeter {
 	/** The database, with every statement it runs measured. The fake D1 uses only `prepare` and `exec`. */
 	get database(): SqliteDatabase {
 		return double<SqliteDatabase>({
-			prepare: (sql: string) => this.watch(sql, this.sqlite.prepare(sql)),
+			prepare: (sql: string) => {
+				const { statement, write, own } = this.compile(sql);
+
+				return this.watch(statement, write, own);
+			},
 			exec: (sql: string) => {
 				const result = this.sqlite.exec(sql);
 

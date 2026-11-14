@@ -106,10 +106,15 @@ const HEX = /^[0-9a-f]{64}$/;
 
 const isCount = (value) => Number.isInteger(value) && value >= 0;
 
+/** A list of table names in strictly increasing order: sorted, and no name twice. */
 const isSortedNames = (list) =>
 	Array.isArray(list) &&
-	list.every((name) => typeof name === "string" && name !== "") &&
-	JSON.stringify(list) === JSON.stringify([...list].sort());
+	list.every(
+		(name, index) =>
+			typeof name === "string" &&
+			name !== "" &&
+			(index === 0 || list[index - 1] < name),
+	);
 
 /**
  * Checks the whole shape of a current-format case, and throws an Error naming the case, the step or the effect and the
@@ -198,26 +203,40 @@ export function assertCompleteRecord(entry) {
 
 		if (!UNSTATED_KINDS.has(effect.kind)) sets(where, "state", effect.state);
 
-		if (
-			effect.kind === "d1" &&
-			effect.outcome?.threw === undefined &&
-			!isCount(effect.outcome?.changes)
-		)
-			fail(
-				where,
-				`outcome.changes must be a count of rows, got ${show(effect.outcome?.changes)}`,
-			);
+		if (effect.kind === "d1") {
+			const outcome = effect.outcome;
 
-		if (effect.kind === "d1-batch")
-			for (const [at, statement] of (effect.statements ?? []).entries())
+			if (outcome === null || typeof outcome !== "object")
+				fail(where, "outcome is missing");
+
+			// An outcome either threw (with a message) or changed a count of rows; `threw: null` is neither.
+			if ("threw" in outcome) {
+				if (typeof outcome.threw !== "string" || outcome.threw === "")
+					fail(
+						where,
+						`outcome.threw must be a message, got ${show(outcome.threw)}`,
+					);
+			} else if (!isCount(outcome.changes))
+				fail(
+					where,
+					`outcome.changes must be a count of rows, got ${show(outcome.changes)}`,
+				);
+		}
+
+		if (effect.kind === "d1-batch") {
+			if (!Array.isArray(effect.statements))
+				fail(where, "statements is missing");
+
+			for (const [at, statement] of effect.statements.entries())
 				if (
 					effect.result === "committed" &&
-					!isCount(statement.outcome?.changes)
+					!isCount(statement?.outcome?.changes)
 				)
 					fail(
 						where,
-						`statements[${at}].outcome.changes must be a count of rows, got ${show(statement.outcome?.changes)}`,
+						`statements[${at}].outcome.changes must be a count of rows, got ${show(statement?.outcome?.changes)}`,
 					);
+		}
 	}
 
 	const final = entry.finalState;
@@ -310,6 +329,23 @@ export function compareCase(before, after) {
 	)
 		return { status: "identical" };
 
+	// Before format 4 nothing records the database state at each outside effect, so a case with D1 statements that is not
+	// byte-identical cannot be shown not to have moved an effect across a write, whatever else differs.
+	if (
+		formatOf(before) < STATE_FORMAT &&
+		[...before.effects, ...after.effects].some(isD1)
+	)
+		return {
+			status: "not-comparable",
+			difference: {
+				area: "no state at each outside effect",
+				path: "case",
+				reason: `format ${formatOf(before)} recordings do not hold the database state at each outside effect, so a difference in a case with D1 statements cannot be shown not to have moved an effect across a write`,
+				expected: formatOf(before),
+				actual: formatOf(after),
+			},
+		};
+
 	const state = differences(rest(before), rest(after));
 
 	if (state.length > 0) {
@@ -351,25 +387,6 @@ export function compareCase(before, after) {
 		};
 	}
 
-	// The D1 entries differ and the rest is identical. With the state at every outside effect recorded, that is neutral.
-	// Without it (format 1 to 3, and the older recorder's cases, which have no D1 entries and so never reach here), an
-	// email may have moved across a write and nothing recorded would show it.
-	if (
-		formatOf(before) < STATE_FORMAT &&
-		JSON.stringify(before.effects.filter(isD1)) !==
-			JSON.stringify(after.effects.filter(isD1))
-	)
-		return {
-			status: "not-comparable",
-			difference: {
-				area: "no state at each outside effect",
-				path: "case.effects",
-				reason: `format ${formatOf(before)} recordings do not hold the database state at each outside effect, so a change in the D1 statements cannot be shown not to have moved an effect across a write`,
-				expected: formatOf(before),
-				actual: formatOf(after),
-			},
-		};
-
 	return { status: "d1-only" };
 }
 
@@ -381,6 +398,17 @@ const filled = (value) => typeof value === "string" && value.trim() !== "";
  * later, every destination exists in the later revision and not in the earlier, and no two sources share a destination.
  */
 export function compareFixture(before, after, { renames = {} } = {}) {
+	// Every case of both revisions is read before any is compared, the added and the removed ones included.
+	for (const [side, list] of [
+		["earlier revision", before],
+		["later revision", after],
+	])
+		for (const entry of list) {
+			assertKnownFormat(entry, side);
+
+			if (formatOf(entry) === CURRENT_FORMAT) assertCompleteRecord(entry);
+		}
+
 	const byName = (list) => new Map(list.map((entry) => [entry.name, entry]));
 	const was = byName(before);
 	const now = byName(after);
@@ -482,7 +510,7 @@ function print(fixture, result) {
 
 		console.log(
 			reason
-				? `  NOT COMPARABLE: ${result.notComparable.length} cases have different D1 statements and were recorded in format ${expected}, which ${reason.replace(/^format \d+ recordings do not hold/, "does not hold")}.`
+				? `  NOT COMPARABLE: ${result.notComparable.length} cases differ, have D1 statements, and were recorded in format ${expected}, which ${reason.replace(/^format \d+ recordings do not hold/, "does not hold")}.`
 				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. The digests differ between formats, so neutrality cannot be shown across a format change.`,
 		);
 

@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, describe, expect, it } from "vitest";
-import { digestOf, finalStateOf, stateOf } from "../helpers/golden-records";
+import {
+	digestOf,
+	finalStateOf,
+	sha,
+	stateOf,
+} from "../helpers/golden-records";
 import type { JsonObject, JsonValue } from "../helpers/json";
 import {
 	assertCompleteRecord,
@@ -529,6 +534,7 @@ describe("compareCase: the state when an outside effect happened", () => {
 
 describe("compareCase: the fixture format", () => {
 	const v2 = (extra: Json = {}) => ({ ...base, format: 2, ...extra });
+	const v4 = (extra: Json = {}) => ({ ...base, ...extra });
 
 	/** A case recorded before the `format` field existed (format 1). */
 	const v1 = (effects?: Json[]) => {
@@ -577,16 +583,40 @@ describe("compareCase: the fixture format", () => {
 		);
 
 		it.each([undefined, 2, 3])(
-			"in format %s, a difference outside the D1 statements is still reported as not neutral",
+			"in format %s, ANY difference in a case that has D1 entries is NOT COMPARABLE, a changed response included",
 			(format) => {
 				const got = compareCase(
 					{ ...base, format },
 					{ ...make("a case", { answer: answer({ status: 500 }) }), format },
 				);
 
-				expect(got.status).toBe("non-neutral");
+				expect(got.status).toBe("not-comparable");
+				expect(got.difference?.area).toBe("no state at each outside effect");
 			},
 		);
+
+		it.each([undefined, 2, 3])(
+			"in format %s, an email moved across a write with identical D1 entries is NOT COMPARABLE, never neutral",
+			(format) => {
+				const d1 = write("UPDATE items SET value = 'b' WHERE id = 1");
+				const was = { ...make("a case", { effects: [d1, email()] }), format };
+				const now = { ...make("a case", { effects: [email(), d1] }), format };
+
+				expect(compareCase(was, now).status).toBe("not-comparable");
+			},
+		);
+
+		it("a case with no D1 entries at all (the older recorder's) is still judged on what it records", () => {
+			const legacy = (op: string): Json => ({
+				name: "legacy",
+				answers: [],
+				effects: [{ step: 0, kv: "K", op, key: "k" }],
+			});
+
+			expect(compareCase(legacy("get"), legacy("put")).status).toBe(
+				"non-neutral",
+			);
+		});
 
 		it("in format 4 the same D1 difference is neutral", () => {
 			expect(
@@ -609,15 +639,15 @@ describe("compareCase: the fixture format", () => {
 		});
 	});
 
-	it("two format 2 cases are compared, digests included", () => {
+	it("two format 4 cases are compared, digests included", () => {
 		const step = (digest: string) => ({
 			...base.steps[0],
-			digest: { music: digest },
+			digest: { ...digestOf(), music: sha(digest) },
 		});
 
 		const got = compareCase(
-			v2({ steps: [step("a")] }),
-			v2({ steps: [step("b")] }),
+			v4({ steps: [step("a")] }),
+			v4({ steps: [step("b")] }),
 		);
 
 		expect(got.status).toBe("non-neutral");
@@ -625,12 +655,13 @@ describe("compareCase: the fixture format", () => {
 	});
 
 	it("a changed final digest of an undumped table is not neutral", () => {
-		const final = (sha: string) =>
-			v2({
+		const final = (digest: string) =>
+			v4({
 				finalState: {
+					...finalStateOf(),
 					music: {
-						sha256: "x",
-						tables: { audit_log: { rows: 1, sha256: sha } },
+						sha256: sha("final"),
+						tables: { audit_log: { rows: 1, sha256: sha(digest) } },
 					},
 				},
 			});
@@ -661,7 +692,7 @@ interface Editable {
 			publication?: string;
 			touched?: string[] | string;
 		};
-		outcome?: { changes?: number };
+		outcome?: { changes?: number; threw?: string | null };
 		statements?: {
 			sql: string;
 			args: string[];
@@ -953,6 +984,67 @@ describe("the shape of a current-format record", () => {
 		);
 	});
 
+	it("a touched list with a duplicate or a repeated name is an error: it must be strictly increasing", () => {
+		const entry = good();
+
+		effectState(entry).state = { ...stateOfFetch(entry), touched: ["a", "a"] };
+
+		expect(() => assertCompleteRecord(entry)).toThrow(
+			/state\.touched must be a sorted list/,
+		);
+	});
+
+	it("a D1 outcome with threw: null skips nothing: threw must be a message, or there must be a count", () => {
+		const entry = good();
+
+		entry.effects.push({
+			kind: "d1",
+			step: 0,
+			phase: "request",
+			outcome: { threw: null },
+		});
+
+		expect(() => assertCompleteRecord(entry)).toThrow(/outcome/);
+	});
+
+	it("a committed batch with no statements list is an error", () => {
+		const entry = good();
+
+		entry.effects.push({
+			kind: "d1-batch",
+			db: "MUSIC_DB",
+			result: "committed",
+			error: null,
+			step: 0,
+			phase: "request",
+		});
+
+		expect(() => assertCompleteRecord(entry)).toThrow(/statements is missing/);
+	});
+
+	it("a case that is only added in the later revision is validated too, and so is every earlier one", () => {
+		const broken = good();
+
+		delete broken.finalState;
+
+		expect(() =>
+			compareFixture(
+				[make("a case")],
+				[make("a case"), { ...broken, name: "added" }],
+			),
+		).toThrow(/case "added", the case: finalState is missing/);
+
+		expect(() => compareFixture([{ ...broken, name: "old" }], [])).toThrow(
+			/case "old", the case: finalState is missing/,
+		);
+	});
+
+	it("an added or removed case in a format the tool does not know is an error as well", () => {
+		expect(() =>
+			compareFixture([], [{ ...good(), name: "added", format: 99 }]),
+		).toThrow(/format 99 is not one this tool understands/);
+	});
+
 	it("D1 entries and harness markers need no state", () => {
 		const entry = good();
 
@@ -981,6 +1073,13 @@ describe("statementOf", () => {
 		["DELETE FROM main.t WHERE a = 1", "DELETE", "t", true],
 		["SELECT * FROM main.t", "SELECT", "t", false],
 		["UPDATE temp.t SET a = 1", "UPDATE", "t", true],
+		['UPDATE"t"SET a = 1', "UPDATE", "t", true],
+		['INSERT INTO"t"(a)VALUES(1)', "INSERT", "t", true],
+		['DELETE FROM"t"WHERE a = 1', "DELETE", "t", true],
+		["UPDATE/**/t/**/SET a = 1", "UPDATE", "t", true],
+		["UPDATE `t` SET a = 1", "UPDATE", "t", true],
+		["UPDATE [t] SET a = 1", "UPDATE", "t", true],
+		['UPDATE main."t" SET a = 1', "UPDATE", "t", true],
 		["-- note\nUPDATE t SET a = 'delete from nothing'", "UPDATE", "t", true],
 	])("%s", (sql, op, table, write) => {
 		expect(statementOf(sql)).toEqual({ op, table, write });

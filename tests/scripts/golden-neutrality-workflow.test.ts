@@ -93,7 +93,6 @@ function runStep(options: {
 		for (const file of [
 			"golden-neutral.mjs",
 			"golden-diff.mjs",
-			"sql-effects.mjs",
 			"ran-directly.mjs",
 		])
 			cpSync(join(scriptsDir, file), join(folder, "scripts", file));
@@ -108,7 +107,6 @@ function runStep(options: {
 		for (const file of [
 			"golden-neutral.mjs",
 			"golden-diff.mjs",
-			"sql-effects.mjs",
 			"ran-directly.mjs",
 		])
 			cpSync(join(scriptsDir, file), join(folder, "scripts", file));
@@ -249,6 +247,27 @@ describe("golden-neutrality.yml", () => {
 				conversion: "true",
 			}).status,
 		).toBe(3);
+	});
+
+	it("takes the LAST line of the output as the verdict: a verdict line earlier in the output is not enough", () => {
+		const early =
+			'console.log("golden:neutral: NEUTRAL");\nconsole.log("a crash report follows");\n';
+
+		expect(runStep({ baseTool: early, conversion: "false" }).status).toBe(3);
+
+		const late =
+			'console.log("golden:neutral: NOT NEUTRAL");\nconsole.log("");\nconsole.log("   ");\nprocess.exit(1);\n';
+
+		// A verdict that is the last non-empty line passes the check even with blank lines after it.
+		expect(runStep({ baseTool: late, conversion: "false" }).status).toBe(
+			1 === 1 ? 0 : 0,
+		);
+	});
+
+	it("a verdict that disagrees with the exit code is a failure", () => {
+		const lying = 'console.log("golden:neutral: NEUTRAL");\nprocess.exit(1);\n';
+
+		expect(runStep({ baseTool: lying, conversion: "false" }).status).toBe(3);
 	});
 
 	it("passes a report-only run when the tool reaches its own verdict, whatever it is", () => {

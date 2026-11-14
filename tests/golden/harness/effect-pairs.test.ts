@@ -61,6 +61,22 @@ describe("what golden:neutral says about pairs recorded through the harness", ()
 		);
 	});
 
+	it("(a2) the same moved across an email is NOT neutral however the statement is spelled, even one the SQL reader cannot read", async () => {
+		const spelled =
+			"UPDATE\"software_signing_settings\"SET updated_by = 'migration'";
+
+		expect(
+			await verdict(steps(spelled, "email"), steps("email", spelled)),
+		).toBe("non-neutral");
+
+		const commented =
+			"UPDATE/**/software_signing_settings/**/SET updated_by = 'migration'";
+
+		expect(
+			await verdict(steps(commented, "email"), steps("email", commented)),
+		).toBe("non-neutral");
+	});
+
 	it("(b) an insert and delete of a lock row moved wholly across an email is NOT neutral", async () => {
 		expect(
 			await verdict(steps(LOCK, UNLOCK, "email"), steps("email", LOCK, UNLOCK)),
@@ -326,5 +342,47 @@ describe("what the harness records is what golden:neutral requires of a current-
 
 	it("the kinds without a state are the same in the tool and in the harness", () => {
 		expect([...UNSTATED_KINDS].sort()).toEqual([...UNSTATED].sort());
+	});
+});
+
+describe("a statement that failed but kept rows", () => {
+	const PARTIAL =
+		"UPDATE OR FAIL kept SET v = CASE id WHEN 1 THEN 50 WHEN 2 THEN 100 ELSE 7 END";
+
+	const recordKept = (handler: Handler) =>
+		runCase(handler, {
+			name: "partial",
+			fetches: byHost({ resend: json(200, {}) }),
+			setup: (world) =>
+				world.music.exec(
+					"CREATE TABLE kept (id INTEGER PRIMARY KEY, v INTEGER UNIQUE); INSERT INTO kept VALUES (1, 1), (2, 2), (3, 100)",
+				),
+			steps: [{ path: "/api/x", method: "POST", as: asVisitor() }],
+		});
+
+	it("its table is noted in touched, because the rows it changed before failing are really changed", async () => {
+		const handler: Handler = async (context) => {
+			try {
+				await env(context).MUSIC_DB?.prepare(PARTIAL).run();
+			} catch {
+				// the unique index refused the second row
+			}
+
+			await fetch("https://api.resend.com/emails", {
+				method: "POST",
+				body: "{}",
+			});
+
+			return new Response("ok");
+		};
+
+		const got = await recordKept(handler);
+		const quiet = await recordKept(steps("email"));
+
+		const mail = (record: typeof got) =>
+			record.effects.find((effect) => effect.kind === "fetch");
+
+		expect(mail(got)?.state?.music).not.toBe(mail(quiet)?.state?.music);
+		expect(mail(got)?.state?.touched).toEqual(["kept"]);
 	});
 });

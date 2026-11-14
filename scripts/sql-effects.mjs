@@ -12,6 +12,9 @@ export const bare = (sql) =>
 
 const IDENT = String.raw`["\`\[]?[A-Za-z_][A-Za-z0-9_]*["\`\]]?`;
 
+// SQLite needs no whitespace before a quoted name (`UPDATE"t"SET`), so a gap is a space or the start of a quote.
+const GAP = String.raw`(?:\s+|(?=["\`\[]))`;
+
 // An optional schema (`main.`, `temp.`) is skipped; the table is the name after it.
 const NAME = String.raw`(?:${IDENT}\s*\.\s*)?["\`\[]?([A-Za-z_][A-Za-z0-9_]*)["\`\]]?`;
 
@@ -49,11 +52,11 @@ export function statementOf(sql) {
 
 	const pattern =
 		keyword === "INSERT" || keyword === "REPLACE"
-			? new RegExp(String.raw`\binto\s+${NAME}`, "i")
+			? new RegExp(String.raw`\binto${GAP}${NAME}`, "i")
 			: keyword === "UPDATE"
-				? new RegExp(String.raw`^update\s+(?:or\s+\w+\s+)?${NAME}`, "i")
+				? new RegExp(String.raw`^update(?:\s+or\s+\w+)?${GAP}${NAME}`, "i")
 				: keyword === "DELETE" || keyword === "SELECT"
-					? new RegExp(String.raw`\bfrom\s+${NAME}`, "i")
+					? new RegExp(String.raw`\bfrom${GAP}${NAME}`, "i")
 					: schema
 						? new RegExp(
 								String.raw`\b(?:table|index|view|trigger)\s+(?:if\s+(?:not\s+)?exists\s+)?${NAME}`,
