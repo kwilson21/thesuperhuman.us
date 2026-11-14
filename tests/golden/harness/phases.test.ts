@@ -244,7 +244,7 @@ describe("the phase says whether the response waited for the effect", () => {
 			async (context) => {
 				ctxOf(context).waitUntil(
 					(async () => {
-						await budget(context, "late").catch(() => {});
+						await Promise.resolve(budget(context, "late")).catch(() => {});
 					})(),
 				);
 
