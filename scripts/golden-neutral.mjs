@@ -304,6 +304,10 @@ export function compareFixture(
 			if (!filled(reason))
 				throw new Error(`allowance for "${name}", ${id} has no reason`);
 
+	/**
+	 * @typedef {{ id: string, was: string[], now: string[], reason: string | null }} Shifted
+	 * @type {{ identical: string[], d1Only: string[], nonNeutral: { name: string }[], notComparable: { name: string, expected?: number, actual?: number }[], shifted: { name: string, items: Shifted[] }[], added: string[], removed: string[], renamed: { from: string, to: string, status: string }[], unusedAllowances: string[], compared: number, neutral: boolean }}
+	 */
 	const result = {
 		identical: [],
 		d1Only: [],
@@ -610,8 +614,6 @@ function main(argv) {
 		else if (arg.startsWith("-")) usage = true;
 		else positional.push(arg);
 	}
-
-	const all = positional[0] === "--all";
 
 	// A fixture, then <from> and <to>; or --all, then <from> and <to>.
 	if (usage || positional.length === 0 || positional.length > 3) {
