@@ -500,6 +500,14 @@ export function compareFixture(before, after, { renames = {} } = {}) {
 	return result;
 }
 
+/** What the NOT COMPARABLE line says about a format mismatch. Only formats 4 and 5 differ in the digests' meaning at the response. */
+export function formatMismatchNote(expected, actual) {
+	if ([expected, actual].sort().join() === "4,5")
+		return "The digests differ between formats (format 5 records whether the response waited for an effect, where format 4 recorded when it started), so neutrality cannot be shown across a format change. Re-record the earlier revision's fixture with the later revision's harness first.";
+
+	return `The two formats are not comparable: neutrality cannot be shown across a format change (format ${expected} and format ${actual}).`;
+}
+
 function print(fixture, result) {
 	console.log(
 		`${fixture}: ${result.identical.length} identical, ${result.d1Only.length} neutral with D1 changes, ${result.nonNeutral.length} NOT neutral, ${result.notComparable.length} NOT COMPARABLE, ${result.added.length} added, ${result.removed.length} removed, ${result.renamed.length} renamed`,
@@ -511,7 +519,7 @@ function print(fixture, result) {
 		console.log(
 			reason
 				? `  NOT COMPARABLE: ${result.notComparable.length} cases differ, have D1 statements, and were recorded in format ${expected}, which ${reason.replace(/^format \d+ recordings do not hold/, "does not hold")}.`
-				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. The digests differ between formats (format 5 records whether the response waited for an effect, where format 4 recorded when it started), so neutrality cannot be shown across a format change. Re-record the earlier revision's fixture with the later revision's harness first.`,
+				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. ${formatMismatchNote(expected, actual)}`,
 		);
 
 		for (const item of result.notComparable.slice(0, 3))

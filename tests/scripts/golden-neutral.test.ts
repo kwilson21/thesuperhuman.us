@@ -16,6 +16,7 @@ import {
 	assertCompleteRecord,
 	compareCase,
 	compareFixture,
+	formatMismatchNote,
 } from "../../scripts/golden-neutral.mjs";
 import { statementOf } from "../../scripts/sql-effects.mjs";
 
@@ -774,6 +775,31 @@ describe("the shape of a current-format record", () => {
 			expected: 4,
 			actual: 5,
 		});
+	});
+
+	it("the NOT COMPARABLE note for format 4 against format 5 gives the digest explanation, in either order", () => {
+		for (const [expected, actual] of [
+			[4, 5],
+			[5, 4],
+		]) {
+			const note = formatMismatchNote(expected, actual);
+
+			expect(note).toContain("The digests differ between formats");
+			expect(note).toContain(
+				"format 5 records whether the response waited for an effect, where format 4 recorded when it started",
+			);
+			expect(note).toContain("Re-record the earlier revision's fixture");
+		}
+	});
+
+	it("the NOT COMPARABLE note for any other pair names its two formats and gives no format 4 and 5 explanation", () => {
+		const note = formatMismatchNote(1, 3);
+
+		expect(note).toContain("format 1 and format 3");
+		expect(note).toContain("neutrality cannot be shown across a format change");
+		expect(note).not.toContain("digests");
+		expect(note).not.toContain("re-record");
+		expect(note).not.toContain("format 5 records");
 	});
 
 	it("two format 5 cases are compared with the same rules, shape included", () => {
