@@ -48,10 +48,8 @@ jobs:
           tar -xzf "$RUNNER_TEMP/quint-evaluator.tar.gz" -C "$home/rust-evaluator-v0.7.1"
           chmod +x "$home/rust-evaluator-v0.7.1/quint_evaluator"
           echo "QUINT_HOME=$home" >> "$GITHUB_ENV"
-      - name: Quint invoice-events model
-        run: pnpm run verify:quint
-      - name: Quint mutants must fail
-        run: pnpm run verify:quint:mutants
+      - name: Quint models keep their properties and their mutants fail
+        run: pnpm run verify:quint:all
       - run: pnpm run check
       - run: pnpm test
       - run: pnpm run build
