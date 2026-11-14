@@ -56,6 +56,7 @@ export async function checkTurnstile(
 	}
 
 	if (!hasSuccessFlag(data)) return "refused";
+
 	if (data.success === true) return "passed";
 
 	return reportsServiceFault(data) ? "unavailable" : "refused";

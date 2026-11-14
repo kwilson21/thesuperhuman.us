@@ -277,6 +277,7 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 
 it("logs one line when the cleanup of old budget rows fails, and still answers", async () => {
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
 	const failingCleanup = double<D1Database>({
 		prepare: (sql: string) =>
 			sql.startsWith("DELETE")
@@ -290,6 +291,7 @@ it("logs one line when the cleanup of old budget rows fails, and still answers",
 					})
 				: database.prepare(sql),
 	});
+
 	const waitUntil = vi.fn();
 	const ctx = context(input, { MUSIC_DB: failingCleanup });
 	ctx.locals.runtime.ctx = double<ExecutionContext>({ waitUntil });

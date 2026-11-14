@@ -408,6 +408,7 @@ function loggedText(spy: { mock: { calls: unknown[][] } }): string {
 
 it("logs the rival lookup failure once without the visitor's details", async () => {
 	let lookups = 0;
+
 	const failing = fakeD1({
 		prepare: (query: string) => {
 			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
@@ -429,6 +430,7 @@ it("logs the rival lookup failure once without the visitor's details", async () 
 			throw new Error("UNIQUE constraint failed");
 		},
 	});
+
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(500);
@@ -445,7 +447,9 @@ it("logs the give-back failure once and still answers 400 on the too-large path"
 			throw new RequestDetailsTooLargeError();
 		},
 	});
+
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
 	const response = await POST(
 		context(base, {
 			db: oversized,
@@ -458,6 +462,7 @@ it("logs the give-back failure once and still answers 400 on the too-large path"
 			}),
 		}),
 	);
+
 	expect(response.status).toBe(400);
 	expect(log).toHaveBeenCalledTimes(1);
 	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
@@ -466,6 +471,7 @@ it("logs the give-back failure once and still answers 400 on the too-large path"
 
 it("answers 500 and still alerts when the lookup after a failed save also throws", async () => {
 	let lookups = 0;
+
 	const failing = fakeD1({
 		prepare: (query: string) => {
 			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
@@ -488,6 +494,7 @@ it("answers 500 and still alerts when the lookup after a failed save also throws
 			throw new Error("D1 unavailable");
 		},
 	});
+
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(500);
