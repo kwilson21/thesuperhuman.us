@@ -1791,6 +1791,16 @@ describe("screenshot workflow triggers and concurrency", () => {
 		"utf8",
 	);
 
+	it("runs on changes to the browser checks under tests/browser, on pull requests and pushes", () => {
+		const paths = workflow.match(/ {4}paths:\n(?: {6}- .*\n)+/g) ?? [];
+
+		expect(paths).toHaveLength(2);
+
+		for (const block of paths) {
+			expect(block).toContain("      - 'tests/browser/**'\n");
+		}
+	});
+
 	it("lets a newer push wait for a capture in progress instead of cancelling it", () => {
 		expect(workflow).toMatch(/^ {2}cancel-in-progress: false$/m);
 

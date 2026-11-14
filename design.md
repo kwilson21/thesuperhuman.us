@@ -106,7 +106,18 @@ files; a test checks those literals against `global.css`.
 - At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
   that it stays on one line. The publishing consent page's button is the exception: its
   label wraps at any width, because that page cannot use a width query that follows text
-  size, and the label must stay inside the pill when text is enlarged.
+  size, and the label must stay inside the pill when text is enlarged. The closing panel's
+  large button is a second exception: its label wraps at any width when it does not fit, so
+  enlarged text reflows inside the panel; at the default text size it stays on one line.
+- The Work diagram's flow wraps by content: its parts share a row 1 : 1.2 and stack when the
+  row cannot hold their longest word, so enlarged text reflows instead of scrolling sideways
+  (WCAG 1.4.10). A word breaks inside itself only when it cannot fit a line. The large
+  button's and the phone closing panel's side padding are capped by the viewport
+  (`min(1.75rem, 8.75vw)`, `min(1.25rem, 6.25vw)`), and the footer's side gutter is capped
+  too (`min(var(--site-gutter), max(24px, 7.5vw))`). Each cap equals its rem value at 320px
+  wide and above at the default text size; the `max(24px, …)` floor keeps the footer's gutter
+  at its default value below 320px. The footer's side gutter stops growing with the text,
+  which gives the closing panel room for its button when text is enlarged.
 
 ## CTA voice
 - Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
@@ -218,6 +229,13 @@ Kazon revised the panel after seeing the built pages: "it feels like there's two
 Kazon chose how the closing panel's legal line wraps on a narrow phone, from four options
 shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
 is unchanged where it fits on one line.
+
+When the closing button's label wraps to two lines at enlarged text, the arrow stays centred
+beside both lines. Kazon chose it from two renders ("1 for sure", November 13, 2026). At a
+doubled root the label is two lines from 320px to 430px wide (measured in the release
+record). A width where it needs three lines is not yet approved and is an owner decision.
+
+At enlarged text on phone widths the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 

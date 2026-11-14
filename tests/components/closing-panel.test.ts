@@ -71,7 +71,7 @@ it("draws the panel from tokens with no border, shadow or motion", () => {
 	expect(footer).toMatch(/\.closing-panel \{[^}]*padding: 3rem 2rem 2\.25rem;/);
 	expect(footer).not.toContain(".closing-panel--quiet { padding-top");
 	expect(footer).toMatch(
-		/@media \(max-width: 600px\) \{[^@]*\.closing-panel \{[^}]*border-radius: 28px;[^}]*padding: 3rem 1\.25rem 1\.75rem;/,
+		/@media \(max-width: 600px\) \{[^@]*\.closing-panel \{[^}]*border-radius: 28px;[^}]*padding: 3rem min\(1\.25rem, 6\.25vw\) 1\.75rem;/,
 	);
 	expect(footer).not.toMatch(
 		/border-top|box-shadow|data-reveal|animation|#[0-9a-fA-F]{3,6}\b/,

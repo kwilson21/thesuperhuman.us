@@ -253,7 +253,7 @@
   /* Reflow (WCAG 1.4.10): on the narrowest phones a long label may wrap instead of pushing past the gutter. */
   @media (max-width: 380px) { .site-button { white-space: normal; text-align: center; } }
 
-  .site-button-large { min-height: 52px; font-size: 1.0625rem; padding-inline: 1.75rem; gap: .6rem; }
+  .site-button-large { min-height: 52px; font-size: 1.0625rem; padding-inline: min(1.75rem, 8.75vw); gap: .6rem; }
   .site-button-large span { transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-button:hover:not(:disabled) { color: var(--paper); background: var(--ink); border-color: var(--ink); }
@@ -296,7 +296,7 @@
   .project-status { display: flex; align-items: baseline; gap: .65rem; font: .78rem/1.7 var(--font-sans); margin-block: 1.5rem; }
   .project-status::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
   .page-title { font-size: clamp(3.25rem, 6.5vw, 5.4rem); line-height: 1.02; letter-spacing: -.045em; }
-  .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; }
+  .page-lede { font-size: clamp(1.3rem, 2.5vw, 1.8rem); line-height: 1.35; margin-top: 1.25rem; max-width: 40rem; overflow-wrap: break-word; }
   .context-disclosure { margin-top: 1.75rem; }
   .context-disclosure > summary { display: inline-flex; align-items: baseline; gap: .8rem; border-bottom: 1px solid var(--accent); cursor: pointer; list-style: none; min-height: 32px; }
   .context-disclosure > summary::-webkit-details-marker { display: none; }

@@ -46,7 +46,7 @@ This is the list of every button style in `src/` that was checked for the pill s
 ## Notes
 
 - Dead selectors with no markup in `src/`: `.request-work button`, `.audience-list button`, `.request-actions .danger`, `[data-review] button`. They were left as they are, apart from the shared owner rule above.
-- Most pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve. The consent page's button is the exception: its label wraps whenever it does not fit on one line, at any width, so the pill never overflows.
+- Most pill labels carry `white-space: nowrap`, so a label stays on one line instead of wrapping inside the curve. The exceptions are the consent page's button and the closing panel's large "Get in touch" button, whose labels wrap whenever they do not fit on one line, at any width, so the pill never overflows. The pinned contact button follows the global 380px rule.
 
 ## Out of scope
 
