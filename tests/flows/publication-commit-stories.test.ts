@@ -32,7 +32,9 @@ const base: Publication = {
 	},
 };
 
-const withdrawal = (over: Partial<Publication> = {}): Publication => ({
+const withdrawal = (
+	over: Partial<Omit<Publication, "operation" | "story">> = {},
+): Publication => ({
 	...base,
 	operation: "withdraw",
 	story: null,

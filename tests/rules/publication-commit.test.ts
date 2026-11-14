@@ -12,26 +12,28 @@ import { answerOf, nothingToDo, refuse, write } from "../helpers/rule-answers";
 // The commit rule as a table: every combination of what is stored (the latest revision, the event under this id, the
 // operations of the entry) and what is delivered (publish, correct or withdraw, at some expected revision).
 
-const publication = (over: Partial<Publication> = {}): Publication => ({
-	version: 1,
-	projectId: "threadline",
-	eventId: "evt",
-	entryId: "entry",
-	expectedRevision: 2,
-	operation: "publish",
-	origin: "work",
-	occurredOn: "2026-11-12",
-	threadId: null,
-	milestoneId: null,
-	story: {
-		headline: "h",
-		summary: "s",
-		technicalDetail: null,
-		delivery: "available",
-		basis: "repository-verified",
-	},
-	...over,
-});
+const publication = (over: Partial<Publication> = {}): Publication =>
+	// SAFETY: every call changes `operation` together with `story` (a withdrawal carries none, the others carry one), so the merged object is one of the two Publication shapes; TypeScript cannot see that through Partial.
+	({
+		version: 1,
+		projectId: "threadline",
+		eventId: "evt",
+		entryId: "entry",
+		expectedRevision: 2,
+		operation: "publish",
+		origin: "work",
+		occurredOn: "2026-11-12",
+		threadId: null,
+		milestoneId: null,
+		story: {
+			headline: "h",
+			summary: "s",
+			technicalDetail: null,
+			delivery: "available",
+			basis: "repository-verified",
+		},
+		...over,
+	}) as Publication;
 
 const none: CommitFacts = {
 	latestRevision: 2,
