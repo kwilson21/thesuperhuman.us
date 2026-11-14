@@ -18,7 +18,9 @@ const baseline = readFileSync(
 );
 
 const address = "artist@example.com";
-const pendingName = "studio_pending";
+// Over https the cookie uses the __Host- prefix (Secure, Path=/, no Domain), so a sibling subdomain cannot plant or shadow it.
+// Plain-http localhost cannot hold a __Host- cookie, so it keeps the plain name, as the session cookie keeps its attributes.
+const pendingName = "__Host-studio_pending";
 const originOf = "https://thesuperhuman.us";
 
 let sql: InstanceType<typeof DatabaseSync>;
@@ -130,7 +132,7 @@ describe("the pending sign-in cookie", () => {
 				.replace(/=[0-9a-f]{64}/, "=<nonce>");
 
 		expect(pendingCookieOf(known)).toBe(
-			`${pendingName}=<nonce>; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=600; Secure`,
+			`${pendingName}=<nonce>; Path=/; HttpOnly; SameSite=Lax; Max-Age=600; Secure`,
 		);
 		expect(pendingCookieOf(unknown)).toBe(pendingCookieOf(known));
 		expect(await known.json()).toEqual(await unknown.json());
@@ -148,10 +150,64 @@ describe("the pending sign-in cookie", () => {
 
 		const cookie = response.headers
 			.getSetCookie()
-			.find((value) => value.startsWith(`${pendingName}=`))!;
+			.find((value) => value.startsWith("studio_pending="))!;
 
-		expect(cookie).toContain("HttpOnly");
-		expect(cookie).not.toContain("Secure");
+		expect(cookie).toMatch(
+			/^studio_pending=[0-9a-f]{64}; Path=\/api\/studio; HttpOnly; SameSite=Lax; Max-Age=600$/,
+		);
+	});
+
+	it("signs in over plain-http localhost with the unprefixed cookie", async () => {
+		const local = "http://localhost:4321";
+
+		const asked = await requestCode(
+			context(
+				"/api/studio/code",
+				{ email: address, turnstileToken: "ok" },
+				{ origin: local },
+			),
+		);
+
+		await Promise.all(background.splice(0));
+
+		const value = asked.headers
+			.getSetCookie()
+			.map((cookie) => cookie.match(/^studio_pending=([0-9a-f]{64})/)?.[1])
+			.find(Boolean);
+
+		const entered = await completeCode(
+			context(
+				"/api/studio/session",
+				{ email: address, code: codeIn(mails[0]) },
+				{ origin: local, cookie: `studio_pending=${value}` },
+			),
+		);
+
+		expect(entered.status).toBe(200);
+		expect(entered.headers.getSetCookie()[1]).toBe(
+			"studio_pending=; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=0",
+		);
+	});
+
+	it("ignores an unprefixed cookie over https, so a planted one cannot stand in for the real one", async () => {
+		const asked = await ask();
+		const plain = `studio_pending=${nonceFrom(asked)}`;
+
+		expect((await enter(codeIn(mails[0]), { cookie: plain })).status).toBe(401);
+		expect(
+			sql.prepare("SELECT attempts FROM audio_client_signin_codes").get(),
+		).toEqual({ attempts: 0 });
+	});
+
+	it("gives a browser that blocks cookies the refusal that names the browser", async () => {
+		await ask();
+
+		const refused = await enter(codeIn(mails[0]));
+
+		expect(refused.status).toBe(401);
+		expect((await readJson<{ error: string }>(refused)).error).toContain(
+			"Enter it in the browser where you asked for it",
+		);
 	});
 
 	it("lets the browser that asked sign in, and clears the pending cookie beside the session cookie", async () => {
@@ -167,7 +223,7 @@ describe("the pending sign-in cookie", () => {
 		expect(cookies).toHaveLength(2);
 		expect(cookies[0]).toMatch(/^studio_session=[0-9a-f-]{72};/);
 		expect(cookies[1]).toBe(
-			`${pendingName}=; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=0; Secure`,
+			`${pendingName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`,
 		);
 	});
 
@@ -313,6 +369,38 @@ describe("the pending sign-in cookie", () => {
 	});
 });
 
+describe("a browser's own earlier code", () => {
+	const otherAddress = "other@example.com";
+
+	it("is removed when the browser asks for a code for a different address", async () => {
+		sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('song-2','service','${otherAddress}','Another song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
+
+		const first = await ask();
+		const second = await ask(
+			{ cookie: `${pendingName}=${nonceFrom(first)}` },
+			otherAddress,
+		);
+
+		expect(second.status).toBe(200);
+		expect(
+			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
+		).toEqual([{ email: otherAddress }]);
+	});
+
+	it("is removed when the browser asks for an address with no project", async () => {
+		const first = await ask();
+
+		await ask(
+			{ cookie: `${pendingName}=${nonceFrom(first)}` },
+			"nobody@example.com",
+		);
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 0 });
+	});
+});
+
 describe("races", () => {
 	it("gives two requests for one address at once a code and a browser each", async () => {
 		const [one, two] = await Promise.all([
@@ -394,6 +482,36 @@ describe("races", () => {
 				)
 				.get(),
 		).toEqual({ attempts: 0 });
+	});
+
+	it("lets two requests from one browser at once both succeed, and only the later cookie opens its code", async () => {
+		const asked = await ask({ ip: "203.0.113.5" });
+		const cookie = `${pendingName}=${nonceFrom(asked)}`;
+
+		const [one, two] = await Promise.all([
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{ cookie, ip: "203.0.113.20" },
+				),
+			),
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{ cookie, ip: "203.0.113.21" },
+				),
+			),
+		]);
+
+		await Promise.all(background.splice(0));
+		expect([one.status, two.status]).toEqual([200, 200]);
+		expect(mails).toHaveLength(3);
+		// The first code's row is gone; both new rows are live and bounded by the email allowance.
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 2 });
 	});
 
 	it("keeps the client's code when a stranger's request commits between the client's request and entry", async () => {

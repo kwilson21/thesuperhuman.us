@@ -1683,9 +1683,15 @@ it("software-only codes and sessions are scoped across both project kinds and re
 		await clientSoftwareProjectForSession(db, token, "software"),
 	).toBeNull();
 	sql.exec("UPDATE owner_requests SET status='new' WHERE id='software'");
+	// A row left in the retired sign-in codes table goes with the access closure, and so does one for another address not.
+	sql.exec(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at) VALUES
+    ('alex@example.com','old','2026-01-01','2026-01-01'),('other@example.com','old','2026-01-01','2026-01-01')`);
 	expect(
 		(await call(projectPost, { action: "revoke", confirmed: true })).status,
 	).toBe(200);
+	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([
+		{ email: "other@example.com" },
+	]);
 	expect(await clientSoftwareProjectsForSession(db, token)).toBeNull();
 	expect(
 		await clientSoftwareProjectForSession(db, other, "foreign-software"),

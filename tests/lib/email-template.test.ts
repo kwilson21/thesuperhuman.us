@@ -38,6 +38,27 @@ describe("renderEmail", () => {
 		expect(text).toContain("Enter it in the browser where you asked for it.");
 	});
 
+	it("carries no link or address to a page in the sign-in code email", () => {
+		const { html, text } = studioCodeEmail("48271936");
+
+		expect(html).not.toMatch(/<a\s/i);
+		expect(html).not.toContain("Open the sign-in page");
+		expect(text).not.toMatch(/https?:|www\./i);
+		expect(text).not.toContain("Open the sign-in page");
+
+		// The only address left in the HTML is the shared template's font stylesheet and the XML namespaces, none of them a page of the site.
+		const addresses = [...html.matchAll(/https?:\/\/[^"'\s)<]+/g)].map(
+			(match) => new URL(match[0]).hostname,
+		);
+
+		for (const host of addresses)
+			expect(["fonts.googleapis.com", "www.w3.org"]).toContain(host);
+		expect(html).not.toContain("thesuperhuman.us");
+		expect(text).toContain("4827 1936");
+		expect(text).toContain("expires in 10 minutes");
+		expect(text).toContain("Enter it in the browser where you asked for it.");
+	});
+
 	it("keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader", () => {
 		const { html } = studioInvitationEmail();
 		expect(html).toContain(

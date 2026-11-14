@@ -20,6 +20,8 @@ const now = new Date("2026-09-22T12:00:00.000Z");
 const later = (seconds: number) => new Date(now.getTime() + seconds * 1000);
 const address = "artist@example.com";
 
+const otherAddress = "other@example.com";
+
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
@@ -28,6 +30,10 @@ function fixture() {
 		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
     VALUES ('song-1','service',?,'A song','new',?,?)`)
 		.run(address, now.toISOString(), now.toISOString());
+	sql
+		.prepare(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+    VALUES ('song-2','service',?,'Another song','new',?,?)`)
+		.run(otherAddress, now.toISOString(), now.toISOString());
 
 	return { sql, db: sqliteD1(sql) };
 }
@@ -338,6 +344,39 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 				.prepare("SELECT SUM(attempts) AS total FROM audio_client_signin_codes")
 				.get(),
 		).toEqual({ total: 0 });
+		sql.close();
+	});
+
+	it("removes the browser's earlier code when it asks for a different address", async () => {
+		const { sql, db } = fixture();
+		const first = (await issueClientCode(db, address, secret, now))!;
+
+		const second = (await issueClientCode(
+			db,
+			otherAddress,
+			secret,
+			later(5),
+			first.nonce,
+		))!;
+
+		expect(second).not.toBeNull();
+		expect(
+			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
+		).toEqual([{ email: otherAddress }]);
+
+		// Also when nothing new is issued for the other address: the browser's cookie is replaced either way.
+		const third = await issueClientCode(
+			db,
+			"nobody@example.com",
+			secret,
+			later(6),
+			second.nonce,
+		);
+
+		expect(third).toBeNull();
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 0 });
 		sql.close();
 	});
 });

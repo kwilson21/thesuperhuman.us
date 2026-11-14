@@ -644,3 +644,31 @@ it("rejects a complete schema with a missing migration 0023 recipient snapshot c
 		db.close();
 	}
 });
+
+// audio_client_codes is the retired sign-in codes table. Its old rows still count towards studio cleanup while it exists,
+// and the count is left out once it has been dropped.
+it("counts old rows of the retired sign-in codes table only while that table exists", async () => {
+	const fixture = healthyFixture();
+	const baseQuery = fixture.query;
+	let summary = "";
+
+	fixture.query = async (sql: string) => {
+		if (sql.includes("sqlite_master"))
+			return [
+				...requiredSchema.map((name) => ({ name })),
+				...(retired ? [{ name: "audio_client_codes" }] : []),
+			];
+
+		if (sql.includes("audio_client_signin_codes")) summary = sql;
+
+		return baseQuery(sql);
+	};
+
+	let retired = true;
+	await ownerHealth(fixture);
+	expect(summary).toContain("FROM audio_client_codes WHERE");
+	retired = false;
+	await ownerHealth(fixture);
+	expect(summary).not.toContain("audio_client_codes WHERE");
+	expect(summary).toContain("FROM audio_client_signin_codes WHERE");
+});

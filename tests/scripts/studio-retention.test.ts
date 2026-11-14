@@ -1212,3 +1212,60 @@ it("revokes retained offer links and signing sessions without affecting other re
 	).toEqual({ used_at: now.toISOString() });
 	sql.close();
 });
+
+// audio_client_codes is the retired sign-in codes table: nothing reads it any more, but its rows (an address and a code
+// hash) must not outlive the 30-day retention until a later migration drops it.
+it("also removes old rows of the retired audio_client_codes table and keeps recent ones", async () => {
+	const { sql, database } = fixture();
+	sql.exec(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at)
+    VALUES ('retired-old@example.com','h1','2027-10-01','2027-10-01'),
+      ('retired-recent@example.com','h2','2028-01-01','2028-01-01')`);
+
+	const review = await previewStudioRetention(
+		database,
+		"Local test data",
+		storage,
+		now,
+	);
+
+	expect(review.counts).toMatchObject({ retiredCodes: 1, codes: 2 });
+	expect(JSON.stringify(review)).not.toMatch(/retired-old@example/);
+	await applyStudioRetention(
+		database,
+		review,
+		"Local test data",
+		storage,
+		async () => {},
+		now,
+	);
+	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([
+		{ email: "retired-recent@example.com" },
+	]);
+	sql.close();
+});
+
+it("runs the same retention when the retired table has already been dropped", async () => {
+	const { sql, database } = fixture();
+	sql.exec("DROP TABLE audio_client_codes");
+
+	const review = await previewStudioRetention(
+		database,
+		"Local test data",
+		storage,
+		now,
+	);
+
+	expect(review.counts).toMatchObject({ retiredCodes: 0, codes: 2 });
+	await applyStudioRetention(
+		database,
+		review,
+		"Local test data",
+		storage,
+		async () => {},
+		now,
+	);
+	expect(
+		sql.prepare("SELECT nonce_hash FROM audio_client_signin_codes").all(),
+	).toEqual([{ nonce_hash: "nonce-recent" }]);
+	sql.close();
+});
