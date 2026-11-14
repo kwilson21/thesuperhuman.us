@@ -164,6 +164,76 @@ describe("the publication envelope reader against the validator it replaced", ()
 		expect(run.count).toBeGreaterThan(6000);
 	});
 
+	it("answers alike on objects that are not plain, and on odd keys, deep nesting and very long strings", () => {
+		const run = differential(
+			(input: RawValue) => ({ v: legacyParsePublication(input) }),
+			(input: RawValue) => ({ v: parsePublication(input) }),
+			(answer) => JSON.stringify(answer),
+		);
+
+		const inherited = (operation: string) => Object.create(valid(operation));
+
+		const hidden = (operation: string) => {
+			const input = valid(operation);
+			const copy: JsonObject = {};
+
+			for (const [key, held] of Object.entries(input))
+				Object.defineProperty(copy, key, {
+					value: held,
+					enumerable: key !== "projectId",
+				});
+
+			return copy;
+		};
+
+		const nested = (depth: number): JsonObject => {
+			let inner: JsonObject = { headline: "x" };
+
+			for (let i = 0; i < depth; i += 1) inner = { next: inner };
+
+			return inner;
+		};
+
+		const inputs: RawValue[] = [
+			inherited("publish"),
+			inherited("withdraw"),
+			hidden("publish"),
+			hidden("withdraw"),
+			Object.create(null),
+			Object.assign(Object.create(null), valid("publish")),
+			new Date(0),
+			new Map(Object.entries(valid("publish"))),
+			JSON.parse(
+				`{"__proto__": {"version": 1}, ${JSON.stringify(valid("publish")).slice(1)}`,
+			),
+			{ ...valid("publish"), constructor: "x" },
+			{ ...valid("publish"), __proto__: { extra: 1 } },
+			{ ...valid("publish"), story: nested(60) },
+			{
+				...valid("publish"),
+				story: { ...story(), headline: "a".repeat(20001) },
+			},
+			{
+				...valid("publish"),
+				story: { ...story(), summary: "é".repeat(30000) },
+			},
+			{
+				...valid("publish"),
+				story: { ...story(), technicalDetail: "b".repeat(100000) },
+			},
+			{ ...valid("publish"), story: Object.create(story()) },
+			{ ...valid("publish"), projectId: "a".repeat(20001) },
+			{
+				...valid("publish"),
+				story: Object.assign(Object.create({ extra: 1 }), story()),
+			},
+		];
+
+		for (const input of inputs) run.run(input);
+		expect(run.mismatches).toEqual([]);
+		expect(run.count).toBe(inputs.length);
+	});
+
 	it("accepts the same valid envelope, with members in the order they arrived", () => {
 		for (const operation of ["publish", "correct", "withdraw"]) {
 			const input = valid(operation);

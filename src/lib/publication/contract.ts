@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
@@ -119,11 +120,47 @@ const publication = Schema.Union([
 	}),
 ]);
 
+const topKeys = [
+	"version",
+	"projectId",
+	"eventId",
+	"entryId",
+	"expectedRevision",
+	"operation",
+	"origin",
+	"occurredOn",
+	"threadId",
+	"milestoneId",
+	"story",
+];
+
+const storyKeys = [
+	"headline",
+	"summary",
+	"technicalDetail",
+	"delivery",
+	"basis",
+];
+
+/** An object that has exactly these members as its OWN, enumerable, string-keyed properties (an inherited or hidden member does not count, and none may be extra). */
+function hasExactly(value: unknown, keys: readonly string[]): boolean {
+	if (!Predicate.isObject(value)) return false;
+	const own = Object.keys(value);
+
+	return own.length === keys.length && keys.every((key) => own.includes(key));
+}
+
 /**
  * Strict shape validation, NOT content sanitization or publication permission. The Effect Schema reader of the envelope:
- * the value, as a copy detached from the caller (so later mutations cannot change a prepared delivery), or null.
+ * the value, as a copy detached from the caller (so later mutations cannot change a prepared delivery), or null. Only an
+ * object's own enumerable string-keyed members count, as they do for JSON, so an envelope whose members are inherited or
+ * hidden is refused before the Schema reads it.
  */
 export function parsePublication(value: unknown): Publication | null {
+	if (!hasExactly(value, topKeys)) return null;
+	const story = new Map(Object.entries(value)).get("story");
+
+	if (Predicate.isObject(story) && !hasExactly(story, storyKeys)) return null;
 	const read = Schema.decodeUnknownResult(publication)(value, {
 		onExcessProperty: "error",
 	});
