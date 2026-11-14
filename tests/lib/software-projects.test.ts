@@ -9,6 +9,10 @@ import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { changeOwnerRequest } from "~/lib/owner-requests";
+import {
+	failingRetiredCleanup,
+	retiredCleanupLogLine,
+} from "../helpers/retired-codes-failure";
 import { POST as requestPost } from "~/pages/api/owner/requests/[id]";
 import { POST as offerPost } from "~/pages/api/owner/requests/[id]/software";
 import { POST as messagesPost } from "~/pages/api/studio/software/[id]/messages";
@@ -2186,6 +2190,72 @@ it("withdrawal records access closure and its retention clock in the same transa
 		sql.prepare("SELECT revoked_at FROM audio_client_sessions").get()
 			.revoked_at,
 	).toBeTruthy();
+});
+
+it("withdrawal succeeds and logs a fixed line when the retired-table cleanup fails", async () => {
+	await start();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	await changeOwnerRequest(failingRetiredCleanup(db), {
+		id: "software",
+		action: "withdraw",
+		actor: "owner@example.com",
+	});
+	expect(
+		sql.prepare("SELECT revoked_at FROM software_projects").get().revoked_at,
+	).toBeTruthy();
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	log.mockRestore();
+});
+
+it("a failed withdrawal batch still fails and does not run the retired-table cleanup", async () => {
+	await start();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	sql.exec("DROP TABLE audio_client_sessions");
+
+	await expect(
+		changeOwnerRequest(failingRetiredCleanup(db), {
+			id: "software",
+			action: "withdraw",
+			actor: "owner@example.com",
+		}),
+	).rejects.toThrow();
+	expect(log).not.toHaveBeenCalled();
+	log.mockRestore();
+});
+
+it("the access revoke route answers success, keeps the revocation and logs a fixed line when the retired-table cleanup fails", async () => {
+	await start();
+	const real = db;
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	env.MUSIC_DB = failingRetiredCleanup(real);
+
+	const response = await call(projectPost, {
+		action: "revoke",
+		confirmed: true,
+	});
+
+	env.MUSIC_DB = real;
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ ok: true });
+	expect(
+		sql.prepare("SELECT revoked_at FROM software_projects").get().revoked_at,
+	).toBeTruthy();
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	log.mockRestore();
+});
+
+it("the access revoke route still answers its error when the revocation batch fails", async () => {
+	await start();
+	sql.exec("DROP TABLE audio_client_sessions");
+
+	const response = await call(projectPost, {
+		action: "revoke",
+		confirmed: true,
+	});
+
+	expect(response.status).not.toBe(200);
 });
 
 it("rejects offer actions after project start before sending any email", async () => {

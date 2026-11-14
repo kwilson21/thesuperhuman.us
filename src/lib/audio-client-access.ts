@@ -460,8 +460,11 @@ export function pendingSignInFromRequest(request: Request): string | null {
 
 /**
  * Deletes the closed project's address from the retired sign-in codes table. Nothing reads that table any more; its rows
- * (an address and a code hash) are cleared so they do not outlive retention until a later migration drops it. A database
- * where it is already dropped is fine.
+ * (an address and a code hash) are cleared so they do not outlive retention until a later migration drops it.
+ *
+ * Best effort: it runs after the revocation has committed, so a failure must not make the revocation look failed. A
+ * missing table (already dropped) is silent; any other failure is logged as one fixed line with the error class only, and
+ * the retention script still sweeps the leftover rows.
  */
 export async function deleteRetiredCodes(
 	db: D1Database,
@@ -475,8 +478,10 @@ export async function deleteRetiredCodes(
 			.bind(requestId)
 			.run();
 	} catch (error) {
-		if (!(error instanceof Error && /no such table/i.test(error.message)))
-			throw error;
+		if (error instanceof Error && /no such table/i.test(error.message)) return;
+		console.error(
+			`Retired sign-in codes cleanup failed (${error instanceof Error ? error.name : "Error"}).`,
+		);
 	}
 }
 

@@ -1,11 +1,16 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
 	revokeProjectAccess,
 	revokeProjectFile,
 } from "~/lib/audio-project-revocation";
+import { double } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
+import {
+	failingRetiredCleanup,
+	retiredCleanupLogLine,
+} from "../helpers/retired-codes-failure";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -286,5 +291,51 @@ it("still closes access when the retired sign-in codes table has been dropped", 
 			)
 			.get(),
 	).toEqual({ revoked_at: now.toISOString() });
+	sql.close();
+});
+
+// The cleanup of the retired table is best effort: the revocation has committed, so a failure there must not be reported
+// as a failed revocation.
+it("closes access and answers true when the retired-table cleanup fails, and logs a fixed line", async () => {
+	const { sql, db } = fixture();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	expect(
+		await revokeProjectAccess(
+			failingRetiredCleanup(db),
+			"song-1",
+			"owner@example.com",
+			now,
+		),
+	).toBe(true);
+	expect(
+		sql
+			.prepare(
+				"SELECT revoked_at FROM audio_projects WHERE request_id='song-1'",
+			)
+			.get(),
+	).toEqual({ revoked_at: now.toISOString() });
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	expect(JSON.stringify(log.mock.calls)).not.toContain("example.com");
+	log.mockRestore();
+	sql.close();
+});
+
+it("still fails as before when the revocation batch itself fails", async () => {
+	const { sql, db } = fixture();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	const broken = double<D1Database>({
+		prepare: (query: string) => db.prepare(query),
+		batch: async () => {
+			throw new Error("d1 down");
+		},
+	});
+
+	await expect(
+		revokeProjectAccess(broken, "song-1", "owner@example.com", now),
+	).rejects.toThrow("d1 down");
+	expect(log).not.toHaveBeenCalled();
+	log.mockRestore();
 	sql.close();
 });
