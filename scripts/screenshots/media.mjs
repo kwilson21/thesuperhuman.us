@@ -7,6 +7,9 @@
 // the metadata is loaded, it dispatches the same `loadedmetadata` event the page listens for, so the page's own
 // render runs. A player with no source, or one that failed to load, is not waited for: its problem message is
 // what the page shows.
+//
+// The site bug is open: the owner has not yet decided whether to fix project-player.ts. Until then this wait stays,
+// so the screenshot shows the label a visitor sees when the race does not happen. It does not show the bug.
 
 /** Runs in the page: every player with a source and no error has loaded its metadata. Self-contained. */
 export function metadataLoaded() {
@@ -62,13 +65,24 @@ export function playersSettled() {
 export async function waitForPlayers(page, { timeout = 15_000 } = {}) {
 	try {
 		await page.waitForFunction(metadataLoaded, null, { timeout });
-		await page.evaluate(renderPlayers);
-		await page.waitForFunction(playersSettled, null, { timeout });
 	} catch (error) {
 		if (error?.name !== "TimeoutError") throw error;
 
 		throw new Error(
 			`The audio player metadata did not load within ${timeout} ms, so its duration label cannot be captured.`,
+		);
+	}
+
+	await page.evaluate(renderPlayers);
+
+	try {
+		await page.waitForFunction(playersSettled, null, { timeout });
+	} catch (error) {
+		if (error?.name !== "TimeoutError") throw error;
+
+		// The metadata had loaded by now, so the message must not blame it.
+		throw new Error(
+			`The audio player duration label did not render within ${timeout} ms after its metadata loaded, so its capture cannot show the duration.`,
 		);
 	}
 }

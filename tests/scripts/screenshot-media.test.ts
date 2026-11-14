@@ -1,6 +1,7 @@
 import { type Context, createContext, runInContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 import {
+	metadataLoaded,
 	playersSettled,
 	renderPlayers,
 	waitForPlayers,
@@ -73,6 +74,38 @@ function inPage(
 	return runInContext(`(${fn.toString()})()`, sandbox) as boolean | undefined;
 }
 
+describe("metadataLoaded", () => {
+	it("holds when there are no players", () => {
+		expect(inPage(metadataLoaded, [])).toBe(true);
+	});
+
+	it("holds for a player with no source or one that failed to load", () => {
+		expect(inPage(metadataLoaded, [player({ src: "" })])).toBe(true);
+		expect(
+			inPage(metadataLoaded, [player({ error: { code: 4 }, readyState: 0 })]),
+		).toBe(true);
+	});
+
+	it("waits while a player with a source has no metadata yet", () => {
+		expect(inPage(metadataLoaded, [player({ readyState: 0 })])).toBe(false);
+	});
+
+	it("holds once the metadata is loaded, even before the label is rendered", () => {
+		expect(
+			inPage(metadataLoaded, [player({ readyState: 1, label: "0:00" })]),
+		).toBe(true);
+	});
+
+	it("requires every player, not just the first", () => {
+		expect(
+			inPage(metadataLoaded, [
+				player({ readyState: 1 }),
+				player({ readyState: 0 }),
+			]),
+		).toBe(false);
+	});
+});
+
 describe("playersSettled", () => {
 	it("is settled when there are no players", () => {
 		expect(inPage(playersSettled, [])).toBe(true);
@@ -142,8 +175,9 @@ type FakePage = {
 // SAFETY: the fake pages implement only the two methods waitForPlayers calls, which is all it reads.
 const asPage = (page: FakePage) => page as never;
 
-// A fake page that records the order of its waits and evaluations, by the function passed to each.
-function recordingPage(options: { timesOut: boolean }) {
+// A fake page that records the order of its waits and evaluations, by the function passed to each. `timesOut`
+// makes every wait time out; `timesOutOn` names the one wait that does.
+function recordingPage(options: { timesOut?: boolean; timesOutOn?: string }) {
 	const calls: { name: string; timeout?: number }[] = [];
 
 	return {
@@ -159,7 +193,7 @@ function recordingPage(options: { timesOut: boolean }) {
 					timeout: wait.timeout,
 				});
 
-				if (options.timesOut) {
+				if (options.timesOut || options.timesOutOn === fn.name) {
 					throw Object.assign(new Error("Timeout exceeded."), {
 						name: "TimeoutError",
 					});
@@ -194,5 +228,14 @@ describe("waitForPlayers", () => {
 		await expect(
 			waitForPlayers(asPage(recorded.page), { timeout: 5 }),
 		).rejects.toThrow(/audio player metadata did not load/);
+	});
+
+	it("does not blame the metadata when the duration label is what fails to render", async () => {
+		const recorded = recordingPage({ timesOutOn: "playersSettled" });
+
+		const failure = waitForPlayers(asPage(recorded.page), { timeout: 5 });
+
+		await expect(failure).rejects.toThrow(/duration label did not render/);
+		await expect(failure).rejects.not.toThrow(/metadata did not load/);
 	});
 });
