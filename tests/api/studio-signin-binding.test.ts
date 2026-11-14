@@ -252,13 +252,42 @@ describe("the pending sign-in cookie", () => {
 		).toBe(200);
 	});
 
-	it("keeps a code request from the same browser inside thirty seconds from replacing its cookie", async () => {
+	it("returns a fresh value whether or not the address has a project, even when the browser sends one", async () => {
+		const sent = "9".repeat(64);
+		const cookie = `${pendingName}=${sent}`;
+		const known = await ask({ cookie });
+		const unknown = await ask({ cookie }, "nobody@example.com");
+
+		expect(nonceFrom(known)).toMatch(/^[0-9a-f]{64}$/);
+		expect(nonceFrom(known)).not.toBe(sent);
+		expect(nonceFrom(unknown)).toMatch(/^[0-9a-f]{64}$/);
+		expect(nonceFrom(unknown)).not.toBe(sent);
+	});
+
+	it("returns a fresh value to a browser that asks again at once, and the new code replaces its own earlier one", async () => {
 		const first = await ask();
 		const nonce = nonceFrom(first)!;
 		const second = await ask({ cookie: `${pendingName}=${nonce}` });
 
-		expect(nonceFrom(second)).toBe(nonce);
-		expect(mails).toHaveLength(1);
+		expect(nonceFrom(second)).not.toBe(nonce);
+		expect(mails).toHaveLength(2);
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 1 });
+		expect(
+			(
+				await enter(codeIn(mails[0]), {
+					cookie: `${pendingName}=${nonceFrom(second)}`,
+				})
+			).status,
+		).toBe(401);
+		expect(
+			(
+				await enter(codeIn(mails[1]), {
+					cookie: `${pendingName}=${nonceFrom(second)}`,
+				})
+			).status,
+		).toBe(200);
 	});
 
 	it("answers the same way when the address already has the most live codes", async () => {
