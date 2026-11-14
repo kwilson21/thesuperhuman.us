@@ -15,6 +15,10 @@ import { musicRequest } from "~/lib/music-request";
 import { verifyTurnstile } from "~/lib/turnstile";
 import { studioCodeEmail } from "~/lib/client-emails";
 
+// A code request issues a code bound to the browser that asked (the pending sign-in cookie, see audio-client-access.ts).
+// Two requests from one browser at the same moment (two tabs) each get a code and an email, and the later cookie wins, so
+// the earlier tab's email will not open there. That is accepted: the email allowance (3 per five minutes) bounds it and
+// the browser's earlier code is deleted by whichever request commits last.
 export const prerender = false;
 
 const inputSchema = z.object({
