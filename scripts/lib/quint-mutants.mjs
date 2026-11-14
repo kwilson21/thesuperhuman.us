@@ -71,6 +71,7 @@ export const signinMutants = {
 	signinNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinNoCapGuard: { property: "liveRowsBounded" },
+	signinWriteDeleteByAddress: { property: "outcomeIndependentOfAddress" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
@@ -99,6 +100,6 @@ export const models = [
 		mutants: signinMutants,
 		equivalents: [],
 		exhaustive: [],
-		samples: "8000",
+		samples: "20000",
 	},
 ];
