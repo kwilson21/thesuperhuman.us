@@ -6,8 +6,11 @@ import {
 	suggestionVisitorHash,
 	validSuggestionPass,
 } from "~/lib/brief-suggestion-pass";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+
+const ROUTE = "/api/software/brief/suggest";
 
 const schema = z
 	.object({
@@ -44,6 +47,16 @@ const empty = () =>
 		{ suggestion: "" },
 		{ headers: { "cache-control": "no-store" } },
 	);
+
+/** A store, limiter or model failure: the same empty body, with 500 so the failure is not taken for a quiet answer. */
+const failed = (error: unknown) => {
+	logUnexpected(ROUTE, error);
+
+	return Response.json(
+		{ suggestion: "" },
+		{ status: 500, headers: { "cache-control": "no-store" } },
+	);
+};
 
 /** Whether the model returned a response string; the timeout branch resolves to null. */
 function hasResponseText(
@@ -140,7 +153,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							.run(),
 					)
 					.then(() => {})
-					.catch(() => {});
+					.catch((error: unknown) => logUnexpected(ROUTE, error));
 
 				locals.runtime?.ctx?.waitUntil(cleanup);
 			}
@@ -174,8 +187,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ suggestion: `${/\s$/.test(parsed.data.text) ? "" : " "}${words}` },
 			{ headers: { "cache-control": "no-store" } },
 		);
-	} catch {
-		return empty();
+	} catch (error) {
+		return failed(error);
 	} finally {
 		if (timer) clearTimeout(timer);
 	}

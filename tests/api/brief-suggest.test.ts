@@ -277,7 +277,9 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 
 it("returns no suggestion on error, empty model output or timeout", async () => {
 	run.mockRejectedValueOnce(new Error("unavailable"));
-	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
+	const failed = await POST(context());
+	expect(failed.status).toBe(500);
+	expect(await failed.json()).toEqual({ suggestion: "" });
 	run.mockResolvedValueOnce({ response: "" });
 	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 	run.mockImplementationOnce(() => new Promise(() => {}));
@@ -426,9 +428,11 @@ it.each(["pending", "rejected", "unsuccessful", "throws"])(
 	},
 );
 
-it("fails closed when the minute binding throws", async () => {
+it("fails closed with a 500 when the minute binding throws", async () => {
 	limiter.limit.mockRejectedValueOnce(new Error("unavailable"));
-	await POST(context());
+	const response = await POST(context());
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ suggestion: "" });
 	expect(run).not.toHaveBeenCalled();
 	expect(database.prepare).not.toHaveBeenCalled();
 });
