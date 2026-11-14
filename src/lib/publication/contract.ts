@@ -158,7 +158,7 @@ function hasExactly(value: RawValue, keys: readonly string[]): boolean {
  * hidden is refused before the Schema reads it.
  */
 export function parsePublication(value: unknown): Publication | null {
-	if (!hasExactly(value, topKeys)) return null;
+	if (!Predicate.isObject(value) || !hasExactly(value, topKeys)) return null;
 	const story = new Map(Object.entries(value)).get("story");
 
 	if (Predicate.isObject(story) && !hasExactly(story, storyKeys)) return null;
