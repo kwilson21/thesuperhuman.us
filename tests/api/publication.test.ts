@@ -90,7 +90,7 @@ describe("publication receiver", () => {
 	it("does not expose storage errors and serves only listed public projects", async () => {
 		commit.mockRejectedValueOnce(new Error("private database details"));
 		const response = await POST(ctx());
-		expect(response.status).toBe(503);
+		expect(response.status).toBe(500);
 		expect(await response.text()).not.toContain("private database");
 		expect((await GET(ctx(body, { PUBLICATION_PROJECTS: "" }))).status).toBe(
 			404,

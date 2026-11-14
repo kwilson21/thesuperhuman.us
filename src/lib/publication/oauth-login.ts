@@ -42,10 +42,27 @@ const random = () => encode(crypto.getRandomValues(new Uint8Array(32)));
 const cookie = (value: string, age = 600) =>
 	`${cookieName}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
 
-async function key(env: LoginEnv) {
-	const bytes = decode(env.PUBLICATION_COOKIE_KEY);
+/**
+ * Something on the site's side failed (a KV read or write, the cookie key, GitHub), not the visitor's request. The visitor
+ * is told so, with one fixed sentence and the status that says which kind it is: 500 for the site's own fault, 503 when
+ * GitHub is the unavailable dependency. The failure's own text is never sent.
+ */
+class Unavailable extends Error {
+	constructor(readonly status: 500 | 503) {
+		super("Publication connection unavailable.");
+	}
+}
 
-	if (bytes.length !== 32) throw new Error("Invalid cookie key");
+async function key(env: LoginEnv) {
+	let bytes: Uint8Array<ArrayBuffer>;
+
+	try {
+		bytes = decode(env.PUBLICATION_COOKIE_KEY);
+	} catch {
+		throw new Unavailable(500);
+	}
+
+	if (bytes.length !== 32) throw new Unavailable(500);
 
 	return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, [
 		"encrypt",
@@ -113,6 +130,46 @@ const fail = () =>
 		},
 	);
 
+const unavailable = (status: 500 | 503) =>
+	new Response("Publication connection unavailable.", {
+		status,
+		headers: { "Cache-Control": "no-store", "Set-Cookie": cookie("", 0) },
+	});
+
+/** Runs a call to the OAuth library; a refusal of the request itself stays the visitor's (400), any other failure is the site's (500). */
+async function library<T>(call: () => Promise<T>): Promise<T> {
+	try {
+		return await call();
+	} catch (error) {
+		if (error instanceof Error && error.name === "AuthorizationError")
+			throw error;
+
+		throw new Unavailable(500);
+	}
+}
+
+/** Calls GitHub; a call that cannot be made, or a 5xx answer, or an answer that is not JSON, is GitHub being unavailable (503). */
+async function github(url: string, init: RequestInit) {
+	let response: Response;
+
+	try {
+		response = await fetch(url, init);
+	} catch {
+		throw new Unavailable(503);
+	}
+
+	if (response.status >= 500) throw new Unavailable(503);
+	let body: unknown;
+
+	try {
+		body = await response.json();
+	} catch {
+		throw new Unavailable(503);
+	}
+
+	return { response, body };
+}
+
 function redirect(url: string, token: string, age = 600) {
 	return new Response(null, {
 		status: 302,
@@ -168,7 +225,9 @@ export async function publicationLogin(
 			url.pathname === publicationBase + "/authorize" &&
 			request.method === "GET"
 		) {
-			const auth = await env.OAUTH_PROVIDER.parseAuthRequest(request);
+			const auth = await library(() =>
+				env.OAUTH_PROVIDER.parseAuthRequest(request),
+			);
 
 			const supported = (env.PUBLICATION_PROJECTS ?? "")
 				.split(",")
@@ -190,7 +249,9 @@ export async function publicationLogin(
 					))
 			)
 				return fail();
-			const client = await env.OAUTH_PROVIDER.lookupClient(auth.clientId);
+			const client = await library(() =>
+				env.OAUTH_PROVIDER.lookupClient(auth.clientId),
+			);
 
 			if (!client) return fail();
 
@@ -269,7 +330,7 @@ export async function publicationLogin(
 			)
 				return fail();
 
-			const response = await fetch(
+			const exchange = await github(
 				"https://github.com/login/oauth/access_token",
 				{
 					method: "POST",
@@ -289,14 +350,15 @@ export async function publicationLogin(
 			);
 
 			// SAFETY: only access_token and error are read, and the fail() check below tests both before access_token is used.
-			const token = (await response.json()) as {
+			const token = exchange.body as {
 				access_token?: string;
 				error?: string;
 			};
 
-			if (!response.ok || token.error || !token.access_token) return fail();
+			if (!exchange.response.ok || token.error || !token.access_token)
+				return fail();
 
-			const userResponse = await fetch("https://api.github.com/user", {
+			const lookup = await github("https://api.github.com/user", {
 				headers: {
 					Authorization: `Bearer ${token.access_token}`,
 					Accept: "application/vnd.github+json",
@@ -306,28 +368,30 @@ export async function publicationLogin(
 			});
 
 			// SAFETY: only id is read, then stringified and compared with the configured owner ID, so a missing id becomes "undefined" and cannot match; the body is GitHub's API response over TLS.
-			const user = (await userResponse.json()) as { id?: number };
+			const user = lookup.body as { id?: number };
 
 			if (
-				!userResponse.ok ||
+				!lookup.response.ok ||
 				!env.PUBLICATION_OWNER_ID ||
 				String(user.id) !== env.PUBLICATION_OWNER_ID
 			)
 				return fail();
 
-			const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
+			const { redirectTo } = await library(() =>
+				env.OAUTH_PROVIDER.completeAuthorization({
 				request: state.request,
 				userId: String(user.id),
 				scope: state.request.scope,
 				metadata: {},
 				props: { ownerId: String(user.id), scopes: state.request.scope },
-			});
+			}),
+			);
 
 			return redirect(redirectTo, "", 0);
 		}
 
 		return new Response("Not found", { status: 404 });
-	} catch {
-		return fail();
+	} catch (error) {
+		return error instanceof Unavailable ? unavailable(error.status) : fail();
 	}
 }

@@ -554,3 +554,136 @@ describe("publication consent page styling", () => {
 		);
 	});
 });
+
+describe("publication sign-in when something other than the visitor's request fails", () => {
+	const callback = (nonce: string, response: Response) =>
+		new Request(origin + "/api/publication/callback?code=x&state=" + nonce, {
+			headers: { cookie: cookie(response) },
+		});
+
+	const SENTENCE = "Publication connection unavailable.";
+
+	it("answers 500 with the fixed sentence when the client lookup fails", async () => {
+		const { env } = fixture();
+
+		vi.mocked(env.OAUTH_PROVIDER.lookupClient).mockRejectedValueOnce(
+			new Error("kv private details"),
+		);
+		const page = await publicationLogin(
+			new Request(origin + "/api/publication/authorize"),
+			env,
+		);
+
+		expect(page.status).toBe(500);
+		expect(await page.text()).toBe(SENTENCE);
+	});
+
+	it("answers 500 when reading the authorization request fails in KV, and 400 when the request itself is refused", async () => {
+		const { env } = fixture();
+		const parse = vi.mocked(env.OAUTH_PROVIDER.parseAuthRequest);
+		const refused = Object.assign(new Error("Invalid client_id"), {
+			name: "AuthorizationError",
+		});
+
+		parse.mockRejectedValueOnce(new Error("kv private details"));
+		expect(
+			(
+				await publicationLogin(
+					new Request(origin + "/api/publication/authorize"),
+					env,
+				)
+			).status,
+		).toBe(500);
+		parse.mockRejectedValueOnce(refused);
+		expect(
+			(
+				await publicationLogin(
+					new Request(origin + "/api/publication/authorize"),
+					env,
+				)
+			).status,
+		).toBe(400);
+	});
+
+	it("answers 500 when the cookie key is not a usable key", async () => {
+		const { env } = fixture();
+		const bad = partial<LoginEnv>({
+			...env,
+			PUBLICATION_COOKIE_KEY: btoa("short"),
+		});
+
+		const page = await publicationLogin(
+			new Request(origin + "/api/publication/authorize"),
+			bad,
+		);
+
+		expect(page.status).toBe(500);
+		expect(await page.text()).toBe(SENTENCE);
+	});
+
+	it.each([
+		["cannot be reached", () => Promise.reject(new Error("network down"))],
+		["answers 500", () => Promise.resolve(new Response("bad", { status: 500 }))],
+		[
+			"answers with HTML",
+			() => Promise.resolve(new Response("<html>", { status: 200 })),
+		],
+	])("answers 503 when GitHub %s", async (_name, answer) => {
+		const { env, complete } = fixture();
+		const { response, nonce } = await start(env);
+
+		vi.stubGlobal("fetch", vi.fn(answer));
+		const result = await publicationLogin(callback(nonce, response), env);
+
+		expect(result.status).toBe(503);
+		expect(await result.text()).toBe(SENTENCE);
+		expect(complete).not.toHaveBeenCalled();
+	});
+
+	it("answers 503 when GitHub's user lookup cannot be reached", async () => {
+		const { env } = fixture();
+		const { response, nonce } = await start(env);
+
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+				.mockRejectedValueOnce(new Error("network down")),
+		);
+		expect(
+			(await publicationLogin(callback(nonce, response), env)).status,
+		).toBe(503);
+	});
+
+	it("still answers 400 when GitHub refuses the code", async () => {
+		const { env } = fixture();
+		const { response, nonce } = await start(env);
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ error: "bad_verification_code" })),
+		);
+		expect(
+			(await publicationLogin(callback(nonce, response), env)).status,
+		).toBe(400);
+	});
+
+	it("answers 500 when the grant cannot be stored", async () => {
+		const { env, complete } = fixture();
+		const { response, nonce } = await start(env);
+
+		complete.mockRejectedValueOnce(new Error("kv private details"));
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+				.mockResolvedValueOnce(Response.json({ id: 10987837 })),
+		);
+		const result = await publicationLogin(callback(nonce, response), env);
+
+		expect(result.status).toBe(500);
+		expect(await result.text()).toBe(SENTENCE);
+	});
+});

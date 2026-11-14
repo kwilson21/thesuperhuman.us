@@ -165,7 +165,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 		return wrapped;
 	} catch {
 		return new Response("Publication connection unavailable.", {
-			status: 503,
+			status: 500,
 			headers,
 		});
 	}
