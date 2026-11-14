@@ -11,7 +11,7 @@ import {
 	type LoginEnv,
 } from "../lib/publication/oauth-login";
 import { publicationMcp } from "../lib/publication/mcp";
-import { BodyUnreadable, readBounded } from "./bounded-body";
+import { readBounded } from "./bounded-body";
 import { keyBoundedKv } from "./publication-kv";
 import { publicationTools } from "./publication-mcp";
 import { publicationLogin } from "./publication-login";
