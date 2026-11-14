@@ -169,7 +169,7 @@ stateDiagram-v2
     [*] --> live: a browser asks for a code (new row bound to its cookie)
     live --> live: that browser guesses wrong (its row's attempts +1, up to the limit)
     live --> used: that browser enters the right code (the cookie is cleared)
-    live --> replaced: the same browser asks again after the pause (its own row is replaced)
+    live --> replaced: the same browser asks again (its own row is replaced)
     live --> expired: the code's lifetime passes
     expired --> swept: the next code request deletes it
     used --> swept: its lifetime passes and the next code request deletes it
@@ -179,7 +179,7 @@ stateDiagram-v2
 
 A browser with no cookie, or a cookie that matches no row, is not looked up at all: nothing is charged and nothing changes. Another browser asking for a code adds its own row and leaves the others alone.
 
-**State.** The rows (owner browser, delivered or not, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the time, and the emails allowance window. Browsers: the client's own (0), the client's other browser that can read the inbox but holds no cookie (1), and three strangers who know the address and never learn a code (2 to 4). Numbers are scaled from the code: 3 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 4 ticks (10 minutes), a pause of 1 tick (30 seconds), 3 live rows (6).
+**State.** The rows (owner browser, delivered or not, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the time, and the emails allowance window. Browsers: the client's own (0), the client's other browser that can read the inbox but holds no cookie (1), and three strangers who know the address and never learn a code (2 to 4). Numbers are scaled from the code: 3 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 4 ticks (10 minutes), 3 live rows (6).
 
 **Actions.** Request a code, deliver it, guess (with the right code only if the browser can read the inbox and the email was delivered), let a tick of time pass, and sweep expired rows.
 
@@ -194,7 +194,7 @@ A browser with no cookie, or a cookie that matches no row, is not looked up at a
 
 | Mutant | The change | Breaks |
 |---|---|---|
-| `SingleRow` | One row per address (the code before this fix): a new request replaces the address's row once it is older than the pause | `clientNeverLockedOut` |
+| `SingleRow` | One row per address (the code before this fix): a new request replaces the address's row once it is older than 30 seconds | `clientNeverLockedOut` |
 | `EvictOldest` | A full address makes room by removing the oldest live row | `clientNeverLockedOut` |
 | `SweepLive` | The sweep also removes rows that have not expired | `clientNeverLockedOut` |
 | `CookieNotRequired` | A correct code signs in without the cookie (the code before this fix) | `cookieRequired` |
@@ -208,7 +208,7 @@ A browser with no cookie, or a cookie that matches no row, is not looked up at a
 
 **Choices the model records.** A full address refuses the new request (it does not drop another browser's code), because dropping the oldest breaks property 1 (`EvictOldest`). The model's cap is 3 against an allowance of 2 per window so a random search can reach it; the code's cap is 6 (two windows of the allowance of 3).
 
-**What it does not cover.** The captcha, per-IP allowances, email delivery failure and the discard of an undelivered code, the project check (an address with no project gets no row and the same answer), the 30-second pause beyond one tick, and what the client types. A stranger can still use the address's email allowance (3 per five minutes) and the live-row cap to stop a client who has not yet asked for a code from getting one for a few minutes; that is the cost of the email allowance and is not a property of the model. A stranger who asks for codes also gets their own row for the address and, by luck, can guess its code (1 in 10^8 per guess, 5 guesses per row, 3 emails per five minutes), as before the fix; the model treats a stranger's guesses as always wrong.
+**What it does not cover.** The captcha, per-IP allowances, email delivery failure and the discard of an undelivered code, the project check (an address with no project gets no row and the same answer, with a fresh cookie value either way), and what the client types. The address's email allowance (3 per five minutes) and live-code cap are shared by everyone who asks for that address, so they bound how many codes can exist, not who asked for them; the model's property 1 is about a client who already has a code. A browser that asks for a code and then guesses its own code is limited to the per-code attempts, as before. The code before this fix paused 30 seconds before replacing a row; the fixed code has no pause, a browser that asks again replaces its own code and the email allowance bounds the mail, so the cookie value a request returns never depends on whether the address has a project (the mutants `SingleRow` and `ReplaceLive` keep the old pause).
 
 ## Verified modules
 
