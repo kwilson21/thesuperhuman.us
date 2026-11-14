@@ -9,9 +9,8 @@ import * as Effect from "effect/Effect";
 import { decideAndSave } from "../guarded-save";
 import {
 	findCampaignTag,
-	findPlayback,
 	insertPlayback,
-	lastPlayback,
+	readPlaybackFacts,
 } from "../music-store";
 import type { EventInput } from "../music-input";
 import { tagPlayback } from "../rules/campaign-tag";
@@ -69,17 +68,11 @@ export const recordPlayback = (report: PlaybackReport) =>
 		const now = report.now();
 
 		return yield* decideAndSave({
-			facts: Effect.gen(function* () {
-				const duplicate = yield* findPlayback(input.eventId);
-
-				// A stored event with this id settles the answer without the playthrough's last event.
-				const last =
-					duplicate === null
-						? yield* lastPlayback(input.sessionId, input.playthroughId)
-						: null;
-
-				return { duplicate, last };
-			}),
+			facts: readPlaybackFacts(
+				input.eventId,
+				input.sessionId,
+				input.playthroughId,
+			),
 			decide: (facts) =>
 				judgePlayback.decide(
 					{ event: input, visitor: metadata, tag, now },

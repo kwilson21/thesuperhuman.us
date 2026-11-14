@@ -32,54 +32,70 @@ const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 		});
 	});
 
-/** The stored event with this id, or null. */
-export const findPlayback = (eventId: string) =>
-	asked(async (db): Promise<StoredPlayback | null> => {
-		const row = await db
-			.prepare(
-				`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`,
-			)
-			.bind(eventId)
-			.first<{
-				session_id: string;
-				playthrough_id: string;
-				sequence: number;
-			}>();
+/** What is stored about an event and its playthrough, read together. */
+export type PlaybackFacts = {
+	/** The stored event with this id, or null. */
+	readonly duplicate: StoredPlayback | null;
+	/** The playthrough's last stored event, with when its first event was stored, or null when it has none. */
+	readonly last: LastPlayback | null;
+};
 
-		return row === null
-			? null
-			: {
-					sessionId: row.session_id,
-					playthroughId: row.playthrough_id,
-					sequence: row.sequence,
-				};
-	});
+type PlaybackRow = {
+	session_id: string;
+	playthrough_id: string;
+	sequence: number;
+	accumulated_seconds: number;
+	event: string;
+	occurred_at: string;
+	started_at: string | null;
+};
 
-/** The playthrough's last stored event, with when its first event was stored, or null when it has none. */
-export const lastPlayback = (sessionId: string, playthroughId: string) =>
-	asked(async (db): Promise<LastPlayback | null> => {
-		const row = await db
-			.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
+/**
+ * Reads the stored event with this id and the playthrough's last event in ONE batch (one transaction, one snapshot), so
+ * another request cannot store this very event between the two reads: read apart, such an event would be absent from
+ * the first and make the second show its place taken, and the rule would refuse a duplicate as out of sequence before
+ * any insert. Both are read even when the id is already stored.
+ */
+export const readPlaybackFacts = (
+	eventId: string,
+	sessionId: string,
+	playthroughId: string,
+) =>
+	asked(async (db): Promise<PlaybackFacts> => {
+		const [duplicateRead, lastRead] = await db.batch<PlaybackRow>([
+			db
+				.prepare(
+					`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`,
+				)
+				.bind(eventId),
+			db
+				.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
       (SELECT occurred_at FROM music_playback_events first_event
         WHERE first_event.session_id=? AND first_event.playthrough_id=? AND first_event.sequence=1) AS started_at
     FROM music_playback_events
     WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
-			.bind(sessionId, playthroughId, sessionId, playthroughId)
-			.first<{
-				sequence: number;
-				accumulated_seconds: number;
-				event: string;
-				occurred_at: string;
-				started_at: string | null;
-			}>();
+				.bind(sessionId, playthroughId, sessionId, playthroughId),
+		]);
 
-		return row === null
-			? null
-			: {
-					sequence: row.sequence,
-					accumulatedSeconds: row.accumulated_seconds,
-					startedAt: row.started_at,
-				};
+		const duplicate = duplicateRead.results[0];
+		const last = lastRead.results[0];
+
+		return {
+			duplicate: duplicate
+				? {
+						sessionId: duplicate.session_id,
+						playthroughId: duplicate.playthrough_id,
+						sequence: duplicate.sequence,
+					}
+				: null,
+			last: last
+				? {
+						sequence: last.sequence,
+						accumulatedSeconds: last.accumulated_seconds,
+						startedAt: last.started_at,
+					}
+				: null,
+		};
 	});
 
 /** The combination the owner defined for these three names, with its campaign's status, or null. Callers name all three. */

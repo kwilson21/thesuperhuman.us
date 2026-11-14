@@ -29,6 +29,9 @@ export function musicWorld(options: MusicWorldOptions = {}) {
 		first: async () => null,
 	});
 
+	/** A read that answers as though the tables were empty, in a batch as well as alone. */
+	const blindResult = double<D1Result>({ success: true, results: [] });
+
 	const db = double<D1Database>({
 		prepare: (query: string) => {
 			if (pattern.test(query)) act();
@@ -38,6 +41,11 @@ export function musicWorld(options: MusicWorldOptions = {}) {
 				: real.prepare(query);
 		},
 		batch: async <T>(items: D1PreparedStatement[]) => {
+			if (items.every((item) => item === blindStatement))
+				return items.map(() =>
+					double<D1Result<T>>({ ...blindResult, results: [] }),
+				);
+
 			if (items.some((item) => pattern.test(boundStatement(item).query))) act();
 
 			return real.batch<T>(items);
