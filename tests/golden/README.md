@@ -328,13 +328,17 @@ pins a `setImmediate` yield at several sizes of work, and fails if that tracking
 
 - Blob and compressed stream answers. Node runs macrotasks inside the read of a Blob body or a `CompressionStream` output,
   and the harness cannot see them. Tracking the read as in flight holds the gate shut against a stream that reads an
-  effect (the stream test in `phases.test.ts`), so this is a limit. Such an answer records its deferred fetch as `request`
-  (pinned by the "known limit" tests there). No current route is affected: the only route that streams its body (the
-  file download, `src/pages/api/studio/projects/[id]/files/[fileId].ts`) never calls `waitUntil`, and no route returns a
-  Blob or stream body and also calls `waitUntil`.
+  effect (the stream test in `phases.test.ts`), so this is a limit, and the phase of deferred work behind such an answer
+  is NOT guaranteed. The tests for these answers assert only that the case terminates, the answer is recorded, and every
+  effect is recorded once with a valid phase and the same content as a string answer. No current route is affected: the
+  only route that streams its body (the file download, `src/pages/api/studio/projects/[id]/files/[fileId].ts`) never
+  calls `waitUntil`, and no route returns a Blob or stream body and also calls `waitUntil`.
 - `timers/promises` (`setImmediate` and `setTimeout` from `node:timers/promises`) go through Node's own timers, not the
-  globals, so they are not tracked. No route uses them. A test (`phases.test.ts`, "timers/promises is not observed") pins
-  what a deferred write behind such a yield records today.
+  globals, so they are not tracked. No route uses them. The phase of deferred work behind such a yield is NOT guaranteed;
+  the test (`phases.test.ts`, "timers/promises: terminates") asserts termination and one entry per effect only.
+- Request bodies that a handler reads (`request.json()`, a stream body). Their reads are not tracked. The golden routes
+  read string and JSON bodies; that they read without a macrotask has not been proven, so the stability of a phase after such
+  a read rests on the repeated runs (the suite is run several times, see docs/verification.md), not on a guarantee.
 - Key operations other than the cipher and digest calls: `importKey`, `exportKey`, `deriveKey`, `wrapKey` and `unwrapKey`
   are not wrapped. The harness's own `generateKey` fake calls `importKey`. A probe that imported and exported a key after
   `waitUntil` recorded the same phases, but a probe is not a proof.

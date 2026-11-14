@@ -751,12 +751,11 @@ describe("macrotask yields change nothing", () => {
 		});
 });
 
-describe("known limit: an answer read from a Blob or a compressed stream", () => {
-	// Node runs macrotasks inside the read of a Blob body or a compressed stream. The harness cannot see them: they do
-	// not go through the global setImmediate or timers. Tracking the read as work in flight would hold the gate shut
-	// against a stream that reads an effect (see the stream test above), so this is a limit, not a fix. Answers whose body
-	// is a Blob or a stream are the case here: src/lib/audio-project-files.ts returns an R2 object body, which is a stream.
-	// A deferred effect of such an answer is labelled request, unlike a string answer.
+describe("an answer read from a Blob or a compressed stream: the record, not the phase of the deferred work", () => {
+	// Node runs macrotasks inside the read of a Blob body or a compressed stream, and the harness does not see them (the
+	// README, "Not observed"). So the phase of the deferred work behind such an answer is NOT guaranteed, and these tests
+	// do not assert it. What is guaranteed, and asserted: the case terminates, the answer is recorded, and every effect is
+	// recorded exactly once, with a valid phase and the same content as the string answer.
 	const answer =
 		(kind: "text" | "blob" | "gzip") => async (context: APIContext) => {
 			ctxOf(context).waitUntil(
@@ -776,28 +775,41 @@ describe("known limit: an answer read from a Blob or a compressed stream", () =>
 			return new Response("ok");
 		};
 
-	it("a string answer records the background phases", async () => {
-		expect(phases(await record(answer("text")))).toEqual([
-			"waitUntil:request",
-			"fetch:background",
-			"kv:background",
-		]);
-	});
+	const withoutPhase = (got: CaseRecord) =>
+		got.effects.map(({ phase: _phase, ...rest }) => JSON.stringify(rest));
 
-	it("a Blob answer records its deferred fetch as request (the limit)", async () => {
-		expect(phases(await record(answer("blob")))).toEqual([
-			"waitUntil:request",
-			"fetch:request",
-			"kv:background",
-		]);
-	});
+	const baseline = record(answer("text"));
 
-	it("a compressed stream answer records its deferred fetch as request (the limit)", async () => {
-		expect(phases(await record(answer("gzip")))).toEqual([
-			"waitUntil:request",
-			"fetch:request",
-			"kv:background",
-		]);
+	it.each(["blob", "gzip"] as const)(
+		"a %s answer terminates and records every effect once; the phase of the deferred work is not guaranteed",
+		async (kind) => {
+			const got = await record(answer(kind));
+
+			expect(got.steps[0]?.answer).toMatchObject({
+				outcome: "response",
+				status: 200,
+			});
+
+			for (const effect of got.effects)
+				expect(["request", "background"]).toContain(effect.phase);
+
+			expect(
+				got.effects
+					.filter((effect) => effect.kind !== "waitUntil-settled")
+					.map((effect) => effect.kind),
+			).toEqual(["waitUntil", "fetch", "kv"]);
+
+			expect(withoutPhase(got)).toEqual(withoutPhase(await baseline));
+		},
+		60_000,
+	);
+
+	it("a Blob answer records its two bytes as a byte record", async () => {
+		const got = await record(answer("blob"));
+
+		expect(got.steps[0]?.answer).toMatchObject({
+			body: { $bytes: { length: 2 } },
+		});
 	});
 });
 
@@ -839,7 +851,7 @@ describe("a setImmediate loop, a stuck handler, and the event loop's own timers"
 		expect(Date.now() - started).toBeLessThan(10_000);
 	}, 60_000);
 
-	it("timers/promises is not observed: its yield is not tracked, so the record rests on the order Node runs its immediates in", async () => {
+	it("timers/promises: terminates and records the deferred write once; its phase is not guaranteed", async () => {
 		const got = await record(async (context) => {
 			ctxOf(context).waitUntil(
 				(async () => {
@@ -852,7 +864,16 @@ describe("a setImmediate loop, a stuck handler, and the event loop's own timers"
 			return new Response("ok");
 		});
 
-		expect(phases(got)).toEqual(["waitUntil:request", "kv:background"]);
+		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response" });
+
+		for (const effect of got.effects)
+			expect(["request", "background"]).toContain(effect.phase);
+
+		expect(
+			got.effects
+				.filter((effect) => effect.kind !== "waitUntil-settled")
+				.map((effect) => effect.kind),
+		).toEqual(["waitUntil", "kv"]);
 	});
 
 	it("setImmediate with a non-function callback throws synchronously, as Node does", async () => {
