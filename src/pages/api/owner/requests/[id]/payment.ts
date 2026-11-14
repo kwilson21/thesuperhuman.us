@@ -14,6 +14,7 @@ import { getOwnerRequest } from "~/lib/owner-requests";
 import {
 	createBalanceInvoice,
 	createBookingInvoice,
+	isStripeProviderFailure,
 	stripeAvailable,
 } from "~/lib/stripe-invoicing";
 
@@ -199,12 +200,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			{ headers },
 		);
 	} catch (error) {
-		const message = error instanceof Error ? error.message : "";
-		const stripeFailure = /Stripe|hosted payment URL/i.test(message);
-
 		return Response.json(
 			{ ok: false },
-			{ status: stripeFailure ? 502 : 409, headers },
+			{
+				status:
+					error instanceof Error && isStripeProviderFailure(error) ? 502 : 409,
+				headers,
+			},
 		);
 	}
 };
