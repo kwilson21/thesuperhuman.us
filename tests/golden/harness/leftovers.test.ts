@@ -47,6 +47,12 @@ const bytes = (got: CaseRecord) => JSON.stringify(asFixture(got));
 const d1Effects = (got: CaseRecord) =>
 	got.effects.filter((effect) => effect.kind === "d1");
 
+/** The ids of the waitUntil entries a case registered, in order. */
+const registeredIds = (got: CaseRecord) =>
+	got.effects.flatMap((effect) =>
+		effect.kind === "waitUntil" ? [effect.id] : [],
+	);
+
 /** A route that answers at once and leaves a put behind a 10 ms timer. */
 const putAfterTimer: Handler = (context) => {
 	void (async () => {
@@ -100,6 +106,7 @@ describe("a timer left queued when its step ends is abandoned", () => {
 					{ path: "/api/b", method: "POST", as: asVisitor(), handler: idle },
 				],
 			});
+
 			const seen = new Set<string>();
 
 			for (let run = 0; run < RUNS; run += 1) {
@@ -133,6 +140,7 @@ describe("a timer left queued when its step ends is abandoned", () => {
 					},
 				],
 			});
+
 			const seen = new Set<string>();
 
 			for (let run = 0; run < RUNS; run += 1) {
@@ -201,20 +209,12 @@ describe("a waitUntil registered after the background pass has begun is drained"
 				one(),
 			);
 
-			const registered = got.effects.filter(
-				(effect) => effect.kind === "waitUntil",
-			);
-			const settled = got.effects.filter(
-				(effect) => effect.kind === "waitUntil-settled",
-			);
+			const [id] = registeredIds(got);
 
-			expect(registered).toHaveLength(1);
-			expect(settled).toEqual([
-				expect.objectContaining({
-					id: (registered[0] as { id: number }).id,
-					outcome: "fulfilled",
-				}),
-			]);
+			expect(registeredIds(got)).toHaveLength(1);
+			expect(
+				got.effects.filter((effect) => effect.kind === "waitUntil-settled"),
+			).toEqual([expect.objectContaining({ id, outcome: "fulfilled" })]);
 		},
 		BUDGET_MS,
 	);
@@ -229,17 +229,14 @@ describe("a waitUntil registered after the background pass has begun is drained"
 				one(),
 			);
 
-			const registered = got.effects.filter(
-				(effect) => effect.kind === "waitUntil",
-			);
-			const settled = got.effects.filter(
-				(effect) => effect.kind === "waitUntil-settled",
-			);
+			const [id] = registeredIds(got);
 
-			expect(registered).toHaveLength(1);
-			expect(settled).toEqual([
+			expect(registeredIds(got)).toHaveLength(1);
+			expect(
+				got.effects.filter((effect) => effect.kind === "waitUntil-settled"),
+			).toEqual([
 				expect.objectContaining({
-					id: (registered[0] as { id: number }).id,
+					id,
 					outcome: "rejected",
 					error: "Error: late",
 				}),

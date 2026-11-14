@@ -463,6 +463,7 @@ function provePhases(old, next, problems) {
 
 			if (changed) {
 				stats.derived += 1;
+
 				if (reference.kind === "waitUntil") stats.derivedFromWaitUntil += 1;
 				else if (reference.kind === "previous step end")
 					stats.derivedFromPreviousEnd += 1;
