@@ -54,6 +54,8 @@ type Parts = {
 	kv?: "missing" | "get fails" | "put fails" | "delete fails";
 	db?: "missing";
 	omit?: string[];
+	/** env.MUSIC_EVENTS_ENABLED */
+	events?: string;
 };
 
 function world(parts: Parts = {}) {
@@ -99,6 +101,7 @@ function world(parts: Parts = {}) {
 	const env = {
 		MUSIC_DB: parts.db === "missing" ? undefined : db,
 		RATE_LIMIT: parts.kv === "missing" ? undefined : kv,
+		MUSIC_EVENTS_ENABLED: parts.events,
 		TURNSTILE_SECRET_KEY: "turnstile-secret",
 		RESEND_API_KEY: "resend-key",
 		CONTACT_FROM_EMAIL: "site@example.test",
@@ -341,5 +344,92 @@ describe("a playthrough whose first event is gone", () => {
 
 		expect(response.status).toBe(409);
 		expect(stored(sql)).toEqual([{ id: eid(2), sequence: 2 }]);
+	});
+});
+
+describe("the public routes' other answers", () => {
+	it("music-interest refuses another origin and an unknown release, and stores nothing", async () => {
+		const { env, sql } = world();
+
+		const other = partial<APIContext>({
+			request: new Request("https://thesuperhuman.us/api/music-interest", {
+				method: "POST",
+				headers: {
+					origin: "https://evil.example",
+					"content-type": "application/json",
+				},
+				body: JSON.stringify(wish),
+			}),
+			locals: partial<APIContext["locals"]>({ runtime: testRuntime(env) }),
+		});
+
+		expect((await interest(other)).status).toBe(403);
+		expect((await want({ ...wish, releaseId: "missing" }, env)).status).toBe(
+			404,
+		);
+		expect(
+			sql.prepare("SELECT count(*) AS n FROM music_interest").get(),
+		).toEqual({ n: 0 });
+	});
+
+	it("music-interest confirms only after the captcha and the storage succeed", async () => {
+		const { env } = world();
+
+		expect((await want(wish, env)).status).toBe(200);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ success: false })),
+		);
+		expect((await want(wish, world().env)).status).toBe(403);
+	});
+
+	it("music-interest refuses a request over 8192 bytes", async () => {
+		const { env } = world();
+
+		expect(
+			(await want({ ...wish, padding: "x".repeat(9000) }, env)).status,
+		).toBe(413);
+	});
+
+	it("music-event refuses a recording the release does not list", async () => {
+		const { env } = world();
+
+		expect(
+			(await play({ ...start, recordingId: "other-recording" }, env)).status,
+		).toBe(404);
+	});
+
+	it("music-event lets the same event be sent again after a temporary database failure", async () => {
+		let failing = true;
+
+		const { env, sql } = world({
+			before: [
+				/INSERT INTO music_playback_events/,
+				() => {
+					if (failing) throw new Error("d1 down");
+				},
+			],
+		});
+
+		expect((await play(start, env)).status).toBe(500);
+		failing = false;
+		expect((await play(start, env)).status).toBe(200);
+		expect(stored(sql)).toEqual([{ id: eid(1), sequence: 1 }]);
+	});
+
+	it("music-event reports an invalid sequence as a conflict, and can be switched off", async () => {
+		const { env } = world();
+
+		expect(
+			(
+				await play(
+					{ ...start, sequence: 2, event: "listen30", accumulatedSeconds: 10 },
+					env,
+				)
+			).status,
+		).toBe(409);
+		expect((await play(start, world({ events: "false" }).env)).status).toBe(
+			204,
+		);
 	});
 });

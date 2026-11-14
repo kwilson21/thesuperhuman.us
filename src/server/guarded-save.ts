@@ -106,8 +106,8 @@ export class SaveKeptChanging extends Data.TaggedError("SaveKeptChanging") {}
  * count; it then fails with `SaveKeptChanging`. Answers with the facts it decided on, what the rule decided (nothing,
  * when what was asked is already true), and what the save answered, which is there only when something was saved.
  */
-export const decideAndSave = <F, W, E, S, E2, R1, R2>(steps: {
-	facts: Effect.Effect<F, never, R1>;
+export const decideAndSave = <F, W, E, S, E0, E2, R1, R2>(steps: {
+	facts: Effect.Effect<F, E0, R1>;
 	decide: (facts: F) => Effect.Effect<Option.Option<W>, E>;
 	save: (write: W) => Effect.Effect<S, ChangedSinceRead | E2, R2>;
 }) =>

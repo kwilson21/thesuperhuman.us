@@ -1,47 +1,39 @@
 import type { APIRoute } from "astro";
-import {
-	eventSchema,
-	PlaybackSequenceError,
-	saveEvent,
-} from "~/lib/music-demand";
+import * as Effect from "effect/Effect";
 import { loadMusicCatalog } from "~/lib/music-content";
+import { musicRequest } from "~/lib/music-request";
+import { recordPlayback } from "~/server/flows/music-event";
 import {
 	musicFailed,
-	musicRequest,
 	musicUnavailable,
-} from "~/lib/music-request";
-import { resolveCampaignTag } from "~/lib/owner-campaigns";
-import { checkRateLimit } from "~/lib/rate-limit";
+	readEventInput,
+	readVisitor,
+} from "~/server/music-input";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 
-/** Cloudflare fills each cf location field with a string or leaves it undefined. */
-function isLocationText(value: string | undefined): value is string {
-	return typeof value === "string";
-}
-
-function locationPart(value: string | undefined) {
-	return isLocationText(value) &&
-		value.length <= 80 &&
-		!/[\u0000-\u001f]/.test(value)
-		? value
-		: "";
-}
+/** The answer for a playback event that cannot be stored as reported: the player does not retry a 409. */
+const conflict = () =>
+	Effect.succeed(Response.json({ ok: false }, { status: 409 }));
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request);
 
 	if (body instanceof Response) return body;
-	const parsed = eventSchema.safeParse(body);
+	const read = readEventInput(body);
 
-	if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
+	if (!read.ok) return Response.json({ ok: false }, { status: 400 });
 
-	if (locals.runtime.env.MUSIC_EVENTS_ENABLED === "false")
+	const env = locals.runtime.env;
+
+	if (env.MUSIC_EVENTS_ENABLED === "false")
 		return new Response(null, {
 			status: 204,
 			headers: { "cache-control": "no-store" },
 		});
-	const input = parsed.data;
+	const input = read.value;
 	const catalog = await loadMusicCatalog();
 	const release = catalog.releases.find((r) => r.id === input.releaseId);
 	const recording = catalog.recordings.find((r) => r.id === input.recordingId);
@@ -54,62 +46,39 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			!recording.youtubeId)
 	)
 		return Response.json({ ok: false }, { status: 404 });
-	const env = locals.runtime.env;
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
 
-	if (!env.MUSIC_DB || !env.RATE_LIMIT) return musicUnavailable();
-	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+	if (!bindings.ok) return musicUnavailable();
 
-	try {
-		if (
-			!(await checkRateLimit(env.RATE_LIMIT, ip, "rl:music-event-all:", 240))
-				.allowed
-		)
-			return Response.json({ ok: false }, { status: 429 });
-		const prefix = `rl:music-event:${input.releaseId}:${input.recordingId}:${input.medium}:${input.event}:`;
-
-		if (!(await checkRateLimit(env.RATE_LIMIT, ip, prefix, 60)).allowed)
-			return Response.json({ ok: false }, { status: 429 });
-		const tag = await resolveCampaignTag(env.MUSIC_DB, input);
-
-		// SAFETY: Request.cf is typed CfProperties<unknown>, so its location fields read as unknown. On an incoming Worker request country, region and city are optional strings and botManagement.verifiedBot an optional boolean; cf itself can be absent (read with ?.), locationPart re-checks typeof before use, and verifiedBot is compared with === true.
-		const cf = (
-			request as Request & {
-				cf?: {
-					country?: string;
-					region?: string;
-					city?: string;
-					botManagement?: { verifiedBot?: boolean };
-				};
-			}
-		).cf;
-
-		const automated =
-			cf?.botManagement?.verifiedBot === true ||
-			/bot|crawler|spider|slurp|preview/i.test(
-				request.headers.get("user-agent") ?? "",
-			);
-
-		await saveEvent(
-			env.MUSIC_DB,
-			{ ...input, mediaDurationSeconds: Math.round(recording.duration) },
-			{
-				trafficClass: automated ? "automated" : "human",
-				...(tag ?? {}),
-				country: locationPart(cf?.country),
-				region: locationPart(cf?.region),
-				city: locationPart(cf?.city),
-			},
-		);
-
-		return Response.json(
-			{ ok: true },
-			{ headers: { "cache-control": "no-store" } },
-		);
-	} catch (error) {
-		if (error instanceof PlaybackSequenceError)
-			return Response.json({ ok: false }, { status: 409 });
-
-		// Anything else is a store failing unexpectedly: the fixed sentence, never the error's own text.
-		return musicFailed();
-	}
+	return runRoute(
+		bindings.services,
+		recordPlayback({
+			// The recording's own length from the catalog, never the player's.
+			input: { ...input, mediaDurationSeconds: Math.round(recording.duration) },
+			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			visitor: readVisitor(request),
+			now: () => new Date(),
+		}).pipe(
+			Effect.map(() =>
+				Response.json(
+					{ ok: true },
+					{ headers: { "cache-control": "no-store" } },
+				),
+			),
+			Effect.catchTags({
+				TooManyPlaybacks: () =>
+					Effect.succeed(Response.json({ ok: false }, { status: 429 })),
+				PlaybackIdReused: conflict,
+				PlaybackOutOfSequence: conflict,
+				ListenNotEarned: conflict,
+				CompletionNotEarned: conflict,
+				PlaybackHasNoStart: conflict,
+				ProgressSkipped: conflict,
+				FasterThanServerTime: conflict,
+				SaveKeptChanging: conflict,
+				MusicStoreFailed: () => Effect.succeed(musicFailed()),
+				RateLimitStoreFailed: () => Effect.succeed(musicFailed()),
+			}),
+		),
+	);
 };

@@ -16,12 +16,13 @@ describe("the frozen Zod validators", () => {
 		cwd: repository,
 	});
 
-	it("are the five reference copies", () => {
+	it("are the six reference copies", () => {
 		expect(frozen.map((file) => file.split("/").pop()).sort()).toEqual([
 			"agreement-client-fields.ts",
 			"agreement-draft-fields.ts",
 			"agreement-fields.ts",
 			"audio-intake.ts",
+			"music-demand.ts",
 			"software-inquiry.ts",
 		]);
 	});

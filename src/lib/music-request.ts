@@ -64,22 +64,3 @@ export async function musicRequest(
 		return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
 	}
 }
-
-export const musicUnavailable = () =>
-	Response.json(
-		{
-			ok: false,
-			error: "Your request could not be saved. Please try again shortly.",
-		},
-		{ status: 503 },
-	);
-
-/** An unexpected failure of a store: the same sentence, and 500 because nothing is known to be unavailable. */
-export const musicFailed = () =>
-	Response.json(
-		{
-			ok: false,
-			error: "Your request could not be saved. Please try again shortly.",
-		},
-		{ status: 500 },
-	);
