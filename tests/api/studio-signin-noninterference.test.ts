@@ -310,25 +310,50 @@ function merges(lists: string[][]): string[][] {
 	return out;
 }
 
+/** Runs `work` under a schedule. An ordering that does not finish, or that leaves steps unused, is a failure, never a result to compare. */
 async function withSchedule<T>(
+	context: string,
 	schedule: string[],
 	work: () => Promise<T>,
-): Promise<T | "HANG"> {
+	timeoutMs = 3000,
+): Promise<T> {
 	script = [...schedule];
 	waiters.clear();
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	const pending = work();
 
-	const result = await Promise.race([
-		work(),
-		new Promise<"HANG">((resolve) => {
-			timer = setTimeout(() => resolve("HANG"), 3000);
-		}),
-	]);
+	// If the ordering hangs, `work` may still settle or reject later; that must not become an unhandled rejection.
+	pending.catch(() => {});
 
-	clearTimeout(timer);
+	const hang = new Promise<never>((_, reject) => {
+		timer = setTimeout(
+			() =>
+				reject(
+					new Error(
+						`${context}: the ordering did not finish within ${timeoutMs} ms. Schedule [${schedule.join(" ")}], steps left [${script.join(" ")}].`,
+					),
+				),
+			timeoutMs,
+		);
+	});
 
-	return script.length ? "HANG" : result;
+	try {
+		const result = await Promise.race([pending, hang]);
+
+		if (script.length)
+			throw new Error(
+				`${context}: the ordering finished with steps unused. Schedule [${schedule.join(" ")}], steps left [${script.join(" ")}].`,
+			);
+
+		return result;
+	} catch (error) {
+		script = [];
+		waiters.clear();
+		throw error;
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 type Actor = {
@@ -484,14 +509,12 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 			await flush();
 			resetAllowances();
 
-			const result = await withSchedule(schedule, () =>
-				Promise.all(scenario.actors.map((actor) => actor.start(ADDR[name]))),
+			const result = await withSchedule(
+				`${expect.getState().currentTestName}, target ${name}`,
+				schedule,
+				() =>
+					Promise.all(scenario.actors.map((actor) => actor.start(ADDR[name]))),
 			);
-
-			if (result === "HANG") {
-				seen.set(name, "HANG");
-				continue;
-			}
 
 			await flush();
 			seen.set(
@@ -526,6 +549,41 @@ const report = (name: string, result: Awaited<ReturnType<typeof explore>>) => {
 
 beforeEach(() => {
 	vi.unstubAllGlobals();
+});
+
+describe("withSchedule", () => {
+	it("fails an ordering that cannot finish, naming the schedule", async () => {
+		await expect(
+			withSchedule(
+				"unit",
+				["X.a", "X.b"],
+				() => new Promise<void>(() => {}),
+				50,
+			),
+		).rejects.toThrow(/unit: .*did not finish.*\[X\.a X\.b\]/);
+	});
+
+	it("fails an ordering that leaves steps unused", async () => {
+		await expect(
+			withSchedule("unit", ["X.a"], async () => "done", 50),
+		).rejects.toThrow(/steps unused.*\[X\.a\]/);
+	});
+
+	it("returns the result of an ordering that uses every step", async () => {
+		await expect(
+			withSchedule(
+				"unit",
+				["X.a"],
+				async () => {
+					await gate("X.a");
+					done();
+
+					return "ok";
+				},
+				50,
+			),
+		).resolves.toBe("ok");
+	});
 });
 
 const attackers = [
