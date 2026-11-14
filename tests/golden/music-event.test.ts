@@ -29,9 +29,10 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                                       and the reverse, the release's slug. (Two branches need a second recording: one
 //                                       the release does not list, and a video event for a recording with no video. The
 //                                       catalog has one recording, which has a video, so neither is reachable here.)
-//   503 "could not be saved"            no MUSIC_DB; no RATE_LIMIT; KV read or write throws; a database error in any
-//                                       statement of saveEvent (duplicate lookup, last-event lookup, insert, campaign
-//                                       lookup); the insert loses a race for the same event id
+//   503 "could not be saved"            no MUSIC_DB; no RATE_LIMIT
+//   500 "could not be saved"            KV read or write throws; a database error in any statement of saveEvent
+//                                       (duplicate lookup, last-event lookup, insert, campaign lookup). An unexpected
+//                                       failure, never the error's own text.
 //   429 { ok: false }                   the all-events counter (240 a window), the per-event counter (60 a window),
 //                                       counts just below the limits, a count that is not a number
 //   409 { ok: false }  PlaybackSequenceError
@@ -40,10 +41,12 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                                       or complete with no earlier event, a sequence gap or repeat, seconds going back;
 //                                       a listen30 under 30 seconds; a complete under 90% (or at exactly 90%); more than
 //                                       12 seconds in one step; seconds more than 2 ahead of the server's clock (and
-//                                       exactly 2 ahead, which is allowed). The "complete with a zero duration" check
+//                                       exactly 2 ahead, which is allowed); a playthrough with no sequence 1 row; another
+//                                       event taking the same place just before the insert. The "complete with a zero duration" check
 //                                       cannot be reached: the route always passes the catalog's 160 seconds.
 //   200 { ok: true }                    start and replay, audio and video; a duplicate delivery (same identity, nothing
-//                                       stored); a full listen; the campaign tag matched, not matched, inactive, partial;
+//                                       stored), including the same event stored by another request just before the
+//                                       insert; a full listen; the campaign tag matched, not matched, inactive, partial;
 //                                       the client's own duration ignored; the stored location, traffic class and the
 //                                       rules that blank a location part
 //
@@ -397,6 +400,22 @@ const cases: Case[] = [
 					run: (sqlite) =>
 						sqlite.exec(
 							`INSERT INTO music_playback_events (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,traffic_class,occurred_at) VALUES ('${eid(1)}','${RELEASE}','${RECORDING}','${SESSION}','${PLAY}',1,'audio','start',0,160,'human','2026-11-13T11:59:59.000Z')`,
+						),
+				},
+			],
+		},
+	),
+	withBody(
+		"another request takes the same place in the playthrough just before the insert",
+		{},
+		{
+			interleave: [
+				{
+					on: /INSERT INTO music_playback_events/,
+					label: "a different event arrived from another connection at sequence 1",
+					run: (sqlite) =>
+						sqlite.exec(
+							`INSERT INTO music_playback_events (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,traffic_class,occurred_at) VALUES ('${eid(2)}','${RELEASE}','${RECORDING}','${SESSION}','${PLAY}',1,'audio','start',0,160,'human','2026-11-13T11:59:59.000Z')`,
 						),
 				},
 			],
