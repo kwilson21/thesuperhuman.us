@@ -51,7 +51,8 @@ export const PAGES = [
 
 /** Page files that are covered another way. */
 export const NOT_PAGES = {
-	"src/pages/404.astro": "Captured through not-found.",
+	"src/pages/404.astro":
+		"Captured through not-found-desktop (horizon scene) and not-found-wave-desktop (wave scene), two seeded captures of the one page.",
 	"src/pages/music/[slug].astro": "Captured through music-old-news.",
 };
 

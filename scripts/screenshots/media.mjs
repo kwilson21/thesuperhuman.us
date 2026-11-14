@@ -1,9 +1,10 @@
 // Waits for the studio's project players before a capture. Each player's time label should read
 // "0:00 / <duration>" once its audio metadata has loaded.
 //
-// The site's player (src/scripts/project-player.ts) only renders the label from the `loadedmetadata` event. When
-// the metadata loads before the script attaches its listener, the event has already passed and the label stays
-// at "0:00". Nothing in the page then repeats the render until playback. This file does not change the site: once
+// The site's player (src/scripts/project-player.ts) renders the label from `loadedmetadata`, `timeupdate`, `ended`
+// and the seek input. When the metadata loads before the script attaches its `loadedmetadata` listener, that event
+// has already passed and the label stays at "0:00". Nothing in the page then repeats the render until playback
+// (`timeupdate`) or the seek input is used. This file does not change the site: once
 // the metadata is loaded, it dispatches the same `loadedmetadata` event the page listens for, so the page's own
 // render runs. A player with no source, or one that failed to load, is not waited for: its problem message is
 // what the page shows.

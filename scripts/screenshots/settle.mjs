@@ -93,8 +93,14 @@ export function createRequestTracker({
 		start(key, url) {
 			if (!counted(url)) return;
 
-			pending.set(key, url);
+			pending.set(key, { url, status: undefined });
 			lastChange = now();
+		},
+		// The page received the response's status. The request stays pending until it finishes.
+		response(key, status) {
+			const entry = pending.get(key);
+
+			if (entry) entry.status = status;
 		},
 		finish(key) {
 			// A request that is not pending (ignored, or already finished) changes nothing.
@@ -104,7 +110,9 @@ export function createRequestTracker({
 		},
 		inFlight: () => pending.size,
 		// The URL of the request that has been in flight longest, or undefined when none is.
-		firstUrl: () => pending.values().next().value,
+		firstUrl: () => pending.values().next().value?.url,
+		// The status of that request's response, or undefined when none has arrived.
+		firstStatus: () => pending.values().next().value?.status,
 		quiet(windowMs = QUIET_MS) {
 			return (
 				pending.size === 0 &&
@@ -117,6 +125,9 @@ export function createRequestTracker({
 /** Counts a page's requests with `tracker` (a new one by default). Call before page.goto. */
 export function trackRequests(page, tracker = createRequestTracker()) {
 	page.on("request", (request) => tracker.start(request, request.url()));
+	page.on("response", (response) =>
+		tracker.response(response.request(), response.status()),
+	);
 	page.on("requestfinished", (request) => tracker.finish(request));
 	page.on("requestfailed", (request) => tracker.finish(request));
 
@@ -162,8 +173,9 @@ export function widgetBoxes() {
  * passed since the call, reading them every WIDGET_POLL_MS. A change restarts the stable window, and the wait
  * extends past `minimum` while the box keeps changing. Resolves:
  * - "held" when the box is still for the window and `minimum` has passed;
- * - "moving" at the cap when the box changed during the wait;
- * - "no time" at the cap when the box never changed but the cap left too little time to confirm it.
+ * - "moving" at the cap when the box changed within the last WIDGET_STABLE_MS, so it was still changing;
+ * - "no time" at the cap otherwise: the box never changed, or it changed earlier and held still to the cap,
+ *   so the cap left too little time to confirm it.
  * `left()` gives the time left before the cap. `now` and `pause` are injectable so tests can move a fake clock.
  */
 export async function waitForWidgetBoxes(
@@ -176,7 +188,8 @@ export async function waitForWidgetBoxes(
 	let moved = false;
 
 	for (;;) {
-		if (left() <= 0) return moved ? "moving" : "no time";
+		if (left() <= 0)
+			return moved && now() - since < WIDGET_STABLE_MS ? "moving" : "no time";
 
 		await pause(Math.min(WIDGET_POLL_MS, left()));
 
@@ -207,9 +220,12 @@ function requestsReason(tracker) {
 	const count = tracker.inFlight();
 	const url = tracker.firstUrl();
 
-	return url === undefined
-		? `cap: ${count} requests in flight`
-		: `cap: ${count} requests in flight, first ${reasonUrl(url).slice(0, REASON_URL_LENGTH)}`;
+	if (url === undefined) return `cap: ${count} requests in flight`;
+
+	const status = tracker.firstStatus();
+	const answer = status === undefined ? "no response" : `response ${status}`;
+
+	return `cap: ${count} requests in flight, first ${reasonUrl(url).slice(0, REASON_URL_LENGTH)}, ${answer}`;
 }
 
 const stoppedReason = (error) =>
@@ -232,10 +248,11 @@ async function capReason(page, tracker) {
 }
 
 /**
- * Resolves with why settle stopped waiting: "quiet", "cap: N requests in flight, first <url>" (with
- * "; turnstile token missing" added when a drawn widget has no token), "cap: turnstile token" when the
- * cap ran out waiting for a token, "cap: turnstile size" when a widget's box was still changing at the cap, or
- * "cap: turnstile paint" when the token came too late to see the box still. It never throws. A page that closes while settling stops it with
+ * Resolves with why settle stopped waiting: "quiet", "cap: N requests in flight, first <url>, response <status>
+ * or no response" (with "; turnstile token missing" added when a drawn widget has no token), "cap: turnstile
+ * token" when the cap ran out waiting for a token, "cap: turnstile size" when a widget's box changed within the
+ * last stable window before the cap, or "cap: turnstile paint" when there was no time left to confirm the box.
+ * It never throws. A page that closes while settling stops it with
  * "stopped: <message>". `pause` is injectable so tests can move a fake clock.
  */
 export async function settle(

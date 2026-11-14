@@ -40,15 +40,7 @@ import {
 import { loadOrCreateAccessKey } from "./access-key.mjs";
 import { browserClockScript, stepTime } from "./clock.mjs";
 import { createStepper } from "./clock-steps.mjs";
-import {
-	decodeImages,
-	eagerLazyImages,
-	IMAGE_CAP_MS,
-	imagesLoaded,
-	imagesReason,
-	imageStates,
-	pendingImages,
-} from "./images.mjs";
+import { waitForImages } from "./images.mjs";
 import { seededRandomScript } from "./random.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
@@ -189,33 +181,6 @@ async function readReference() {
 }
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
-// Waits for the page's images (see images.mjs). At the cap the capture goes on and logs what was still loading.
-async function waitForImages(page, file) {
-	try {
-		await page.evaluate(eagerLazyImages);
-
-		try {
-			await page.waitForFunction(imagesLoaded, null, {
-				timeout: IMAGE_CAP_MS,
-			});
-		} catch (error) {
-			if (error?.name !== "TimeoutError") throw error;
-
-			const pending = pendingImages(await page.evaluate(imageStates));
-
-			// The last image may have finished between the timeout and this read.
-			if (pending.length) settles.record(imagesReason(pending), file);
-		}
-
-		await page.evaluate(decodeImages);
-	} catch (error) {
-		// Names the capture: a navigation that starts after the scenario's own steps can end the page here.
-		throw new Error(`${file}: the image wait failed: ${error.message}`, {
-			cause: error,
-		});
-	}
-}
-
 async function capture({
 	file,
 	path,
@@ -328,7 +293,13 @@ async function capture({
 		await timings.time(scope, "prepare", () =>
 			prepareWithDiagnostics(page, prepare, OUT, currentScenario, file),
 		);
-	await timings.time(scope, "images", () => waitForImages(page, file));
+	await timings.time(scope, "images", () =>
+		waitForImages(page, {
+			file,
+			prepared: Boolean(prepare),
+			record: (reason) => settles.record(reason, file),
+		}),
+	);
 
 	const target = selector ? page.locator(selector).first() : page;
 	const screenshotOptions = { path: `${OUT}/${file}`, animations: "disabled" };

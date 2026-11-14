@@ -1,12 +1,14 @@
 import { type Context, createContext, runInContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	decodeImages,
 	eagerLazyImages,
 	IMAGE_CAP_MS,
+	imageStates,
 	imagesLoaded,
 	imagesReason,
 	pendingImages,
+	waitForImages,
 } from "../../scripts/screenshots/images.mjs";
 import { REASON_URL_LENGTH } from "../../scripts/screenshots/settle.mjs";
 
@@ -156,8 +158,327 @@ describe("decodeImages", () => {
 });
 
 describe("the image cap", () => {
-	it("is a few seconds, not a wait a full run would notice", () => {
-		expect(IMAGE_CAP_MS).toBeGreaterThanOrEqual(1_000);
-		expect(IMAGE_CAP_MS).toBeLessThanOrEqual(5_000);
+	it("is three seconds", () => {
+		expect(IMAGE_CAP_MS).toBe(3_000);
+	});
+});
+
+// A page with a fake clock. `images` gives the images as they are at the clock's time; a wait that errors first
+// throws each of `waitErrors` in turn.
+type FakeState = { src: string; complete: boolean; naturalWidth: number };
+
+type FakeScript =
+	| typeof imageStates
+	| typeof decodeImages
+	| typeof eagerLazyImages;
+
+type ImagePage = Parameters<typeof waitForImages>[0];
+
+function fakeClock() {
+	let now = 0;
+
+	return {
+		now: () => now,
+		pause: async (ms: number) => {
+			now += ms;
+		},
+	};
+}
+
+function fakePage({
+	clock,
+	images,
+	decode = () => Promise.resolve(),
+	waitErrors = [],
+}: {
+	clock: ReturnType<typeof fakeClock>;
+	images: () => FakeState[];
+	decode?: () => Promise<void>;
+	waitErrors?: Error[];
+}) {
+	const errors = [...waitErrors];
+
+	return {
+		evaluate: vi.fn(async (script: FakeScript): Promise<FakeState[] | void> => {
+			if (script === imageStates)
+				return images().map(({ src, complete, naturalWidth }) => ({
+					src,
+					complete,
+					naturalWidth,
+				}));
+
+			if (script === decodeImages) return decode();
+
+			return undefined;
+		}),
+		waitForFunction: vi.fn(
+			async (
+				_script: typeof imagesLoaded,
+				_arg: null,
+				{ timeout }: { timeout: number },
+			) => {
+				const failure = errors.shift();
+
+				if (failure) throw failure;
+
+				const start = clock.now();
+
+				for (;;) {
+					if (images().every((image) => image.complete)) return true;
+
+					if (clock.now() - start >= timeout) {
+						const error = new Error("Timeout exceeded.");
+						error.name = "TimeoutError";
+
+						throw error;
+					}
+
+					await clock.pause(50);
+				}
+			},
+		),
+		waitForLoadState: vi.fn(async () => {}),
+	};
+}
+
+const never = () => new Promise<void>(() => {});
+const SHOT = "shot.png";
+
+const navigation = () =>
+	new Error(
+		"Execution context was destroyed, most likely because of a navigation",
+	);
+
+describe("waitForImages", () => {
+	it("records nothing and decodes when every image is complete at once", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+		});
+
+		const record = vi.fn();
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause: never,
+		});
+
+		expect(page.waitForFunction).toHaveBeenCalledWith(imagesLoaded, null, {
+			timeout: IMAGE_CAP_MS,
+		});
+		expect(page.evaluate).toHaveBeenCalledWith(decodeImages);
+		expect(record).not.toHaveBeenCalled();
+	});
+
+	it("waits for an image that finishes later, within the cap, without recording a reason", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{
+					src: "https://a.test/x.webp",
+					complete: clock.now() >= 1_200,
+					naturalWidth: 9,
+				},
+			],
+		});
+
+		const record = vi.fn();
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause: never,
+		});
+
+		expect(clock.now()).toBe(1_200);
+		expect(record).not.toHaveBeenCalled();
+	});
+
+	it("does not hang on a broken image, which is complete with no width", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 0 },
+			],
+		});
+
+		const record = vi.fn();
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause: never,
+		});
+
+		expect(clock.now()).toBe(0);
+		expect(record).not.toHaveBeenCalled();
+	});
+
+	it("stops at the cap and names how many images are still loading and the first URL without its query", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{
+					src: "https://a.test/one.webp?v=secret#f",
+					complete: false,
+					naturalWidth: 0,
+				},
+				{ src: "https://a.test/two.webp", complete: false, naturalWidth: 0 },
+			],
+		});
+
+		const record = vi.fn();
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause: never,
+		});
+
+		expect(clock.now()).toBe(IMAGE_CAP_MS);
+		expect(record).toHaveBeenCalledWith(
+			"images: 2 still loading, first https://a.test/one.webp",
+		);
+		expect(record.mock.calls[0]?.[0]).not.toContain("secret");
+	});
+
+	it("keeps the decode inside the cap: it is raced against the time left, and a decode that never ends is recorded", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+			decode: never,
+		});
+
+		const record = vi.fn();
+		const pause = vi.fn(async () => {});
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause,
+		});
+
+		expect(pause).toHaveBeenCalledWith(IMAGE_CAP_MS);
+		expect(record).toHaveBeenCalledWith("images: decode still running at cap");
+	});
+
+	it("retries once after a navigation when there is no prepare step, and records the reason", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+			waitErrors: [navigation()],
+		});
+
+		const record = vi.fn();
+
+		await waitForImages(page, {
+			file: SHOT,
+			record,
+			now: clock.now,
+			pause: never,
+		});
+
+		expect(page.waitForLoadState).toHaveBeenCalledWith("load");
+		expect(page.waitForFunction).toHaveBeenCalledTimes(2);
+		expect(record).toHaveBeenCalledWith(
+			"images: page navigated during the wait",
+		);
+	});
+
+	it("throws, naming the capture, on a navigation when the capture has a prepare step, without retrying", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+			waitErrors: [navigation()],
+		});
+
+		await expect(
+			waitForImages(page, {
+				file: SHOT,
+				prepared: true,
+				record: vi.fn(),
+				now: clock.now,
+				pause: never,
+			}),
+		).rejects.toThrow(/shot\.png.*prepare step/);
+
+		expect(page.waitForLoadState).not.toHaveBeenCalled();
+		expect(page.waitForFunction).toHaveBeenCalledTimes(1);
+	});
+
+	it("throws, naming the capture, when the retry also navigates", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+			waitErrors: [navigation(), navigation()],
+		});
+
+		await expect(
+			waitForImages(page, {
+				file: SHOT,
+				record: vi.fn(),
+				now: clock.now,
+				pause: never,
+			}),
+		).rejects.toThrow(/shot\.png/);
+
+		expect(page.waitForFunction).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not retry when the page is closed, and names the capture", async () => {
+		const clock = fakeClock();
+
+		const page = fakePage({
+			clock,
+			images: () => [
+				{ src: "https://a.test/x.webp", complete: true, naturalWidth: 9 },
+			],
+			waitErrors: [
+				new Error("Target page, context or browser has been closed"),
+			],
+		});
+
+		await expect(
+			waitForImages(page, {
+				file: SHOT,
+				record: vi.fn(),
+				now: clock.now,
+				pause: never,
+			}),
+		).rejects.toThrow(/shot\.png: the image wait failed/);
+
+		expect(page.waitForLoadState).not.toHaveBeenCalled();
 	});
 });
