@@ -29,7 +29,7 @@ No page copy, markup, style, route, migration, binding, secret or dependency cha
 - Owner, in conversation, 2026-11-12: fix every finding before enforcing; no ratchet.
 - Owner, 2026-11-13, as relayed in the task brief: fix the deferred findings and make the lint check enforce a clean result.
 - Owner, in conversation, 2026-11-13, after `main` moved: rebase the stack rather than close it.
-- Delegated, 2026-11-14. The session that coordinates this work reported that the owner, shown the open questions, answered "Can you decide these yourself". These are that coordinating session's decisions under the delegation, not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
+- Delegated, 2026-11-14: the owner left the open questions to the session that coordinates this work. Its decisions, which are not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
 
 ## Behaviour
 
@@ -158,6 +158,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-This record authorizes neither merge nor deployment. The delegation under Owner decisions is a second-hand report, not the owner's own words. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
+This record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the coordinating session, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
