@@ -50,9 +50,8 @@ export async function agreementDownload(
 
 	if (!owner && !archive && !signing && !studioIdentity) return signInFirst();
 
-	// A verified visitor gets the same reads whatever the id is: the same statements run in the same order for an unknown id,
-	// an agreement that is not executed or is closed, and one of another client, so the number of database round trips
-	// does not tell them apart. Only the decision below uses the results.
+	// For a verified visitor the reads do not depend on the id: the same statements run in the same order whether the
+	// agreement is unknown, not executed, closed, or another client's. Only the decision below uses their results.
 	const studioProjects =
 		!owner && studio
 			? await clientSoftwareProjectsForSession(db, studio)

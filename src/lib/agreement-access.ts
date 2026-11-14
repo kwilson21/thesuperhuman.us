@@ -145,7 +145,7 @@ export async function issueAgreementLink(
 		!db ||
 		!env.AUDIO_CLIENT_CODE_KEY ||
 		// A key too short to hash with is the same unavailable sign-in as a missing one. Checked here for the archive path
-		// only, so the signing path keeps its order of reads.
+		// only: the signing path's corpus fixes its order of reads, and it keeps its own answer (see the record).
 		(!token && env.AUDIO_CLIENT_CODE_KEY.length < 32) ||
 		!env.RESEND_API_KEY ||
 		!env.CONTACT_FROM_EMAIL ||

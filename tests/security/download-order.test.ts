@@ -138,8 +138,10 @@ it.each([
 	});
 });
 
-// The database statements a verified visitor's request runs are the same whatever the id is, so the number and order of
-// round trips cannot tell an unknown id from an agreement of another client or of another offer of their own.
+// The reads a verified visitor's request makes do not depend on the id: the same statements run whether the agreement is
+// unknown, someone else's, or one of another offer of their own, for a signing session or a studio session.
+const STUDIO = "b".repeat(72);
+
 async function traced(agreement: Row, cookie: string) {
 	const sql: string[] = [];
 
@@ -157,11 +159,16 @@ async function traced(agreement: Row, cookie: string) {
 										offer_id: "o-mine",
 										token_hash: "h",
 									}
-								: /FROM software_offers o JOIN software_offer_links/.test(query)
-									? { ok: 1 }
-									: /FROM software_agreements a JOIN/.test(query)
-										? agreement
-										: null,
+								: /FROM audio_client_sessions/.test(query)
+									? { email: "me@example.test" }
+									: /FROM software_offers o JOIN software_offer_links/.test(
+												query,
+											)
+										? { ok: 1 }
+										: /FROM software_agreements a JOIN/.test(query)
+											? agreement
+											: null,
+						all: async () => ({ results: [] }),
 					}),
 			});
 		},
@@ -174,29 +181,27 @@ async function traced(agreement: Row, cookie: string) {
 		}),
 		"a1",
 	);
+
 	return { ...(await answer(response)), sql };
 }
 
+const THEIRS: Row = {
+	id: "a1",
+	offer_id: "o-other",
+	request_id: "r-other",
+	recipient_email: "other@example.test",
+};
+
 it.each([
-	[
-		"an archive session, someone else's agreement",
-		`agreement_archive=${TOKEN}`,
-		{
-			id: "a1",
-			offer_id: "o-other",
-			request_id: "r-other",
-			recipient_email: "other@example.test",
-		},
-	],
 	[
 		"a signing session, the same client's agreement on another offer",
 		`agreement_session=${TOKEN}`,
-		{
-			id: "a1",
-			offer_id: "o-other",
-			request_id: "r-other",
-			recipient_email: "me@example.test",
-		},
+		{ ...THEIRS, recipient_email: "me@example.test" },
+	],
+	[
+		"a studio session, someone else's agreement",
+		`studio_session=${STUDIO}`,
+		THEIRS,
 	],
 ])(
 	"runs the same statements for an unknown id and for %s",

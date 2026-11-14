@@ -19,7 +19,12 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB;
 
-	if (!db) return new Response("Unavailable", { status: 503 });
+	// A missing binding answers 503 before any read, as in src/lib/agreement-download.ts.
+	if (!db || !env.AUDIO)
+		return new Response("Unavailable", {
+			status: 503,
+			headers: agreementHeaders,
+		});
 
 	try {
 		const session = await agreementSession(db, request);
@@ -39,11 +44,6 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 
 		if (!row) return notFound();
 
-		if (!env.AUDIO)
-			return new Response("Unavailable", {
-				status: 503,
-				headers: agreementHeaders,
-			});
 		const object = await env.AUDIO.get(row.object_key);
 
 		if (!object) return notFound();
