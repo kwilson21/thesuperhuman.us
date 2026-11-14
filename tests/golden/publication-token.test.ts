@@ -44,6 +44,7 @@ const assertion = (issuer: string) => {
 		"c2ln",
 	].join(".");
 };
+
 const REFRESH_TTL = 2_592_001_000;
 const CODE_LIFETIME = 600_000;
 
