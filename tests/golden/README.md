@@ -289,7 +289,7 @@ later, is `background`, and runs after the digest `atResponse` is taken. A route
 `Effect.runPromise` wrapper, say) records the same phases and order. Entries are kept in the order the effects finish,
 except that a line a route writes itself (`console`, `waitUntil`) sits after the effects released before it and before
 those released after it. Work that is neither awaited nor handed to `waitUntil` is `background`, and still runs and is
-recorded before the next step. A rejecting handler is answered "rejected", and what it deferred is `background`.
+recorded before the next step; in the last step of a case it is recorded before the case ends, the same as in any other step. A rejecting handler is answered "rejected", and what it deferred is `background`.
 
 **Tracked work is delivered in the order it started.** Work that leaves the microtask queue takes a place in a delivery
 order when it starts (`harness/sequencer.ts`), and the route receives its result only when the driver hands that place

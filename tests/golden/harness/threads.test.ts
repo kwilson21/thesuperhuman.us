@@ -295,3 +295,66 @@ describe("the background pass waits for every undelivered slot before it release
 		}, 240_000);
 	}
 });
+
+describe("floating work that is still running when a step ends is delivered, in the last step too", () => {
+	// A floating step starts `void (async () => { await digest(); await put(f) })()` and returns. The background pass must
+	// not end while the digest is undelivered, so the put is recorded in the step that started it, in every run, and it is
+	// in the final KV state.
+	const floating = (context: APIContext, size: number, key: string) => {
+		void (async () => {
+			await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+			await env(context).RATE_LIMIT.put(key, "1");
+		})();
+
+		return new Response("ok");
+	};
+
+	const steps = (paths: string[]): Case["steps"] =>
+		paths.map((path) => ({ path, method: "POST", as: asVisitor() }));
+
+	const putsIn = (got: CaseRecord, step: number) =>
+		got.effects.filter(
+			(effect) =>
+				effect.kind === "kv" && effect.op === "put" && effect.step === step,
+		).length;
+
+	for (const size of [300_000, 3_000_000]) {
+		it(`the last step's floating put is recorded in every one of 30 runs at ${size} bytes`, async () => {
+			for (let run = 0; run < 30; run += 1) {
+				const got = await runCase(
+					(context) =>
+						context.url.pathname === "/last"
+							? floating(context, size, "f")
+							: new Response("ok"),
+					{
+						...one(),
+						steps: steps(["/first", "/last"]),
+						final: { kv: ["RATE_LIMIT"] },
+					},
+				);
+
+				expect(putsIn(got, 1)).toBe(1);
+				expect(JSON.stringify(got.final)).toContain('"f"');
+			}
+		}, 240_000);
+
+		it(`a middle step's floating put is recorded in its own step in every one of 30 runs at ${size} bytes`, async () => {
+			for (let run = 0; run < 30; run += 1) {
+				const got = await runCase(
+					(context) =>
+						context.url.pathname === "/middle"
+							? floating(context, size, "m")
+							: new Response("ok"),
+					{
+						...one(),
+						steps: steps(["/first", "/middle", "/last"]),
+						final: { kv: ["RATE_LIMIT"] },
+					},
+				);
+
+				expect(putsIn(got, 1)).toBe(1);
+				expect(JSON.stringify(got.final)).toContain('"m"');
+			}
+		}, 240_000);
+	}
+});
