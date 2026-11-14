@@ -13,7 +13,9 @@ import {
 
 // WebCrypto runs on a thread and a real timer fires on a later macrotask, so how long they take depends on the machine.
 // The runner waits for them (EffectLog.begin) and fires timers itself (Determinism.fireNextTimer), so a label never
-// depends on speed or load: each scenario is recorded many times, at several sizes of work, and must give one record.
+// depends on speed or load. Each scenario is therefore recorded at every point of a spread of work: digests from a
+// fraction of a millisecond to tens of milliseconds, each followed by a different number of queued timer turns, so the
+// tracked work resolves early, late and in between. Every recording of a scenario must give one record.
 
 const env = (context: APIContext) => context.locals.runtime.env;
 const ctxOf = (context: APIContext) => context.locals.runtime.ctx;
@@ -34,24 +36,43 @@ const phases = (got: CaseRecord) =>
 
 const bytes = (got: CaseRecord) => JSON.stringify(asFixture(got));
 
-const SIZES = [1_000, 64_000, 300_000];
-const RUNS = 200;
+/** One unit of tracked work: a digest of `size` bytes, then `turns` queued timer turns before it resolves for the route. */
+type Work = { readonly size: number; readonly turns: number };
 
-const work = (size: number) =>
-	crypto.subtle.digest("SHA-256", new Uint8Array(size));
+const WORK: readonly Work[] = [
+	{ size: 1_000, turns: 0 },
+	{ size: 64_000, turns: 1 },
+	{ size: 4_000_000, turns: 0 },
+	{ size: 40_000_000, turns: 2 },
+];
+
+/** Recordings per scenario: each point of WORK is recorded this many times in turn. */
+const RUNS = 40;
+
+const turns = async (count: number) => {
+	for (let turn = 0; turn < count; turn += 1)
+		await new Promise<void>((resolve) => setTimeout(resolve, 1));
+};
+
+const work = async ({ size, turns: pause }: Work) => {
+	await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+	await turns(pause);
+};
 
 type Scenario = {
 	readonly name: string;
-	readonly handler: (size: number) => Handler;
+	readonly handler: (point: Work) => Handler;
 	readonly expected: string[];
+	/** The points of work the scenario is recorded at. */
+	readonly points?: readonly Work[];
 };
 
 const scenarios: Scenario[] = [
 	{
 		name: "work in the awaited path",
 		expected: ["fetch:request", "waitUntil:request", "kv:background"],
-		handler: (size) => async (context) => {
-			await work(size);
+		handler: (point) => async (context) => {
+			await work(point);
 			await mail();
 
 			ctxOf(context).waitUntil(
@@ -66,10 +87,10 @@ const scenarios: Scenario[] = [
 	{
 		name: "work in the deferred path",
 		expected: ["waitUntil:request", "fetch:background", "kv:background"],
-		handler: (size) => async (context) => {
+		handler: (point) => async (context) => {
 			ctxOf(context).waitUntil(
 				(async () => {
-					await work(size);
+					await work(point);
 					await mail();
 					await env(context).RATE_LIMIT.put("k", "1");
 				})(),
@@ -81,15 +102,17 @@ const scenarios: Scenario[] = [
 	{
 		name: "work in both paths (the route keeps awaiting after waitUntil, so the deferred write is request: the known limit)",
 		expected: ["waitUntil:request", "kv:request", "fetch:request"],
-		handler: (size) => async (context) => {
+		// The deferred digest here races the answer, so its extra timer turns are left out (see the test below).
+		points: WORK.map((point) => ({ ...point, turns: 0 })),
+		handler: (point) => async (context) => {
 			ctxOf(context).waitUntil(
 				(async () => {
-					await work(size);
+					await work(point);
 					await env(context).RATE_LIMIT.put("k", "1");
 				})(),
 			);
 
-			await work(size / 10);
+			await work({ ...point, size: point.size / 10 });
 			await mail();
 
 			return new Response("ok");
@@ -98,13 +121,13 @@ const scenarios: Scenario[] = [
 	{
 		name: "a real timer in the deferred path",
 		expected: ["waitUntil:request", "kv:background"],
-		handler: () => async (context) => {
+		handler: (point) => async (context) => {
 			ctxOf(context).waitUntil(
-				new Promise<void>((resolve) => setTimeout(resolve, 3)).then(
-					async () => {
+				new Promise<void>((resolve) => setTimeout(resolve, 3))
+					.then(() => turns(point.turns))
+					.then(async () => {
 						await env(context).RATE_LIMIT.put("k", "1");
-					},
-				),
+					}),
 			);
 
 			return new Response("ok");
@@ -113,8 +136,9 @@ const scenarios: Scenario[] = [
 	{
 		name: "a real timer that the answer waits for",
 		expected: ["kv:request"],
-		handler: () => async (context) => {
+		handler: (point) => async (context) => {
 			await new Promise((resolve) => setTimeout(resolve, 3));
+			await turns(point.turns);
 			await env(context).RATE_LIMIT.put("k", "1");
 
 			return new Response("ok");
@@ -124,12 +148,16 @@ const scenarios: Scenario[] = [
 
 describe("work that leaves the microtask queue does not change a label", () => {
 	for (const scenario of scenarios)
-		it(`${scenario.name}: ${RUNS} recordings, the work growing and shrinking, are identical`, async () => {
+		it(`${scenario.name}: ${RUNS} recordings across every point of the work are identical`, async () => {
 			const seen = new Set<string>();
+			const points = scenario.points ?? WORK;
 
 			for (let run = 0; run < RUNS; run += 1) {
-				const size = SIZES[run % SIZES.length] ?? 0;
-				const got = await runCase(scenario.handler(size), one());
+				const point = points[run % points.length] ?? points[0];
+
+				if (!point) throw new Error("WORK is empty");
+
+				const got = await runCase(scenario.handler(point), one());
 
 				seen.add(bytes(got));
 
@@ -138,4 +166,27 @@ describe("work that leaves the microtask queue does not change a label", () => {
 
 			expect(seen.size).toBe(1);
 		}, 120_000);
+	// The known limit, pinned: a deferred digest that outlives the answer by two queued timer turns is recorded as
+	// background, while the same digest with no extra turns races the answer and is recorded as request. The label
+	// depends on how the deferred work compares with the answer, so a route that keeps awaiting after waitUntil must
+	// call waitUntil last (tests/golden/README.md).
+	it("the deferred write of a route that keeps awaiting is background when it outlives the answer", async () => {
+		const outlives = { size: 40_000_000, turns: 2 };
+
+		for (let run = 0; run < 3; run += 1) {
+			const got = await runCase(
+				scenarios[2]?.handler(outlives) ??
+					(() => {
+						throw new Error("missing scenario");
+					})(),
+				one(),
+			);
+
+			expect(phases(got)).toEqual([
+				"waitUntil:request",
+				"fetch:request",
+				"kv:background",
+			]);
+		}
+	}, 120_000);
 });
