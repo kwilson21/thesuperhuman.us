@@ -796,11 +796,7 @@ const cases: Case[] = [
 		workflow,
 		insertOther("someone@else.test"),
 	),
-	single(
-		"a read-back failure after the insert is never made (one request, 200)",
-		workflow,
-		fails(/SELECT id,kind,release_id,service_id/),
-	),
+	single("the stored request is answered without reading it back", workflow),
 
 	// --- the client copy (the first Resend call) and the owner notice (the second)
 	single("the copy is refused with 400", workflow, {

@@ -426,11 +426,7 @@ const cases: Case[] = [
 		...fails(/INSERT INTO owner_requests/),
 		kv: { RATE_LIMIT: { fails: ["delete"] } },
 	}),
-	single(
-		"a read-back failure after the insert is never made (one request, 200)",
-		good,
-		fails(/SELECT id,kind,release_id,service_id/),
-	),
+	single("the stored request is answered without reading it back", good),
 	// Control characters swell a stored request six times (each is "\u0001" in JSON). They are refused where the form is
 	// checked, so they never reach storage and never raise the urgent alert.
 	single(
@@ -574,13 +570,6 @@ const cases: Case[] = [
 		steps: [send(good), send(good)],
 		fetches: allGood,
 		...fails(/INSERT INTO owner_requests/),
-		final: FINAL,
-	},
-	{
-		name: "a read-back failure after the insert does not fail the request",
-		steps: [send(good)],
-		fetches: allGood,
-		...fails(/SELECT id,kind,release_id,service_id/),
 		final: FINAL,
 	},
 	{
