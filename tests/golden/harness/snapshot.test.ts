@@ -1,10 +1,9 @@
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
-import { freshMusicDb } from "./db";
+import { freshMusicDb, freshPublicationDb } from "./db";
 import { digestDatabase } from "./digest";
 import {
 	asVisitor,
-	CASE_TIMEOUT_MS,
 	runCase,
 	type Case,
 	type CaseRecord,
@@ -14,8 +13,8 @@ import {
 /** Recordings per case. Five is enough to show the snapshot is the same every time. */
 const RECORDINGS = 5;
 
-/** The per-case budget of the corpus (CASE_TIMEOUT_MS), once for each recording a test makes. */
-const RECORDED_TIMEOUT_MS = CASE_TIMEOUT_MS * RECORDINGS;
+// Five recordings of a case take about 100 ms; 30 s leaves a loaded CI runner room.
+const RECORDED_TIMEOUT_MS = 30_000;
 
 // The digest at the response is the state of the databases when the response was read, before any background work. These
 // tests check that mechanism with synthetic handlers on the real harness. The expected digests are computed here, from
@@ -36,8 +35,36 @@ const ROW_B =
 const ROW_C =
 	"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('c', 's', 1)";
 
+/** Publication rows: an accepted event in publication_events (the publication database). */
+const PUBLICATION_ROW_A =
+	"INSERT INTO publication_events (project_id, event_id, entry_id, revision, operation, origin, payload_hash, published_at) VALUES ('p', 'ev_a', 'entry', 1, 'publish', 'work', 'hash_a', '2026-01-01T00:00:00Z')";
+
+/** A second publication row, written by background work. */
+const PUBLICATION_ROW_B =
+	"INSERT INTO publication_events (project_id, event_id, entry_id, revision, operation, origin, payload_hash, published_at) VALUES ('p', 'ev_b', 'entry', 2, 'correct', 'work', 'hash_b', '2026-01-01T00:00:01Z')";
+
 const write = async (context: APIContext, sql: string): Promise<void> => {
 	await env(context).MUSIC_DB?.prepare(sql).run();
+};
+
+const writePublication = async (
+	context: APIContext,
+	sql: string,
+): Promise<void> => {
+	await env(context).PUBLICATION_DB?.prepare(sql).run();
+};
+
+/** The digest of a publication database that holds exactly the given rows, computed from scratch in this test. */
+const digestPublicationWith = (...rows: string[]): string => {
+	const db = freshPublicationDb();
+
+	try {
+		for (const sql of rows) db.exec(sql);
+
+		return digestDatabase(db).sha256;
+	} finally {
+		db.close();
+	}
 };
 
 /** The digest of a music database that holds exactly the given rows, computed from scratch in this test. */
@@ -221,6 +248,62 @@ describe("the digest at the response: the snapshot mechanism", () => {
 					expect(got.steps[1]?.digest.atResponse.touched).toEqual([
 						"brief_suggestion_budget",
 					]);
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
+
+	it(
+		"a request write and a background write, both to the publication database: the snapshot holds the request's write only",
+		async () => {
+			const handler: Handler = async (context) => {
+				await writePublication(context, PUBLICATION_ROW_A);
+				ctxOf(context).waitUntil(writePublication(context, PUBLICATION_ROW_B));
+
+				return new Response("ok");
+			};
+
+			await recordedTimes(
+				() => runCase(handler, one([step])),
+				(got) => {
+					const atResponse = got.steps[0]?.digest.atResponse;
+
+					expect(atResponse?.publication).toBe(
+						digestPublicationWith(PUBLICATION_ROW_A),
+					);
+					expect(atResponse?.touched).toEqual(["publication_events"]);
+					expect(atResponse?.music).toBe(digestWith());
+					expect(got.steps[0]?.digest.publication).toBe(
+						digestPublicationWith(PUBLICATION_ROW_A, PUBLICATION_ROW_B),
+					);
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
+
+	it(
+		"a request write to the music database and a background write to the publication database: each database holds its own write",
+		async () => {
+			const handler: Handler = async (context) => {
+				await write(context, ROW_A);
+				ctxOf(context).waitUntil(writePublication(context, PUBLICATION_ROW_B));
+
+				return new Response("ok");
+			};
+
+			await recordedTimes(
+				() => runCase(handler, one([step])),
+				(got) => {
+					const atResponse = got.steps[0]?.digest.atResponse;
+
+					expect(atResponse?.music).toBe(digestWith(ROW_A));
+					expect(atResponse?.publication).toBe(digestPublicationWith());
+					expect(atResponse?.touched).toEqual(["brief_suggestion_budget"]);
+					expect(got.steps[0]?.digest.publication).toBe(
+						digestPublicationWith(PUBLICATION_ROW_B),
+					);
 				},
 			);
 		},

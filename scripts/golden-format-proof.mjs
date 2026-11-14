@@ -66,11 +66,22 @@ export const ALLOWED = {
  *   4. The touched set at the response is contained in the old recording's, and in the touched set of every later
  *      background effect of the step (each is read after the response, and the set only grows within a step).
  *
- * What is proved: for every changed value of the real fixtures, the rules above hold (their counts are printed). What is
- * NOT proved: the digest at the response as a value. Neither recording holds it: the old recording took it after the
- * background work had begun, and the new one can only give the state of the last request effect, which the rules above
- * tie to it. So the exact value of a relabelled step's digest at the response is established by the harness tests
- * (tests/golden/harness/phases.test.ts), not by this proof.
+ * What each rule establishes. Rules 1 and 2 say that the digest at the response, its touched set and a waitUntil entry's
+ * state AGREE WITH a state the same step recorded: the last request effect that carries one. In the real fixtures that is
+ * the step's own waitUntil entry in every changed step (245 of 245), so rules 1 and 2 check the two changed fields against
+ * each other. The two are taken at separate moments in world.ts, so a bug that moved only one of them is caught; a bug in
+ * the probe that produces both is not. Rule 3 says the digest at the response differs from the end of the step only in
+ * databases a relabelled write could have changed. Rule 4 bounds the touched set by the old recording and later effects.
+ *
+ * Forging both fields consistently (measured in review, on the real fixtures): the end-of-step digest is rejected by rule
+ * 3 in 238 steps and accepted in the 7 steps with an interleave hook (a hook may have written, so rule 3 is not checked
+ * there); the state after the first of two background writes is rejected in 121 steps and accepted in 93; a made-up
+ * digest with the correct touched set is accepted in all 245; the previous step's end digest is accepted in 22.
+ *
+ * What is NOT proved: the VALUE of the digest at the response. Neither recording holds it: the old recording took it
+ * after the background work had begun, and the new one gives only the state of the last request effect, which the rules
+ * above tie to it. The value is established by tests/golden/harness/snapshot.test.ts, which computes the expected
+ * digests from rows inserted by hand and fails when the snapshot is taken at the end of the step or at its start.
  *
  * Limits: the touched set at the end of a step is not recorded, so rule 4 can only check against the later background
  * effects. Rule 3 treats a same-value UPDATE as no write, so it would reject a recording where one changed no digest; no
@@ -154,7 +165,12 @@ const anchorOf = (items) =>
 const referenceOf = (items, previous) => {
 	const anchor = anchorOf(items);
 
-	if (anchor) return { state: anchor.entry.state, index: anchor.index };
+	if (anchor)
+		return {
+			state: anchor.entry.state,
+			index: anchor.index,
+			kind: anchor.entry.kind,
+		};
 
 	return {
 		state: previous && {
@@ -163,6 +179,7 @@ const referenceOf = (items, previous) => {
 			touched: [],
 		},
 		index: -1,
+		kind: "previous step end",
 	};
 };
 
@@ -211,6 +228,8 @@ function provePhases(old, next, problems) {
 		relabelled: 0,
 		atResponse: 0,
 		derived: 0,
+		derivedFromWaitUntil: 0,
+		derivedFromPreviousEnd: 0,
 		bounded: 0,
 		writerDiffer: 0,
 		writerEqual: 0,
@@ -442,7 +461,12 @@ function provePhases(old, next, problems) {
 					`step ${s}: the touched tables at the response are not those the last request effect recorded`,
 				);
 
-			if (changed) stats.derived += 1;
+			if (changed) {
+				stats.derived += 1;
+				if (reference.kind === "waitUntil") stats.derivedFromWaitUntil += 1;
+				else if (reference.kind === "previous step end")
+					stats.derivedFromPreviousEnd += 1;
+			}
 		} else {
 			if (
 				reference.state !== undefined &&
@@ -634,6 +658,8 @@ export function proveFixtureDetailed(before, after) {
 		relabelled: 0,
 		atResponse: 0,
 		derived: 0,
+		derivedFromWaitUntil: 0,
+		derivedFromPreviousEnd: 0,
 		bounded: 0,
 		writerDiffer: 0,
 		writerEqual: 0,
@@ -869,7 +895,7 @@ function main([from, to]) {
 
 	if (changedPhases.size > 0)
 		console.log(
-			`format 4 to 5 structural checks, of the changed values: ${sum("derived")} of ${sum("atResponse")} digests at the response and touched sets equal those of the last request effect of their step, ${sum("bounded")} only bounded by it (a request write follows); the writer rule: ${sum("writerDiffer")} steps differ from their end, ${sum("writerEqual")} equal it, ${sum("writerHook")} not checked (a hook may have written); ${sum("waitUntilConsistent")} of ${sum("waitUntilState")} waitUntil states equal the digest at the response, ${sum("waitUntilNotApplicable")} not applicable (a request effect follows). Not proved: the value of the digest at the response (see ALLOWED_PHASES)`,
+			`format 4 to 5 consistency checks, of the changed values: ${sum("derived")} of ${sum("atResponse")} digests at the response and touched sets AGREE WITH the state of the last request effect of their step (a waitUntil entry in ${sum("derivedFromWaitUntil")} of them, the previous step's end in ${sum("derivedFromPreviousEnd")}); ${sum("bounded")} only bounded by it (a request write follows); the writer rule: ${sum("writerDiffer")} steps differ from their end, ${sum("writerEqual")} equal it, ${sum("writerHook")} not checked (a hook may have written); ${sum("waitUntilConsistent")} of ${sum("waitUntilState")} waitUntil states AGREE WITH the digest at the response, ${sum("waitUntilNotApplicable")} not applicable (a request effect follows). These agree with each other; they do not establish the digest's value, which the proof does not hold (see ALLOWED_PHASES and tests/golden/harness/snapshot.test.ts)`,
 		);
 
 	for (const problem of problems.slice(0, 20))
@@ -878,7 +904,7 @@ function main([from, to]) {
 	console.log(
 		problems.length === 0
 			? changedPhases.size > 0
-				? "golden-format-proof: the only differences are the format number, effects relabelled request to background, the digests at the response, the states of waitUntil entries, and the place of the lines a route writes itself, and every changed value passes the structural checks"
+				? "golden-format-proof: the only differences are the format number, effects relabelled request to background, the digests at the response, the states of waitUntil entries, and the place of the lines a route writes itself, and every changed value agrees with its recorded state (the consistency checks above; the digest's value is not proved)"
 				: "golden-format-proof: the only differences are the format number, the `touched` sets, and read change counts that now say 0"
 			: `golden-format-proof: ${problems.length} problems, so this is not only a format change`,
 	);
