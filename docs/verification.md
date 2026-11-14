@@ -223,6 +223,26 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The publication-journal model
+
+File: `verification/publication-journal.qnt`, written for the conversion of the publication routes (module `publication`). An agent delivers envelopes (publish, correct, withdraw) to one project's journal and retries on a failure; the Worker serves several deliveries at once. A delivery reads (the project's latest revision, the event under its event id and the operations of its entry, as ONE batch), judges by the commit rule and inserts; the table's constraints (the primary key on project and event id, and `UNIQUE (project_id, revision)`) refuse an insert another delivery got to first, and the delivery then reads and judges again, three tries in all (`src/server/flows/publication-commit.ts`). Every accepted write takes the next revision, so the revision key is the compare-and-set for everything the rule read.
+
+**State.** The stored events (event id, entry, operation, expected revision, the revision taken and the delivery that stored it), four deliveries and one ghost flag. Two event ids, two entries and expected revisions 0 to 3.
+
+**Properties** (`allProperties`): `oneRowPerRevision`; `contiguousFromOne` (the revisions are 1, 2, 3 with none missing); `entryNeverResurrected` (nothing of an entry is stored after its withdrawal); `onePublishPerEntry`; `correctionHasTarget` (a correction follows an event of its entry); `retryNeverConflicts` (an event that is stored is never answered as a conflict when it is delivered again).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoRevisionKey` | The revision is not unique | `oneRowPerRevision` |
+| `AnyRevision` | The rule accepts any expected revision, not only the latest | `contiguousFromOne` |
+| `NoWithdrawnRule` | The rule does not refuse events for a withdrawn entry | `entryNeverResurrected` |
+| `NoNewEntryRule` | The rule accepts a publish of an entry that has events | `onePublishPerEntry` |
+| `NoTargetRule` | The rule accepts a correction of an entry with no events | `correctionHasTarget` |
+| `NoRetry` | A lost race answers conflict at once, without reading again | `retryNeverConflicts` |
+| `SplitRead` | The event id and the latest revision are read in two steps, not one snapshot | `retryNeverConflicts` |
+
+**What it does not cover.** The content and the erasure of a withdrawn entry's text, the hash, the origin (backfill changes the feed, not the journal's rules), the allowlist and token checks, and the feed (a pure rule over one read, `tests/rules/publication-feed.test.ts`). The event id key adds nothing a property could see once the revision key and the rule are in place (every accepted write takes the next revision), so no property or mutant names it.
+
 ## Verified modules
 
 Tally's four questions decide whether a function carries a contract: is it pure, does its rule involve a sum, count, partition or conservation law, would a break lose or miscount money, and can the rule be said in one plain sentence. The decision function is pure and a break loses money. Question two is met loosely (the rule is "money received is never lost"), and the owner asked for it (2026-11-13), so it is in. `guardTime` is not: it is one conditional, a test says it as clearly, and the model checks that its value is never stored.
