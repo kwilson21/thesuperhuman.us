@@ -127,13 +127,14 @@ export async function issueClientCode(
 	now = new Date(),
 	pending: string | null = null,
 ): Promise<{ code: string; nonce: string } | null> {
+	const code = newCode();
+
 	const nonce =
 		pending !== null && pendingFormat.test(pending)
 			? pending
 			: newPendingNonce();
 
 	const nonceHash = await hashValue(nonce);
-	const code = newCode();
 	const digest = await codeHash(email, nonceHash, code, secret);
 	const issuedAt = now.toISOString();
 	const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();

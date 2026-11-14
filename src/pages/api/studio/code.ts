@@ -115,17 +115,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 429 },
 			);
 
-		// The browser's own cookie value is used for its code and answered with whether or not a code is issued, so a
-		// refused or lost request leaves the cookie opening the code an earlier request of the browser emailed, and the
-		// answer does not show whether the address has a project. A browser with no cookie gets a fresh random value.
-		const cookieValue = pendingSignInFromRequest(request) ?? newPendingNonce();
+		// A browser that sent its cookie gets that same value back whether or not a code is issued, so a refused or lost
+		// request cannot replace the cookie of a code another request of the same browser just emailed, and the answer does not
+		// show whether the address has a project. A browser with no cookie gets the new code's value, or a fresh random one.
+		const pending = pendingSignInFromRequest(request);
 
 		const issued = await issueClientCode(
 			env.MUSIC_DB,
 			email,
 			env.AUDIO_CLIENT_CODE_KEY,
 			new Date(),
-			cookieValue,
+			pending,
 		);
 
 		if (issued) {
@@ -164,7 +164,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json(generic, {
 			headers: {
 				"set-cookie": pendingSignInCookie(
-					cookieValue,
+					pending ?? issued?.nonce ?? newPendingNonce(),
 					new URL(request.url).protocol === "https:",
 				),
 			},
