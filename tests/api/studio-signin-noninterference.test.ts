@@ -7,7 +7,6 @@ import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
-import { hashValue } from "~/lib/audio-client-access";
 import { revokeProjectAccess } from "~/lib/audio-project-revocation";
 import {
 	applyStudioRetention,
@@ -307,7 +306,7 @@ async function withSchedule<T>(
 
 type Actor = {
 	steps: string[];
-	start: (target: string) => Promise<Response | void>;
+	start: (target: string) => Response | void | Promise<Response | void>;
 };
 
 const request = (
