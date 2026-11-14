@@ -656,7 +656,7 @@ export function pendingSignInFromRequest(request: Request): string | null {
 
 /**
  * Deletes the closed project's address from the retired sign-in codes table. Nothing reads that table any more; its rows
- * (an address and a code hash) are cleared so they do not outlive retention until a later migration drops it.
+ * (an address and a code hash) are cleared so they do not outlive retention until a later migration drops it (0028, https://github.com/kwilson21/thesuperhuman.us/issues/271).
  *
  * Best effort: it runs after the revocation has committed, so a failure must not make the revocation look failed. A
  * missing table (already dropped) is silent; any other failure is logged as one fixed line with the error class only, and

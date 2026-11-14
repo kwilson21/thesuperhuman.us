@@ -26,6 +26,7 @@ export class CookieJar {
 			const [pair, ...attributes] = header
 				.split(";")
 				.map((part) => part.trim());
+
 			const at = pair.indexOf("=");
 			const name = pair.slice(0, at);
 			const value = pair.slice(at + 1);
@@ -68,17 +69,18 @@ export class CookieJar {
 	headerFor(url: string): string | undefined {
 		const { protocol, pathname } = new URL(url);
 
-		const sent = [...this.cookies]
-			.filter(
-				([, cookie]) =>
-					cookie.expires > Date.now() &&
-					(!cookie.secure || protocol === "https:") &&
-					(pathname === cookie.path ||
-						pathname.startsWith(
-							cookie.path.endsWith("/") ? cookie.path : `${cookie.path}/`,
-						)),
+		const sent: string[] = [];
+
+		for (const [name, cookie] of this.cookies)
+			if (
+				cookie.expires > Date.now() &&
+				(!cookie.secure || protocol === "https:") &&
+				(pathname === cookie.path ||
+					pathname.startsWith(
+						cookie.path.endsWith("/") ? cookie.path : `${cookie.path}/`,
+					))
 			)
-			.map(([name, cookie]) => `${name}=${cookie.value}`);
+				sent.push(`${name}=${cookie.value}`);
 
 		return sent.length ? sent.join("; ") : undefined;
 	}

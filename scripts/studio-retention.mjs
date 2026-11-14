@@ -59,7 +59,7 @@ export function softwareRetentionProjectPredicate(now) {
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 
-/** Whether the retired sign-in codes table (audio_client_codes) still exists; a later migration drops it. */
+/** Whether the retired sign-in codes table (audio_client_codes) still exists; a later migration drops it (0028, https://github.com/kwilson21/thesuperhuman.us/issues/271). */
 const retiredCodesExist = async (database) =>
 	(
 		await database.query(
@@ -236,7 +236,7 @@ function sources(now) {
 		limit: 1000,
 	});
 
-	// The retired sign-in codes table: nothing reads it, but its rows are cleared on the same 30-day clock.
+	// The retired sign-in codes table: nothing reads it, but its rows are cleared on the same 30-day clock until a later migration drops it (https://github.com/kwilson21/thesuperhuman.us/issues/271).
 	const retiredCodes = snapshot({
 		columns: "email,created_at",
 		from: "audio_client_codes",
