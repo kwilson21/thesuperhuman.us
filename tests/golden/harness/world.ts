@@ -534,7 +534,10 @@ async function runOn(
 				// The browser that asked for the code sends back its pending sign-in cookie, as a real browser does.
 				const pending = issued.headers
 					.getSetCookie()
-					.map((value) => value.match(/^(studio_pending=[0-9a-f]{64})/)?.[1])
+					.map(
+						(value) =>
+							value.match(/^(__Host-studio_pending=[0-9a-f]{64})/)?.[1],
+					)
 					.find(Boolean);
 
 				const response = await send(

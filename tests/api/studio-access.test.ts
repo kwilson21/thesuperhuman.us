@@ -169,7 +169,7 @@ describe("studio access routes", () => {
 				"/api/studio/session",
 				{ email, code: "12345678" },
 				true,
-				`studio_pending=${nonce}`,
+				`__Host-studio_pending=${nonce}`,
 			),
 		);
 
@@ -243,7 +243,7 @@ describe("studio access routes", () => {
 						"/api/studio/session",
 						{ email, code: "12345678" },
 						true,
-						`studio_pending=${nonce}`,
+						`__Host-studio_pending=${nonce}`,
 					),
 				)
 			).status,

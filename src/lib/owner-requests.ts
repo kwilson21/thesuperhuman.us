@@ -1,3 +1,4 @@
+import { deleteRetiredCodes } from "./audio-client-access";
 import { retireRequestSigning } from "./software-agreements";
 import { depositOfferBlock, depositOfferGuard } from "./software-invoices";
 import {
@@ -391,6 +392,9 @@ export async function changeOwnerRequest(
 			throw new Error(offerSendingMessage);
 		throw error;
 	}
+
+	if (current.kind === "software" && command.action === "withdraw")
+		await deleteRetiredCodes(db, command.id);
 
 	const update =
 		results[

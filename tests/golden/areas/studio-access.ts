@@ -19,7 +19,7 @@ export const SAME_ORIGIN = { origin: ORIGIN };
 
 /** The pending sign-in value a seeded code row is bound to, and the cookie header the browser that asked for it sends. */
 export const PENDING = "ab".repeat(32);
-export const PENDING_COOKIE = `studio_pending=${PENDING}`;
+export const PENDING_COOKIE = `__Host-studio_pending=${PENDING}`;
 
 /** The headers of a browser that asked for the seeded code: same origin, and its pending sign-in cookie. */
 export const BROWSER = { ...SAME_ORIGIN, cookie: PENDING_COOKIE };
@@ -33,11 +33,11 @@ export const browser = (prior: Prior) => {
 		if (step.answer.outcome !== "response") continue;
 
 		for (const value of step.answer.setCookies) {
-			const match = value.match(/^studio_pending=([^;]*)/);
+			const match = value.match(/^__Host-studio_pending=([^;]*)/);
 
 			if (match)
 				return match[1]
-					? { ...SAME_ORIGIN, cookie: `studio_pending=${match[1]}` }
+					? { ...SAME_ORIGIN, cookie: `__Host-studio_pending=${match[1]}` }
 					: SAME_ORIGIN;
 		}
 	}
@@ -52,12 +52,15 @@ export const browserAt = (index: number) => (prior: Prior) => {
 	const pending =
 		answer?.outcome === "response"
 			? answer.setCookies
-					.map((value) => value.match(/^studio_pending=([0-9a-f]{64})/)?.[1])
+					.map(
+						(value) =>
+							value.match(/^__Host-studio_pending=([0-9a-f]{64})/)?.[1],
+					)
 					.find(Boolean)
 			: undefined;
 
 	return pending
-		? { ...SAME_ORIGIN, cookie: `studio_pending=${pending}` }
+		? { ...SAME_ORIGIN, cookie: `__Host-studio_pending=${pending}` }
 		: SAME_ORIGIN;
 };
 

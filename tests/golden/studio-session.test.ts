@@ -463,7 +463,10 @@ const cases: Case[] = [
 			login(),
 			login("87654321", {
 				advanceMs: 60_000,
-				headers: { ...BROWSER, cookie: `studio_pending=${SECOND_PENDING}` },
+				headers: {
+					...BROWSER,
+					cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+				},
 				before: {
 					label: "a second code is issued to another browser",
 					run: async (world) => {
@@ -511,7 +514,10 @@ const cases: Case[] = [
 				{ email: OTHER, code: "55555555" },
 				{
 					as: asVisitor({ ip: "198.51.100.8" }),
-					headers: { ...BROWSER, cookie: `studio_pending=${SECOND_PENDING}` },
+					headers: {
+						...BROWSER,
+						cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+					},
 				},
 			),
 		],
@@ -535,7 +541,7 @@ const cases: Case[] = [
 			login(GOOD, {
 				headers: {
 					origin: "https://thesuperhuman.us",
-					cookie: `studio_pending=${"e".repeat(64)}`,
+					cookie: `__Host-studio_pending=${"e".repeat(64)}`,
 				},
 			}),
 		],
@@ -545,7 +551,7 @@ const cases: Case[] = [
 			login(GOOD, {
 				headers: {
 					origin: "https://thesuperhuman.us",
-					cookie: "studio_pending=not-a-nonce",
+					cookie: "__Host-studio_pending=not-a-nonce",
 				},
 			}),
 		],
@@ -555,7 +561,7 @@ const cases: Case[] = [
 			login(GOOD, {
 				headers: {
 					origin: "https://thesuperhuman.us",
-					cookie: `studio_pending=${PENDING.toUpperCase()}`,
+					cookie: `__Host-studio_pending=${PENDING.toUpperCase()}`,
 				},
 			}),
 		],
@@ -565,7 +571,7 @@ const cases: Case[] = [
 			login(GOOD, {
 				headers: {
 					origin: "https://thesuperhuman.us",
-					cookie: `studio_pending=${PENDING.slice(0, 63)}0`,
+					cookie: `__Host-studio_pending=${PENDING.slice(0, 63)}0`,
 				},
 			}),
 		],
@@ -620,7 +626,10 @@ const cases: Case[] = [
 			steps: [
 				...Array.from({ length: 6 }, () =>
 					login("00000000", {
-						headers: { ...BROWSER, cookie: `studio_pending=${SECOND_PENDING}` },
+						headers: {
+							...BROWSER,
+							cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+						},
 					}),
 				),
 				login(),

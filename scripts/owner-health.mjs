@@ -385,6 +385,7 @@ export async function ownerHealth({
 
 		const rows = await query(`SELECT
       (SELECT COUNT(*) FROM audio_client_signin_codes WHERE COALESCE(used_at,expires_at)< '${old}')
+      ${availableSchema.has("audio_client_codes") ? `+(SELECT COUNT(*) FROM audio_client_codes WHERE COALESCE(used_at,expires_at)< '${old}')` : ""}
       +(SELECT COUNT(*) FROM audio_client_sessions WHERE expires_at<'${old}' OR revoked_at<'${old}' OR last_seen_at<'${old}')
       +(SELECT COUNT(*) FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
         WHERE ${studioRetentionProjectPredicate(now)})

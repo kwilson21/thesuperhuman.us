@@ -86,8 +86,8 @@ const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
 
 /**
  * Issues a code bound to a new pending value, which the caller sets as the browser's cookie. `pending` is the value the
- * browser already holds, if any: its own earlier code is replaced. Other browsers' codes for the address are never
- * touched. Returns null when the address has no project or already has the most live codes.
+ * browser already holds, if any: that value is the browser's own earlier code, for whatever address, and it is deleted
+ * (the browser's cookie is replaced whether or not a new code is issued). Other browsers' codes are never touched. Returns null when the address has no project or already has the most live codes.
  */
 export async function issueClientCode(
 	db: D1Database,
@@ -132,11 +132,8 @@ export async function issueClientCode(
 				liveCodesPerAddress,
 			),
 		db
-			.prepare(
-				`DELETE FROM audio_client_signin_codes WHERE email=? AND nonce_hash=?
-      AND EXISTS (SELECT 1 FROM audio_client_signin_codes WHERE nonce_hash=?)`,
-			)
-			.bind(email, previousHash, nonceHash),
+			.prepare("DELETE FROM audio_client_signin_codes WHERE nonce_hash=?")
+			.bind(previousHash),
 		db
 			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT p.request_id,'code-issued',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
@@ -434,21 +431,53 @@ export function studioSessionCookie(token: string, secure: boolean): string {
 	return `studio_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
 }
 
+// Over https the pending cookie is __Host- prefixed (Secure, Path=/, no Domain), so a sibling subdomain cannot plant or
+// shadow it. Plain-http localhost cannot hold a prefixed cookie, so it keeps the plain name on the API path.
+const pendingCookieName = (secure: boolean) =>
+	secure ? "__Host-studio_pending" : "studio_pending";
+
+const pendingCookiePath = (secure: boolean) => (secure ? "/" : "/api/studio");
+
 /** The pending sign-in cookie: set when a code is requested, so only this browser can use the code. */
 export function pendingSignInCookie(nonce: string, secure: boolean): string {
-	return `studio_pending=${nonce}; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=${codeLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
+	return `${pendingCookieName(secure)}=${nonce}; Path=${pendingCookiePath(secure)}; HttpOnly; SameSite=Lax; Max-Age=${codeLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
 }
 
 export function clearPendingSignInCookie(secure: boolean): string {
-	return `studio_pending=; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
+	return `${pendingCookieName(secure)}=; Path=${pendingCookiePath(secure)}; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
+/** The browser's pending value, read by the name that fits the request's scheme; the other name is ignored. */
 export function pendingSignInFromRequest(request: Request): string | null {
+	const name = pendingCookieName(new URL(request.url).protocol === "https:");
+
 	const match = request.headers
 		.get("cookie")
-		?.match(/(?:^|;\s*)studio_pending=([0-9a-f]{64})(?:;|$)/);
+		?.match(new RegExp(`(?:^|;\\s*)${name}=([0-9a-f]{64})(?:;|$)`));
 
 	return match?.[1] ?? null;
+}
+
+/**
+ * Deletes the closed project's address from the retired sign-in codes table. Nothing reads that table any more; its rows
+ * (an address and a code hash) are cleared so they do not outlive retention until a later migration drops it. A database
+ * where it is already dropped is fine.
+ */
+export async function deleteRetiredCodes(
+	db: D1Database,
+	requestId: string,
+): Promise<void> {
+	try {
+		await db
+			.prepare(
+				"DELETE FROM audio_client_codes WHERE email=(SELECT email FROM owner_requests WHERE id=?)",
+			)
+			.bind(requestId)
+			.run();
+	} catch (error) {
+		if (!(error instanceof Error && /no such table/i.test(error.message)))
+			throw error;
+	}
 }
 
 export async function revokeClientSession(
