@@ -34,17 +34,19 @@ module publicationJournal {
   type Ev = { id: int, entry: int, op: str, exp: int }
   // A stored event: the envelope, the revision it took, and the delivery that stored it (two rows are two writes).
   type Row = { id: int, entry: int, op: str, exp: int, rev: int, by: int }
-  // One delivery: phase "none" (not started), "idle" (about to read), "idRead" (only in the split-read mutant: the event id and
+  // One delivery: sawOwn says whether an event with exactly its content was stored when it made its LAST read (a read is a
+  // snapshot, so only that moment counts, never the moment it judges). Phase "none" (not started), "idle" (about to read), "idRead" (only in the split-read mutant: the event id and
   // the entry were read, the latest revision was not), "read" (read, about to judge and store) or "done"; what it read; how many
   // inserts have met a constraint; and how it ended.
   type Run = {
-    phase: str, ev: Ev, same: str, hasEntry: bool, withdrawn: bool, latest: int, tries: int, outcome: str,
+    phase: str, ev: Ev, same: str, hasEntry: bool, withdrawn: bool, latest: int, tries: int, outcome: str, sawOwn: bool,
   }
 
   var rows: Set[Row]
   var runs: int -> Run
-  // Ghost: a delivery ended as a conflict although an event with exactly its content is stored (a retry or a duplicate in
-  // flight must answer duplicate, or withdrawn, never conflict).
+  // Ghost: a delivery ended as a conflict although an event with exactly its content was stored when it made its last read, or
+  // when its insert last met a constraint (a retry or a duplicate in flight must answer duplicate, or withdrawn, never
+  // conflict). An event stored AFTER the delivery read, which it then judges stale, is a correct conflict, not a flag.
   var conflictedSame: bool
 
   val RUNS = 1.to(4)
@@ -54,7 +56,7 @@ module publicationJournal {
   val EXPS = 0.to(3)
   val TRIES = 3
 
-  val idle = { phase: "none", ev: { id: 0, entry: 0, op: "publish", exp: 0 }, same: "none", hasEntry: false, withdrawn: false, latest: 0, tries: 0, outcome: "none" }
+  val idle = { phase: "none", ev: { id: 0, entry: 0, op: "publish", exp: 0 }, same: "none", hasEntry: false, withdrawn: false, latest: 0, tries: 0, outcome: "none", sawOwn: false }
 
   action init = all {
     rows' = Set(),
@@ -64,17 +66,20 @@ module publicationJournal {
 
   // An envelope reaches a handler. The same envelope may reach several handlers (a retry, or a duplicate in flight), and an
   // event id may be reused with other content.
+  action deliverAs(r: int, e: Ev): bool = all {
+    runs.get(r).phase == "none",
+    rows' = rows,
+    runs' = runs.set(r, { ...idle, phase: "idle", ev: e }),
+    conflictedSame' = conflictedSame,
+  }
+
   action deliver = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "none").oneOf()
     nondet id = IDS.oneOf()
     nondet entry = ENTRIES.oneOf()
     nondet op = OPS.oneOf()
     nondet exp = EXPS.oneOf()
-    all {
-      rows' = rows,
-      runs' = runs.set(r, { ...idle, phase: "idle", ev: { id: id, entry: entry, op: op, exp: exp } }),
-      conflictedSame' = conflictedSame,
-    }
+    deliverAs(r, { id: id, entry: entry, op: op, exp: exp })
   }
 
   pure def latestOf(rs: Set[Row]): int = rs.fold(0, (m, x) => if (x.rev > m) x.rev else m)
@@ -83,18 +88,24 @@ module publicationJournal {
 
   // The reads: the latest revision, the event under this event id, and the entry's operations, as ONE step (one D1 batch, one
   // snapshot). Another handler may store between this and the same handler's insert, never between the reads.
-  action read = {
-    nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
+  action readOf(r: int): bool = {
     val h = runs.get(r)
     val mine = rows.filter(x => x.entry == h.ev.entry)
     all {
       MUTANT != "split-read",
+      h.phase == "idle",
       rows' = rows,
       runs' = runs.set(r, { ...h, phase: "read",
         same: if (storedSame(rows, h.ev)) "same" else if (storedOther(rows, h.ev)) "other" else "none",
-        hasEntry: mine.size() > 0, withdrawn: mine.exists(x => x.op == "withdraw"), latest: latestOf(rows) }),
+        hasEntry: mine.size() > 0, withdrawn: mine.exists(x => x.op == "withdraw"), latest: latestOf(rows),
+        sawOwn: storedSame(rows, h.ev) }),
       conflictedSame' = conflictedSame,
     }
+  }
+
+  action read = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
+    readOf(r)
   }
 
   // The split-read mutant: the event id and the entry are read in one step ...
@@ -119,7 +130,7 @@ module publicationJournal {
     all {
       MUTANT == "split-read",
       rows' = rows,
-      runs' = runs.set(r, { ...h, phase: "read", latest: latestOf(rows) }),
+      runs' = runs.set(r, { ...h, phase: "read", latest: latestOf(rows), sawOwn: storedSame(rows, h.ev) }),
       conflictedSame' = conflictedSame,
     }
   }
@@ -138,6 +149,10 @@ module publicationJournal {
 
   action judgeAndStore = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "read").oneOf()
+    judgeOf(r)
+  }
+
+  action judgeOf(r: int): bool = {
     val h = runs.get(r)
     val ev = h.ev
     val verdict = judge(h)
@@ -152,11 +167,12 @@ module publicationJournal {
     val after = if (keepsTrying) { ...h, phase: "idle", tries: h.tries + 1 }
                else { ...h, phase: "done", tries: if (guardFired) h.tries + 1 else h.tries, outcome: outcome }
     all {
+      h.phase == "read",
       rows' = if (inserts) rows.union(Set({ id: ev.id, entry: ev.entry, op: ev.op, exp: ev.exp, rev: revision, by: r })) else rows,
       runs' = runs.set(r, after),
-      // Ghost: set from the real outcome, never from the mutant: the delivery ends as a conflict while an event with exactly
-      // its content is stored.
-      conflictedSame' = (conflictedSame or (not(keepsTrying) and outcome == "conflict" and storedSame(rows, ev))),
+      // Ghost: set from the real outcome, never from the mutant: the delivery ends as a conflict although its content was
+      // stored when it last read, or its insert met a constraint for the last time while its content is stored.
+      conflictedSame' = (conflictedSame or (not(keepsTrying) and outcome == "conflict" and (h.sawOwn or (guardFired and storedSame(rows, ev))))),
     }
   }
 
@@ -182,8 +198,8 @@ module publicationJournal {
   // 5. A correction follows an event of its entry.
   val correctionHasTarget = rows.forall(c => c.op == "correct" implies rows.exists(p => p.entry == c.entry and p.rev < c.rev))
 
-  // 6. An event that is stored is never answered as a conflict when it is delivered again (the loser of a race reads
-  //    again and finds it).
+  // 6. An event that was stored when a delivery read, or that its insert met, is never answered as a conflict (the loser
+  //    of a race reads again and finds it).
   val retryNeverConflicts = not(conflictedSame)
 
   val allProperties = and {
@@ -194,6 +210,27 @@ module publicationJournal {
   // ended: one stored it and the other answered duplicate.
   val raced = runs.keys().exists(a => runs.keys().exists(b => a != b and runs.get(a).outcome == "stored" and runs.get(b).outcome == "duplicate" and runs.get(a).ev == runs.get(b).ev))
   val neverRaced = not(raced)
+
+  // A scripted run (`quint test verification/publication-journal.qnt --main publication`; tests/scripts/publication-journal-trace.test.ts
+  // runs it): the trace that showed property 6 was first written wrongly. Run 1 reads an empty journal; run 2 stores another
+  // entry at revision 1; run 3 delivers run 1's exact envelope, reads latest 1 and stores it at revision 2; run 1 then judges its
+  // stale read and answers conflict while the same envelope is stored. That conflict is right (the read was before the store), so the
+  // ghost must stay false, and the journal holds the envelope once.
+  val first = { id: 1, entry: 1, op: "publish", exp: 1 }
+  val other = { id: 2, entry: 2, op: "publish", exp: 0 }
+
+  run staleReadTest = init
+    .then(deliverAs(1, first)).then(readOf(1))
+    .then(deliverAs(2, other)).then(readOf(2)).then(judgeOf(2))
+    .then(deliverAs(3, first)).then(readOf(3)).then(judgeOf(3))
+    .then(judgeOf(1))
+    .then(all {
+      assert(runs.get(1).outcome == "conflict"),
+      assert(runs.get(3).outcome == "stored"),
+      assert(rows.filter(x => x.id == 1).size() == 1),
+      assert(not(conflictedSame)),
+      rows' = rows, runs' = runs, conflictedSame' = conflictedSame,
+    })
 }
 
 module publication { import publicationJournal(MUTANT = "none").* }
