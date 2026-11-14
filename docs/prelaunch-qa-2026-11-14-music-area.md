@@ -83,13 +83,13 @@ Changed cases (from `pnpm run golden:diff`; status is the HTTP status; the body 
 | music-interest: the interest write fails and the alert is sent; the batch fails on the request insert; the batch fails on the audit insert; a failed write and Resend answers 400, answers 500, is unreachable, has no key, has no sender, has no owner address; a storage failure then a retry | 503 | 500 | A store failure; the alert, the allowance given back and every other effect are unchanged. |
 | music-interest: a failed write and the counter delete throws first | 503, no alert | 500, alert sent | A failed cleanup no longer hides the failure from the owner. |
 
-Branch B at `22b8f9cd` (A's tip `e252a871` merged in, plus the conversion and review round 1; this record is committed after it):
+Branch B at `d4c126c7` (A's tip `e252a871` merged in, plus the conversion and review round 1; this record is committed after it):
 
 - `pnpm exec biome format .`: no fixes applied (756 files).
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed; the bundle manifest is unchanged (no browser-reachable module changed; `music-catalog.ts` is server-only and `ReleaseInterest.astro` reads `MERCHANDISE` in its frontmatter).
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,671 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
-- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`, with the new model; wall time 44.5 s (43.2 s on A).
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,675 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`, with the new model; wall time 44.6 s (43.2 s on A).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 51 problems (53 on A); `no-module-mocking` 16 (18 on A): the two `vi.mock` calls of `tests/api/music-demand.test.ts` are gone with the file, and no new finding is in the area.
 - `pnpm run check`: `Result (782 files): 0 errors, 0 warnings, 17 hints`.
