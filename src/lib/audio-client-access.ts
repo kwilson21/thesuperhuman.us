@@ -189,9 +189,12 @@ export async function issueClientCode(
 
 	// The sweep, and the browser's earlier code for another address: for every answer, and kept when the write below fails.
 	await db.batch([
+		// Expired rows among those read, deleted by key (the decision named them).
 		db
-			.prepare("DELETE FROM audio_client_signin_codes WHERE expires_at<=?")
-			.bind(issuedAt),
+			.prepare(
+				"DELETE FROM audio_client_signin_codes WHERE nonce_hash IN (SELECT value FROM json_each(?))",
+			)
+			.bind(JSON.stringify(answer.expiredNonceHashes)),
 		db
 			.prepare(
 				"DELETE FROM audio_client_signin_codes WHERE nonce_hash=? AND email=?",
@@ -214,13 +217,13 @@ export async function issueClientCode(
 					email,
 					nonceHash,
 					issuedAt,
-					liveCodesPerAddress,
+					answer.kind === "issue" ? answer.liveOthersBelow : 0,
 				),
+			// Replaces the browser's row whatever address it is for: the table has one row per cookie value, so the insert below
+			// can never collide on it, however requests sharing a cookie interleave.
 			db
-				.prepare(
-					"DELETE FROM audio_client_signin_codes WHERE nonce_hash=? AND email=?",
-				)
-				.bind(issue ? nonceHash : "", issue ? email : ""),
+				.prepare("DELETE FROM audio_client_signin_codes WHERE nonce_hash=?")
+				.bind(issue ? nonceHash : ""),
 			db
 				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
         SELECT ?,?,?,0,?,?,NULL,NULL WHERE ?=1`)

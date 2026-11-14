@@ -45,15 +45,26 @@ describe("issuing a sign-in code", () => {
 			const eligible = projects.some((project) => !project.withdrawn);
 
 			const expected = !eligible
-				? { kind: "refuse", refusal: "NoOpenProject", clearEarlierEmail: null }
+				? {
+						kind: "refuse",
+						refusal: "NoOpenProject",
+						clearEarlierEmail: null,
+						expiredNonceHashes: [],
+					}
 				: liveOthers >= cap
-					? { kind: "refuse", refusal: "AddressFull", clearEarlierEmail: null }
+					? {
+							kind: "refuse",
+							refusal: "AddressFull",
+							clearEarlierEmail: null,
+							expiredNonceHashes: [],
+						}
 					: {
 							kind: "issue",
 							// Every project that is not closed is audited, a withdrawn one included.
 							auditRequestIds: projects.map((project) => project.requestId),
 							liveOthersBelow: cap,
 							clearEarlierEmail: null,
+							expiredNonceHashes: [],
 						};
 
 			it(`${name}, ${liveOthers} other live codes`, () => {
@@ -92,6 +103,19 @@ describe("issuing a sign-in code", () => {
 				"not live",
 			);
 		});
+	});
+
+	it("names the expired rows it was given, whatever the answer is", () => {
+		const codes = [
+			row("old", { expiresAt: now }),
+			row("older", { expiresAt: "2026-11-13T11:00:00.000Z" }),
+			row("live"),
+		];
+
+		for (const projects of [[open], []])
+			expect(decideIssue(facts(projects, codes), cap)).toMatchObject({
+				expiredNonceHashes: ["old", "older"],
+			});
 	});
 
 	describe("the browser's earlier code", () => {
