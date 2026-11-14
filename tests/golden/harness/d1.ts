@@ -189,10 +189,14 @@ class ChangeMeter {
 			return result;
 		};
 
+		// SAFETY: get, all and run are overloaded for named parameters; the fake D1 only passes positional ones, and each member runs the real statement with exactly the arguments it was given.
 		return double<StatementSync>({
-			get: (...args: SQLInputValue[]) => measured(() => statement.get(...args)),
-			all: (...args: SQLInputValue[]) => measured(() => statement.all(...args)),
-			run: (...args: SQLInputValue[]) => measured(() => statement.run(...args)),
+			get: ((...args: SQLInputValue[]) =>
+				measured(() => statement.get(...args))) as StatementSync["get"],
+			all: ((...args: SQLInputValue[]) =>
+				measured(() => statement.all(...args))) as StatementSync["all"],
+			run: ((...args: SQLInputValue[]) =>
+				measured(() => statement.run(...args))) as StatementSync["run"],
 		});
 	}
 
