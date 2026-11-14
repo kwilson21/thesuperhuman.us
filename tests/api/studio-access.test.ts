@@ -79,14 +79,17 @@ function context(
 ): StudioContext {
 	const pending: Promise<unknown>[] = [];
 
+	const headers = new Headers({
+		origin: "https://thesuperhuman.us",
+		"content-type": "application/json",
+	});
+
+	if (cookie) headers.set("cookie", cookie);
+
 	return partial<StudioContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
-			headers: {
-				origin: "https://thesuperhuman.us",
-				"content-type": "application/json",
-				...(cookie ? { cookie } : {}),
-			},
+			headers,
 			body: JSON.stringify(body),
 		}),
 		locals: {

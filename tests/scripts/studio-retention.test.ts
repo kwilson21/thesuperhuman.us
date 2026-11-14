@@ -1273,14 +1273,12 @@ it("runs the same retention when the retired table has already been dropped", as
 // The schema accepts addresses up to 320 characters (src/lib/audio-client-access.ts), so the worst case is that length.
 const worstEmail = (index: number) =>
 	`${String(index).padStart(4, "0")}${"a".repeat(304)}@example.com`;
+
 const nonceFor = (index: number) => index.toString(16).padStart(64, "0");
 const STATEMENT_LIMIT = 90_000;
 
 // Wraps the database so every statement the apply sends is measured.
-function measuredDatabase(database: {
-	query: (query: string) => Promise<unknown>;
-	batch: (statements: string[]) => Promise<unknown>;
-}) {
+function measuredDatabase(database: ReturnType<typeof fixture>["database"]) {
 	const sizes: number[] = [];
 
 	return {
@@ -1301,9 +1299,11 @@ function measuredDatabase(database: {
 it("keeps a batch of worst-case sign-in codes under the statement limit and drains the rest over later runs", async () => {
 	const { sql, database } = fixture();
 	sql.exec("DELETE FROM audio_client_signin_codes");
+
 	const insert = sql.prepare(
 		"INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at) VALUES (?,?,?,?,?)",
 	);
+
 	for (let index = 0; index < 400; index++)
 		insert.run(
 			nonceFor(index),
@@ -1320,6 +1320,7 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 		storage,
 		now,
 	);
+
 	expect(first.counts.codes).toBe(150);
 	await applyStudioRetention(
 		measured.database,
@@ -1329,11 +1330,14 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 		async () => {},
 		now,
 	);
+
+	// SAFETY: the query selects only nonce_hash, so every row is exactly one text column.
 	const left = sql
 		.prepare(
 			"SELECT nonce_hash FROM audio_client_signin_codes ORDER BY nonce_hash",
 		)
 		.all() as { nonce_hash: string }[];
+
 	expect(left).toHaveLength(250);
 	expect(left[0].nonce_hash).toBe(nonceFor(150));
 
@@ -1344,6 +1348,7 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 			storage,
 			now,
 		);
+
 		await applyStudioRetention(
 			measured.database,
 			review,
@@ -1353,6 +1358,7 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 			now,
 		);
 	}
+
 	expect(
 		sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
 	).toEqual({ n: 0 });
@@ -1363,9 +1369,11 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 it("keeps a realistic backlog of 1,000 short-address sign-in codes under the statement limit", async () => {
 	const { sql, database } = fixture();
 	sql.exec("DELETE FROM audio_client_signin_codes");
+
 	const insert = sql.prepare(
 		"INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at) VALUES (?,?,?,?,?)",
 	);
+
 	for (let index = 0; index < 1000; index++)
 		insert.run(
 			nonceFor(index),
@@ -1382,6 +1390,7 @@ it("keeps a realistic backlog of 1,000 short-address sign-in codes under the sta
 		storage,
 		now,
 	);
+
 	expect(review.counts.codes).toBeLessThan(1000);
 	await applyStudioRetention(
 		measured.database,
@@ -1400,9 +1409,11 @@ it("keeps a realistic backlog of 1,000 short-address sign-in codes under the sta
 
 it("keeps a batch of worst-case retired codes under the statement limit", async () => {
 	const { sql, database } = fixture();
+
 	const insert = sql.prepare(
 		"INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at) VALUES (?,?,?,?)",
 	);
+
 	for (let index = 0; index < 400; index++)
 		insert.run(
 			worstEmail(index),
@@ -1418,6 +1429,7 @@ it("keeps a batch of worst-case retired codes under the statement limit", async 
 		storage,
 		now,
 	);
+
 	expect(review.counts.retiredCodes).toBe(150);
 	await applyStudioRetention(
 		measured.database,
