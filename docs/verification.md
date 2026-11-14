@@ -206,7 +206,7 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 2. `oneRowPerPlace`: no two stored events share a place in a playthrough.
 3. `contiguousFromOne`: each playthrough's places are 1, 2, 3 and so on, with none missing.
 4. `secondsNeverFall`: seconds never fall along a playthrough.
-5. `sameEventNeverConflicts`: the same event delivered twice at once is never answered as a refusal or a conflict: a delivery that read its own event as stored, or whose insert meets it, answers duplicate (the loser reads again and finds it).
+5. `sameEventNeverConflicts`: the same event delivered twice at once is never answered as a refusal or a conflict: a delivery that read its own event as stored (at any place in the playthrough, not only as its newest row), or whose insert meets it, answers duplicate (the loser reads again and finds it).
 
 | Mutant | The change | Breaks |
 |---|---|---|

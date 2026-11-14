@@ -4,10 +4,10 @@ Three things are gated: pull request #270 (test tooling for the conversion proof
 
 Date: November 14, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `58a3f5b9` (review round 1 added one commit to A). Neither has a pull request number yet.
-Pull requests: #270 is merged as `f4c96c4c`.
+Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `58a3f5b9` (review round 1 added one commit to A).
+Pull requests: #270 is merged as `f4c96c4c`; A is #272 and B is #273 (stacked with `gh stack`, stack 274).
 Target: production
-Reviewer: both branches were written by a Claude Sonnet 5.5 builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). One independent Claude review round ran (round 1, below); Greptile and Codex have not run and are not recorded here.
+Reviewer: both branches were written by a Claude Sonnet 5.5 builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). Independent Claude reviews ran: three rounds on the pilot (below) and a fourth on the batch-read fix. Codex and Greptile reviewed the pull requests (see Delivery status).
 Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `58a3f5b9`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
 
 ## Scope
@@ -26,7 +26,7 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
 - Owner, 2026-11-14 (relayed in the task): fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database error answers 500 with the route's fixed generic sentence; a real lost race or stale version stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
-- Judgment calls made by the builder under that instruction, for the owner to confirm: a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence); a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
+- Judgment calls made by the builder under that instruction, a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence), which follows the owner's "500 on db errors" decision and was reported to him; a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
 
 ## Review round 1 (independent Claude round on the pilot; no behavior bug found)
 
@@ -99,7 +99,7 @@ Changed cases (from `pnpm run golden:diff`; status is the HTTP status; the body 
 | music-interest: the interest write fails and the alert is sent; the batch fails on the request insert; the batch fails on the audit insert; a failed write and Resend answers 400, answers 500, is unreachable, has no key, has no sender, has no owner address; a storage failure then a retry | 503 | 500 | A store failure; the alert, the allowance given back and every other effect are unchanged. |
 | music-interest: a failed write and the counter delete throws first | 503, no alert | 500, alert sent | A failed cleanup no longer hides the failure from the owner. |
 
-Branch B at `7804be94` (A's tip `58a3f5b9` merged in, plus the conversion and review round 1; this record is committed after it):
+Branch B at `2fc0fa67` (A's tip `58a3f5b9` merged in, plus the conversion and review round 1; this record is committed after it):
 
 - `pnpm exec biome format .`: no fixes applied (756 files).
 - `pnpm run build`: completed.
@@ -149,7 +149,7 @@ Limits: a defect answer is shown by forcing a throw in the clock and the id sour
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks: the local gates above for each branch.
-- UNVERIFIED, 7.2 Exact diff review on each pull request head and independent code and security review: not run.
+- PASS, 7.2 Review of each pull request head, as observed by the operator on `58a3f5b9` (A) and `2fc0fa67` (B): Greptile Review check SUCCESS, no open review thread; independent Claude review rounds ran (three on the pilot, a fourth on the batch-read fix with no must-fix finding; see Delivery status).
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The trigger `music_events_archive_before_delete` is on `music_events`, a table neither route reads or writes, so the converted code relies on no trigger (issue #242 still tracks moving the five that write).
 - PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: A's tip `58a3f5b9`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed. For #270 the operator reported "build succeeded, pages 200"; to be confirmed by the operator.
@@ -161,12 +161,16 @@ Limits: a defect answer is shown by forcing a throw in the clock and the id sour
 
 ## Delivery status and remaining gates
 
-- UNVERIFIED: CI (`validate`, `Golden neutrality` with the `conversion` label on B), Greptile, Codex and Workers Builds on either head.
-- UNVERIFIED: an independent correctness and security review of each branch.
+- Observed by the operator on heads `58a3f5b9` (A, #272) and `2fc0fa67` (B, #273): CI `validate` SUCCESS on both; `Golden neutrality` SUCCESS on #273 with the `conversion` label; Greptile Review check SUCCESS; Workers Builds SUCCESS; no open review thread.
+- Bot findings: Codex on #272 asked for a Quint model and a named failure instead of the catch around the allowance give-back; both are delivered by #273. Greptile comment 4571910896 on #273 (the split read) is fixed on both branches (see above).
+- Independent reviews: three rounds on the pilot (above) and a fourth round on the batch-read fix, with no must-fix finding and three notes:
+  - R4.a, accepted: a request whose id is already stored now answers 500 instead of 200 if the last-event read fails, because both reads are one batch; the client's retry then gets 200.
+  - R4.b, fixed: the model ghost for `sameEventNeverConflicts` looked only at the playthrough's newest row, so a split read that missed the event while a later event was stored would not set it. It now sets the flag when the delivery ended refused or in conflict while this very event was stored at the time of its read, at any place in the playthrough; the real design still passes at the driver's 20,000 samples, and `split-read` and `no-retry` still fail.
+  - R4.c, noted: the route test's hook fires when the batch is prepared, so it stores the other request's event just before the batch, not between its two reads; it still guards the regression (it failed on the two-call code).
 - UNVERIFIED: live checks after merge: a playback start and a listen on a release page, an interest submission, and the owner alert.
 
-No deployment is authorized by this record.
+Deployment: the owner's standing instruction is that a complete pull request (CI green, review bots clean, every comment addressed, no new visual or product decision) is merged by the operator, and merging to `main` deploys production. This record authorizes nothing beyond that.
 
 Branch A: implemented yes, deployed no, verified live no. Branch B: implemented yes, deployed no, verified live no. #270: implemented and deployed (as reported); verified live as reported.
 
-Both branches were built by a Claude Sonnet 5.5 subagent. This record does not certify the checks listed as UNVERIFIED.
+Both branches were built by a Claude Sonnet 5.5 subagent. This record does not certify the checks listed as UNVERIFIED (live verification, the browser check and the delivery of the owner alert).

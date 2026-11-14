@@ -31,7 +31,7 @@ module musicPlayback {
   type Ev = { id: int, pt: int, seq: int, acc: int }
   // One delivery of an event to a request handler: phase "none" (not started), "idle" (about to read), "dupRead" (only in the
   // split-read mutant: the id has been read, the last event has not), "read" (read, about to judge and store) or "done";
-  // what it read (sawSame: the last event it read is this very event); how many inserts have met a constraint; and how it ended.
+  // what it read (sawSame: this very event was stored when it did its last read, at any place in the playthrough); how many inserts have met a constraint; and how it ended.
   type Run = {
     phase: str, ev: Ev, dupSame: bool, dupOther: bool, sawSame: bool, lastSeq: int, lastAcc: int, tries: int, outcome: str,
   }
@@ -82,7 +82,8 @@ module musicPlayback {
     val lastSecs = mine.filter(x => x.seq == last).fold(0, (m, x) => if (x.acc > m) x.acc else m)
     val same = rows.exists(x => x.id == h.ev.id and x.pt == h.ev.pt and x.seq == h.ev.seq)
     val other = rows.exists(x => x.id == h.ev.id and (x.pt != h.ev.pt or x.seq != h.ev.seq))
-    val sawOwn = mine.exists(x => x.seq == last and x.id == h.ev.id and x.seq == h.ev.seq)
+    // This very event (id and place) is stored now, wherever it sits in the playthrough, not only as its newest row.
+    val sawOwn = rows.exists(x => x.id == h.ev.id and x.pt == h.ev.pt and x.seq == h.ev.seq)
     all {
       MUTANT != "split-read",
       rows' = rows,
@@ -112,7 +113,8 @@ module musicPlayback {
     val mine = rows.filter(x => x.pt == h.ev.pt)
     val last = mine.fold(0, (m, x) => if (x.seq > m) x.seq else m)
     val lastSecs = mine.filter(x => x.seq == last).fold(0, (m, x) => if (x.acc > m) x.acc else m)
-    val sawOwn = mine.exists(x => x.seq == last and x.id == h.ev.id and x.seq == h.ev.seq)
+    // This very event (id and place) is stored now, wherever it sits in the playthrough, not only as its newest row.
+    val sawOwn = rows.exists(x => x.id == h.ev.id and x.pt == h.ev.pt and x.seq == h.ev.seq)
     all {
       MUTANT == "split-read",
       rows' = rows,
