@@ -4,7 +4,11 @@ import { z } from "astro/zod";
 import { afterEach, expect, it, vi } from "vitest";
 import { FieldsRefused } from "~/lib/fields";
 import { LostRace, ReaderMessage } from "~/lib/reader-message";
-import { classifyFailure, logUnexpected } from "~/server/failure";
+import {
+	classifyFailure,
+	logUnexpected,
+	redactAddresses,
+} from "~/server/failure";
 
 // What a route does with what it caught: only a sentence the code wrote for the reader may be shown.
 
@@ -319,4 +323,74 @@ it("redacts an IPv4 or IPv6 address from the logged message, wherever it sits, a
 	expect(said("std::vector at 12:30:45 failed")).toBe(
 		"std::vector at 12:30:45 failed",
 	);
+});
+
+it("redacts a whole IPv4-mapped or IPv4-embedded IPv6 address, leaving no octet", () => {
+	const said = (message: string) => logLine(new Error(message))?.[2];
+
+	expect(said("from ::ffff:203.0.113.7 failed")).toBe("from [ip] failed");
+	expect(said("from ::203.0.113.7 failed")).toBe("from [ip] failed");
+	expect(said("from 64:ff9b::203.0.113.7 failed")).toBe("from [ip] failed");
+	expect(said("from 2001:db8:0:0:0:0:203.0.113.7.")).toBe("from [ip].");
+});
+
+it("leaves text that is not an address alone, and redacts every real address, short ones included", () => {
+	const said = (message: string) => logLine(new Error(message))?.[2];
+
+	// Not addresses, or too short to tell from a name: no decimal digit and at most two groups.
+	for (const text of [
+		"abc::def",
+		"a::b",
+		"cafe::",
+		"at ::",
+		"std::vector",
+		"12:30:45",
+	])
+		expect(said(`saw ${text} then`)).toBe(`saw ${text} then`);
+
+	// Real addresses, however short.
+	expect(said("saw ::1 then")).toBe("saw [ip] then");
+	expect(said("saw fe80::1 then")).toBe("saw [ip] then");
+	expect(said("saw 2001:db8::1 then")).toBe("saw [ip] then");
+	expect(said("saw 2001:db8:: then")).toBe("saw [ip] then");
+	expect(said("saw fe80::1%eth0 then")).toBe("saw [ip] then");
+	expect(said("saw fdab:cdef:abcd::beef then")).toBe("saw [ip] then");
+	expect(said("saw 2001:0db8:85a3:0000:0000:8a2e:0370:7334 then")).toBe(
+		"saw [ip] then",
+	);
+
+	// A port after a bracketed address is not part of it.
+	expect(said("dial [2001:db8::1]:443 failed")).toBe("dial [[ip]]:443 failed");
+});
+
+it("leaves a five-part dotted number alone and still redacts an address at the end of a sentence", () => {
+	const said = (message: string) => logLine(new Error(message))?.[2];
+
+	expect(said("build 1.2.3.4.5 failed")).toBe("build 1.2.3.4.5 failed");
+	expect(said("peer 203.0.113.7.")).toBe("peer [ip].");
+	expect(said("peer 203.0.113.7, then 198.51.100.4")).toBe(
+		"peer [ip], then [ip]",
+	);
+});
+
+it("redacts in linear time on long adversarial messages", () => {
+	const inputs = [
+		"1".repeat(50_000),
+		":".repeat(50_000),
+		"1.".repeat(20_000),
+		"a:".repeat(25_000),
+		"a:1:".repeat(12_500),
+		`${"f".repeat(30_000)}::`,
+		`${"f:".repeat(7)}${"g".repeat(40_000)}`,
+		`${"1:".repeat(25_000)}%`,
+		`x ${"1.1.1.".repeat(10_000)}1`,
+		`${"::1 ".repeat(10_000)}`,
+	];
+
+	for (const text of inputs) {
+		const started = performance.now();
+
+		redactAddresses(text);
+		expect(performance.now() - started).toBeLessThan(50);
+	}
 });

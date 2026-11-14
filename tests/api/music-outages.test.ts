@@ -527,6 +527,8 @@ describe("a defect in a converted route answers the fixed sentence", () => {
 		const text = log.mock.calls[0].map(String).join(" ");
 
 		expect(text).toContain("/api/music-event");
+		expect(text).toContain("[email]");
+		expect(text).toContain("[ip]");
 		expect(text).not.toContain("fan@example.com");
 		expect(text).not.toContain("203.0.113.7");
 	});

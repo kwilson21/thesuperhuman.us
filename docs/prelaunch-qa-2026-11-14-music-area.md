@@ -46,6 +46,14 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 - R2.4, fixed: item B2 above claimed 100,000 samples for the real design; the driver runs 20,000, and the larger run was an extra ad hoc check. Corrected.
 - R2.5, fixed: AGENTS.md carries the same points as CLAUDE.md (facts may fail with a named error, `alwaysWrites` with `refusals: []` cannot fail, the contact guards keep their defect, what the legacy-validators test checks); the publicist block is untouched.
 
+## Review round 3 (independent Claude round; two flaws in the new IP redaction)
+
+- R3.1, fixed: an IPv4-mapped address leaked three octets (`::ffff:203.0.113.7` was logged as `[ip].0.113.7`). The IPv6 pattern now matches an IPv4 tail explicitly (`::ffff:203.0.113.7`, `::203.0.113.7`, `64:ff9b::203.0.113.7` and the six-group form each become one `[ip]`).
+- R3.2, fixed: the IPv6 pattern ate text that is not an address. A compressed form must now contain `::`, so a port after a bracketed address is left (`[2001:db8::1]:443` is logged as `[[ip]]:443`), and a bare `::`, `cafe::`, `abc::def`, `a::b` and `std::vector` are left alone. Real short addresses (`::1`, `fe80::1`, `2001:db8::1`, `2001:db8::`, `fe80::1%eth0` with its zone) are still redacted. Limit, stated plainly: a compressed form of at most two groups with no decimal digit cannot be told from a name, and `a::b` and `dead::beef` are valid IPv6, so those are left alone; every other match is redacted, and a real client address has a digit (global addresses start with 2 or 3, link-local is `fe80`), so none is known to be left. Redacting wins everywhere else.
+- R3.3, fixed: `1.2.3.4.5` was logged as `[ip].5`; a dotted number with a fifth group is now left alone (an address at the end of a sentence, `203.0.113.7.`, is still redacted).
+- R3.4, fixed: the music-event defect test now asserts `[email]` and `[ip]` are present, as the interest test does.
+- Linear time: the address patterns have no nested repeats and every repeat is bounded; `tests/security/failure.test.ts` runs 50,000 digits, 50,000 colons, `1.` repeated 20,000 times, hex-and-colon runs, a long hex run before `::` and similar, each under 50 ms. The older patterns in the same helper (the email pattern in particular) are quadratic on a very long word, but they only ever see a message already cut to 2,000 characters.
+
 A defect in the two routes now writes one redacted log line through `logUnexpected`, where the old outer catch logged nothing. The response is unchanged (the same fixed 500 sentence).
 
 ## Evidence and limits
