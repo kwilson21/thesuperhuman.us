@@ -4,11 +4,11 @@ Three things are gated: pull request #270 (test tooling for the conversion proof
 
 Date: November 14, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from the tip of A (`f14be27d`). Neither has a pull request number yet.
+Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `e252a871` (review round 1 added one commit to A). Neither has a pull request number yet.
 Pull requests: #270 is merged as `f4c96c4c`.
 Target: production
-Reviewer: both branches were written by a Claude builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). No independent review round, Greptile or Codex has run on either branch; they are not recorded here.
-Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, the tip of A. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
+Reviewer: both branches were written by a Claude Sonnet 5.5 builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). One independent Claude review round ran (round 1, below); Greptile and Codex have not run and are not recorded here.
+Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `e252a871`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
 
 ## Scope
 
@@ -18,7 +18,7 @@ Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B,
    - A playback event whose insert lost a race (another request stored the same event id, or the same place in the playthrough, between the read and the insert) answered 503. It is now read again: the same event is a duplicate and answers 200, any other event is out of sequence and answers 409.
    - When the visitor's allowance could not be given back after a failed write, the urgent owner alert was never sent. It is now sent either way.
    - A playthrough with no sequence 1 row was accepted without the server clock check (`new Date(null)` is the epoch). It is now refused with 409. Found by reading, not recorded before.
-3. Branch B, the conversion: the two routes are `runRoute(services, program)` with an error type of `never`; input is read with Effect Schema (`src/server/music-input.ts`; the Zod schemas are gone from the area); the decisions are pure rules in the new `src/server/rules/` (`playback.ts`, `campaign-tag.ts`, `visitor.ts`, `music-interest.ts`); the sequences are flows (`src/server/flows/music-event.ts`, `music-interest.ts`, `rate-limit.ts`); storage is `src/server/music-store.ts`; the owner alert is a new service (`OwnerAlert` in `src/server/services.ts`). It adds the Quint model `verification/music-playback.qnt` and the Back-end rules text in CLAUDE.md and AGENTS.md. No response changes (shown by `golden:neutral`).
+3. Branch B, the conversion: the two routes are `runRoute(services, program)` with an error type of `never`; input is read with Effect Schema (`src/server/music-input.ts`; the Zod schemas are gone from the area); the decisions are pure rules in the new `src/server/rules/` (`playback.ts`, `campaign-tag.ts`, `visitor.ts`, `music-interest.ts`); the sequences are flows (`src/server/flows/music-event.ts`, `music-interest.ts`, `rate-limit.ts`); storage is `src/server/music-store.ts`; the owner alert is a new service (`OwnerAlert` in `src/server/services.ts`). Review round 1 added: `runRoute` takes an optional `{ route, answer }`, so a defect in a converted route is logged once through `logUnexpected` and answered with the route's fixed sentence (500; the contact and resume routes pass none and keep their bare 500, shown by `tests/server/run.test.ts`); `alwaysWrites` in `src/server/terms.ts` replaces every `Option.getOrThrow` and the `throw` in the campaign tag rule (a rule that refuses nothing now cannot fail); the `OwnerAlert` service fails with the named `OwnerAlertFailed` and the interest flow ignores it, so an alert failure never replaces or hides the store failure answer. `Effect.promise` remains only for `liveTurnstile` and the existing contact services, because `verifyTurnstile` catches every failure itself and changing it would change the contact route's answer; a defect there is now covered in the music routes by the same fixed answer. It adds the Quint model `verification/music-playback.qnt` and the Back-end rules text in CLAUDE.md and AGENTS.md. No response changes (shown by `golden:neutral`).
 
 The studio, audio intake, owner audio tools, the media route (`src/pages/music/file/[id]/[version].ts`, R2 only, no corpus) and the content catalog (`src/lib/music-catalog.ts`, Astro collections, Zod required) are other areas and are untouched, except that `music-catalog.ts` now exports the id pattern the new reader shares.
 
@@ -27,6 +27,16 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
 - Owner, 2026-11-14 (relayed in the task): fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database error answers 500 with the route's fixed generic sentence; a real lost race or stale version stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
 - Judgment calls made by the builder under that instruction, for the owner to confirm: a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence); a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
+
+## Review round 1 (independent Claude round on the pilot; no behavior bug found)
+
+- A1, fixed on A: nothing proved a non-UNIQUE insert error is not retried; a test now counts insert attempts and asserts exactly one, and fails when the retry is widened to every error (checked).
+- B1, fixed: the Back-end rules text named `nothingToDo` for the rule key; the real key is `nothingToDoIf` (`src/server/terms.ts`). Every identifier in the text was re-read against the code; the text now also names `alwaysWrites`, the answers module and the `runRoute` defect argument, and says what `tests/architecture/legacy-validators.test.ts` asserts (the directory's exact file list, the frozen-copy marker, and that nothing under `src/` or `scripts/` imports them).
+- B2, fixed: the model's ghost `conflictedSame` was set only when the mutant `no-retry` was on, so `sameEventNeverConflicts` held vacuously. It is now set from the real outcome (the delivery ends as a conflict while the same event is stored). The real design still passes (100,000 samples), the mutant still fails, and no other flag or update mentions a mutant (the mutant name appears only in the design switches of the rule and the guards).
+- B3, fixed: see Scope, item 3.
+- B4, fixed: `src/server/music-input.ts` no longer points at the deleted `src/lib/music-demand.ts`; comments that named deleted files or described Zod now say what the reader does; the golden test headers name the playback rule instead of `saveEvent`.
+- B5, fixed: `musicUnavailable` and `musicFailed` moved back next to `musicRequest` in `src/lib/music-request.ts`. Chosen because they need nothing from `src/server/` (`lib` cannot import it), `musicRequest` is already imported by 25 routes, and the later areas need the same two answers. No other route was touched.
+- B6, a check, not a change: `chainMatches` in `src/server/guarded-save.ts` follows the cause chain six levels deep (depth 0 to 5); the old music code followed five. The conversion therefore recognises a unique violation one cause level deeper than the old code did. D1 errors are one level deep in practice, and no case in the corpus has a deeper chain, so the neutrality claim holds for every recorded case; it is not shown for a chain of exactly six.
 
 ## Evidence and limits
 
@@ -38,13 +48,13 @@ Pull request #270 (as reported, not re-observed here):
 - Live pages answered 200.
 - UNVERIFIED: to be confirmed by the operator.
 
-Branch A at `f14be27d` (on `origin/main` at `f4c96c4c`):
+Branch A at `e252a871` (on `origin/main` at `f4c96c4c`):
 
 - `pnpm exec biome format .`: no fixes applied (742 files).
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 288 test files, 12,578 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
-- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`; wall time 42.9 s (43.1 s on `origin/main`).
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 288 test files, 12,579 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`; wall time 43.2 s (43.1 s on `origin/main`).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 53 problems, the same as `origin/main` (`no-module-mocking`: 18).
 - `pnpm run check`: `Result (768 files): 0 errors, 0 warnings, 17 hints`.
@@ -63,20 +73,20 @@ Changed cases (from `pnpm run golden:diff`; status is the HTTP status; the body 
 | music-interest: the interest write fails and the alert is sent; the batch fails on the request insert; the batch fails on the audit insert; a failed write and Resend answers 400, answers 500, is unreachable, has no key, has no sender, has no owner address; a storage failure then a retry | 503 | 500 | A store failure; the alert, the allowance given back and every other effect are unchanged. |
 | music-interest: a failed write and the counter delete throws first | 503, no alert | 500, alert sent | A failed cleanup no longer hides the failure from the owner. |
 
-Branch B at `9929cc1a` (the tip of branch A, `f14be27d`, plus the conversion; this record is committed after it):
+Branch B at `22b8f9cd` (A's tip `e252a871` merged in, plus the conversion and review round 1; this record is committed after it):
 
 - `pnpm exec biome format .`: no fixes applied (756 files).
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed; the bundle manifest is unchanged (no browser-reachable module changed; `music-catalog.ts` is server-only and `ReleaseInterest.astro` reads `MERCHANDISE` in its frontmatter).
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,661 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
-- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`, with the new model; wall time 45.0 s (42.9 s on A).
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,671 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`, with the new model; wall time 44.5 s (43.2 s on A).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 51 problems (53 on A); `no-module-mocking` 16 (18 on A): the two `vi.mock` calls of `tests/api/music-demand.test.ts` are gone with the file, and no new finding is in the area.
 - `pnpm run check`: `Result (782 files): 0 errors, 0 warnings, 17 hints`.
-- `pnpm run golden:neutral --all claude/effect-10-music-fixes HEAD` (exit 0): `music-event` 111 identical, 6 neutral with D1 changes, 0 not neutral, 0 not comparable, 0 added, 0 removed, 0 renamed; `music-interest` 46 identical, 29 neutral with D1 changes, 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,015 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commit, and no case was added, removed or renamed in it.
+- `pnpm run golden:neutral --all e252a871 HEAD` (exit 0): `music-event` 111 identical, 6 neutral with D1 changes, 0 not neutral, 0 not comparable, 0 added, 0 removed, 0 renamed; `music-interest` 46 identical, 29 neutral with D1 changes, 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,015 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commit, and no case was added, removed or renamed in it.
 - Differential tests against the frozen Zod 3 schemas (`tests/fixtures/legacy-validators/music-demand.ts`, a sixth reference copy): the interest body and the event body, thousands of seeded inputs each, zero differences (values, error keys in order, every sentence).
 
-Limits: no browser run of the release page form or player; the player's retry on a 5xx treats 500 as it treated 503 (read in `src/scripts/music-playback.ts`, not run); the interest form shows `result.error` for any non-400 status (read in `src/scripts/form-submission.ts`, not run). The Quint model is checked by random simulation, not by Apalache. The rate limit store has a small read-then-write window that this area does not change (see `src/lib/rate-limit.ts`).
+Limits: a defect answer is shown by forcing a throw in the clock and the id source (the services cannot be swapped from outside a route); no browser run of the release page form or player; the player's retry on a 5xx treats 500 as it treated 503 (read in `src/scripts/music-playback.ts`, not run); the interest form shows `result.error` for any non-400 status (read in `src/scripts/form-submission.ts`, not run). The Quint model is checked by random simulation, not by Apalache. The rate limit store has a small read-then-write window that this area does not change (see `src/lib/rate-limit.ts`).
 
 ## Checklist
 
@@ -115,7 +125,7 @@ Limits: no browser run of the release page form or player; the player's retry on
 - PASS, 7.1 Required checks: the local gates above for each branch.
 - UNVERIFIED, 7.2 Exact diff review on each pull request head and independent code and security review: not run.
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The trigger `music_events_archive_before_delete` is on `music_events`, a table neither route reads or writes, so the converted code relies on no trigger (issue #242 still tracks moving the five that write).
-- PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: the tip of A).
+- PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: A's tip `e252a871`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed. For #270 the operator reported "build succeeded, pages 200"; to be confirmed by the operator.
 - PASS, 7.6 Receipt and QA evidence for the local gates, with the four states reported separately (below).
 
@@ -133,4 +143,4 @@ No deployment is authorized by this record.
 
 Branch A: implemented yes, deployed no, verified live no. Branch B: implemented yes, deployed no, verified live no. #270: implemented and deployed (as reported); verified live as reported.
 
-Both branches were built by a Claude subagent. This record does not certify the checks listed as UNVERIFIED.
+Both branches were built by a Claude Sonnet 5.5 subagent. This record does not certify the checks listed as UNVERIFIED.
