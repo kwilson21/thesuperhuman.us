@@ -31,6 +31,11 @@ Evidence: the renders and the 320px and 200% measurements were gathered at code 
   - Opus correctness and security review: no must-fix. The template is identical outside the added markup; the hash equals the served style bytes in every fixture; attacker-influenced values reach only escaped text after the style element; all three golden sets differ only in the consent page body and its CSP header, and each set rebuilt back to the old body with zero mismatches (publication-oauth 53 steps, publication-mcp 60, publication-token 43). One should-fix, label overflow at large text, is fixed in `14179d78`.
   - Sonnet design review: no visual defect; confirmed the colours and button values equal the site's; asked for the drift test and the document changes, which are in this round.
 - Independent reviews of head `df3e6606` on 2026-11-13: a Claude Opus security and correctness review was clean (the policy's `font-src 'self'` resolves to `https://thesuperhuman.us` only; both fixed directives precede the request-derived origin; the style hash equals the served style bytes; all three golden sets differ only in the consent page body and its policy header, with zero residual after removing the added markup; 21 of 21 tests pass) and a Claude Sonnet design and rules review found no visual defect and asked for the document fixes made in this revision. This revision's one style change (a smaller heading minimum, for 320px with doubled text) is covered by the measurements below and by the bot reviews on the final head.
+- Bot reviews and merge, observed by the coordinating session on GitHub (2026-11-13). On the final head `b898f307`: `validate` succeeded, the Greptile check succeeded, and the Cloudflare build succeeded. Codex's last full review was of `be0c3834` ("no major issues" in its code review; no security issues). Codex did not review the final two commits: `dae9ea58` (the pressed-state fill and golden re-record) and `b898f307` (the record update). Those two commits are covered by the local tests and golden comparison in Evidence, not by a Codex review.
+- Review threads left for the owner, resolved on his go-ahead:
+  - Codex suggested sending no referrer from this page. Not changed: under `no-referrer` the consent POST's Origin header would be `null` and the page's origin check would refuse it. The font requests go only to the same origin that already received the authorization URL.
+  - Codex asked for a CI screenshot. Not done: the consent route answers only for the hard-coded production origin, so the local preview cannot reach it, and making that origin configurable is a separate owner decision (see Screenshot capture).
+- The owner authorized merging in conversation on 2026-11-13 ("#261 is good to go"), having been told that the page has local renders only and that capturing it in CI needs a separate decision. Merged 2026-11-13 21:42:57 UTC as `57e26842`. The production build succeeded.
 
 ## Hallmark audit
 
@@ -123,7 +128,7 @@ No production behaviour was changed and no bypass was added. Option for the owne
 
 ## 1. Purpose and content
 
-- **UNVERIFIED · Project, branch, local changes, instructions and audience.** One branch from `origin/main`; the changes are the code commits listed above and the document commit. Deployment authorization: not given by this record. The owner has not yet seen the 1.25rem heading minimum (see Owner decisions).
+- **UNVERIFIED · Project, branch, local changes, instructions and audience.** One branch from `origin/main`; the changes are the code commits listed above and the document commit. Deployment authorization: not given by this record; the owner authorized the merge in conversation on 2026-11-13. The owner has not yet seen the 1.25rem heading minimum (see Owner decisions).
 - **PASS · Approved design and truthful claims.** The look is the owner's approved restyle. No professional claim, copy or image changed.
 - **N/A · Explanatory copy.** No copy changed; the consent sentences are as before.
 - **N/A · First screen and next step.** This is a consent page, not a site page. Its one action is the button, which the renders show at every width measured.
@@ -186,8 +191,8 @@ No production behaviour was changed and no bypass was added. Option for the owne
 - **PASS · Exact diff.** The diff is limited to the files listed under Scope and the document commit. No secrets, no unrelated changes, no generated files committed (`.screenshots/` and `.jolli/` are not committed).
 - **UNVERIFIED · Production bindings, secrets and headers on dynamic responses.** Not deployed; no production response was observed.
 - **PASS · Rollback version.** `fad7694e`. No backup is needed: the PR writes no data and adds no migration.
-- **N/A · Post-deploy verification.** Not deployed, and this record does not authorize deployment.
-- **UNVERIFIED · Receipt and monitoring.** Not applicable until a deployment is authorized.
+- **UNVERIFIED · Post-deploy verification.** Merged to `main` on 2026-11-13 21:42:57 UTC as `57e26842`, and the production build succeeded. Live check by the coordinating session on 2026-11-13 after the merge: `https://thesuperhuman.us/` returned 200; `https://thesuperhuman.us/fonts/libron-v0.25/Libron-Regular.woff2` returned 200 (the font file the page loads, same origin); a bare request to `/api/publication/authorize` without a valid authorization request returned 400, as expected. The restyled page itself was NOT viewed in production, because it renders only for a valid authorization request. This record does not by itself authorize deployment.
+- **UNVERIFIED · Receipt and monitoring.** Monitoring was not checked. Status: implemented: yes. Verified locally: yes. Verified in CI: `validate`, Greptile and the Cloudflare build succeeded on the final head. Deployed: yes (merged 2026-11-13 as `57e26842`, production build succeeded). Verified live: in part (the three responses above); the restyled page was not viewed in production.
 
 ## 8. Private owner center
 
@@ -199,9 +204,9 @@ No production behaviour was changed and no bypass was added. Option for the owne
 - Owner decision: the body domain "thesuperhuman.us" breaks inside the word at 320px with 200% text, and its full stop sits alone at 390px with 200% text (see Heading fit). A fix would change how long tokens wrap in the body copy.
 - Noindex: decide whether the consent response should carry `X-Robots-Tag: noindex`. It is not added here, because it changes behavior.
 - Follow-up outside this PR (pre-existing): reject redirect origins containing `;` or `,` when a client registers. An injected directive can only tighten the policy.
-- Remaining checks listed as UNVERIFIED above: Safari and Firefox, a real phone, the browser's own 200% text setting, forced-colors mode, tablet widths, production headers and cache behavior, and the live error paths.
+- Remaining checks listed as UNVERIFIED above: the restyled page in production (it renders only for a valid authorization request), Safari and Firefox, a real phone, the browser's own 200% text setting, forced-colors mode, tablet widths, production headers and cache behavior, and the live error paths.
 - Screenshots: CI does not capture the consent page. The blocker and a proposed option are under "Screenshot capture (blocked)" above. The owner decides whether to take that option.
 
 ## Deployment
 
-This record does not authorize deployment. Merging to `main` deploys production.
+This record does not by itself authorize deployment. Merging to `main` deploys production. The owner authorized the merge in conversation on 2026-11-13, and it deployed as `57e26842` (2026-11-13 21:42:57 UTC).

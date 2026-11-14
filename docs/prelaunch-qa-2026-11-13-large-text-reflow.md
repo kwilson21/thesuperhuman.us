@@ -13,7 +13,7 @@ Rollback revision: `7f28f299`, `origin/main`'s tip when `1211dc25` merged it (`g
 
 CI run `43520072156` failed on head `abe5fe28` at the new step "Check large text reflow": `the closing button leaves its panel at 320px with a 200% root`. The check measured the button against the panel's border box: at 320px the button needed about 204px in a 184px content box, so it overhung the panel's right padding by 20.4px. The closing label was also three lines from 320px to 356px. The earlier claims in this record that everything stays inside its box, and that the browser check passes on the final tree, were made before that run and were wrong for `abe5fe28`.
 
-`76230c49` changed the cause: the footer's side gutter is capped by the viewport (see Scope), so the closing panel keeps its content width at enlarged text, and the label is two lines at every width measured from 320px to 430px. This revision adds the 24px floor below 320px and fixes the browser check (see Browser check). Its result on this revision is recorded below; CI has not yet run on this revision.
+`76230c49` changed the cause: the footer's side gutter is capped by the viewport (see Scope), so the closing panel keeps its content width at enlarged text, and the label is two lines at every width measured from 320px to 430px. This revision adds the 24px floor below 320px and fixes the browser check (see Browser check). Its result on this revision is recorded below. CI result on the final head `0c627ebb`, observed by the coordinating session on GitHub (2026-11-13): `validate` and `capture` succeeded. In Screenshots run 43529715648 the new step "Check large text reflow" passed and printed `text scale browser checks: PASS`; the run reused 10 of 54 pages and ran eight scenarios because the footer changed. The Greptile check succeeded. Codex's code and security reviews of the previous head `44412e3a` (identical code; the last commit changed comments and documents only) found no issues.
 
 ## Scope
 
@@ -147,7 +147,7 @@ Earlier mutants from the previous revision and the independent review (run on ea
 UNVERIFIED until checked:
 
 - This revision (the commit that corrects this record, the comments and the decision note) changes only comments and documents. The code it sits on, at `44412e3a`, was independently reviewed in round 5.
-- CI on this revision: the "Check large text reflow" step must pass on the PR.
+- CI on this revision: passed on the final head `0c627ebb` (run 43529715648, "Check large text reflow" step passed; see CI status).
 - Firefox and Safari text-only zoom, a second browser engine, a real phone, and text sizes above 200%. Only Chromium with a doubled root was run.
 - Widths below 320px. Below 320px the footer's default-size gutter is 24px, from the `max(24px, …)` floor. Measured at the default size from 240px (zero movement, see the first section above). At a doubled root below 320px the button overhangs its panel (28.4px at 240px, 0.4px at 280px), where the page already scrolls sideways; widths below 320px are outside the reflow requirement.
 - Widths above 430px at a 200% root were not swept in this revision; the review's sweep covered 480, 600, 768 and 800px for the document width only.
@@ -155,11 +155,11 @@ UNVERIFIED until checked:
 - The pinned contact bar is hidden while the header's mobile menu is open (`Footer.astro`, as on `main`). The content `<details>` do not hide it; the browser check no longer opens the mobile menu.
 - Other pages are out of scope and were not re-measured in this revision. In the earlier repro they still scrolled sideways: `/audio` 538px, `/audio/services` 502px, `/services` 453px outside the diagram, `/writing` 400px, measured at 375px.
 - The site pins `html { font-size: 16px }`, so a visitor's browser default text size does not enlarge the site's text. This is a separate owner decision.
-- Production behaviour after an authorized merge.
+- Production behaviour after an authorized merge: partly checked (see section 7). Only 390px was checked live.
 
 ## 1. Purpose and content
 
-- **PASS · Project, branch, changes, instructions and audience.** One branch from `origin/main`, merged, with the scope above. Deployment authorization: not given by this record.
+- **PASS · Project, branch, changes, instructions and audience.** One branch from `origin/main`, merged, with the scope above. Deployment authorization: not given by this record; the owner authorized the merge in conversation on 2026-11-13 local time ("Yes, merge #263").
 - **PASS · Approved design and truthful claims.** The closing button's wrapped label is the owner's choice from two renders. No professional claim, copy or image changes.
 - **N/A · Explanatory copy.** No copy changes.
 - **N/A · First screen and next step.** Layout only; the first screen and CTA are unchanged at the default text size.
@@ -202,8 +202,8 @@ UNVERIFIED until checked:
 - **N/A · Bindings, secrets, migrations.** None change.
 - **N/A · HTTPS, host routing, cache behaviour and response headers.** No route, header, redirect, host or cache change.
 - **PASS · Rollback version.** `origin/main`'s tip when `1211dc25` merged it, `7f28f299` (see the header). Re-check `origin/main` at merge time.
-- **UNVERIFIED · Production verification after deploy.** To be done after an authorized merge: `/work` and the closing panel at 320px and 375px, with enlarged text, and the footer on an audio host page.
-- **PASS · Receipt and evidence.** This record. Status: CI run `43520072156` failed on `abe5fe28`; this revision fixes the cause locally and passes the checks above; the browser check passes on this revision locally; CI has not yet run on this revision; not deployed; not verified live.
+- **UNVERIFIED · Production verification after deploy.** Partly done. Merged to `main` on 2026-11-14 00:07:58 UTC as `8eab5f4d`, and the production build succeeded. Live check by the coordinating session on 2026-11-14, minutes after the merge, in Chromium (its built-in browser) on `https://thesuperhuman.us/work` at 390px wide. At the default text size: document 390px wide, the closing button's label on one line, the button inside the panel's content box, both diagram flows on one row. With the root font size doubled by script: document 390px wide (no horizontal scroll), the label on two lines with the arrow beside it, the button inside the panel's content box, both diagram flows stacked. `https://thesuperhuman.us/work`, `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` returned 200. Not checked live (UNVERIFIED): other widths (including 320px and 375px), the footer on an audio host page at enlarged text, Firefox and Safari text-only zoom, a real phone, and the rest of the post-deployment check (served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring). This record does not by itself authorize deployment.
+- **PASS · Receipt and evidence.** This record. Status: CI run `43520072156` failed on `abe5fe28`; the cause was fixed and the checks above pass locally; on the final head `0c627ebb` CI passed (Screenshots run 43529715648, "Check large text reflow" step passed) and Greptile succeeded; deployed (merged 2026-11-14 00:07:58 UTC as `8eab5f4d`, production build succeeded); verified live in part (390px on `/work` only, Chromium with a script-doubled root); other widths, other engines, a real phone and the rest of the post-deployment check are not checked.
 
 ## 8. Private owner center
 
@@ -211,8 +211,7 @@ UNVERIFIED until checked:
 
 ## Remaining work
 
-- An independent review of this revision (correctness and security, and UI, copy and rules).
-- CI green on the PR head with the "Check large text reflow" step passing; Greptile and Codex reviews on the head.
+- Done: CI green on the final head `0c627ebb` with the "Check large text reflow" step passing; the Greptile check succeeded; Codex's reviews of `44412e3a` (identical code) found no issues (see CI status). Merged 2026-11-14 00:07:58 UTC as `8eab5f4d`.
 - Firefox, Safari, a real phone, and text above 200% (UNVERIFIED above).
 - Owner decisions: the arrow after "Support" when the next part stacks below it, the "After ·" dot at a line end, and the three-line case if any width needs it.
-- Production check after an authorized merge (section 7). Merging deploys production.
+- Rest of the production check (section 7): other widths in production (only 390px was checked live), the audio host page at enlarged text, Firefox and Safari text-only zoom, a real phone, and the post-deployment items (served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring). UNVERIFIED. The limits already recorded stay: other pages are out of scope, words that cannot fit a line still split, and the root is pinned at 16px.

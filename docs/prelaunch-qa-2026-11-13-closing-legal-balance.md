@@ -39,16 +39,22 @@ Local runs on macOS arm64, Node 26.13.1, pnpm 12.20.0, on the branch after the t
 - The PR's Screenshots workflow run 43493217578 on head `676cbad3` succeeded. It captures 390px and 1280px; at both the line is a single line, so it is unchanged there.
 - Independent review on head `ded6b517` by two Claude Sonnet subagents on 2026-11-13. Correctness review: clean (the rule is scoped to the one paragraph by Astro; both footer variants and the audio host wrapper render it; the global `p { text-wrap: pretty }` in `src/styles/global.css` is overridden by the scoped class; a browser without support wraps as before; the built CSS keeps the declaration). Rules review: found no code or rule defect and asked for the documentation changes made in this commit.
 
+Merge, reviews and live check, observed by the coordinating session:
+
+- Before merge, on the final head `34c2a16a`: `validate` and `capture` succeeded, the Greptile check succeeded, and Codex's code and security reviews of that head found no issues.
+- The owner authorized merging in conversation on 2026-11-13 ("Yes"). Merged 2026-11-13 20:27:49 UTC as `c786f38b`. The production build succeeded (checked on `fad7694e`, the merge commit that followed seconds later and contains it).
+- Live check on 2026-11-13, a few minutes after the merges, in Chromium (the coordinating session's built-in browser) at 320px wide: on `https://thesuperhuman.us/work` and on `https://audio.thesuperhuman.us/` the legal line's computed `text-wrap` is `balance`, it renders as two lines of 116px and 117px ("The Superhuman" / "Group LLC · 2026"), and the document is 320px wide (no horizontal scroll). `https://thesuperhuman.us/` and `/work` returned 200 and a missing page returned 404.
+
 UNVERIFIED until checked:
 
 - A second browser engine (Safari, Firefox), and a real phone. The rendering above is Chromium only.
-- 200% text size.
+- 200% text size at the time of this PR. A later PR, #263, addressed enlarged text in the closing panel.
 - A browser without `text-wrap: balance` support. There the line wraps as it does today (the orphaned "· 2026" returns). This is acceptable.
 - Hallmark audit: run read-only from source by an independent reviewer on 2026-11-13: no defects (muted text on the panel is 7.6:1 at 14px; only the `--muted` token is used; the line is not clickable; the six `design:check` gates pass). The audit's missing-stamp findings are set aside as `docs/design-standard.md` says. No new design choice beyond the approved option B. The wrap at 320px, 390px and 1280px and horizontal overflow were then checked on this branch in Chromium (see Evidence). Not run, and still UNVERIFIED: contrast in context, the visual slop test and the structural fingerprint.
 
 ## 1. Purpose and content
 
-- **PASS · Project, branch, changes, instructions and audience.** One branch from `origin/main`; one CSS property and its test. Deployment authorization: not given by this record.
+- **PASS · Project, branch, changes, instructions and audience.** One branch from `origin/main`; one CSS property and its test. Deployment authorization: not given by this record; the owner authorized the merge in conversation on 2026-11-13.
 - **PASS · Approved design and truthful claims.** The look is the owner's option B. No professional claim changes, no copy changes, no images.
 - **N/A · Explanatory copy.** No copy changes.
 - **N/A · First screen and next step.** Not changed.
@@ -91,8 +97,8 @@ UNVERIFIED until checked:
 - **N/A · Bindings, secrets, migrations.** None change.
 - **N/A · HTTPS, host routing, cache behaviour and response headers.** No route, header, redirect, host or cache change.
 - **PASS · Rollback version.** `88551410`.
-- **UNVERIFIED · Production verification after deploy.** To be done after an authorized merge: the footer on an invitation page and a quiet page at 320px, and the audio host.
-- **PASS · Receipt and evidence.** This record. Status: implemented; tests, typecheck and build pass locally; the rendering on this branch was viewed locally in Chromium at 320px, 390px and 1280px; other browsers, a real phone and 200% text size are not checked; not deployed; not verified live.
+- **UNVERIFIED · Production verification after deploy.** Partly done on 2026-11-13 (see Evidence): the legal line on `https://thesuperhuman.us/work` and on `https://audio.thesuperhuman.us/` at 320px in Chromium, and the 200 and 404 responses named there. Not done: the served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring, and a quiet-footer page.
+- **PASS · Receipt and evidence.** This record. Status: implemented; tests, typecheck and build pass locally; the rendering on this branch was viewed locally in Chromium at 320px, 390px and 1280px; CI checks succeeded on the final head; deployed (merged 2026-11-13 20:27:49 UTC as `c786f38b`, production build succeeded); verified live in part (the 320px legal line check above, Chromium only); other browsers, a real phone and the rest of the post-deployment check are not checked.
 
 ## 8. Private owner center
 
@@ -100,8 +106,8 @@ UNVERIFIED until checked:
 
 ## Remaining work
 
-- CI green on the final head, and Greptile and Codex reviews.
-- A second browser engine, a real phone, a browser without `text-wrap: balance` support and 200% text size (UNVERIFIED above).
-- Production check after an authorized merge (section 7).
+- Done: CI green on the final head `34c2a16a`, and Greptile and Codex reviews with no findings (see Evidence).
+- A second browser engine, a real phone, a browser without `text-wrap: balance` support and 200% text size at the time of this PR (UNVERIFIED above; a later PR, #263, addressed enlarged text in the closing panel).
+- The rest of the production check (section 7): served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring. UNVERIFIED.
 - The branch preview is behind Cloudflare Access, so the coordinating session could not open it.
 - Note for design: `design.md` says "Headings balance; prose wraps `pretty`". The legal line is a paragraph, not a heading, and is now balanced. The owner approved this. `design.md` now records the one exception: the closing panel's LLC line balances (Nov 13 decision). It grants no general permission.
