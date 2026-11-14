@@ -99,6 +99,17 @@ function logged(error: Error) {
 	return lines[0];
 }
 
+/** The error a call throws, which a test needs as a real instance. */
+function thrown(run: () => unknown): Error {
+	try {
+		run();
+	} catch (error) {
+		if (error instanceof Error) return error;
+	}
+
+	throw new Error("the call did not throw an error");
+}
+
 const quoting: [string, () => Error][] = [
 	[
 		"a Stripe invalid request error",
@@ -126,35 +137,18 @@ const quoting: [string, () => Error][] = [
 	],
 	[
 		"a JSON parse error",
-		() => {
-			try {
-				JSON.parse('{"email":"grace@example.test",');
-			} catch (error) {
-				return error as Error;
-			}
-
-			throw new Error("unreachable");
-		},
+		() => thrown(() => JSON.parse('{"email":"grace@example.test",')),
 	],
 	[
 		"a Zod error",
-		() => {
-			const read = z.enum(["a"]).safeParse("grace@example.test");
-
-			return read.error as Error;
-		},
+		() => thrown(() => z.enum(["a"]).parse("grace@example.test")),
 	],
 	[
 		"an Effect schema error",
-		() => {
-			try {
-				Schema.decodeUnknownSync(Schema.Literal("a"))("grace@example.test");
-			} catch (error) {
-				return error as Error;
-			}
-
-			throw new Error("unreachable");
-		},
+		() =>
+			thrown(() =>
+				Schema.decodeUnknownSync(Schema.Literal("a"))("grace@example.test"),
+			),
 	],
 	["a refused form", () => new FieldsRefused({ email: "grace@example.test" })],
 ];
