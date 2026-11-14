@@ -553,9 +553,9 @@ it("answers 503 with the temporary sentence when the captcha service cannot be r
 		error:
 			"Sending is temporarily unavailable. Your details are still here. Please try again later.",
 	});
-	expect(
-		sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get(),
-	).toEqual({ n: 0 });
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{ n: 0 },
+	);
 });
 
 it("still alerts the owner when clearing the counter fails after a storage failure", async () => {

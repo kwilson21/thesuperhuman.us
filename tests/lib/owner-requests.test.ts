@@ -68,9 +68,7 @@ describe("owner requests", () => {
 		});
 
 		expect(reads).toEqual([]);
-		expect(request).toEqual(
-			await getOwnerRequest(db, request.id),
-		);
+		expect(request).toEqual(await getOwnerRequest(db, request.id));
 	});
 
 	it("stores a request and its creation audit atomically", async () => {
