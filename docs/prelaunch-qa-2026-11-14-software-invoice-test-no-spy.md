@@ -32,7 +32,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch and scope: see the header and Scope. Deployment authorization: see Owner decisions.
+- PASS, 1.1 Project, branch and scope: see the header and Scope. UNVERIFIED, deployment authorization: the owner's approval covers the tests-only change; merging follows the owner's standing rule for a complete pull request, and this record does not authorize it.
 - N/A, 1.2 to 1.5: no page, copy, media, link or route changed.
 
 ### 2. Search and sharing
