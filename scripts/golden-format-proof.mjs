@@ -72,7 +72,9 @@ const layout = (effects) =>
 
 /**
  * Compares a format 4 case with its format 5 recording as ALLOWED_PHASES says. Returns the counts of what changed, and
- * pushes a problem for the first thing that is not allowed.
+ * pushes a problem for the first thing that is not allowed. Each rule is per step: a relabel is allowed only as a suffix
+ * of its step (in the later recording), and the digest at the response and the state of a waitUntil entry may differ only
+ * in a step that holds a relabel. Counts that do not match are a problem, never a thrown error.
  */
 function provePhases(old, next, problems) {
 	const stats = { relabelled: 0, atResponse: 0, waitUntilState: 0, moved: 0 };
@@ -90,12 +92,34 @@ function provePhases(old, next, problems) {
 		return fail(error instanceof Error ? error.message : String(error));
 	}
 
+	if (old.steps.length !== next.steps.length)
+		return fail(`${old.steps.length} steps before, ${next.steps.length} after`);
+
 	if (old.effects.length !== next.effects.length)
 		return fail(
 			`${old.effects.length} effects before, ${next.effects.length} after`,
 		);
 
-	/** Whether the later phase is allowed; counts a relabel. */
+	const effectsOld = old.effects.filter((effect) => !isWritten(effect));
+	const effectsNext = next.effects.filter((effect) => !isWritten(effect));
+	const writtenOld = old.effects.filter(isWritten);
+	const writtenNext = next.effects.filter(isWritten);
+
+	if (effectsOld.length !== effectsNext.length)
+		return fail(
+			`${effectsOld.length} effects before, ${effectsNext.length} after, not counting the lines the route writes`,
+		);
+
+	if (writtenOld.length !== writtenNext.length)
+		return fail(
+			`${writtenOld.length} lines written by the route before, ${writtenNext.length} after`,
+		);
+
+	/** The steps that hold a relabelled entry, and the later entries that were relabelled. */
+	const relabelledSteps = new Set();
+	const relabelled = new Set();
+
+	/** Whether the later phase is allowed; counts a relabel and records it. */
 	const phaseOk = (before, after) => {
 		if (before.phase === after.phase) return true;
 
@@ -103,12 +127,11 @@ function provePhases(old, next, problems) {
 			return false;
 
 		stats.relabelled += 1;
+		relabelledSteps.add(before.step);
+		relabelled.add(after);
 
 		return true;
 	};
-
-	const effectsOld = old.effects.filter((effect) => !isWritten(effect));
-	const effectsNext = next.effects.filter((effect) => !isWritten(effect));
 
 	for (const [index, effect] of effectsOld.entries()) {
 		const after = effectsNext[index];
@@ -122,25 +145,15 @@ function provePhases(old, next, problems) {
 			);
 	}
 
-	const writtenOld = old.effects.filter(isWritten);
-	const writtenNext = next.effects.filter(isWritten);
-
 	for (const [index, effect] of writtenOld.entries()) {
 		const after = writtenNext[index];
-		const { state: was, ...before } = withoutPhase(effect);
-		const { state: now, ...later } = withoutPhase(after);
+		const { state: _was, ...before } = withoutPhase(effect);
+		const { state: _now, ...later } = withoutPhase(after);
 
 		if (json(before) !== json(later))
 			return fail(
-				`line ${index} (${effect.kind}) differs beyond its phase and place`,
+				`line ${index} (${effect.kind}) differs beyond its phase, state and place`,
 			);
-
-		if (json(was) !== json(now)) {
-			if (effect.kind !== "waitUntil")
-				return fail(`line ${index} (${effect.kind}) has another state`);
-
-			stats.waitUntilState += 1;
-		}
 
 		if (!phaseOk(effect, after))
 			return fail(
@@ -148,7 +161,63 @@ function provePhases(old, next, problems) {
 			);
 	}
 
-	if (layout(old.effects) !== layout(next.effects)) stats.moved += 1;
+	// A relabelled effect must be followed, in the later recording, only by background effects of its step.
+	const flippedSteps = new Set();
+
+	for (const entry of next.effects) {
+		if (relabelled.has(entry)) flippedSteps.add(entry.step);
+		else if (flippedSteps.has(entry.step) && entry.phase !== "background")
+			return fail(
+				`step ${entry.step}: a ${entry.kind} after a relabelled effect is still request, so the relabelled effects are not a suffix of the step`,
+			);
+	}
+
+	// A line the route wrote may sit anywhere within its own step: no effect of an earlier step after it, none of a later step before it.
+	const stepsBefore = [];
+	const stepsAfter = [];
+	let highest = Number.NEGATIVE_INFINITY;
+
+	for (const entry of next.effects) {
+		stepsBefore.push(highest);
+
+		if (!isWritten(entry)) highest = Math.max(highest, entry.step);
+	}
+
+	let lowest = Number.POSITIVE_INFINITY;
+
+	for (const entry of next.effects.toReversed()) {
+		stepsAfter.unshift(lowest);
+
+		if (!isWritten(entry)) lowest = Math.min(lowest, entry.step);
+	}
+
+	for (const [position, entry] of next.effects.entries()) {
+		if (!isWritten(entry)) continue;
+
+		if (stepsBefore[position] > entry.step || stepsAfter[position] < entry.step)
+			return fail(
+				`line ${entry.kind} at step ${entry.step} sits outside its own step`,
+			);
+	}
+
+	// The states of waitUntil entries and the digests at the response may change only in a step that holds a relabel.
+	for (const [index, effect] of writtenOld.entries()) {
+		const after = writtenNext[index];
+
+		if (json(effect.state) === json(after.state)) continue;
+
+		if (effect.kind !== "waitUntil")
+			return fail(`line ${index} (${effect.kind}) has another state`);
+
+		if (!relabelledSteps.has(effect.step))
+			return fail(
+				`waitUntil ${index} changed its state in step ${effect.step}, which holds no relabelled effect`,
+			);
+
+		stats.waitUntilState += 1;
+	}
+
+	const atResponseChanged = [];
 
 	for (const [index, step] of old.steps.entries()) {
 		const after = next.steps[index];
@@ -158,8 +227,19 @@ function provePhases(old, next, problems) {
 		if (json({ ...step, digest: before }) !== json({ ...after, digest: later }))
 			return fail(`step ${index} differs beyond its digest at the response`);
 
-		if (json(was) !== json(now)) stats.atResponse += 1;
+		if (json(was) !== json(now)) atResponseChanged.push(index);
 	}
+
+	for (const index of atResponseChanged) {
+		if (!relabelledSteps.has(index))
+			return fail(
+				`step ${index}: the digest at the response changed, but no effect of the step was relabelled`,
+			);
+
+		stats.atResponse += 1;
+	}
+
+	if (layout(old.effects) !== layout(next.effects)) stats.moved += 1;
 
 	const { effects: _a, steps: _b, format: _c, ...restOld } = old;
 	const { effects: _d, steps: _e, format: _f, ...restNext } = next;

@@ -458,4 +458,168 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 			),
 		).toHaveLength(1);
 	});
+
+	describe("the allowances are per step and exact", () => {
+		const later = (effect: JsonObject) => ({ ...effect, phase: "background" });
+
+		const twoSteps = () => [
+			step(digestOf("m", ["a"])),
+			step(digestOf("m", ["a"])),
+		];
+
+		it("rejects a relabelled first read with its later requests left as request, even with a changed digest at the response", () => {
+			const reads = [
+				d1("SELECT 1", 0),
+				d1("SELECT 2", 0),
+				mail(stateOf("m", ["a"])),
+			];
+
+			const got = proveFixture(
+				[four(reads)],
+				[
+					five([later(reads[0]), reads[1], reads[2]], {
+						steps: [step(digestOf("zeros", ["a"]))],
+					}),
+				],
+			);
+
+			expect(got).toHaveLength(1);
+			expect(got[0]).toContain("not a suffix");
+		});
+
+		it("accepts the same relabel when everything after it in its step is background", () => {
+			const reads = [d1("SELECT 1", 0), d1("SELECT 2", 0)];
+
+			expect(proveFixture([four(reads)], [five(reads.map(later))])).toEqual([]);
+		});
+
+		it("rejects a changed digest at the response in a step that holds no relabel", () => {
+			const got = proveFixture(
+				[four(log("request"), { steps: twoSteps() })],
+				[
+					five(log("request"), {
+						steps: [
+							step(digestOf("m", ["a"])),
+							step(digestOf("changed", ["a"])),
+						],
+					}),
+				],
+			);
+
+			expect(got).toHaveLength(1);
+			expect(got[0]).toContain("step 1");
+		});
+
+		it("rejects a waitUntil state that changes in a step that holds no relabel", () => {
+			const entry = (state: JsonObject, at: number) => ({
+				kind: "waitUntil",
+				id: 1,
+				step: at,
+				phase: "request",
+				state,
+			});
+
+			const got = proveFixture(
+				[
+					four([entry(stateOf("m", ["a"]), 0), mail(stateOf("m", ["a"]))], {
+						steps: twoSteps(),
+					}),
+				],
+				[
+					five([entry(stateOf("n", ["a"]), 0), mail(stateOf("m", ["a"]))], {
+						steps: twoSteps(),
+					}),
+				],
+			);
+
+			expect(got).toHaveLength(1);
+			expect(got[0]).toContain("no relabelled effect");
+		});
+
+		it("rejects a waitUntil entry whose other content changed", () => {
+			const entry = (id: number) => ({
+				kind: "waitUntil",
+				id,
+				step: 0,
+				phase: "request",
+				state: stateOf("m", ["a"]),
+			});
+
+			expect(
+				proveFixture(
+					[four([entry(1), mail(stateOf("m", ["a"]))])],
+					[five([entry(2), mail(stateOf("m", ["a"]))])],
+				),
+			).toHaveLength(1);
+		});
+
+		it("rejects a written line whose content changed while it moved", () => {
+			const entry = (id: number) => ({
+				kind: "waitUntil",
+				id,
+				step: 0,
+				phase: "request",
+				state: stateOf("m", ["a"]),
+			});
+
+			expect(
+				proveFixture(
+					[four([mail(stateOf("m", ["a"])), entry(1)])],
+					[five([entry(2), mail(stateOf("m", ["a"]))])],
+				),
+			).toHaveLength(1);
+		});
+
+		it("rejects a non-written effect that was reordered", () => {
+			const reads = [d1("SELECT 1", 0), d1("SELECT 2", 0)];
+
+			expect(
+				proveFixture([four(reads)], [five([reads[1], reads[0]])]),
+			).toHaveLength(1);
+		});
+
+		it("rejects a written line that left its own step, without throwing", () => {
+			const entry = {
+				kind: "waitUntil",
+				id: 1,
+				step: 1,
+				phase: "request",
+				state: stateOf("m", ["a"]),
+			};
+
+			const got = proveFixture(
+				[four([mail(stateOf("m", ["a"])), entry], { steps: twoSteps() })],
+				[five([entry, mail(stateOf("m", ["a"]))], { steps: twoSteps() })],
+			);
+
+			expect(got).toHaveLength(1);
+			expect(got[0]).toContain("outside its own step");
+		});
+
+		it("reports a count mismatch of the lines the route wrote as a problem, not a thrown error", () => {
+			const entry = {
+				kind: "waitUntil",
+				id: 1,
+				step: 0,
+				phase: "request",
+				state: stateOf("m", ["a"]),
+			};
+
+			const line = { ...entry, kind: "console", level: "error", args: [] };
+
+			expect(() =>
+				proveFixture(
+					[four([entry, mail(stateOf("m", ["a"])), line])],
+					[five([entry, mail(stateOf("m", ["a"])), mail(stateOf("m", ["a"]))])],
+				),
+			).not.toThrow();
+
+			expect(
+				proveFixture(
+					[four([entry, mail(stateOf("m", ["a"])), line])],
+					[five([entry, mail(stateOf("m", ["a"])), mail(stateOf("m", ["a"]))])],
+				),
+			).toHaveLength(1);
+		});
+	});
 });
