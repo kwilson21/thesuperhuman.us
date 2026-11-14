@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CookieJar } from "../helpers/cookie-jar";
 import { double, partial } from "../helpers/doubles";
 import { boundStatement, fakeBatch } from "../helpers/d1";
 import { readJson } from "../helpers/json";
@@ -124,6 +125,40 @@ async function enter(code: string, sent: Sent = {}, who = address) {
 	);
 }
 
+/** A browser: it sends the cookies it holds and keeps what each response sets, as a real one does. */
+function browser(origin = originOf) {
+	const jar = new CookieJar();
+
+	return {
+		jar,
+		async ask(who = address, sent: Sent = {}) {
+			const url = `${origin}/api/studio/code`;
+
+			const response = await ask(
+				{ ...sent, origin, cookie: jar.headerFor(url) },
+				who,
+			);
+
+			jar.apply(response, url);
+
+			return response;
+		},
+		async enter(code: string, who = address, sent: Sent = {}) {
+			const url = `${origin}/api/studio/session`;
+
+			const response = await enter(
+				code,
+				{ ...sent, origin, cookie: jar.headerFor(url) },
+				who,
+			);
+
+			jar.apply(response, url);
+
+			return response;
+		},
+	};
+}
+
 const allowanceRows = () =>
 	sql.prepare("SELECT COUNT(*) AS n FROM audio_client_allowances").get();
 
@@ -191,9 +226,8 @@ describe("the pending sign-in cookie", () => {
 		);
 
 		expect(entered.status).toBe(200);
-		expect(entered.headers.getSetCookie()[1]).toBe(
-			"studio_pending=; Path=/api/studio; HttpOnly; SameSite=Lax; Max-Age=0",
-		);
+		expect(entered.headers.getSetCookie()).toHaveLength(1);
+		expect(entered.headers.getSetCookie()[0]).toMatch(/^studio_session=/);
 	});
 
 	it("ignores an unprefixed cookie over https, so a planted one cannot stand in for the real one", async () => {
@@ -217,21 +251,21 @@ describe("the pending sign-in cookie", () => {
 		);
 	});
 
-	it("lets the browser that asked sign in, and clears the pending cookie beside the session cookie", async () => {
-		const asked = await ask();
+	it("lets the browser that asked sign in, and leaves the pending cookie to expire", async () => {
+		const you = browser();
 
-		const response = await enter(codeIn(mails[0]), {
-			cookie: `${pendingName}=${nonceFrom(asked)}`,
-		});
+		await you.ask();
+
+		const response = await you.enter(codeIn(mails[0]));
 
 		expect(response.status).toBe(200);
 
+		// Only the session cookie is set. The pending cookie is not cleared: a browser that holds codes for two addresses needs it
+		// for the second sign-in, and it is useless without an emailed code.
 		const cookies = response.headers.getSetCookie();
-		expect(cookies).toHaveLength(2);
+		expect(cookies).toHaveLength(1);
 		expect(cookies[0]).toMatch(/^studio_session=[0-9a-f-]{72};/);
-		expect(cookies[1]).toBe(
-			`${pendingName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure`,
-		);
+		expect(you.jar.get(pendingName)).toMatch(/^[0-9a-f]{64}$/);
 	});
 
 	it("keeps working when the code is typed on another device but sent from the original browser", async () => {
@@ -386,9 +420,10 @@ describe("a browser's own earlier code", () => {
 		sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
       VALUES ('song-2','service','${otherAddress}','Another song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 
-		const first = await ask();
-		const cookie = `${pendingName}=${nonceFrom(first)}`;
-		const second = await ask({ cookie }, otherAddress);
+		const you = browser();
+
+		const first = await you.ask();
+		const second = await you.ask(otherAddress);
 
 		expect(second.status).toBe(200);
 		expect(nonceFrom(second)).toBe(nonceFrom(first));
@@ -399,10 +434,49 @@ describe("a browser's own earlier code", () => {
 		).toEqual([{ email: address }, { email: otherAddress }]);
 
 		// Each code opens its own address, from the same browser.
-		expect((await enter(codeIn(mails[0]), { cookie })).status).toBe(200);
-		expect(
-			(await enter(codeIn(mails[1]), { cookie }, otherAddress)).status,
-		).toBe(200);
+		expect((await you.enter(codeIn(mails[0]))).status).toBe(200);
+		expect((await you.enter(codeIn(mails[1]), otherAddress)).status).toBe(200);
+	});
+
+	it("signs one browser in to both of its addresses, one session each, and refuses a used code again", async () => {
+		sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('song-2','service','${otherAddress}','Another song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
+
+		const you = browser();
+
+		// Request A, request B, sign in to A, then sign in to B.
+		await you.ask(address);
+		await you.ask(otherAddress);
+
+		const codeA = codeIn(mails[0]);
+		const codeB = codeIn(mails[1]);
+
+		const inA = await you.enter(codeA, address);
+		expect(inA.status).toBe(200);
+
+		const inB = await you.enter(codeB, otherAddress);
+		expect(inB.status).toBe(200);
+
+		const sessions = () =>
+			sql
+				.prepare(
+					"SELECT email, COUNT(*) AS n FROM audio_client_sessions GROUP BY email ORDER BY email",
+				)
+				.all();
+
+		expect(sessions()).toEqual([
+			{ email: address, n: 1 },
+			{ email: otherAddress, n: 1 },
+		]);
+
+		// The same cookie with the same code is refused after it was used, and no second session is created.
+		sql.exec("DELETE FROM audio_client_allowances");
+		expect((await you.enter(codeA, address)).status).toBe(401);
+		expect((await you.enter(codeB, otherAddress)).status).toBe(401);
+		expect(sessions()).toEqual([
+			{ email: address, n: 1 },
+			{ email: otherAddress, n: 1 },
+		]);
 	});
 
 	it("keeps the code for the first address whatever the other address is: a project, none, or full", async () => {
@@ -435,13 +509,13 @@ describe("a browser's own earlier code", () => {
 			sql.exec("DELETE FROM audio_client_allowances");
 			mails.length = 0;
 
-			const first = await ask();
-			const cookie = `${pendingName}=${nonceFrom(first)}`;
+			const you = browser();
 
+			await you.ask();
 			prepare();
 			sql.exec("DELETE FROM audio_client_allowances");
-			await ask({ cookie }, toAddress);
-			statuses.push((await enter(codeIn(mails[0]), { cookie })).status);
+			await you.ask(toAddress);
+			statuses.push((await you.enter(codeIn(mails[0]))).status);
 		}
 
 		expect(statuses).toEqual([200, 200]);
@@ -449,7 +523,7 @@ describe("a browser's own earlier code", () => {
 });
 
 describe("two requests on one cookie for different addresses", () => {
-	// The table has one row per cookie value. Two requests from one browser (one cookie value), for two addresses, interleaved
+	// The table has one row per cookie value and address. Two requests from one browser (one cookie value), for two addresses, interleaved
 	// batch by batch, must answer the same whatever the second address is: a database error that only a request that issues can
 	// reach would show that its address has an open project.
 	const cookieValue = "5".repeat(64);

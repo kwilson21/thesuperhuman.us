@@ -189,7 +189,7 @@ export async function issueClientCode(
 		liveCodesPerAddress,
 	);
 
-	// The sweep, and the browser's earlier code for another address: for every answer, and kept when the write below fails.
+	// The sweep of this address's expired rows: for every answer, and kept when the write below fails.
 	await db.batch([
 		// The expired rows of this address that `decideIssue` named, deleted by key. The guard re-checks the decided fact at write
 		// time: a row goes only if it is still expired and still holds the code that was read, so a fresh code another request
@@ -641,10 +641,6 @@ const pendingCookiePath = (secure: boolean) => (secure ? "/" : "/api/studio");
 /** The pending sign-in cookie: set when a code is requested, so only this browser can use the code. */
 export function pendingSignInCookie(nonce: string, secure: boolean): string {
 	return `${pendingCookieName(secure)}=${nonce}; Path=${pendingCookiePath(secure)}; HttpOnly; SameSite=Lax; Max-Age=${codeLifetimeMs / 1000}${secure ? "; Secure" : ""}`;
-}
-
-export function clearPendingSignInCookie(secure: boolean): string {
-	return `${pendingCookieName(secure)}=; Path=${pendingCookiePath(secure)}; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
 /** The browser's pending value, read by the name that fits the request's scheme; the other name is ignored. */

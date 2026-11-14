@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CookieJar } from "../helpers/cookie-jar";
 import { boundStatement } from "../helpers/d1";
 import { double, partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
+import { hashValue, keyedHash } from "~/lib/audio-client-access";
 import { revokeProjectAccess } from "~/lib/audio-project-revocation";
 import {
 	applyStudioRetention,
@@ -18,8 +20,10 @@ import {
 // of the concurrent requests (and of a completion, a revocation or a retention sweep), the test runs the same scenario once per
 // target state (open project, closed, withdrawn, none, full) and asserts that everything the attacker can observe is identical
 // across the target states: each answer's status, body and cookie, the emails sent to the attacker's addresses, and whether each
-// of the attacker's own codes works afterwards. The three-request sets are large, so `pnpm test` runs a deterministic sample of
-// them; set SIGNIN_EXHAUSTIVE=1 for every ordering.
+// of the attacker's own codes works afterwards. It also compares the state the attacker owns or can affect: the attacker's code rows
+// (attempts, used, expired), its sessions, the audit entries of its own projects and its allowance counters. A browser is a cookie
+// jar: every Set-Cookie of a response is applied to the next request, as a real browser does. The three-request sets are large, so
+// `pnpm test` runs a deterministic sample of them; set SIGNIN_EXHAUSTIVE=1 for every ordering (about ten minutes, and not run in CI).
 
 const exhaustive = process.env.SIGNIN_EXHAUSTIVE === "1";
 
@@ -56,6 +60,7 @@ let db: D1Database;
 let mails: { to: string; text: string }[] = [];
 let background: Promise<unknown>[] = [];
 let ipCounter = 0;
+let jars = new Map<string, CookieJar>();
 
 function addProject(id: string, email: string, status = "new") {
 	sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
@@ -97,6 +102,7 @@ function fresh() {
 	mails = [];
 	background = [];
 	ipCounter = 0;
+	jars = new Map();
 }
 
 // ---- the scheduler: a script of labels; a step runs only when its label is next ----
@@ -159,6 +165,18 @@ function scripted(who: string, gated = true) {
 	});
 }
 
+/** The browser that first held the cookie value `label`; it keeps what each response sets. A request with no label is a new browser. */
+const jarOf = (label: string) => {
+	let jar = jars.get(label);
+
+	if (!jar) {
+		jar = new CookieJar({ [PN]: label });
+		jars.set(label, jar);
+	}
+
+	return jar;
+};
+
 function context(
 	path: string,
 	body: Record<string, string>,
@@ -170,7 +188,7 @@ function context(
 		"content-type": "application/json",
 	});
 
-	if (cookie) headers.set("cookie", `${PN}=${cookie}`);
+	if (cookie) headers.set("cookie", cookie);
 	headers.set("cf-connecting-ip", `198.51.100.${(ipCounter++ % 250) + 1}`);
 
 	return partial<APIContext>({
@@ -200,19 +218,36 @@ function context(
 	});
 }
 
+async function send(
+	path: string,
+	body: Record<string, string>,
+	label: string | undefined,
+	database: D1Database,
+) {
+	const url = `${ORIGIN}${path}`;
+	const jar = label ? jarOf(label) : undefined;
+	const handler = path.endsWith("/code") ? requestCode : completeCode;
+
+	const response = await handler(
+		context(path, body, jar?.headerFor(url), database),
+	);
+
+	jar?.apply(response.clone(), url);
+
+	return response;
+}
+
 const ask = (
 	who: string,
 	email: string,
 	cookie: string | undefined,
 	gated = true,
 ) =>
-	requestCode(
-		context(
-			"/api/studio/code",
-			{ email, turnstileToken: "ok" },
-			cookie,
-			scripted(who, gated),
-		),
+	send(
+		"/api/studio/code",
+		{ email, turnstileToken: "ok" },
+		cookie,
+		scripted(who, gated),
 	);
 
 const enter = (
@@ -221,15 +256,7 @@ const enter = (
 	code: string,
 	cookie: string | undefined,
 	gated = true,
-) =>
-	completeCode(
-		context(
-			"/api/studio/session",
-			{ email, code },
-			cookie,
-			scripted(who, gated),
-		),
-	);
+) => send("/api/studio/session", { email, code }, cookie, scripted(who, gated));
 
 const flush = async () => {
 	while (background.length) await Promise.all(background.splice(0));
@@ -306,6 +333,8 @@ async function withSchedule<T>(
 
 type Actor = {
 	steps: string[];
+	/** The attacker cannot see this actor's answer (it goes to someone else's browser). */
+	hidden?: boolean;
 	start: (target: string) => Response | void | Promise<Response | void>;
 };
 
@@ -339,6 +368,7 @@ async function observe(
 	responses: (Response | void)[],
 	pairs: [string, string][],
 	sent: string[],
+	target: string,
 ) {
 	const seen: string[] = [];
 
@@ -363,6 +393,51 @@ async function observe(
 		}
 
 	const addresses = [...new Set(pairs.map(([, address]) => address))];
+	const marks = addresses.map(() => "?").join(",");
+
+	// The state the attacker owns or can affect, before its own codes are tried: its code rows (a count of attempts, whether each is
+	// used or expired; the code hashes are random), its sessions, the audit entries of its own projects, and the allowance counters
+	// other than those keyed by the target's address.
+	const now = new Date().toISOString();
+
+	seen.push(
+		`rows=${JSON.stringify(
+			sql
+				.prepare(
+					`SELECT nonce_hash, email, attempts, used_at IS NOT NULL AS used, expires_at<=? AS expired,
+            session_token_hash IS NOT NULL AS signedIn FROM audio_client_signin_codes WHERE email IN (${marks}) ORDER BY nonce_hash, email`,
+				)
+				.all(now, ...addresses),
+		)}`,
+	);
+	seen.push(
+		`sessions=${JSON.stringify(sql.prepare(`SELECT email, COUNT(*) AS n FROM audio_client_sessions WHERE email IN (${marks}) GROUP BY email ORDER BY email`).all(...addresses))}`,
+	);
+	seen.push(
+		`audit=${JSON.stringify(sql.prepare(`SELECT request_id, action FROM audio_client_access_audit WHERE request_id IN (SELECT id FROM owner_requests WHERE email IN (${marks})) ORDER BY id`).all(...addresses))}`,
+	);
+
+	const targetKeys = [
+		await keyedHash(SECRET, `code-email:${target}`),
+		...(await Promise.all(
+			sent.map(async (value) =>
+				keyedHash(
+					SECRET,
+					`session-requester:${target}:${await hashValue(value)}`,
+				),
+			),
+		)),
+	];
+
+	seen.push(
+		`allowances=${JSON.stringify(
+			sql
+				.prepare(
+					`SELECT key, uses FROM audio_client_allowances WHERE key NOT IN (${targetKeys.map(() => "?").join(",")}) ORDER BY key`,
+				)
+				.all(...targetKeys),
+		)}`,
+	);
 
 	seen.push(
 		`mails=${addresses.map((address) => mails.filter((mail) => mail.to === address).length).join(",")}`,
@@ -419,7 +494,15 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 			}
 
 			await flush();
-			seen.set(name, await observe(result, scenario.pairs, scenario.sent));
+			seen.set(
+				name,
+				await observe(
+					result.filter((_, index) => !scenario.actors[index].hidden),
+					scenario.pairs,
+					scenario.sent,
+					ADDR[name],
+				),
+			);
 		}
 
 		if (new Set(seen.values()).size > 1) {
@@ -535,136 +618,220 @@ describe("a request for one address does not change what an attacker sees of ano
 			);
 
 			report(`three requests, two cookies, ${attacker.name}`, result);
+			expect(result.orderings).toBe(exhaustive ? 1680 : 42);
 			expect(result.differing).toBe(0);
 		}, 1_800_000);
 	}
 
-	it("a request racing the client's own entry of its code", async () => {
-		const result = await explore({
-			setup: async () => {
-				await ask("setup", ADDR.client, K1, false);
-			},
-			actors: [
-				request("B", (target) => target, K1),
+	for (const attacker of attackers) {
+		// The attacker holds K1 and a code for its own address (a stranger has no project, so no code, but still asks and sees answers).
+		const setup = async () => {
+			await ask("setup", attacker.own, K1, false);
+		};
+
+		const own = (): [string, string][] => [[K1, attacker.own]];
+
+		it(`a request racing the client's own entry of its code, ${attacker.name}`, async () => {
+			const result = await explore({
+				setup,
+				actors: [
+					request("B", (target) => target, K1),
+					{
+						steps: ["E.cr", "E.cw"],
+						start: async () =>
+							enter(
+								"E",
+								attacker.own,
+								codeIn(
+									mails.find((mail) => mail.to === attacker.own) ?? {
+										text: "0000 0000",
+									},
+								),
+								K1,
+							),
+					},
+				],
+				pairs: own(),
+				sent: [K1],
+			});
+
+			report(`a request racing the attacker's entry, ${attacker.name}`, result);
+			expect(result.differing).toBe(0);
+		}, 120_000);
+
+		it(`a request racing the target's own client signing in, ${attacker.name}`, async () => {
+			const result = await explore(
 				{
-					steps: ["E.cr", "E.cw"],
-					start: async () =>
-						enter(
-							"E",
-							ADDR.client,
-							codeIn(mails.find((mail) => mail.to === ADDR.client)!),
-							K1,
-						),
-				},
-			],
-			pairs: [[K1, ADDR.client]],
-			sent: [K1],
-		});
-
-		report("a request racing the client's entry", result);
-		expect(result.differing).toBe(0);
-	}, 120_000);
-
-	it("a request racing the revocation of the target's project", async () => {
-		const result = await explore({
-			setup: async () => {
-				await ask("setup", ADDR.client, K1, false);
-			},
-			actors: [
-				request("B", (target) => target, K1),
-				atomic("V", async (target) => {
-					const id =
-						target === ADDR.open
-							? "p-open"
-							: target === ADDR.full
-								? "p-full"
-								: undefined;
-
-					if (id) await revokeProjectAccess(db, id, "owner");
-				}),
-			],
-			pairs: [[K1, ADDR.client]],
-			sent: [K1],
-		});
-
-		report("a request racing a revocation of the target's project", result);
-		expect(result.differing).toBe(0);
-	}, 120_000);
-
-	it("a request racing a retention sweep that removes old codes of the target", async () => {
-		const result = await explore({
-			setup: async (target) => {
-				await ask("setup", ADDR.client, K1, false);
-				sql
-					.prepare(
-						`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at) VALUES (?,?,?,0,?,?)`,
-					)
-					.run(
-						"old-row",
-						target,
-						"old",
-						"2020-01-01T00:00:00.000Z",
-						"2020-01-01T00:10:00.000Z",
-					);
-			},
-			actors: [
-				request("B", (target) => target, K1),
-				atomic("T", async () => {
-					const database = {
-						query: async (query: string) =>
-							sql
-								.prepare(query)
-								.all()
-								.map((row) => ({ ...row })),
-						batch: async (statements: string[]) => {
-							sql.exec("BEGIN");
-
-							try {
-								const result = statements.map((statement) =>
-									sql.prepare(statement).all(),
-								);
-
-								sql.exec("COMMIT");
-
-								return result;
-							} catch (error) {
-								sql.exec("ROLLBACK");
-								throw error;
-							}
+					setup: async (target) => {
+						await setup();
+						await ask("setup", target, K2, false);
+					},
+					actors: [
+						request("A", () => attacker.own, K1),
+						request("B", (target) => target, K1),
+						{
+							// The target's client enters its own code from its own browser (K2); there is none for a closed or empty target.
+							steps: ["O.cr", "O.cw"],
+							hidden: true,
+							start: async (target) =>
+								enter(
+									"O",
+									target,
+									codeIn(
+										mails.find((mail) => mail.to === target) ?? {
+											text: "0000 0000",
+										},
+									),
+									K2,
+								),
 						},
-					};
+					],
+					pairs: own(),
+					sent: [K1, K2],
+				},
+				exhaustive ? 1 : 8,
+			);
 
-					const storage = {
-						accountId: null,
-						databaseId: "local-music",
-						bucket: "local-audio",
-						jurisdiction: null,
-					};
+			report(`a request racing the target's client, ${attacker.name}`, result);
+			expect(result.orderings).toBe(exhaustive ? 560 : 70);
+			expect(result.differing).toBe(0);
+		}, 1_800_000);
 
-					const review = await previewStudioRetention(
-						database,
-						"Local test data",
-						storage,
-						new Date(),
-					);
+		it(`a request racing the revocation of the target's project, ${attacker.name}`, async () => {
+			const result = await explore({
+				setup,
+				actors: [
+					request("B", (target) => target, K1),
+					atomic("V", async (target) => {
+						const id =
+							target === ADDR.open
+								? "p-open"
+								: target === ADDR.full
+									? "p-full"
+									: undefined;
 
-					await applyStudioRetention(
-						database,
-						review,
-						"Local test data",
-						storage,
-						async () => {},
-						new Date(),
-					);
-				}),
-			],
-			pairs: [[K1, ADDR.client]],
-			sent: [K1],
-		});
+						if (id) await revokeProjectAccess(db, id, "owner");
+					}),
+				],
+				pairs: own(),
+				sent: [K1],
+			});
 
-		report("a request racing a retention sweep", result);
-		expect(result.differing).toBe(0);
-	}, 120_000);
+			report(
+				`a request racing a revocation of the target's project, ${attacker.name}`,
+				result,
+			);
+			expect(result.differing).toBe(0);
+		}, 120_000);
+
+		it(`a request racing a retention sweep that removes old codes of the target, ${attacker.name}`, async () => {
+			const result = await explore({
+				setup: async (target) => {
+					await setup();
+					sql
+						.prepare(
+							`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at) VALUES (?,?,?,0,?,?)`,
+						)
+						.run(
+							"old-row",
+							target,
+							"old",
+							"2020-01-01T00:00:00.000Z",
+							"2020-01-01T00:10:00.000Z",
+						);
+				},
+				actors: [
+					request("B", (target) => target, K1),
+					atomic("T", async () => {
+						const database = {
+							query: async (query: string) =>
+								sql
+									.prepare(query)
+									.all()
+									.map((row) => ({ ...row })),
+							batch: async (statements: string[]) => {
+								sql.exec("BEGIN");
+
+								try {
+									const result = statements.map((statement) =>
+										sql.prepare(statement).all(),
+									);
+
+									sql.exec("COMMIT");
+
+									return result;
+								} catch (error) {
+									sql.exec("ROLLBACK");
+									throw error;
+								}
+							},
+						};
+
+						const storage = {
+							accountId: null,
+							databaseId: "local-music",
+							bucket: "local-audio",
+							jurisdiction: null,
+						};
+
+						const review = await previewStudioRetention(
+							database,
+							"Local test data",
+							storage,
+							new Date(),
+						);
+
+						await applyStudioRetention(
+							database,
+							review,
+							"Local test data",
+							storage,
+							async () => {},
+							new Date(),
+						);
+					}),
+				],
+				pairs: own(),
+				sent: [K1],
+			});
+
+			report(`a request racing a retention sweep, ${attacker.name}`, result);
+			expect(result.differing).toBe(0);
+		}, 120_000);
+
+		it(`a request racing the passing of time, ${attacker.name}`, async () => {
+			// The attacker's code expires between two steps of the target's request: a clock step of 11 minutes runs in every position.
+			const start = Date.now();
+
+			try {
+				vi.useFakeTimers({ toFake: ["Date"] });
+				vi.setSystemTime(start);
+
+				const result = await explore({
+					setup: async (target) => {
+						vi.setSystemTime(start);
+						await setup();
+						await ask("setup", target, K2, false);
+					},
+					actors: [
+						request("B", (target) => target, K1),
+						request("A", () => attacker.own, K1),
+						atomic("X", async () => {
+							vi.setSystemTime(start + 11 * 60_000);
+						}),
+					],
+					pairs: own(),
+					sent: [K1, K2],
+				});
+
+				report(`a request racing the clock, ${attacker.name}`, result);
+				expect(result.orderings).toBe(140);
+				expect(result.differing).toBe(0);
+			} finally {
+				vi.useRealTimers();
+			}
+		}, 600_000);
+	}
 });
 
 describe("regression checks from earlier rounds", () => {

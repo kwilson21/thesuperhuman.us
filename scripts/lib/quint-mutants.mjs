@@ -72,6 +72,7 @@ export const signinMutants = {
 	signinNoReplace: { property: "outcomeIndependentOfAddress" },
 	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
 	signinDeleteByCookie: { property: "noCrossAddressEffect" },
+	signinEntryByCookie: { property: "noCrossAddressEffect" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent

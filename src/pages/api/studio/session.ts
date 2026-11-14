@@ -1,7 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import {
-	clearPendingSignInCookie,
 	clientPortalEnabled,
 	completeClientCode,
 	hashValue,
@@ -98,7 +97,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		const secure = new URL(request.url).protocol === "https:";
 		const headers = new Headers();
 		headers.append("set-cookie", studioSessionCookie(token, secure));
-		headers.append("set-cookie", clearPendingSignInCookie(secure));
+		// The pending cookie is left to expire (Max-Age, reset by each code request): a browser that holds codes for two addresses
+		// needs it for the second sign-in. A used code cannot be used again, and the cookie is HttpOnly, random and useless without a code.
 
 		return Response.json({ ok: true }, { headers });
 	} catch {

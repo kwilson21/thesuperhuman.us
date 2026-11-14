@@ -482,20 +482,23 @@ const cases: Case[] = [
 		},
 		steps: [form({ headers: BROWSER })],
 	}),
-	open("a code issued exactly 30 seconds ago is replaced", {
-		music: {
-			seed: mergeSeeds(client, {
-				audio_client_signin_codes: [
-					await codeRow(GRACE, "11111111", {
-						created_at: "2026-11-13T11:59:30.000Z",
-						expires_at: "2026-11-13T12:09:30.000Z",
-						attempts: 4,
-					}),
-				],
-			}),
+	open(
+		"a code issued 30 seconds ago is replaced like any other (there is no pause)",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await codeRow(GRACE, "11111111", {
+							created_at: "2026-11-13T11:59:30.000Z",
+							expires_at: "2026-11-13T12:09:30.000Z",
+							attempts: 4,
+						}),
+					],
+				}),
+			},
+			steps: [form({ headers: BROWSER })],
 		},
-		steps: [form({ headers: BROWSER })],
-	}),
+	),
 	open("a used code issued 5 seconds ago is replaced at once", {
 		music: {
 			seed: mergeSeeds(client, {

@@ -47,6 +47,8 @@ module signinCodes {
   //                          same key collides and the request that issues answers with an error where a refusal answers normally
   //   "sweep-unguarded"      the clean-up deletes the expired rows it read by key without checking that each still holds the code that was
   //                          read, so a code stored under the same key in the gap is deleted
+  //   "entry-by-cookie"      the counted attempt and the sign-in of an entry match the row by the cookie value alone, so the browser's row
+  //                          for the other address is charged and signed in too, and its audit entry is written
   //   "delete-by-cookie"     a request deletes the browser's rows by cookie value alone, whatever the address (the code of the previous four
   //                          rounds): a request for one address changes the fate of a row for another, depending on the first's state
   const MUTANT: str
@@ -113,6 +115,7 @@ module signinCodes {
   var exempt: Set[int]        // browsers that sent two cookie-less requests at once (a ghost; see property 8)
   var open: int -> bool       // address -> its project is open
   var gflights: int -> Guess
+  var audit: int -> int       // address -> audit entries written for its projects (code issued, signed in)
 
   val blank: Row = {
     issued: false, owner: 0, addr: 0, ver: 0, delivered: false, attempts: 0, own: 0, compared: 0,
@@ -147,6 +150,10 @@ module signinCodes {
   pure def foreignChange(before: int -> Row, after: int -> Row, a: int): bool =
     before.keys().exists(i => before.get(i).addr != a and before.get(i).addr != 0 and before.get(i) != after.get(i))
 
+  // Whether a step changed the audit entries of an address other than a.
+  pure def foreignAudit(before: int -> int, after: int -> int, a: int): bool =
+    1.to(2).exists(x => x != a and before.get(x) != after.get(x))
+
   action init = all {
     rows' = 2.to(11).mapBy(_ => blank),
     // Browsers 0 (the client's) and 2 (a stranger) already hold a pending value from an earlier visit; browsers 1 and 3 hold none,
@@ -162,6 +169,7 @@ module signinCodes {
     exempt' = Set(),
     open' = Map(1 -> true, 2 -> true),
     gflights' = 1.to(MAX_GUESSES).mapBy(_ => idleGuess),
+    audit' = Map(1 -> 0, 2 -> 0),
   }
 
   // ---- Asking for a code (code.ts, issueClientCode) ----------------------------------------------------------------
@@ -189,7 +197,7 @@ module signinCodes {
         sOpen: open.get(a), sLiveOthers: liveAt(a).filter(i => i != key(c, a)).size(),
         sExp: expiredAt(a), sExpVer: expiredAt(a).mapBy(i => rows.get(i).ver) }),
       exempt' = if (c == 0 and bareFlight) exempt.union(Set(b)) else exempt,
-      rows' = rows, cookie' = cookie, now' = now, ghost' = ghost, lastIssued' = lastIssued, open' = open, gflights' = gflights
+      rows' = rows, cookie' = cookie, now' = now, ghost' = ghost, lastIssued' = lastIssued, open' = open, gflights' = gflights, audit' = audit
     }
   }
 
@@ -213,7 +221,7 @@ module signinCodes {
       ghost' = { ...ghost,
         badSweep: ghost.badSweep or swept.exists(i => isLive(rows.get(i), now)),
         badFrame: ghost.badFrame or foreignChange(rows, newRows, fl.a) },
-      cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
+      cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights, audit' = audit
     }
   }
 
@@ -264,7 +272,7 @@ module signinCodes {
           rehashed: rows.get(target).rehashed or rows.get(target).owner != b })
       else if (insert) cleared.set(k, fresh)
       else cleared
-    val issuedValue = if (replaceInPlace) rows.get(target).owner else fl.value
+    val newAudit = if (insert or replaceInPlace) audit.set(a, audit.get(a) + 1) else audit
     all {
       fl.phase == "cleared",
       rows' = newRows,
@@ -273,7 +281,8 @@ module signinCodes {
       ghost' = { ...ghost,
         badAudit: ghost.badAudit or (insert and not(open.get(a))),
         badOutcome: ghost.badOutcome or collision,
-        badFrame: ghost.badFrame or foreignChange(rows, newRows, a) },
+        badFrame: ghost.badFrame or foreignChange(rows, newRows, a) or foreignAudit(audit, newAudit, a) },
+      audit' = newAudit,
       cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, exempt' = exempt, open' = open, gflights' = gflights
     }
   }
@@ -283,7 +292,7 @@ module signinCodes {
     flights.get(f).phase == "sent",
     cookie' = if (flights.get(f).err) cookie else cookie.set(flights.get(f).b, flights.get(f).value),
     flights' = flights.set(f, idleFlight),
-    rows' = rows, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
+    rows' = rows, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights, audit' = audit
   }
 
   // A project is closed (by the owner) between a read and the write that relies on it: only a closing in such a gap can change an
@@ -293,7 +302,7 @@ module signinCodes {
     flights.keys().exists(f => flights.get(f).phase != "idle" and flights.get(f).phase != "sent" and flights.get(f).a == a)
       or gflights.keys().exists(g => gflights.get(g).phase == "read" and gflights.get(g).a == a),
     open' = open.set(a, false),
-    rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, gflights' = gflights
+    rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, gflights' = gflights, audit' = audit
   }
 
   // ---- Entering a code (session.ts, completeClientCode) ------------------------------------------------------------
@@ -311,7 +320,7 @@ module signinCodes {
       gflights' = gflights.set(g, {
         phase: "read", b: b, a: a, t: t, right: right, c: c,
         sPresent: r.present, sUsed: r.used, sExp: r.expires, sAtt: r.attempts, sVer: r.ver, sOpen: open.get(a) }),
-      rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open
+      rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, audit' = audit
     }
   }
 
@@ -341,17 +350,29 @@ module signinCodes {
     val bare = MUTANT == "cookie-not-required" and c == 0 and right and accepts(rt, now) and hasAttempts(rt)
     // address-attempts: every guess charges the address's live rows.
     val spread = MUTANT == "address-attempts" and c == 0
+    // entry-by-cookie: the counted attempt and the sign-in match the row by the cookie value alone, so the browser's row for the
+    // other address is charged and signed in too, and its audit entry is written.
+    val otherK = key(c, 3 - fl.a)
+    val byCookie = MUTANT == "entry-by-cookie" and charged and c != 0 and rows.get(otherK).present and rows.get(otherK).issued
+    val rowsCharged = rows.set(k, { ...r, attempts: r.attempts + 1, own: r.own + (if (b == r.owner) 1 else 0),
+      compared: r.compared + 1, used: r.used or success })
+    val newRows =
+      if (charged)
+        (if (byCookie) rowsCharged.set(otherK, { ...rows.get(otherK), attempts: rows.get(otherK).attempts + 1, used: rows.get(otherK).used or success })
+         else rowsCharged)
+      else if (bare)
+        rows.set(t, { ...rt, attempts: rt.attempts + 1, compared: rt.compared + 1, used: true })
+      else if (spread)
+        rows.keys().mapBy(i => if (accepts(rows.get(i), now) and rows.get(i).addr == fl.a) { ...rows.get(i), attempts: rows.get(i).attempts + 1 } else rows.get(i))
+      else rows
+    // A sign-in writes an audit entry for the address's projects (and, for entry-by-cookie, for the other address's too).
+    val newAudit =
+      if (success) (if (byCookie) audit.set(fl.a, audit.get(fl.a) + 1).set(3 - fl.a, audit.get(3 - fl.a) + 1) else audit.set(fl.a, audit.get(fl.a) + 1))
+      else audit
     all {
       fl.phase == "read",
-      rows' =
-        if (charged)
-          rows.set(k, { ...r, attempts: r.attempts + 1, own: r.own + (if (b == r.owner) 1 else 0),
-            compared: r.compared + 1, used: r.used or success })
-        else if (bare)
-          rows.set(t, { ...rt, attempts: rt.attempts + 1, compared: rt.compared + 1, used: true })
-        else if (spread)
-          rows.keys().mapBy(i => if (accepts(rows.get(i), now) and rows.get(i).addr == fl.a) { ...rows.get(i), attempts: rows.get(i).attempts + 1 } else rows.get(i))
-        else rows,
+      rows' = newRows,
+      audit' = newAudit,
       gflights' = gflights.set(g, idleGuess),
       ghost' = { ...ghost,
         noCookieSignIn: ghost.noCookieSignIn or bare,
@@ -359,7 +380,7 @@ module signinCodes {
         clientRejected: ghost.clientRejected or (b == CLIENT and shouldSucceed and not(success)),
         badCharge: ghost.badCharge or (charged and not(sameCode)) or (success and not(sameCode)),
         badAudit: ghost.badAudit or (success and not(open.get(fl.a))),
-        badFrame: ghost.badFrame or bare },
+        badFrame: ghost.badFrame or bare or foreignChange(rows, newRows, fl.a) or foreignAudit(audit, newAudit, fl.a) },
       cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open
     }
   }
@@ -368,7 +389,7 @@ module signinCodes {
   action tick = all {
     now < MAX_NOW,
     now' = now + 1,
-    rows' = rows, cookie' = cookie, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
+    rows' = rows, cookie' = cookie, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights, audit' = audit
   }
 
   // Each step picks only what it can do: an idle slot for a new request, a request in the phase a step needs, a guess that means
@@ -446,8 +467,9 @@ module signinCodes {
   val cookieOpensEmailedCode = 0.to(3).forall(b =>
     (noFlight(b) and not(exempt.contains(b)) and lastIssued.get(b) != 0) implies cookie.get(b) == lastIssued.get(b))
 
-  // 9. Non-interference (a frame property): no step of a request or an entry for one address changes any row, attempt count or code
-  //    of another address, whatever the first address's state is (it has a project, none, it is full, the write lost a race).
+  // 9. Non-interference (a frame property): no step of a request (read, clean-up, write) or of an entry (read, attempt charge, accept)
+  //    for one address changes any row, attempt count or code, or any audit entry, of another address, whatever the first address's
+  //    state is (it has a project, none, it is full, the write lost a race).
   val noCrossAddressEffect = not(ghost.badFrame)
 
   // 10. An attempt is counted on, and a sign-in accepted for, only the code the guess read, never a code issued after it.
@@ -493,3 +515,4 @@ module signinNoCapGuard { import signinCodes(MUTANT = "no-cap-guard").* }
 module signinNoReplace { import signinCodes(MUTANT = "no-replace").* }
 module signinSweepUnguarded { import signinCodes(MUTANT = "sweep-unguarded").* }
 module signinDeleteByCookie { import signinCodes(MUTANT = "delete-by-cookie").* }
+module signinEntryByCookie { import signinCodes(MUTANT = "entry-by-cookie").* }
