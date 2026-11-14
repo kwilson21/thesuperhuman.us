@@ -399,9 +399,11 @@ export async function previewStudioRetention(
 	}
 
 	const codes = await readSource(database, sql.codes);
+
 	const retiredCodes = (await retiredCodesExist(database))
 		? await readSource(database, sql.retiredCodes)
 		: [];
+
 	const sessions = await readSource(database, sql.sessions);
 	const accessAudit = await readSource(database, sql.accessAudit);
 	const projectAudit = await readSource(database, sql.projectAudit);

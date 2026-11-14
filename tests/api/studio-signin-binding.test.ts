@@ -18,6 +18,7 @@ const baseline = readFileSync(
 );
 
 const address = "artist@example.com";
+
 // Over https the cookie uses the __Host- prefix (Secure, Path=/, no Domain), so a sibling subdomain cannot plant or shadow it.
 // Plain-http localhost cannot hold a __Host- cookie, so it keeps the plain name, as the session cookie keeps its attributes.
 const pendingName = "__Host-studio_pending";
@@ -377,6 +378,7 @@ describe("a browser's own earlier code", () => {
       VALUES ('song-2','service','${otherAddress}','Another song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 
 		const first = await ask();
+
 		const second = await ask(
 			{ cookie: `${pendingName}=${nonceFrom(first)}` },
 			otherAddress,
