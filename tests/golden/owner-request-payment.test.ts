@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import type { JsonValue } from "../helpers/json";
 import { POST as webhook } from "~/pages/api/stripe/webhook";
 import { POST } from "~/pages/api/owner/requests/[id]/payment";
@@ -38,7 +37,6 @@ import {
 } from "./harness";
 
 // The Stripe SDK waits about a second between retries of a network failure or a 5xx without a stop header.
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/payment: the owner approves the price of an audio request, records
 // a payment that arrived outside Stripe, or has the site create (or replace a void) booking and balance invoice in Stripe.

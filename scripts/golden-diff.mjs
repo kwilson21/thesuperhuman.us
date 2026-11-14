@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
+import { ranDirectly } from "./ran-directly.mjs";
 
 const DIRECTORY = "tests/golden/fixtures";
 const LIMIT = 200;
@@ -22,7 +23,7 @@ function parse(buffer) {
 	return buffer ? JSON.parse(gunzipSync(buffer).toString("utf8")) : [];
 }
 
-function fromDisk(fixture) {
+export function fromDisk(fixture) {
 	const path = join(process.cwd(), pathOf(fixture));
 
 	return parse(existsSync(path) ? readFileSync(path) : undefined);
@@ -123,6 +124,19 @@ function diff(fixture, from, to) {
 	const names = [...new Set([...before, ...after].map((entry) => entry.name))];
 	let changed = 0;
 
+	const formats = (list) => [
+		...new Set(list.map((entry) => entry.format ?? 1)),
+	];
+
+	if (before.length > 0 && after.length > 0) {
+		const [was, now] = [formats(before), formats(after)];
+
+		if (was.join() !== now.join())
+			console.log(
+				`note: fixture format ${was.join("+")} before, ${now.join("+")} after; fields a newer format adds (format, finalState, digest, trigger-hit entries) are listed as differences below, and golden:neutral cannot compare across formats`,
+			);
+	}
+
 	for (const name of names) {
 		const old = before.find((entry) => entry.name === name);
 		const next = after.find((entry) => entry.name === name);
@@ -197,5 +211,4 @@ function main([mode, fixture, ...rest]) {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`)
-	main(process.argv.slice(2));
+if (ranDirectly(import.meta.url)) main(process.argv.slice(2));

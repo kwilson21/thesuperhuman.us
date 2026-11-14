@@ -1,0 +1,346 @@
+import { describe, expect, it } from "vitest";
+import {
+	proveFixture,
+	proveFixtureDetailed,
+} from "../../scripts/golden-format-proof.mjs";
+import type { JsonObject } from "../helpers/json";
+import {
+	digestOf,
+	finalStateOf,
+	sha,
+	stateOf,
+} from "../helpers/golden-records";
+
+// The proof for the format 3 to 4 re-record: only the table sets, the format number and the counts of reads that now say 0
+// may differ, the later record must have the whole shape format 4 requires, and everything else (trigger-hit entries and
+// the older digests included) is compared exactly.
+
+/** Format 3 recorded the same states without `touched`. */
+const withoutTouched = <T extends { touched: string[] }>(state: T) => {
+	const { touched: _touched, ...rest } = state;
+
+	return rest;
+};
+
+const hit = {
+	kind: "trigger-hit",
+	trigger: "failure",
+	name: "n",
+	db: "M",
+	hits: [{ op: "UPDATE", table: "a", access: "write" }],
+	step: 0,
+	phase: "request",
+};
+
+const d1 = (sql: string, changes: number) => ({
+	kind: "d1",
+	sql,
+	outcome: { rows: 0, changes },
+	step: 0,
+	phase: "request",
+});
+
+const mail = (state: JsonObject) => ({
+	kind: "fetch",
+	url: "https://api.resend.com/emails",
+	step: 0,
+	phase: "request",
+	state,
+});
+
+const step = (digest: JsonObject, extra = {}) => ({
+	request: { path: "/x" },
+	answer: { status: 200 },
+	state: null,
+	digest,
+	...extra,
+});
+
+const oldDigest = () => {
+	const { atResponse, ...rest } = digestOf();
+
+	return { ...rest, atResponse: withoutTouched(atResponse) };
+};
+
+const oldCase = (
+	effects: object[] = [hit, mail(withoutTouched(stateOf())), d1("SELECT 1", 1)],
+) => ({
+	name: "a",
+	format: 3,
+	steps: [step(oldDigest())],
+	effects,
+	final: null,
+	finalState: finalStateOf(),
+});
+
+const newCase = (
+	effects: object[] = [hit, mail(stateOf("m", ["a"])), d1("SELECT 1", 0)],
+	over = {},
+) => ({
+	...oldCase(),
+	format: 4,
+	steps: [step(digestOf("m", ["a"]))],
+	effects,
+	...over,
+});
+
+describe("golden format proof, format 3 to 4", () => {
+	it("accepts a re-record that only added the table sets and zeroed a read's count", () => {
+		expect(proveFixtureDetailed([oldCase()], [newCase()])).toEqual({
+			problems: [],
+			counts: 1,
+			touched: [],
+		});
+	});
+
+	it("an older recorder case, with no format, must be identical", () => {
+		const legacy = {
+			name: "legacy",
+			answers: [],
+			effects: [{ step: 0, kv: "K", op: "get" }],
+		};
+
+		expect(proveFixture([legacy], [legacy])).toEqual([]);
+
+		expect(
+			proveFixture(
+				[legacy],
+				[{ ...legacy, effects: [{ step: 0, kv: "K", op: "put" }] }],
+			),
+		).toHaveLength(1);
+	});
+
+	it("rejects a tampered pre-existing field", () => {
+		const got = proveFixture(
+			[oldCase()],
+			[
+				newCase(undefined, {
+					steps: [step(digestOf("m", ["a"]), { answer: { status: 201 } })],
+				}),
+			],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("steps[0].answer.status");
+	});
+
+	it("compares trigger-hit entries exactly: a changed, removed or added one is rejected", () => {
+		const state = mail(stateOf("m", ["a"]));
+
+		const other = {
+			...hit,
+			hits: [{ op: "SELECT", table: "a", access: "read" }],
+		};
+
+		for (const effects of [
+			[other, state, d1("SELECT 1", 0)],
+			[state, d1("SELECT 1", 0)],
+			[hit, hit, state, d1("SELECT 1", 0)],
+		])
+			expect(proveFixture([oldCase()], [newCase(effects)])).toHaveLength(1);
+	});
+
+	it("compares the older digests exactly: a step digest, an effect state and the final state", () => {
+		const changed = { ...digestOf("m", ["a"]), music: sha("changed") };
+
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase(undefined, { steps: [step(changed)] })],
+			),
+		).toHaveLength(1);
+
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase([hit, mail(stateOf("changed", ["a"])), d1("SELECT 1", 0)])],
+			),
+		).toHaveLength(1);
+
+		expect(
+			proveFixture(
+				[oldCase()],
+				[
+					newCase(undefined, {
+						finalState: { ...finalStateOf(), r2: { k: 1 } },
+					}),
+				],
+			),
+		).toHaveLength(1);
+	});
+
+	it("REQUIRES the fields format 4 mandates: a later record without touched, atResponse or a state is rejected", () => {
+		const noTouched = [hit, mail(withoutTouched(stateOf())), d1("SELECT 1", 0)];
+
+		expect(proveFixture([oldCase()], [newCase(noTouched)])).toHaveLength(1);
+
+		const noAtResponse = { ...digestOf("m", ["a"]), atResponse: undefined };
+
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase(undefined, { steps: [step(noAtResponse)] })],
+			),
+		).toHaveLength(1);
+
+		const noState = [
+			hit,
+			{ ...mail(stateOf()), state: undefined },
+			d1("SELECT 1", 0),
+		];
+
+		expect(proveFixture([oldCase()], [newCase(noState)])).toHaveLength(1);
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase(undefined, { finalState: undefined })],
+			),
+		).toHaveLength(1);
+	});
+
+	it("accepts only a sorted list of table names as the added set, and no other added field", () => {
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase([hit, mail(stateOf("m", ["b", "a"])), d1("SELECT 1", 0)])],
+			),
+		).toHaveLength(1);
+
+		const extra = { ...stateOf("m", ["a"]), more: 1 };
+
+		expect(
+			proveFixture(
+				[oldCase()],
+				[newCase([hit, mail(extra), d1("SELECT 1", 0)])],
+			),
+		).toHaveLength(1);
+		expect(
+			proveFixture([oldCase()], [newCase(undefined, { surprise: true })]),
+		).toHaveLength(1);
+	});
+
+	it("accepts a changed count only for a read that now says 0", () => {
+		const was = (sql: string, changes: number) =>
+			oldCase([hit, mail(withoutTouched(stateOf())), d1(sql, changes)]);
+
+		const now = (sql: string, changes: number) =>
+			newCase([hit, mail(stateOf("m", ["a"])), d1(sql, changes)]);
+
+		expect(proveFixture([was("SELECT 1", 1)], [now("SELECT 1", 0)])).toEqual(
+			[],
+		);
+		expect(
+			proveFixture([was("SELECT 1", 1)], [now("SELECT 1", 2)]),
+		).toHaveLength(1);
+		expect(
+			proveFixture(
+				[was("UPDATE a SET x = 1", 1)],
+				[now("UPDATE a SET x = 1", 0)],
+			),
+		).toHaveLength(1);
+		expect(
+			proveFixture(
+				[was("UPDATE a SET x = 1", 1)],
+				[now("UPDATE a SET x = 1", 2)],
+			),
+		).toHaveLength(1);
+		expect(
+			proveFixture(
+				[was("UPDATE a SET x = 1", 1)],
+				[now("UPDATE a SET x = 1", 1)],
+			),
+		).toEqual([]);
+	});
+
+	it("applies the same rule to the statements of a batch", () => {
+		const batch = (changes: number) => ({
+			kind: "d1-batch",
+			result: "committed",
+			statements: [
+				{ sql: "SELECT 1", args: [], outcome: { rows: 1, changes } },
+			],
+			step: 0,
+			phase: "request",
+		});
+
+		expect(
+			proveFixtureDetailed(
+				[oldCase([hit, mail(withoutTouched(stateOf())), batch(1)])],
+				[newCase([hit, mail(stateOf("m", ["a"])), batch(0)])],
+			),
+		).toEqual({ problems: [], counts: 1, touched: [] });
+	});
+
+	it("rejects a case that is not format 3 before and format 4 after", () => {
+		expect(
+			proveFixture([oldCase()], [newCase(undefined, { format: 3 })]),
+		).toHaveLength(1);
+		expect(
+			proveFixture([{ ...oldCase(), format: 2 }], [newCase()]),
+		).toHaveLength(1);
+	});
+
+	it("rejects a removed, added, renamed or reordered case", () => {
+		expect(proveFixture([oldCase()], [])).not.toEqual([]);
+		expect(proveFixture([oldCase()], [newCase(), newCase()])).not.toEqual([]);
+		expect(
+			proveFixture([oldCase()], [newCase(undefined, { name: "b" })]),
+		).not.toEqual([]);
+	});
+});
+
+describe("golden format proof, format 4 to 4 (the table sets are derived differently)", () => {
+	const four = (touched: string[], over = {}) => ({
+		...newCase([hit, mail(stateOf("m", touched)), d1("SELECT 1", 0)], {
+			steps: [step(digestOf("m", touched))],
+		}),
+		...over,
+	});
+
+	it("accepts a re-record where only the table sets differ, and lists the cases", () => {
+		const got = proveFixtureDetailed([four(["a"])], [four(["a", "b"])]);
+
+		expect(got.problems).toEqual([]);
+		expect(got.touched).toEqual(["a"]);
+	});
+
+	it("accepts an identical re-record with no changed set", () => {
+		expect(proveFixtureDetailed([four(["a"])], [four(["a"])])).toMatchObject({
+			problems: [],
+			touched: [],
+		});
+	});
+
+	it("rejects any other difference: a digest, a state, a trigger-hit, a count, the final state", () => {
+		const base = four(["a"]);
+
+		for (const changed of [
+			four(["a"], {
+				steps: [step({ ...digestOf("m", ["a"]), music: sha("x") })],
+			}),
+			four(["a"], {
+				effects: [hit, mail(stateOf("other", ["a"])), d1("SELECT 1", 0)],
+			}),
+			four(["a"], { effects: [mail(stateOf("m", ["a"])), d1("SELECT 1", 0)] }),
+			four(["a"], {
+				effects: [hit, mail(stateOf("m", ["a"])), d1("SELECT 1", 1)],
+			}),
+			four(["a"], { finalState: { ...finalStateOf(), r2: { k: 1 } } }),
+		])
+			expect(proveFixture([base], [changed])).toHaveLength(1);
+	});
+
+	it("still requires the whole shape of the later record", () => {
+		expect(
+			proveFixture([four(["a"])], [four(["a"], { finalState: undefined })]),
+		).toHaveLength(1);
+	});
+
+	it("a format 4 to 4 pair may not be mixed with a format 3 to 4 count change", () => {
+		const was = four(["a"], {
+			effects: [hit, mail(stateOf("m", ["a"])), d1("SELECT 1", 1)],
+		});
+
+		expect(proveFixture([was], [four(["a"])])).toHaveLength(1);
+	});
+});

@@ -833,6 +833,13 @@ const cases: Case[] = [
 				{ on: NOTICE_CLAIM, message: "d1 down" },
 				{ on: NOTICE_FINAL, message: "d1 down" },
 			],
+			mustNotFire: [
+				{
+					trigger: `d1 failure on ${NOTICE_FINAL}`,
+					reason:
+						"a control: the case claims the final write is never reached, so this failure must stay unused",
+				},
+			],
 		},
 	),
 	// outages and races

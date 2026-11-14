@@ -3,6 +3,7 @@ import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import type { EffectLog } from "./log";
 import { plain, viewOf, type Recorded } from "./plain";
+import type { Triggers } from "./triggers";
 
 /** A value a namespace holds before the case, optionally with a lifetime counted from the start of the case. */
 export type KvSeedValue =
@@ -30,7 +31,11 @@ export type KvSetup = {
 type Held = string | Uint8Array;
 
 /** A value and the time (milliseconds since the epoch, on the case's clock) at which the namespace drops it. */
-type Entry = { held: Held; expiresAt: number | null };
+type Entry = {
+	held: Held;
+	expiresAt: number | null;
+	metadata: string | null;
+};
 
 const isEntry = (
 	value: KvSeedValue,
@@ -51,19 +56,26 @@ function expiryOf(options: {
 }
 
 /** A recording namespace, and what it holds now (keys sorted; bytes as a length and a digest). */
-export type RecordedKv = { binding: KVNamespace; snapshot: () => Recorded };
+export type RecordedKv = {
+	binding: KVNamespace;
+	/** The live keys and their values (what `dump` records). */
+	snapshot: () => Recorded;
+	/** The same, with each key's expiry (milliseconds on the case's clock) and metadata: the whole state. */
+	state: () => Recorded;
+};
 
 export function recordingKv(
 	label: string,
 	setup: KvSetup,
 	log: EffectLog,
+	triggers: Triggers,
 ): RecordedKv {
 	const store = new Map<string, Entry>(
 		Object.entries(setup.seed ?? {}).map(([key, given]) => [
 			key,
 			isEntry(given)
-				? { held: given.value, expiresAt: expiryOf(given) }
-				: { held: given, expiresAt: null },
+				? { held: given.value, expiresAt: expiryOf(given), metadata: null }
+				: { held: given, expiresAt: null, metadata: null },
 		]),
 	);
 
@@ -84,6 +96,16 @@ export function recordingKv(
 
 	const fails = new Set(setup.fails ?? []);
 
+	for (const op of fails) triggers.declare(`kv ${label} fails ${op}`);
+
+	const failIf = (op: "get" | "put" | "delete" | "list") => {
+		if (!fails.has(op)) return;
+
+		triggers.see(`kv ${label} fails ${op}`);
+
+		throw new Error(`kv ${op} failed`);
+	};
+
 	const binding = double<KVNamespace>({
 		// SAFETY: routes call get with a key and, for binary values, "arrayBuffer" or "text"; the fake answers the text or bytes the store holds, as the overload they pick returns.
 		get: (async (key: string, type?: string | { type?: string }) => {
@@ -97,7 +119,7 @@ export function recordingKv(
 				detail: { type: kind },
 			});
 
-			if (fails.has("get")) throw new Error("kv get failed");
+			failIf("get");
 			const held = live(key);
 
 			if (held === undefined) return null;
@@ -137,8 +159,12 @@ export function recordingKv(
 				},
 			});
 
-			if (fails.has("put")) throw new Error("kv put failed");
-			store.set(key, { held, expiresAt: expiryOf(options ?? {}) });
+			failIf("put");
+			store.set(key, {
+				held,
+				expiresAt: expiryOf(options ?? {}),
+				metadata: options?.metadata ?? null,
+			});
 		},
 		delete: async (key: string) => {
 			log.push({
@@ -149,7 +175,7 @@ export function recordingKv(
 				detail: null,
 			});
 
-			if (fails.has("delete")) throw new Error("kv delete failed");
+			failIf("delete");
 			store.delete(key);
 		},
 		// SAFETY: routes call list with a prefix and read keys and list_complete; the fake answers those.
@@ -162,7 +188,7 @@ export function recordingKv(
 				detail: { prefix: options?.prefix ?? null },
 			});
 
-			if (fails.has("list")) throw new Error("kv list failed");
+			failIf("list");
 
 			const keys = [...store.keys()]
 				.filter((key) => live(key) !== undefined)
@@ -184,6 +210,28 @@ export function recordingKv(
 						const held = live(key);
 
 						return held === undefined ? [] : [[key, plain(held)]];
+					}),
+			),
+		state: () =>
+			Object.fromEntries(
+				[...store.keys()]
+					.sort((a, b) => a.localeCompare(b))
+					.flatMap((key) => {
+						const held = live(key);
+						const entry = store.get(key);
+
+						return held === undefined || entry === undefined
+							? []
+							: [
+									[
+										key,
+										{
+											value: plain(held),
+											expiresAt: entry.expiresAt,
+											metadata: entry.metadata,
+										},
+									],
+								];
 					}),
 			),
 	};
