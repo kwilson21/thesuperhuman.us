@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decideComplete, decideIssue } from "./signin-code-rules";
 
 const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));
 const codeLifetimeMs = 10 * 60 * 1000;
@@ -84,10 +85,40 @@ const activeProjects = `SELECT p.request_id FROM ${studioProjects} p
   JOIN owner_requests r ON r.id=p.request_id
   WHERE r.email=? AND r.status<>'withdrawn' AND p.revoked_at IS NULL`;
 
+/** The address's projects that are not closed, with whether each one's request is withdrawn. A read. */
+const projectFacts = (db: D1Database, email: string) =>
+	db
+		.prepare(`SELECT p.request_id AS requestId,r.status='withdrawn' AS withdrawn
+    FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
+    WHERE r.email=? AND p.revoked_at IS NULL ORDER BY p.request_id`)
+		.bind(email);
+
+type ProjectRow = { requestId: string; withdrawn: number };
+
+const projectsOf = (rows: ProjectRow[]) =>
+	rows.map((row) => ({
+		requestId: row.requestId,
+		withdrawn: Boolean(row.withdrawn),
+	}));
+
+const issueAttempts = 3;
+
+/** A write guard raised: SQLite raises it as a malformed-JSON error (the same test as raisedByJsonGuard in src/server/guarded-save.ts, which src/lib may not import). */
+const guardRaised = (error: Error) => /malformed JSON/.test(error.message);
+
 /**
- * Issues a code bound to a new pending value, which the caller sets as the browser's cookie. `pending` is the value the
- * browser already holds, if any: that value is the browser's own earlier code, for whatever address, and it is deleted
- * (the browser's cookie is replaced whether or not a new code is issued). Other browsers' codes are never touched. Returns null when the address has no project or already has the most live codes.
+ * Issues a code for the browser holding `pending` (its pending sign-in cookie value), or for a newly minted value when it
+ * holds none; the value used is returned with the code. A browser's earlier code, for whatever address, is replaced in
+ * place, and other browsers' codes are never touched. Returns null when no code was issued: the address has no open
+ * project, it already has the most live codes, or the facts kept changing under the write.
+ *
+ * What is read, decided and written (nothing here decides in SQL):
+ *   read:  the address's projects, and how many other live codes it has (always, whatever the address)
+ *   decide: `decideIssue` (src/lib/signin-code-rules.ts)
+ *   write: one batch. Its guard re-checks the two facts the rule relied on, at write time: (1) the address still has a
+ *     project that is open, (2) its live codes other than this browser's are still fewer than the cap. If either changed,
+ *     the guard raises and nothing is written: a lost race, so the facts are read and decided again (three tries; then
+ *     nothing is issued, the same answer as any refusal).
  */
 export async function issueClientCode(
 	db: D1Database,
@@ -96,53 +127,79 @@ export async function issueClientCode(
 	now = new Date(),
 	pending: string | null = null,
 ): Promise<{ code: string; nonce: string } | null> {
-	const code = newCode();
-	const nonce = newPendingNonce();
-	const nonceHash = await hashValue(nonce);
-
-	const previousHash =
+	const nonce =
 		pending !== null && pendingFormat.test(pending)
-			? await hashValue(pending)
-			: "";
+			? pending
+			: newPendingNonce();
 
+	const nonceHash = await hashValue(nonce);
+	const code = newCode();
 	const digest = await codeHash(email, nonceHash, code, secret);
 	const issuedAt = now.toISOString();
 	const expiresAt = new Date(now.getTime() + codeLifetimeMs).toISOString();
 
-	const [, stored] = await db.batch([
-		db
-			.prepare("DELETE FROM audio_client_signin_codes WHERE expires_at<=?")
-			.bind(issuedAt),
-		db
-			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
-      SELECT ?,?,?,0,?,?,NULL,NULL WHERE EXISTS (${activeProjects})
+	const sweep = db
+		.prepare("DELETE FROM audio_client_signin_codes WHERE expires_at<=?")
+		.bind(issuedAt);
+
+	for (let attempt = 0; attempt < issueAttempts; attempt++) {
+		const [projectRows, countRows] = await db.batch<ProjectRow & { n: number }>(
+			[
+				projectFacts(db, email),
+				db
+					.prepare(`SELECT COUNT(*) AS n FROM audio_client_signin_codes WHERE email=? AND nonce_hash<>?
+      AND used_at IS NULL AND expires_at>?`)
+					.bind(email, nonceHash, issuedAt),
+			],
+		);
+
+		const answer = decideIssue(
+			{
+				projects: projectsOf(projectRows.results),
+				liveOthers: Number(countRows.results[0]?.n ?? 0),
+			},
+			liveCodesPerAddress,
+		);
+
+		// A refusal writes nothing but the sweep, in a batch of its own, so every request makes the same round trips.
+		if (answer.kind !== "issue") {
+			await db.batch([sweep]);
+
+			return null;
+		}
+
+		try {
+			await db.batch([
+				sweep,
+				db
+					.prepare(`SELECT CASE WHEN EXISTS (${activeProjects})
         AND (SELECT COUNT(*) FROM audio_client_signin_codes WHERE email=? AND nonce_hash<>?
           AND used_at IS NULL AND expires_at>?)<?
-      RETURNING nonce_hash`)
-			.bind(
-				nonceHash,
-				email,
-				digest,
-				issuedAt,
-				expiresAt,
-				email,
-				email,
-				previousHash,
-				issuedAt,
-				liveCodesPerAddress,
-			),
-		db
-			.prepare("DELETE FROM audio_client_signin_codes WHERE nonce_hash=?")
-			.bind(previousHash),
-		db
-			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'code-issued',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
-      WHERE r.email=? AND p.revoked_at IS NULL
-        AND EXISTS(SELECT 1 FROM audio_client_signin_codes WHERE nonce_hash=? AND code_hash=? AND created_at=?)`)
-			.bind(issuedAt, email, nonceHash, digest, issuedAt),
-	]);
+        THEN 1 ELSE json_extract('changed','$') END`)
+					.bind(email, email, nonceHash, issuedAt, answer.liveOthersBelow),
+				db
+					.prepare("DELETE FROM audio_client_signin_codes WHERE nonce_hash=?")
+					.bind(nonceHash),
+				db
+					.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
+        VALUES (?,?,?,0,?,?,NULL,NULL)`)
+					.bind(nonceHash, email, digest, issuedAt, expiresAt),
+				...answer.auditRequestIds.map((requestId) =>
+					db
+						.prepare(
+							"INSERT INTO audio_client_access_audit(request_id,action,occurred_at) VALUES (?,'code-issued',?)",
+						)
+						.bind(requestId, issuedAt),
+				),
+			]);
 
-	return stored.results.length ? { code, nonce } : null;
+			return { code, nonce };
+		} catch (error) {
+			if (!(error instanceof Error && guardRaised(error))) throw error;
+		}
+	}
+
+	return null;
 }
 
 export async function discardUndeliveredCode(
@@ -155,19 +212,42 @@ export async function discardUndeliveredCode(
 ): Promise<void> {
 	const nonceHash = await hashValue(nonce);
 	const digest = await codeHash(email, nonceHash, code, secret);
-	await db.batch([
+	const liveCode = `SELECT 1 FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL`;
+
+	const [stored, projectRows] = await db.batch<ProjectRow & { found: number }>([
 		db
-			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'code-delivery-failed',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
-      WHERE r.email=? AND p.revoked_at IS NULL
-        AND EXISTS(SELECT 1 FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL)`)
-			.bind(now.toISOString(), email, email, nonceHash, digest),
-		db
-			.prepare(
-				"DELETE FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL",
-			)
+			.prepare(`SELECT 1 AS found FROM (${liveCode})`)
 			.bind(email, nonceHash, digest),
+		projectFacts(db, email),
 	]);
+
+	// Nothing to discard when the code is already used or gone.
+	if (!stored.results.length) return;
+
+	try {
+		await db.batch([
+			db
+				.prepare(
+					`SELECT CASE WHEN EXISTS (${liveCode}) THEN 1 ELSE json_extract('changed','$') END`,
+				)
+				.bind(email, nonceHash, digest),
+			...projectsOf(projectRows.results).map((project) =>
+				db
+					.prepare(
+						"INSERT INTO audio_client_access_audit(request_id,action,occurred_at) VALUES (?,'code-delivery-failed',?)",
+					)
+					.bind(project.requestId, now.toISOString()),
+			),
+			db
+				.prepare(
+					"DELETE FROM audio_client_signin_codes WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL",
+				)
+				.bind(email, nonceHash, digest),
+		]);
+	} catch (error) {
+		// The code was used or discarded since it was read: nothing left to do.
+		if (!(error instanceof Error && guardRaised(error))) throw error;
+	}
 }
 
 export async function listStudioSignInFailures(
@@ -194,10 +274,21 @@ export async function listStudioSignInFailures(
 	}));
 }
 
+const attemptsPerCode = 5;
+
 /**
  * Completes sign-in for the browser holding `nonce` (its pending sign-in cookie). Without a well-formed value nothing is
- * read or written. With one, only the row bound to it is charged an attempt, before the code is compared, and only that
- * row can accept the code.
+ * read or written.
+ *
+ * What is read, decided and written (nothing here decides in SQL):
+ *   read:  the browser's own code row, and the address's projects
+ *   decide: `decideComplete` (src/lib/signin-code-rules.ts) counts the attempt, compares the stored hash in
+ *     constant time, and says whether it signs in
+ *   write: one batch of guards that re-check what the rule relied on: the attempt is counted only while the code is still
+ *     unused, unexpired and under the limit; the code is accepted only while it is still unused and unexpired, still has
+ *     the stored hash the rule compared (it was not replaced), the attempt was counted, and a project is still open.
+ *     When a guard does not hold, nothing is accepted and the answer is the same as for a wrong code: every refusal
+ *     here is one answer, so a lost race needs no retry.
  */
 export async function completeClientCode(
 	db: D1Database,
@@ -212,33 +303,74 @@ export async function completeClientCode(
 	if (nonce === null || !pendingFormat.test(nonce)) return null;
 	const nonceHash = await hashValue(nonce);
 	const digest = await codeHash(email, nonceHash, code, secret);
+	const at = now.toISOString();
+
+	const [codeRows, projectRows] = await db.batch<
+		ProjectRow & {
+			attempts: number;
+			usedAt: string | null;
+			expiresAt: string;
+			codeHash: string;
+		}
+	>([
+		db
+			.prepare(`SELECT attempts,used_at AS usedAt,expires_at AS expiresAt,code_hash AS codeHash
+      FROM audio_client_signin_codes WHERE email=? AND nonce_hash=?`)
+			.bind(email, nonceHash),
+		projectFacts(db, email),
+	]);
+
+	const stored = codeRows.results[0];
+
+	const answer = decideComplete(
+		{
+			code: stored
+				? {
+						attempts: Number(stored.attempts),
+						usedAt: stored.usedAt,
+						expiresAt: stored.expiresAt,
+						codeHash: stored.codeHash,
+					}
+				: null,
+			projects: projectsOf(projectRows.results),
+		},
+		{ limit: attemptsPerCode, now: at, digest },
+	);
+
+	if (answer.kind !== "count" || !stored) return null;
+
+	const charge = db
+		.prepare(`UPDATE audio_client_signin_codes SET attempts=attempts+1
+      WHERE email=? AND nonce_hash=? AND used_at IS NULL AND expires_at>? AND attempts<?`)
+		.bind(email, nonceHash, at, attemptsPerCode);
+
+	if (!answer.accept) {
+		await db.batch([charge]);
+
+		return null;
+	}
+
 	const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
 	const tokenHash = await hashValue(token);
-	const at = now.toISOString();
 	const expiresAt = new Date(now.getTime() + sessionLifetimeMs).toISOString();
 
-	// One transaction: charge the attempt first, then accept the code only if that charge landed.
-	// Concurrent guesses each spend one of the code's five attempts before any comparison.
 	const [, used] = await db.batch([
-		db
-			.prepare(`UPDATE audio_client_signin_codes SET attempts=attempts+1
-      WHERE email=? AND nonce_hash=? AND used_at IS NULL AND expires_at>? AND attempts<5`)
-			.bind(email, nonceHash, at),
+		charge,
 		db
 			.prepare(`UPDATE audio_client_signin_codes SET used_at=?,session_token_hash=?
       WHERE email=? AND nonce_hash=? AND code_hash=? AND used_at IS NULL AND expires_at>? AND changes()=1 AND EXISTS (${activeProjects})
       RETURNING nonce_hash`)
-			.bind(at, tokenHash, email, nonceHash, digest, at, email),
+			.bind(at, tokenHash, email, nonceHash, stored.codeHash, at, email),
 		db
 			.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
       SELECT ?,email,?,?,? FROM audio_client_signin_codes WHERE nonce_hash=? AND session_token_hash=?`)
 			.bind(tokenHash, at, expiresAt, at, nonceHash, tokenHash),
-		db
-			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
-      SELECT p.request_id,'signed-in',? FROM ${studioProjects} p JOIN owner_requests r ON r.id=p.request_id
-      WHERE r.email=? AND p.revoked_at IS NULL
-        AND EXISTS(SELECT 1 FROM audio_client_sessions WHERE token_hash=?)`)
-			.bind(at, email, tokenHash),
+		...answer.auditRequestIds.map((requestId) =>
+			db
+				.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
+        SELECT ?,'signed-in',? WHERE EXISTS(SELECT 1 FROM audio_client_sessions WHERE token_hash=?)`)
+				.bind(requestId, at, tokenHash),
+		),
 	]);
 
 	return used.results.length ? token : null;

@@ -396,6 +396,7 @@ describe("a browser's own earlier code", () => {
 	it("keeps the browser's code when it asks for an address with no project, because its cookie does not change", async () => {
 		const first = await ask();
 		const nonce = nonceFrom(first)!;
+
 		const refused = await ask(
 			{ cookie: `${pendingName}=${nonce}` },
 			"nobody@example.com",
@@ -454,7 +455,7 @@ describe("what a code request shows", () => {
 					);
 		});
 
-		const shapes = [known, unknown, full].map(({ batches }) => ({
+		const readsPerCase = [known, unknown, full].map(({ batches }) => ({
 			trips: batches.length,
 			// The batch that reads the facts is the one that is all SELECTs and has two statements.
 			reads: batches.filter(
@@ -464,17 +465,17 @@ describe("what a code request shows", () => {
 			),
 		}));
 
-		expect(shapes[0].reads).toHaveLength(1);
-		expect(shapes[2].reads).toEqual(shapes[0].reads);
-		expect(shapes[1].trips).toBe(shapes[0].trips);
-		expect(shapes[2].trips).toBe(shapes[0].trips);
+		expect(readsPerCase[0].reads).toHaveLength(1);
+		expect(readsPerCase[2].reads).toEqual(readsPerCase[0].reads);
+		expect(readsPerCase[1].trips).toBe(readsPerCase[0].trips);
+		expect(readsPerCase[2].trips).toBe(readsPerCase[0].trips);
 
 		// And the answers are indistinguishable.
 		const answers = await Promise.all(
 			[known, unknown, full].map(async ({ response }) => ({
 				status: response.status,
 				body: await response.json(),
-				cookieShape: response.headers
+				cookieWithoutValue: response.headers
 					.getSetCookie()[0]
 					.replace(/=[0-9a-f]{64}/, "=<value>"),
 			})),
@@ -679,6 +680,7 @@ describe("races", () => {
 					arrived < 2
 				) {
 					arrived++;
+
 					if (arrived === 2) release();
 					await gate;
 				}

@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-	completeSignInCode,
+	decideComplete,
+	decideIssue,
+	sameHash,
 	type CompleteFacts,
-} from "../../src/server/rules/signin-complete";
-import {
-	issueSignInCode,
 	type IssueFacts,
-} from "../../src/server/rules/signin-issue";
-import { answerOf, refuse, write } from "../helpers/rule-answers";
+} from "~/lib/signin-code-rules";
 
-// The two sign-in decisions as pure rules, over the whole table of facts. The database only re-checks the facts a rule
-// relied on when it writes (see src/lib/audio-client-access.ts).
+// The two sign-in decisions as pure functions, over the whole table of facts. The database only re-checks the facts a
+// decision relied on when it writes (src/lib/audio-client-access.ts).
 
 const cap = 6;
 
@@ -23,6 +21,7 @@ describe("issuing a sign-in code", () => {
 		["a withdrawn project only", [withdrawn]],
 		["an open project", [open]],
 		["an open and a withdrawn project", [open, withdrawn]],
+		["a withdrawn and an open project", [withdrawn, open]],
 	];
 
 	for (const [name, projects] of projectSets)
@@ -30,36 +29,20 @@ describe("issuing a sign-in code", () => {
 			const eligible = projects.some((project) => !project.withdrawn);
 
 			const expected = !eligible
-				? refuse("NoOpenProject", "No open studio project for this address.")
+				? { kind: "refuse", refusal: "NoOpenProject" }
 				: liveOthers >= cap
-					? refuse(
-							"AddressFull",
-							"This address already has the most live codes.",
-						)
-					: write({
+					? { kind: "refuse", refusal: "AddressFull" }
+					: {
+							kind: "issue",
+							// Every project that is not closed is audited, a withdrawn one included.
 							auditRequestIds: projects.map((project) => project.requestId),
 							liveOthersBelow: cap,
-						});
+						};
 
 			it(`${name}, ${liveOthers} other live codes`, () => {
-				expect(
-					answerOf(issueSignInCode.decide({ cap }, { projects, liveOthers })),
-				).toEqual(expected);
+				expect(decideIssue({ projects, liveOthers }, cap)).toEqual(expected);
 			});
 		}
-
-	it("audits every project that is not closed, as the old audit did, even a withdrawn one next to an open one", () => {
-		expect(
-			answerOf(
-				issueSignInCode.decide(
-					{ cap },
-					{ projects: [withdrawn, open], liveOthers: 0 },
-				),
-			),
-		).toMatchObject({
-			save: { auditRequestIds: ["withdrawn", "open"] },
-		});
-	});
 });
 
 describe("completing a sign-in", () => {
@@ -75,74 +58,71 @@ describe("completing a sign-in", () => {
 	});
 
 	const decide = (facts: CompleteFacts, digest = "right") =>
-		answerOf(completeSignInCode.decide({ limit, now, digest }, facts));
+		decideComplete(facts, { limit, now, digest });
+
+	const refused = { kind: "refuse", refusal: "NoCodeToTry" };
 
 	const cases: [string, CompleteFacts, string, unknown][] = [
-		[
-			"no code row",
-			{ code: null, projects: [open] },
-			"right",
-			refuse("NoCodeToTry", "There is no code to try."),
-		],
+		["no code row", { code: null, projects: [open] }, "right", refused],
 		[
 			"a used code",
 			{ code: code({ usedAt: "2026-11-13T11:59:00.000Z" }), projects: [open] },
 			"right",
-			refuse("NoCodeToTry", "There is no code to try."),
+			refused,
 		],
 		[
 			"a code that expires at this instant",
 			{ code: code({ expiresAt: now }), projects: [open] },
 			"right",
-			refuse("NoCodeToTry", "There is no code to try."),
+			refused,
 		],
 		[
 			"a code past its attempts",
 			{ code: code({ attempts: limit }), projects: [open] },
 			"right",
-			refuse("NoCodeToTry", "There is no code to try."),
+			refused,
 		],
 		[
 			"the right code, an open project",
 			{ code: code(), projects: [open] },
 			"right",
-			write({ accept: true, auditRequestIds: ["open"] }),
+			{ kind: "count", accept: true, auditRequestIds: ["open"] },
 		],
 		[
 			"the right code on the last attempt",
 			{ code: code({ attempts: limit - 1 }), projects: [open] },
 			"right",
-			write({ accept: true, auditRequestIds: ["open"] }),
+			{ kind: "count", accept: true, auditRequestIds: ["open"] },
 		],
 		[
 			"the right code, a withdrawn project only",
 			{ code: code(), projects: [withdrawn] },
 			"right",
-			write({ accept: false, auditRequestIds: ["withdrawn"] }),
+			{ kind: "count", accept: false, auditRequestIds: ["withdrawn"] },
 		],
 		[
 			"the right code, no project",
 			{ code: code(), projects: [] },
 			"right",
-			write({ accept: false, auditRequestIds: [] }),
+			{ kind: "count", accept: false, auditRequestIds: [] },
 		],
 		[
 			"the right code, a withdrawn and an open project",
 			{ code: code(), projects: [withdrawn, open] },
 			"right",
-			write({ accept: true, auditRequestIds: ["withdrawn", "open"] }),
+			{ kind: "count", accept: true, auditRequestIds: ["withdrawn", "open"] },
 		],
 		[
-			"a wrong code is still charged",
+			"a wrong code is still counted",
 			{ code: code(), projects: [open] },
 			"wrong",
-			write({ accept: false, auditRequestIds: ["open"] }),
+			{ kind: "count", accept: false, auditRequestIds: ["open"] },
 		],
 		[
-			"a wrong code of another length is charged and not accepted",
+			"a typed hash that is longer is counted and not accepted",
 			{ code: code(), projects: [open] },
 			"right-and-more",
-			write({ accept: false, auditRequestIds: ["open"] }),
+			{ kind: "count", accept: false, auditRequestIds: ["open"] },
 		],
 	];
 
@@ -150,4 +130,14 @@ describe("completing a sign-in", () => {
 		it(name, () => {
 			expect(decide(facts, digest)).toEqual(expected);
 		});
+});
+
+describe("comparing hashes", () => {
+	it("is equal only for the same text, whatever the length", () => {
+		expect(sameHash("abcd", "abcd")).toBe(true);
+		expect(sameHash("abcd", "abce")).toBe(false);
+		expect(sameHash("abcd", "abc")).toBe(false);
+		expect(sameHash("abc", "abcd")).toBe(false);
+		expect(sameHash("", "")).toBe(true);
+	});
 });
