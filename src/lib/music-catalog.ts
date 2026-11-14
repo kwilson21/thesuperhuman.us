@@ -1,3 +1,4 @@
+import type { RawValue } from "./fields";
 import { z } from "astro/zod";
 
 /** What a release, recording, campaign, channel or creative id looks like (the music API reads it with the same pattern). */
@@ -162,7 +163,13 @@ export type MusicCatalog = {
 	examples: z.infer<typeof exampleSchema>[];
 };
 
-export function validateCatalog(input: unknown): MusicCatalog {
+/**
+ * Callers pass `input` as whatever they hold, and nothing types it for them: src/lib/music-content.ts passes Astro
+ * collection data (already typed by the schemas in src/content/config.ts), scripts/prepare-music.mjs passes JSON
+ * parsed from the catalog files, and tests/lib/music-catalog.test.ts passes deliberately malformed shapes. The schema
+ * below is the only reader of `input`; anything that does not match it throws.
+ */
+export function validateCatalog(input: RawValue): MusicCatalog {
 	const catalog = z
 		.object({
 			recordings: z.array(recordingSchema),

@@ -9,3 +9,8 @@ export function isText<T>(value: T): value is T & string {
 export function isObject(value: unknown): value is object {
 	return value !== null && typeof value === "object";
 }
+
+/** The value for a key the table has as its own name; undefined for any other key, including names inherited from Object.prototype. */
+export function ownLabel(table: Record<string, string>, key: string) {
+	return Object.hasOwn(table, key) ? table[key] : undefined;
+}
