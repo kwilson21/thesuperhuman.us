@@ -297,7 +297,7 @@ module discountOffers {
   }
 
   // 3. Invoices never mix terms from two versions: every open or paid invoice belongs to the same offer version.
-  val oneVersionInvoiced = liveSlots.forall(a => liveSlots.forall(b => vOf(a) == vOf(b)))
+  val oneVersionInvoiced = liveSlots.map(vOf).size() <= 1
 
   // 4. The installments of every offer version sum to its discounted total.
   val installmentsSum = versionIds.forall(v => offers.get(v).status == "none" or planSum(offers.get(v).terms) == total(offers.get(v).terms))

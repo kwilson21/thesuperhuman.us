@@ -14,10 +14,11 @@ import {
 //   node scripts/verify-quint.mjs              the current rule keeps every property, in every model
 //   node scripts/verify-quint.mjs mutants      each mutant breaks the property named for it, every equivalent mutant keeps
 //                                              them all, and every property of every model has a mutant
+//   node scripts/verify-quint.mjs all          both of the above in one pool of runs (what CI runs)
 //   node scripts/verify-quint.mjs exhaustive [steps]
 //                                              by hand: Apalache searches every order up to a step bound (slow)
 // The seed is fixed so a run is the same every time; the Quint version is pinned in package.json. Runs are independent,
-// so they go in parallel, up to the number of CPUs.
+// so they go in parallel, up to the number of CPUs (or QUINT_JOBS), longest first. Each line ends with its run time.
 
 const SEED = "0x1";
 const STEPS = "20";
@@ -67,7 +68,12 @@ async function runAll(jobs, limit) {
 		while (next < jobs.length) {
 			const index = next++;
 
-			results[index] = await jobs[index]();
+			const started = performance.now();
+
+			results[index] = {
+				...(await jobs[index]()),
+				seconds: (performance.now() - started) / 1000,
+			};
 		}
 	}
 
@@ -79,6 +85,8 @@ async function runAll(jobs, limit) {
 }
 
 const mode = process.argv[2] ?? "properties";
+// How many runs at once: every CPU, or QUINT_JOBS (to see locally what a smaller CI runner would take).
+const jobs = Number(process.env.QUINT_JOBS) || availableParallelism();
 let failed = false;
 
 function report(ok, line, result) {
@@ -98,28 +106,63 @@ const check = (model, main, invariant, kind, describe) => ({
 	describe,
 });
 
+/**
+ * Runs the checks, longest first, and reports them in the order given. A check that must pass makes every one of its
+ * random runs; a mutant stops at its first violation, which comes within seconds. So the runs that must pass start first,
+ * the larger sample counts before the smaller, and the quick mutants fill the cores they leave free; started last, a long
+ * run would leave the other cores idle at the end.
+ */
 async function runChecks(checks) {
-	const results = await runAll(
-		checks.map(
-			({ model, main, invariant }) =>
+	const order = checks
+		.map((check, index) => ({ check, index }))
+		.sort(
+			(a, b) =>
+				Number(b.check.kind === "pass") - Number(a.check.kind === "pass") ||
+				Number(b.check.model.samples) - Number(a.check.model.samples),
+		);
+
+	const started = await runAll(
+		order.map(
+			({ check: { model, main, invariant } }) =>
 				() =>
 					simulate(model, main, invariant),
 		),
-		availableParallelism(),
+		jobs,
 	);
+
+	const results = [];
+
+	order.forEach(({ index }, position) => {
+		results[index] = started[position];
+	});
 
 	checks.forEach(({ kind, describe }, index) => {
 		const outcome = classifyRun(results[index]);
 
 		report(
 			outcome.kind === kind,
-			`${describe} (${outcome.kind}: ${outcome.reason})`,
+			`${describe} (${outcome.kind}: ${outcome.reason}; ${results[index].seconds.toFixed(1)} s)`,
 			results[index],
 		);
 	});
 }
 
-if (mode === "mutants") {
+/** Every model's runs that must keep every property. */
+const propertyChecks = () =>
+	models.flatMap((model) =>
+		model.current.map((main) =>
+			check(
+				model,
+				main,
+				"allProperties",
+				"pass",
+				`${main} keeps every property`,
+			),
+		),
+	);
+
+/** Every mutant, which must break the property named for it, and every equivalent mutant, which must keep them all. */
+function mutantChecks() {
 	for (const model of models) {
 		const properties = propertiesOf(readFileSync(model.file, "utf8"));
 
@@ -134,28 +177,33 @@ if (mode === "mutants") {
 			);
 	}
 
-	await runChecks(
-		models.flatMap((model) => [
-			...Object.entries(model.mutants).map(([main, { property }]) =>
-				check(
-					model,
-					main,
-					property,
-					"violation",
-					`${main} breaks ${property}, as it must`,
-				),
+	return models.flatMap((model) => [
+		...Object.entries(model.mutants).map(([main, { property }]) =>
+			check(
+				model,
+				main,
+				property,
+				"violation",
+				`${main} breaks ${property}, as it must`,
 			),
-			...model.equivalents.map((main) =>
-				check(
-					model,
-					main,
-					"allProperties",
-					"pass",
-					`${main} keeps every property, as an equivalent mutant must`,
-				),
+		),
+		...model.equivalents.map((main) =>
+			check(
+				model,
+				main,
+				"allProperties",
+				"pass",
+				`${main} keeps every property, as an equivalent mutant must`,
 			),
-		]),
-	);
+		),
+	]);
+}
+
+if (mode === "all") {
+	// CI: both kinds of check in one pool, so no core waits for the slowest run of one kind before the next kind starts.
+	await runChecks([...propertyChecks(), ...mutantChecks()]);
+} else if (mode === "mutants") {
+	await runChecks(mutantChecks());
 } else if (mode === "exhaustive") {
 	// Apalache: every order up to the bound, not a sample. Needs Java 17 or newer; slow (see docs/verification.md). One at
 	// a time: each starts a server on a fixed port.
@@ -186,19 +234,7 @@ if (mode === "mutants") {
 			);
 		}
 } else {
-	await runChecks(
-		models.flatMap((model) =>
-			model.current.map((main) =>
-				check(
-					model,
-					main,
-					"allProperties",
-					"pass",
-					`${main} keeps every property`,
-				),
-			),
-		),
-	);
+	await runChecks(propertyChecks());
 }
 
 process.exit(failed ? 1 : 0);

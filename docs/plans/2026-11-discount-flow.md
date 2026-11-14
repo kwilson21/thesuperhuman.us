@@ -1,64 +1,47 @@
 # Discounts on software offers: design
 
-Status: design for owner review (2026-11-13). Nothing under `src/` changes in this PR. It adds this plan, a Quint model
-(`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
+Status: decided (owner, 2026-11-13: "go with the discount recommendations"). Nothing under `src/` changes in this PR.
+It adds this plan, a Quint model (`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
 (`tests/fixtures/discount-installments.ts`) and the tests that tie them to today's code.
 
 Every engagement stays fixed price. The amounts in this document ($2,400 usual fee, $400 discount) are made up for the
 mock-ups; $2,400 is the public placeholder of the fee field.
 
-## 1. Decisions for you
+## 1. Decisions
 
-Each has one recommendation. The rest of the design assumes these answers; "If you answer differently" under each says
-what would change.
-
-1. **Fixed amount or percentage?** A fixed dollar amount, typed on each milestone.
+1. **A fixed dollar amount, typed on each milestone.** Approved by the owner, 2026-11-13.
    Why: you see the exact price the client pays before you send, and nothing is rounded.
-   If different: a percentage becomes form arithmetic (the form turns 15% into dollars per milestone, rounded down to the
-   cent, and saves the dollars). Stored data, contract and model stay the same; the client copy would say "15% off".
-2. **How does it split across deposit, milestones and balance?** You set the discount per milestone (most website
-   projects have one milestone, so it is one number). Each milestone's deposit is half of its lower price, rounded down
-   to the cent, and the balance is the rest, as today. On invoice terms each milestone is one invoice of its lower price.
+2. **Each milestone's deposit is half of its lower price, rounded down to the cent; the balance is the rest.** On
+   invoice terms each milestone is one invoice of its lower price. Approved by the owner, 2026-11-13.
    Why: the parts always add up to the discounted total because nothing is spread by a formula.
-   If different: one discount for the whole project split automatically needs a split rule (for example "off the last
-   milestone first") with its own contract, and the form shows the result before saving.
-3. **Where is it shown, and in what words?** On the offer page, the review and sign page, the agreed terms page, the SOW
-   (one line, so also the signed PDF), your offer form and your invoice panel. Not in emails: they carry no amounts today.
-   Why: everywhere a price appears, the client can see why it is lower.
-4. **Show the usual price beside it?** Yes, once in the fee box: "Usual price $2,400. Friends and family discount: $400."
+3. **Shown on the offer page, the review and sign page, the agreed terms page, one SOW line (so the signed PDF), the
+   owner form and the invoice panel. Not in emails.** Approved by the owner, 2026-11-13.
+   Why: everywhere a price appears, the client can see why it is lower; emails carry no amounts today.
+4. **The usual price is shown once, in the fee box: "Usual price $2,400. Friends and family discount: $400."** Approved
+   by the owner, 2026-11-13.
    Why: the client sees what the discount is worth, without a crossed-out price that reads like a sale.
-   If different: drop that sentence and the "usual" notes; the SOW line stays, because the agreement should say it.
-5. **Can it change after sending?** Only by sending a new offer version, like any other term. Signing fixes the
-   discounted prices for that project; there is no change after signing.
+5. **It changes only by a new offer version, and signing fixes it for the project.** Approved by the owner, 2026-11-13.
    Why: this is how terms already work, so nothing new can go wrong.
-6. **Limits?** Whole dollars, at least $1 off, and the client still pays at least $1 for each milestone (today's minimum
-   fee). No 100 percent discount.
+6. **Whole dollars, at least $1 off, and the client pays at least $1 per milestone. No 100 percent discount.** Approved
+   by the owner, 2026-11-13.
    Why: the invoice code refuses any Stripe invoice that does not come back open with a payment link, so a $0
    installment could not be invoiced; with at least $1 per milestone every deposit is at least $0.50.
-   If different: free work needs a path with no invoices (start without a deposit, skip $0 installments), which changes
-   invoicing, project start, the model and the contract.
-7. **A label or reason?** One short label the client sees, up to 60 characters, for example "Friends and family
-   discount". Blank shows "Discount". No private reason field; keep private context in the request's owner note.
+7. **An optional label the client sees, up to 60 characters; blank shows "Discount". No private reason field.**
+   Approved by the owner, 2026-11-13.
    Why: the client never sees an unexplained number, and nothing private goes into the agreement.
-8. **How does it look in Stripe?** The invoice line is simply the lower amount, with "discounted price" added to its
-   description. No Stripe coupon.
-   Why: the Stripe total then equals the SOW installment, and the payment check that compares them keeps working as is.
-   If different: a coupon means the line shows the usual amount and Stripe subtracts, so invoice creation, recovery and
-   the amount check all change.
-9. **Found while modelling: a paid deposit on a declined offer does not stop the next offer.** Today you can decline a
-   request after the client paid the first deposit, reopen it, and send new terms; the client could then pay a second
-   deposit. Recommendation: sending refuses while any earlier version has a paid, unrefunded deposit: "A deposit is paid
-   on an earlier offer. Refund it in Stripe before sending new terms."
-   Why: one project, one set of terms, one deposit.
-   How sure: found by reading the decline, reopen and send guards and confirmed in the model (the mutant
-   `discountTodayDepositGuard` is today's guard, and it fails). It has not been reproduced against the real handlers
-   yet; PR 2 starts with that test.
-   If different (keep today's behaviour): the model keeps today's guard and drops the "never mix versions" property for
-   that path; nothing else changes.
+8. **The Stripe line is the lower amount, with "discounted price" in its description. No coupon.** Approved by the
+   owner, 2026-11-13.
+   Why: the Stripe total equals the SOW installment, so the payment check that compares them keeps working as is.
+9. **A paid deposit on a declined offer must stop the next offer: it is to be reproduced against the real code and fixed
+   if real, in PR 2.** Owner instruction, 2026-11-13.
+   Why: one project, one set of terms, one deposit. Today a request can be declined after the client paid the first
+   deposit, reopened, and sent new terms. Found by reading the decline, reopen and send guards and confirmed in the
+   model (the mutant `discountTodayDepositGuard` is today's guard, and it fails); not yet reproduced against the real
+   handlers. The proposed refusal: "A deposit is paid on an earlier offer. Refund it in Stripe before sending new
+   terms."
 
-Two smaller rules follow from these and need no separate answer: a checkpoint's cancellation amount is a share of the
-discounted price (what the client agreed to pay), and the non-binding project estimate must be at least the discounted
-total.
+Two smaller rules follow from these: a checkpoint's cancellation amount is a share of the discounted price (what the
+client agreed to pay), and the non-binding project estimate must be at least the discounted total.
 
 ## 2. The design in one paragraph
 
@@ -358,14 +341,15 @@ with no Effect imports beyond Schema.
 discount it equals `softwareInvoiceTerms` on the lower fee; and it samples the contract over every usual fee from $1.00
 to $4.60 and every allowed discount.
 
-Dafny is not installed on this machine, so `pnpm run verify:dafny` was not run here; CI runs it. `lsc gen --backend=dafny`
-translated the file without errors and the generated Dafny was read: the arithmetic is linear apart from division by
-the constant 2, which Dafny handles without hints.
+Result: the contracts passed in CI on `87de79fa` (the "LemmaScript contracts (Dafny)" step, Dafny 4.9.0, its first real
+run). Dafny is not installed on the machine this was written on, so they were not run locally, and no planted bug has
+yet been run against them to show the prover rejects it.
 
 ### 6.2 The model (Quint)
 
-`verification/discount-offers.qnt`, wired into `pnpm run verify:quint` and `verify:quint:mutants` through the model list
-in `scripts/lib/quint-mutants.mjs`. One request, two offer versions, two milestones with odd usual fees (5 and 4 units,
+`verification/discount-offers.qnt`, run by `pnpm run verify:quint:all` (and the `verify:quint` and
+`verify:quint:mutants` halves) through the model list in `scripts/lib/quint-mutants.mjs`; docs/verification.md
+describes it with the invoice-events model. One request, two offer versions, two milestones with odd usual fees (5 and 4 units,
 where 1 is the $1 minimum) and any discount on each, either payment mode. The moves: new draft, edit draft, send,
 decline, reopen, review, sign, start, invoice reserve (read), invoice batch (write), and Stripe pay or void, in any
 order. Review and sign are separate steps, and so are the invoice read and write, so the owner can edit, send or decline
@@ -398,10 +382,9 @@ check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` modu
 3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds); run it deeper
 before PR 2 or PR 3 changes a modelled rule.
 
-CI cost: on this machine, loaded by other work (load average about 40 on 12 cores), `verify:quint` took 71 s and
-`verify:quint:mutants` 98 s for both models together. The discount pass run is the slow part (10,000 runs, about 30 s
-alone); its mutants are each found in under 10 s. Measure on a runner in the PR and keep the whole verification step
-under 3 minutes; lower the discount model's runs if it is not.
+Run counts and bounds: the pass run of `discount` and each mutant use 10,000 random executions of up to 20 steps, seed
+`0x1`; the pass run must finish all of them with no violation, and each mutant stops at its first violation. CI time
+and how the two models share the runner's cores are in docs/verification.md ("CI").
 
 ## 7. Build order (stacked PRs, tests first)
 
@@ -409,7 +392,7 @@ Each PR stands alone and keeps every existing golden case and hash. "Effect" mea
 Effect (CLAUDE.md "Back-end rules") first, because the change touches its validator or route.
 
 1. **This PR: design and verification.** Plan, model, contract, tests. No dependency.
-2. **Send guard for paid deposits (decision 9), only if you approve it.** Tests first: a golden case that declines with a
+2. **Send guard for paid deposits (decision 9).** Tests first, reproducing it against the real code: a golden case that declines with a
    paid deposit, reopens and sends a new version, answered 409 with the new sentence. Then the guard in
    `depositOfferGuard` and `depositOfferBlock`. Can land before the payments conversion; it changes a guard, not a rule.
 3. **Read and show the discount.** Tests first: reader tests for every new sentence, golden draft cases with the new
