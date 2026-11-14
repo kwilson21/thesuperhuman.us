@@ -439,6 +439,10 @@ const authorizeCases: Case[] = [
 		]),
 	),
 	oc(
+		"authorize: a client id too long to be a key",
+		run((_f, c) => [c.register(), c.authorize({ client_id: "a".repeat(600) })]),
+	),
+	oc(
 		"authorize: no client id",
 		run((_f, c) => [c.register(), c.authorize({ client_id: null })]),
 	),
@@ -790,6 +794,21 @@ const callbackCases: Case[] = [
 				token: networkDown("getaddrinfo ENOTFOUND github.com"),
 			}),
 		},
+	),
+	oc(
+		"callback: GitHub refuses the code exchange with an HTML 403",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ token: text(403, "<html>forbidden</html>") }) },
+	),
+	oc(
+		"callback: GitHub rate-limits the code exchange with 429",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ token: text(429, "<html>slow down</html>") }) },
+	),
+	oc(
+		"callback: GitHub's user lookup answers an HTML 403",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ user: text(403, "<html>forbidden</html>") }) },
 	),
 	oc(
 		"callback: GitHub's user lookup is refused",
