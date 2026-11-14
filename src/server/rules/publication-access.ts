@@ -107,23 +107,3 @@ export const narrowScopes = alwaysWrites({
 		),
 	writesText: "the scopes the new access token carries",
 });
-
-/** The longest part of a credential a visitor may send, in bytes: a KV key may not exceed 512, and the library builds keys from these parts. */
-export const LONGEST_CREDENTIAL_PART = 256;
-
-/**
- * No real client id, code or refresh token part comes near this long. A longer value is replaced with a stub no credential
- * equals, so the OAuth library refuses the request with its own answer (an unknown client, an invalid grant) before it
- * reaches KV, where a key over the limit would fail as a fault of the site.
- */
-export const keySafeValue = alwaysWrites({
-	name: "Keep a visitor's credential value short enough to be a KV key",
-	given: (request: { readonly value: string }, _facts: Record<string, never>) =>
-		request,
-	refusals: [],
-	writes: (g) =>
-		new TextEncoder().encode(g.value).length > LONGEST_CREDENTIAL_PART
-			? "x"
-			: g.value,
-	writesText: "the value, or a stub when it is too long to be part of a key",
-});

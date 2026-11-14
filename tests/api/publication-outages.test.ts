@@ -167,88 +167,398 @@ describe("the OAuth route when its KV namespace fails", () => {
 });
 
 describe("values a visitor sends that would become part of a KV key", () => {
-	/** A KV namespace that refuses a key over 512 bytes, as Cloudflare's does, and holds nothing else. */
-	const strictKv = () =>
-		fakeKv({
-			get: async (key: string) => {
-				if (new TextEncoder().encode(key).length > 512)
-					throw new Error("KV GET failed: 414 UriTooLong");
+	/**
+	 * A namespace that holds what is put in it and refuses a key over 512 bytes as Cloudflare's does, on every operation.
+	 * `keys` lists the key of every operation that reached it, so a test can show that none was too long.
+	 */
+	const strictKv = () => {
+		const store = new Map<string, string>();
+		const keys: string[] = [];
 
-				return null;
+		const checked = (key: string, operation: string) => {
+			keys.push(key);
+
+			if (new TextEncoder().encode(key).length > 512)
+				throw new Error(`KV ${operation} failed: 414 UriTooLong`);
+		};
+
+		const kv = fakeKv({
+			get: async (key: string, options?: string) => {
+				checked(key, "GET");
+				const held = store.get(key);
+
+				if (held === undefined) return null;
+
+				return options === undefined ? held : JSON.parse(held);
 			},
-			put: async (key: string) => {
-				if (new TextEncoder().encode(key).length > 512)
-					throw new Error("KV PUT failed: 414 UriTooLong");
+			put: async (key: string, value: string) => {
+				checked(key, "PUT");
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				checked(key, "DELETE");
+				store.delete(key);
+			},
+			list: async (options: { prefix?: string }) => {
+				checked(options.prefix ?? "", "LIST");
+
+				return {
+					keys: [...store.keys()].flatMap((name) =>
+						name.startsWith(options.prefix ?? "") ? [{ name }] : [],
+					),
+					list_complete: true,
+				};
 			},
 		});
 
-	const call = (path: string, init?: RequestInit) =>
-		publicationOAuthRoute(
-			partial<APIContext>({
-				request: new Request("https://thesuperhuman.us" + path, init),
-				locals: partial<APIContext["locals"]>({
-					runtime: partial<APIContext["locals"]["runtime"]>({
-						env: partial<APIContext["locals"]["runtime"]["env"]>({
-							OAUTH_KV: strictKv(),
-							PUBLICATION_DB: double<D1Database>({}),
-							PUBLICATION_OWNER_ID: "10987837",
-							PUBLICATION_PROJECTS: "threadline",
-							PUBLICATION_GITHUB_CLIENT_ID: "client",
-							PUBLICATION_GITHUB_CLIENT_SECRET: "secret",
-							PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
+		return { kv, keys };
+	};
+
+	const setup = () => {
+		const { kv, keys } = strictKv();
+
+		const call = (path: string, init?: RequestInit) =>
+			publicationOAuthRoute(
+				partial<APIContext>({
+					request: new Request("https://thesuperhuman.us" + path, init),
+					locals: partial<APIContext["locals"]>({
+						runtime: partial<APIContext["locals"]["runtime"]>({
+							env: partial<APIContext["locals"]["runtime"]["env"]>({
+								OAUTH_KV: kv,
+								PUBLICATION_DB: double<D1Database>({}),
+								PUBLICATION_OWNER_ID: "10987837",
+								PUBLICATION_PROJECTS: "threadline",
+								PUBLICATION_GITHUB_CLIENT_ID: "client",
+								PUBLICATION_GITHUB_CLIENT_SECRET: "secret",
+								PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
+							}),
+							ctx: double<ExecutionContext>({ waitUntil() {} }),
 						}),
-						ctx: double<ExecutionContext>({ waitUntil() {} }),
 					}),
 				}),
+			);
+
+		return { call, keys };
+	};
+
+	type Setup = ReturnType<typeof setup>;
+
+	/** A public client registered through the route, so the token endpoint has a client to find. */
+	async function registered(call: Setup["call"]): Promise<string> {
+		const response = await call("/api/publication/register", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				redirect_uris: ["https://chatgpt.com/callback"],
+				client_name: "Chat",
+				token_endpoint_auth_method: "none",
 			}),
-		);
+		});
+
+		const body = await response.json<{ client_id: string }>();
+
+		return body.client_id;
+	}
+
+	/** What a visitor sees: the status, the body and the challenge. */
+	async function seen(response: Response) {
+		return {
+			status: response.status,
+			body: await response.text(),
+			challenge: response.headers.get("www-authenticate"),
+		};
+	}
+
+	const tooLong = (keys: string[]) =>
+		keys.filter((key) => new TextEncoder().encode(key).length > 512);
 
 	const long = "a".repeat(600);
 
-	const form = (fields: { [name: string]: string }) => ({
+	const form = (
+		fields: Iterable<[string, string]>,
+		headers: { [name: string]: string } = {},
+	) => ({
 		method: "POST",
-		headers: { "content-type": "application/x-www-form-urlencoded" },
-		body: new URLSearchParams(fields),
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			...headers,
+		},
+		body: new URLSearchParams([...fields]),
 	});
 
-	it("answers a client id too long for a key as a refused request, not a server fault", async () => {
-		const query = new URLSearchParams({
+	const authorize = (clientId: string) =>
+		`/api/publication/authorize?${new URLSearchParams({
 			response_type: "code",
-			client_id: long,
+			client_id: clientId,
 			redirect_uri: "https://chatgpt.com/callback",
 			scope: "publication:threadline",
-		});
+		})}`;
 
-		const response = await call(`/api/publication/authorize?${query}`);
+	/** Each path the library reads a key from, with the long value and the short unknown value it must answer as. */
+	it("answers a client id too long for a key on /authorize as it answers an unknown client", async () => {
+		const { call, keys } = setup();
 
-		expect(response.status).toBe(400);
+		const unknown = await seen(await call(authorize("nobody")));
+		const answer = await seen(await call(authorize(long)));
+
+		expect(answer).toEqual(unknown);
+		expect(answer.status).toBe(400);
+		expect(tooLong(keys)).toEqual([]);
 	});
 
-	it("answers a token request whose code, refresh token or client id is too long with a 4xx", async () => {
-		const cases: { [name: string]: string }[] = [
-			{ grant_type: "authorization_code", code: `1:2:${long}`, client_id: "c" },
+	it("answers a code, a client id and a refresh token too long for a key as the library refuses any invalid one", async () => {
+		const { call, keys } = setup();
+		const client = await registered(call);
+
+		const cases: {
+			long: [string, string][];
+			short: [string, string][];
+			status: number;
+		}[] = [
 			{
-				grant_type: "refresh_token",
-				refresh_token: `1:2:${long}`,
-				client_id: "c",
+				long: [
+					["grant_type", "authorization_code"],
+					["code", `${long}:2:3`],
+					["client_id", client],
+				],
+				short: [
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", client],
+				],
+				status: 400,
 			},
-			{ grant_type: "authorization_code", code: "1:2:3", client_id: long },
+			{
+				long: [
+					["grant_type", "refresh_token"],
+					["refresh_token", `${long}:2:3`],
+					["client_id", client],
+				],
+				short: [
+					["grant_type", "refresh_token"],
+					["refresh_token", "1:2:3"],
+					["client_id", client],
+				],
+				status: 400,
+			},
+			{
+				long: [
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", long],
+				],
+				short: [
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", "nobody"],
+				],
+				status: 401,
+			},
 		];
 
-		for (const fields of cases) {
-			const response = await call("/api/publication/token", form(fields));
+		for (const { long: sent, short, status } of cases) {
+			const answer = await seen(
+				await call("/api/publication/token", form(sent)),
+			);
 
-			expect(response.status).toBeGreaterThanOrEqual(400);
-			expect(response.status).toBeLessThan(500);
+			expect(answer).toEqual(
+				await seen(await call("/api/publication/token", form(short))),
+			);
+			expect(answer.status).toBe(status);
 		}
+
+		expect(tooLong(keys)).toEqual([]);
 	});
 
-	it("answers a bearer token too long for a key with a 4xx", async () => {
-		const response = await call("/api/publication/mcp", {
-			method: "POST",
-			headers: { authorization: `Bearer 1:2:${long}` },
-		});
+	it("answers a client id too long for a key in a Basic header, whatever its length, scheme spelling or separator", async () => {
+		const { call, keys } = setup();
 
-		expect(response.status).toBe(401);
+		for (const scheme of ["Basic ", "basic ", "Basic\t", "BASIC "])
+			for (const size of [700, 2000]) {
+				const header = (id: string) => `${scheme}${btoa(`${id}:secret`)}`;
+
+				const unknown = await seen(
+					await call(
+						"/api/publication/token",
+						form(
+							[
+								["grant_type", "authorization_code"],
+								["code", "1:2:3"],
+							],
+							{
+								authorization: header("nobody"),
+							},
+						),
+					),
+				);
+
+				const answer = await seen(
+					await call(
+						"/api/publication/token",
+						form(
+							[
+								["grant_type", "authorization_code"],
+								["code", "1:2:3"],
+							],
+							{
+								authorization: header("a".repeat(size)),
+							},
+						),
+					),
+				);
+
+				expect(answer).toEqual(unknown);
+				expect(answer.status).toBe(401);
+			}
+
+		expect(tooLong(keys)).toEqual([]);
+	});
+
+	it("answers a client assertion whose issuer is too long for a key as one from an unknown client", async () => {
+		const { call, keys } = setup();
+
+		const part = (value: { [name: string]: string }) =>
+			btoa(JSON.stringify(value)).replaceAll("=", "");
+
+		const assertion = (issuer: string) =>
+			[
+				part({ alg: "RS256", typ: "JWT" }),
+				part({ iss: issuer, sub: issuer }),
+				"c2ln",
+			].join(".");
+
+		const assert = (issuer: string) =>
+			call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					[
+						"client_assertion_type",
+						"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+					],
+					["client_assertion", assertion(issuer)],
+				]),
+			);
+
+		const unknown = await seen(await assert("nobody"));
+		const answer = await seen(await assert(long));
+
+		expect(answer).toEqual(unknown);
+		expect(answer.status).toBe(401);
+		expect(answer.body).toContain("Client not found");
+		expect(tooLong(keys)).toEqual([]);
+	});
+
+	it("answers a revocation of a token too long for a key as it answers any unknown token", async () => {
+		const { call, keys } = setup();
+		const client = await registered(call);
+
+		const revoke = (token: string) =>
+			call(
+				"/api/publication/token",
+				form([
+					["token", token],
+					["client_id", client],
+				]),
+			);
+
+		const unknown = await seen(await revoke("1:2:3"));
+		const answer = await seen(await revoke(`${long}:2:3`));
+
+		expect(answer).toEqual(unknown);
+		expect(answer.status).toBe(200);
+		expect(tooLong(keys)).toEqual([]);
+	});
+
+	it("answers a bearer token whose user part is too long for a key as it answers any unknown token", async () => {
+		const { call, keys } = setup();
+
+		const bearer = (token: string) =>
+			call("/api/publication/mcp", {
+				method: "POST",
+				headers: { authorization: `Bearer ${token}` },
+			});
+
+		const unknown = await seen(await bearer("1:2:3"));
+		const answer = await seen(await bearer(`${long}:2:3`));
+
+		expect(answer).toEqual(unknown);
+		expect(answer.status).toBe(401);
+		expect(tooLong(keys)).toEqual([]);
+	});
+
+	it("leaves repeated and empty parameters to the library", async () => {
+		const { call, keys } = setup();
+		const client = await registered(call);
+
+		const repeated = await seen(
+			await call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "a"],
+					["code", "b"],
+					["client_id", client],
+				]),
+			),
+		);
+
+		expect(repeated.status).toBe(400);
+		expect(repeated.body).toContain(
+			'Request parameter \\"code\\" must not be repeated',
+		);
+
+		const once = await seen(
+			await call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", client],
+				]),
+			),
+		);
+
+		const emptyFirst = await seen(
+			await call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", ""],
+					["client_id", client],
+				]),
+			),
+		);
+
+		expect(emptyFirst).toEqual(once);
+		expect(emptyFirst.status).toBe(400);
+
+		const unknown = await seen(
+			await call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", "nobody"],
+				]),
+			),
+		);
+
+		const emptyThenLong = await seen(
+			await call(
+				"/api/publication/token",
+				form([
+					["grant_type", "authorization_code"],
+					["code", "1:2:3"],
+					["client_id", ""],
+					["client_id", long],
+				]),
+			),
+		);
+
+		expect(emptyThenLong).toEqual(unknown);
+		expect(tooLong(keys)).toEqual([]);
 	});
 });

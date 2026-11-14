@@ -76,7 +76,7 @@ const mcpAccess: Case[] = [
 		"mcp: a bearer token too long to be a key",
 		run((f, c) => [
 			...connect(f, c),
-			rpc(f, "tools/list", {}, { token: "1:2:" + "3".repeat(600) }),
+			rpc(f, "tools/list", {}, { token: "u".repeat(600) + ":2:3" }),
 		]),
 	),
 	oc(
