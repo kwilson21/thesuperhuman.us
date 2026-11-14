@@ -669,7 +669,9 @@ describe("D1 change counts under parallel calls", () => {
 
 		const counts = got.effects
 			.filter((entry) => entry.kind === "d1")
-			.map((entry) => entry.outcome.changes);
+			.map((entry) =>
+				"changes" in entry.outcome ? entry.outcome.changes : -1,
+			);
 
 		expect(counts).toEqual([1, 0]);
 	});
