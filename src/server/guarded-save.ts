@@ -37,6 +37,9 @@ import { isUniqueViolation, raisedByJsonGuard } from "../lib/guard-error";
 // them too; they are re-exported here for the server's own callers.
 export { isUniqueViolation, raisedByJsonGuard };
 
+/** Says whether a database error is the failure of a batch guard. Each call to `guardedSave` names its own. */
+export type IsGuard = (error: Error) => boolean;
+
 /** The save found the facts changed since the rule read them. Never shown to a person: the rule is asked again. */
 export class ChangedSinceRead extends Data.TaggedError("ChangedSinceRead") {}
 
