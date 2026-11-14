@@ -3,6 +3,12 @@
 // the Effect reader to answer every input as this one does. It is not product code: nothing under src/ may import it
 // (tests/architecture/legacy-validators.test.ts), and the Effect stack's final layer deletes this directory.
 import { z } from "astro/zod";
+import type { RawValue } from "../../../src/lib/fields";
+
+/** The answer the old reader gave: the parsed value, or a refusal. */
+export type LegacyAnswer =
+	| { readonly ok: true; readonly value: RawValue }
+	| { readonly ok: false };
 
 export const legacySuggestSchema = z
 	.object({
@@ -35,9 +41,7 @@ export const legacySuggestSchema = z
 	.strict();
 
 /** The answer the old route acted on: the parsed value, or a refusal (the route then answers empty). */
-export function legacyReadSuggest(
-	body: unknown,
-): { ok: true; value: unknown } | { ok: false } {
+export function legacyReadSuggest(body: RawValue): LegacyAnswer {
 	const parsed = legacySuggestSchema.safeParse(body);
 
 	return parsed.success ? { ok: true, value: parsed.data } : { ok: false };
