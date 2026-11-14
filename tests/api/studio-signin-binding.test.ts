@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
@@ -396,5 +396,42 @@ describe("races", () => {
 		expect(
 			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_sessions").get(),
 		).toEqual({ n: 1 });
+	});
+});
+
+describe("the deploy order", () => {
+	it("answers 503 and stores nothing when the 0027 migration has not been applied", async () => {
+		const before = new DatabaseSync(":memory:");
+
+		for (const name of readdirSync(
+			new URL("../../migrations/music/", import.meta.url),
+		)
+			.filter((file) => file.endsWith(".sql") && file < "0027")
+			.sort())
+			before.exec(
+				readFileSync(
+					new URL(`../../migrations/music/${name}`, import.meta.url),
+					"utf8",
+				),
+			);
+		before.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('song-1','service','${address}','A song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
+		db = sqliteD1(before);
+
+		const response = await ask();
+
+		expect(response.status).toBe(503);
+		expect(mails).toHaveLength(0);
+	});
+
+	it("leaves the old table alone, so the code running before the deploy keeps working on the migrated database", () => {
+		const names = sql
+			.prepare(
+				"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'audio_client_%codes'",
+			)
+			.all()
+			.map((row: { name: string }) => row.name);
+
+		expect(names).toEqual(["audio_client_codes", "audio_client_signin_codes"]);
 	});
 });
