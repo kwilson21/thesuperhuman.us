@@ -230,48 +230,52 @@ describe("the background pass waits for every undelivered slot before it release
 	// Two deferred chains: the first digests and then writes "a", the second reads and then writes "b". The digest takes a
 	// slot in the delivery order, so "b" must wait for it (its gate stays shut until the slot is delivered), whatever the
 	// machine's speed. Each size is recorded RUNS times and every recording must give one record.
-	const pair = (size: number): Handler => async (context) => {
-		ctxOf(context).waitUntil(
-			(async () => {
-				await crypto.subtle.digest("SHA-256", new Uint8Array(size));
-				await env(context).RATE_LIMIT.put("a", "1");
-			})(),
-		);
+	const pair =
+		(size: number): Handler =>
+		async (context) => {
+			ctxOf(context).waitUntil(
+				(async () => {
+					await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+					await env(context).RATE_LIMIT.put("a", "1");
+				})(),
+			);
 
-		ctxOf(context).waitUntil(
-			(async () => {
-				await env(context).RATE_LIMIT.get("g");
-				await env(context).RATE_LIMIT.put("b", "1");
-			})(),
-		);
+			ctxOf(context).waitUntil(
+				(async () => {
+					await env(context).RATE_LIMIT.get("g");
+					await env(context).RATE_LIMIT.put("b", "1");
+				})(),
+			);
 
-		return new Response("ok");
-	};
+			return new Response("ok");
+		};
 
-	const triple = (size: number): Handler => async (context) => {
-		ctxOf(context).waitUntil(
-			(async () => {
-				await crypto.subtle.digest("SHA-256", new Uint8Array(size));
-				await env(context).RATE_LIMIT.put("a", "1");
-			})(),
-		);
+	const triple =
+		(size: number): Handler =>
+		async (context) => {
+			ctxOf(context).waitUntil(
+				(async () => {
+					await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+					await env(context).RATE_LIMIT.put("a", "1");
+				})(),
+			);
 
-		ctxOf(context).waitUntil(
-			(async () => {
-				await env(context).RATE_LIMIT.get("g");
-				await env(context).RATE_LIMIT.put("b", "1");
-			})(),
-		);
+			ctxOf(context).waitUntil(
+				(async () => {
+					await env(context).RATE_LIMIT.get("g");
+					await env(context).RATE_LIMIT.put("b", "1");
+				})(),
+			);
 
-		ctxOf(context).waitUntil(
-			(async () => {
-				await env(context).RATE_LIMIT.get("h");
-				await env(context).RATE_LIMIT.put("c", "1");
-			})(),
-		);
+			ctxOf(context).waitUntil(
+				(async () => {
+					await env(context).RATE_LIMIT.get("h");
+					await env(context).RATE_LIMIT.put("c", "1");
+				})(),
+			);
 
-		return new Response("ok");
-	};
+			return new Response("ok");
+		};
 
 	const sizes = [300_000, 3_000_000, 6_000_000];
 
@@ -301,17 +305,19 @@ describe("the yield threshold: a waitUntil write followed by setImmediate yields
 	// threshold is structural and deterministic: a gated effect that waits while the route yields is released as request
 	// at the POLL_LIMIT-th yield (100) in a row, so 99 yields leave it background and 100 make it request. Both sides are
 	// pinned here, so a change to the limit cannot pass unnoticed.
-	const yieldsAfterWaitUntil = (count: number): Handler => async (context) => {
-		ctxOf(context).waitUntil(
-			(async () => {
-				await env(context).RATE_LIMIT.put("k", "1");
-			})(),
-		);
+	const yieldsAfterWaitUntil =
+		(count: number): Handler =>
+		async (context) => {
+			ctxOf(context).waitUntil(
+				(async () => {
+					await env(context).RATE_LIMIT.put("k", "1");
+				})(),
+			);
 
-		for (let index = 0; index < count; index += 1) await yieldMacrotask();
+			for (let index = 0; index < count; index += 1) await yieldMacrotask();
 
-		return new Response("ok");
-	};
+			return new Response("ok");
+		};
 
 	it("99 yields after waitUntil: the deferred write is background", async () => {
 		const got = await runCase(yieldsAfterWaitUntil(99), one());
@@ -339,7 +345,10 @@ describe("no deadlock: the oldest tracked result is awaited together with a gate
 			return new Response("ok");
 		}, one());
 
-		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response", status: 200 });
+		expect(got.steps[0]?.answer).toMatchObject({
+			outcome: "response",
+			status: 200,
+		});
 		expect(phases(got)).toEqual(["kv:request"]);
 	});
 
@@ -352,7 +361,10 @@ describe("no deadlock: the oldest tracked result is awaited together with a gate
 			return new Response("ok");
 		}, one());
 
-		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response", status: 200 });
+		expect(got.steps[0]?.answer).toMatchObject({
+			outcome: "response",
+			status: 200,
+		});
 		expect(phases(got)).toEqual(["kv:request"]);
 	});
 });

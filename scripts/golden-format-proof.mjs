@@ -715,7 +715,8 @@ function main([from, to]) {
 
 		if (proved.phases.cases > 0) changedPhases.set(fixture, proved.phases);
 
-		for (const label of proved.unanchored) unanchored.push(`${fixture}: ${label}`);
+		for (const label of proved.unanchored)
+			unanchored.push(`${fixture}: ${label}`);
 
 		for (const problem of proved.problems)
 			problems.push(`${fixture}: ${problem}`);

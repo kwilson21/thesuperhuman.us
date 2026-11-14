@@ -121,7 +121,11 @@ export async function drive<T>(
 			// Gated effects are released only when no tracked operation is undelivered, in both passes: a release while a
 			// digest is still running would let the machine's speed decide which effect comes first. The work's own status
 			// decides whether a pass still waits for effects (`!settled`), and the background pass also releases.
-			if (log.waiting > 0 && log.inflight === 0 && (!settled || driving.flush)) {
+			if (
+				log.waiting > 0 &&
+				log.inflight === 0 &&
+				(!settled || driving.flush)
+			) {
 				log.release(driving.phase);
 				yields = 0;
 
@@ -130,7 +134,10 @@ export async function drive<T>(
 
 			// The request pass ends once its answer has been read. The background pass ends only when nothing waits at the
 			// gate and no tracked operation is undelivered, so floating work at the end of a step is recorded like any other.
-			if (settled && (!driving.flush || (log.waiting === 0 && log.inflight === 0)))
+			if (
+				settled &&
+				(!driving.flush || (log.waiting === 0 && log.inflight === 0))
+			)
 				break;
 
 			if (log.inflight === 0 && driving.timers && (await clock.fireNextTimer()))

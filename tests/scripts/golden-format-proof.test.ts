@@ -382,9 +382,12 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 		five(effects, { format: 4, ...over });
 
 	it("accepts a relabel from request to background, with the digest at the response and a waitUntil state", () => {
-		const was = four([wait(stateOf("early", ["a"])), mail(stateOf("m", ["a"]))], {
-			steps: [step(digestOf("early", ["a"]))],
-		});
+		const was = four(
+			[wait(stateOf("early", ["a"])), mail(stateOf("m", ["a"]))],
+			{
+				steps: [step(digestOf("early", ["a"]))],
+			},
+		);
 
 		const now = five(
 			[
@@ -794,7 +797,9 @@ describe("golden format proof, format 4 to 5: the state at the response and at e
 	const was1 = stepOne(4, "post", "request");
 
 	it("step 0: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
-		expect(proveFixture([was0], [stepZero(5, "post", "background")])).toEqual([]);
+		expect(proveFixture([was0], [stepZero(5, "post", "background")])).toEqual(
+			[],
+		);
 
 		for (const forged of ["X", "end"])
 			expect(
@@ -804,7 +809,9 @@ describe("golden format proof, format 4 to 5: the state at the response and at e
 	});
 
 	it("a later step: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
-		expect(proveFixture([was1], [stepOne(5, "post", "background")])).toEqual([]);
+		expect(proveFixture([was1], [stepOne(5, "post", "background")])).toEqual(
+			[],
+		);
 
 		for (const forged of ["X", "end"])
 			expect(
