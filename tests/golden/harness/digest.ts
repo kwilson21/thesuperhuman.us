@@ -18,7 +18,7 @@
 // digest, which covers every table by name, so a table that gains a row changes it.
 //
 // `DatabaseDigester` answers "what is the digest now" many times a case (at every outside effect). It hashes again only
-// when SQLite's `total_changes()`, `schema_version` or AUTOINCREMENT counters have moved since the last answer:
+// when SQLite's `total_changes()`, `schema_version` or AUTOINCREMENT counters have moved since the last answer (and never across a ROLLBACK or a failed statement, which the fake D1 reports with `invalidate()`):
 // `total_changes()` counts every row changed through the connection, by a statement, a trigger, a hook or a setup script
 // alike, and the counters are the one write that moves without a row (an ignored INSERT). With GOLDEN_VERIFY_DIGESTS=1 every answer taken from the cache is also computed in full and compared.
 import { createHash } from "node:crypto";
@@ -132,6 +132,7 @@ export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
 /** The digest of one database now, hashed again only after something was written (or the schema changed). */
 export class DatabaseDigester {
 	private stamp = "";
+	private stale = false;
 	private cached: DatabaseDigest | undefined;
 	private tables: ReadonlyMap<string, string> = new Map();
 
@@ -159,6 +160,14 @@ export class DatabaseDigester {
 		return `${changes?.n}:${schema?.schema_version}:${counters}`;
 	}
 
+	/**
+	 * Forgets the cached answer. A ROLLBACK, or a statement that failed part way, puts rows back without moving
+	 * `total_changes()`, so whoever runs one (the fake D1) says so here.
+	 */
+	invalidate() {
+		this.stale = true;
+	}
+
 	/** The digest of every table now (empty ones included), by table name, from the same cache as `current()`. */
 	perTable(): ReadonlyMap<string, string> {
 		this.current();
@@ -169,7 +178,7 @@ export class DatabaseDigester {
 	current(): DatabaseDigest {
 		const stamp = this.stampNow();
 
-		if (this.cached && stamp === this.stamp) {
+		if (this.cached && !this.stale && stamp === this.stamp) {
 			if (VERIFY) {
 				const full = digestDatabase(this.sqlite);
 
@@ -198,6 +207,7 @@ export class DatabaseDigester {
 		this.cached = all.digest;
 		this.tables = all.perTable;
 		this.stamp = stamp;
+		this.stale = false;
 
 		return this.cached;
 	}

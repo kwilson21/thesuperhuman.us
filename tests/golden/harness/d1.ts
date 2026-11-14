@@ -284,7 +284,16 @@ class ChangeMeter {
 		const measured = <T>(work: () => T): T => {
 			const before = write ? this.digester.perTable() : undefined;
 			const totalBefore = VERIFY_COUNTS ? this.total() : 0;
-			const result = work();
+			let result: T;
+
+			try {
+				result = work();
+			} catch (error) {
+				// A statement that failed part way puts its rows back without moving total_changes().
+				this.digester.invalidate();
+
+				throw error;
+			}
 
 			const count = write
 				? Number(this.sqlite.prepare("SELECT changes() AS n").get()?.n ?? 0)
@@ -337,6 +346,9 @@ class ChangeMeter {
 				const result = this.sqlite.exec(sql);
 
 				if (sql === "COMMIT" || sql === "ROLLBACK") this.transaction = sql;
+
+				// A rollback puts rows back without moving total_changes(): the cached digests are stale.
+				if (sql === "ROLLBACK") this.digester.invalidate();
 
 				return result;
 			},

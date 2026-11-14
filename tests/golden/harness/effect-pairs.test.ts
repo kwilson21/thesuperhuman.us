@@ -198,6 +198,11 @@ describe("touched is noted when the statement runs, and describes the same insta
 			"software_signing_settings",
 		]);
 		expect(mailOf(rolledBack)?.state?.touched).toEqual([]);
+
+		// A rolled-back batch leaves the database as it was, and the cached digest must know it (total_changes() does not).
+		const quiet = await record(steps("email"));
+
+		expect(mailOf(rolledBack)?.state?.music).toBe(mailOf(quiet)?.state?.music);
 	});
 });
 
