@@ -5,7 +5,7 @@ import {
 	saveEvent,
 } from "~/lib/music-demand";
 import { loadMusicCatalog } from "~/lib/music-content";
-import { musicRequest, musicUnavailable } from "~/lib/music-request";
+import { musicFailed, musicRequest, musicUnavailable } from "~/lib/music-request";
 import { resolveCampaignTag } from "~/lib/owner-campaigns";
 import { checkRateLimit } from "~/lib/rate-limit";
 
@@ -52,7 +52,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json({ ok: false }, { status: 404 });
 	const env = locals.runtime.env;
 
-	if (!env.MUSIC_DB) return musicUnavailable();
+	if (!env.MUSIC_DB || !env.RATE_LIMIT) return musicUnavailable();
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
 
 	try {
@@ -105,6 +105,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		if (error instanceof PlaybackSequenceError)
 			return Response.json({ ok: false }, { status: 409 });
 
-		return musicUnavailable();
+		// Anything else is a store failing unexpectedly: the fixed sentence, never the error's own text.
+		return musicFailed();
 	}
 };

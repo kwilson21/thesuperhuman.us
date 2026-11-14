@@ -101,7 +101,7 @@ it("rejects cross-origin requests and unknown releases", async () => {
 
 it("only confirms interest after persistence and captcha succeed", async () => {
 	expect((await interest(context(body))).status).toBe(200);
-	expect((await interest(context(body, { fail: true }))).status).toBe(503);
+	expect((await interest(context(body, { fail: true }))).status).toBe(500);
 	expect(sendUrgentOwnerAlert).toHaveBeenCalledWith(
 		expect.anything(),
 		expect.objectContaining({
@@ -163,7 +163,7 @@ it("allows the same event to retry after a temporary database failure", async ()
 			stored.delete(k);
 		},
 	});
-	expect((await event(ctx)).status).toBe(503);
+	expect((await event(ctx)).status).toBe(500);
 	const retry = context(data);
 	retry.locals.runtime.env.RATE_LIMIT = ctx.locals.runtime.env.RATE_LIMIT;
 	expect((await event(retry)).status).toBe(200);

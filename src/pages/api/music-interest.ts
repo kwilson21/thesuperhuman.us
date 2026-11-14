@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { interestSchema, saveInterest } from "~/lib/music-demand";
 import { loadMusicCatalog } from "~/lib/music-content";
-import { musicRequest, musicUnavailable } from "~/lib/music-request";
+import { musicFailed, musicRequest, musicUnavailable } from "~/lib/music-request";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
 import { verifyTurnstile } from "~/lib/turnstile";
 import { checkRateLimit } from "~/lib/rate-limit";
@@ -31,7 +31,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json({ ok: false }, { status: 404 });
 	const env = locals.runtime.env;
 
-	if (!env.MUSIC_DB || !env.TURNSTILE_SECRET_KEY) return musicUnavailable();
+	if (!env.MUSIC_DB || !env.RATE_LIMIT || !env.TURNSTILE_SECRET_KEY)
+		return musicUnavailable();
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
 
 	try {
@@ -81,7 +82,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		try {
 			await saveInterest(env.MUSIC_DB, input);
 		} catch (error) {
-			await env.RATE_LIMIT.delete(`rl:music-interest:${ip}`);
+
+			// Giving the allowance back must not stop the owner being told that a request was lost.
+			try {
+				await env.RATE_LIMIT.delete(`rl:music-interest:${ip}`);
+			} catch {
+				// The counter keeps its count until its window ends; the alert below matters more.
+			}
+
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
 				route: "/api/music-interest",
@@ -97,6 +105,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ headers: { "cache-control": "no-store" } },
 		);
 	} catch {
-		return musicUnavailable();
+		// A store failing unexpectedly: the fixed sentence, never the error's own text.
+		return musicFailed();
 	}
 };

@@ -137,11 +137,44 @@ type PlaybackMetadata = {
 	city?: string;
 };
 
+/** How many times an event is read, judged and stored again after another request took its place first. */
+const EVENT_TRIES = 3;
+
+/** True when a database error, or one of its causes, is SQLite's UNIQUE violation (a lost race for an event's place). */
+function isUniqueViolation(error: unknown): boolean {
+	for (let depth = 0; depth < 5 && error instanceof Error; depth++) {
+		if (/UNIQUE/.test(error.message)) return true;
+		error = error.cause;
+	}
+
+	return false;
+}
+
 export async function saveEvent(
 	db: D1Database,
 	input: z.infer<typeof eventSchema>,
 	metadata: PlaybackMetadata,
 	now = new Date(),
+) {
+	// A UNIQUE violation on the insert means another request stored an event with this id, or this place in the
+	// playthrough, after it was read. Read and judge again: the same event is then a duplicate, and any other is out of sequence.
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return await readJudgeAndStoreEvent(db, input, metadata, now);
+		} catch (error) {
+			if (!isUniqueViolation(error)) throw error;
+
+			if (attempt >= EVENT_TRIES)
+				throw new PlaybackSequenceError("Playback event kept changing.");
+		}
+	}
+}
+
+async function readJudgeAndStoreEvent(
+	db: D1Database,
+	input: z.infer<typeof eventSchema>,
+	metadata: PlaybackMetadata,
+	now: Date,
 ) {
 	const duplicate = await db
 		.prepare(
@@ -177,7 +210,7 @@ export async function saveEvent(
 			accumulated_seconds: number;
 			event: string;
 			occurred_at: string;
-			started_at: string;
+			started_at: string | null;
 		}>();
 
 	const first = input.event === "start" || input.event === "replay";
@@ -204,6 +237,10 @@ export async function saveEvent(
 	}
 
 	if (last) {
+		// The playthrough's first event is the clock the evidence is checked against; without it nothing can be.
+		if (last.started_at === null)
+			throw new PlaybackSequenceError("Playback has no recorded start.");
+
 		const advance = input.accumulatedSeconds - last.accumulated_seconds;
 
 		if (advance > 12)
