@@ -59,6 +59,14 @@ export function softwareRetentionProjectPredicate(now) {
     OR (revoked_at IS NOT NULL AND julianday(revoked_at)+${days}<=julianday(${quote(now.toISOString())})))`;
 }
 
+/** Whether the retired sign-in codes table (audio_client_codes) still exists; a later migration drops it (0028, https://github.com/kwilson21/thesuperhuman.us/issues/271). */
+const retiredCodesExist = async (database) =>
+	(
+		await database.query(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='audio_client_codes'",
+		)
+	).length > 0;
+
 async function softwareSources(database, now) {
 	const exists = (
 		await database.query(
@@ -220,12 +228,26 @@ function sources(now) {
 		limit: 25,
 	});
 
+	// 150 rows. The apply's DELETE lists each row as ('<64-char hash>','<address>'): 1 + 66 + 1 + 322 + 1, plus a comma,
+	// 392 bytes for the longest address the schema accepts (320). 150 rows are about 59,000 bytes, under the 90,000-byte
+	// statement limit with room to spare; 1,000 rows would be about 392,000. Rows beyond the batch wait for the next run.
 	const codes = snapshot({
+		columns: "nonce_hash,email,created_at",
+		from: "audio_client_signin_codes",
+		where: `COALESCE(used_at,expires_at)<${old}`,
+		order: "nonce_hash,email",
+		limit: 150,
+	});
+
+	// The retired sign-in codes table: nothing reads it, but its rows are cleared on the same 30-day clock until a later migration drops it (https://github.com/kwilson21/thesuperhuman.us/issues/271).
+	// 150 rows, for the same reason: the guard embeds each row as ["<320-char address>","<24-char time>"], 352 bytes,
+	// so 150 rows are about 53,000 bytes against the 90,000-byte limit (1,000 rows would be about 352,000).
+	const retiredCodes = snapshot({
 		columns: "email,created_at",
 		from: "audio_client_codes",
 		where: `COALESCE(used_at,expires_at)<${old}`,
 		order: "email",
-		limit: 1000,
+		limit: 150,
 	});
 
 	const sessions = snapshot({
@@ -252,7 +274,15 @@ function sources(now) {
 		limit: 1000,
 	});
 
-	return { projects, codes, sessions, accessAudit, projectAudit, old };
+	return {
+		projects,
+		codes,
+		retiredCodes,
+		sessions,
+		accessAudit,
+		projectAudit,
+		old,
+	};
 }
 
 const fileSnapshot = (projectIds) =>
@@ -374,6 +404,11 @@ export async function previewStudioRetention(
 	}
 
 	const codes = await readSource(database, sql.codes);
+
+	const retiredCodes = (await retiredCodesExist(database))
+		? await readSource(database, sql.retiredCodes)
+		: [];
+
 	const sessions = await readSource(database, sql.sessions);
 	const accessAudit = await readSource(database, sql.accessAudit);
 	const projectAudit = await readSource(database, sql.projectAudit);
@@ -395,6 +430,7 @@ export async function previewStudioRetention(
 			messages: hash(JSON.stringify(messages)),
 			updates: hash(JSON.stringify(updates)),
 			codes: hash(JSON.stringify(codes)),
+			retiredCodes: hash(JSON.stringify(retiredCodes)),
 			sessions: hash(JSON.stringify(sessions)),
 			accessAudit: hash(JSON.stringify(accessAudit)),
 			projectAudit: hash(JSON.stringify(projectAudit)),
@@ -411,6 +447,7 @@ export async function previewStudioRetention(
 			messages: messages.length,
 			updates: updates.length,
 			codes: codes.length,
+			retiredCodes: retiredCodes.length,
 			sessions: sessions.length,
 			accessAudit: accessAudit.length,
 			projectAudit: projectAudit.length,
@@ -483,6 +520,11 @@ export async function applyStudioRetention(
 
 	for (const [name, query] of Object.entries(queries))
 		values[name] = await readSource(database, query);
+	const retiredExists = await retiredCodesExist(database);
+
+	values.retiredCodes = retiredExists
+		? await readSource(database, sql.retiredCodes)
+		: [];
 	values.files = await readSource(database, fileSnapshot(values.projects));
 	values.messages = await readSource(
 		database,
@@ -598,7 +640,13 @@ export async function applyStudioRetention(
 		),
 		`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id IN (${projectIds}) AND revoked_at IS NULL)
       THEN 1 ELSE json_extract('access-open','$') END`,
-		`DELETE FROM audio_client_codes WHERE email IN (${ids(values.codes)})`,
+		`DELETE FROM audio_client_signin_codes WHERE (nonce_hash,email) IN (VALUES ${values.codes.length ? values.codes.map(([nonce, email]) => `(${quote(nonce)},${quote(email)})`).join(",") : "('','')"})`,
+		...(retiredExists
+			? [
+					guard(sql.retiredCodes, values.retiredCodes),
+					`DELETE FROM audio_client_codes WHERE email IN (${ids(values.retiredCodes)})`,
+				]
+			: []),
 		`DELETE FROM audio_client_sessions WHERE token_hash IN (${ids(values.sessions)})`,
 		`DELETE FROM audio_client_access_audit WHERE id IN (${ids(values.accessAudit)})`,
 		`DELETE FROM audio_project_audit WHERE id IN (${ids(values.projectAudit)})`,

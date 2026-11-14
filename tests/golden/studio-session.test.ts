@@ -1,4 +1,5 @@
 import type { JsonValue } from "../helpers/json";
+import { hashValue } from "~/lib/audio-client-access";
 import { POST } from "~/pages/api/studio/session";
 import {
 	asClientCookie,
@@ -12,12 +13,13 @@ import {
 import {
 	allowanceRow,
 	audioClient,
+	BROWSER,
 	codeRow,
 	FIRST_SIGN_IN_TOKEN,
 	GRACE,
 	mergeSeeds,
 	OTHER,
-	SAME_ORIGIN,
+	PENDING,
 	sessionRow,
 	softwareClient,
 	sql,
@@ -43,9 +45,13 @@ import {
 //   400 "Check the email and ..."         null, array, no email, no code, code not text, empty, 7 digits, 9 digits, letters,
 //                                         a space in the middle (as the email prints it), spaces around, a trailing newline,
 //                                         non-ASCII digits, an invalid email, an email over 320
+//   no pending cookie                     401 with the same sentence before anything is read, charged or counted: no cookie,
+//                                         a cookie that names no code, is not 64 lower-case hex digits or has one digit
+//                                         changed, thirty guesses in a row without it; another browser's code does not open
+//                                         this browser's code, and a stranger's wrong guesses on their own code leave it alone
 //   takeStudioAllowance
-//   429 "Too many attempts"               session-ip at 20 uses (the email allowance is then not taken), session-email at 10
-//                                         (the ip allowance was spent); 19 and 9 pass; stale windows pruned; sequence of 11
+//   429 "Too many attempts"               session-ip at 20 uses (the requester allowance is then not taken),
+//                                         session-requester at 10 (one browser's own count; the ip allowance was spent); 19 and 9 pass; stale windows pruned; sequence of 11
 //                                         tries, where the eleventh is refused even with the right code
 //   completeClientCode
 //   401 "invalid or expired"              no code row, wrong code, wrong code at the fifth attempt, the right code after five
@@ -65,9 +71,13 @@ import {
 const URL_PATH = "/api/studio/session";
 const IP = "203.0.113.9";
 const GOOD = "12345678";
+const SECOND_PENDING = "cd".repeat(32);
+
+// The subject of the per-requester allowance: the address and the hash of the browser's pending value.
+const REQUESTER = `${GRACE}:${await hashValue(PENDING)}`;
 
 const tables = [
-	"audio_client_codes",
+	"audio_client_signin_codes",
 	"audio_client_sessions",
 	"audio_client_access_audit",
 	"audio_client_allowances",
@@ -80,7 +90,7 @@ const attempt = (
 	as: asVisitor({ ip: IP }),
 	path: URL_PATH,
 	json: body,
-	headers: SAME_ORIGIN,
+	headers: BROWSER,
 	dump: { music: tables },
 	...extra,
 });
@@ -92,7 +102,11 @@ const client = audioClient("r1", GRACE);
 const code = (over = {}) => codeRow(GRACE, GOOD, over);
 
 const seeded = async (...more: Seed[]): Promise<{ seed: Seed }> => ({
-	seed: mergeSeeds(client, { audio_client_codes: [await code()] }, ...more),
+	seed: mergeSeeds(
+		client,
+		{ audio_client_signin_codes: [await code()] },
+		...more,
+	),
 });
 
 const open = async (
@@ -160,7 +174,7 @@ const cases: Case[] = [
 			attempt(undefined, {
 				body: `email=${encodeURIComponent(GRACE)}&code=${GOOD}`,
 				headers: {
-					...SAME_ORIGIN,
+					...BROWSER,
 					"content-type": "application/x-www-form-urlencoded",
 				},
 			}),
@@ -169,7 +183,7 @@ const cases: Case[] = [
 	await open("JSON content type and no body", {
 		steps: [
 			attempt(undefined, {
-				headers: { ...SAME_ORIGIN, "content-type": "application/json" },
+				headers: { ...BROWSER, "content-type": "application/json" },
 			}),
 		],
 	}),
@@ -177,7 +191,7 @@ const cases: Case[] = [
 		steps: [
 			login(GOOD, {
 				headers: {
-					...SAME_ORIGIN,
+					...BROWSER,
 					"content-type": "application/json; charset=utf-8",
 				},
 			}),
@@ -191,7 +205,7 @@ const cases: Case[] = [
 		steps: [
 			attempt(undefined, {
 				body: "{not json",
-				headers: { ...SAME_ORIGIN, "content-type": "application/json" },
+				headers: { ...BROWSER, "content-type": "application/json" },
 			}),
 		],
 	}),
@@ -199,7 +213,7 @@ const cases: Case[] = [
 		steps: [
 			attempt(undefined, {
 				body: "",
-				headers: { ...SAME_ORIGIN, "content-type": "application/json" },
+				headers: { ...BROWSER, "content-type": "application/json" },
 			}),
 		],
 	}),
@@ -247,14 +261,18 @@ const cases: Case[] = [
 		"the email is at 10 uses so the 11th is refused after the address was counted",
 		{},
 		{
-			audio_client_allowances: [await allowanceRow("session-email", GRACE, 10)],
+			audio_client_allowances: [
+				await allowanceRow("session-requester", REQUESTER, 10),
+			],
 		},
 	),
 	await open(
 		"the email is at 9 uses so the 10th passes",
 		{},
 		{
-			audio_client_allowances: [await allowanceRow("session-email", GRACE, 9)],
+			audio_client_allowances: [
+				await allowanceRow("session-requester", REQUESTER, 9),
+			],
 		},
 	),
 	await open(
@@ -263,8 +281,8 @@ const cases: Case[] = [
 		{
 			audio_client_allowances: [
 				await allowanceRow(
-					"session-email",
-					GRACE,
+					"session-requester",
+					REQUESTER,
 					10,
 					"2026-11-13T11:55:00.000Z",
 				),
@@ -293,14 +311,14 @@ const cases: Case[] = [
 	}),
 	await open("a wrong code", { steps: [login("00000000")] }),
 	await open("a wrong code at the fifth attempt", {
-		setup: sql("UPDATE audio_client_codes SET attempts=4"),
+		setup: sql("UPDATE audio_client_signin_codes SET attempts=4"),
 		steps: [login("00000000")],
 	}),
 	await open("the right code after five attempts", {
-		setup: sql("UPDATE audio_client_codes SET attempts=5"),
+		setup: sql("UPDATE audio_client_signin_codes SET attempts=5"),
 	}),
 	await open("the right code at the fifth attempt", {
-		setup: sql("UPDATE audio_client_codes SET attempts=4"),
+		setup: sql("UPDATE audio_client_signin_codes SET attempts=4"),
 	}),
 	await open("four wrong tries then the right code", {
 		steps: [...wrongTries(4), login()],
@@ -310,23 +328,23 @@ const cases: Case[] = [
 	}),
 	await open("a code that expires at this instant", {
 		setup: sql(
-			"UPDATE audio_client_codes SET expires_at='2026-11-13T12:00:00.000Z'",
+			"UPDATE audio_client_signin_codes SET expires_at='2026-11-13T12:00:00.000Z'",
 		),
 	}),
 	await open("a code that expires one millisecond from now", {
 		setup: sql(
-			"UPDATE audio_client_codes SET expires_at='2026-11-13T12:00:00.001Z'",
+			"UPDATE audio_client_signin_codes SET expires_at='2026-11-13T12:00:00.001Z'",
 		),
 	}),
 	await open("a code used already", {
 		setup: sql(
-			`UPDATE audio_client_codes SET used_at='2026-11-13T11:56:00.000Z',session_token_hash='${T1.hash}'`,
+			`UPDATE audio_client_signin_codes SET used_at='2026-11-13T11:56:00.000Z',session_token_hash='${T1.hash}'`,
 		),
 	}),
 	await open("a code issued for another email", {
 		music: {
 			seed: mergeSeeds(client, {
-				audio_client_codes: [await codeRow(OTHER, GOOD)],
+				audio_client_signin_codes: [await codeRow(OTHER, GOOD)],
 			}),
 		},
 	}),
@@ -352,7 +370,7 @@ const cases: Case[] = [
 	await open("a software project can sign in", {
 		music: {
 			seed: mergeSeeds(softwareClient("s1", GRACE), {
-				audio_client_codes: [await code()],
+				audio_client_signin_codes: [await code()],
 			}),
 		},
 	}),
@@ -362,7 +380,7 @@ const cases: Case[] = [
 				softwareClient("s1", GRACE, {
 					project: { revoked_at: "2026-11-13T11:30:00.000Z" },
 				}),
-				{ audio_client_codes: [await code()] },
+				{ audio_client_signin_codes: [await code()] },
 			),
 		},
 	}),
@@ -372,7 +390,7 @@ const cases: Case[] = [
 				softwareClient("s1", GRACE, {
 					project: { content_deleted_at: "2026-11-13T11:30:00.000Z" },
 				}),
-				{ audio_client_codes: [await code()] },
+				{ audio_client_signin_codes: [await code()] },
 			),
 		},
 	}),
@@ -398,11 +416,11 @@ const cases: Case[] = [
 	await open("another sign-in uses the code first", {
 		interleave: [
 			{
-				on: /UPDATE audio_client_codes SET attempts/,
+				on: /UPDATE audio_client_signin_codes SET attempts/,
 				label: "another request signed in with the code",
 				run: (sqlite) =>
 					sqlite.exec(
-						`UPDATE audio_client_codes SET used_at='2026-11-13T11:59:59.000Z',session_token_hash='${T1.hash}'`,
+						`UPDATE audio_client_signin_codes SET used_at='2026-11-13T11:59:59.000Z',session_token_hash='${T1.hash}'`,
 					),
 			},
 		],
@@ -410,17 +428,17 @@ const cases: Case[] = [
 	await open("other guesses spend the attempts first", {
 		interleave: [
 			{
-				on: /UPDATE audio_client_codes SET attempts/,
+				on: /UPDATE audio_client_signin_codes SET attempts/,
 				label: "someone else made five wrong guesses",
 				run: (sqlite) =>
-					sqlite.exec("UPDATE audio_client_codes SET attempts=5"),
+					sqlite.exec("UPDATE audio_client_signin_codes SET attempts=5"),
 			},
 		],
 	}),
 	await open("the project is revoked during the sign-in", {
 		interleave: [
 			{
-				on: /UPDATE audio_client_codes SET attempts/,
+				on: /UPDATE audio_client_signin_codes SET attempts/,
 				label: "the owner revoked the project",
 				run: (sqlite) => sqlite.exec(revoke),
 			},
@@ -429,11 +447,11 @@ const cases: Case[] = [
 	await open("the code is replaced during the sign-in", {
 		interleave: [
 			{
-				on: /UPDATE audio_client_codes SET attempts/,
+				on: /UPDATE audio_client_signin_codes SET attempts/,
 				label: "a new code replaced this one",
 				run: (sqlite) =>
 					sqlite.exec(
-						"UPDATE audio_client_codes SET code_hash='replaced',attempts=0",
+						"UPDATE audio_client_signin_codes SET code_hash='replaced',attempts=0",
 					),
 			},
 		],
@@ -445,21 +463,31 @@ const cases: Case[] = [
 			login(),
 			login("87654321", {
 				advanceMs: 60_000,
+				headers: {
+					...BROWSER,
+					cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+				},
 				before: {
-					label: "a second code is issued",
+					label: "a second code is issued to another browser",
 					run: async (world) => {
-						world.music.exec("DELETE FROM audio_client_codes");
+						world.music.exec("DELETE FROM audio_client_signin_codes");
 
-						const row = await codeRow(GRACE, "87654321", {
-							created_at: "2026-11-13T12:00:30.000Z",
-							expires_at: "2026-11-13T12:10:30.000Z",
-						});
+						const row = await codeRow(
+							GRACE,
+							"87654321",
+							{
+								created_at: "2026-11-13T12:00:30.000Z",
+								expires_at: "2026-11-13T12:10:30.000Z",
+							},
+							SECOND_PENDING,
+						);
 
 						world.music
 							.prepare(
-								"INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at) VALUES(?,?,?,?,?)",
+								"INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at) VALUES(?,?,?,?,?,?)",
 							)
 							.run(
+								String(row.nonce_hash),
 								String(row.email),
 								String(row.code_hash),
 								0,
@@ -474,14 +502,23 @@ const cases: Case[] = [
 	await open("two clients sign in", {
 		music: {
 			seed: mergeSeeds(client, audioClient("r2", OTHER), {
-				audio_client_codes: [await code(), await codeRow(OTHER, "55555555")],
+				audio_client_signin_codes: [
+					await code(),
+					await codeRow(OTHER, "55555555", {}, SECOND_PENDING),
+				],
 			}),
 		},
 		steps: [
 			login(),
 			attempt(
 				{ email: OTHER, code: "55555555" },
-				{ as: asVisitor({ ip: "198.51.100.8" }) },
+				{
+					as: asVisitor({ ip: "198.51.100.8" }),
+					headers: {
+						...BROWSER,
+						cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+					},
+				},
 			),
 		],
 	}),
@@ -494,6 +531,110 @@ const cases: Case[] = [
 		"a client who already has a cookie signs in again",
 		{ steps: [login(GOOD, { as: asClientCookie(T1.value) })] },
 		{ audio_client_sessions: [sessionRow(T1, GRACE)] },
+	),
+	// the pending sign-in cookie (a code belongs to the browser that asked for it)
+	await open("the right code without the pending cookie", {
+		steps: [login(GOOD, { headers: { origin: "https://thesuperhuman.us" } })],
+	}),
+	await open("the right code with a pending cookie that names no code", {
+		steps: [
+			login(GOOD, {
+				headers: {
+					origin: "https://thesuperhuman.us",
+					cookie: `__Host-studio_pending=${"e".repeat(64)}`,
+				},
+			}),
+		],
+	}),
+	await open("the right code with a pending cookie that is not well formed", {
+		steps: [
+			login(GOOD, {
+				headers: {
+					origin: "https://thesuperhuman.us",
+					cookie: "__Host-studio_pending=not-a-nonce",
+				},
+			}),
+		],
+	}),
+	await open("the right code with the pending cookie written in capitals", {
+		steps: [
+			login(GOOD, {
+				headers: {
+					origin: "https://thesuperhuman.us",
+					cookie: `__Host-studio_pending=${PENDING.toUpperCase()}`,
+				},
+			}),
+		],
+	}),
+	await open("the right code with one digit of the pending cookie changed", {
+		steps: [
+			login(GOOD, {
+				headers: {
+					origin: "https://thesuperhuman.us",
+					cookie: `__Host-studio_pending=${PENDING.slice(0, 63)}0`,
+				},
+			}),
+		],
+	}),
+	await open(
+		"thirty guesses without the cookie leave the code and allowances alone",
+		{
+			steps: [
+				...Array.from({ length: 30 }, () =>
+					login("00000000", {
+						headers: { origin: "https://thesuperhuman.us" },
+					}),
+				),
+				login(),
+			],
+		},
+	),
+	await open("another browser's code does not open this browser's code", {
+		music: {
+			seed: mergeSeeds(client, {
+				audio_client_signin_codes: [
+					await code(),
+					await codeRow(GRACE, "55555555", {}, SECOND_PENDING),
+				],
+			}),
+		},
+		steps: [login("55555555"), login()],
+	}),
+	await open(
+		"a code that looks right in this browser but belongs to another browser's cookie",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await codeRow(GRACE, GOOD, {}, SECOND_PENDING),
+					],
+				}),
+			},
+		},
+	),
+	await open(
+		"a stranger's wrong guesses with their own cookie do not touch the client's code",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await code(),
+						await codeRow(GRACE, "55555555", {}, SECOND_PENDING),
+					],
+				}),
+			},
+			steps: [
+				...Array.from({ length: 6 }, () =>
+					login("00000000", {
+						headers: {
+							...BROWSER,
+							cookie: `__Host-studio_pending=${SECOND_PENDING}`,
+						},
+					}),
+				),
+				login(),
+			],
+		},
 	),
 	// outages
 	await open("the first allowance batch fails", {
@@ -512,7 +653,10 @@ const cases: Case[] = [
 	}),
 	await open("the sign-in batch fails", {
 		failures: [
-			{ on: /UPDATE audio_client_codes SET attempts/, message: "d1 down" },
+			{
+				on: /UPDATE audio_client_signin_codes SET attempts/,
+				message: "d1 down",
+			},
 		],
 	}),
 	await open(

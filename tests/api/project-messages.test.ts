@@ -32,7 +32,13 @@ beforeEach(async () => {
 
 	db = sqliteD1(sql);
 	const code = (await issueClientCode(db, "artist@example.com", secret))!;
-	token = (await completeClientCode(db, "artist@example.com", code, secret))!;
+	token = (await completeClientCode(
+		db,
+		"artist@example.com",
+		code.code,
+		code.nonce,
+		secret,
+	))!;
 });
 
 function context(

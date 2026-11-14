@@ -3,7 +3,9 @@ import { z } from "zod";
 import {
 	clientPortalEnabled,
 	completeClientCode,
+	hashValue,
 	normalizeClientEmail,
+	pendingSignInFromRequest,
 	studioSessionCookie,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
@@ -15,6 +17,18 @@ const inputSchema = z.object({
 	email: z.string().max(320),
 	code: z.string().regex(/^\d{8}$/),
 });
+
+// One answer for a wrong, expired, used or never-issued code and for a browser that did not ask for the code, so it does
+// not show which it was or whether the address has a project.
+const notThisBrowser = () =>
+	Response.json(
+		{
+			ok: false,
+			error:
+				"That code is invalid or expired. Enter it in the browser where you asked for it, or request a new one here.",
+		},
+		{ status: 401 },
+	);
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
@@ -41,6 +55,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ status: 400 },
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+	const pending = pendingSignInFromRequest(request);
+
+	// A code only works in the browser that asked for it. Without that browser's cookie nothing is looked up, charged or
+	// counted, so someone who only knows the address cannot use up anyone's attempts or allowances.
+	if (!pending) return notThisBrowser();
 
 	try {
 		const allowed =
@@ -53,8 +72,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			)) &&
 			(await takeStudioAllowance(
 				env.MUSIC_DB,
-				"session-email",
-				email,
+				"session-requester",
+				`${email}:${await hashValue(pending)}`,
 				10,
 				env.AUDIO_CLIENT_CODE_KEY,
 			));
@@ -69,30 +88,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			env.MUSIC_DB,
 			email,
 			parsed.data.code,
+			pending,
 			env.AUDIO_CLIENT_CODE_KEY,
 		);
 
-		if (!token)
-			return Response.json(
-				{
-					ok: false,
-					error:
-						"That code is invalid or expired. Request a new one if needed.",
-				},
-				{ status: 401 },
-			);
+		if (!token) return notThisBrowser();
 
-		return Response.json(
-			{ ok: true },
-			{
-				headers: {
-					"set-cookie": studioSessionCookie(
-						token,
-						new URL(request.url).protocol === "https:",
-					),
-				},
-			},
-		);
+		const secure = new URL(request.url).protocol === "https:";
+		const headers = new Headers();
+		headers.append("set-cookie", studioSessionCookie(token, secure));
+		// The pending cookie is left to expire (Max-Age, reset by each code request): a browser that holds codes for two addresses
+		// needs it for the second sign-in. A used code cannot be used again, and the cookie is HttpOnly, random and useless without a code.
+
+		return Response.json({ ok: true }, { headers });
 	} catch {
 		return Response.json(
 			{ ok: false, error: "Studio sign-in is temporarily unavailable." },

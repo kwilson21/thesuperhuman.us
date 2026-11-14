@@ -35,6 +35,30 @@ describe("renderEmail", () => {
 		expect(html).toContain("4827 1936");
 		expect(text).toContain("4827 1936");
 		expect(text).toContain("expires in 10 minutes");
+		expect(text).toContain("Enter it in the browser where you asked for it.");
+	});
+
+	it("carries no link or address to a page in the sign-in code email", () => {
+		const { html, text } = studioCodeEmail("48271936");
+
+		expect(html).not.toMatch(/<a\s/i);
+		expect(html).not.toContain("Open the sign-in page");
+		expect(text).not.toMatch(/https?:|www\./i);
+		expect(text).not.toContain("Open the sign-in page");
+
+		// The only addresses left in the HTML belong to the shared template: its font stylesheet and the header icon image.
+		const addresses = [...html.matchAll(/https?:\/\/[^"'\s)<]+/g)].map(
+			(match) => match[0],
+		);
+
+		for (const address of addresses)
+			expect([
+				"https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Newsreader:opsz@6..72&display=swap",
+				"https://thesuperhuman.us/apple-touch-icon.png",
+			]).toContain(address.replaceAll("&amp;", "&"));
+		expect(text).toContain("4827 1936");
+		expect(text).toContain("expires in 10 minutes");
+		expect(text).toContain("Enter it in the browser where you asked for it.");
 	});
 
 	it("keeps Outlook-safe markup: longhand fonts, padded button cell, fixed-width frame, hidden preheader", () => {
@@ -76,13 +100,12 @@ describe("renderEmail", () => {
 });
 
 // Sandbox mail must not send clients into the production studio.
-it("uses the configured origin for every studio email", () => {
+it("uses the configured origin for every studio email that links to the sign-in page", () => {
 	const origin = "https://test.example.com";
 
 	for (const email of [
 		studioInvitationEmail(origin),
 		studioUpdateEmail(origin),
-		studioCodeEmail("12345678", origin),
 	]) {
 		expect(email.text).toContain(`${origin}/studio/sign-in`);
 		expect(email.html).toContain(`${origin}/studio/sign-in`);

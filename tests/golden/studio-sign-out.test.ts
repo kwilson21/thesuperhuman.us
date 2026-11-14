@@ -47,7 +47,7 @@ const URL_PATH = "/api/studio/sign-out";
 
 const tables = [
 	"audio_client_sessions",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 	"audio_client_access_audit",
 ];
 

@@ -4,7 +4,10 @@ import {
 	clientPortalEnabled,
 	discardUndeliveredCode,
 	issueClientCode,
+	newPendingNonce,
 	normalizeClientEmail,
+	pendingSignInCookie,
+	pendingSignInFromRequest,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
 import { sendAudioMessage } from "~/lib/audio-resend";
@@ -12,6 +15,12 @@ import { musicRequest } from "~/lib/music-request";
 import { verifyTurnstile } from "~/lib/turnstile";
 import { studioCodeEmail } from "~/lib/client-emails";
 
+// A code request issues a code bound to the browser that asked (the pending sign-in cookie, see audio-client-access.ts).
+// A browser that sent its cookie gets the same value back whatever the outcome. Two requests from one browser at the same
+// moment (two tabs) therefore both answer with that one value and each writes its code in place of the other's: both are
+// emailed, only the code written last opens, and the cookie opens it whichever response arrives last. The earlier email's
+// code does not work. That is accepted: the email allowance (3 per five minutes) bounds it. A browser that sent no cookie
+// and sends two requests at once has no value to share, so its responses can overwrite each other and it asks again.
 export const prerender = false;
 
 const inputSchema = z.object({
@@ -108,13 +117,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ status: 429 },
 			);
 
-		const code = await issueClientCode(
+		// A browser that sent its cookie gets that same value back whether or not a code is issued, so a refused or lost
+		// request cannot replace the cookie of a code another request of the same browser just emailed, and the answer does not
+		// show whether the address has a project. A browser with no cookie gets the new code's value, or a fresh random one.
+		const pending = pendingSignInFromRequest(request);
+
+		const issued = await issueClientCode(
 			env.MUSIC_DB,
 			email,
 			env.AUDIO_CLIENT_CODE_KEY,
+			new Date(),
+			pending,
 		);
 
-		if (code)
+		if (issued) {
+			const { code, nonce } = issued;
+
 			locals.runtime.ctx.waitUntil(
 				(async () => {
 					const sent = await sendAudioMessage({
@@ -123,7 +141,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							from: env.CONTACT_FROM_EMAIL,
 							to: [email],
 							subject: "Your studio sign-in code",
-							...studioCodeEmail(code, env.SITE_ORIGIN),
+							...studioCodeEmail(code),
 						},
 					});
 
@@ -134,6 +152,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							env.MUSIC_DB!,
 							email,
 							code,
+							nonce,
 							env.AUDIO_CLIENT_CODE_KEY!,
 						);
 				})().catch(() => {
@@ -141,8 +160,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					console.error("Studio code delivery or cleanup failed.");
 				}),
 			);
+		}
 
-		return Response.json(generic);
+		// Every answer sets the same cookie value whether or not a code was issued.
+		return Response.json(generic, {
+			headers: {
+				"set-cookie": pendingSignInCookie(
+					pending ?? issued?.nonce ?? newPendingNonce(),
+					new URL(request.url).protocol === "https:",
+				),
+			},
+		});
 	} catch {
 		return Response.json(
 			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
