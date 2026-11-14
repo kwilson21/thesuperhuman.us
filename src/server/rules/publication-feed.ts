@@ -1,11 +1,14 @@
-// The feed rule: what a project's journal shows the public. From every stored event (read in one batch with the latest
-// revision) it picks the CURRENT entry (the newest published entry of live work, if its newest live event is not a
-// withdrawal) and the HISTORY (every entry that was not withdrawn, once, at its newest event, newest day first, at most
-// 100). Backfilled entries are history only. A story that is shown is read again as a publication; one that does not read
-// as one makes the whole feed refuse, because the journal holds something this site did not write.
-//
-// It reads no store and writes nothing, so no write-time guard applies. Nothing is decided in SQL: the store returns
-// rows, and the choices above are made here.
+// The feed rules: what a project's journal shows the public, in two pure steps over two plain reads, so a request reads
+// the journal's small columns for the project and the text of the entries it shows, never the text of all of them.
+//   chooseFeed  from the small columns of every event (no text), picks the CURRENT entry (the newest published entry of
+//               live work, if its newest live event is not a withdrawal) and the HISTORY (every entry that was not
+//               withdrawn, once, at its newest event, newest day first, at most 100). Backfilled entries are history only.
+//   showFeed    from the text of the picked events, reads each as a publication and builds the feed. A picked event whose
+//               text is gone by now (a withdrawal landed between the two reads and erased it) is treated as withdrawn and
+//               left out. A story that is shown and does not read as a publication makes the whole feed refuse, because the
+//               journal holds something this site did not write.
+// Neither reads a store or writes anything, so no write-time guard applies. Nothing is decided in SQL: the store returns
+// columns and text, and the choices above are made here.
 import * as Data from "effect/Data";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
@@ -13,21 +16,45 @@ import { parsePublication } from "../../lib/publication/contract";
 import type { ProjectFeed, PublicEntry } from "../../lib/publication/read";
 import { alwaysWrites, term, unless } from "../terms";
 
-/** One stored event of a project, with its content (null once a withdrawal erased it). */
+/** The small columns of one stored event: no text. `erased` says its text was erased by a withdrawal. */
 export type FeedEvent = {
 	readonly revision: number;
 	readonly entryId: string;
 	readonly operation: string;
 	readonly origin: string;
-	readonly payload: string | null;
+	readonly erased: boolean;
 	readonly publishedAt: string;
 };
 
-/** What the feed reads, in one batch. */
-export type FeedFacts = {
-	readonly revision: number;
+/** The day a published entry says the work happened, read from the stored text of its publish event; null when it names none. */
+export type PublishedDay = {
+	readonly entryId: string;
+	readonly day: string | null;
+};
+
+/** What the first read gives: the latest revision (null when the project has no event), every event's small columns, and each publish event's day. */
+export type FeedIndex = {
+	readonly latestRevision: number | null;
 	/** Every event of the project, oldest revision first. */
 	readonly events: readonly FeedEvent[];
+	readonly days: readonly PublishedDay[];
+};
+
+/** An event picked to be shown, with what the entry needs besides its text. */
+export type FeedPick = {
+	readonly revision: number;
+	readonly entryId: string;
+	/** The origin the entry shows: the publish event's for history, the event's own for the current entry. */
+	readonly origin: string;
+	/** The day to show instead of the story's own (history only). */
+	readonly day: string | null;
+	readonly publishedAt: string;
+};
+
+export type FeedChoice = {
+	readonly revision: number;
+	readonly current: FeedPick | null;
+	readonly history: readonly FeedPick[];
 };
 
 /** A stored event that is shown does not read as a publication with a story: the journal holds something this site did not write. */
@@ -38,69 +65,6 @@ export class StoredPublicationInvalid extends Data.TaggedError(
 }
 
 const MOST_IN_HISTORY = 100;
-
-const text = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
-
-type Parsed =
-	| { readonly ok: true; readonly entry: PublicEntry | null }
-	| { readonly ok: false };
-
-const noEntry: Parsed = { ok: true, entry: null };
-
-/** The entry a stored event shows: none when its content was erased, a refusal when its content is not a publication with a story. */
-function entryOf(
-	event: FeedEvent,
-	origin: string,
-	occurredOn: string | null,
-): Parsed {
-	if (event.payload === null) return noEntry;
-	const json = text(event.payload);
-
-	if (!Result.isSuccess(json)) return { ok: false };
-	const publication = parsePublication(json.success);
-
-	if (!publication || !publication.story) return { ok: false };
-
-	return {
-		ok: true,
-		entry: {
-			entryId: publication.entryId,
-			occurredOn: occurredOn ?? publication.occurredOn,
-			publishedAt: event.publishedAt,
-			backfilled: origin === "backfill",
-			story: publication.story,
-		},
-	};
-}
-
-const publishedDay = Schema.decodeUnknownResult(
-	Schema.Struct({ occurredOn: Schema.optional(Schema.String) }),
-);
-
-/** The day a publish event says the work happened, from its stored content: null when erased, or when it names no day. */
-function dayOf(
-	event: FeedEvent,
-): { ok: true; day: string | null } | { ok: false } {
-	if (event.payload === null) return { ok: true, day: null };
-	const json = text(event.payload);
-
-	if (!Result.isSuccess(json)) return { ok: false };
-	const read = publishedDay(json.success);
-
-	return {
-		ok: true,
-		day: Result.isSuccess(read) ? (read.success.occurredOn ?? null) : null,
-	};
-}
-
-type Given = { readonly valid: boolean; readonly feed: ProjectFeed };
-
-const empty = (facts: FeedFacts): ProjectFeed => ({
-	projectId: "",
-	revision: facts.revision,
-	current: null,
-	history: [],
-});
 
 /** The newest event of each entry. */
 function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
@@ -116,8 +80,10 @@ function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
 	return [...newest.values()];
 }
 
-function assemble(projectId: string, facts: FeedFacts): Given {
-	const live = facts.events.filter((event) => event.origin !== "backfill");
+type ChooseGiven = { readonly choice: FeedChoice };
+
+function choose(index: FeedIndex): ChooseGiven {
+	const live = index.events.filter((event) => event.origin !== "backfill");
 
 	const newestPublish = live
 		.filter((event) => event.operation === "publish")
@@ -132,36 +98,22 @@ function assemble(projectId: string, facts: FeedFacts): Given {
 			)[0]
 		: undefined;
 
-	const current = currentEvent
-		? entryOf(currentEvent, currentEvent.origin, null)
-		: noEntry;
+	const dayOf = new Map(index.days.map((d) => [d.entryId, d.day]));
 
 	const publishOf = new Map(
-		facts.events
+		index.events
 			.filter((event) => event.operation === "publish")
 			.map((event) => [event.entryId, event]),
 	);
 
-	const candidates = newestOfEach(facts.events).flatMap((event) => {
-		const published = publishOf.get(event.entryId);
+	const history = newestOfEach(index.events)
+		.flatMap((event) => {
+			const published = publishOf.get(event.entryId);
 
-		return event.payload !== null && event.operation !== "withdraw" && published
-			? [{ event, published }]
-			: [];
-	});
-
-	const days = candidates.map((candidate) => ({
-		...candidate,
-		read: dayOf(candidate.published),
-	}));
-
-	if (!current.ok || days.some((candidate) => !candidate.read.ok))
-		return { valid: false, feed: empty(facts) };
-
-	const ordered = days
-		.flatMap((candidate) =>
-			candidate.read.ok ? [{ ...candidate, day: candidate.read.day }] : [],
-		)
+			return !event.erased && event.operation !== "withdraw" && published
+				? [{ event, published, day: dayOf.get(event.entryId) ?? null }]
+				: [];
+		})
 		.sort((a, b) => {
 			// Newest day first; a story with no day last; the later publish first on the same day.
 			if (a.day !== b.day) {
@@ -174,20 +126,114 @@ function assemble(projectId: string, facts: FeedFacts): Given {
 
 			return b.published.revision - a.published.revision;
 		})
-		.slice(0, MOST_IN_HISTORY);
+		.slice(0, MOST_IN_HISTORY)
+		.map(
+			({ event, published, day }): FeedPick => ({
+				revision: event.revision,
+				entryId: event.entryId,
+				origin: published.origin,
+				day,
+				publishedAt: event.publishedAt,
+			}),
+		);
 
-	const history = ordered.map((candidate) =>
-		entryOf(candidate.event, candidate.published.origin, candidate.day),
+	return {
+		choice: {
+			revision: index.latestRevision ?? 0,
+			current:
+				currentEvent && !currentEvent.erased
+					? {
+							revision: currentEvent.revision,
+							entryId: currentEvent.entryId,
+							origin: currentEvent.origin,
+							day: null,
+							publishedAt: currentEvent.publishedAt,
+						}
+					: null,
+			history,
+		},
+	};
+}
+
+export const chooseFeed = alwaysWrites({
+	name: "Choose the current entry and the history of a project's journal",
+	given: (index: FeedIndex, _facts: Record<string, never>) => choose(index),
+	refusals: [],
+	writes: (g) => g.choice,
+	writesText: "the events whose text the feed shows",
+});
+
+/** The revisions whose text is to be read: the current entry's and the history's, each once. */
+export const revisionsToRead = (choice: FeedChoice): number[] => [
+	...new Set([
+		...(choice.current ? [choice.current.revision] : []),
+		...choice.history.map((pick) => pick.revision),
+	]),
+];
+
+/** The stored text of the picked events by revision; null where it was erased. */
+export type FeedTexts = ReadonlyMap<number, string | null>;
+
+const text = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
+
+type Shown =
+	| { readonly ok: true; readonly entry: PublicEntry | null }
+	| { readonly ok: false };
+
+const nothing: Shown = { ok: true, entry: null };
+
+/** The entry a picked event shows: none when its text is gone, a refusal when its text is not a publication with a story. */
+function entryOf(pick: FeedPick, payload: string | null | undefined): Shown {
+	if (payload === null || payload === undefined) return nothing;
+	const json = text(payload);
+
+	if (!Result.isSuccess(json)) return { ok: false };
+	const publication = parsePublication(json.success);
+
+	if (!publication || !publication.story) return { ok: false };
+
+	return {
+		ok: true,
+		entry: {
+			entryId: publication.entryId,
+			occurredOn: pick.day ?? publication.occurredOn,
+			publishedAt: pick.publishedAt,
+			backfilled: pick.origin === "backfill",
+			story: publication.story,
+		},
+	};
+}
+
+type ShowGiven = { readonly valid: boolean; readonly feed: ProjectFeed };
+
+function assemble(
+	request: { readonly projectId: string; readonly choice: FeedChoice },
+	texts: FeedTexts,
+): ShowGiven {
+	const { projectId, choice } = request;
+	const current = choice.current
+		? entryOf(choice.current, texts.get(choice.current.revision))
+		: nothing;
+	const history = choice.history.map((pick) =>
+		entryOf(pick, texts.get(pick.revision)),
 	);
 
-	if (history.some((item) => !item.ok))
-		return { valid: false, feed: empty(facts) };
+	if (!current.ok || history.some((item) => !item.ok))
+		return {
+			valid: false,
+			feed: {
+				projectId,
+				revision: choice.revision,
+				current: null,
+				history: [],
+			},
+		};
 
 	return {
 		valid: true,
 		feed: {
 			projectId,
-			revision: facts.revision,
+			revision: choice.revision,
 			current: current.entry,
 			history: history.flatMap((item) =>
 				item.ok && item.entry ? [item.entry] : [],
@@ -196,15 +242,17 @@ function assemble(projectId: string, facts: FeedFacts): Given {
 	};
 }
 
-export const projectFeed = alwaysWrites({
-	name: "Show a project's journal to the public",
-	given: (request: { readonly projectId: string }, facts: FeedFacts) =>
-		assemble(request.projectId, facts),
+export const showFeed = alwaysWrites({
+	name: "Show a project's chosen entries to the public",
+	given: (
+		request: { readonly projectId: string; readonly choice: FeedChoice },
+		facts: { readonly texts: FeedTexts },
+	) => assemble(request, facts.texts),
 	refusals: [
 		unless(
-			term(
+			term<ShowGiven>(
 				"every story that is shown reads as a publication",
-				(g: Given) => g.valid,
+				(g) => g.valid,
 			),
 			() => new StoredPublicationInvalid(),
 		),

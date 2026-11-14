@@ -1,9 +1,21 @@
-// The feed flow: read a project's journal in one batch and let the feed rule pick the current entry and the history.
+// The feed flow: read the small columns of a project's journal in one batch, let the rule choose the current entry and the
+// history, read the text of the chosen events only (a second plain read), and let the rule show them. Reading the journal
+// in two steps is safe because a withdrawal landing between them erases text, which the second rule treats as withdrawn.
 import * as Effect from "effect/Effect";
-import { readFeedFacts } from "../publication-store";
-import { projectFeed } from "../rules/publication-feed";
+import { readFeedIndex, readFeedTexts } from "../publication-store";
+import {
+	chooseFeed,
+	revisionsToRead,
+	showFeed,
+} from "../rules/publication-feed";
 
 export const readFeed = (projectId: string) =>
-	readFeedFacts(projectId).pipe(
-		Effect.flatMap((facts) => projectFeed.decide({ projectId }, facts)),
-	);
+	Effect.gen(function* () {
+		const choice = yield* chooseFeed.decide(
+			yield* readFeedIndex(projectId),
+			{},
+		);
+		const texts = yield* readFeedTexts(projectId, revisionsToRead(choice));
+
+		return yield* showFeed.decide({ projectId, choice }, { texts });
+	});

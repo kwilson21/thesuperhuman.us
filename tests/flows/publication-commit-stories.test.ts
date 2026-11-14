@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Publication } from "../../src/lib/publication/contract";
 import { commit } from "../../src/server/flows/publication-commit";
 import { readFeed } from "../../src/server/flows/publication-feed";
+import { publishTool } from "../../src/server/flows/publication-tools";
 import { answerOfRun } from "../helpers/rule-answers";
 import {
 	publicationWorld,
@@ -311,5 +312,127 @@ describe("a failing database", () => {
 		await deliver(world, base);
 		world.sql.exec("UPDATE publication_events SET payload='not json'");
 		await expect(feed(world)).rejects.toThrow();
+	});
+});
+
+describe("a failure part-way through the commit batch", () => {
+	/** The withdrawal's erase fails after its insert and the trigger have run. */
+	const failingErase = (world: PublicationWorld) =>
+		world.sql.exec(
+			"CREATE TRIGGER golden_boom BEFORE UPDATE ON publication_events BEGIN SELECT RAISE(ABORT, 'boom'); END",
+		);
+
+	it("rolls back the insert and the trigger's effect, and the delivery is a named failure", async () => {
+		const world = publicationWorld();
+
+		await deliver(world, base);
+		world.sql.exec(
+			"INSERT INTO publication_outbox (project_id,event_id,entry_id,payload_hash,payload) VALUES ('threadline','one','first','h','queued text')",
+		);
+		failingErase(world);
+
+		const answer = await deliver(
+			world,
+			withdrawal({ eventId: "remove", expectedRevision: 1 }),
+		);
+
+		expect(answer).toEqual({
+			kind: "refuse",
+			type: "PublicationStoreFailed",
+			facts: {},
+		});
+		expect(
+			world.sql.prepare("SELECT COUNT(*) AS n FROM publication_events").get(),
+		).toEqual({ n: 1 });
+		expect(
+			world.sql.prepare("SELECT payload FROM publication_outbox").get(),
+		).toEqual({ payload: "queued text" });
+	});
+
+	it("is the tool's documented word, pending, and the retry then succeeds", async () => {
+		const world = publicationWorld();
+
+		failingErase(world);
+		const setting = {
+			ownerId: "1",
+			allowlist: "threadline",
+			connection: { ownerId: "1", scopes: ["publication:threadline"] },
+		};
+
+		const envelope = {
+			...withdrawal({ eventId: "remove" }),
+			story: null,
+		};
+
+		const first = await Effect.runPromise(
+			publishTool(setting, "threadline", envelope).pipe(
+				Effect.provideContext(world.services),
+			),
+		);
+
+		expect(first).toEqual({ value: { status: "pending" }, isError: true });
+		world.sql.exec("DROP TRIGGER golden_boom");
+
+		const retry = await Effect.runPromise(
+			publishTool(setting, "threadline", envelope).pipe(
+				Effect.provideContext(world.services),
+			),
+		);
+
+		expect(retry.isError).toBe(false);
+	});
+});
+
+describe("the feed's two reads", () => {
+	it("reads no text in the index read, and the text of the shown entries only", async () => {
+		const world = publicationWorld();
+
+		await deliver(world, base);
+		world.batches.length = 0;
+		await feed(world);
+		const [index, texts] = world.batches;
+
+		expect(
+			index.some((q) =>
+				/SELECT[^;]*\bpayload\b(?! IS NULL)/.test(
+					q.replace(/json_extract\(payload[^)]*\)/g, ""),
+				),
+			),
+		).toBe(false);
+		expect(texts).toHaveLength(1);
+		expect(texts[0]).toMatch(/revision IN \(\?2\)/);
+	});
+
+	it("leaves out an entry a withdrawal erased between the index read and the text read", async () => {
+		const world = publicationWorld();
+
+		await deliver(world, base);
+		world.before(/revision IN/, async () => {
+			await deliver(
+				world,
+				withdrawal({ eventId: "remove", expectedRevision: 1 }),
+			);
+		});
+		const shown = await feed(world);
+
+		expect(shown.current).toBeNull();
+		expect(shown.history).toEqual([]);
+	});
+
+	it("reads a long history in statements of at most 50 revisions", async () => {
+		const world = publicationWorld();
+
+		for (let i = 0; i < 120; i += 1)
+			await deliver(world, {
+				...base,
+				eventId: `e${i}`,
+				entryId: `n${i}`,
+				expectedRevision: i,
+			});
+		world.batches.length = 0;
+		const shown = await feed(world);
+
+		expect(shown.history).toHaveLength(100);
+		expect(world.batches[1]).toHaveLength(2);
 	});
 });

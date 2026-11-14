@@ -54,8 +54,8 @@ export type StoredEvent = {
 
 /** What a commit reads, in one batch. */
 export type CommitFacts = {
-	/** The project's latest revision; 0 when it has no event. */
-	readonly latestRevision: number;
+	/** The project's latest revision; null when it has no event, which the rule reads as 0. */
+	readonly latestRevision: number | null;
 	/** The event stored for this project and event id, or null. */
 	readonly sameEvent: StoredEvent | null;
 	/** The operation of every event stored for this entry. */
@@ -164,7 +164,7 @@ export const commitPublication = rule({
 				"expectedRevision is the project's latest revision, or the withdrawal is already stored",
 				(g: Given) =>
 					g.repeatsWithdrawal ||
-					g.p.expectedRevision === g.facts.latestRevision,
+					g.p.expectedRevision === (g.facts.latestRevision ?? 0),
 			),
 			() => new PublicationConflict(),
 		),

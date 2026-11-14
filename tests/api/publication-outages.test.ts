@@ -225,7 +225,7 @@ describe("values a visitor sends that would become part of a KV key", () => {
 	});
 
 	it("answers a token request whose code, refresh token or client id is too long with a 4xx", async () => {
-		for (const fields of [
+		const cases: { [name: string]: string }[] = [
 			{ grant_type: "authorization_code", code: `1:2:${long}`, client_id: "c" },
 			{
 				grant_type: "refresh_token",
@@ -233,7 +233,9 @@ describe("values a visitor sends that would become part of a KV key", () => {
 				client_id: "c",
 			},
 			{ grant_type: "authorization_code", code: "1:2:3", client_id: long },
-		]) {
+		];
+
+		for (const fields of cases) {
 			const response = await call("/api/publication/token", form(fields));
 
 			expect(response.status).toBeGreaterThanOrEqual(400);

@@ -12,7 +12,7 @@ import type {
 	CommitWrite,
 	StoredEvent,
 } from "./rules/publication-commit";
-import type { FeedEvent, FeedFacts } from "./rules/publication-feed";
+import type { FeedIndex, FeedTexts } from "./rules/publication-feed";
 import { PublicationDb } from "./services";
 
 /** The publication database failed, and nothing says it is only unavailable: an outage, a bad statement, a failed batch. */
@@ -24,13 +24,15 @@ export class PublicationStoreFailed extends Data.TaggedError(
 export type StoredReceipt = Pick<StoredEvent, "revision" | "publishedAt">;
 
 type EventRow = {
-	revision?: number;
+	revision?: number | null;
 	published_at?: string;
 	payload_hash?: string;
 	operation?: string;
 	entry_id?: string;
 	origin?: string;
 	payload?: string | null;
+	erased?: number;
+	occurred_on?: string | null;
 };
 
 /** Runs one database call; a rejection is a PublicationStoreFailed. */
@@ -44,11 +46,11 @@ const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 		});
 	});
 
-/** The project's latest revision statement. 0 when the project has no event. */
+/** The project's latest revision statement. The value is null when the project has no event; the rules treat that as 0. */
 const latestRevision = (db: D1Database, projectId: string) =>
 	db
 		.prepare(
-			"SELECT COALESCE(MAX(revision),0) AS revision FROM publication_events WHERE project_id=?1",
+			"SELECT MAX(revision) AS revision FROM publication_events WHERE project_id=?1",
 		)
 		.bind(projectId);
 
@@ -80,9 +82,9 @@ export const readCommitFacts = (
 		const stored = same.results[0];
 
 		return {
-			latestRevision: latest.results[0]?.revision ?? 0,
+			latestRevision: latest.results[0]?.revision ?? null,
 			sameEvent:
-				stored?.revision === undefined ||
+				stored?.revision == null ||
 				stored.published_at === undefined ||
 				stored.payload_hash === undefined
 					? null
@@ -151,35 +153,42 @@ export const insertEvent = (write: CommitWrite) =>
 
 		const row = results.at(-1)?.results[0];
 
-		if (row?.revision === undefined || row.published_at === undefined)
+		if (row?.revision == null || row.published_at === undefined)
 			return yield* Effect.fail(new PublicationStoreFailed());
 
 		return { revision: row.revision, publishedAt: row.published_at };
 	});
 
 /**
- * Reads a project's whole journal for the feed, in ONE batch: the latest revision and every event with its stored
- * content. Which entry is current and which are history is the feed rule's decision (src/server/rules/publication-feed.ts).
+ * Reads, in ONE batch, what choosing a project's feed needs and no text: the latest revision, the small columns of every
+ * event (`erased` says its text was erased by a withdrawal), and each publish event's day, taken from its stored text by
+ * `json_extract` (a projection of one field, not a decision). Which entry is current and which are history is the feed
+ * rule's decision (src/server/rules/publication-feed.ts).
  */
-export const readFeedFacts = (projectId: string) =>
-	asked(async (db): Promise<FeedFacts> => {
-		const [latest, events] = await db.batch<EventRow>([
+export const readFeedIndex = (projectId: string) =>
+	asked(async (db): Promise<FeedIndex> => {
+		const [latest, events, days] = await db.batch<EventRow>([
 			latestRevision(db, projectId),
 			db
 				.prepare(
-					"SELECT revision,entry_id,operation,origin,payload,published_at FROM publication_events WHERE project_id=?1 ORDER BY revision",
+					"SELECT revision,entry_id,operation,origin,payload IS NULL AS erased,published_at FROM publication_events WHERE project_id=?1 ORDER BY revision",
+				)
+				.bind(projectId),
+			db
+				.prepare(
+					"SELECT entry_id,json_extract(payload,'$.occurredOn') AS occurred_on FROM publication_events WHERE project_id=?1 AND operation='publish'",
 				)
 				.bind(projectId),
 		]);
 
 		return {
-			revision: latest.results[0]?.revision ?? 0,
-			events: events.results.flatMap((row): FeedEvent[] =>
-				row.revision === undefined ||
+			latestRevision: latest.results[0]?.revision ?? null,
+			events: events.results.flatMap((row) =>
+				row.revision == null ||
 				row.entry_id === undefined ||
 				row.operation === undefined ||
 				row.origin === undefined ||
-				row.payload === undefined ||
+				row.erased === undefined ||
 				row.published_at === undefined
 					? []
 					: [
@@ -188,10 +197,54 @@ export const readFeedFacts = (projectId: string) =>
 								entryId: row.entry_id,
 								operation: row.operation,
 								origin: row.origin,
-								payload: row.payload,
+								erased: row.erased === 1,
 								publishedAt: row.published_at,
 							},
 						],
 			),
+			days: days.results.flatMap((row) =>
+				row.entry_id === undefined
+					? []
+					: [{ entryId: row.entry_id, day: row.occurred_on ?? null }],
+			),
 		};
+	});
+
+/** Most revisions in one statement: D1 allows 100 bound values in a statement, and one is the project. */
+const REVISIONS_PER_STATEMENT = 50;
+
+/**
+ * Reads the stored text of the picked events, by project and revision (a key), in ONE batch of plain reads. A text that a
+ * withdrawal erased since the index was read is null; one that is not there is absent.
+ */
+export const readFeedTexts = (
+	projectId: string,
+	revisions: readonly number[],
+) =>
+	asked(async (db): Promise<FeedTexts> => {
+		if (revisions.length === 0) return new Map();
+		const chunks: number[][] = [];
+
+		for (let at = 0; at < revisions.length; at += REVISIONS_PER_STATEMENT)
+			chunks.push(revisions.slice(at, at + REVISIONS_PER_STATEMENT));
+
+		const results = await db.batch<EventRow>(
+			chunks.map((chunk) =>
+				db
+					.prepare(
+						`SELECT revision,payload FROM publication_events WHERE project_id=?1 AND revision IN (${chunk.map((_, i) => `?${i + 2}`).join(",")})`,
+					)
+					.bind(projectId, ...chunk),
+			),
+		);
+
+		return new Map(
+			results.flatMap((result) =>
+				result.results.flatMap((row): [number, string | null][] =>
+					row.revision == null || row.payload === undefined
+						? []
+						: [[row.revision, row.payload]],
+				),
+			),
+		);
 	});
