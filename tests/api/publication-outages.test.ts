@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
-import { publicationOAuthRoute } from "~/lib/publication/oauth";
+import { publicationOAuthRoute } from "~/server/publication-oauth";
 import { GET, POST } from "~/pages/api/work-feed";
 import { boundStatement } from "../helpers/d1";
 import { double, fakeKv, partial } from "../helpers/doubles";

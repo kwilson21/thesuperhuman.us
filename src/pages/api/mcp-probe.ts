@@ -1,12 +1,19 @@
 import type { APIRoute } from "astro";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import { runRoute } from "~/server/run";
 
 export const prerender = false;
 
-/** Public connectivity probe only. No credentials, database access, or publication. */
-export const ALL: APIRoute = async ({ request }) => {
+/** The MCP transport failed while it read or answered the request. */
+class ProbeFailed extends Data.TaggedError("ProbeFailed") {}
+
+/** Public connectivity probe only. No credentials, database access, or publication. Zod stays here: the MCP SDK requires it for the tool's input. */
+const probe = async (request: Request) => {
 	const server = new McpServer({
 		name: "superhuman-connectivity-probe",
 		version: "1.0.0",
@@ -56,3 +63,17 @@ export const ALL: APIRoute = async ({ request }) => {
 		await server.close();
 	}
 };
+
+export const ALL: APIRoute = ({ request }) =>
+	runRoute(
+		Context.empty(),
+		Effect.tryPromise({
+			try: () => probe(request),
+			catch: () => new ProbeFailed(),
+		}).pipe(
+			// The probe has no fixed sentence: a transport failure answers a bare 500, as it did when it threw.
+			Effect.catchTags({
+				ProbeFailed: () => Effect.succeed(new Response(null, { status: 500 })),
+			}),
+		),
+	);

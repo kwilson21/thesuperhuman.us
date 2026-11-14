@@ -1,6 +1,10 @@
 // FROZEN REFERENCE COPY. The hand-written publication envelope validator that src/lib/publication/contract.ts held before
 // it became an Effect Schema reader. It is a reference for tests/server/validators-differential.test.ts only and is not
 // product code: nothing under src/ or scripts/ imports it.
+import type { RawValue } from "../../../src/lib/fields";
+
+/** Any value a delivery can hold: JSON, or a value that is not (the reference reads both). */
+export type LegacyInput = RawValue;
 
 export type LegacyPublication = {
 	version: 1;
@@ -66,7 +70,9 @@ function day(value: unknown): value is string {
 }
 
 /** Strict shape validation, NOT content sanitization or publication permission. */
-export function legacyParsePublication(value: unknown): LegacyPublication | null {
+export function legacyParsePublication(
+	value: unknown,
+): LegacyPublication | null {
 	if (!record(value)) return null;
 	const fields = new Map<string, unknown>(Object.entries(value));
 

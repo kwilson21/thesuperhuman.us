@@ -55,7 +55,9 @@ export interface PublicationJournal {
 }
 
 const id = Schema.String.check(
-	Schema.makeFilter((value: string) => /^[a-z0-9][a-z0-9_-]{0,79}$/.test(value)),
+	Schema.makeFilter((value: string) =>
+		/^[a-z0-9][a-z0-9_-]{0,79}$/.test(value),
+	),
 );
 
 /** Text that is not blank, within the limit, and holds no control character except tab, line feed and carriage return. */
@@ -70,7 +72,9 @@ const text = (limit: number) =>
 	);
 
 const revision = Schema.Number.check(
-	Schema.makeFilter((value: number) => Number.isSafeInteger(value) && value >= 0),
+	Schema.makeFilter(
+		(value: number) => Number.isSafeInteger(value) && value >= 0,
+	),
 );
 
 /** A real calendar day, written YYYY-MM-DD. */

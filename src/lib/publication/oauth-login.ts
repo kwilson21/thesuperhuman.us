@@ -1,7 +1,4 @@
-import type {
-	AuthRequest,
-	OAuthHelpers,
-} from "@cloudflare/workers-oauth-provider";
+import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 export const publicationOrigin = "https://thesuperhuman.us";
 export const publicationBase = "/api/publication";
@@ -14,103 +11,8 @@ export interface LoginEnv extends Env {
 	PUBLICATION_COOKIE_KEY: string;
 }
 
-interface LoginState {
-	request: AuthRequest;
-	nonce: string;
-	verifier: string;
-	expires: number;
-	approved: boolean;
-}
-
-const cookieName = "__Host-publication-login";
-
-const encode = (bytes: Uint8Array) =>
-	btoa(String.fromCharCode(...bytes))
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "");
-
-function decode(value: string): Uint8Array<ArrayBuffer> {
-	return Uint8Array.from(
-		atob(value.replace(/-/g, "+").replace(/_/g, "/")),
-		(c) => c.charCodeAt(0),
-	);
-}
-
-const random = () => encode(crypto.getRandomValues(new Uint8Array(32)));
-
-const cookie = (value: string, age = 600) =>
-	`${cookieName}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}`;
-
-/**
- * Something on the site's side failed (a KV read or write, the cookie key, GitHub), not the visitor's request. The visitor
- * is told so, with one fixed sentence and the status that says which kind it is: 500 for the site's own fault, 503 when
- * GitHub is the unavailable dependency. The failure's own text is never sent.
- */
-class Unavailable extends Error {
-	constructor(readonly status: 500 | 503) {
-		super("Publication connection unavailable.");
-	}
-}
-
-async function key(env: LoginEnv) {
-	let bytes: Uint8Array<ArrayBuffer>;
-
-	try {
-		bytes = decode(env.PUBLICATION_COOKIE_KEY);
-	} catch {
-		throw new Unavailable(500);
-	}
-
-	if (bytes.length !== 32) throw new Unavailable(500);
-
-	return crypto.subtle.importKey("raw", bytes, "AES-GCM", false, [
-		"encrypt",
-		"decrypt",
-	]);
-}
-
-async function seal(value: LoginState, env: LoginEnv) {
-	const iv = crypto.getRandomValues(new Uint8Array(12));
-
-	const encrypted = await crypto.subtle.encrypt(
-		{ name: "AES-GCM", iv },
-		await key(env),
-		new TextEncoder().encode(JSON.stringify(value)),
-	);
-
-	const token = encode(iv) + "." + encode(new Uint8Array(encrypted));
-
-	if (token.length > 3600) throw new Error("Authorization request too large");
-
-	return token;
-}
-
-async function unseal(request: Request, env: LoginEnv): Promise<LoginState> {
-	const value = request.headers
-		.get("cookie")
-		?.split(";")
-		.map((c) => c.trim())
-		.find((c) => c.startsWith(cookieName + "="))
-		?.slice(cookieName.length + 1);
-
-	if (!value || value.length > 3600) throw new Error("Missing login");
-	const [iv, ciphertext] = value.split(".");
-
-	const bytes = await crypto.subtle.decrypt(
-		{ name: "AES-GCM", iv: decode(iv) },
-		await key(env),
-		decode(ciphertext),
-	);
-
-	// SAFETY: the bytes are AES-GCM-decrypted with the server cookie key, so they are the JSON that seal wrote from a LoginState.
-	const state = JSON.parse(new TextDecoder().decode(bytes)) as LoginState;
-
-	if (!Number.isFinite(state.expires) || state.expires < Date.now())
-		throw new Error("Expired login");
-
-	return state;
-}
+/** The login cookie's name (it carries the sealed state of one sign-in, nothing else). */
+export const cookieName = "__Host-publication-login";
 
 const escape = (value: string) =>
 	value.replace(
@@ -121,72 +23,11 @@ const escape = (value: string) =>
 			]!,
 	);
 
-const fail = () =>
-	new Response(
-		"Sign-in could not be completed. Start again from your connection settings.",
-		{
-			status: 400,
-			headers: { "Cache-Control": "no-store", "Set-Cookie": cookie("", 0) },
-		},
-	);
-
-const unavailable = (status: 500 | 503) =>
-	new Response("Publication connection unavailable.", {
-		status,
-		headers: { "Cache-Control": "no-store", "Set-Cookie": cookie("", 0) },
-	});
-
-/** Runs a call to the OAuth library; a refusal of the request itself stays the visitor's (400), any other failure is the site's (500). */
-async function library<T>(call: () => Promise<T>): Promise<T> {
-	try {
-		return await call();
-	} catch (error) {
-		if (error instanceof Error && error.name === "AuthorizationError")
-			throw error;
-
-		throw new Unavailable(500);
-	}
-}
-
-/** Calls GitHub; a call that cannot be made, or a 5xx answer, or an answer that is not JSON, is GitHub being unavailable (503). */
-async function github(url: string, init: RequestInit) {
-	let response: Response;
-
-	try {
-		response = await fetch(url, init);
-	} catch {
-		throw new Unavailable(503);
-	}
-
-	if (response.status >= 500) throw new Unavailable(503);
-	let body: unknown;
-
-	try {
-		body = await response.json();
-	} catch {
-		throw new Unavailable(503);
-	}
-
-	return { response, body };
-}
-
-function redirect(url: string, token: string, age = 600) {
-	return new Response(null, {
-		status: 302,
-		headers: {
-			Location: url,
-			"Set-Cookie": cookie(token, age),
-			"Cache-Control": "no-store",
-			"Referrer-Policy": "no-referrer",
-		},
-	});
-}
-
 // The consent page's only stylesheet. Its values are the site's tokens from src/styles/global.css as literals, because this
 // response carries its own CSP (default-src 'none'), not the site's. That policy admits this exact block by SHA-256 hash
 // and no other inline style. Libron is loaded from the site's own font files (the same Regular and Bold faces global.css
 // declares), which the policy admits with font-src 'self' only.
-const consentStyle = `
+export const consentStyle = `
 @font-face { font-family: 'Libron'; src: url('/fonts/libron-v0.25/Libron-Regular.woff2') format('woff2'); font-display: swap; font-style: normal; font-weight: 400; }
 @font-face { font-family: 'Libron'; src: url('/fonts/libron-v0.25/Libron-Bold.woff2') format('woff2'); font-display: swap; font-style: normal; font-weight: 700; }
 html { background: #FBF8F2; color: #0E0E0E; color-scheme: light; }
@@ -204,194 +45,21 @@ button:active { background: #0E0E0E; border-color: #0E0E0E; }
 .cancel { margin: 0; font: .8125rem/1.5 system-ui, -apple-system, sans-serif; color: #4A4A4A; }
 `;
 
-async function sha256Base64(text: string) {
-	const digest = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(text),
-	);
-
-	return btoa(String.fromCharCode(...new Uint8Array(digest)));
-}
-
-/** Explicit client consent precedes GitHub sign-in; no remembered blanket approval. */
-export async function publicationLogin(
-	request: Request,
-	env: LoginEnv,
-): Promise<Response> {
-	const url = new URL(request.url);
-
-	try {
-		if (
-			url.pathname === publicationBase + "/authorize" &&
-			request.method === "GET"
-		) {
-			const auth = await library(() =>
-				env.OAUTH_PROVIDER.parseAuthRequest(request),
-			);
-
-			const supported = (env.PUBLICATION_PROJECTS ?? "")
-				.split(",")
-				.map((s) => s.trim())
-				.filter(Boolean)
-				.map((p) => `publication:${p}`);
-
-			if (
-				auth.responseType !== "code" ||
-				auth.codeChallengeMethod !== "S256" ||
-				!auth.codeChallenge ||
-				!auth.scope.length ||
-				auth.scope.some((s) => !supported.includes(s)) ||
-				(auth.resource !== publicationResource &&
-					!(
-						Array.isArray(auth.resource) &&
-						auth.resource.length === 1 &&
-						auth.resource[0] === publicationResource
-					))
-			)
-				return fail();
-			const client = await library(() =>
-				env.OAUTH_PROVIDER.lookupClient(auth.clientId),
-			);
-
-			if (!client) return fail();
-
-			const state: LoginState = {
-				request: auth,
-				nonce: random(),
-				verifier: random(),
-				expires: Date.now() + 600000,
-				approved: false,
-			};
-
-			return new Response(
-				`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"><title>Connect project publishing</title><style>${consentStyle}</style><body><main>
-        <h1>Connect project publishing</h1><p><strong>${escape(client.clientName || auth.clientId)}</strong> is requesting access to ${escape(auth.scope.map((s) => s.slice(12)).join(", "))}.</p>
+/** The consent page: who asks, for what, where the visitor returns to, and the one form that carries the nonce. */
+export function consentHtml(
+	clientName: string,
+	projects: readonly string[],
+	returnOrigin: string,
+	nonce: string,
+) {
+	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"><title>Connect project publishing</title><style>${consentStyle}</style><body><main>
+        <h1>Connect project publishing</h1><p><strong>${escape(clientName)}</strong> is requesting access to ${escape(projects.join(", "))}.</p>
         <p>This connection can read progress and publish, correct, or permanently withdraw public progress on thesuperhuman.us.</p>
-        <p class="return-address">Return address: ${escape(new URL(auth.redirectUri).origin)}</p>
-        <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${state.nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p class="cancel">Close this page to cancel.</p>
-        </main></body></html>`,
-				{
-					headers: {
-						"Content-Type": "text/html; charset=utf-8",
-						"Cache-Control": "no-store",
-						// Preserve Origin on the same-site consent POST; omit cross-site referrers.
-						"Set-Cookie": cookie(await seal(state, env)),
-						"Referrer-Policy": "same-origin",
-						// Browsers also enforce form-action on the POST's redirect destination.
-						"Content-Security-Policy": `default-src 'none'; style-src 'sha256-${await sha256Base64(consentStyle)}'; font-src 'self'; form-action 'self' https://github.com/login/oauth/authorize ${new URL(auth.redirectUri).origin}; frame-ancestors 'none'; base-uri 'none'`,
-					},
-				},
-			);
-		}
-
-		if (
-			url.pathname === publicationBase + "/authorize" &&
-			request.method === "POST"
-		) {
-			if (request.headers.get("origin") !== publicationOrigin) return fail();
-			const state = await unseal(request, env);
-			const body = new URLSearchParams(await request.text());
-
-			if (state.approved || body.get("nonce") !== state.nonce) return fail();
-			state.approved = true;
-			const github = new URL("https://github.com/login/oauth/authorize");
-			github.search = new URLSearchParams({
-				client_id: env.PUBLICATION_GITHUB_CLIENT_ID,
-				redirect_uri: publicationOrigin + publicationBase + "/callback",
-				state: state.nonce,
-				scope: "",
-				code_challenge: encode(
-					new Uint8Array(
-						await crypto.subtle.digest(
-							"SHA-256",
-							new TextEncoder().encode(state.verifier),
-						),
-					),
-				),
-				code_challenge_method: "S256",
-				allow_signup: "false",
-			}).toString();
-
-			return redirect(github.href, await seal(state, env));
-		}
-
-		if (
-			url.pathname === publicationBase + "/callback" &&
-			request.method === "GET"
-		) {
-			const state = await unseal(request, env);
-			const code = url.searchParams.get("code");
-
-			if (
-				!state.approved ||
-				!code ||
-				code.length > 512 ||
-				url.searchParams.get("state") !== state.nonce
-			)
-				return fail();
-
-			const exchange = await github(
-				"https://github.com/login/oauth/access_token",
-				{
-					method: "POST",
-					headers: {
-						Accept: "application/json",
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						client_id: env.PUBLICATION_GITHUB_CLIENT_ID,
-						client_secret: env.PUBLICATION_GITHUB_CLIENT_SECRET,
-						code,
-						redirect_uri: publicationOrigin + publicationBase + "/callback",
-						code_verifier: state.verifier,
-					}),
-					signal: AbortSignal.timeout(10000),
-				},
-			);
-
-			// SAFETY: only access_token and error are read, and the fail() check below tests both before access_token is used.
-			const token = exchange.body as {
-				access_token?: string;
-				error?: string;
-			};
-
-			if (!exchange.response.ok || token.error || !token.access_token)
-				return fail();
-
-			const lookup = await github("https://api.github.com/user", {
-				headers: {
-					Authorization: `Bearer ${token.access_token}`,
-					Accept: "application/vnd.github+json",
-					"User-Agent": "superhuman-publication",
-				},
-				signal: AbortSignal.timeout(10000),
-			});
-
-			// SAFETY: only id is read, then stringified and compared with the configured owner ID, so a missing id becomes "undefined" and cannot match; the body is GitHub's API response over TLS.
-			const user = lookup.body as { id?: number };
-
-			if (
-				!lookup.response.ok ||
-				!env.PUBLICATION_OWNER_ID ||
-				String(user.id) !== env.PUBLICATION_OWNER_ID
-			)
-				return fail();
-
-			const { redirectTo } = await library(() =>
-				env.OAUTH_PROVIDER.completeAuthorization({
-				request: state.request,
-				userId: String(user.id),
-				scope: state.request.scope,
-				metadata: {},
-				props: { ownerId: String(user.id), scopes: state.request.scope },
-			}),
-			);
-
-			return redirect(redirectTo, "", 0);
-		}
-
-		return new Response("Not found", { status: 404 });
-	} catch (error) {
-		return error instanceof Unavailable ? unavailable(error.status) : fail();
-	}
+        <p class="return-address">Return address: ${escape(returnOrigin)}</p>
+        <form method="post" action="${publicationBase}/authorize"><input type="hidden" name="nonce" value="${nonce}"><button type="submit">Allow and sign in with GitHub</button></form><p class="cancel">Close this page to cancel.</p>
+        </main></body></html>`;
 }
+
+/** The consent page's own policy: its one inline style by hash, the site's fonts, and where the form may go. */
+export const consentPolicy = (styleHash: string, returnOrigin: string) =>
+	`default-src 'none'; style-src 'sha256-${styleHash}'; font-src 'self'; form-action 'self' https://github.com/login/oauth/authorize ${returnOrigin}; frame-ancestors 'none'; base-uri 'none'`;

@@ -3,10 +3,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { double, partial } from "../helpers/doubles";
 import {
-	publicationLogin,
 	publicationResource,
 	type LoginEnv,
 } from "~/lib/publication/oauth-login";
+import { publicationLogin } from "~/server/publication-login";
 
 const origin = "https://thesuperhuman.us";
 
@@ -569,6 +569,7 @@ describe("publication sign-in when something other than the visitor's request fa
 		vi.mocked(env.OAUTH_PROVIDER.lookupClient).mockRejectedValueOnce(
 			new Error("kv private details"),
 		);
+
 		const page = await publicationLogin(
 			new Request(origin + "/api/publication/authorize"),
 			env,
@@ -581,6 +582,7 @@ describe("publication sign-in when something other than the visitor's request fa
 	it("answers 500 when reading the authorization request fails in KV, and 400 when the request itself is refused", async () => {
 		const { env } = fixture();
 		const parse = vi.mocked(env.OAUTH_PROVIDER.parseAuthRequest);
+
 		const refused = Object.assign(new Error("Invalid client_id"), {
 			name: "AuthorizationError",
 		});
@@ -607,6 +609,7 @@ describe("publication sign-in when something other than the visitor's request fa
 
 	it("answers 500 when the cookie key is not a usable key", async () => {
 		const { env } = fixture();
+
 		const bad = partial<LoginEnv>({
 			...env,
 			PUBLICATION_COOKIE_KEY: btoa("short"),
@@ -623,7 +626,10 @@ describe("publication sign-in when something other than the visitor's request fa
 
 	it.each([
 		["cannot be reached", () => Promise.reject(new Error("network down"))],
-		["answers 500", () => Promise.resolve(new Response("bad", { status: 500 }))],
+		[
+			"answers 500",
+			() => Promise.resolve(new Response("bad", { status: 500 })),
+		],
 		[
 			"answers with HTML",
 			() => Promise.resolve(new Response("<html>", { status: 200 })),

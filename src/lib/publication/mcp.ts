@@ -1,31 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { parsePublication } from "./contract";
-import { D1PublicationJournal } from "./journal";
-import { readProject } from "./read";
 
 export interface PublicationIdentity {
 	ownerId: string;
-	scopes: string[];
-}
-
-export const scopeFor = (project: string) => `publication:${project}`;
-
-export function projectAccess(
-	env: Env,
-	identity: PublicationIdentity,
-	project: string,
-): boolean {
-	return (
-		Boolean(env.PUBLICATION_OWNER_ID) &&
-		identity.ownerId === env.PUBLICATION_OWNER_ID &&
-		identity.scopes.includes(scopeFor(project)) &&
-		(env.PUBLICATION_PROJECTS ?? "")
-			.split(",")
-			.map((s) => s.trim())
-			.includes(project)
-	);
+	readonly scopes: readonly string[];
 }
 
 const id = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/);
@@ -59,20 +38,35 @@ const envelope = z
 	})
 	.strict();
 
-const result = (value: unknown, isError = false) => ({
-	content: [{ type: "text" as const, text: JSON.stringify(value) }],
-	isError,
+const result = (answer: ToolAnswer) => ({
+	content: [{ type: "text" as const, text: JSON.stringify(answer.value) }],
+	isError: answer.isError,
 });
+
+/** The envelope as the tool's declared input shapes it; the commit reads it again as a publication before it is used. */
+export type Envelope = z.infer<typeof envelope>;
+
+/** What a tool answers: a value that becomes the tool result's JSON text, and whether it is an error result. */
+export interface ToolAnswer {
+	value: unknown;
+	isError: boolean;
+}
+
+/**
+ * What the two tools do. The decisions and the journal are in src/server (src/lib may not import it), so the route hands
+ * them in; this file is the MCP transport and the tools' declared inputs, which the MCP SDK requires to be Zod schemas.
+ */
+export interface PublicationTools {
+	progress(projectId: string): Promise<ToolAnswer>;
+	publish(projectId: string, publication: Envelope): Promise<ToolAnswer>;
+}
 
 /** Called only after OAuth token verification. No public route calls this directly. */
 export async function publicationMcp(
 	request: Request,
-	env: Env,
 	identity: PublicationIdentity,
+	tools: PublicationTools,
 ): Promise<Response> {
-	if (!env.PUBLICATION_DB)
-		return new Response("Publication unavailable", { status: 503 });
-
 	const server = new McpServer(
 		{ name: "superhuman-publication", version: "1.0.0" },
 		{
@@ -100,16 +94,7 @@ export async function publicationMcp(
 				openWorldHint: false,
 			},
 		},
-		async ({ projectId }) => {
-			if (!projectAccess(env, identity, projectId))
-				return result({ status: "forbidden" }, true);
-
-			try {
-				return result(await readProject(env.PUBLICATION_DB!, projectId));
-			} catch {
-				return result({ status: "unavailable" }, true);
-			}
-		},
+		async ({ projectId }) => result(await tools.progress(projectId)),
 	);
 	server.registerTool(
 		"publish_project_update",
@@ -125,25 +110,8 @@ export async function publicationMcp(
 				openWorldHint: true,
 			},
 		},
-		async ({ publication }) => {
-			if (!projectAccess(env, identity, publication.projectId))
-				return result({ status: "forbidden" }, true);
-			const parsed = parsePublication(publication);
-
-			if (!parsed) return result({ status: "invalid" }, true);
-
-			try {
-				const outcome = await new D1PublicationJournal(
-					env.PUBLICATION_DB!,
-				).commit(parsed);
-
-				return outcome.status === "accepted" || outcome.status === "duplicate"
-					? result({ status: "delivered", receipt: outcome.receipt })
-					: result(outcome, true);
-			} catch {
-				return result({ status: "pending" }, true);
-			}
-		},
+		async ({ publication }) =>
+			result(await tools.publish(publication.projectId, publication)),
 	);
 
 	const transport = new WebStandardStreamableHTTPServerTransport({
