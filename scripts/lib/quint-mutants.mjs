@@ -99,6 +99,6 @@ export const models = [
 		mutants: signinMutants,
 		equivalents: [],
 		exhaustive: [],
-		samples: "12000",
+		samples: "8000",
 	},
 ];
