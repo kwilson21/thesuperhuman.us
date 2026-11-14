@@ -11,7 +11,11 @@ import * as Effect from "effect/Effect";
 import type { AudioPayment } from "../lib/audio-payments";
 import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
 import { sendMail } from "../lib/resend";
-import { verifyTurnstile } from "../lib/turnstile";
+import {
+	checkTurnstile,
+	type TurnstileOutcome,
+	verifyTurnstile,
+} from "../lib/turnstile";
 
 /**
  * Each binding service is typed as REQUIRED, as kwilson21/tally types its `Database`: a program that reads one is never
@@ -348,6 +352,28 @@ export class Background extends Context.Service<
 	Background,
 	{ readonly schedule: (task: () => Promise<void>) => Effect.Effect<void> }
 >()("site/Background") {}
+
+/**
+ * The captcha check that answers three ways: the token passed, the check refused it, or the check could not answer
+ * (src/lib/turnstile.ts `checkTurnstile`). The service never fails: each outcome is a value the caller decides on.
+ */
+export class TurnstileCheck extends Context.Service<
+	TurnstileCheck,
+	{
+		readonly check: (
+			token: string,
+			remoteIp: string,
+		) => Effect.Effect<TurnstileOutcome>;
+	}
+>()("site/TurnstileCheck") {}
+
+/** The three-way Turnstile check with `secret` (env.TURNSTILE_SECRET_KEY). */
+export const liveTurnstileCheck = (secret: string) =>
+	Context.make(TurnstileCheck, {
+		// checkTurnstile catches every failure of the call and answers "unavailable", so the promise cannot reject.
+		check: (token, remoteIp) =>
+			Effect.promise(() => checkTurnstile(token, secret, remoteIp)),
+	});
 
 /** The suggestion limiters the request's bindings give. */
 export const liveSuggestLimits = (env: Env) =>

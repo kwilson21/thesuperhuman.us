@@ -1,20 +1,26 @@
 import type { APIRoute } from "astro";
-import { z } from "astro/zod";
+import * as Effect from "effect/Effect";
 import { musicRequest } from "~/lib/music-request";
-import { checkTurnstile } from "~/lib/turnstile";
-import {
-	createSuggestionPass,
-	suggestionPassCookie,
-} from "~/lib/brief-suggestion-pass";
+import { suggestionPassCookie } from "~/lib/brief-suggestion-pass";
+import { readPassInput } from "~/server/brief-input";
 import { logUnexpected } from "~/server/failure";
+import { issuePass, PassSigningFailed } from "~/server/flows/brief-pass";
+import { runRoute } from "~/server/run";
+import { liveTurnstileCheck } from "~/server/services";
 
 export const prerender = false;
+
 const ROUTE = "/api/software/brief/pass";
-const schema = z.object({ token: z.string().min(1).max(2048) }).strict();
+
+const headers = () => new Headers({ "cache-control": "no-store" });
+
+/** A pass that was not issued says nothing of why: the same `{ ok: false }` the route has always answered. */
+const notIssued = () => Response.json({ ok: false }, { headers: headers() });
+
+const signingFailed = () =>
+	Response.json({ ok: false }, { status: 500, headers: headers() });
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	const headers = new Headers({ "cache-control": "no-store" });
-
 	try {
 		const env = locals.runtime?.env;
 		const ip = request.headers.get("cf-connecting-ip");
@@ -24,31 +30,46 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
 			!ip
 		)
-			return Response.json({ ok: false }, { headers });
-		const parsed = schema.safeParse(await musicRequest(request, 4096));
+			return notIssued();
+		const read = readPassInput(await musicRequest(request, 4096));
 
-		if (!parsed.success) return Response.json({ ok: false }, { headers });
+		if (!read.ok) return notIssued();
+		const secret = env.TURNSTILE_SECRET_KEY;
 
-		const check = await checkTurnstile(
-			parsed.data.token,
-			env.TURNSTILE_SECRET_KEY,
-			ip,
+		return runRoute(
+			liveTurnstileCheck(secret),
+			issuePass({ token: read.value.token, ip, secret }).pipe(
+				Effect.map((answer) => {
+					if (answer.kind === "unavailable")
+						// The captcha service cannot answer: a known unavailable dependency.
+						return Response.json(
+							{ ok: false },
+							{ status: 503, headers: headers() },
+						);
+
+					if (answer.kind === "refused") return notIssued();
+					const issued = headers();
+
+					issued.set(
+						"set-cookie",
+						`${suggestionPassCookie}=${answer.cookie}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
+					);
+
+					return Response.json({ ok: true }, { headers: issued });
+				}),
+				Effect.catchTag("PassSigningFailed", (failure: PassSigningFailed) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.cause);
+
+						return signingFailed();
+					}),
+				),
+			),
+			{ route: ROUTE, answer: signingFailed },
 		);
-
-		// A captcha service that cannot answer is an outage: the pass is not granted, and the answer says the service is unavailable.
-		if (check === "unavailable")
-			return Response.json({ ok: false }, { status: 503, headers });
-
-		if (check === "refused") return Response.json({ ok: false }, { headers });
-		headers.set(
-			"set-cookie",
-			`${suggestionPassCookie}=${await createSuggestionPass(env.TURNSTILE_SECRET_KEY, ip)}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
-		);
-
-		return Response.json({ ok: true }, { headers });
 	} catch (error) {
 		logUnexpected(ROUTE, error);
 
-		return Response.json({ ok: false }, { status: 500, headers });
+		return signingFailed();
 	}
 };

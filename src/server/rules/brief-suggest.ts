@@ -58,7 +58,10 @@ export const askForSuggestion = alwaysWrites({
 /** The visitor's pass: a signed, unexpired cookie for this address. Without one the route asks for a pass. */
 export const requirePass = alwaysWrites({
 	name: "Require a valid suggestion pass",
-	given: (facts: { readonly valid: boolean }) => facts,
+	given: (
+		request: { readonly valid: boolean },
+		_facts: Record<string, never>,
+	) => request,
 	refusals: [
 		unless(
 			term(
@@ -75,8 +78,10 @@ export const requirePass = alwaysWrites({
 /** Both minute limits must allow the request. The site's count is read only after the visitor's allowed it. */
 export const withinMinuteLimits = alwaysWrites({
 	name: "Within the minute limits",
-	given: (facts: { readonly visitor: boolean; readonly site: boolean }) =>
-		facts,
+	given: (
+		request: { readonly visitor: boolean; readonly site: boolean },
+		_facts: Record<string, never>,
+	) => request,
 	refusals: [
 		unless(
 			term(
@@ -100,7 +105,10 @@ export const withinMinuteLimits = alwaysWrites({
 /** The site may still take suggestions today: its stored count is under the daily cap (or nothing is stored yet). */
 export const withinSiteBudget = alwaysWrites({
 	name: "Within the site's daily budget",
-	given: (facts: { readonly siteCount: number | null }) => facts,
+	given: (
+		request: { readonly siteCount: number | null },
+		_facts: Record<string, never>,
+	) => request,
 	refusals: [
 		unless(
 			term(
@@ -121,7 +129,10 @@ export const withinSiteBudget = alwaysWrites({
  */
 export const suggestionFromReply = alwaysWrites({
 	name: "Turn the model's reply into a suggestion",
-	given: (facts: { readonly reply: string; readonly text: string }) => facts,
+	given: (
+		request: { readonly reply: string; readonly text: string },
+		_facts: Record<string, never>,
+	) => request,
 	refusals: [
 		unless(
 			term(
