@@ -28,6 +28,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { differences, fromDisk, fromRevision } from "./golden-diff.mjs";
+import { ranDirectly } from "./ran-directly.mjs";
 
 const DIRECTORY = "tests/golden/fixtures";
 const SHORT = 160;
@@ -84,7 +85,190 @@ const areaOf = (path) =>
 
 const rest = ({ name: _name, effects: _effects, ...others }) => others;
 
-const formatOf = (entry) => entry.format ?? 1;
+const formatOf = (entry) => (entry.format === undefined ? 1 : entry.format);
+
+/** The formats this tool understands. Any other number, higher or not, is an error, never "not comparable". */
+export const KNOWN_FORMATS = [1, 2, 3, 4];
+
+/** The newest format: the one whose full shape is checked before anything is compared. */
+export const CURRENT_FORMAT = 4;
+
+/** Log entries that carry no `state`: D1 statements and the harness's own markers (the same set as tests/golden/harness/log.ts). */
+export const UNSTATED_KINDS = new Set([
+	"d1",
+	"d1-batch",
+	"interleave",
+	"trigger-hit",
+	"advance",
+]);
+
+const HEX = /^[0-9a-f]{64}$/;
+
+const isCount = (value) => Number.isInteger(value) && value >= 0;
+
+const isSortedNames = (list) =>
+	Array.isArray(list) &&
+	list.every((name) => typeof name === "string" && name !== "") &&
+	JSON.stringify(list) === JSON.stringify([...list].sort());
+
+/**
+ * Checks the whole shape of a current-format case, and throws an Error naming the case, the step or the effect and the
+ * field. Without it two records that both stopped recording a field would agree on "missing against missing" and a
+ * comparison would pass.
+ */
+export function assertCompleteRecord(entry) {
+	const fail = (where, what) => {
+		throw new Error(`case "${entry?.name}", ${where}: ${what}`);
+	};
+
+	const hex = (where, field, value) => {
+		if (typeof value !== "string" || !HEX.test(value))
+			fail(
+				where,
+				`${field} must be a SHA-256 (64 hex characters), got ${show(value)}`,
+			);
+	};
+
+	const sets = (where, field, value) => {
+		if (value === null || typeof value !== "object" || Array.isArray(value))
+			fail(where, `${field} is missing`);
+
+		hex(where, `${field}.music`, value.music);
+		hex(where, `${field}.publication`, value.publication);
+
+		if (!isSortedNames(value.touched))
+			fail(
+				where,
+				`${field}.touched must be a sorted list of table names, got ${show(value.touched)}`,
+			);
+	};
+
+	if (
+		entry === null ||
+		typeof entry !== "object" ||
+		typeof entry.name !== "string"
+	)
+		throw new Error("a case has no name");
+
+	if (!Array.isArray(entry.steps) || entry.steps.length === 0)
+		fail("the case", "steps is missing or empty");
+
+	if (!Array.isArray(entry.effects)) fail("the case", "effects is missing");
+
+	for (const [index, step] of entry.steps.entries()) {
+		const where = `step ${index}`;
+
+		if (step === null || typeof step !== "object")
+			fail(where, "is not an object");
+
+		if (step.digest === null || typeof step.digest !== "object")
+			fail(where, "digest is missing");
+
+		for (const field of ["music", "publication", "r2", "kv"])
+			hex(where, `digest.${field}`, step.digest[field]);
+
+		sets(where, "digest.atResponse", step.digest.atResponse);
+	}
+
+	for (const [index, effect] of entry.effects.entries()) {
+		const where = `effect ${index} (${effect?.kind === undefined ? "no kind" : describeEffect(effect)})`;
+
+		if (
+			effect === null ||
+			typeof effect !== "object" ||
+			typeof effect.kind !== "string"
+		)
+			fail(`effect ${index}`, "has no kind");
+
+		if (
+			!Number.isInteger(effect.step) ||
+			effect.step < 0 ||
+			effect.step >= entry.steps.length
+		)
+			fail(
+				where,
+				`step must be the index of one of the ${entry.steps.length} steps, got ${show(effect.step)}`,
+			);
+
+		if (effect.phase !== "request" && effect.phase !== "background")
+			fail(
+				where,
+				`phase must be "request" or "background", got ${show(effect.phase)}`,
+			);
+
+		if (!UNSTATED_KINDS.has(effect.kind)) sets(where, "state", effect.state);
+
+		if (
+			effect.kind === "d1" &&
+			effect.outcome?.threw === undefined &&
+			!isCount(effect.outcome?.changes)
+		)
+			fail(
+				where,
+				`outcome.changes must be a count of rows, got ${show(effect.outcome?.changes)}`,
+			);
+
+		if (effect.kind === "d1-batch")
+			for (const [at, statement] of (effect.statements ?? []).entries())
+				if (
+					effect.result === "committed" &&
+					!isCount(statement.outcome?.changes)
+				)
+					fail(
+						where,
+						`statements[${at}].outcome.changes must be a count of rows, got ${show(statement.outcome?.changes)}`,
+					);
+	}
+
+	const final = entry.finalState;
+
+	if (final === null || typeof final !== "object")
+		fail("the case", "finalState is missing");
+
+	for (const database of ["music", "publication"]) {
+		const part = final[database];
+
+		if (part === null || typeof part !== "object")
+			fail("finalState", `${database} is missing`);
+
+		hex("finalState", `${database}.sha256`, part.sha256);
+
+		if (
+			part.tables === null ||
+			typeof part.tables !== "object" ||
+			Array.isArray(part.tables)
+		)
+			fail("finalState", `${database}.tables is missing`);
+
+		for (const [table, digest] of Object.entries(part.tables)) {
+			if (!isCount(digest?.rows))
+				fail(
+					"finalState",
+					`${database}.tables.${table}.rows must be a count of rows`,
+				);
+
+			hex("finalState", `${database}.tables.${table}.sha256`, digest?.sha256);
+		}
+	}
+
+	for (const store of ["r2", "kv"])
+		if (
+			final[store] === undefined ||
+			final[store] === null ||
+			typeof final[store] !== "object"
+		)
+			fail("finalState", `${store} is missing`);
+}
+
+/** Throws unless the format is one this tool understands. */
+function assertKnownFormat(entry, side) {
+	const format = formatOf(entry);
+
+	if (!KNOWN_FORMATS.includes(format))
+		throw new Error(
+			`case "${entry.name}" (${side}): format ${show(entry.format)} is not one this tool understands (it knows ${KNOWN_FORMATS[0]} to ${KNOWN_FORMATS[KNOWN_FORMATS.length - 1]}), so it cannot say anything about it`,
+		);
+}
 
 /** The first format that records the state of the databases at every outside effect and at the response. */
 const STATE_FORMAT = 4;
@@ -104,6 +288,12 @@ function effectAt(path, list) {
  * Returns { status: "identical" | "d1-only" | "non-neutral" | "not-comparable", difference? }.
  */
 export function compareCase(before, after) {
+	assertKnownFormat(before, "earlier revision");
+	assertKnownFormat(after, "later revision");
+
+	for (const entry of [before, after])
+		if (formatOf(entry) === CURRENT_FORMAT) assertCompleteRecord(entry);
+
 	if (formatOf(before) !== formatOf(after))
 		return {
 			status: "not-comparable",
@@ -406,7 +596,15 @@ function run({ target, from, to, renamesFile }) {
 	for (const fixture of fixtures) {
 		const before = fromRevision(fixture, from);
 		const after = to ? fromRevision(fixture, to) : fromDisk(fixture);
-		const result = compareFixture(before, after, { renames: renames[fixture] });
+		let result;
+
+		try {
+			result = compareFixture(before, after, { renames: renames[fixture] });
+		} catch (error) {
+			throw new Error(
+				`fixture "${fixture}": ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 
 		cases += result.compared;
 		neutral &&= result.neutral;
@@ -481,5 +679,4 @@ function main(argv) {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`)
-	main(process.argv.slice(2));
+if (ranDirectly(import.meta.url)) main(process.argv.slice(2));

@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
+import { ranDirectly } from "./ran-directly.mjs";
 
 const DIRECTORY = "tests/golden/fixtures";
 const LIMIT = 200;
@@ -210,5 +211,4 @@ function main([mode, fixture, ...rest]) {
 	}
 }
 
-if (import.meta.url === `file://${process.argv[1]}`)
-	main(process.argv.slice(2));
+if (ranDirectly(import.meta.url)) main(process.argv.slice(2));

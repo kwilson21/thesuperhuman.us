@@ -1,5 +1,6 @@
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
+import { measureOf, verifyCount } from "./d1";
 import { DatabaseDigester, digestDatabase } from "./digest";
 import { freshMusicDb, freshPublicationDb } from "./db";
 import {
@@ -693,5 +694,53 @@ describe("KV state", () => {
 		expect(short.steps[0]?.digest.kv).not.toBe(long.steps[0]?.digest.kv);
 		expect(short.steps[0]?.digest.kv).not.toBe(meta.steps[0]?.digest.kv);
 		expect(JSON.stringify(short.finalState.kv)).toContain("expiresAt");
+	});
+});
+
+describe("the verification of recorded change counts", () => {
+	const table = () => {
+		const sqlite = freshMusicDb();
+
+		return sqlite;
+	};
+
+	it("a read must be recorded as 0 and measure 0", () => {
+		const sqlite = table();
+
+		expect(() => verifyCount(sqlite, "SELECT 1", 0, 0)).not.toThrow();
+		expect(() => verifyCount(sqlite, "SELECT 1", 1, 0)).toThrow(
+			/does not agree/,
+		);
+		expect(() => verifyCount(sqlite, "SELECT 1", 0, 1)).toThrow(
+			/does not agree/,
+		);
+	});
+
+	it("a write on a plain table must be recorded as exactly the rows SQLite counted", () => {
+		const sqlite = table();
+		const update = "UPDATE software_signing_settings SET updated_by = 'z'";
+
+		expect(() => verifyCount(sqlite, update, 1, 1)).not.toThrow();
+		expect(() => verifyCount(sqlite, update, 0, 1)).toThrow(/does not agree/);
+		expect(() => verifyCount(sqlite, update, 2, 1)).toThrow(/does not agree/);
+	});
+
+	it("a write on a table with a trigger may be counted higher by SQLite, but a row must have changed exactly when SQLite says so", () => {
+		const sqlite = table();
+		const remove = "DELETE FROM music_events WHERE session_id = 's'";
+
+		expect(() => verifyCount(sqlite, remove, 1, 2)).not.toThrow();
+		expect(() => verifyCount(sqlite, remove, 0, 2)).toThrow(/does not agree/);
+		expect(() => verifyCount(sqlite, remove, 3, 2)).toThrow(/does not agree/);
+		expect(() => verifyCount(sqlite, remove, 0, 0)).not.toThrow();
+	});
+
+	it("a count that was not measured is an error, never a recorded 0", () => {
+		expect(() => measureOf(undefined, "UPDATE a SET x = 1")).toThrow(
+			/no change count was measured/,
+		);
+		expect(
+			measureOf({ count: 2, delta: 0, tables: [] }, "UPDATE a SET x = 1").count,
+		).toBe(2);
 	});
 });

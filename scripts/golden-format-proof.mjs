@@ -9,16 +9,20 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { differences, fromDisk, fromRevision } from "./golden-diff.mjs";
+import { assertCompleteRecord } from "./golden-neutral.mjs";
 import { statementOf } from "./sql-effects.mjs";
+import { ranDirectly } from "./ran-directly.mjs";
 
 const DIRECTORY = "tests/golden/fixtures";
 
 /**
  * What the format 3 to format 4 re-record may change, and nothing else:
  *
- * - `format` goes from 3 to 4 (a case in neither format, the older recorder's, must be identical);
+ * - `format` goes from 3 to 4 (a case in neither format, the older recorder's, must be identical), and the later case
+ *   must have the whole shape format 4 requires (`assertCompleteRecord` in golden-neutral.mjs): every field present, not just tolerated;
  * - each outside effect's `state` and each step's `digest.atResponse` gain `touched`, the sorted names of the tables
  *   that committed row-changing writes had touched so far in the step;
+ * - within format 4 (the same format before and after) only the `touched` sets may differ: they are listed;
  * - a D1 `changes` count may change, and only where the statement is a read and the new count is 0: the count of a read
  *   that ran beside a write used to be the write's. A changed count of a write is NOT accepted here (the harness verified
  *   every recorded count against SQLite's `total_changes()` when it recorded them; see GOLDEN_VERIFY_COUNTS in
@@ -36,6 +40,14 @@ const isSortedNames = (list) =>
 	Array.isArray(list) &&
 	list.every((name) => typeof name === "string") &&
 	JSON.stringify(list) === JSON.stringify([...list].sort());
+
+/** Every `touched` set of a case, in order: each effect's, then each step's at the response. */
+const touchedOf = (entry) => [
+	...entry.effects.flatMap((effect) =>
+		effect.state ? [effect.state.touched] : [],
+	),
+	...entry.steps.map((step) => step.digest?.atResponse?.touched),
+];
 
 /** The later case without the allowed additions, or a reason it cannot be compared. */
 function reduce(entry, problems, name) {
@@ -128,6 +140,7 @@ function acceptCounts(old, next) {
  */
 export function proveFixtureDetailed(before, after) {
 	const problems = [];
+	const touched = [];
 	let counts = 0;
 
 	if (before.length !== after.length)
@@ -154,10 +167,43 @@ export function proveFixtureDetailed(before, after) {
 			continue;
 		}
 
+		// Within format 4 only the table sets may differ (how they are derived changed); everything else is exact.
+		if (old.format === ALLOWED.toFormat && next.format === ALLOWED.toFormat) {
+			try {
+				assertCompleteRecord(old);
+				assertCompleteRecord(next);
+			} catch (error) {
+				problems.push(error instanceof Error ? error.message : String(error));
+				continue;
+			}
+
+			const earlier = reduce(old, problems, old.name);
+			const later = reduce(next, problems, old.name);
+			const found = differences(earlier, later);
+
+			if (found.length > 0)
+				problems.push(
+					`${old.name}: ${found[0].path || "(root)"} differs (${found.length} differences)`,
+				);
+
+			if (JSON.stringify(touchedOf(old)) !== JSON.stringify(touchedOf(next)))
+				touched.push(old.name);
+
+			continue;
+		}
+
 		if (old.format !== ALLOWED.fromFormat || next.format !== ALLOWED.toFormat) {
 			problems.push(
 				`${old.name}: format ${old.format} to ${next.format}, not ${ALLOWED.fromFormat} to ${ALLOWED.toFormat}`,
 			);
+			continue;
+		}
+
+		// The current format REQUIRES its fields; a record that left one out is a failure, not something to tolerate.
+		try {
+			assertCompleteRecord(next);
+		} catch (error) {
+			problems.push(error instanceof Error ? error.message : String(error));
 			continue;
 		}
 
@@ -176,7 +222,7 @@ export function proveFixtureDetailed(before, after) {
 			);
 	}
 
-	return { problems, counts };
+	return { problems, counts, touched };
 }
 
 /** The problems only (see `proveFixtureDetailed`). */
@@ -223,6 +269,7 @@ function main([from, to]) {
 	let textBefore = 0;
 	let textAfter = 0;
 	const changedCounts = new Map();
+	const changedSets = new Map();
 
 	for (const fixture of [...new Set([...before, ...after])].sort()) {
 		if (!before.has(fixture) || !after.has(fixture)) {
@@ -242,6 +289,8 @@ function main([from, to]) {
 		const proved = proveFixtureDetailed(old, next);
 
 		if (proved.counts > 0) changedCounts.set(fixture, proved.counts);
+
+		if (proved.touched.length > 0) changedSets.set(fixture, proved.touched);
 
 		for (const problem of proved.problems)
 			problems.push(`${fixture}: ${problem}`);
@@ -265,17 +314,35 @@ function main([from, to]) {
 		`recorded change counts that changed: ${total}${[...changedCounts].map(([fixture, n]) => `\n  ${fixture}: ${n}`).join("")}`,
 	);
 
+	const sets = [...changedSets.values()].reduce(
+		(sum, list) => sum + list.length,
+		0,
+	);
+
+	console.log(
+		`cases whose table sets differ (format 4 to 4): ${sets}${[...changedSets]
+			.map(
+				([fixture, list]) =>
+					`\n  ${fixture}: ${list.length}${list
+						.slice(0, 5)
+						.map((name) => `\n    ${name}`)
+						.join(
+							"",
+						)}${list.length > 5 ? `\n    ... ${list.length - 5} more` : ""}`,
+			)
+			.join("")}`,
+	);
+
 	for (const problem of problems.slice(0, 20))
 		console.log(`  DIFFERENT: ${problem}`);
 
 	console.log(
 		problems.length === 0
-			? "golden-format-proof: the only differences are format 3 to 4, the added `touched` sets, and read change counts that now say 0"
+			? "golden-format-proof: the only differences are the format number, the `touched` sets, and read change counts that now say 0"
 			: `golden-format-proof: ${problems.length} problems, so this is not only a format change`,
 	);
 
 	process.exit(problems.length === 0 ? 0 : 1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`)
-	main(process.argv.slice(2));
+if (ranDirectly(import.meta.url)) main(process.argv.slice(2));

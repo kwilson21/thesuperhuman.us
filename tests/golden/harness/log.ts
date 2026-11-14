@@ -1,5 +1,4 @@
 // The ordered effect log of one case, and the entries in it.
-import { statementOf } from "../../../scripts/sql-effects.mjs";
 import type { ByteRecord, Recorded } from "./plain";
 
 /** Where an effect happened: while the handler ran, or after it had answered (ctx.waitUntil work). */
@@ -108,7 +107,7 @@ export type Effect = EffectBody & {
 	state?: EffectState;
 };
 
-const UNSTATED = new Set([
+export const UNSTATED = new Set([
 	"d1",
 	"d1-batch",
 	"interleave",
@@ -139,27 +138,16 @@ export class EffectLog {
 		return [...(this.written.get(this.step) ?? [])].sort();
 	}
 
-	/** Notes the tables a D1 entry changed: a statement that ran and changed a row, or a batch that committed. */
-	private note(body: EffectBody) {
-		const changed = (sql: string, changes: number) =>
-			changes > 0 && statementOf(sql).write ? [statementOf(sql).table] : [];
-
-		const tables =
-			body.kind === "d1" && !("threw" in body.outcome)
-				? changed(body.sql, body.outcome.changes)
-				: body.kind === "d1-batch" && body.result === "committed"
-					? body.statements.flatMap((statement) =>
-							"threw" in statement.outcome
-								? []
-								: changed(statement.sql, statement.outcome.changes),
-						)
-					: [];
-
-		if (tables.length === 0) return;
+	/**
+	 * Notes tables whose rows changed in the current step. The D1 wrapper calls it as a statement runs (a batch when it
+	 * commits), so the set and the state digest describe the same instant, whatever order parallel calls settle in.
+	 */
+	touch(tables: readonly string[]) {
+		if (this.quiet > 0 || tables.length === 0) return;
 
 		const set = this.written.get(this.step) ?? new Set<string>();
 
-		for (const table of tables) if (table) set.add(table);
+		for (const table of tables) set.add(table);
 
 		this.written.set(this.step, set);
 	}
@@ -168,8 +156,6 @@ export class EffectLog {
 		if (this.quiet > 0) return;
 
 		const entry: Effect = { ...body, step: this.step, phase: this.phase };
-
-		this.note(body);
 
 		if (this.probe && !UNSTATED.has(body.kind))
 			entry.state = { ...this.probe(), touched: this.touched() };

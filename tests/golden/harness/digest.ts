@@ -99,8 +99,8 @@ function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
 	return { rows: rows.length, sha256: hash.digest("hex") };
 }
 
-/** The digest of every table of the database, computed in full. */
-export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
+/** Every table's digest, empty tables included, and the digest of the whole database. */
+function digestAll(sqlite: SqliteDatabase) {
 	const names = sqlite
 		.prepare(
 			"SELECT name FROM sqlite_master WHERE type = 'table' AND (name NOT LIKE 'sqlite\\_%' ESCAPE '\\' OR name = 'sqlite_sequence') ORDER BY name",
@@ -110,22 +110,30 @@ export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
 
 	const whole = createHash("sha256");
 	const tables: { [table: string]: TableDigest } = {};
+	const perTable: Map<string, string> = new Map();
 
 	for (const name of names) {
 		const digest = digestTable(sqlite, name);
 
 		whole.update(`${name}\0${digest.rows}\0${digest.sha256}\n`);
+		perTable.set(name, `${digest.rows}:${digest.sha256}`);
 
 		if (digest.rows > 0) tables[name] = digest;
 	}
 
-	return { sha256: whole.digest("hex"), tables };
+	return { digest: { sha256: whole.digest("hex"), tables }, perTable };
+}
+
+/** The digest of every table of the database, computed in full. */
+export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
+	return digestAll(sqlite).digest;
 }
 
 /** The digest of one database now, hashed again only after something was written (or the schema changed). */
 export class DatabaseDigester {
 	private stamp = "";
 	private cached: DatabaseDigest | undefined;
+	private tables: ReadonlyMap<string, string> = new Map();
 
 	constructor(private readonly sqlite: SqliteDatabase) {}
 
@@ -149,6 +157,13 @@ export class DatabaseDigester {
 		}
 
 		return `${changes?.n}:${schema?.schema_version}:${counters}`;
+	}
+
+	/** The digest of every table now (empty ones included), by table name, from the same cache as `current()`. */
+	perTable(): ReadonlyMap<string, string> {
+		this.current();
+
+		return this.tables;
 	}
 
 	current(): DatabaseDigest {
@@ -178,7 +193,10 @@ export class DatabaseDigester {
 			return this.cached;
 		}
 
-		this.cached = digestDatabase(this.sqlite);
+		const all = digestAll(this.sqlite);
+
+		this.cached = all.digest;
+		this.tables = all.perTable;
 		this.stamp = stamp;
 
 		return this.cached;

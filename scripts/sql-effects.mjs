@@ -10,7 +10,10 @@ export const bare = (sql) =>
 		.replace(/'(?:[^']|'')*'/g, "''")
 		.trim();
 
-const NAME = String.raw`["\`\[]?([A-Za-z_][A-Za-z0-9_]*)["\`\]]?`;
+const IDENT = String.raw`["\`\[]?[A-Za-z_][A-Za-z0-9_]*["\`\]]?`;
+
+// An optional schema (`main.`, `temp.`) is skipped; the table is the name after it.
+const NAME = String.raw`(?:${IDENT}\s*\.\s*)?["\`\[]?([A-Za-z_][A-Za-z0-9_]*)["\`\]]?`;
 
 const WRITES = new Set(["INSERT", "UPDATE", "DELETE", "REPLACE"]);
 

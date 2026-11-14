@@ -44,7 +44,7 @@ jobs:
           tool="scripts/golden-neutral.mjs"
           copy="the pull request's copy (the base branch has no golden-neutral.mjs)"
           if git cat-file -e HEAD^1:scripts/golden-neutral.mjs 2>/dev/null; then
-            for file in golden-neutral.mjs golden-diff.mjs sql-effects.mjs; do
+            for file in golden-neutral.mjs golden-diff.mjs sql-effects.mjs ran-directly.mjs; do
               git show "HEAD^1:scripts/$file" > "$tool_dir/$file" 2>/dev/null || rm -f "$tool_dir/$file"
             done
             tool="$tool_dir/golden-neutral.mjs"
@@ -64,6 +64,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/neutral.txt"
           if [ "$status" -ge 2 ]; then exit "$status"; fi
+          # Exit 0 and 1 are the tool's own verdicts, and the tool always ends its output with a verdict line. A tool that
+          # crashed (a missing module, a syntax error) also exits 1, with no verdict line: that is a failure of the job,
+          # labelled or not, never "not neutral".
+          verdict=$(grep -E '^golden:neutral: (NEUTRAL|NOT NEUTRAL|identical, [0-9]+ cases)$' "$RUNNER_TEMP/neutral.txt" | tail -n 1)
+          if [ "$status" -eq 0 ] && [ "$verdict" = "golden:neutral: NOT NEUTRAL" ]; then verdict=""; fi
+          if [ "$status" -eq 1 ] && [ "$verdict" != "golden:neutral: NOT NEUTRAL" ]; then verdict=""; fi
+          if [ -z "$verdict" ]; then
+            echo "::error::The comparison tool ended without a verdict that matches its exit code ($status), so it did not run to completion."
+            exit 3
+          fi
           if [ "$CONVERSION" = "true" ] && [ "$status" -ne 0 ]; then
             echo "::error::This pull request has the conversion label, so every golden case must be neutral."
             exit 1

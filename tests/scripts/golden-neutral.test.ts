@@ -5,8 +5,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { afterAll, describe, expect, it } from "vitest";
+import { digestOf, finalStateOf, stateOf } from "../helpers/golden-records";
 import type { JsonObject, JsonValue } from "../helpers/json";
-import { compareCase, compareFixture } from "../../scripts/golden-neutral.mjs";
+import {
+	assertCompleteRecord,
+	compareCase,
+	compareFixture,
+} from "../../scripts/golden-neutral.mjs";
 import { statementOf } from "../../scripts/sql-effects.mjs";
 
 // Hand-built cases in the shape the golden harness records. What a conversion may change is the D1 entries and nothing
@@ -20,7 +25,7 @@ const read = (sql: string, args: JsonValue[] = [], extra: Json = {}) => ({
 	via: "first",
 	sql,
 	args,
-	outcome: { rows: 1, changes: null },
+	outcome: { rows: 1, changes: 0 },
 	step: 0,
 	phase: "request",
 	...extra,
@@ -49,6 +54,7 @@ const email = (extra: Json = {}) => ({
 	answered: "200",
 	step: 0,
 	phase: "request",
+	state: stateOf(),
 	...extra,
 });
 
@@ -77,6 +83,7 @@ const make = (
 			request: { actor: "owner", method: "POST", path: "/x", body: null },
 			answer: over.answer ?? answer(),
 			state: over.state ?? { music: { items: [{ id: 1, value: "a" }] } },
+			digest: digestOf(),
 		},
 	],
 	effects: over.effects ?? [
@@ -85,6 +92,7 @@ const make = (
 		email(),
 	],
 	final: over.final ?? { music: { items: [{ id: 1, value: "b" }] } },
+	finalState: finalStateOf(),
 });
 
 const base = make("a case");
@@ -307,7 +315,7 @@ describe("compareCase: the state when an outside effect happened", () => {
 		...over,
 	});
 
-	const at = (music: string) => ({ state: { music, publication: "p" } });
+	const at = (music: string) => ({ state: stateOf(music) });
 
 	it("two writes to the same table that swap places around an email are not neutral, though the end state is the same", () => {
 		// "mark as sent, then send" against "send, then mark as sent".
@@ -362,13 +370,7 @@ describe("compareCase: the state when an outside effect happened", () => {
 			steps: [
 				{
 					...base.steps[0],
-					digest: {
-						music: "end",
-						publication: "p",
-						r2: "r",
-						kv: "k",
-						atResponse: { music, publication: "p" },
-					},
+					digest: digestOf(music),
 				},
 			],
 		});
@@ -639,6 +641,328 @@ describe("compareCase: the fixture format", () => {
 	});
 });
 
+/** The parts of a current-format record the shape tests take away or damage, all optional so a test can delete them. */
+interface Editable {
+	name: string;
+	format?: number | string | null;
+	steps: {
+		digest?: {
+			music?: string;
+			kv?: string;
+			atResponse?: { touched?: string[] | string } | undefined;
+		};
+	}[];
+	effects: {
+		kind: string;
+		step: number | string;
+		phase: string;
+		state?: {
+			music?: string;
+			publication?: string;
+			touched?: string[] | string;
+		};
+		outcome?: { changes?: number };
+		statements?: {
+			sql: string;
+			args: string[];
+			outcome: { rows: number; changes?: number };
+		}[];
+		result?: string;
+		error?: string | null;
+		db?: string;
+	}[];
+	finalState?: {
+		music?: { tables?: { items?: { rows?: number; sha256?: string } } };
+		publication?: object;
+		r2?: object;
+	};
+}
+
+describe("the shape of a current-format record", () => {
+	const good = (): Editable => JSON.parse(JSON.stringify(make("a case")));
+
+	/** Removes what a harness that stopped recording would have left out, on both sides of a comparison. */
+	const bare = (entry: Editable, d1: string): Editable => {
+		const copy = structuredClone(entry);
+
+		copy.effects = [
+			JSON.parse(JSON.stringify(write(d1))),
+			JSON.parse(JSON.stringify({ ...email(), state: undefined })),
+		];
+
+		for (const step of copy.steps)
+			step.digest = { ...step.digest, atResponse: undefined };
+
+		return copy;
+	};
+
+	it("two records that both lost their states, with D1 statements that differ, are an error, never neutral", () => {
+		const was = bare(good(), "UPDATE a SET x = 1");
+		const now = bare(good(), "UPDATE a SET x = 2");
+
+		expect(() => compareCase(was, now)).toThrow(
+			/case "a case", effect 1 .*: state\.music|case "a case", step 0: digest\.atResponse/,
+		);
+	});
+
+	it("identical malformed records are an error too, not identical", () => {
+		const broken = bare(good(), "UPDATE a SET x = 1");
+
+		expect(() => compareCase(broken, structuredClone(broken))).toThrow(
+			/case "a case"/,
+		);
+	});
+
+	it.each([99, 5, 0, -1, 4.5, "4", null])(
+		"format %s on both sides is an error naming the case, never neutral",
+		(format) => {
+			const was = { ...good(), format };
+			const now = { ...good(), format };
+
+			expect(() => compareCase(was, now)).toThrow(
+				/case "a case" \(earlier revision\): format .* is not one this tool understands/,
+			);
+		},
+	);
+
+	it("an unknown format on one side only is an error too, even when the other side is current", () => {
+		expect(() => compareCase(good(), { ...good(), format: 5 })).toThrow(
+			/\(later revision\)/,
+		);
+		expect(() => compareCase({ ...good(), format: 5 }, good())).toThrow(
+			/\(earlier revision\)/,
+		);
+	});
+
+	it("a known older format keeps the NOT COMPARABLE rule", () => {
+		const { format: _f, ...older } = good();
+
+		expect(compareCase(older, good()).status).toBe("not-comparable");
+	});
+
+	const mutate = (change: (entry: Editable) => void) => {
+		const entry = good();
+
+		change(entry);
+
+		return entry;
+	};
+
+	const need = <T>(value: T | undefined, what: string): T => {
+		if (value === undefined) throw new Error(`the test case has no ${what}`);
+
+		return value;
+	};
+
+	const effectState = (entry: Editable) =>
+		need(
+			entry.effects.find((item) => item.kind === "fetch"),
+			"stated effect",
+		);
+
+	/** The state of the first fetch (it has one in a good record). */
+	const stateOfFetch = (entry: Editable) =>
+		need(effectState(entry).state, "state on the effect");
+
+	const stepOf = (entry: Editable) => need(entry.steps[0], "step");
+
+	const digestOfStep = (entry: Editable) =>
+		need(stepOf(entry).digest, "digest");
+
+	const atResponseOf = (entry: Editable) =>
+		need(digestOfStep(entry).atResponse, "atResponse");
+
+	const outcomeOf = (entry: Editable, index: number) =>
+		need(entry.effects[index]?.outcome, "outcome");
+
+	const finalOf = (entry: Editable) => need(entry.finalState, "finalState");
+
+	const itemsOf = (entry: Editable) =>
+		need(finalOf(entry).music?.tables?.items, "items table");
+
+	// SAFETY: each row is a name, a change made to a clone of the good record, and the message that change must raise.
+	it.each([
+		[
+			"an outside effect with no state",
+			(e) => {
+				delete effectState(e).state;
+			},
+			/effect 2 \(fetch POST .*\): state is missing/,
+		],
+		[
+			"a state with no touched",
+			(e) => {
+				delete stateOfFetch(e).touched;
+			},
+			/state\.touched must be a sorted list/,
+		],
+		[
+			"a touched that is not sorted",
+			(e) => {
+				stateOfFetch(e).touched = ["b", "a"];
+			},
+			/state\.touched must be a sorted list/,
+		],
+		[
+			"a touched that is not a list",
+			(e) => {
+				stateOfFetch(e).touched = "a";
+			},
+			/state\.touched must be a sorted list/,
+		],
+		[
+			"a state digest that is not a SHA-256",
+			(e) => {
+				stateOfFetch(e).music = "abc";
+			},
+			/state\.music must be a SHA-256/,
+		],
+		[
+			"a state with no publication digest",
+			(e) => {
+				delete stateOfFetch(e).publication;
+			},
+			/state\.publication must be a SHA-256/,
+		],
+		[
+			"an effect with a step outside the case",
+			(e) => {
+				effectState(e).step = 3;
+			},
+			/step must be the index of one of the 1 steps/,
+		],
+		[
+			"an effect with a bad phase",
+			(e) => {
+				effectState(e).phase = "later";
+			},
+			/phase must be "request" or "background"/,
+		],
+		[
+			"a step with no digest",
+			(e) => {
+				delete stepOf(e).digest;
+			},
+			/step 0: digest is missing/,
+		],
+		[
+			"a step digest that is not a SHA-256",
+			(e) => {
+				digestOfStep(e).kv = "k";
+			},
+			/step 0: digest\.kv must be a SHA-256/,
+		],
+		[
+			"a step with no atResponse",
+			(e) => {
+				delete digestOfStep(e).atResponse;
+			},
+			/step 0: digest\.atResponse is missing/,
+		],
+		[
+			"an atResponse with no touched",
+			(e) => {
+				delete atResponseOf(e).touched;
+			},
+			/step 0: digest\.atResponse\.touched must be a sorted list/,
+		],
+		[
+			"a D1 statement with no change count",
+			(e) => {
+				delete outcomeOf(e, 0).changes;
+			},
+			/outcome\.changes must be a count of rows/,
+		],
+		[
+			"a D1 statement with a negative or fractional change count",
+			(e) => {
+				outcomeOf(e, 1).changes = -1;
+			},
+			/outcome\.changes must be a count of rows/,
+		],
+		[
+			"no finalState",
+			(e) => {
+				delete e.finalState;
+			},
+			/finalState is missing/,
+		],
+		[
+			"a finalState with no publication",
+			(e) => {
+				delete finalOf(e).publication;
+			},
+			/finalState: publication is missing/,
+		],
+		[
+			"a finalState table with no rows count",
+			(e) => {
+				delete itemsOf(e).rows;
+			},
+			/music\.tables\.items\.rows must be a count/,
+		],
+		[
+			"a finalState table with a bad digest",
+			(e) => {
+				itemsOf(e).sha256 = "x";
+			},
+			/music\.tables\.items\.sha256 must be a SHA-256/,
+		],
+		[
+			"a finalState with no r2",
+			(e) => {
+				delete finalOf(e).r2;
+			},
+			/finalState: r2 is missing/,
+		],
+		[
+			"no steps",
+			(e) => {
+				e.steps = [];
+			},
+			/steps is missing or empty/,
+		],
+	] as [string, (entry: Editable) => void, RegExp][])(
+		"%s is an error naming the case and the place",
+		(_name, change, message) => {
+			expect(() => assertCompleteRecord(mutate(change))).toThrow(message);
+			expect(() => compareCase(good(), mutate(change))).toThrow(message);
+			expect(() => compareCase(mutate(change), good())).toThrow(message);
+		},
+	);
+
+	it("a well-formed record passes", () => {
+		expect(() => assertCompleteRecord(good())).not.toThrow();
+	});
+
+	it("a batch whose committed statements lack a change count is an error", () => {
+		const entry = good();
+
+		entry.effects.push({
+			kind: "d1-batch",
+			db: "MUSIC_DB",
+			result: "committed",
+			error: null,
+			statements: [{ sql: "SELECT 1", args: [], outcome: { rows: 1 } }],
+			step: 0,
+			phase: "request",
+		});
+
+		expect(() => assertCompleteRecord(entry)).toThrow(
+			/statements\[0\]\.outcome\.changes must be a count/,
+		);
+	});
+
+	it("D1 entries and harness markers need no state", () => {
+		const entry = good();
+
+		for (const kind of ["interleave", "trigger-hit", "advance"])
+			entry.effects.push({ kind, step: 0, phase: "request" });
+
+		expect(() => assertCompleteRecord(entry)).not.toThrow();
+	});
+});
+
 describe("statementOf", () => {
 	it.each([
 		["INSERT INTO t VALUES (1)", "INSERT", "t", true],
@@ -652,6 +976,11 @@ describe("statementOf", () => {
 		["SELECT replace(a, 'x', 'y') FROM t", "SELECT", "t", false],
 		["WITH x AS (SELECT 1) SELECT * FROM x", "SELECT", "x", false],
 		["SELECT 1", "SELECT", null, false],
+		["UPDATE main.t SET a = 1", "UPDATE", "t", true],
+		['INSERT INTO "main"."t" VALUES (1)', "INSERT", "t", true],
+		["DELETE FROM main.t WHERE a = 1", "DELETE", "t", true],
+		["SELECT * FROM main.t", "SELECT", "t", false],
+		["UPDATE temp.t SET a = 1", "UPDATE", "t", true],
 		["-- note\nUPDATE t SET a = 'delete from nothing'", "UPDATE", "t", true],
 	])("%s", (sql, op, table, write) => {
 		expect(statementOf(sql)).toEqual({ op, table, write });
@@ -812,6 +1141,7 @@ describe("golden:neutral on the command line", () => {
 	save("two", [make("c")]);
 	save("three", [{ ...make("d"), format: 1 }]);
 	save("empty", []);
+
 	git("add", "-A");
 	git("commit", "-q", "-m", "before");
 	git("tag", "before");
@@ -958,5 +1288,70 @@ describe("golden:neutral on the command line", () => {
 
 	it("exits 2 with a message when there is no argument", () => {
 		expect(run().status).toBe(2);
+	});
+});
+
+describe("golden:neutral on the command line: records it cannot judge", () => {
+	const folder = mkdtempSync(join(tmpdir(), "golden-neutral-shape-"));
+	const fixtures = join(folder, "tests/golden/fixtures");
+
+	const git = (...args: string[]) =>
+		execFileSync("git", args, { cwd: folder, stdio: "ignore" });
+
+	const script = fileURLToPath(
+		new URL("../../scripts/golden-neutral.mjs", import.meta.url),
+	);
+
+	const run = (...args: string[]) =>
+		spawnSync(process.execPath, [script, ...args], {
+			cwd: folder,
+			encoding: "utf8",
+		});
+
+	mkdirSync(fixtures, { recursive: true });
+
+	for (const args of [
+		["init", "-q"],
+		["config", "user.email", "test@example.test"],
+		["config", "user.name", "Test"],
+		["config", "commit.gpgsign", "false"],
+	])
+		git(...args);
+
+	const { finalState: _finalState, ...broken } = make("b1");
+
+	const save = (fixture: string, cases: object[]) =>
+		writeFileSync(
+			join(fixtures, `${fixture}.json.gz`),
+			gzipSync(JSON.stringify(cases)),
+		);
+
+	save("future", [make("f1"), { ...make("f2"), format: 99 }]);
+	save("broken", [broken]);
+	git("add", "-A");
+	git("commit", "-q", "-m", "records");
+
+	afterAll(() => rmSync(folder, { recursive: true, force: true }));
+
+	it("exits 2 naming the fixture and the case for a format the tool does not understand, never NEUTRAL", () => {
+		const got = run("future", "HEAD", "HEAD");
+
+		expect(got.status).toBe(2);
+		expect(got.stderr).toContain('fixture "future": case "f2"');
+		expect(got.stderr).toContain("format 99 is not one this tool understands");
+		expect(got.stdout).not.toContain("NEUTRAL");
+	});
+
+	it("exits 2 for a malformed current-format record even when both revisions are the same", () => {
+		const got = run("broken", "HEAD", "HEAD");
+
+		expect(got.status).toBe(2);
+		expect(got.stderr).toContain(
+			'fixture "broken": case "b1", the case: finalState is missing',
+		);
+	});
+
+	it("--all stops at the first record it cannot judge", () => {
+		expect(run("--all", "HEAD", "HEAD").status).toBe(2);
 	});
 });

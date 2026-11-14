@@ -42,7 +42,12 @@ pnpm run golden:neutral <fixture|--all> [<from> [<to>]] [--allow-renames <file>]
 compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the working tree, `--all` runs every fixture)
 and exits 0 only when every case that existed before is neutral. It prints the two commits it resolved, how many fixtures
 and cases it compared, and refuses (exit 2) a fixture that exists in neither revision, a revision git cannot find, an
-unknown flag, extra arguments, a malformed allow file, and a run that compared no case. For each case and each step,
+unknown flag, extra arguments, a malformed allow file, a run that compared no case, a record in a format it does not
+understand (it knows formats 1 to 4; any other number, higher or not, on either side), and a format 4 record whose shape
+is not complete (an outside effect without its `state` and sorted `touched`, a step without its `digest` and
+`atResponse`, a missing `finalState` or change count): the message names the fixture, case, step or effect and the field,
+and it is an error, never NEUTRAL, so a harness that stops recording a field cannot make every later comparison pass on
+"missing against missing". For each case and each step,
 these must be byte-identical before and after:
 
 - the request, and the response: status, headers, every set-cookie value, and the body;
@@ -64,8 +69,11 @@ statement's result. The tool removes the D1 entries from both logs and requires 
 digests catch it: each outside effect records the digest of both databases at that moment, so "mark as sent, then send"
 and "send, then mark as sent" differ at the email even when the end state is the same. The digests cannot see a write that
 changes nothing they hash (a same-value UPDATE) or a row that is inserted and deleted again (a lock held while an email
-goes out), so each outside effect and the response also record the SET of tables that committed row-changing writes had
-touched so far in the step: table names only, no operation and no count. What each mechanism catches:
+goes out), so each outside effect and the response also record the SET of tables whose rows had changed so far in the
+step: table names only, no operation and no count. A table is in the set when a committed write changed a row of it,
+whoever wrote it: the statement itself (taken when it reports a changed row, which includes a same-value UPDATE) or a
+database trigger (found by comparing the digest of every table before and after each committed write). So a rule moved from
+a trigger into code leaves the same state and the same set, and is neutral. What each mechanism catches:
 
 - the step and final digests: any change to any table, R2 or KV by the end of a step or the case, including a write to a
   table the case does not dump, one more column set, a dropped background write, a changed AUTOINCREMENT counter or a
@@ -108,8 +116,9 @@ it as a fix.
 **Fixture format 4.** Each case records `format: 4` and:
 
 - on every outside effect (not a D1 statement or a harness marker), `state`: one SHA-256 per database as it was when the
-  effect happened, and `touched`, the sorted names of the tables that committed row-changing writes had touched so far in
-  the step;
+  effect happened, and `touched`, the sorted names of the tables whose rows had changed so far in the step (by a
+  committed statement, or by a trigger it fired). They are noted when the statement runs, and a batch's when it commits, so
+  `state` and `touched` always describe the same instant, whatever order parallel calls settle in;
 - after every step, `digest`: one SHA-256 per database, one for R2 and one for KV (with each key's expiry and metadata),
   and `atResponse`, the same as an effect's `state` taken when the response had been read, before any background work;
 - at the end, `finalState`: for each database a digest over all its tables and, per table that holds rows, the row count
@@ -123,10 +132,11 @@ order), starting with its column names, with every cell tagged from SQLite's `ty
 an integer is read as text so a value above 2^53 keeps every digit). Two self-checks run in CI (`validate.yml` sets them for
 `pnpm test`) and can be set locally: `GOLDEN_VERIFY_DIGESTS=1` computes every cached database digest in full as well, and
 fails on a difference (the digest is not recomputed while SQLite's `total_changes()`, schema version and AUTOINCREMENT
-counters have not moved); `GOLDEN_VERIFY_COUNTS=1` compares every recorded change count with the difference in
-`total_changes()` measured around the statement, which is 0 for a read and exactly the count for a write on a table with no
+counters have not moved); `GOLDEN_VERIFY_COUNTS=1` compares every RECORDED change count (the value written into the log, not an
+intermediate one) with the difference in `total_changes()` measured around the statement, which is 0 for a read and exactly the count for a write on a table with no
 trigger, foreign key action or REPLACE (on one that has them `total_changes()` also counts their writes, so the check is
-that a row changed exactly when SQLite says rows changed). Both were run over every fixture when format 4 was recorded.
+that a row changed exactly when SQLite says rows changed); a count that was not measured is an error and never recorded
+as 0. Both were run over every fixture when format 4 was recorded.
 Formats cannot be compared with each other: the tool says NOT COMPARABLE and exits 1, because neutrality cannot be shown
 across a format change. `node scripts/golden-format-proof.mjs <from> [<to>]` proves the format 3 to 4 re-record changed
 only the allowed things (see its header): trigger-hit entries and the older digests are compared exactly, and a recorded
@@ -147,11 +157,13 @@ them onto this harness would rename every pre-existing field, so it cannot be sh
 **In CI.** The `Golden neutrality` workflow runs on every pull request, and again when a label is added or removed. It
 compares the base branch tip (the first parent of the merge ref the job checks out) with the merge result, runs
 `golden:neutral --all`, and writes the report to the job summary. It runs the BASE branch's copy of the tool and of every
-local module the tool imports, extracted from the first parent, so a pull request cannot edit the tool and then pass with
+local module the tool imports (a test derives that list from the tool's real import graph), extracted from the first parent, so a pull request cannot edit the tool and then pass with
 it; it falls back to the pull request's own copy only when the base has none (the pull request that introduces the tool),
 and prints which copy ran. Without the `conversion` label it only reports, since a behaviour fix changes fixtures on
 purpose; it fails only on a usage or read error. A pull request that carries the `conversion` label fails unless every case
-is neutral.
+is neutral. The job also fails, labelled or not, when the tool did not run to completion (a module missing from the
+extracted copy, a crash): it checks that the output ends in the tool's verdict line and that the line agrees with the exit
+code, so a crash is never read as "not neutral".
 
 Its limits, plainly: it is not a required status check unless the repository owner makes it one in the repository settings
 (and a pull request can edit the workflow file itself, which only a required check from the base branch or a code owner

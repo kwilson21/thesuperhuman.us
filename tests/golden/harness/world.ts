@@ -398,6 +398,8 @@ async function runOn(
 
 	const triggers = new Triggers(() => log.recording);
 	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? [], triggers);
+	const musicDigest = new DatabaseDigester(music);
+	const publicationDigest = new DatabaseDigester(publication);
 
 	const r2 = recordingR2(
 		"AUDIO",
@@ -427,10 +429,16 @@ async function runOn(
 	for (const name of c.omit ?? []) delete env[name];
 
 	if (!c.music?.missing)
-		env.MUSIC_DB = recordingD1("MUSIC_DB", music, log, hooks);
+		env.MUSIC_DB = recordingD1("MUSIC_DB", music, log, hooks, musicDigest);
 
 	if (!c.publication?.missing)
-		env.PUBLICATION_DB = recordingD1("PUBLICATION_DB", publication, log, hooks);
+		env.PUBLICATION_DB = recordingD1(
+			"PUBLICATION_DB",
+			publication,
+			log,
+			hooks,
+			publicationDigest,
+		);
 
 	if (!c.r2?.missing) env.AUDIO = r2.binding;
 
@@ -631,9 +639,6 @@ async function runOn(
 		Object.fromEntries(
 			kvNames.map((name) => [name, kvs[name]?.state() ?? null]),
 		);
-
-	const musicDigest = new DatabaseDigester(music);
-	const publicationDigest = new DatabaseDigester(publication);
 
 	const databases = () => ({
 		music: musicDigest.current().sha256,
