@@ -168,7 +168,7 @@ async function traced(agreement: Row, cookie: string) {
 										: /FROM software_agreements a JOIN/.test(query)
 											? agreement
 											: null,
-						all: async <T = Record<string, unknown>>() =>
+						all: async <T>() =>
 							double<D1Result<T>>({ success: true, results: [] }),
 					}),
 			});
