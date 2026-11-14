@@ -3,6 +3,7 @@ import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { boundStatement } from "../helpers/d1";
 import { double, partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
@@ -22,10 +23,12 @@ import {
 // them; set SIGNIN_EXHAUSTIVE=1 for every ordering.
 
 const exhaustive = process.env.SIGNIN_EXHAUSTIVE === "1";
+
 const baseline = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
 const SECRET = "a".repeat(32);
 const PN = "__Host-studio_pending";
 const ORIGIN = "https://thesuperhuman.us";
@@ -43,7 +46,9 @@ const ADDR = {
 };
 
 const TARGETS = ["open", "closed", "withdrawn", "none", "full"] as const;
+
 type Target = (typeof TARGETS)[number];
+
 const K1 = "1".repeat(64);
 const K2 = "2".repeat(64);
 
@@ -62,6 +67,7 @@ function fresh() {
 	sql = new DatabaseSync(":memory:");
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
+
 	for (const [id, email] of [
 		["p-client", ADDR.client],
 		["p-client2", ADDR.client2],
@@ -122,9 +128,13 @@ function kindOf(items: D1PreparedStatement[]): string | null {
 	const first = boundStatement(items[0]).query;
 
 	if (first.includes("AS requestId") && items.length === 2) return "r";
+
 	if (/^\s*SELECT CASE WHEN \?=0/i.test(first)) return "w";
+
 	if (/^\s*DELETE FROM audio_client_signin_codes/i.test(first)) return "c";
+
 	if (/^\s*SELECT attempts/i.test(first)) return "cr";
+
 	if (/^\s*UPDATE audio_client_signin_codes SET attempts/i.test(first))
 		return "cw";
 
@@ -171,9 +181,13 @@ function context(
 			body: JSON.stringify(body),
 		}),
 		locals: {
-			runtime: {
-				ctx: { waitUntil: (work: Promise<unknown>) => background.push(work) },
-				env: {
+			runtime: partial<TestRuntime>({
+				ctx: double<ExecutionContext>({
+					waitUntil: (work: Promise<unknown>) => {
+						background.push(work);
+					},
+				}),
+				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: "true",
 					AUDIO_CLIENT_CODE_KEY: SECRET,
 					MUSIC_DB: database,
@@ -181,10 +195,10 @@ function context(
 					RESEND_API_KEY: "t",
 					CONTACT_FROM_EMAIL: "noreply@example.com",
 					SITE_ORIGIN: ORIGIN,
-				},
-			},
+				}),
+			}),
 		},
-	} as unknown as Partial<APIContext>);
+	});
 }
 
 const ask = (
@@ -224,6 +238,7 @@ const flush = async () => {
 
 const codeIn = (mail: { text: string }) =>
 	/(\d{4}) (\d{4})/.exec(mail.text)!.slice(1, 3).join("");
+
 const resetAllowances = () => sql.exec("DELETE FROM audio_client_allowances");
 
 function stubFetch() {
@@ -381,6 +396,7 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 	const schedules = merges(scenario.actors.map((actor) => actor.steps)).filter(
 		(_, index) => index % sampleEvery === 0,
 	);
+
 	let differing = 0;
 	const examples: string[] = [];
 
@@ -558,12 +574,12 @@ describe("a request for one address does not change what an attacker sees of ano
 			actors: [
 				request("B", (target) => target, K1),
 				atomic("V", async (target) => {
-					const id = (
-						{ [ADDR.open]: "p-open", [ADDR.full]: "p-full" } as Record<
-							string,
-							string
-						>
-					)[target];
+					const id =
+						target === ADDR.open
+							? "p-open"
+							: target === ADDR.full
+								? "p-full"
+								: undefined;
 
 					if (id) await revokeProjectAccess(db, id, "owner");
 				}),
@@ -600,7 +616,7 @@ describe("a request for one address does not change what an attacker sees of ano
 							sql
 								.prepare(query)
 								.all()
-								.map((row: object) => ({ ...row })),
+								.map((row) => ({ ...row })),
 						batch: async (statements: string[]) => {
 							sql.exec("BEGIN");
 
@@ -625,6 +641,7 @@ describe("a request for one address does not change what an attacker sees of ano
 						bucket: "local-audio",
 						jurisdiction: null,
 					};
+
 					const review = await previewStudioRetention(
 						database,
 						"Local test data",

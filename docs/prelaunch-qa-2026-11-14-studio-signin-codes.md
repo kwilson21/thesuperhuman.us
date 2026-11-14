@@ -13,11 +13,11 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
 
 - The problem: sign-in codes were kept one row per email address, so anyone who knew a client's address could use up the client's attempts and allowances or replace the code the client had just been sent. A code now belongs to the browser that asked for it.
 - A code request sets a pending sign-in cookie (`__Host-studio_pending`, Path `/`, Secure, HttpOnly, SameSite=Lax, 10 minutes over https; `studio_pending` on `/api/studio` on plain-http localhost). A code is accepted only with that cookie, from the row it was issued to.
-- Each code is its own row (migration 0027, a new table). At most 6 live codes per address; the email allowance (3 per five minutes) is unchanged. A browser that asks again replaces its own code in place; asking for a different address always deletes the earlier code.
+- Each code is its own row (migration 0027, a new table), keyed by the cookie value and the address: `PRIMARY KEY (nonce_hash, email)`. At most 6 live codes per address; the email allowance (3 per five minutes) is unchanged. A browser that asks again for the same address replaces its own code in place. Asking for a different address leaves the earlier code alone: a request for an address reads, writes and deletes only the rows of that address, so what a stranger can see of another address does not depend on that address's state.
 - The decisions are pure functions (`src/lib/signin-code-rules.ts`) and SQL keeps only guards. Issuing a code and entering one each make the same round trips with the same statements for every address and code state.
 - The code email loses its "Open the sign-in page" link. The sign-in page and the email note gain the approved sentences listed under Owner decisions.
 - The retired `audio_client_codes` table is still cleared by retention, owner health and access closure (best effort) until a later migration drops it.
-- A Quint model, `verification/signin-codes.qnt`, with 17 mutants that fail, runs in the pooled CI step; `docs/verification.md` describes it and classifies every statement of the sign-in code path.
+- A Quint model, `verification/signin-codes.qnt`, with 18 mutants that fail, runs in the pooled CI step; `docs/verification.md` describes it and classifies every statement of the sign-in code path.
 - The screenshot scenario `software-project` gains a step that shows the "check your email" form at both sizes.
 - No change to Stripe, invoices, the owner pages or any other route.
 
@@ -33,7 +33,7 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
 
 ## Reviews
 
-Four security rounds and two repo-rules rounds, each finding verified against the code and fixed with a test that failed first:
+Security rounds 1 to 7 (the seventh is the design change below) and two repo-rules rounds, each finding verified against the code and fixed with a test that failed first:
 
 - Security round 1 (independent, head `ccf2779f`): no code must-fix. Five items: the retired table was no longer cleared by retention, owner health or access closure; a browser's earlier row for another address stayed live; two tabs at once create two codes; the guessing budget and the cookie scope needed stating; the code email's link contradicts the new note.
 - Security round 2 (independent, head `233de829`): clean, with one note: the cleanup of the retired table ran after the revocation had committed and could report a failed revocation, so it became best effort with a fixed log line.
@@ -41,6 +41,8 @@ Four security rounds and two repo-rules rounds, each finding verified against th
 - Security round 4 (the security reviewer and Greptile, head `efb1ec3f`): a lost race on the code route answered 503 only when the target address had an open project, because the write replaced the browser's row only for the same address and two requests on one cookie for different addresses collided on the table's key. Fixed: the write replaces the row that holds the cookie value whatever its address, and the model now includes the key.
 - Repo-rules round 1 (head `a90d6926`): the live-code predicate still decided inside a COUNT, the model did not cover the read-to-write gap, the "check your email" step had no screenshot, and this record was missing.
 - Repo-rules round 2 (head `efb1ec3f`): the document's "no decisions in SQL" line was not exactly true for the expired-row sweep and the allowance clean-up, the guard did not use the rule's cap, the Hallmark audit had not been recorded, and this record's checklist items, ledger wording and date needed fixing.
+- Security rounds 5 and 6 (findings M1, M1b and P1 to P5, then the sweep delete): the findings and their fixes are in the commit messages of the branch (`git log origin/main..HEAD`). The last of them was that the clean-up delete of expired rows was unguarded and unmodelled; it is now guarded by the code that was read and modelled (`liveCodeNeverSwept`, mutant `SweepUnguarded`).
+- Security round 7 (a design change): the cross-address oracle. Rows were keyed by the cookie value alone, and a request deleted or replaced the browser's row whatever its address. A stranger that sent one cookie value with requests for two addresses could learn from the answers and from whether its first code survived whether the second address had a project (this is the rule of rounds 3 to 6, "asking for a different address ends the earlier code"). The rule was dropped. Rows are keyed by `(nonce_hash, email)`, every statement of a request for address T touches only T's rows, and asking for another address no longer ends the earlier code. A client with codes for two addresses in one browser can use both; before, only the last worked.
 - Greptile and Codex review the pull request head.
 
 ## Hallmark audit (`docs/design-standard.md`, "Auditing before review")
@@ -54,8 +56,10 @@ Four security rounds and two repo-rules rounds, each finding verified against th
 ## Evidence
 
 - Local runs on macOS arm64, Node 26, pnpm, on the head recorded in the pull request: format, build, the client-bundle test, `pnpm test` twice with a clean `git status`, `QUINT_JOBS=4 pnpm run verify:quint:all`, the publicist gate, Oxlint at 53, `pnpm run check` with 0 errors and 17 hints. The pull request description carries the exact lines.
-- `git diff ccf2779f HEAD -- migrations` is empty: migration 0027 is byte-identical to the file the owner approved.
+- **Migration 0027 was changed in place after the owner's 2026-11-13 approval, and he must be told before it is applied.** The primary key changed from `nonce_hash` to `(nonce_hash, email)` (round 7). The file was changed in place because it has not been applied anywhere (the coordinator lifted the earlier ban on editing it), and `db/music.sql` is regenerated from the migrations. The approval above was for the earlier file. **UNVERIFIED:** the owner has not yet been told or approved the changed file. The operator applies it only after he has.
+- Final table: `audio_client_signin_codes(nonce_hash, email, code_hash, attempts CHECK 0..5, created_at, expires_at, used_at, session_token_hash, PRIMARY KEY (nonce_hash, email))` with an index on `(email, expires_at)`.
 - Golden fixtures re-recorded each in their own commit with a per-case comparison: `studio-code` and `studio-session` changed, plus the owner and sign-out fixtures when the table was renamed. Every existing case keeps its status, body and stored rows except the listed ones (session token values and one audit row order, and the case where a replaced code is no longer charged).
+- The enumeration test `tests/api/studio-signin-noninterference.test.ts` runs every interleaving of the batch steps of two and of three concurrent requests, on one cookie and on two, once for each target state (open, closed only, withdrawn only, none, full), with the attacker a client or a stranger, and asserts that what the attacker can observe (each answer's status, body and cookie, emails to attacker-controlled addresses, whether the attacker's own codes still work) is identical across target states. It also races a request with a completion, a revocation and the retention sweep. A deterministic sample runs in `pnpm test`; `SIGNIN_EXHAUSTIVE=1` runs the full set. On the code before this change it fails (see Evidence figures in the pull request description).
 - The round-trip test records every database batch of a code request (for an address with a project, one without and a full one) and of an entry (no row, used, expired, exhausted, wrong, right) and asserts the same batch and statement counts in each.
 
 ## Migration ledger and deployment
@@ -79,6 +83,7 @@ Four security rounds and two repo-rules rounds, each finding verified against th
 ## 3. Accessibility and responsive behavior
 
 - **PASS, with limits · Copy and layout.** One sentence is added to an existing paragraph on the sign-in page. The screenshot scenario captures the "check your email" step at 1280x800 and 390x844; the CI Screenshots workflow runs it and its images are in the pull request description.
+- **UNVERIFIED · Migration approval.** The owner has not seen the round 7 change to migration 0027 (see Evidence).
 - **UNVERIFIED · The scenario run.** The scenario was not run locally (it needs the screenshot environment). CI runs it.
 
 ## 4. Performance and resilience
