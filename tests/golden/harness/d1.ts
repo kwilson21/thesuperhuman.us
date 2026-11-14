@@ -14,6 +14,7 @@ import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
 import type { D1Outcome, D1Statement } from "./log";
 import type { EffectLog } from "./log";
 import { argRecord, errorText } from "./plain";
+import type { Triggers } from "./triggers";
 
 /** Picks the n-th statement (or batch containing a statement) whose SQL matches. `on` must not use the g flag. */
 export type SqlTrigger = {
@@ -34,12 +35,31 @@ export type InjectedFailure = SqlTrigger & { readonly message: string };
 /** The hooks of a case, with the count of matches each has seen. */
 export class SqlHooks {
 	private readonly seen = new Map<SqlTrigger, number>();
+	private readonly ids = new Map<SqlTrigger, string>();
 	private paused = 0;
 
 	constructor(
 		private readonly interleaves: readonly Interleave[],
 		private readonly failures: readonly InjectedFailure[],
-	) {}
+		private readonly triggers: Triggers,
+	) {
+		const where = (trigger: SqlTrigger) =>
+			`${trigger.db === undefined ? "" : `${trigger.db} `}${trigger.on}${trigger.nth === undefined || trigger.nth === 1 ? "" : ` (match ${trigger.nth})`}`;
+
+		for (const interleave of interleaves)
+			this.declare(
+				interleave,
+				`d1 interleave "${interleave.label}" on ${where(interleave)}`,
+			);
+
+		for (const failure of failures)
+			this.declare(failure, `d1 failure on ${where(failure)}`);
+	}
+
+	private declare(trigger: SqlTrigger, id: string) {
+		this.ids.set(trigger, id);
+		this.triggers.declare(id, trigger.nth ?? 1);
+	}
 
 	/** Runs `work` with no hook firing and no match counted, for setup that is not part of the case (sign-in). */
 	async quietly<T>(work: () => Promise<T>): Promise<T> {
@@ -59,6 +79,10 @@ export class SqlHooks {
 
 		const count = (this.seen.get(trigger) ?? 0) + 1;
 		this.seen.set(trigger, count);
+
+		const id = this.ids.get(trigger);
+
+		if (id !== undefined) this.triggers.see(id);
 
 		return count === (trigger.nth ?? 1);
 	}

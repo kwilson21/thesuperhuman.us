@@ -306,6 +306,16 @@ describe("hooks during sign-in", () => {
 					},
 				},
 			],
+			optionalTriggers: [
+				{
+					trigger: "d1 failure on /studio_/i",
+					reason: "the test shows the sign-in does not fire it",
+				},
+				{
+					trigger: 'd1 interleave "other request" on /studio_/i',
+					reason: "the test shows the sign-in does not fire it",
+				},
+			],
 		});
 
 		expect(interleaved).toBe(0);

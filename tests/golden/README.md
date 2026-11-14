@@ -3,16 +3,26 @@
 A golden corpus proves that a route behaves the same after it is converted to Effect. It is a table of requests run
 against the route as it is now. For each request the test records the status, headers, exact body and every outside
 effect the route makes, in order. The record is saved as a compressed JSON fixture (`tests/golden/fixtures/<route>.json.gz`) and committed. After the conversion the same test
-must pass with the fixture untouched.
+must pass with the fixture untouched, or, when the conversion only changes D1 statements, with a fixture that
+`pnpm run golden:neutral` shows is neutral (see "A conversion is neutral when").
 
 Three older routes (contact, resume-request, resume-approve) use `recorder.ts`. Everything else uses `harness/`. The
 worked example is `owner-request-status.test.ts` (POST /api/owner/requests/[id]); copy its shape.
 
 ## The rule
 
-A fixture is recorded from the OLD code and never edited to make a conversion pass. If a converted route differs from its
-fixture, the route is wrong. The one exception is a real bug fix agreed with the owner, made on the old code first, then
-re-recorded in its own commit that says so.
+A fixture is recorded from the OLD code, and a converted route that differs from it is wrong unless one of two things is
+true. Each is its own commit.
+
+1. A behaviour FIX agreed with the owner. Make it on the old code first, then re-record in a commit that says so, with a
+   per-case explanation of every case whose outcome changed.
+2. A behaviour-NEUTRAL conversion (a rule moved out of SQL into TypeScript, with SQL keeping only the compare-and-set
+   guard). Its D1 statements change, so the fixture changes, and the re-record is allowed only when
+   `pnpm run golden:neutral` passes between the fixture before the commit and the fixture after it. Re-record in a commit
+   of its own that holds no fix and no other change, and paste the tool's output in the PR description.
+
+Never edit a fixture by hand, and never re-record to make a failing test pass when the tool says the change is not
+neutral: the route is wrong.
 
 Re-record only with `UPDATE_GOLDEN=1`, and only one file at a time:
 
@@ -22,6 +32,45 @@ UPDATE_GOLDEN=1 pnpm exec vitest run tests/golden/<route>.test.ts
 
 A plain `pnpm test` compares and never writes. Always `git diff` the fixtures after re-recording, and check the other
 golden fixtures did not change.
+
+## A conversion is neutral when
+
+```
+pnpm run golden:neutral <fixture|--all> [<from> [<to>]] [--allow-renames <file>] [--allow-positions <file>]
+```
+
+compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the working tree, `--all` runs every fixture)
+and exits 0 only when every case that existed before is neutral. For each such case and each step, these must be
+byte-identical before and after:
+
+- the request, and the response: status, headers, every set-cookie value, and the body;
+- what the step dumped of the databases, R2 and KV, and the final dump (every table, row and column the harness dumps, in
+  its order);
+- every effect that is not a D1 statement, in order, with its step and phase: outgoing HTTP (Stripe, Resend, Turnstile)
+  with method, URL, headers and body, Workers AI calls, R2 and KV operations, `console.error` and `console.warn`,
+  `waitUntil` registrations and how they settled, rate-limit calls, clock moves and interleave markers.
+
+Only the D1 entries may differ: SQL text, binds, how many statements, where the batches begin and end, and each
+statement's result. The tool removes the D1 entries from both logs and requires what is left to be identical.
+
+**Order against D1.** An email that was sent after the write and is now sent before it is a behaviour change, so the
+tool also looks, per step, at where each non-D1 effect sits among the writes: before the first D1 write, between the
+first and the last, after the last, or in a step with no write. A write is an INSERT, UPDATE, DELETE, REPLACE or schema
+statement that ran; a statement that threw, and a batch that did not commit, wrote nothing. If an effect's place changed,
+the case is reported as a moved effect and the run FAILS, unless the case is named, with a reason, in the file given to
+`--allow-positions` (`{ "<fixture>": { "<case name>": "<reason>" } }`, the name being the case's name after the
+conversion). An allowance that matches no moved effect also fails, so the list cannot go stale.
+
+**Cases.** An added case is listed and does not fail (it has no earlier record to compare). A removed case fails. A
+renamed case is a removed case and an added one unless `--allow-renames` maps it (`{ "<fixture>": { "<old name>":
+"<new name>" } }`); a mapped pair is compared as one case and must itself be neutral. A mapping that names no case is an
+error.
+
+The tool prints, per fixture, how many cases are identical, neutral with D1 changes, NOT neutral (each with the first
+differing field and both values, shortened), added, removed and renamed, then `golden:neutral: NEUTRAL` or `NOT
+NEUTRAL`. Exit codes: 0 neutral, 1 not neutral, 2 usage or read error. Two judgement calls: a write is recognised from
+the SQL text (its first keyword, or the statement a `WITH` ends in), and a write that ran but changed no row still counts
+as a write. If a conversion needs a case's input changed, that is not a conversion: record it as a fix.
 
 ## Reviewing a fixture change
 
@@ -154,6 +203,18 @@ database just before the n-th statement (or batch containing a statement) that m
 reaches, such as a row changing between a pre-check and the batch. `failures: [{ on: /.../, message }]` makes the n-th
 matching statement or batch throw without running. Both are written into the log, so the fixture shows them. R2 and KV
 `fails` make a named operation reject.
+
+A declared trigger that never fires fails the case, when recording and when checking, with a message naming it and its
+pattern (`d1 failure on /UPDATE .../ (seen 0 times, declared 1)`). The triggers are: each `failures` and `interleave`
+entry (which must match `nth` times), each R2 and KV `fails` entry, each `byHost` fetch answer that throws, and each AI
+answer that throws or never answers (a hand-written responder declares nothing). Without this a conversion that changes
+the SQL a hook matches would leave a case recording the happy path under the name of an outage or a race. A trigger
+that may legitimately stay quiet, such as a control that proves a statement is never reached, is listed in the case's
+`optionalTriggers: [{ trigger: "<the text the failure message prints>", reason: "..." }]`; an entry with no reason, or
+one that matches no trigger, fails too. Work done off the record (sign-in, `setup`, hooks) never counts as a firing.
+
+Every generated case has a 60 second time limit (`CASE_TIMEOUT_MS`, set once in `defineCorpus`), because cases that render
+PDFs come close to the 5 second default when several suites run at once.
 
 ## Signing in a client
 

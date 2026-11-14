@@ -83,6 +83,11 @@ export class EffectLog {
 	phase: Phase = "request";
 	private quiet = 0;
 
+	/** False while off-record work (sign-in, seeding, a hook) runs. */
+	get recording() {
+		return this.quiet === 0;
+	}
+
 	push(body: EffectBody) {
 		if (this.quiet > 0) return;
 

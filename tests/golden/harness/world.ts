@@ -28,6 +28,7 @@ import {
 	recordingAi,
 	recordingFetch,
 	recordingRateLimit,
+	trackedResponder,
 	type AiAnswer,
 	type Responder,
 } from "./net";
@@ -39,6 +40,7 @@ import {
 	type Recorded,
 } from "./plain";
 import { recordingR2, type R2Setup } from "./r2";
+import { Triggers, type OptionalTrigger } from "./triggers";
 
 export type Handler = (context: APIContext) => Response | Promise<Response>;
 
@@ -180,6 +182,12 @@ export type Case = {
 	readonly noContext?: boolean;
 	readonly interleave?: readonly Interleave[];
 	readonly failures?: readonly InjectedFailure[];
+	/**
+	 * Every declared trigger (a D1 failure or interleave, an R2 or KV `fails` entry, a `byHost` answer that throws, an AI
+	 * answer that throws or never answers) must fire as often as declared, or the case fails and names it. List here one
+	 * that may legitimately stay quiet: the text is the one the failure message prints, and the reason is required.
+	 */
+	readonly optionalTriggers?: readonly OptionalTrigger[];
 	/** Runs once before the first step, off the record, to seed with code (raw SQL on the databases). */
 	readonly setup?: (world: World) => void | Promise<void>;
 	/** Record these tables' rows (and stores) after the last step. */
@@ -220,6 +228,9 @@ export type World = {
 	/** Move the clock. Recorded. */
 	advance(ms: number): void;
 };
+
+/** The time limit of every generated case. Cases that render PDFs run close to the 5 second default under load. */
+export const CASE_TIMEOUT_MS = 60_000;
 
 type Pending = { id: number; promise: Promise<void> };
 
@@ -356,8 +367,17 @@ async function runOn(
 
 	if (c.publication?.seed) seed(publication, c.publication.seed);
 
-	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? []);
-	const r2 = recordingR2("AUDIO", c.r2 ?? {}, log, clock.now, clock.nextFakeId);
+	const triggers = new Triggers(() => log.recording);
+	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? [], triggers);
+
+	const r2 = recordingR2(
+		"AUDIO",
+		c.r2 ?? {},
+		log,
+		clock.now,
+		clock.nextFakeId,
+		triggers,
+	);
 
 	const kvNames: KvName[] = ["RATE_LIMIT", "RESUME_STORE", "OAUTH_KV"];
 
@@ -367,7 +387,9 @@ async function runOn(
 
 	const kvs = Object.fromEntries(
 		kvNames.flatMap((name) =>
-			bound(name) ? [[name, recordingKv(name, c.kv?.[name] ?? {}, log)]] : [],
+			bound(name)
+				? [[name, recordingKv(name, c.kv?.[name] ?? {}, log, triggers)]]
+				: [],
 		),
 	);
 
@@ -389,7 +411,7 @@ async function runOn(
 
 	if (kvs.OAUTH_KV) env.OAUTH_KV = kvs.OAUTH_KV.binding;
 
-	if (c.ai) env.AI = recordingAi(c.ai, log);
+	if (c.ai) env.AI = recordingAi(c.ai, log, triggers);
 
 	for (const name of [
 		"BRIEF_SUGGEST_RATE_LIMIT",
@@ -400,9 +422,14 @@ async function runOn(
 		if (script) env[name] = recordingRateLimit(name, script, log);
 	}
 
-	let responder: Responder =
+	let responder: Responder = trackedResponder(
 		c.fetches ??
-		(() => ({ kind: "throws", message: "golden harness: no fetch scripted" }));
+			(() => ({
+				kind: "throws",
+				message: "golden harness: no fetch scripted",
+			})),
+		triggers,
+	);
 
 	vi.stubGlobal(
 		"fetch",
@@ -667,6 +694,13 @@ async function runOn(
 		});
 	}
 
+	const unfired = triggers.problems(c.optionalTriggers);
+
+	if (unfired.length > 0)
+		throw new Error(
+			`golden harness: case "${c.name}" declared triggers that did not fire, so it would record the happy path under a name that claims otherwise. ${unfired.join("; ")}.`,
+		);
+
 	return {
 		name: c.name,
 		steps: records,
@@ -690,9 +724,13 @@ export function defineCorpus(
 		});
 
 		for (const c of cases)
-			it(c.name, async () => {
-				expectRecorded(area, await runCase(handler, c));
-			});
+			it(
+				c.name,
+				async () => {
+					expectRecorded(area, await runCase(handler, c));
+				},
+				CASE_TIMEOUT_MS,
+			);
 
 		afterAll(() => settleFixture(area, names));
 	});

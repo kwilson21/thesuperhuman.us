@@ -22,7 +22,7 @@ function parse(buffer) {
 	return buffer ? JSON.parse(gunzipSync(buffer).toString("utf8")) : [];
 }
 
-function fromDisk(fixture) {
+export function fromDisk(fixture) {
 	const path = join(process.cwd(), pathOf(fixture));
 
 	return parse(existsSync(path) ? readFileSync(path) : undefined);

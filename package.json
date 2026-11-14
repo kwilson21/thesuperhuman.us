@@ -30,6 +30,7 @@
     "verify:quint:exhaustive": "node scripts/verify-quint.mjs exhaustive",
     "verify:dafny": "lsc check --backend=dafny",
     "golden:diff": "node scripts/golden-diff.mjs diff",
+    "golden:neutral": "node scripts/golden-neutral.mjs",
     "golden:show": "node scripts/golden-diff.mjs show",
     "screenshots:preview": "node scripts/screenshots/preview.mjs",
     "screenshots": "node scripts/screenshots/capture.mjs",
