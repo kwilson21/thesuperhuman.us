@@ -744,7 +744,7 @@ describe("the shape of a current-format record", () => {
 		);
 	});
 
-	it.each([99, 5, 0, -1, 4.5, "4", null])(
+	it.each([99, 6, 0, -1, 4.5, "4", null])(
 		"format %s on both sides is an error naming the case, never neutral",
 		(format) => {
 			const was = { ...good(), format };
@@ -757,12 +757,33 @@ describe("the shape of a current-format record", () => {
 	);
 
 	it("an unknown format on one side only is an error too, even when the other side is current", () => {
-		expect(() => compareCase(good(), { ...good(), format: 5 })).toThrow(
+		expect(() => compareCase(good(), { ...good(), format: 6 })).toThrow(
 			/\(later revision\)/,
 		);
-		expect(() => compareCase({ ...good(), format: 5 }, good())).toThrow(
+		expect(() => compareCase({ ...good(), format: 6 }, good())).toThrow(
 			/\(earlier revision\)/,
 		);
+	});
+
+	it("format 4 against format 5 is not comparable: the phase and the digest at the response mean something else", () => {
+		const outcome = compareCase(good(), { ...good(), format: 5 });
+
+		expect(outcome.status).toBe("not-comparable");
+		expect(outcome.difference).toMatchObject({
+			area: "fixture format",
+			expected: 4,
+			actual: 5,
+		});
+	});
+
+	it("two format 5 cases are compared with the same rules, shape included", () => {
+		expect(
+			compareCase({ ...good(), format: 5 }, { ...good(), format: 5 }).status,
+		).toBe("identical");
+
+		const { steps: _steps, ...broken } = { ...good(), format: 5 };
+
+		expect(() => compareCase(broken, broken)).toThrow(/case "a case"/);
 	});
 
 	it("a known older format keeps the NOT COMPARABLE rule", () => {
