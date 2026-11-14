@@ -27,6 +27,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
+      - run: pnpm run format:check
       # docs/verification.md: Dafny checks the LemmaScript contracts listed in LemmaScript-files.txt, pinned by version and
       # checksum as in Tally. The unpacked tool is dev-only and never part of the Worker.
       - name: Install Dafny 4.9.0
