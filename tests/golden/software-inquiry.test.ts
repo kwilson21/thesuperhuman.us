@@ -51,7 +51,8 @@ import {
 //                                      request counter
 //   429 request limit                  one saved brief per address per window
 //   saving                             insert batch throws (counter cleared, alert, 500), another request saved the same
-//                                      id first (same email: 200 with the stored brief; different email: 409), clearing
+//                                      id first (same email: 200 with the stored brief; different email: 409; in both the
+//                                      allowance is given back), clearing
 //                                      the counter throws too (the alert still goes out), a read-back after the insert is
 //                                      never made
 //   the client copy                    sent, refused 400, 5xx and network down (uncertain), no key, sender or owner
