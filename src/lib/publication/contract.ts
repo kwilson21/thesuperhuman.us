@@ -28,30 +28,21 @@ export type Publication = PublicationBase &
 		| { operation: "withdraw"; story: null }
 	);
 
+/**
+ * What the journal guarantees (src/server/flows/publication-commit.ts): deduplication, expectedRevision comparison, history,
+ * current-view changes and the receipt are one atomic per-project operation: the read, the decision and the guarded write
+ * agree on the revision, and a write that finds the revision taken reads and decides again (src/server/flows/publication-commit.ts).
+ * Event IDs are opaque source-outcome identities shared by backfill and live work.
+ * Duplicate IDs with different payloads are conflicts, never successful retries.
+ * Withdrawals tombstone entryId and erase served content; replay cannot restore it.
+ * Backfill records history without changing current state; timestamps never order writes.
+ * The receiver assigns receipt time/revision; the caller cannot claim acceptance. A receipt is that assignment.
+ */
 export interface Receipt {
 	projectId: string;
 	eventId: string;
 	revision: number;
 	publishedAt: string;
-}
-
-export type CommitResult =
-	| { status: "accepted" | "duplicate"; receipt: Receipt }
-	| { status: "conflict" | "withdrawn" | "rejected" };
-
-/**
- * Implementations MUST make deduplication, expectedRevision comparison, history,
- * current-view changes and the receipt one atomic per-project operation: the read, the decision and the guarded write
- * agree on the revision, and a write that finds the revision taken reads and decides again (src/server/flows/publication-commit.ts).
- * A KV get/check/put implementation does not satisfy this port.
- * Event IDs are opaque source-outcome identities shared by backfill and live work.
- * Duplicate IDs with different payloads are conflicts, never successful retries.
- * Withdrawals tombstone entryId and erase served content; replay cannot restore it.
- * Backfill records history without changing current state; timestamps never order writes.
- * The receiver assigns receipt time/revision; the caller cannot claim acceptance.
- */
-export interface PublicationJournal {
-	commit(publication: Publication): Promise<CommitResult>;
 }
 
 const id = Schema.String.check(

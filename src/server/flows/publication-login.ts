@@ -16,6 +16,7 @@ import {
 	publicationResource,
 	type LoginEnv,
 } from "../../lib/publication/oauth-login";
+import { sha256 } from "../digest";
 import { BodyUnreadable } from "../bounded-body";
 import { LoginRefused } from "../rules/publication-login";
 import { encode, seal, unseal, type LoginState } from "../publication-cookie";
@@ -36,15 +37,6 @@ export type LoginWorld = {
 	readonly now: () => number;
 	readonly random: () => string;
 };
-
-/** The SHA-256 of text. `Effect.promise`: a digest of bytes cannot reject, so there is no failure to name. */
-const digest = (text: string) =>
-	Effect.promise(
-		async () =>
-			new Uint8Array(
-				await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
-			),
-	);
 
 const base64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 
@@ -82,7 +74,7 @@ export const showConsent = (
 		const cookie = yield* seal(state, env.PUBLICATION_COOKIE_KEY);
 		const returnOrigin = new URL(auth.redirectUri).origin;
 
-		const styleHash = base64(yield* digest(consentStyle));
+		const styleHash = base64(yield* sha256(consentStyle));
 
 		return {
 			html: consentHtml(
@@ -129,7 +121,7 @@ export const approveConsent = (
 			{},
 		);
 
-		const challenge = encode(yield* digest(state.verifier));
+		const challenge = encode(yield* sha256(state.verifier));
 		const github = new URL("https://github.com/login/oauth/authorize");
 
 		github.search = new URLSearchParams({

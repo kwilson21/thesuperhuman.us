@@ -56,7 +56,7 @@ import {
 //   400 rejected                              expectedRevision of Number.MAX_SAFE_INTEGER (valid shape, refused by the journal)
 //   503 {"error":"Delivery pending. Retry the same event."}   the journal batch throws
 //
-// Journal paths (D1PublicationJournal.commit): the insert guards (revision, event id, tombstone, operation), the
+// Journal paths (the commit rule and store): the insert guards (revision, event id, tombstone, operation), the
 // withdraw erase, the receipt select, the tombstone select; and the outbox trigger that clears queued prose.
 // Multi-step sequences are named "sequence: ...".
 

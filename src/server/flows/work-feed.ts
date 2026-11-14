@@ -6,6 +6,7 @@
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { parsePublication } from "../../lib/publication/contract";
+import { sha256 } from "../digest";
 import { readBounded } from "../bounded-body";
 import { allowProject } from "../rules/publication-access";
 import { presentsBearer, sameDigest } from "../rules/publication-token";
@@ -24,15 +25,6 @@ export class InvalidPublication extends Data.TaggedError(
 /** The largest envelope read, in bytes. */
 export const LARGEST_ENVELOPE = 32768;
 
-/** The SHA-256 of a token. `Effect.promise`: a digest of bytes cannot reject, so there is no failure to name. */
-const digestOf = (token: string) =>
-	Effect.promise(
-		async () =>
-			new Uint8Array(
-				await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token)),
-			),
-	);
-
 /** Succeeds when the request presents the configured token; fails with Unauthorized otherwise. */
 export const authorizeFeed = (
 	header: string | null,
@@ -43,8 +35,8 @@ export const authorizeFeed = (
 
 		// presentsBearer refused an unset token, so `configured` is text here; the digests are compared byte for byte.
 		const [a, b] = yield* Effect.all([
-			digestOf(presented),
-			digestOf(configured ?? ""),
+			sha256(presented),
+			sha256(configured ?? ""),
 		]);
 
 		yield* sameDigest.decide({ presented: a, configured: b }, {});

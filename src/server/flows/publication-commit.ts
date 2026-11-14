@@ -5,6 +5,7 @@
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type { Publication, Receipt } from "../../lib/publication/contract";
+import { sha256Hex } from "../digest";
 import { decideAndSave } from "../guarded-save";
 import { insertEvent, readCommitFacts } from "../publication-store";
 import {
@@ -21,25 +22,14 @@ export type Committed = {
 	readonly receipt: Receipt;
 };
 
-/** The SHA-256 of the canonical envelope, as lower-case hex. */
-const hashOf = (publication: Publication) =>
-	// `Effect.promise`: digest of bytes cannot reject for SHA-256, so there is no failure to name; a defect would be a runtime fault.
-	Effect.promise(async () => {
-		const digest = await crypto.subtle.digest(
-			"SHA-256",
-			new TextEncoder().encode(canonicalPublication(publication)),
-		);
-
-		return Array.from(new Uint8Array(digest), (b) =>
-			b.toString(16).padStart(2, "0"),
-		).join("");
-	});
-
 export const commit = (publication: Publication) =>
 	Effect.gen(function* () {
 		yield* admitPublication.decide(publication, {});
 
-		const request = requestOf(publication, yield* hashOf(publication));
+		const request = requestOf(
+			publication,
+			yield* sha256Hex(canonicalPublication(publication)),
+		);
 
 		const done = yield* decideAndSave({
 			facts: readCommitFacts(
