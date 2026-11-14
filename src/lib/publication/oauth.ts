@@ -7,7 +7,7 @@ import {
 	type LoginEnv,
 } from "./oauth-login";
 import { publicationMcp, type PublicationIdentity } from "./mcp";
-import { keyBoundedKv } from "../../server/publication-kv";
+import { keyBoundedKv } from "./key-bounded-kv";
 import { isText } from "../type-guards";
 
 const paths = new Set([
