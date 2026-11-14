@@ -140,7 +140,7 @@ it.each([
 
 // The database statements a verified visitor's request runs are the same whatever the id is, so the number and order of
 // round trips cannot tell an unknown id from an agreement of another client or of another offer of their own.
-function traced(agreement: Row, cookie: string) {
+async function traced(agreement: Row, cookie: string) {
 	const sql: string[] = [];
 
 	const db = fakeD1({
@@ -167,13 +167,14 @@ function traced(agreement: Row, cookie: string) {
 		},
 	});
 
-	return agreementDownload(
+	const response = await agreementDownload(
 		partial<Env>({ MUSIC_DB: db, AUDIO: double<R2Bucket>({}) }),
 		new Request("https://thesuperhuman.us/api/agreements/a1/file", {
 			headers: { cookie },
 		}),
 		"a1",
-	).then(async (response) => ({ ...(await answer(response)), sql }));
+	);
+	return { ...(await answer(response)), sql };
 }
 
 it.each([
