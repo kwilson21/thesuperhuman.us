@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { Publication } from "../../src/lib/publication/contract";
 import { commit } from "../../src/server/flows/publication-commit";
 import { readFeed } from "../../src/server/flows/publication-feed";
-import { progressTool, publishTool } from "../../src/server/flows/publication-tools";
+import {
+	progressTool,
+	publishTool,
+} from "../../src/server/flows/publication-tools";
 import { answerOfRun } from "../helpers/rule-answers";
 import {
 	publicationWorld,
