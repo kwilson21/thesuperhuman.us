@@ -6,7 +6,7 @@ Branch: `claude/screenshot-ci-speed-db66c3`
 Pull request: #243
 Target: production `https://thesuperhuman.us`
 Reviewer: built by Claude Haiku subagents, tests first; reviewed by independent Claude Opus and Sonnet subagents over four rounds (the last two clean). This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: `e22d01f1d6a72022ca6d478663a88336dcdcdde2` (local `origin/main` when this record was written; re-check with `git fetch` before merge)
+Rollback revision: `c786f38bc6f43f2eaabee9a7a9394984509bf6c1`, the revision of `main` immediately before this PR merged as `fad7694e` (its first parent). Later changes have merged since, so to undo only this change, revert the merge commit `fad7694e`. When this record was first written the rollback point was `e22d01f1`, which is 37 commits older and must not be used.
 
 ## Scope
 
@@ -121,7 +121,7 @@ Four rounds by independent Claude subagents.
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits (`pnpm run check` 561 files, 0 errors; `pnpm test` 2,053 passed, 1 skipped; `pnpm run build` complete; format check clean; lint shows only the 66 deferred findings, none in a touched file; publicist gate 84 entries with the private note lookup skipped).
 - PASS, 7.2 Exact diff review: 18 files changed, 2,970 insertions, 171 deletions, all under `scripts/screenshots/`, `tests/scripts/` or `.github/workflows/screenshots.yml`; no change under `src/`. Four rounds of independent Claude review. On the final head `851de05c`, Greptile succeeded with no actionable findings and Codex's code and security reviews found no issues (see Reviews).
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: no binding, secret or migration changed, and nothing about the deployed site changed.
-- PASS, 7.4 Rollback version preserved: revision `e22d01f1d6a72022ca6d478663a88336dcdcdde2` is local `origin/main` when this record was written; re-check with `git fetch` before merge.
+- PASS, 7.4 Rollback version preserved: `c786f38b`, the revision of `main` immediately before the merge commit `fad7694e`. To undo only this change, revert `fad7694e`.
 - UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-13 20:28:03 UTC as `fad7694e`, and the coordinating session observed that the Cloudflare production build for that commit succeeded. No live check of the served site was made for this record; the change is CI tooling and nothing about the served site changed.
 - PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes (unit tests and local checks). Verified in CI: yes (the runs in the table above, and the first run on `main`, 43501821328, below). Deployed: yes (merged 2026-11-13 20:28:03 UTC as `fad7694e`; production build succeeded; no site change). Verified live: no (not checked; CI tooling only).
 

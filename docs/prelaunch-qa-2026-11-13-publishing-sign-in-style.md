@@ -7,7 +7,7 @@ Commits: `6151aa50` (style), `76f3fefb` (golden re-record for the style), then `
 Pull request: #261 (see the PR description for the link).
 Target: production `https://thesuperhuman.us` after merge. The consent page is served by the Astro route `src/pages/api/publication/[...path].ts`, which returns 404 unless the request origin is `https://thesuperhuman.us` (`src/lib/publication/oauth.ts`). Its fonts are static files on the same origin (`public/fonts/libron-v0.25/`). The page is never served on the audio host.
 Reviewer: Claude Haiku 5.5 subagent, tests first. The coordinating session owns the review, the browser checks listed as UNVERIFIED, and the deployment decision. This record does not certify them.
-Rollback revision: `fad7694e` (`origin/main` when this branch was cut). The PR adds no migration and writes no stored data.
+Rollback revision: `fad7694e`, the revision of `main` immediately before this PR merged as `57e26842` (its first parent, and `origin/main` when this branch was cut). Later changes have merged since, so to undo only this change, revert the merge commit `57e26842`. The PR adds no migration and writes no stored data.
 Evidence: the renders and the 320px and 200% measurements were gathered at code commit `77c047e8`. Commit `dae9ea58` changes one style declaration (the pressed state), so the golden comparison and the tests below were re-run at `dae9ea58`. The wrong-nonce test in `be0c3834` adds no production code change.
 
 ## Scope

@@ -7,7 +7,7 @@ Commits: `2d29fd93` (test), `1e9c1085` (change), `ded6b517` (release record), `6
 Pull request: [#260](https://github.com/kwilson21/thesuperhuman.us/pull/260)
 Target: production `https://thesuperhuman.us` after merge. The shared footer also renders on `audio.thesuperhuman.us`.
 Reviewer: Claude Haiku 5.5 subagent, test first. The coordinating session owns the review, the Hallmark audit and the browser checks listed as UNVERIFIED. This record does not certify them.
-Rollback revision: `88551410` (`origin/main` when this branch was cut). The PR adds no migration and writes no stored data.
+Rollback revision: `c357a1ca`, the revision of `main` immediately before this PR merged as `c786f38b` (its first parent). Later changes have merged since, so to undo only this change, revert the merge commit `c786f38b`. When the branch was cut `origin/main` was `88551410`, which is 22 commits older and must not be used. The PR adds no migration and writes no stored data.
 
 ## Scope
 
@@ -96,7 +96,7 @@ UNVERIFIED until checked:
 - **PASS · Diff review.** Four files (`git diff --stat origin/main...HEAD`: 4 files changed): `src/components/Footer.astro` (one rule gains `text-wrap: balance`), `tests/components/closing-panel.test.ts` (one test), `design.md` (one sentence on the typography line records the exception, and a November 13 owner-decision entry) and this record. `design.md` was reviewed; this revision narrows its wording after review to the one approved case. No secrets, no dependency changes, no generated files committed. `.jolli/` is untracked and not committed.
 - **N/A · Bindings, secrets, migrations.** None change.
 - **N/A · HTTPS, host routing, cache behaviour and response headers.** No route, header, redirect, host or cache change.
-- **PASS · Rollback version.** `88551410`.
+- **PASS · Rollback version.** `c357a1ca`, the revision of `main` immediately before the merge commit `c786f38b`. To undo only this change, revert `c786f38b`.
 - **UNVERIFIED · Production verification after deploy.** Partly done on 2026-11-13 (see Evidence): the legal line on `https://thesuperhuman.us/work` and on `https://audio.thesuperhuman.us/` at 320px in Chromium, and the 200 and 404 responses named there. Not done: the served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring, and a quiet-footer page.
 - **PASS · Receipt and evidence.** This record. Status: implemented; tests, typecheck and build pass locally; the rendering on this branch was viewed locally in Chromium at 320px, 390px and 1280px; CI checks succeeded on the final head; deployed (merged 2026-11-13 20:27:49 UTC as `c786f38b`, production build succeeded); verified live in part (the 320px legal line check above, Chromium only); other browsers, a real phone and the rest of the post-deployment check are not checked.
 
