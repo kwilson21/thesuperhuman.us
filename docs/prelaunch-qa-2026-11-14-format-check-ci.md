@@ -4,16 +4,16 @@ Date: November 14, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
-Branch: `claude/followup-fmt`, stacked on `claude/lint-zero-3-enforce` (pull request #258)
-Rollback revision: the production revision at merge time; after merge, the merge commit's first parent. Reverting the merge commit undoes only this change.
+Branch: `claude/followup-fmt` (pull request #277), built on the lint stack (#256 to #258, merged as `440b28ef`)
+Rollback revision: the production revision when this reaches `main`; after that, its merge commit's first parent. Reverting the merge commit undoes only this change.
 
 ## Scope
 
-One step, `pnpm run format:check`, added to the Validate workflow after `pnpm run lint`, and one line each in `CLAUDE.md` and `README.md`. No source, test, dependency or configuration file changed. `pnpm run format:check` is `biome format .`. Biome checks `src`, `scripts`, `tests` and the root config files named in `biome.json` (including `.astro` and `.mjs` files there); it does not check CSS, Markdown, `package.json`, `.github` or `docs`.
+One step, `pnpm run format:check`, added to the Validate workflow after `pnpm run lint`, and one line each in `CLAUDE.md` and `README.md`. No source, test, dependency or configuration file changed. `pnpm run format:check` is `biome format .`. Biome checks `src`, `scripts`, `tests` and the root config files named in `biome.json` (including `.astro` and `.mjs` files there); it does not check CSS, Markdown, `package.json`, `.github`, `docs`, or the few generated files `biome.json` excludes.
 
 ## Owner decisions
 
-- The owner approved adding the format check to CI as a follow-up to the lint stack (reported by the party coordinating this work, 2026-11-14). It changes no site behaviour.
+- The owner approved adding the format check to CI as a follow-up to the lint stack (approval relayed to the pull request author, 2026-11-14; not recorded here in the owner's own words). It changes no site behaviour.
 
 ## Evidence and limits
 
@@ -62,12 +62,16 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - UNVERIFIED, 7.5 Post-deployment verification: not deployed.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
 
+### Software agreement signing
+
+- N/A: no agreement, signing, template or retention code changed.
+
 ### 8. Private owner center
 
 - N/A, 8.1 to 8.15: nothing in the owner center, payments, retention or studio changed.
 
 ## Delivery status
 
-Not merged. Depends on pull request #258. This record authorizes neither merge nor deployment.
+Not merged. This record authorizes neither merge nor deployment.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
