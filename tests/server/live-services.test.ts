@@ -4,11 +4,13 @@ import { type Mock, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendMail } from "../../src/lib/resend";
 import {
 	Mail,
+	OwnerAlert,
 	RateLimit,
 	ResumeStore,
 	Turnstile,
 	legacyBindingsOrDefect,
 	liveMail,
+	liveOwnerAlert,
 	liveTurnstile,
 } from "../../src/server/services";
 import { double, fakeKv } from "../helpers/doubles";
@@ -160,6 +162,72 @@ describe("liveTurnstile", () => {
 
 		fetchMock.mockRejectedValueOnce(new Error("network down"));
 		expect(await verify()).toBe("TurnstileFailed");
+	});
+});
+
+describe("liveOwnerAlert", () => {
+	const incident = {
+		category: "request-storage",
+		route: "/api/music-interest",
+		requestId: "id-1",
+		code: "d1-write-failed",
+		occurredAt: "2026-11-14T12:00:00.000Z",
+	} as const;
+
+	const env = (over: Partial<Env> = {}) =>
+		double<Env>({
+			RESEND_API_KEY: "key",
+			CONTACT_FROM_EMAIL: "site@example.test",
+			CONTACT_TO_EMAIL: "owner@example.test",
+			...over,
+		});
+
+	/** What the live alert answers: "sent", or the name of its failure and what it carries. */
+	const alert = (given: Env) =>
+		OwnerAlert.use((owner) => owner.send(incident)).pipe(
+			Effect.provideContext(liveOwnerAlert(given)),
+			Effect.match({
+				onFailure: (failure) => ({
+					tag: failure._tag,
+					own: Object.keys(failure),
+					text: String(failure),
+				}),
+				onSuccess: () => "sent",
+			}),
+			Effect.runPromise,
+		);
+
+	it("sends the incident through Resend and says it sent", async () => {
+		fetchMock.mockResolvedValue(answered(200));
+
+		expect(await alert(env())).toBe("sent");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("fails with OwnerAlertFailed when the alert is not sent (sendUrgentOwnerAlert answers false)", async () => {
+		fetchMock.mockResolvedValue(answered(500));
+		expect(await alert(env())).toMatchObject({ tag: "OwnerAlertFailed" });
+
+		// No key: the alert is not even attempted, and answers false.
+		fetchMock.mockClear();
+		expect(await alert(env({ RESEND_API_KEY: "" }))).toMatchObject({
+			tag: "OwnerAlertFailed",
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("fails with OwnerAlertFailed, carrying none of the error's text, when the call rejects", async () => {
+		const rejecting = double<Env>({
+			get RESEND_API_KEY(): string {
+				throw new Error("keychain down for fan@example.com");
+			},
+		});
+
+		const answer = await alert(rejecting);
+
+		expect(answer).toMatchObject({ tag: "OwnerAlertFailed", own: ["_tag"] });
+		expect(JSON.stringify(answer)).not.toContain("keychain");
+		expect(JSON.stringify(answer)).not.toContain("fan@example.com");
 	});
 });
 

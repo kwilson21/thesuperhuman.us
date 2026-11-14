@@ -77,16 +77,29 @@ const clean = (text: string, limit: number) =>
 	text.replace(CONTROLS, " ").trim().slice(0, limit);
 
 // What a message may quote of what was sent is removed, not listed by word: the userinfo and the query string of anything
-// that looks like a URL, any other query string, and anything shaped like an email address.
+// that looks like a URL, any other query string, anything shaped like an email address, and an IPv4 or IPv6 address.
 const USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/?#"'<>]*@/gi;
 const QUERY = /\?[^\s"'<>]+/g;
 const EMAIL = /[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g;
+
+// An IPv4 address is four dotted groups of digits (so a version such as 4.1.4 is not one); an IPv6 address is eight full
+// groups or a compressed form with "::" (so a time such as 12:30:45 and a name such as std::vector are not). Neither may
+// sit inside a longer word or number.
+const IPV4 = /(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?!\w)/g;
+const HEX = "[0-9a-f]{1,4}";
+
+const IPV6 = new RegExp(
+	`(?<![\\w:])(?:(?:${HEX}:){7}${HEX}|(?:${HEX}:){0,6}(?::${HEX}){1,7}|(?:${HEX}:){1,7}:|::(?:${HEX}(?::${HEX}){0,6})?)(?![\\w:])`,
+	"gi",
+);
 
 const redact = (text: string) =>
 	text
 		.replace(USERINFO, "$1[redacted]@")
 		.replace(QUERY, "?[redacted]")
-		.replace(EMAIL, "[email]");
+		.replace(EMAIL, "[email]")
+		.replace(IPV6, "[ip]")
+		.replace(IPV4, "[ip]");
 
 /** Errors whose message quotes the input they read or the values they were sent, found by what they are, not by name. */
 const quotesInput = <T>(error: T): boolean =>

@@ -36,7 +36,7 @@ const COUNTER = "rl:music-interest:203.0.113.7";
 /** How many times each world has been sent to, so two sends to one database never reuse an id. */
 const rounds = new WeakMap<object, number>();
 
-type Told = { alerts: OwnerIncident[]; ids: number };
+type Told = { alerts: OwnerIncident[]; attempts: number; ids: number };
 
 const send = async (
 	world: ReturnType<typeof musicWorld>,
@@ -47,7 +47,7 @@ const send = async (
 		alertFails?: boolean;
 	} = {},
 ) => {
-	const told: Told = { alerts: [], ids: 0 };
+	const told: Told = { alerts: [], attempts: 0, ids: 0 };
 	const round = (rounds.get(world) ?? 0) + 1;
 
 	rounds.set(world, round);
@@ -70,11 +70,15 @@ const send = async (
 					}),
 					Context.add(OwnerAlert, {
 						send: (incident: OwnerIncident) =>
-							options.alertFails
-								? Effect.fail(new OwnerAlertFailed())
-								: Effect.sync(() => {
-										told.alerts.push(incident);
-									}),
+							Effect.suspend(() => {
+								told.attempts += 1;
+
+								return options.alertFails
+									? Effect.fail(new OwnerAlertFailed())
+									: Effect.sync(() => {
+											told.alerts.push(incident);
+										});
+							}),
 					}),
 				),
 			),
@@ -243,6 +247,8 @@ describe("a storage failure", () => {
 
 		expect(answer).toEqual(refuseWith("MusicStoreFailed", {}));
 		expect(told.alerts).toEqual([]);
+		// The alert was tried once, and its failure did not stop the allowance being given back.
+		expect(told.attempts).toBe(1);
 		expect(world.counts.has(COUNTER)).toBe(false);
 	});
 

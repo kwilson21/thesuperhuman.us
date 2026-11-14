@@ -512,7 +512,7 @@ describe("a defect in a converted route answers the fixed sentence", () => {
 			"Date",
 			class {
 				constructor() {
-					throw new Error("clock down");
+					throw new Error("clock down for fan@example.com at 203.0.113.7");
 				}
 			},
 		);
@@ -524,7 +524,11 @@ describe("a defect in a converted route answers the fixed sentence", () => {
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });
 		expect(log).toHaveBeenCalledTimes(1);
-		expect(String(log.mock.calls[0][0])).toContain("/api/music-event");
+		const text = log.mock.calls[0].map(String).join(" ");
+
+		expect(text).toContain("/api/music-event");
+		expect(text).not.toContain("fan@example.com");
+		expect(text).not.toContain("203.0.113.7");
 	});
 
 	it("music-interest: an id source that throws, with the visitor's address and email kept out of the log", async () => {
@@ -532,19 +536,24 @@ describe("a defect in a converted route answers the fixed sentence", () => {
 		const { env } = world();
 
 		vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
-			throw new Error("entropy down for fan@example.com");
+			throw new Error("entropy down for fan@example.com at 203.0.113.7");
 		});
 
 		const response = await want(wish, env);
 
+		const body = await response.json();
+
 		expect(response.status).toBe(500);
-		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });
+		expect(body).toEqual({ ok: false, error: SENTENCE });
 		expect(log).toHaveBeenCalledTimes(1);
 
 		const text = log.mock.calls[0].map(String).join(" ");
 
 		expect(text).toContain("/api/music-interest");
+		expect(text).toContain("[email]");
+		expect(text).toContain("[ip]");
 		expect(text).not.toContain("fan@example.com");
 		expect(text).not.toContain("203.0.113.7");
+		expect(JSON.stringify(body)).not.toMatch(/fan@example\.com|203\.0\.113\.7/);
 	});
 });

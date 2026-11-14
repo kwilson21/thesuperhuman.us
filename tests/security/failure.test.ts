@@ -295,3 +295,28 @@ it("logs the class of a cause and never its message, and drops a message that wr
 
 	expect(logLine(parser)).toEqual([PREFIX, "Error", "", "cause=SyntaxError"]);
 });
+
+it("redacts an IPv4 or IPv6 address from the logged message, wherever it sits, and leaves version numbers and C++ style names alone", () => {
+	const said = (message: string) => logLine(new Error(message))?.[2];
+
+	expect(said("rate limit for 203.0.113.7 failed")).toBe(
+		"rate limit for [ip] failed",
+	);
+	expect(said("peer 203.0.113.7:8443 reset, then 198.51.100.4.")).toBe(
+		"peer [ip]:8443 reset, then [ip].",
+	);
+	expect(said("no route to 2001:db8::1")).toBe("no route to [ip]");
+	expect(said("no route to 2001:0db8:85a3:0000:0000:8a2e:0370:7334 now")).toBe(
+		"no route to [ip] now",
+	);
+	expect(said("no route to ::1 or fe80::1ff:fe23:4567:890a")).toBe(
+		"no route to [ip] or [ip]",
+	);
+	// Ordinary text with dots and colons is not an address.
+	expect(said("effect 4.1.4 and xstate 6.0.0-beta.1 failed")).toBe(
+		"effect 4.1.4 and xstate 6.0.0-beta.1 failed",
+	);
+	expect(said("std::vector at 12:30:45 failed")).toBe(
+		"std::vector at 12:30:45 failed",
+	);
+});
