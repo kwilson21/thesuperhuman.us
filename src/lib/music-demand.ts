@@ -141,10 +141,12 @@ type PlaybackMetadata = {
 const EVENT_TRIES = 3;
 
 /** True when a database error, or one of its causes, is SQLite's UNIQUE violation (a lost race for an event's place). */
-function isUniqueViolation(error: unknown): boolean {
-	for (let depth = 0; depth < 5 && error instanceof Error; depth++) {
-		if (/UNIQUE/.test(error.message)) return true;
-		error = error.cause;
+function isUniqueViolation(error: Error): boolean {
+	let link: unknown = error;
+
+	for (let depth = 0; depth < 5 && link instanceof Error; depth++) {
+		if (/UNIQUE/.test(link.message)) return true;
+		link = link.cause;
 	}
 
 	return false;
@@ -162,7 +164,7 @@ export async function saveEvent(
 		try {
 			return await readJudgeAndStoreEvent(db, input, metadata, now);
 		} catch (error) {
-			if (!isUniqueViolation(error)) throw error;
+			if (!(error instanceof Error) || !isUniqueViolation(error)) throw error;
 
 			if (attempt >= EVENT_TRIES)
 				throw new PlaybackSequenceError("Playback event kept changing.");

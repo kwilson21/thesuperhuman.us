@@ -5,6 +5,7 @@ import { POST as event } from "~/pages/api/music-event";
 import { POST as interest } from "~/pages/api/music-interest";
 import { boundStatement } from "../helpers/d1";
 import { double, fakeKv, partial } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/json";
 import { testRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
@@ -111,7 +112,7 @@ function world(parts: Parts = {}) {
 
 type Env = ReturnType<typeof world>["env"];
 
-function context(path: string, body: object, env: Env) {
+function context(path: string, body: JsonObject, env: Env) {
 	return partial<APIContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
@@ -126,10 +127,10 @@ function context(path: string, body: object, env: Env) {
 	});
 }
 
-const play = (body: object, env: Env) =>
+const play = (body: JsonObject, env: Env) =>
 	event(context("/api/music-event", body, env));
 
-const want = (body: object, env: Env) =>
+const want = (body: JsonObject, env: Env) =>
 	interest(context("/api/music-interest", body, env));
 
 const sent: string[] = [];
@@ -261,7 +262,9 @@ describe("an outage in a store answers 500 with the route's own sentence", () =>
 
 describe("a missing binding stays a deliberate 503", () => {
 	it("music-event without the rate limit namespace or the database", async () => {
-		for (const parts of [{ kv: "missing" }, { db: "missing" }] as const) {
+		const missing: Parts[] = [{ kv: "missing" }, { db: "missing" }];
+
+		for (const parts of missing) {
 			const { env } = world(parts);
 			const response = await play(start, env);
 
@@ -271,11 +274,13 @@ describe("a missing binding stays a deliberate 503", () => {
 	});
 
 	it("music-interest without the rate limit namespace, the database or the captcha secret", async () => {
-		for (const parts of [
+		const missing: Parts[] = [
 			{ kv: "missing" },
 			{ db: "missing" },
 			{ omit: ["TURNSTILE_SECRET_KEY"] },
-		] as const) {
+		];
+
+		for (const parts of missing) {
 			const { env } = world(parts);
 			const response = await want(wish, env);
 
