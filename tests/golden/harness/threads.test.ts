@@ -296,6 +296,67 @@ describe("the background pass waits for every undelivered slot before it release
 	}
 });
 
+describe("the yield threshold: a waitUntil write followed by setImmediate yields", () => {
+	// A route that keeps yielding to the event loop after waitUntil is a known limit (tests/golden/README.md). The
+	// threshold is structural and deterministic: a gated effect that waits while the route yields is released as request
+	// at the POLL_LIMIT-th yield (100) in a row, so 99 yields leave it background and 100 make it request. Both sides are
+	// pinned here, so a change to the limit cannot pass unnoticed.
+	const yieldsAfterWaitUntil = (count: number): Handler => async (context) => {
+		ctxOf(context).waitUntil(
+			(async () => {
+				await env(context).RATE_LIMIT.put("k", "1");
+			})(),
+		);
+
+		for (let index = 0; index < count; index += 1) await yieldMacrotask();
+
+		return new Response("ok");
+	};
+
+	it("99 yields after waitUntil: the deferred write is background", async () => {
+		const got = await runCase(yieldsAfterWaitUntil(99), one());
+
+		expect(phases(got)).toEqual(["waitUntil:request", "kv:background"]);
+	});
+
+	it("100 yields after waitUntil: the deferred write is request", async () => {
+		const got = await runCase(yieldsAfterWaitUntil(100), one());
+
+		expect(phases(got)).toEqual(["waitUntil:request", "kv:request"]);
+	});
+});
+
+describe("no deadlock: the oldest tracked result is awaited together with a gated effect", () => {
+	// The route waits for a digest (the oldest slot) and a KV read (a gated effect) in one Promise.all. The driver must
+	// deliver the digest while the read waits at the gate, and the read is then request, the answer waited for it.
+	it("completes, and the gated read is request", async () => {
+		const got = await runCase(async (context) => {
+			await Promise.all([
+				crypto.subtle.digest("SHA-256", new Uint8Array(1_000_000)),
+				env(context).RATE_LIMIT.get("g"),
+			]);
+
+			return new Response("ok");
+		}, one());
+
+		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response", status: 200 });
+		expect(phases(got)).toEqual(["kv:request"]);
+	});
+
+	it("completes when the gated read comes before the digest in the same chain", async () => {
+		const got = await runCase(async (context) => {
+			const read = env(context).RATE_LIMIT.get("g");
+			await crypto.subtle.digest("SHA-256", new Uint8Array(3_000_000));
+			await read;
+
+			return new Response("ok");
+		}, one());
+
+		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response", status: 200 });
+		expect(phases(got)).toEqual(["kv:request"]);
+	});
+});
+
 describe("floating work that is still running when a step ends is delivered, in the last step too", () => {
 	// A floating step starts `void (async () => { await digest(); await put(f) })()` and returns. The background pass must
 	// not end while the digest is undelivered, so the put is recorded in the step that started it, in every run, and it is

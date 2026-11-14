@@ -200,8 +200,9 @@ export class Determinism {
 
 	/**
 	 * Makes the asynchronous work that leaves the microtask queue visible to the runner: WebCrypto operations that run on a
-	 * thread (digest, sign, verify, encrypt, decrypt, deriveBits) and, on real timers, setTimeout. Each counts as in
-	 * flight until it ends (EffectLog.begin), and the macrotask it comes back on is a boundary (EffectLog.boundary).
+	 * thread (digest, sign, verify, encrypt, decrypt, deriveBits) and setImmediate. Each takes a place in the delivery order
+	 * when it starts (sequencer.ts) and is delivered at a driver turn, oldest first. On real timers a queued setTimeout is
+	 * fired by the driver (fireNextTimer), never by real time. Each macrotask a result comes back on is a boundary (EffectLog.boundary).
 	 * Returns what puts the originals back.
 	 */
 	private trackAsyncWork(): (() => void)[] {
