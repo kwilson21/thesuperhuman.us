@@ -119,6 +119,42 @@ describe("the work feed when the database fails", () => {
 	});
 });
 
+describe("the work feed over a stored text that is not valid JSON", () => {
+	const withdrawal: JsonObject = {
+		...envelope,
+		eventId: "evt-2",
+		expectedRevision: 1,
+		operation: "withdraw",
+		story: null,
+	};
+
+	it("answers a shown entry's corrupt text with 500 and the fixed sentence", async () => {
+		const { db, sql } = world();
+
+		expect((await POST(feed("POST", db, envelope))).status).toBe(200);
+		sql.exec("UPDATE publication_events SET payload='not json {'");
+		const response = await GET(feed("GET", db));
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({ error: "Updates unavailable." });
+	});
+
+	it("does not read the corrupt text of an entry that was withdrawn", async () => {
+		const { db, sql } = world();
+
+		expect((await POST(feed("POST", db, envelope))).status).toBe(200);
+		expect((await POST(feed("POST", db, withdrawal))).status).toBe(200);
+		// The withdrawal erased the text; a corrupt one left behind on the publish event is never read.
+		sql.exec(
+			"UPDATE publication_events SET payload='not json {' WHERE revision=1",
+		);
+		const response = await GET(feed("GET", db));
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ current: null, history: [] });
+	});
+});
+
 describe("the OAuth route when its KV namespace fails", () => {
 	it("answers 500 with the fixed sentence and never the failure's text", async () => {
 		const kv = fakeKv({
