@@ -73,9 +73,10 @@ import {
 //                                         code and an expired code left or swept, another browser's code kept (a lost race
 //                                         with another request, a live code seeded for another browser), five live codes (the
 //                                         sixth is issued)
-//   cookie                                every answer that reaches the issue sets __Host-studio_pending to a fresh random value,
-//                                         whether or not a code was issued; a code is bound to that value (it is read back
-//                                         by the sign-in steps through the cookie jar)
+//   cookie                                every answer that reaches the issue sets __Host-studio_pending to the value the browser
+//                                         sent, or to a fresh random one when it sent none, whether or not a code was issued; a
+//                                         code is bound to that value and the address (it is read back by the sign-in steps
+//                                         through the cookie jar, which a successful sign-in no longer clears)
 //   mail outcomes (background)            200 sent; 4xx and 429 discard the code (audit "code-delivery-failed", row deleted);
 //                                         5xx, network down keep it; the discard batch failing is swallowed (console.error,
 //                                         which a corpus does not capture); SITE_ORIGIN unset and custom
