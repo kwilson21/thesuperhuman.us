@@ -71,6 +71,7 @@ export const signinMutants = {
 	signinNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinNoCapGuard: { property: "liveRowsBounded" },
+	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
 	signinWriteDeleteByAddress: { property: "outcomeIndependentOfAddress" },
 };
 
@@ -100,9 +101,9 @@ export const models = [
 		mutants: signinMutants,
 		equivalents: [],
 		exhaustive: [],
-		// Its rarest mutants take up to about 15,000 random runs to find, so each mutant check allows 20,000; the run that must
-		// pass makes 10,000, which costs about 6 s of one core.
-		samples: "20000",
+		// Its rarest mutant takes about 10,000 random runs to find (the rest a few hundred to a few thousand), so each mutant
+		// check allows 14,000; the run that must pass makes 10,000, which costs about 6 s of one core.
+		samples: "14000",
 		passSamples: "10000",
 	},
 ];

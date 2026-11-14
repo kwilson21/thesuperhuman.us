@@ -46,6 +46,8 @@ module signinCodes {
   //                          for a project closed after the facts were read
   //   "accept-no-open-guard" the sign-in does not re-check that a project is still open
   //   "no-cap-guard"         the write does not re-check the address's live codes, only the count read earlier
+  //   "sweep-unguarded"      the clean-up deletes the expired rows it read by key without checking that each still holds the code that was
+  //                          read, so a code issued under the same cookie value in the gap is deleted (the code of the previous round)
   //   "write-delete-by-address" the write replaces the browser's row only when it is for the same address (the code of the previous
   //                          round): two requests for different addresses on one cookie collide on the table's key, and the one
   //                          that issues answers with an error where a refusal answers normally
@@ -54,9 +56,9 @@ module signinCodes {
   val LIMIT = 2
   val EMAILS = 2
   val WINDOW = 2
-  val LIFE = 4
+  val LIFE = 2
   val THROTTLE = 1
-  val CAP = 2
+  val CAP = 1
   val MAX_ROWS = 5     // cookie values (row ids) handed out in one run
   val MAX_NOW = 10     // ticks in one run
   val MAX_FLIGHTS = 2  // code requests in progress at once, from any browsers
@@ -80,6 +82,7 @@ module signinCodes {
   type Flight = {
     phase: str, b: int, a: int, value: int, c: int, bare: bool, err: bool,
     sOpen: bool, sLiveOthers: int, sOwnAddr: int,
+    sExp: Set[int], sExpVer: int -> int,  // the expired rows read (their ids and which code each held), to be swept by key
   }
   // Entering a code is two steps: READ the browser's row (guessRead), then WRITE the counted attempt and the sign-in in guarded
   // statements (guessWrite). The s-fields are the row as it was read.
@@ -95,6 +98,7 @@ module signinCodes {
     badCharge: bool,        // an attempt was counted on, or a sign-in accepted for, a code other than the one the guess read
     badAudit: bool,         // an audit row was written for a project that was closed
     clientCleared: bool,    // the client's own request for another address deleted its earlier code, as it must
+    badSweep: bool,         // a request's clean-up removed a code that was live (unused and unexpired) when it ran
     badOutcome: bool,       // a code request ended in an error, which only a request that issues can do: its outcome depends on the address
     killedClosed: bool,     // witness: a request for an address whose project is closed deleted the browser's earlier code
     killedFull: bool,       // witness: a request for a full address deleted the browser's earlier code
@@ -118,7 +122,7 @@ module signinCodes {
     created: 0, expires: 0, used: false, present: false, rehashed: false,
   }
 
-  val idleFlight: Flight = { phase: "idle", b: 0, a: 0, value: 0, c: 0, bare: false, err: false, sOpen: false, sLiveOthers: 0, sOwnAddr: 0 }
+  val idleFlight: Flight = { phase: "idle", b: 0, a: 0, value: 0, c: 0, bare: false, err: false, sOpen: false, sLiveOthers: 0, sOwnAddr: 0, sExp: Set(), sExpVer: Map() }
   val idleGuess: Guess = {
     phase: "idle", b: 0, t: 0, right: false, c: 0,
     sPresent: false, sUsed: false, sExp: 0, sAtt: 0, sVer: 0, sAddr: 0, sOpen: false,
@@ -134,6 +138,10 @@ module signinCodes {
 
   pure def minOf(ids: Set[int]): int = ids.fold(MAX_ROWS + 1, (m, i) => if (i < m) i else m)
 
+  // The rows the code's read batch returns (the address's rows and the browser's own) that have expired.
+  def expiredRead(a: int, c: int): Set[int] =
+    rows.keys().filter(i => rows.get(i).issued and rows.get(i).present and (rows.get(i).addr == a or i == c) and now >= rows.get(i).expires)
+
   def liveAt(a: int): Set[int] = rows.keys().filter(i => isLive(rows.get(i), now) and rows.get(i).addr == a)
 
   action init = all {
@@ -144,7 +152,7 @@ module signinCodes {
     now' = 0, nextId' = 3, winStart' = Map(1 -> 0, 2 -> 0), winUses' = Map(1 -> 0, 2 -> 0),
     ghost' = {
       noCookieSignIn: false, badSignIn: false, clientRejected: false, badKeep: false, badCharge: false, badAudit: false,
-      clientCleared: false, badOutcome: false, killedClosed: false, killedFull: false,
+      clientCleared: false, badSweep: false, badOutcome: false, killedClosed: false, killedFull: false,
     },
     flights' = 1.to(MAX_FLIGHTS).mapBy(_ => idleFlight),
     lastIssued' = 0.to(3).mapBy(_ => 0),
@@ -177,7 +185,8 @@ module signinCodes {
       nextId' = if (alloc) nextId + 1 else nextId,
       flights' = flights.set(f, {
         phase: "read", b: b, a: a, value: value, c: c, bare: c == 0, err: false,
-        sOpen: open.get(a), sLiveOthers: liveAt(a).filter(i => i != c).size(), sOwnAddr: ownAddr }),
+        sOpen: open.get(a), sLiveOthers: liveAt(a).filter(i => i != c).size(), sOwnAddr: ownAddr,
+        sExp: expiredRead(a, c), sExpVer: expiredRead(a, c).mapBy(i => rows.get(i).ver) }),
       exempt' = if (c == 0 and bareFlight) exempt.union(Set(b)) else exempt,
       rows' = rows, cookie' = cookie, now' = now, ghost' = ghost, lastIssued' = lastIssued, open' = open, gflights' = gflights
     }
@@ -193,7 +202,11 @@ module signinCodes {
     val clearDecided = fl.sOwnAddr != 0 and fl.sOwnAddr != fl.a
     val clearApplied = clearDecided and c != 0 and rows.get(c).present and rows.get(c).addr == fl.sOwnAddr
       and (MUTANT != "keep-on-refusal" or (fl.sOpen and roomRead))
-    val newRows = if (clearApplied) rows.set(c, { ...rows.get(c), present: false }) else rows
+    // The expired rows named at the read are deleted by key, but only a row that still holds the code that was read and is still
+    // expired (the "sweep-unguarded" mutant deletes whatever now holds the key, as the code of the previous round did).
+    val swept = fl.sExp.filter(i => rows.get(i).present and (MUTANT == "sweep-unguarded" or (rows.get(i).ver == fl.sExpVer.get(i) and now >= rows.get(i).expires)))
+    val afterSweep = rows.keys().mapBy(i => if (swept.contains(i)) { ...rows.get(i), present: false } else rows.get(i))
+    val newRows = if (clearApplied) afterSweep.set(c, { ...afterSweep.get(c), present: false }) else afterSweep
     all {
       fl.phase == "read",
       rows' = newRows,
@@ -201,6 +214,7 @@ module signinCodes {
       ghost' = { ...ghost,
         badKeep: ghost.badKeep or (clearDecided and c != 0 and newRows.get(c).present and newRows.get(c).addr == fl.sOwnAddr),
         clientCleared: ghost.clientCleared or (fl.b == CLIENT and clearApplied),
+        badSweep: ghost.badSweep or swept.exists(i => isLive(rows.get(i), now)),
         killedClosed: ghost.killedClosed or (clearApplied and not(fl.sOpen)),
         killedFull: ghost.killedFull or (clearApplied and fl.sOpen and not(roomRead)) },
       cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, lastIssued' = lastIssued,
@@ -365,6 +379,8 @@ module signinCodes {
   // The sweep removes expired rows (the issue transaction deletes them). The "sweep-live" mutant keys it on the wrong
   // column and also removes live rows.
   action sweep = all {
+    rows.keys().exists(i => rows.get(i).issued and rows.get(i).present
+      and (now >= rows.get(i).expires or (MUTANT == "sweep-live" and rows.get(i).created < now))),
     rows' = rows.keys().mapBy(i => {
       val r = rows.get(i)
       if (r.issued and (now >= r.expires or (MUTANT == "sweep-live" and r.created < now))) { ...r, present: false } else r
@@ -372,25 +388,30 @@ module signinCodes {
     cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
   }
 
+  // Each step picks only what it can do: an idle slot for a new request, a request in the phase a step needs, a guess that
+  // means something (a browser with a cookie enters its own code, or a wrong one; only browsers 0 and 1 can know a code). That
+  // keeps a random run from spending its steps on choices that could not happen.
+  def inPhase(ph: str): Set[int] = flights.keys().filter(f => flights.get(f).phase == ph)
+
   action step = any {
-    nondet f = 1.to(MAX_FLIGHTS).oneOf()
+    nondet f = inPhase("idle").oneOf()
     nondet b = 0.to(3).oneOf()
     nondet a = 1.to(2).oneOf()
     sendRead(f, b, a),
-    nondet f = 1.to(MAX_FLIGHTS).oneOf()
+    nondet f = inPhase("read").oneOf()
     sendClear(f),
-    nondet f = 1.to(MAX_FLIGHTS).oneOf()
+    nondet f = inPhase("cleared").oneOf()
     sendWrite(f),
-    nondet f = 1.to(MAX_FLIGHTS).oneOf()
+    nondet f = inPhase("sent").oneOf()
     receive(f),
     nondet a = 1.to(2).oneOf()
     closeProject(a),
-    nondet g = 1.to(MAX_GUESSES).oneOf()
+    nondet g = gflights.keys().filter(g => gflights.get(g).phase == "idle").oneOf()
     nondet b = 0.to(3).oneOf()
-    nondet t = 1.to(MAX_ROWS).oneOf()
-    nondet right = Set(true, false).oneOf()
+    nondet t = (if (cookie.get(b) != 0) Set(cookie.get(b)) else 1.to(MAX_ROWS)).oneOf()
+    nondet right = (if (b < STRANGER) Set(true, false) else Set(false)).oneOf()
     guessRead(g, b, t, right),
-    nondet g = 1.to(MAX_GUESSES).oneOf()
+    nondet g = gflights.keys().filter(g => gflights.get(g).phase == "read").oneOf()
     guessWrite(g),
     tick,
     sweep,
@@ -463,9 +484,14 @@ module signinCodes {
   val witnessKilledByClosedAddress = not(ghost.killedClosed)
   val witnessKilledByFullAddress = not(ghost.killedFull)
 
+  // 13. A code that was emailed and is unexpired, unused and not superseded by a later request from its own browser is never removed
+  //     by another request's clean-up: a clean-up deletes the expired rows it read only if each still holds the code it read.
+  val liveCodeNeverSwept = not(ghost.badSweep)
+
   val allProperties = and {
     clientNeverLockedOut, cookieRequired, othersUntouched, attemptsBounded, emailsBounded, deadCodeNeverSignsIn,
     liveRowsBounded, cookieOpensEmailedCode, otherAddressKillsEarlier, chargeOnlyTheCodeRead, noAuditForClosedProject, outcomeIndependentOfAddress,
+    liveCodeNeverSwept,
   }
 }
 
@@ -489,4 +515,5 @@ module signinChargeAnyVersion { import signinCodes(MUTANT = "charge-any-version"
 module signinNoOpenGuard { import signinCodes(MUTANT = "no-open-guard").* }
 module signinAcceptNoOpenGuard { import signinCodes(MUTANT = "accept-no-open-guard").* }
 module signinWriteDeleteByAddress { import signinCodes(MUTANT = "write-delete-by-address").* }
+module signinSweepUnguarded { import signinCodes(MUTANT = "sweep-unguarded").* }
 module signinNoCapGuard { import signinCodes(MUTANT = "no-cap-guard").* }
