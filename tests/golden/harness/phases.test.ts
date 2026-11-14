@@ -861,7 +861,7 @@ describe("a setImmediate loop, a stuck handler, and the event loop's own timers"
 		await record(async () => {
 			try {
 				// Node must reject a non-function callback, so this call is the test.
-				// -expect-error: the wrong type on purpose.
+				// @ts-expect-error: the wrong type on purpose.
 				setImmediate(42);
 			} catch (error) {
 				thrown = error;
