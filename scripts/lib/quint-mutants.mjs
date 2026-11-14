@@ -56,7 +56,6 @@ export const discountMutants = {
 export const signinMutants = {
 	signinSingleRow: { property: "clientNeverLockedOut" },
 	signinEvictOldest: { property: "clientNeverLockedOut" },
-	signinSweepLive: { property: "clientNeverLockedOut" },
 	signinCookieNotRequired: { property: "cookieRequired" },
 	signinAddressAttempts: { property: "othersUntouched" },
 	signinReplaceLive: { property: "othersUntouched" },
@@ -66,13 +65,13 @@ export const signinMutants = {
 	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
 	signinNoRowCap: { property: "liveRowsBounded" },
 	signinFreshCookie: { property: "cookieOpensEmailedCode" },
-	signinKeepOnRefusal: { property: "otherAddressKillsEarlier" },
 	signinChargeAnyVersion: { property: "chargeOnlyTheCodeRead" },
 	signinNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
 	signinNoCapGuard: { property: "liveRowsBounded" },
+	signinNoReplace: { property: "outcomeIndependentOfAddress" },
 	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
-	signinWriteDeleteByAddress: { property: "outcomeIndependentOfAddress" },
+	signinDeleteByCookie: { property: "noCrossAddressEffect" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
@@ -101,9 +100,9 @@ export const models = [
 		mutants: signinMutants,
 		equivalents: [],
 		exhaustive: [],
-		// Its rarest mutant takes about 10,000 random runs to find (the rest a few hundred to a few thousand), so each mutant
-		// check allows 14,000; the run that must pass makes 10,000, which costs about 6 s of one core.
-		samples: "14000",
-		passSamples: "10000",
+		// Its rarest mutant takes about 6,000 random runs to find (the rest a few hundred), so each mutant check allows 12,000; the
+		// run that must pass makes 8,000, which costs about 8 s of one core.
+		samples: "12000",
+		passSamples: "8000",
 	},
 ];
