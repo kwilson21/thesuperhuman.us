@@ -1,7 +1,11 @@
 import type { APIRoute } from "astro";
 import { interestSchema, saveInterest } from "~/lib/music-demand";
 import { loadMusicCatalog } from "~/lib/music-content";
-import { musicFailed, musicRequest, musicUnavailable } from "~/lib/music-request";
+import {
+	musicFailed,
+	musicRequest,
+	musicUnavailable,
+} from "~/lib/music-request";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
 import { verifyTurnstile } from "~/lib/turnstile";
 import { checkRateLimit } from "~/lib/rate-limit";
@@ -82,7 +86,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		try {
 			await saveInterest(env.MUSIC_DB, input);
 		} catch (error) {
-
 			// Giving the allowance back must not stop the owner being told that a request was lost.
 			try {
 				await env.RATE_LIMIT.delete(`rl:music-interest:${ip}`);

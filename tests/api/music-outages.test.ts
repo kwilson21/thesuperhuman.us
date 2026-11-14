@@ -71,8 +71,7 @@ function world(parts: Parts = {}) {
 			return real.prepare(query);
 		},
 		batch: async <T>(items: D1PreparedStatement[]) => {
-			if (items.some((item) => pattern.test(boundStatement(item).query)))
-				act();
+			if (items.some((item) => pattern.test(boundStatement(item).query))) act();
 
 			return real.batch<T>(items);
 		},

@@ -412,7 +412,8 @@ const cases: Case[] = [
 			interleave: [
 				{
 					on: /INSERT INTO music_playback_events/,
-					label: "a different event arrived from another connection at sequence 1",
+					label:
+						"a different event arrived from another connection at sequence 1",
 					run: (sqlite) =>
 						sqlite.exec(
 							`INSERT INTO music_playback_events (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,traffic_class,occurred_at) VALUES ('${eid(2)}','${RELEASE}','${RECORDING}','${SESSION}','${PLAY}',1,'audio','start',0,160,'human','2026-11-13T11:59:59.000Z')`,
