@@ -26,6 +26,7 @@ export const issuePass = (submission: {
 	Effect.gen(function* () {
 		const check = yield* TurnstileCheck;
 		const outcome = yield* check.check(submission.token, submission.ip);
+
 		const verdict = yield* Effect.result(
 			issueForPassedCheck.decide({ outcome }, {}),
 		);
