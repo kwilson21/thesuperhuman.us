@@ -430,7 +430,7 @@ describe("the deploy order", () => {
 				"SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'audio_client_%codes'",
 			)
 			.all()
-			.map((row: { name: string }) => row.name);
+			.map((row) => row.name);
 
 		expect(names).toEqual(["audio_client_codes", "audio_client_signin_codes"]);
 	});
