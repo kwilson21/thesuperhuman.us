@@ -45,7 +45,9 @@ and cases it compared, and refuses (exit 2) a fixture that exists in neither rev
 unknown flag, extra arguments, a malformed allow file, a run that compared no case, a record in a format it does not
 understand (it knows formats 1 to 4; any other number, higher or not, on either side), and a format 4 record whose shape
 is not complete (an outside effect without its `state` and sorted `touched`, a step without its `digest` and
-`atResponse`, a missing `finalState` or change count): the message names the fixture, case, step or effect and the field,
+`atResponse`, a missing `finalState` or change count, a `threw` that is not a message, a committed batch with no
+`statements`, a name twice in `touched`): every case of both revisions is validated, added and removed ones included, and
+recordings in formats 1 to 3 get no shape checks. The message names the fixture, case, step or effect and the field,
 and it is an error, never NEUTRAL, so a harness that stops recording a field cannot make every later comparison pass on
 "missing against missing". For each case and each step,
 these must be byte-identical before and after:
@@ -77,7 +79,10 @@ a trigger into code leaves the same state and the same set, and is neutral, when
 stored value. A trigger write that sets a value to what it already was, or changes a row and changes it back, leaves the
 trigger's table OUT of the set (no digest moves, and the statement's own table is the other one), while the same write in
 code puts it IN: that pair is reported NOT neutral, and so is the reverse move. It is a false alarm, in the safe direction:
-the tool never calls such a pair neutral. What each mechanism catches:
+the tool never calls such a pair neutral. SQLite also reports a foreign key cascade's write with no trigger name, so the
+child table is counted as the statement's own table even when no child row changed (`ch.p REFERENCES p(id) ON DELETE
+CASCADE`, then `DELETE FROM p WHERE id = 1` with no child rows gives `["ch", "p"]`); that only over-reports, the safe
+direction, and no schema in this repository uses CASCADE or SET NULL today. What each mechanism catches:
 
 - the step and final digests: any change to any table, R2 or KV by the end of a step or the case, including a write to a
   table the case does not dump, one more column set, a dropped background write, a changed AUTOINCREMENT counter or a
@@ -130,7 +135,8 @@ it as a fix.
   effect happened, and `touched`, the sorted names of the tables whose rows had changed so far in the step (by a
   committed statement, or by a trigger it fired). They are noted when the statement runs, and a batch's when it commits, so
   `state` and `touched` always describe the same instant, whatever order parallel calls settle in; a statement that fails
-  part way (`UPDATE OR FAIL`) still notes the tables whose rows it changed;
+  part way (`UPDATE OR FAIL`) still notes the tables whose rows it changed, but only when a stored value changed (one whose
+  only kept change wrote the same value notes nothing);
 - after every step, `digest`: one SHA-256 per database, one for R2 and one for KV (with each key's expiry and metadata),
   and `atResponse`, the same as an effect's `state` taken when the response had been read, before any background work;
 - at the end, `finalState`: for each database a digest over all its tables and, per table that holds rows, the row count

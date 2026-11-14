@@ -259,9 +259,7 @@ describe("golden-neutrality.yml", () => {
 			'console.log("golden:neutral: NOT NEUTRAL");\nconsole.log("");\nconsole.log("   ");\nprocess.exit(1);\n';
 
 		// A verdict that is the last non-empty line passes the check even with blank lines after it.
-		expect(runStep({ baseTool: late, conversion: "false" }).status).toBe(
-			1 === 1 ? 0 : 0,
-		);
+		expect(runStep({ baseTool: late, conversion: "false" }).status).toBe(0);
 	});
 
 	it("a verdict that disagrees with the exit code is a failure", () => {
