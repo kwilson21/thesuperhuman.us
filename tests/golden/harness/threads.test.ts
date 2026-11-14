@@ -4,12 +4,19 @@ import {
 	asFixture,
 	asVisitor,
 	byHost,
+	CASE_TIMEOUT_MS,
 	json,
 	runCase,
 	type Case,
 	type CaseRecord,
 	type Handler,
 } from "./index";
+
+/**
+ * The timeout of a test that makes `recordings` recordings: the corpus's per-case budget (CASE_TIMEOUT_MS, 20 s) for each
+ * one. A loaded CI runner takes several times longer than an idle one, so a test that counts on a shorter limit fails at random.
+ */
+const recordingTimeout = (recordings: number) => CASE_TIMEOUT_MS * recordings;
 
 // WebCrypto runs on a thread and a real timer fires on a later macrotask, so how long they take depends on the machine.
 // The harness does not deliver a finished threaded operation (or a finished setImmediate) when it finishes: it holds
@@ -165,23 +172,27 @@ const scenarios: Scenario[] = [
 
 describe("work that leaves the microtask queue does not change a label", () => {
 	for (const scenario of scenarios)
-		it(`${scenario.name}: ${RUNS} recordings across every point of the work are identical`, async () => {
-			const seen = new Set<string>();
+		it(
+			`${scenario.name}: ${RUNS} recordings across every point of the work are identical`,
+			async () => {
+				const seen = new Set<string>();
 
-			for (let run = 0; run < RUNS; run += 1) {
-				const point = WORK[run % WORK.length] ?? WORK[0];
+				for (let run = 0; run < RUNS; run += 1) {
+					const point = WORK[run % WORK.length] ?? WORK[0];
 
-				if (!point) throw new Error("WORK is empty");
+					if (!point) throw new Error("WORK is empty");
 
-				const got = await runCase(scenario.handler(point), one());
+					const got = await runCase(scenario.handler(point), one());
 
-				seen.add(bytes(got));
+					seen.add(bytes(got));
 
-				if (run === 0) expect(phases(got)).toEqual(scenario.expected);
-			}
+					if (run === 0) expect(phases(got)).toEqual(scenario.expected);
+				}
 
-			expect(seen.size).toBe(1);
-		}, 120_000);
+				expect(seen.size).toBe(1);
+			},
+			recordingTimeout(RUNS),
+		);
 
 	// The pairings that made the record depend on machine speed before the delivery order was fixed: a deferred digest
 	// of several megabytes against an awaited one of a kilobyte, and the reverse, with and without load.
@@ -192,38 +203,42 @@ describe("work that leaves the microtask queue does not change a label", () => {
 	];
 
 	for (const [deferred, awaited] of pairs)
-		it(`deferred ${deferred} bytes, awaited ${awaited} bytes, then a timer turn: ${RUNS} recordings are identical`, async () => {
-			const seen = new Set<string>();
+		it(
+			`deferred ${deferred} bytes, awaited ${awaited} bytes, then a timer turn: ${RUNS} recordings are identical`,
+			async () => {
+				const seen = new Set<string>();
 
-			for (let run = 0; run < RUNS; run += 1) {
-				const got = await runCase(async (context) => {
-					ctxOf(context).waitUntil(
-						(async () => {
-							await crypto.subtle.digest("SHA-256", new Uint8Array(deferred));
-							await turns(1);
-							await env(context).RATE_LIMIT.put("k", "1");
-						})(),
-					);
+				for (let run = 0; run < RUNS; run += 1) {
+					const got = await runCase(async (context) => {
+						ctxOf(context).waitUntil(
+							(async () => {
+								await crypto.subtle.digest("SHA-256", new Uint8Array(deferred));
+								await turns(1);
+								await env(context).RATE_LIMIT.put("k", "1");
+							})(),
+						);
 
-					await crypto.subtle.digest("SHA-256", new Uint8Array(awaited));
-					await turns(1);
-					await mail();
+						await crypto.subtle.digest("SHA-256", new Uint8Array(awaited));
+						await turns(1);
+						await mail();
 
-					return new Response("ok");
-				}, one());
+						return new Response("ok");
+					}, one());
 
-				seen.add(bytes(got));
+					seen.add(bytes(got));
 
-				if (run === 0)
-					expect(phases(got)).toEqual([
-						"waitUntil:request",
-						"kv:request",
-						"fetch:request",
-					]);
-			}
+					if (run === 0)
+						expect(phases(got)).toEqual([
+							"waitUntil:request",
+							"kv:request",
+							"fetch:request",
+						]);
+				}
 
-			expect(seen.size).toBe(1);
-		}, 240_000);
+				expect(seen.size).toBe(1);
+			},
+			recordingTimeout(RUNS),
+		);
 });
 
 describe("the background pass waits for every undelivered slot before it releases an effect", () => {
@@ -280,23 +295,31 @@ describe("the background pass waits for every undelivered slot before it release
 	const sizes = [300_000, 3_000_000, 6_000_000];
 
 	for (const size of sizes) {
-		it(`two deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`, async () => {
-			const seen = new Set<string>();
+		it(
+			`two deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`,
+			async () => {
+				const seen = new Set<string>();
 
-			for (let run = 0; run < RUNS; run += 1)
-				seen.add(bytes(await runCase(pair(size), one())));
+				for (let run = 0; run < RUNS; run += 1)
+					seen.add(bytes(await runCase(pair(size), one())));
 
-			expect(seen.size).toBe(1);
-		}, 240_000);
+				expect(seen.size).toBe(1);
+			},
+			recordingTimeout(RUNS),
+		);
 
-		it(`three deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`, async () => {
-			const seen = new Set<string>();
+		it(
+			`three deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`,
+			async () => {
+				const seen = new Set<string>();
 
-			for (let run = 0; run < RUNS; run += 1)
-				seen.add(bytes(await runCase(triple(size), one())));
+				for (let run = 0; run < RUNS; run += 1)
+					seen.add(bytes(await runCase(triple(size), one())));
 
-			expect(seen.size).toBe(1);
-		}, 240_000);
+				expect(seen.size).toBe(1);
+			},
+			recordingTimeout(RUNS),
+		);
 	}
 });
 
@@ -392,42 +415,50 @@ describe("floating work that is still running when a step ends is delivered, in 
 		).length;
 
 	for (const size of [300_000, 3_000_000]) {
-		it(`the last step's floating put is recorded in every one of 30 runs at ${size} bytes`, async () => {
-			for (let run = 0; run < 30; run += 1) {
-				const got = await runCase(
-					(context) =>
-						context.url.pathname === "/last"
-							? floating(context, size, "f")
-							: new Response("ok"),
-					{
-						...one(),
-						steps: steps(["/first", "/last"]),
-						final: { kv: ["RATE_LIMIT"] },
-					},
-				);
+		it(
+			`the last step's floating put is recorded in every one of 30 runs at ${size} bytes`,
+			async () => {
+				for (let run = 0; run < 30; run += 1) {
+					const got = await runCase(
+						(context) =>
+							context.url.pathname === "/last"
+								? floating(context, size, "f")
+								: new Response("ok"),
+						{
+							...one(),
+							steps: steps(["/first", "/last"]),
+							final: { kv: ["RATE_LIMIT"] },
+						},
+					);
 
-				expect(putsIn(got, 1)).toBe(1);
-				expect(JSON.stringify(got.final)).toContain('"f"');
-			}
-		}, 240_000);
+					expect(putsIn(got, 1)).toBe(1);
+					expect(JSON.stringify(got.final)).toContain('"f"');
+				}
+			},
+			recordingTimeout(30),
+		);
 
-		it(`a middle step's floating put is recorded in its own step in every one of 30 runs at ${size} bytes`, async () => {
-			for (let run = 0; run < 30; run += 1) {
-				const got = await runCase(
-					(context) =>
-						context.url.pathname === "/middle"
-							? floating(context, size, "m")
-							: new Response("ok"),
-					{
-						...one(),
-						steps: steps(["/first", "/middle", "/last"]),
-						final: { kv: ["RATE_LIMIT"] },
-					},
-				);
+		it(
+			`a middle step's floating put is recorded in its own step in every one of 30 runs at ${size} bytes`,
+			async () => {
+				for (let run = 0; run < 30; run += 1) {
+					const got = await runCase(
+						(context) =>
+							context.url.pathname === "/middle"
+								? floating(context, size, "m")
+								: new Response("ok"),
+						{
+							...one(),
+							steps: steps(["/first", "/middle", "/last"]),
+							final: { kv: ["RATE_LIMIT"] },
+						},
+					);
 
-				expect(putsIn(got, 1)).toBe(1);
-				expect(JSON.stringify(got.final)).toContain('"m"');
-			}
-		}, 240_000);
+					expect(putsIn(got, 1)).toBe(1);
+					expect(JSON.stringify(got.final)).toContain('"m"');
+				}
+			},
+			recordingTimeout(30),
+		);
 	}
 });

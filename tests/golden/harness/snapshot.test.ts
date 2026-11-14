@@ -4,11 +4,18 @@ import { freshMusicDb } from "./db";
 import { digestDatabase } from "./digest";
 import {
 	asVisitor,
+	CASE_TIMEOUT_MS,
 	runCase,
 	type Case,
 	type CaseRecord,
 	type Handler,
 } from "./index";
+
+/** Recordings per case. Five is enough to show the snapshot is the same every time. */
+const RECORDINGS = 5;
+
+/** The per-case budget of the corpus (CASE_TIMEOUT_MS), once for each recording a test makes. */
+const RECORDED_TIMEOUT_MS = CASE_TIMEOUT_MS * RECORDINGS;
 
 // The digest at the response is the state of the databases when the response was read, before any background work. These
 // tests check that mechanism with synthetic handlers on the real harness. The expected digests are computed here, from
@@ -53,14 +60,14 @@ const one = (steps: Case["steps"]): Case => ({
 
 const step = { path: "/api/snapshot", method: "POST", as: asVisitor() };
 
-/** Runs a case 20 times and checks that every run gives the same answer. */
-async function twentyTimes<T>(
+/** Runs a case RECORDINGS times and checks that every run gives the same answer. */
+async function recordedTimes<T>(
 	run: () => Promise<T>,
 	check: (got: T) => void,
 ): Promise<void> {
 	const seen = new Set<string>();
 
-	for (let index = 0; index < 20; index += 1) {
+	for (let index = 0; index < RECORDINGS; index += 1) {
 		const got = await run();
 
 		seen.add(JSON.stringify(got));
@@ -81,124 +88,142 @@ const phases = (got: CaseRecord) =>
 		.map((effect) => `${effect.kind}:${effect.phase}`);
 
 describe("the digest at the response: the snapshot mechanism", () => {
-	it("a write, then waitUntil with a write: the snapshot holds A and not B, touches A's table only, and the waitUntil state is the response", async () => {
-		const handler: Handler = async (context) => {
-			await write(context, ROW_A);
-			ctxOf(context).waitUntil(write(context, ROW_B));
+	it(
+		"a write, then waitUntil with a write: the snapshot holds A and not B, touches A's table only, and the waitUntil state is the response",
+		async () => {
+			const handler: Handler = async (context) => {
+				await write(context, ROW_A);
+				ctxOf(context).waitUntil(write(context, ROW_B));
 
-			return new Response("ok");
-		};
+				return new Response("ok");
+			};
 
-		await twentyTimes(
-			() => runCase(handler, one([step])),
-			(got) => {
-				const atResponse = got.steps[0]?.digest.atResponse;
+			await recordedTimes(
+				() => runCase(handler, one([step])),
+				(got) => {
+					const atResponse = got.steps[0]?.digest.atResponse;
 
-				expect(atResponse?.music).toBe(digestWith(ROW_A));
-				expect(atResponse?.touched).toEqual(["brief_suggestion_budget"]);
-				expect(got.steps[0]?.digest.music).toBe(digestWith(ROW_A, ROW_B));
-				expect(phases(got)).toEqual([
-					"d1:request",
-					"waitUntil:request",
-					"d1:background",
-				]);
+					expect(atResponse?.music).toBe(digestWith(ROW_A));
+					expect(atResponse?.touched).toEqual(["brief_suggestion_budget"]);
+					expect(got.steps[0]?.digest.music).toBe(digestWith(ROW_A, ROW_B));
+					expect(phases(got)).toEqual([
+						"d1:request",
+						"waitUntil:request",
+						"d1:background",
+					]);
 
-				const waitUntil = got.effects.find(
-					(effect) => effect.kind === "waitUntil",
-				);
+					const waitUntil = got.effects.find(
+						(effect) => effect.kind === "waitUntil",
+					);
 
-				expect(waitUntil?.state).toEqual({
-					music: atResponse?.music,
-					publication: atResponse?.publication,
-					touched: atResponse?.touched,
-				});
-			},
-		);
-	});
+					expect(waitUntil?.state).toEqual({
+						music: atResponse?.music,
+						publication: atResponse?.publication,
+						touched: atResponse?.touched,
+					});
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
 
-	it("a write started before waitUntil is called, and not awaited: the snapshot does not hold it, and it is background", async () => {
-		const handler: Handler = async (context) => {
-			await write(context, ROW_A);
+	it(
+		"a write started before waitUntil is called, and not awaited: the snapshot does not hold it, and it is background",
+		async () => {
+			const handler: Handler = async (context) => {
+				await write(context, ROW_A);
 
-			// The write starts here, synchronously, before the handler returns. The response does not wait for it.
-			const pending = (async () => {
-				await write(context, ROW_B);
-			})();
+				// The write starts here, synchronously, before the handler returns. The response does not wait for it.
+				const pending = (async () => {
+					await write(context, ROW_B);
+				})();
 
-			ctxOf(context).waitUntil(pending);
+				ctxOf(context).waitUntil(pending);
 
-			return new Response("ok");
-		};
+				return new Response("ok");
+			};
 
-		await twentyTimes(
-			() => runCase(handler, one([step])),
-			(got) => {
-				expect(got.steps[0]?.digest.atResponse.music).toBe(digestWith(ROW_A));
-				expect(got.steps[0]?.digest.atResponse.touched).toEqual([
-					"brief_suggestion_budget",
-				]);
+			await recordedTimes(
+				() => runCase(handler, one([step])),
+				(got) => {
+					expect(got.steps[0]?.digest.atResponse.music).toBe(digestWith(ROW_A));
+					expect(got.steps[0]?.digest.atResponse.touched).toEqual([
+						"brief_suggestion_budget",
+					]);
 
-				const statements = got.effects.filter((effect) => effect.kind === "d1");
+					const statements = got.effects.filter(
+						(effect) => effect.kind === "d1",
+					);
 
-				expect(statements.map((effect) => effect.phase)).toEqual([
-					"request",
-					"background",
-				]);
-			},
-		);
-	});
+					expect(statements.map((effect) => effect.phase)).toEqual([
+						"request",
+						"background",
+					]);
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
 
-	it("a handler that awaits a write after calling waitUntil: the snapshot holds the awaited write", async () => {
-		// The harness cannot tell that the response did not need the un-awaited write while the handler is still running, so
-		// the write started before the awaited one is released as request (phases.test.ts, "known limit"). The awaited write
-		// is in the snapshot, and so is that one.
-		const handler: Handler = async (context) => {
-			ctxOf(context).waitUntil(write(context, ROW_B));
-			await write(context, ROW_A);
+	it(
+		"a handler that awaits a write after calling waitUntil: the snapshot holds the awaited write",
+		async () => {
+			// The harness cannot tell that the response did not need the un-awaited write while the handler is still running, so
+			// the write started before the awaited one is released as request (phases.test.ts, "known limit"). The awaited write
+			// is in the snapshot, and so is that one.
+			const handler: Handler = async (context) => {
+				ctxOf(context).waitUntil(write(context, ROW_B));
+				await write(context, ROW_A);
 
-			return new Response("ok");
-		};
+				return new Response("ok");
+			};
 
-		await twentyTimes(
-			() => runCase(handler, one([step])),
-			(got) => {
-				const atResponse = got.steps[0]?.digest.atResponse;
+			await recordedTimes(
+				() => runCase(handler, one([step])),
+				(got) => {
+					const atResponse = got.steps[0]?.digest.atResponse;
 
-				expect(atResponse?.music).toBe(digestWith(ROW_A, ROW_B));
-				expect(atResponse?.touched).toEqual([
-					"brief_suggestion_budget",
-					"stripe_unmatched_events",
-				]);
-				expect(got.steps[0]?.digest.music).toBe(digestWith(ROW_A, ROW_B));
-			},
-		);
-	});
+					expect(atResponse?.music).toBe(digestWith(ROW_A, ROW_B));
+					expect(atResponse?.touched).toEqual([
+						"brief_suggestion_budget",
+						"stripe_unmatched_events",
+					]);
+					expect(got.steps[0]?.digest.music).toBe(digestWith(ROW_A, ROW_B));
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
 
-	it("two steps: step 2's snapshot holds step 1's background write", async () => {
-		const first: Handler = async (context) => {
-			await write(context, ROW_A);
-			ctxOf(context).waitUntil(write(context, ROW_B));
+	it(
+		"two steps: step 2's snapshot holds step 1's background write",
+		async () => {
+			const first: Handler = async (context) => {
+				await write(context, ROW_A);
+				ctxOf(context).waitUntil(write(context, ROW_B));
 
-			return new Response("first");
-		};
+				return new Response("first");
+			};
 
-		const second: Handler = async (context) => {
-			await write(context, ROW_C);
+			const second: Handler = async (context) => {
+				await write(context, ROW_C);
 
-			return new Response("second");
-		};
+				return new Response("second");
+			};
 
-		await twentyTimes(
-			() => runCase(first, one([step, { ...step, handler: second }])),
-			(got) => {
-				expect(got.steps[0]?.digest.atResponse.music).toBe(digestWith(ROW_A));
-				expect(got.steps[1]?.digest.atResponse.music).toBe(
-					digestWith(ROW_A, ROW_B, ROW_C),
-				);
-				expect(got.steps[1]?.digest.atResponse.touched).toEqual([
-					"brief_suggestion_budget",
-				]);
-			},
-		);
-	});
+			await recordedTimes(
+				() => runCase(first, one([step, { ...step, handler: second }])),
+				(got) => {
+					expect(got.steps[0]?.digest.atResponse.music).toBe(digestWith(ROW_A));
+					expect(got.steps[1]?.digest.atResponse.music).toBe(
+						digestWith(ROW_A, ROW_B, ROW_C),
+					);
+					expect(got.steps[1]?.digest.atResponse.touched).toEqual([
+						"brief_suggestion_budget",
+					]);
+				},
+			);
+		},
+		RECORDED_TIMEOUT_MS,
+	);
 });

@@ -13,8 +13,15 @@ import {
 	type Case,
 	type CaseRecord,
 	type Handler,
+	CASE_TIMEOUT_MS,
 } from "./index";
 import { EffectLog } from "./log";
+
+/**
+ * The timeout of a test that makes `recordings` recordings: the corpus's per-case budget (CASE_TIMEOUT_MS, 20 s) for each
+ * one, so a loaded CI runner gets the same allowance per recording as a corpus case.
+ */
+const recordingTimeout = (recordings: number) => CASE_TIMEOUT_MS * recordings;
 
 // The phase of an effect says whether the response waited for it. It is decided by what the answer needed, never by how
 // many promise turns a route takes (settle.ts), so a conversion that adds turns records the same phases, and a change
@@ -540,26 +547,30 @@ describe("extra promise turns change nothing", () => {
 					});
 		});
 
-	it("the real move is still told apart at every number of turns", async () => {
-		for (const extra of EXTRA) {
-			const awaited = await record(async () => {
-				await turns(extra);
-				await mail();
+	it(
+		"the real move is still told apart at every number of turns",
+		async () => {
+			for (const extra of EXTRA) {
+				const awaited = await record(async () => {
+					await turns(extra);
+					await mail();
 
-				return new Response("ok");
-			});
+					return new Response("ok");
+				});
 
-			const deferred = await record(async (context) => {
-				await turns(extra);
-				ctxOf(context).waitUntil(mail().then(() => {}));
-				await turns(extra);
+				const deferred = await record(async (context) => {
+					await turns(extra);
+					ctxOf(context).waitUntil(mail().then(() => {}));
+					await turns(extra);
 
-				return new Response("ok");
-			});
+					return new Response("ok");
+				});
 
-			expect(verdict(awaited, deferred).neutral).toBe(false);
-		}
-	});
+				expect(verdict(awaited, deferred).neutral).toBe(false);
+			}
+		},
+		recordingTimeout(EXTRA.length * 2),
+	);
 });
 
 describe("the gate", () => {
