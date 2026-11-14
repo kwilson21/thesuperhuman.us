@@ -162,6 +162,20 @@ const tokenCases: Case[] = [
 		run((f, c) => [...connect(f, c).slice(0, 4), c.token({ code: "1:2:3" })]),
 	),
 	oc(
+		"token: a code too long to be a key",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token({ code: "1:2:" + "3".repeat(600) }),
+		]),
+	),
+	oc(
+		"token: a client id too long to be a key",
+		run((f, c) => [
+			...connect(f, c).slice(0, 4),
+			c.token({ client_id: "c".repeat(600) }),
+		]),
+	),
+	oc(
 		"token: no grant type",
 		run((f, c) => [
 			...connect(f, c).slice(0, 4),
@@ -303,6 +317,13 @@ const tokenCases: Case[] = [
 	oc(
 		"refresh: a made-up refresh token",
 		run((f, c) => [...connect(f, c), c.refresh({ refresh_token: "1:2:3" })]),
+	),
+	oc(
+		"refresh: a refresh token too long to be a key",
+		run((f, c) => [
+			...connect(f, c),
+			c.refresh({ refresh_token: "1:2:" + "3".repeat(600) }),
+		]),
 	),
 	oc(
 		"refresh: another client",
