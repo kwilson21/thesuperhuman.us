@@ -1,3 +1,4 @@
+import { isObject, isText } from "./type-guards";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
@@ -153,6 +154,15 @@ const oneLine = Schema.makeFilter((value: string) =>
 	/[\r\n]/.test(value) ? "Invalid input" : true,
 );
 
+// Text a visitor typed holds no control character, so it cannot swell the stored request (a control character takes six
+// characters of JSON) or reach an email as more than text. A line break and a tab are allowed where text runs over
+// several lines. The sentence is the one the software inquiry and the agreement forms give.
+const noControl = Schema.makeFilter((value: string) =>
+	/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(value)
+		? "Remove control characters."
+		: true,
+);
+
 const linkSentence = "Use a complete HTTPS link, or leave this blank.";
 
 const httpsLink = Schema.makeFilter((value: string) => {
@@ -169,7 +179,8 @@ const httpsLink = Schema.makeFilter((value: string) => {
 	}
 });
 
-const optionalLink = () => stringField(kinds, tooLong(2048), httpsLink);
+const optionalLink = () =>
+	stringField(kinds, tooLong(2048), httpsLink, noControl);
 
 const choice = <const V extends readonly [string, ...string[]]>(values: V) => {
 	const expected = values.map((value) => `'${value}'`).join(" | ");
@@ -219,17 +230,19 @@ const fields = {
 		tooLong(120),
 		Schema.isMinLength(1, { message: "Add a song or project title." }),
 		oneLine,
+		noControl,
 	),
 	direction: choice(["judgment", "preferences", "specific"]),
 	preferences,
-	preserve: stringField(kinds, tooLong(1200)),
+	preserve: stringField(kinds, tooLong(1200), noControl),
 	referenceUrl: optionalLink(),
-	referenceNote: stringField(kinds, tooLong(2000)),
+	referenceNote: stringField(kinds, tooLong(2000), noControl),
 	name: stringField(
 		kinds,
 		tooLong(100),
 		Schema.isMinLength(1, { message: "Add your name." }),
 		oneLine,
+		noControl,
 	),
 	email: stringField(
 		kinds,
@@ -282,11 +295,32 @@ export function ownerRequestForIntake(input: IntakeInput): NewOwnerRequest {
 	};
 }
 
+/**
+ * Text pasted from a word processor carries vertical tabs and form feeds where it has line breaks. In the two free-text
+ * answers, which allow line breaks, they become "\n" before the answers are read, so the stored text has them too. In a
+ * one-line answer they are still refused as control characters. The length is counted as it arrived (each becomes one
+ * character).
+ */
+function withLineBreaks(input: RawValue): RawValue {
+	if (!isObject(input) || Array.isArray(input)) return input;
+
+	return Object.fromEntries(
+		Object.entries(input).map(([name, value]) => [
+			name,
+			(name === "preserve" || name === "referenceNote") && isText(value)
+				? value.replace(/[\u000b\u000c]/g, "\n")
+				: value,
+		]),
+	);
+}
+
 export function validateIntake(
-	input: RawValue,
+	rawInput: RawValue,
 ):
 	| { ok: true; value: IntakeInput }
 	| { ok: false; errors: Record<string, string> } {
+	const input = withLineBreaks(rawInput);
+
 	const read = readFields(fields, input, {
 		winner: "last",
 		defaults: {

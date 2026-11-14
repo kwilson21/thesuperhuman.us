@@ -17,6 +17,8 @@ import { answerOfRun, done, refuse } from "../helpers/rule-answers";
 // The contact form's rule as stories: each row is what the world was like (who already submitted, what the captcha and
 // Resend said) and what the rule answered, with what it counted and emailed. The addresses are plain inputs.
 
+const ALLOWANCE = "rl:203.0.113.7";
+
 const input: ContactInput = {
 	name: "Ada Lovelace",
 	email: "ada@example.com",
@@ -50,9 +52,12 @@ const ask = async (world: World) => {
 			Effect.provideService(
 				RateLimit,
 				fakeKv({
-					get: async () => world.counted ?? null,
-					put: async (_key: string, value: string) => {
-						seen.counts.push(value);
+					// Only the visitor's own allowance is recorded here; the coarse count of attempts has its own stories
+					// in tests/security/rate-order.test.ts.
+					get: async (key: string) =>
+						key === ALLOWANCE ? (world.counted ?? null) : null,
+					put: async (key: string, value: string) => {
+						if (key === ALLOWANCE) seen.counts.push(value);
 					},
 				}),
 			),
@@ -118,10 +123,10 @@ describe("Send a message through the contact form", () => {
 			{ counts: [], mails: [] },
 		],
 		[
-			"refuses a failed captcha, after counting the submission",
+			"refuses a failed captcha, and leaves the visitor's allowance unused",
 			{ captcha: "fail" },
 			refuse("CaptchaFailed", "Captcha failed."),
-			{ counts: ["1"], mails: [] },
+			{ counts: [], mails: [] },
 		],
 		[
 			"says so when Resend refuses the email to the owner, and sends no thank-you",

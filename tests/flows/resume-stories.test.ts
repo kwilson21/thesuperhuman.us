@@ -28,6 +28,8 @@ const mailAnswer = (outcome: Outcome) =>
 			? Effect.fail(new MailRefused())
 			: Effect.fail(new MailUncertain());
 
+const ALLOWANCE = "rl:203.0.113.7";
+
 const input: ResumeRequestInput = {
 	name: "Grace Hopper",
 	email: "grace@example.com",
@@ -62,9 +64,12 @@ const askToRequest = async (world: RequestWorld) => {
 			Effect.provideService(
 				RateLimit,
 				fakeKv({
-					get: async () => world.counted ?? null,
-					put: async (_key: string, value: string) => {
-						seen.counts.push(value);
+					// Only the visitor's own allowance is recorded here; the coarse count of attempts has its own stories
+					// in tests/security/rate-order.test.ts.
+					get: async (key: string) =>
+						key === ALLOWANCE ? (world.counted ?? null) : null,
+					put: async (key: string, value: string) => {
+						if (key === ALLOWANCE) seen.counts.push(value);
 					},
 				}),
 			),
@@ -132,10 +137,10 @@ describe("Ask for the resume", () => {
 			{ counts: [], stored: [], mails: [] },
 		],
 		[
-			"refuses a failed captcha, after counting the submission, and stores nothing",
+			"refuses a failed captcha, leaves the visitor's allowance unused, and stores nothing",
 			{ captcha: "fail" },
 			refuse("CaptchaFailed", "Captcha failed."),
-			{ counts: ["1"], stored: [], mails: [] },
+			{ counts: [], stored: [], mails: [] },
 		],
 		[
 			"says so when Resend refuses the email, though the request stays stored",

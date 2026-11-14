@@ -35,8 +35,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
 
 	try {
+		// A coarse count of attempts first, so the captcha service is not asked without bound; the visitor's own allowance
+		// is counted after the captcha, so a request that fails it never uses that allowance up.
 		if (
-			!(await checkRateLimit(env.RATE_LIMIT, ip, "rl:music-interest:")).allowed
+			!(
+				await checkRateLimit(
+					env.RATE_LIMIT,
+					ip,
+					"rl:music-interest-attempt:",
+					10,
+				)
+			).allowed
 		)
 			return Response.json(
 				{
@@ -56,6 +65,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			return Response.json(
 				{ ok: false, error: "Verification expired. Please try again." },
 				{ status: 403 },
+			);
+
+		if (
+			!(await checkRateLimit(env.RATE_LIMIT, ip, "rl:music-interest:")).allowed
+		)
+			return Response.json(
+				{
+					ok: false,
+					error: "Please wait a few minutes before sending another request.",
+				},
+				{ status: 429 },
 			);
 
 		try {

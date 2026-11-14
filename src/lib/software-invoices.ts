@@ -10,6 +10,7 @@ import {
 import { guardTime } from "./invoice-event-order";
 import { stripeClient } from "./stripe-invoicing";
 import type { CreatedStripeInvoice } from "./stripe-invoicing";
+import { ReaderMessage } from "./reader-message";
 
 export type SoftwareInvoiceKind = "deposit" | "balance" | "milestone";
 
@@ -109,7 +110,7 @@ export function softwareInvoiceTerms(
 			? kind === "milestone"
 			: kind !== "milestone")
 	) {
-		throw new Error(
+		throw new ReaderMessage(
 			"Choose an invoice from the agreed milestone payment schedule.",
 		);
 	}
@@ -187,7 +188,9 @@ export async function createSoftwareInvoiceWithClient(
 		!Number.isSafeInteger(invoice.attempt) ||
 		invoice.attempt < 0
 	) {
-		throw new Error("Invoice does not match the project payment terms.");
+		throw new ReaderMessage(
+			"Invoice does not match the project payment terms.",
+		);
 	}
 
 	const customerKey = `software-request:${invoice.request_id}`;
@@ -436,7 +439,7 @@ export async function reserveSoftwareInvoice(
 			request_updated_at: string;
 		}>();
 
-	if (!offer) throw new Error("Choose the current offer.");
+	if (!offer) throw new ReaderMessage("Choose the current offer.");
 
 	const project = await db
 		.prepare("SELECT * FROM software_projects WHERE request_id=?")
@@ -457,7 +460,7 @@ export async function reserveSoftwareInvoice(
 				project.content_deleted_at
 			: offer.status !== "sent"
 	)
-		throw new Error("Choose the current offer.");
+		throw new ReaderMessage("Choose the current offer.");
 
 	const terms = projectTerms(offer),
 		agreed = softwareInvoiceTerms(terms, milestone, kind);
@@ -498,16 +501,16 @@ export async function reserveSoftwareInvoice(
 			.bind(id, milestone)
 			.first())
 	)
-		throw new Error("This installment is already paid.");
+		throw new ReaderMessage("This installment is already paid.");
 
 	if (
 		!invoiceAvailable(terms, milestone, kind, project, delivered, paid) &&
 		!input.retryId
 	)
-		throw new Error("This invoice is not available at this milestone.");
+		throw new ReaderMessage("This invoice is not available at this milestone.");
 
 	if (invoices.some((row) => row.status === "paid" && !row.refunded_at))
-		throw new Error("This installment is already paid.");
+		throw new ReaderMessage("This installment is already paid.");
 	const at = new Date().toISOString();
 
 	const guards = [
@@ -570,7 +573,7 @@ export async function reserveSoftwareInvoice(
 			previous.external_refs_deleted_at ||
 			Date.parse(previous.created_at) < Date.now() - 23 * 3600_000
 		)
-			throw new Error(
+			throw new ReaderMessage(
 				"Check Stripe and reconcile this invoice before retrying.",
 			);
 		await db.batch([
@@ -596,10 +599,10 @@ export async function reserveSoftwareInvoice(
 		input.replaceId &&
 		(!previous || !["void", "uncollectible"].includes(previous.status))
 	)
-		throw new Error("Void the invoice in Stripe before replacing it.");
+		throw new ReaderMessage("Void the invoice in Stripe before replacing it.");
 
 	if (input.replaceId && previous?.status === "uncollectible")
-		throw new Error(
+		throw new ReaderMessage(
 			"Void the uncollectible invoice in Stripe first; it can still be paid.",
 		);
 
@@ -607,7 +610,7 @@ export async function reserveSoftwareInvoice(
 		!input.replaceId &&
 		invoices.some((row) => ["void", "uncollectible"].includes(row.status))
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"Use Replace invoice after voiding the original in Stripe.",
 		);
 

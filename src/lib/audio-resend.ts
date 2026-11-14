@@ -8,7 +8,26 @@ import {
 } from "./software-inquiry";
 import type { StoredSoftwarePath } from "./software-inquiry";
 
+import { headerText, stripControls } from "./mail-header";
+
 const ENDPOINT = "https://api.resend.com/emails";
+
+/** The payload with a clean subject and clean addresses; the body text is sent as written. */
+function cleanHeaders<
+	P extends { from: string; to: string[]; subject: string; reply_to?: string },
+>(payload: P): P {
+	const clean = {
+		...payload,
+		from: stripControls(payload.from),
+		to: payload.to.map(stripControls),
+		subject: headerText(payload.subject),
+	};
+
+	if (payload.reply_to !== undefined)
+		clean.reply_to = stripControls(payload.reply_to);
+
+	return clean;
+}
 
 export async function sendAudioMessage({
 	payload,
@@ -38,7 +57,7 @@ export async function sendAudioMessage({
 			headers: idempotencyKey
 				? { ...baseHeaders, "Idempotency-Key": idempotencyKey }
 				: baseHeaders,
-			body: JSON.stringify(payload),
+			body: JSON.stringify(cleanHeaders(payload)),
 			signal: AbortSignal.timeout(10_000),
 		});
 

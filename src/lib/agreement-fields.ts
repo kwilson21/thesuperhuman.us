@@ -26,6 +26,7 @@ import {
 } from "./readers";
 import { softwareInvoiceTerms } from "./software-invoices";
 import { formatUSD, offerTotal, type OfferTerms } from "./software-offers";
+import { ReaderMessage } from "./reader-message";
 
 // The owner agreement details and the contractor's details, read with Effect Schema (src/lib/readers.ts). Their failures
 // are shown to the owner word for word, so they keep the sentences, the paths, the order and the stopping rules Zod 3
@@ -214,11 +215,11 @@ export function readAgreementDetails(input: RawValue) {
 
 export function validateAgreementDetails(input: RawValue, terms: OfferTerms) {
 	if (new TextEncoder().encode(JSON.stringify(input)).length > 65536)
-		throw new Error("Agreement details exceed 64 KiB.");
+		throw new ReaderMessage("Agreement details exceed 64 KiB.");
 	const v = parseAgreementDetails(input);
 
 	if (v.milestones.length !== terms.milestones.length)
-		throw new Error("Complete details for every purchased milestone.");
+		throw new ReaderMessage("Complete details for every purchased milestone.");
 
 	if (
 		terms.paymentMode === "invoice" &&
@@ -229,7 +230,7 @@ export function validateAgreementDetails(input: RawValue, terms: OfferTerms) {
 					86400000 +
 					1)
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"Enter a first-milestone duration within its planned dates.",
 		);
 	terms.milestones.forEach((m, i) => {
@@ -240,7 +241,7 @@ export function validateAgreementDetails(input: RawValue, terms: OfferTerms) {
 				v.milestones[i].checkpoint_evidence,
 			].some((x) => !x || x === "None")
 		)
-			throw new Error("Checkpoint criteria and evidence are required.");
+			throw new ReaderMessage("Checkpoint criteria and evidence are required.");
 	});
 
 	return v;

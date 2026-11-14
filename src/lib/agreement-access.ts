@@ -171,7 +171,36 @@ export async function issueAgreementLink(
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
 
-	// Verify before charging either allowance so bots cannot exhaust a recipient's access.
+	// The address allowance is coarse and is charged first, so the captcha service is not asked without bound. The
+	// recipient's allowance is charged only after the captcha passes, so bots cannot exhaust a recipient's access.
+	const allowances: Awaited<ReturnType<typeof reserveStudioAllowance>>[] = [];
+
+	const charge = async (scope: string, value: string, limit: number) => {
+		const allowance = await reserveStudioAllowance(
+			db,
+			scope,
+			value,
+			limit,
+			env.AUDIO_CLIENT_CODE_KEY!,
+		);
+
+		allowances.push(allowance);
+
+		return allowance.allowed
+			? null
+			: agreementJson(
+					{
+						ok: false,
+						error: "Please wait a few minutes before requesting another link.",
+					},
+					429,
+				);
+	};
+
+	const crowded = await charge(`${purpose}-link-ip`, ip, 20);
+
+	if (crowded) return crowded;
+
 	if (
 		!(await verifyTurnstile(input.turnstileToken, env.TURNSTILE_SECRET_KEY, ip))
 	)
@@ -179,31 +208,10 @@ export async function issueAgreementLink(
 			{ ok: false, error: "Complete the security check again." },
 			403,
 		);
-	const allowances: Awaited<ReturnType<typeof reserveStudioAllowance>>[] = [];
 
-	for (const [scope, value, limit] of [
-		[`${purpose}-link-ip`, ip, 20],
-		[`${purpose}-link-email`, email, 3],
-	] as const) {
-		const allowance = await reserveStudioAllowance(
-			db,
-			scope,
-			value,
-			limit,
-			env.AUDIO_CLIENT_CODE_KEY,
-		);
+	const busy = await charge(`${purpose}-link-email`, email, 3);
 
-		allowances.push(allowance);
-
-		if (!allowance.allowed)
-			return agreementJson(
-				{
-					ok: false,
-					error: "Please wait a few minutes before requesting another link.",
-				},
-				429,
-			);
-	}
+	if (busy) return busy;
 
 	const receipt = {
 		ok: true,

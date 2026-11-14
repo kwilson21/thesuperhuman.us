@@ -8,6 +8,7 @@ import {
 	createSoftwareInvoice,
 	recordSoftwareInvoice,
 } from "~/lib/software-invoices";
+import { classifyFailure, logUnexpected } from "~/server/failure";
 import { projectTerms } from "~/lib/software-projects";
 
 export const prerender = false;
@@ -93,16 +94,20 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return json({ ok: true });
 	} catch (error) {
+		const failure = classifyFailure(error);
+
+		if (failure.kind === "unexpected") logUnexpected("Software invoice", error);
+
 		return json(
 			{
 				ok: false,
 				error: reserved
 					? "Invoice creation is unconfirmed. Reload, check Stripe, then retry the same attempt."
-					: error instanceof Error
-						? error.message
+					: failure.kind === "sentence"
+						? failure.say
 						: "Could not reserve invoice.",
 			},
-			reserved ? 502 : 409,
+			reserved ? 502 : failure.kind === "unexpected" ? 500 : 409,
 		);
 	}
 };
