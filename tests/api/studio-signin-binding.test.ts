@@ -53,7 +53,13 @@ beforeEach(() => {
 	);
 });
 
-type Sent = { cookie?: string; ip?: string; origin?: string };
+type Sent = {
+	cookie?: string;
+	ip?: string;
+	origin?: string;
+	/** The database this request uses, to hold it at a step while another request runs. */
+	database?: D1Database;
+};
 
 function context(
 	path: string,
@@ -82,7 +88,7 @@ function context(
 				env: partial<TestRuntime["env"]>({
 					AUDIO_CLIENT_PORTAL_ENABLED: "true",
 					AUDIO_CLIENT_CODE_KEY: "a".repeat(32),
-					MUSIC_DB: db,
+					MUSIC_DB: sent.database ?? db,
 					TURNSTILE_SECRET_KEY: "test",
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "noreply@example.com",
@@ -409,6 +415,213 @@ describe("a browser's own earlier code", () => {
 				.status,
 		).toBe(401);
 	});
+});
+
+describe("two requests on one cookie for different addresses", () => {
+	// The table has one row per cookie value. Two requests from one browser (one cookie value), for two addresses, interleaved
+	// batch by batch, must answer the same whatever the second address is: a database error that only a request that issues can
+	// reach would show that its address has an open project.
+	const cookieValue = "5".repeat(64);
+	const cookie = `${pendingName}=${cookieValue}`;
+
+	type Step = "read" | "clear" | "write";
+
+	/** A database that holds each batch of one request until the script says it is that request's turn. */
+	function scripted(who: string, script: string[]) {
+		const real = db;
+
+		const kindOf = (items: D1PreparedStatement[]): Step | null => {
+			const first = boundStatement(items[0]).query;
+
+			if (first.includes("AS requestId")) return "read";
+			if (
+				/^\s*DELETE FROM audio_client_signin_codes/i.test(first) &&
+				items.length === 2
+			)
+				return "clear";
+			if (/^\s*SELECT CASE WHEN \?=0/i.test(first)) return "write";
+
+			return null;
+		};
+
+		return double<D1Database>({
+			prepare: (query: string) => real.prepare(query),
+			batch: async (items: D1PreparedStatement[]) => {
+				const kind = kindOf(items);
+
+				if (kind === null) return real.batch(items);
+
+				const label = `${who}.${kind}`;
+
+				while (script[0] !== label)
+					await new Promise((resolve) => setTimeout(resolve, 0));
+
+				try {
+					return await real.batch(items);
+				} finally {
+					script.shift();
+				}
+			},
+		});
+	}
+
+	const interleaving = [
+		"A.read",
+		"B.read",
+		"A.clear",
+		"B.clear",
+		"A.write",
+		"B.write",
+	];
+
+	const targets = {
+		open: "open@example.com",
+		closed: "closed@example.com",
+		withdrawn: "withdrawn@example.com",
+		none: "none@example.com",
+		full: "full@example.com",
+	};
+
+	const addProject = (id: string, email: string, status = "new") =>
+		sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+      VALUES ('${id}','service','${email}','Song','${status}','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
+
+	async function run(
+		attackerAddress: string,
+		targetAddress: string,
+		existingRowFor: string | null,
+	) {
+		sql.exec("DELETE FROM audio_client_signin_codes");
+		sql.exec("DELETE FROM audio_client_allowances");
+		mails.length = 0;
+
+		if (targetAddress === targets.full)
+			for (let index = 0; index < 6; index++)
+				sql
+					.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+            VALUES (?,?,?,0,?,?)`)
+					.run(
+						`full${index}`,
+						targetAddress,
+						`c${index}`,
+						new Date().toISOString(),
+						new Date(Date.now() + 600_000).toISOString(),
+					);
+
+		if (existingRowFor)
+			sql
+				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+          VALUES (?,?,'old',0,?,?)`)
+				.run(
+					await hashOf(cookieValue),
+					existingRowFor,
+					new Date().toISOString(),
+					new Date(Date.now() + 600_000).toISOString(),
+				);
+
+		const script = [...interleaving];
+
+		const [first, second] = await Promise.all([
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: attackerAddress, turnstileToken: "ok" },
+					{ cookie, ip: "203.0.113.41", database: scripted("A", script) },
+				),
+			),
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: targetAddress, turnstileToken: "ok" },
+					{ cookie, ip: "203.0.113.42", database: scripted("B", script) },
+				),
+			),
+		]);
+
+		await Promise.all(background.splice(0));
+
+		const seen = async (response: Response) => ({
+			status: response.status,
+			body: await response.json(),
+			cookie: response.headers.getSetCookie(),
+		});
+
+		return { first: await seen(first), second: await seen(second) };
+	}
+
+	const hashOf = async (value: string) => {
+		const bytes = new Uint8Array(
+			await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
+		);
+
+		return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+			"",
+		);
+	};
+
+	it.each([
+		[
+			"a client's request first, then any address, with no earlier code",
+			"client",
+			false,
+		],
+		[
+			"a client's request first, then any address, with an earlier code for the client",
+			"client",
+			true,
+		],
+		[
+			"a stranger's request (an address with no project) first, then any address",
+			"stranger",
+			false,
+		],
+	] as const)(
+		"answers the second request the same whatever its address is: %s",
+		async (_name, attacker, withEarlier) => {
+			addProject("song-open", targets.open);
+			addProject("song-closed", targets.closed);
+			sql.exec(
+				"UPDATE audio_projects SET revoked_at='now' WHERE request_id='song-closed'",
+			);
+			addProject("song-withdrawn", targets.withdrawn, "withdrawn");
+			addProject("song-full", targets.full);
+
+			const attackerAddress =
+				attacker === "client" ? address : "stranger-a@example.com";
+
+			const answers: Record<string, unknown> = {};
+
+			for (const [name, targetAddress] of Object.entries(targets)) {
+				const { first, second } = await run(
+					attackerAddress,
+					targetAddress,
+					withEarlier ? attackerAddress : null,
+				);
+
+				// Every answer is the generic one with the cookie value the browser sent, so nothing differs by address.
+				answers[name] = {
+					first: {
+						...first,
+						cookie: first.cookie.map((value) =>
+							value.replace(/=[0-9a-f]{64}/, "=<value>"),
+						),
+					},
+					second: {
+						...second,
+						cookie: second.cookie.map((value) =>
+							value.replace(/=[0-9a-f]{64}/, "=<value>"),
+						),
+					},
+				};
+				expect(second.status).toBe(200);
+				expect(first.status).toBe(200);
+				expect(second.cookie.join()).toContain(cookieValue);
+			}
+
+			for (const name of Object.keys(targets))
+				expect(answers[name]).toEqual(answers.none);
+		},
+	);
 });
 
 describe("races", () => {
