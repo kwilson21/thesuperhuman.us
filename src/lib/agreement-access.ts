@@ -13,6 +13,7 @@ import {
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
+import { raisedByJsonGuard } from "./guard-error";
 
 export const maskedAgreementEmail = (email: string) =>
 	`${[...email][0]}•••@${email.split("@")[1]}`;
@@ -308,7 +309,12 @@ export async function issueAgreementLink(
 					new Date(at.getTime() + 3600000).toISOString(),
 				),
 		]);
-	} catch {
+	} catch (error) {
+		// On the archive path only a lost guard is the 429; any other failure of the batch is unexpected, and goes to the
+		// route, which answers 500. The signing path keeps its answer for every failure.
+		if (!token && !(error instanceof Error && raisedByJsonGuard(error)))
+			throw error;
+
 		return agreementJson(
 			{
 				ok: false,
