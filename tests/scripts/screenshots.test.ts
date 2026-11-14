@@ -34,6 +34,7 @@ import { readContractor } from "../../src/lib/agreement-fields";
 import { partial } from "../helpers/doubles";
 import { fakeLocals } from "../helpers/runtime";
 import { sqliteD1 } from "../helpers/sqlite-d1";
+import { WAVE_SCENE_SEED } from "../../scripts/screenshots/random.mjs";
 import {
 	BARE_LINK_LANDINGS,
 	expectedResourceError,
@@ -1844,5 +1845,28 @@ describe("screenshot workflow triggers and concurrency", () => {
 		expect(publish).toContain(
 			"github.event.workflow_run.event == 'pull_request'",
 		);
+	});
+});
+
+describe("seeded page captures", () => {
+	it("captures the 404 page under both scenes, each under its own file name", () => {
+		const notFound = PAGES.filter(
+			(page) => page.path === "/this-page-does-not-exist",
+		);
+
+		expect(notFound.map((page) => page.name)).toEqual([
+			"not-found",
+			"not-found-wave",
+		]);
+		expect(notFound.map((page) => page.seed)).toEqual([
+			undefined,
+			WAVE_SCENE_SEED,
+		]);
+	});
+
+	it("gives every page a unique file name, so a seeded capture cannot overwrite another", () => {
+		const names = PAGES.map((page) => page.name);
+
+		expect(new Set(names).size).toBe(names.length);
 	});
 });

@@ -1,5 +1,7 @@
 // What CI screenshots and how the images reach a PR description. Pure; shared by the scripts beside it.
 
+import { WAVE_SCENE_SEED } from "./random.mjs";
+
 /** Every public page. tests/scripts/screenshots.test.ts fails when a page file is missing here. */
 export const PAGES = [
 	{ name: "home", path: "/" },
@@ -35,6 +37,13 @@ export const PAGES = [
 	{ name: "music-old-news", path: "/music/old-news" },
 	{ name: "studio-sign-in", path: "/studio/sign-in" },
 	{ name: "not-found", path: "/this-page-does-not-exist", status: 404 },
+	// The same page with a seed whose first draw picks the other scene (see random.mjs).
+	{
+		name: "not-found-wave",
+		path: "/this-page-does-not-exist",
+		status: 404,
+		seed: WAVE_SCENE_SEED,
+	},
 	{ name: "owner-today", path: "/owner", owner: true },
 	{ name: "owner-requests", path: "/owner/requests", owner: true },
 	{ name: "owner-campaigns", path: "/owner/campaigns", owner: true },

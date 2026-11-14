@@ -40,6 +40,15 @@ import {
 import { loadOrCreateAccessKey } from "./access-key.mjs";
 import { browserClockScript, stepTime } from "./clock.mjs";
 import { createStepper } from "./clock-steps.mjs";
+import {
+	decodeImages,
+	eagerLazyImages,
+	IMAGE_CAP_MS,
+	imagesLoaded,
+	imagesReason,
+	imageStates,
+	pendingImages,
+} from "./images.mjs";
 import { seededRandomScript } from "./random.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
@@ -180,6 +189,33 @@ async function readReference() {
 }
 
 /** Saves one PNG. Pass `owner` for owner pages, `cookie` for a studio session, `selector` for one section. */
+// Waits for the page's images (see images.mjs). At the cap the capture goes on and logs what was still loading.
+async function waitForImages(page, file) {
+	try {
+		await page.evaluate(eagerLazyImages);
+
+		try {
+			await page.waitForFunction(imagesLoaded, null, {
+				timeout: IMAGE_CAP_MS,
+			});
+		} catch (error) {
+			if (error?.name !== "TimeoutError") throw error;
+
+			const pending = pendingImages(await page.evaluate(imageStates));
+
+			// The last image may have finished between the timeout and this read.
+			if (pending.length) settles.record(imagesReason(pending), file);
+		}
+
+		await page.evaluate(decodeImages);
+	} catch (error) {
+		// Names the capture: a navigation that starts after the scenario's own steps can end the page here.
+		throw new Error(`${file}: the image wait failed: ${error.message}`, {
+			cause: error,
+		});
+	}
+}
+
 async function capture({
 	file,
 	path,
@@ -191,6 +227,7 @@ async function capture({
 	prepare,
 	expectedResponses = [],
 	expectedResourceErrors = [],
+	seed,
 }) {
 	await nextStep();
 
@@ -213,7 +250,7 @@ async function capture({
 
 		// The preview's own pages get the same Math.random sequence on every capture (see random.mjs).
 		await context.addInitScript({
-			content: seededRandomScript(new URL(BASE).origin),
+			content: seededRandomScript(new URL(BASE).origin, seed),
 		});
 
 		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -291,6 +328,8 @@ async function capture({
 		await timings.time(scope, "prepare", () =>
 			prepareWithDiagnostics(page, prepare, OUT, currentScenario, file),
 		);
+	await timings.time(scope, "images", () => waitForImages(page, file));
+
 	const target = selector ? page.locator(selector).first() : page;
 	const screenshotOptions = { path: `${OUT}/${file}`, animations: "disabled" };
 
@@ -439,6 +478,9 @@ async function shoot(page, viewport) {
 		status: page.status ?? 200,
 	};
 
+	// Only a page with its own seed records one, so the other entries keep the same shape.
+	if (page.seed !== undefined) params.seed = page.seed;
+
 	const earlier = reference?.pages?.[file];
 
 	if (
@@ -446,6 +488,7 @@ async function shoot(page, viewport) {
 		earlier.path === params.path &&
 		earlier.owner === params.owner &&
 		earlier.status === params.status &&
+		earlier.seed === params.seed &&
 		(await reusable([file]))
 	) {
 		const responses = await timings.time("pages", "replay", () =>
@@ -471,6 +514,7 @@ async function shoot(page, viewport) {
 		viewport: viewport.name,
 		owner: page.owner,
 		status: page.status,
+		seed: page.seed,
 	});
 	const requests = requestsByFile.get(file);
 

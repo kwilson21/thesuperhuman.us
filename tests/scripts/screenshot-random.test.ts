@@ -5,6 +5,7 @@ import {
 	installRandom,
 	RANDOM_SEED,
 	seededRandomScript,
+	WAVE_SCENE_SEED,
 } from "../../scripts/screenshots/random.mjs";
 
 const ORIGIN = "http://127.0.0.1:4321";
@@ -68,6 +69,19 @@ describe("installRandom", () => {
 		expect(Number.isInteger(RANDOM_SEED)).toBe(true);
 		expect(RANDOM_SEED).not.toBe(0);
 	});
+
+	it("defaults to RANDOM_SEED, since its source is copied into the page and cannot refer to the constant", () => {
+		const byDefault = freshScope();
+		const bySeed = freshScope();
+
+		installRandom(byDefault);
+		installRandom(bySeed, RANDOM_SEED);
+
+		const a = Array.from({ length: 8 }, () => byDefault.Math.random());
+		const b = Array.from({ length: 8 }, () => bySeed.Math.random());
+
+		expect(a).toEqual(b);
+	});
 });
 
 describe("seededRandomScript", () => {
@@ -103,7 +117,35 @@ describe("seededRandomScript", () => {
 		const capture = read("scripts/screenshots/capture.mjs");
 
 		expect(capture).toMatch(
-			/addInitScript\(\{\s*content: seededRandomScript\(new URL\(BASE\)\.origin\)/,
+			/addInitScript\(\{\s*content: seededRandomScript\(new URL\(BASE\)\.origin, seed\)/,
 		);
+	});
+});
+
+describe("the 404 page's scene", () => {
+	// The 404 page draws its scene with `Math.random() < .5`, so the first draw decides it.
+	const sceneFor = (seed: number) => {
+		const sandbox = runOn(ORIGIN, seededRandomScript(ORIGIN, seed));
+
+		// SAFETY: the expression is a conditional over two string literals, so it always yields one of them.
+		return runInContext(
+			"Math.random() < .5 ? 'horizon' : 'wave'",
+			sandbox,
+		) as string;
+	};
+
+	it("is the test the 404 page runs, so the scenes below are the page's own", () => {
+		expect(read("src/pages/404.astro")).toContain(
+			"Math.random() < .5 ? 'horizon' : 'wave'",
+		);
+	});
+
+	it("shows the horizon with the default seed", () => {
+		expect(sceneFor(RANDOM_SEED)).toBe("horizon");
+	});
+
+	it("shows the wave with WAVE_SCENE_SEED, so both scenes can be photographed deterministically", () => {
+		expect(sceneFor(WAVE_SCENE_SEED)).toBe("wave");
+		expect(WAVE_SCENE_SEED).not.toBe(RANDOM_SEED);
 	});
 });
