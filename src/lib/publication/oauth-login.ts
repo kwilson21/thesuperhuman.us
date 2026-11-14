@@ -161,6 +161,7 @@ async function github(url: string, init: RequestInit) {
 	// GitHub is unavailable when it is unreachable, answers 5xx, is rate limiting (429), or answers a success that is not JSON.
 	if (response.status >= 500 || response.status === 429)
 		throw new Unavailable(503);
+
 	const read = await response.json().then(
 		(json) => ({ body: json }),
 		() => null,
