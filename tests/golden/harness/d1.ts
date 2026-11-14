@@ -251,7 +251,7 @@ export function measureOf(measure: Measure | undefined, sql: string): Measure {
 /**
  * Measures every statement run through the database, as it runs: the rows it changed (so the record holds the real number
  * for every D1 method, never a null that reads as "no row"), and the tables whose rows changed. The tables come from
- * comparing the per-table digests before and after a write, so a table a trigger wrote counts, and a rule moved from a
+ * comparing the per-table digests before and after a write (SQLite's own AUTOINCREMENT counter table does not count), so a table a trigger wrote counts, and a rule moved from a
  * trigger into code looks the same; the statement's own table is added when it changed a row, which also covers a
  * same-value UPDATE that no digest sees.
  */
@@ -305,7 +305,8 @@ class ChangeMeter {
 				const after = this.digester.perTable();
 
 				for (const [name, digest] of after)
-					if (before.get(name) !== digest) tables.add(name);
+					if (before.get(name) !== digest && name !== "sqlite_sequence")
+						tables.add(name);
 
 				if (count > 0) {
 					try {

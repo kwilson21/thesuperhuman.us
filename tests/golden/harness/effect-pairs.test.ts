@@ -248,6 +248,25 @@ describe("tables written by a trigger are in touched, whoever wrote them", () =>
 		expect(compareCase(withTrigger, inCode).status).toBe("d1-only");
 	});
 
+	it("the AUTOINCREMENT counter table is bookkeeping, not a table a write touched", async () => {
+		const got = await runCase(
+			steps("INSERT INTO seq (v) VALUES (1)", "email"),
+			{
+				name: "autoincrement",
+				fetches: byHost({ resend: json(200, {}) }),
+				setup: (world) =>
+					world.music.exec(
+						"CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)",
+					),
+				steps: [{ path: "/api/x", method: "POST", as: asVisitor() }],
+			},
+		);
+
+		expect(
+			got.effects.find((effect) => effect.kind === "fetch")?.state?.touched,
+		).toEqual(["seq"]);
+	});
+
 	it("a schema-qualified statement counts its real table", async () => {
 		const got = await record(
 			steps(
