@@ -21,21 +21,25 @@ module musicPlayback {
   //   "no-sequence-rule" the rule accepts any sequence number whose place is free, not only the next
   //   "no-seconds-rule"  the rule accepts seconds that go backwards
   //   "no-retry"         an insert that meets a unique constraint answers 409 at once, without reading again
+  //   "split-read"       the stored event with this id and the playthrough's last event are read in two separate steps,
+  //                      not as one snapshot (the code before the fix to PR 272: two D1 calls)
   const MUTANT: str
 
   // A stored event: its id, its playthrough (pt), its place in it (sequence), seconds so far, and the delivery that stored it (so two
   // rows are two writes, even when they say the same).
   type Row = { id: int, pt: int, seq: int, acc: int, by: int }
   type Ev = { id: int, pt: int, seq: int, acc: int }
-  // One delivery of an event to a request handler: phase "none" (not started), "idle" (about to read), "read" (read, about
-  // to judge and store) or "done"; what it read; how many inserts have met a constraint; and how it ended.
+  // One delivery of an event to a request handler: phase "none" (not started), "idle" (about to read), "dupRead" (only in the
+  // split-read mutant: the id has been read, the last event has not), "read" (read, about to judge and store) or "done";
+  // what it read (sawSame: the last event it read is this very event); how many inserts have met a constraint; and how it ended.
   type Run = {
-    phase: str, ev: Ev, dupSame: bool, dupOther: bool, lastSeq: int, lastAcc: int, tries: int, outcome: str,
+    phase: str, ev: Ev, dupSame: bool, dupOther: bool, sawSame: bool, lastSeq: int, lastAcc: int, tries: int, outcome: str,
   }
 
   var rows: Set[Row]
   var runs: int -> Run
-  // Ghost: a delivery ended as a conflict although the very same event (id and place) was already stored.
+  // Ghost: a delivery of an event ended as a refusal or a conflict although it had read its own event as already stored,
+  // or the very same event (id and place) was stored when its insert met a constraint for the last time.
   var conflictedSame: bool
 
   val RUNS = 1.to(4)
@@ -45,7 +49,7 @@ module musicPlayback {
   val ACCS = 0.to(1)
   val TRIES = 3
 
-  val idle = { phase: "none", ev: { id: 0, pt: 0, seq: 0, acc: 0 }, dupSame: false, dupOther: false, lastSeq: 0, lastAcc: 0, tries: 0, outcome: "none" }
+  val idle = { phase: "none", ev: { id: 0, pt: 0, seq: 0, acc: 0 }, dupSame: false, dupOther: false, sawSame: false, lastSeq: 0, lastAcc: 0, tries: 0, outcome: "none" }
 
   action init = all {
     rows' = Set(),
@@ -68,8 +72,8 @@ module musicPlayback {
     }
   }
 
-  // The reads: the stored event with this id, and the playthrough's last event. Another handler may store between this
-  // and the same handler's insert.
+  // The reads: the stored event with this id, and the playthrough's last event, as ONE step (one D1 batch, one snapshot).
+  // Another handler may store between this and the same handler's insert, never between the two reads.
   action read = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
     val h = runs.get(r)
@@ -78,9 +82,41 @@ module musicPlayback {
     val lastSecs = mine.filter(x => x.seq == last).fold(0, (m, x) => if (x.acc > m) x.acc else m)
     val same = rows.exists(x => x.id == h.ev.id and x.pt == h.ev.pt and x.seq == h.ev.seq)
     val other = rows.exists(x => x.id == h.ev.id and (x.pt != h.ev.pt or x.seq != h.ev.seq))
+    val sawOwn = mine.exists(x => x.seq == last and x.id == h.ev.id and x.seq == h.ev.seq)
     all {
+      MUTANT != "split-read",
       rows' = rows,
-      runs' = runs.set(r, { ...h, phase: "read", dupSame: same, dupOther: other, lastSeq: last, lastAcc: lastSecs }),
+      runs' = runs.set(r, { ...h, phase: "read", dupSame: same, dupOther: other, sawSame: sawOwn, lastSeq: last, lastAcc: lastSecs }),
+      conflictedSame' = conflictedSame,
+    }
+  }
+
+  // The split-read mutant: the id is read in one step ...
+  action readDuplicate = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
+    val h = runs.get(r)
+    val same = rows.exists(x => x.id == h.ev.id and x.pt == h.ev.pt and x.seq == h.ev.seq)
+    val other = rows.exists(x => x.id == h.ev.id and (x.pt != h.ev.pt or x.seq != h.ev.seq))
+    all {
+      MUTANT == "split-read",
+      rows' = rows,
+      runs' = runs.set(r, { ...h, phase: "dupRead", dupSame: same, dupOther: other }),
+      conflictedSame' = conflictedSame,
+    }
+  }
+
+  // ... and the last event in a later one, after another handler may have stored this very event.
+  action readLast = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "dupRead").oneOf()
+    val h = runs.get(r)
+    val mine = rows.filter(x => x.pt == h.ev.pt)
+    val last = mine.fold(0, (m, x) => if (x.seq > m) x.seq else m)
+    val lastSecs = mine.filter(x => x.seq == last).fold(0, (m, x) => if (x.acc > m) x.acc else m)
+    val sawOwn = mine.exists(x => x.seq == last and x.id == h.ev.id and x.seq == h.ev.seq)
+    all {
+      MUTANT == "split-read",
+      rows' = rows,
+      runs' = runs.set(r, { ...h, phase: "read", sawSame: sawOwn, lastSeq: last, lastAcc: lastSecs }),
       conflictedSame' = conflictedSame,
     }
   }
@@ -110,11 +146,11 @@ module musicPlayback {
       runs' = runs.set(r, after),
       // Ghost: set from the real outcome, never from the mutant: the delivery ends as a conflict (it will not try again)
       // while the very same event is stored.
-      conflictedSame' = (conflictedSame or (guardFired and not(keepsTrying) and sameStored)),
+      conflictedSame' = (conflictedSame or (guardFired and not(keepsTrying) and sameStored) or (outcome == "refused" and h.sawSame)),
     }
   }
 
-  action step = any { deliver, read, judgeAndStore }
+  action step = any { deliver, read, readDuplicate, readLast, judgeAndStore }
 
   // For the Apalache check only (`--step stepOrEnd`): a state where nothing else can happen stays as it is.
   action finished = all { rows' = rows, runs' = runs, conflictedSame' = conflictedSame }
@@ -133,7 +169,8 @@ module musicPlayback {
   // 4. Seconds never fall along a playthrough.
   val secondsNeverFall = rows.forall(a => rows.forall(b => a.pt == b.pt and a.seq < b.seq implies a.acc <= b.acc))
 
-  // 5. The same event delivered twice, at once, is never answered as a conflict: the loser reads again and finds it.
+  // 5. The same event delivered twice, at once, is never answered as a refusal or a conflict: a delivery that read its own
+  //    event as stored, or whose insert meets it, answers duplicate (the loser reads again and finds it).
   val sameEventNeverConflicts = not(conflictedSame)
 
   val allProperties = and {
@@ -154,3 +191,4 @@ module musicNoPlaceKey { import musicPlayback(MUTANT = "no-place-key").* }
 module musicNoSequenceRule { import musicPlayback(MUTANT = "no-sequence-rule").* }
 module musicNoSecondsRule { import musicPlayback(MUTANT = "no-seconds-rule").* }
 module musicNoRetry { import musicPlayback(MUTANT = "no-retry").* }
+module musicSplitRead { import musicPlayback(MUTANT = "split-read").* }

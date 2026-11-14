@@ -56,6 +56,14 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 
 A defect in the two routes now writes one redacted log line through `logUnexpected`, where the old outer catch logged nothing. The response is unchanged (the same fixed 500 sentence).
 
+## Bot review (Greptile, comment 4571910896): a timing bug in the playback reads
+
+- Finding, real and present on both branches: recording a playback made two separate database calls, the duplicate read (by event id) and the last-event read. Another request could store the same event between them; the first read missed it, the second showed its place taken, and the rule refused it as out of sequence (409) before any insert, so the retry never ran. A client retrying its own event got 409 instead of 200 duplicate. The Quint model read both facts in one step, so it could not see this.
+- Fix on A (`claude/effect-10-music-fixes`): the two reads are one D1 batch (one transaction, one snapshot), with the decision still in TypeScript. A failing route-level test (`tests/api/music-outages.test.ts`) and a new corpus case reproduced it first (409). The batch is right here: D1 runs a batch in one transaction, the golden harness records and fails it as one statement group, and a failure of either read still fails the request as before. Note: the last-event read now also runs when the id is already stored (a read only; no response or effect changes).
+- Fix on B: `readPlaybackFacts` in `src/server/music-store.ts` issues the same batch and the flow takes both facts from it.
+- Corpus: on A the music-event fixture changes in D1 statements only (68 cases neutral with D1 changes, the two reads becoming one batch), plus one added case, "another request stores the same event between the duplicate lookup and the last-event lookup" (200 `{"ok":true}`, nothing more stored). No other case changes its response or any other effect. `music-interest` is unchanged.
+- Model: `verification/music-playback.qnt` matches the code (one atomic read step) and says so; the new mutant `split-read` reads the two facts in separate steps and breaks `sameEventNeverConflicts`, which now also covers a delivery that read its own event as stored and still ended refused. The real design passes at the driver's 20,000 samples (and an ad hoc 100,000).
+
 ## Evidence and limits
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the pilot worktree. No logs retained. Results for #270 below are as reported to the builder by the owner's task; the builder did not re-observe them.

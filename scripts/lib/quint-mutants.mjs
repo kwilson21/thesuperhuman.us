@@ -59,6 +59,7 @@ export const musicMutants = {
 	musicNoSequenceRule: { property: "contiguousFromOne" },
 	musicNoSecondsRule: { property: "secondsNeverFall" },
 	musicNoRetry: { property: "sameEventNeverConflicts" },
+	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
