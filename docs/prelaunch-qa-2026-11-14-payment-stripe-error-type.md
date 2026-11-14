@@ -4,12 +4,14 @@ Date: November 14, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
-Branch: `claude/followup-stripe`, stacked on `claude/followup-spy`
-Rollback revision: the production revision at merge time; after merge, the merge commit's first parent. Reverting the merge commit undoes only this change.
+Branch: `claude/followup-stripe` (pull request #279), stacked on `claude/followup-spy` (pull request #278)
+Rollback revision: the production revision when this reaches `main`; after that, its merge commit's first parent. Reverting the merge commit undoes only this change.
 
 ## Scope
 
-A behaviour change in one route. `src/pages/api/owner/requests/[id]/payment.ts` answered 502 for a failed Stripe invoice action only when the error message contained "Stripe" or "hosted payment URL", and 409 otherwise. Many real Stripe refusals do not contain that word, so they were answered as a 409 conflict. The route now answers 502 when the error is a Stripe SDK error or one of this code's own "unusable Stripe response" errors (`isStripeProviderFailure` and `StripeProviderError` in `src/lib/stripe-invoicing.ts`), and 409 otherwise. Response bodies are unchanged (`{"ok": false}`). No other route, the webhook, software invoices, text, migration, binding or dependency changed.
+A behaviour change in one route. `src/pages/api/owner/requests/[id]/payment.ts` answered 502 for a failed Stripe invoice action only when the error message contained "Stripe" or "hosted payment URL", and 409 otherwise. Many real Stripe refusals do not contain that word, so they were answered as a 409 conflict. The route now answers 502 when the error is a Stripe SDK error or one of this code's own Stripe provider errors, raised for an unusable response or when invoicing is unavailable (`isStripeProviderFailure` and `StripeProviderError` in `src/lib/stripe-invoicing.ts`), and 409 otherwise. Response bodies are unchanged (`{"ok": false}`). The same catch serves the create and the replace actions for booking and balance invoices. No other route, the webhook, software invoices, text, migration, binding or dependency changed. Besides the route and the library, the change touches tests, the Stripe stand-in, one re-recorded fixture and the explanatory comment at the top of `tests/golden/owner-request-payment.test.ts`.
+
+Live on merge: `wrangler.jsonc` sets `STRIPE_PAYMENTS_ENABLED` to `"true"`. Whether the Stripe secrets are set in production was not checked here (UNVERIFIED). If they are, this status change takes effect for real invoice actions as soon as it is deployed.
 
 | Stripe refusal or failure | Before | After |
 | --- | --- | --- |
@@ -19,7 +21,7 @@ A behaviour change in one route. `src/pages/api/owner/requests/[id]/payment.ts` 
 | Rate limited (429) | 409 | 502 |
 | Idempotency conflict | 409 | 502 |
 | Stripe server error (500) whose message does not say "Stripe" | 409 | 502 |
-| Stripe server error (500) whose message says "Stripe" | 502 | 502 |
+| Stripe server error (500) whose message says "Stripe" (from reading the code, not a recorded case) | 502 | 502 |
 | Stripe unreachable (connection dropped) | 502 | 502 |
 | Request timeout (from reading the SDK, not a recorded case) | 409 | 502 |
 | Invoice returned as a draft, or with no or a non-https link | 502 | 502 |
@@ -27,13 +29,13 @@ A behaviour change in one route. `src/pages/api/owner/requests/[id]/payment.ts` 
 | Stripe sent the invoice but saving it failed | 503 | 503 |
 | A site-raised state conflict, or a retry blocked by the reservation | 409 | 409 |
 
-A reviewer read the owner page's script (`src/scripts/owner-payment-actions.ts`): it shows the same message for 409 and 502 and never retries on its own. After any failure the reservation row stays set and idempotency keys include the attempt count, so a 502 cannot lead to a second invoice.
+A reviewer read the owner page's script (`src/scripts/owner-payment-actions.ts`): it shows the same message for 409 and 502 and never retries on its own. After any failure the reservation row stays set and idempotency keys include the attempt count, so a 502 cannot lead to a second invoice. On a replace action the refusal can arrive after the old invoice was already voided and the replacement recorded as reserved (the recorded case "replace booking: Stripe refuses after the replacement was recorded"); that sequence is unchanged apart from its status, 409 before and 502 now.
 
 Two things for the owner to know. An idempotency conflict and an invalid request such as "Invoice is already finalized" are Stripe refusals that read like conflicts; they now answer 502 with the rest. And the old match ignored case, so a non-Stripe error whose message happened to contain lowercase "stripe" (for example a database error naming a `stripe_` column) answered 502 and now answers 409; no such case was reproduced.
 
 ## Owner decisions
 
-- The owner approved building this fix and has not yet seen the table above (reported by the party coordinating this work, 2026-11-14). Merge needs the owner's own yes after seeing it.
+- The owner approved building this fix and has not yet seen the table above (approval relayed to the pull request author, 2026-11-14; not recorded here in the owner's own words). Merge needs the owner's own yes after seeing it.
 
 ## Evidence and limits
 
@@ -67,15 +69,15 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ### 5. Forms and sensitive flows
 
-- PASS (local tests only), 5.1 Server validation, auth and bounds: unchanged; the route's owner check and input reading are untouched.
-- PASS (local tests only), 5.2 Failure handling: see the table and Evidence and limits. Not exercised in a browser.
+- N/A, 5.1 Server validation, origin, auth, abuse protection and rate limits: unchanged; the route's owner check and input reading are untouched and their existing tests pass.
+- PASS (local tests only), 5.2 Server statuses for Stripe failures, including rate limit and server error: see the table. UNVERIFIED, 5.2 timeout (read from the SDK, not run), the pending button, retry and duplicate submit in a browser.
 - N/A, 5.3, 5.4 and 5.6: no page, delivery or confirmation changed.
 - PASS (local tests only), 5.5 Approval-gated flows intact.
 
 ### 6. Privacy, legal and measurement
 
 - N/A, 6.1 to 6.5: nothing collected, stored or sent changed. No response or log line includes Stripe's message, a customer identifier or a key.
-- UNVERIFIED, 6.6 Monitoring: unchanged and not observed.
+- UNVERIFIED, 6.6 Monitoring: unchanged and not observed. Whether any 5xx alerting or `owner:health` treats a 502 from this route differently from a 409 was not checked; more failures now answer 502.
 
 ### 7. Release and final QA
 
@@ -86,15 +88,22 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - UNVERIFIED, 7.5 Post-deployment verification: not deployed.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
 
+### Software agreement signing
+
+- N/A: no agreement, signing, template or retention code changed.
+
 ### 8. Private owner center
 
-- N/A, 8.1 to 8.8, 8.10, 8.14 and 8.15: no Access, header, migration, analytics, retention, studio or rollback procedure changed.
-- N/A, 8.9 and 8.11 Payment launch scope: `STRIPE_PAYMENTS_ENABLED` handling is unchanged; with payments off the route still answers 503 before any Stripe call.
+- N/A, 8.1, 8.3 to 8.8 and 8.10: no Access, migration, analytics, retention or studio code changed.
+- PASS (local, by reading the code), 8.2 Owner response headers: the changed line keeps the route's `cache-control: private, no-store` headers, and the middleware's `x-robots-tag` is untouched.
+- N/A, 8.9 Launch scope with payments off: the flag's handling is unchanged; with payments off the route still answers 503 before any Stripe call.
+- UNVERIFIED, 8.11 Keep payments off until the Stripe test-mode lifecycle passes: `wrangler.jsonc` has the flag set to `"true"` already, and no test-mode booking and balance lifecycle was run for this change.
+- UNVERIFIED, 8.14 Rollback procedures and 8.15 `owner:health` on the target: not run.
 - PASS (local tests only), 8.12 Repeated invoice actions create no duplicate invoice: the reservation and idempotency behaviour is unchanged and the recorded "stuck reservation" sequence differs only in its first status. UNVERIFIED in Stripe test mode.
 - PASS (local, by review), 8.13 No Stripe secret or customer identifier in responses: every body on the changed path is `{"ok": false}`.
 
 ## Delivery status
 
-Not merged. Depends on pull request #258 and on the spy-test follow-up below it. This record authorizes neither merge nor deployment; this change waits for the owner's own yes.
+Not merged. Depends on pull request #278. This record authorizes neither merge nor deployment; this change waits for the owner's own yes.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
