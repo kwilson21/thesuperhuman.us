@@ -10,6 +10,26 @@ function hasSuccessFlag(value: unknown): value is { success: unknown } {
 	return typeof value === "object" && value !== null && "success" in value;
 }
 
+/**
+ * Error codes that mean the fault is ours (a missing or wrong secret, or Cloudflare itself): the visitor did nothing wrong,
+ * so the answer is "unavailable", not "complete the check again".
+ */
+const SERVICE_FAULT_CODES = [
+	"internal-error",
+	"missing-input-secret",
+	"invalid-input-secret",
+];
+
+function reportsServiceFault(value: { success: unknown }): boolean {
+	if (!("error-codes" in value)) return false;
+	const codes = value["error-codes"];
+
+	return (
+		Array.isArray(codes) &&
+		codes.some((code) => SERVICE_FAULT_CODES.includes(code))
+	);
+}
+
 export async function checkTurnstile(
 	token: string,
 	secret: string,
@@ -35,7 +55,10 @@ export async function checkTurnstile(
 		return "unavailable";
 	}
 
-	return hasSuccessFlag(data) && data.success === true ? "passed" : "refused";
+	if (!hasSuccessFlag(data)) return "refused";
+	if (data.success === true) return "passed";
+
+	return reportsServiceFault(data) ? "unavailable" : "refused";
 }
 
 export async function verifyTurnstile(

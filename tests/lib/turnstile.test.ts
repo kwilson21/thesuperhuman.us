@@ -32,6 +32,56 @@ describe("checkTurnstile", () => {
 		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
 	});
 
+	it.each([
+		"internal-error",
+		"missing-input-secret",
+		"invalid-input-secret",
+	])(
+		"is unavailable when Cloudflare reports %s, which is a fault on our side",
+		async (code) => {
+			fetchMock.mockResolvedValueOnce(
+				double<Response>({
+					ok: true,
+					json: async () => ({ success: false, "error-codes": [code] }),
+				}),
+			);
+			expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+				"unavailable",
+			);
+		},
+	);
+
+	it.each([
+		"missing-input-response",
+		"invalid-input-response",
+		"timeout-or-duplicate",
+		"bad-request",
+		"some-future-code",
+	])("is refused when Cloudflare reports %s, a fault of the visitor's token", async (code) => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: true,
+				json: async () => ({ success: false, "error-codes": [code] }),
+			}),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
+	});
+
+	it("is unavailable when a fault code comes with a visitor code", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: true,
+				json: async () => ({
+					success: false,
+					"error-codes": ["invalid-input-response", "invalid-input-secret"],
+				}),
+			}),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+			"unavailable",
+		);
+	});
+
 	it("is unavailable when fetch rejects or times out", async () => {
 		fetchMock.mockRejectedValueOnce(new Error("network"));
 		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
