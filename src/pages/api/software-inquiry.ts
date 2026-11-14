@@ -111,7 +111,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				category: "request-storage",
 				route: "/api/software-inquiry",
 				requestId: crypto.randomUUID(),
-				code: "d1-write-failed",
+				code: "d1-read-failed",
 				occurredAt: new Date().toISOString(),
 			});
 
@@ -151,7 +151,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				logUnexpected(ROUTE, lookupError);
 			}
 
-			if (raced)
+			if (raced) {
+				// This request stored nothing and sent nothing, so its allowance is given back.
+				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
+
 				return raced.email.toLowerCase() === input.email.toLowerCase()
 					? Response.json({
 							ok: true,
@@ -159,6 +162,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							clientCopyStatus: raced.details.clientCopyStatus ?? "failed",
 						})
 					: Response.json({ ok: false, error: preserved }, { status: 409 });
+			}
 
 			if (error instanceof RequestDetailsTooLargeError) {
 				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
