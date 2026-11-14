@@ -47,6 +47,7 @@ One line per round; each finding was verified against the code and fixed with a 
 - R3 (repo rules, `93ad0f77`): no decision in SQL; stale documentation and record gaps.
 - Two bot findings changed the code: decisions inside an INSERT (Codex), and the pending cookie cleared on a successful sign-in, so a browser with two addresses could use only one (Greptile 4571328627; fixed in this round: the cookie is no longer cleared, and the tests now carry cookies as a browser does).
 - Round 7 (the redesign that S6 reviewed) and why: rows had been keyed by the cookie value alone, and a request deleted or replaced the browser's row whatever its address. A stranger that sent one cookie value with requests for two addresses could learn from its own answers and from whether its first code survived whether the second address had a project. Rows are now keyed by `(nonce_hash, email)` and every statement of a request for address T touches only T's rows.
+- Greptile comment 4572324439 (retention, head `9c3ee85c`): the sign-in code snapshot read up to 1,000 rows, and at addresses of 320 characters the apply's one statement passed the 90,000-byte limit, so once enough expired codes built up every retention apply failed, which also blocked cleanup of unrelated studio data. Fixed by reading 150 rows per run (the retired table's snapshot too; 150 rows are about 59,000 and 53,000 bytes), with tests that drain a worst-case backlog and a realistic 1,000-row backlog over several runs.
 
 ## Evidence
 

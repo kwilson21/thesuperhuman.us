@@ -1269,3 +1269,167 @@ it("runs the same retention when the retired table has already been dropped", as
 	).toEqual([{ nonce_hash: "nonce-recent" }]);
 	sql.close();
 });
+
+// The schema accepts addresses up to 320 characters (src/lib/audio-client-access.ts), so the worst case is that length.
+const worstEmail = (index: number) =>
+	`${String(index).padStart(4, "0")}${"a".repeat(304)}@example.com`;
+const nonceFor = (index: number) => index.toString(16).padStart(64, "0");
+const STATEMENT_LIMIT = 90_000;
+
+// Wraps the database so every statement the apply sends is measured.
+function measuredDatabase(database: {
+	query: (query: string) => Promise<unknown>;
+	batch: (statements: string[]) => Promise<unknown>;
+}) {
+	const sizes: number[] = [];
+
+	return {
+		sizes,
+		database: {
+			query: database.query,
+			batch: async (statements: string[]) => {
+				sizes.push(
+					...statements.map((statement) => Buffer.byteLength(statement)),
+				);
+
+				return database.batch(statements);
+			},
+		},
+	};
+}
+
+it("keeps a batch of worst-case sign-in codes under the statement limit and drains the rest over later runs", async () => {
+	const { sql, database } = fixture();
+	sql.exec("DELETE FROM audio_client_signin_codes");
+	const insert = sql.prepare(
+		"INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at) VALUES (?,?,?,?,?)",
+	);
+	for (let index = 0; index < 400; index++)
+		insert.run(
+			nonceFor(index),
+			worstEmail(index),
+			"hash",
+			"2027-10-01T00:00:00.000Z",
+			"2027-10-01T00:00:00.000Z",
+		);
+	const measured = measuredDatabase(database);
+
+	const first = await previewStudioRetention(
+		measured.database,
+		"Local test data",
+		storage,
+		now,
+	);
+	expect(first.counts.codes).toBe(150);
+	await applyStudioRetention(
+		measured.database,
+		first,
+		"Local test data",
+		storage,
+		async () => {},
+		now,
+	);
+	const left = sql
+		.prepare(
+			"SELECT nonce_hash FROM audio_client_signin_codes ORDER BY nonce_hash",
+		)
+		.all() as { nonce_hash: string }[];
+	expect(left).toHaveLength(250);
+	expect(left[0].nonce_hash).toBe(nonceFor(150));
+
+	for (let run = 0; run < 3; run++) {
+		const review = await previewStudioRetention(
+			measured.database,
+			"Local test data",
+			storage,
+			now,
+		);
+		await applyStudioRetention(
+			measured.database,
+			review,
+			"Local test data",
+			storage,
+			async () => {},
+			now,
+		);
+	}
+	expect(
+		sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+	).toEqual({ n: 0 });
+	expect(Math.max(...measured.sizes)).toBeLessThan(STATEMENT_LIMIT);
+	sql.close();
+});
+
+it("keeps a realistic backlog of 1,000 short-address sign-in codes under the statement limit", async () => {
+	const { sql, database } = fixture();
+	sql.exec("DELETE FROM audio_client_signin_codes");
+	const insert = sql.prepare(
+		"INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at) VALUES (?,?,?,?,?)",
+	);
+	for (let index = 0; index < 1000; index++)
+		insert.run(
+			nonceFor(index),
+			`c${index}@example.com`,
+			"hash",
+			"2027-10-01T00:00:00.000Z",
+			"2027-10-01T00:00:00.000Z",
+		);
+	const measured = measuredDatabase(database);
+
+	const review = await previewStudioRetention(
+		measured.database,
+		"Local test data",
+		storage,
+		now,
+	);
+	expect(review.counts.codes).toBeLessThan(1000);
+	await applyStudioRetention(
+		measured.database,
+		review,
+		"Local test data",
+		storage,
+		async () => {},
+		now,
+	);
+	expect(
+		sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+	).toEqual({ n: 1000 - review.counts.codes });
+	expect(Math.max(...measured.sizes)).toBeLessThan(STATEMENT_LIMIT);
+	sql.close();
+});
+
+it("keeps a batch of worst-case retired codes under the statement limit", async () => {
+	const { sql, database } = fixture();
+	const insert = sql.prepare(
+		"INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at) VALUES (?,?,?,?)",
+	);
+	for (let index = 0; index < 400; index++)
+		insert.run(
+			worstEmail(index),
+			"hash",
+			"2027-10-01T00:00:00.000Z",
+			"2027-10-01T00:00:00.000Z",
+		);
+	const measured = measuredDatabase(database);
+
+	const review = await previewStudioRetention(
+		measured.database,
+		"Local test data",
+		storage,
+		now,
+	);
+	expect(review.counts.retiredCodes).toBe(150);
+	await applyStudioRetention(
+		measured.database,
+		review,
+		"Local test data",
+		storage,
+		async () => {},
+		now,
+	);
+	expect(
+		sql.prepare("SELECT COUNT(*) AS n FROM audio_client_codes").get(),
+	).toEqual({ n: 250 });
+	expect(Math.max(...measured.sizes)).toBeLessThan(STATEMENT_LIMIT);
+	sql.close();
+});

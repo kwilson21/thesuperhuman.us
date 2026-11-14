@@ -228,21 +228,26 @@ function sources(now) {
 		limit: 25,
 	});
 
+	// 150 rows. The apply's DELETE lists each row as ('<64-char hash>','<address>'): 1 + 66 + 1 + 322 + 1, plus a comma,
+	// 392 bytes for the longest address the schema accepts (320). 150 rows are about 59,000 bytes, under the 90,000-byte
+	// statement limit with room to spare; 1,000 rows would be about 392,000. Rows beyond the batch wait for the next run.
 	const codes = snapshot({
 		columns: "nonce_hash,email,created_at",
 		from: "audio_client_signin_codes",
 		where: `COALESCE(used_at,expires_at)<${old}`,
 		order: "nonce_hash,email",
-		limit: 1000,
+		limit: 150,
 	});
 
 	// The retired sign-in codes table: nothing reads it, but its rows are cleared on the same 30-day clock until a later migration drops it (https://github.com/kwilson21/thesuperhuman.us/issues/271).
+	// 150 rows, for the same reason: the guard embeds each row as ["<320-char address>","<24-char time>"], 352 bytes,
+	// so 150 rows are about 53,000 bytes against the 90,000-byte limit (1,000 rows would be about 352,000).
 	const retiredCodes = snapshot({
 		columns: "email,created_at",
 		from: "audio_client_codes",
 		where: `COALESCE(used_at,expires_at)<${old}`,
 		order: "email",
-		limit: 1000,
+		limit: 150,
 	});
 
 	const sessions = snapshot({
