@@ -1,3 +1,4 @@
+import type { RawValue } from "../fields";
 import { canonicalPublication } from "./canonical";
 import {
 	parsePublication,
@@ -61,7 +62,7 @@ function validReceipt(receipt: Receipt, publication: Publication): boolean {
  * A delivery receipt confirms ingestion, not that a reader saw the website render.
  */
 export async function deliver(
-	input: unknown,
+	input: RawValue,
 	ports: DeliveryPorts,
 ): Promise<DeliveryResult> {
 	const publication = parsePublication(input);

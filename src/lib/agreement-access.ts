@@ -1,3 +1,4 @@
+import type { JsonValue } from "./json-value";
 import { siteOrigin } from "./site-origin.mjs";
 import { agreementEvent } from "./agreement-events";
 import {
@@ -23,7 +24,7 @@ export const agreementHeaders = {
 	"referrer-policy": "no-referrer",
 };
 
-export const agreementJson = (body: unknown, status = 200) =>
+export const agreementJson = (body: JsonValue, status = 200) =>
 	Response.json(body, { status, headers: agreementHeaders });
 
 export function canonicalAgreementRequest(env: Env, request: Request) {

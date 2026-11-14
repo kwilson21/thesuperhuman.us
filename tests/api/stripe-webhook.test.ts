@@ -1,18 +1,16 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { APIContext } from "astro";
 import { double, partial } from "../helpers/doubles";
 import { fakeBatch, fakeFirst } from "../helpers/d1";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { testRuntime } from "../helpers/runtime";
-
-const verify = vi.hoisted(() => vi.fn());
-
-vi.mock("~/lib/stripe-invoicing", () => ({ verifyStripeWebhook: verify }));
+import { signStripeWebhook } from "../golden/harness";
 
 import { POST } from "~/pages/api/stripe/webhook";
 import { replaceTerminalInvoice } from "~/lib/audio-payments";
+import type { RawValue } from "~/lib/fields";
 import {
 	eventTypes,
 	expectedStatus,
@@ -25,7 +23,6 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
 
 beforeEach(() => {
-	vi.clearAllMocks();
 	sql = new DatabaseSync(":memory:");
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
@@ -40,7 +37,13 @@ beforeEach(() => {
 	db = sqliteD1(sql, /(?!)/);
 });
 
-function context(signature = "valid"): APIContext {
+afterEach(() => {
+	sql.close();
+});
+
+const SECRET = "whsec_test_fake";
+
+function context(body: string, signature: string): APIContext {
 	return partial<APIContext>({
 		request: new Request("https://thesuperhuman.us/api/stripe/webhook", {
 			method: "POST",
@@ -48,12 +51,27 @@ function context(signature = "valid"): APIContext {
 				"stripe-signature": signature,
 				"content-type": "application/json",
 			},
-			body: '{"raw":true}',
+			body,
 		}),
 		locals: {
-			runtime: testRuntime({ MUSIC_DB: db, STRIPE_PAYMENTS_ENABLED: "true" }),
+			runtime: testRuntime({
+				MUSIC_DB: db,
+				STRIPE_PAYMENTS_ENABLED: "true",
+				STRIPE_SECRET_KEY: "sk_test_fake",
+				STRIPE_WEBHOOK_SECRET: SECRET,
+			}),
 		},
 	});
+}
+
+// The request Stripe would send for this event. The body is signed exactly as sent, so the real verification runs.
+function deliver(value: RawValue, secret = SECRET): APIContext {
+	const body = JSON.stringify(value);
+
+	return context(
+		body,
+		signStripeWebhook(body, secret, Math.floor(Date.now() / 1000)),
+	);
 }
 
 function event(type: string, id = "evt_1") {
@@ -75,9 +93,11 @@ function event(type: string, id = "evt_1") {
 }
 
 it("rejects missing or invalid signatures without changing D1", async () => {
-	expect((await POST(context(""))).status).toBe(400);
-	verify.mockRejectedValueOnce(new Error("bad signature"));
-	expect((await POST(context())).status).toBe(400);
+	const body = JSON.stringify(event("invoice.paid"));
+	expect((await POST(context(body, ""))).status).toBe(400);
+	expect(
+		(await POST(deliver(event("invoice.paid"), "whsec_wrong"))).status,
+	).toBe(400);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
 	).toEqual({ total: 0 });
@@ -93,25 +113,22 @@ it.each([
 	["invoice.voided", "void"],
 	["invoice.marked_uncollectible", "uncollectible"],
 ])("projects %s as %s", async (type, status) => {
-	verify.mockResolvedValueOnce(event(type));
-	expect((await POST(context())).status).toBe(200);
+	expect((await POST(deliver(event(type)))).status).toBe(200);
 	expect(
 		sql.prepare("SELECT booking_status FROM audio_payments").get(),
 	).toEqual({ booking_status: status });
 });
 
 it("acknowledges unrelated events without storing them", async () => {
-	verify.mockResolvedValueOnce(event("customer.created"));
-	expect((await POST(context())).status).toBe(200);
+	expect((await POST(deliver(event("customer.created")))).status).toBe(200);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
 	).toEqual({ total: 0 });
 });
 
 it("applies a replayed event only once", async () => {
-	verify.mockResolvedValue(event("invoice.paid"));
-	expect((await POST(context())).status).toBe(200);
-	expect((await POST(context())).status).toBe(200);
+	expect((await POST(deliver(event("invoice.paid")))).status).toBe(200);
+	expect((await POST(deliver(event("invoice.paid")))).status).toBe(200);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
 	).toEqual({ total: 1 });
@@ -120,8 +137,7 @@ it("applies a replayed event only once", async () => {
 it("dead-letters an audio invoice whose request metadata does not match a stored payment", async () => {
 	const value = event("invoice.paid");
 	value.data.object.metadata.audio_request_id = "another-request";
-	verify.mockResolvedValueOnce(value);
-	expect((await POST(context())).status).toBe(200);
+	expect((await POST(deliver(value))).status).toBe(200);
 	expect(
 		sql.prepare("SELECT reason FROM stripe_unmatched_events").get(),
 	).toEqual({ reason: "request-not-found" });
@@ -135,8 +151,7 @@ it("recovers a recognized audio invoice that is not recorded yet", async () => {
 		.prepare(`UPDATE audio_payments SET booking_invoice_id=NULL,booking_invoice_url=NULL,booking_status='not_created'
     WHERE request_id='request-1'`)
 		.run();
-	verify.mockResolvedValueOnce(event("invoice.paid"));
-	expect((await POST(context())).status).toBe(200);
+	expect((await POST(deliver(event("invoice.paid")))).status).toBe(200);
 	expect(
 		sql
 			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
@@ -162,8 +177,9 @@ it("dead-letters a late event for a replaced invoice without reviving it", async
 		installment: "booking",
 		actor: "owner@example.com",
 	});
-	verify.mockResolvedValueOnce(event("invoice.paid", "evt_replaced_paid"));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(event("invoice.paid", "evt_replaced_paid")))).status,
+	).toBe(200);
 	expect(
 		sql
 			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
@@ -211,9 +227,8 @@ it.each([
 			},
 		};
 
-		verify.mockResolvedValue(value);
-		expect((await POST(context())).status).toBe(200);
-		expect((await POST(context())).status).toBe(200);
+		expect((await POST(deliver(value))).status).toBe(200);
+		expect((await POST(deliver(value))).status).toBe(200);
 		expect(
 			sql
 				.prepare("SELECT status,stripe_invoice_id FROM software_invoices")
@@ -299,12 +314,16 @@ describe.each(["audio", "software"] as const)("%s event order", (kind) => {
 		"first %s, then %s arriving %s",
 		async (first, second, arrival) => {
 			if (kind === "software") seedSoftware();
-			verify.mockResolvedValueOnce(make(first, "evt_first", BASE));
-			expect((await POST(context())).status).toBe(200);
-			verify.mockResolvedValueOnce(
-				make(second, "evt_second", BASE + arrivalOffset[arrival]),
+			expect((await POST(deliver(make(first, "evt_first", BASE)))).status).toBe(
+				200,
 			);
-			expect((await POST(context())).status).toBe(200);
+			expect(
+				(
+					await POST(
+						deliver(make(second, "evt_second", BASE + arrivalOffset[arrival])),
+					)
+				).status,
+			).toBe(200);
 			expect(read()).toEqual({
 				status: expectedStatus(first, second, arrival, tie),
 			});
@@ -318,15 +337,11 @@ describe.each(["audio", "software"] as const)("%s event order", (kind) => {
 
 	it("applies an older paid event that arrives after a newer invoice.payment_failed, and a redelivery changes nothing", async () => {
 		if (kind === "software") seedSoftware();
-		verify.mockResolvedValueOnce(
-			make("payment_failed", "evt_failed", BASE + 60),
-		);
-		await POST(context());
+		await POST(deliver(make("payment_failed", "evt_failed", BASE + 60)));
 		expect(read()).toEqual({ status: "payment_failed" });
-		verify.mockResolvedValue(make("paid", "evt_paid", BASE));
-		await POST(context());
+		await POST(deliver(make("paid", "evt_paid", BASE)));
 		expect(read()).toEqual({ status: "paid" });
-		await POST(context());
+		await POST(deliver(make("paid", "evt_paid", BASE)));
 		expect(read()).toEqual({ status: "paid" });
 		expect(
 			sql.prepare("SELECT COUNT(*) AS total FROM stripe_webhook_events").get(),
@@ -363,8 +378,9 @@ it("audio: an older paid event applies when a newer failure commits between its 
 			)
 			.run(isoOf(BASE)),
 	);
-	verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE - 60));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(audioEventAt("paid", "evt_paid", BASE - 60)))).status,
+	).toBe(200);
 	expect(audioStatus()).toEqual({ status: "paid" });
 	expect(
 		sql
@@ -384,8 +400,10 @@ it("software: an older paid event applies when a newer failure commits between i
 			)
 			.run(isoOf(BASE)),
 	);
-	verify.mockResolvedValueOnce(softwareEventAt("paid", "evt_paid", BASE - 60));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(softwareEventAt("paid", "evt_paid", BASE - 60))))
+			.status,
+	).toBe(200);
 	expect(softwareStatus()).toEqual({ status: "paid" });
 });
 
@@ -402,8 +420,9 @@ it("audio recovery: an older paid event applies when a newer failure links the i
 			)
 			.run(isoOf(BASE)),
 	);
-	verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE - 60));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(audioEventAt("paid", "evt_paid", BASE - 60)))).status,
+	).toBe(200);
 	expect(audioStatus()).toEqual({ status: "paid" });
 });
 
@@ -425,10 +444,10 @@ describe.each([
 					)
 					.run(linkedAt === null ? null : isoOf(linkedAt)),
 			);
-			verify.mockResolvedValueOnce(
-				softwareEventAt("paid", "evt_paid", BASE - 60),
-			);
-			expect((await POST(context())).status).toBe(200);
+			expect(
+				(await POST(deliver(softwareEventAt("paid", "evt_paid", BASE - 60))))
+					.status,
+			).toBe(200);
 			expect(
 				sql
 					.prepare("SELECT status,stripe_invoice_id FROM software_invoices")
@@ -556,30 +575,37 @@ describe("audio: an unlinked invoice is linked while its paid event is being han
 
 	it("applies the paid event when the link commits before the attempts check", async () => {
 		beforeFirst(attemptQuery, linkAudioInvoice);
-		verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE));
-		expect((await POST(context())).status).toBe(200);
+		expect(
+			(await POST(deliver(audioEventAt("paid", "evt_paid", BASE)))).status,
+		).toBe(200);
 		expectPaidAndRecorded();
 	});
 
 	it("applies the paid event when the link commits between the attempts check and recovery's own read", async () => {
 		afterFirst(attemptQuery, linkAudioInvoice);
-		verify.mockResolvedValueOnce(audioEventAt("paid", "evt_paid", BASE));
-		expect((await POST(context())).status).toBe(200);
+		expect(
+			(await POST(deliver(audioEventAt("paid", "evt_paid", BASE)))).status,
+		).toBe(200);
 		expectPaidAndRecorded();
 	});
 
 	it("still parks an event for a different Stripe invoice as a conflict", async () => {
 		beforeFirst(attemptQuery, linkAudioInvoice);
-		verify.mockResolvedValueOnce({
-			...audioEventAt("paid", "evt_other", BASE),
-			data: {
-				object: {
-					...audioEventAt("paid", "x", BASE).data.object,
-					id: "in_other",
-				},
-			},
-		});
-		expect((await POST(context())).status).toBe(200);
+		expect(
+			(
+				await POST(
+					deliver({
+						...audioEventAt("paid", "evt_other", BASE),
+						data: {
+							object: {
+								...audioEventAt("paid", "x", BASE).data.object,
+								id: "in_other",
+							},
+						},
+					}),
+				)
+			).status,
+		).toBe(200);
 		expect(audioStatus()).toEqual({ status: "open" });
 		expect(
 			sql.prepare("SELECT event_id,reason FROM stripe_unmatched_events").all(),
@@ -605,8 +631,9 @@ it("audio recovery: an event already processed does not change the row when its 
 			)
 			.run(isoOf(BASE));
 	});
-	verify.mockResolvedValueOnce(audioEventAt("open", "evt_open", BASE));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(audioEventAt("open", "evt_open", BASE)))).status,
+	).toBe(200);
 	expect(audioStatus()).toEqual({ status: "uncollectible" });
 });
 
@@ -621,8 +648,9 @@ it("software: a paid event applies when the creation response links the same Str
 			)
 			.run(),
 	);
-	verify.mockResolvedValueOnce(softwareEventAt("paid", "evt_paid", BASE));
-	expect((await POST(context())).status).toBe(200);
+	expect(
+		(await POST(deliver(softwareEventAt("paid", "evt_paid", BASE)))).status,
+	).toBe(200);
 	expect(softwareStatus()).toEqual({ status: "paid" });
 	expect(sql.prepare("SELECT id FROM stripe_webhook_events").all()).toEqual([
 		{ id: "evt_paid" },
