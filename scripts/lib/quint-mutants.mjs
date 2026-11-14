@@ -62,6 +62,17 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/agreement-link.qnt: the archive link's issue (cooldown, executed lookup, the guarded batch) and its single
+// redeem before expiry (src/server/flows/agreement-link.ts, src/lib/agreement-access.ts completeAgreementLink). Module name
+// -> the property its change must break.
+export const agreementLinkMutants = {
+	agreementLinkNoGuard: { property: "oneIssuePerWindow" },
+	agreementLinkSplitGuard: { property: "oneIssuePerWindow" },
+	agreementLinkNoLookup: { property: "issuedOnlyWithAgreement" },
+	agreementLinkRedeemTwice: { property: "redeemedOnce" },
+	agreementLinkRedeemLate: { property: "redeemedUnexpired" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -88,6 +99,14 @@ export const models = [
 		mutants: musicMutants,
 		equivalents: [],
 		exhaustive: ["music"],
+		samples: "20000",
+	},
+	{
+		file: "verification/agreement-link.qnt",
+		current: ["agreementLink"],
+		mutants: agreementLinkMutants,
+		equivalents: [],
+		exhaustive: ["agreementLink"],
 		samples: "20000",
 	},
 ];
