@@ -85,8 +85,10 @@ async function runAll(jobs, limit) {
 }
 
 const mode = process.argv[2] ?? "properties";
+
 // How many runs at once: every CPU, or QUINT_JOBS (to see locally what a smaller CI runner would take).
 const jobs = Number(process.env.QUINT_JOBS) || availableParallelism();
+
 let failed = false;
 
 function report(ok, line, result) {
