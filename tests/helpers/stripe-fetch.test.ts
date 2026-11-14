@@ -70,6 +70,53 @@ it("gives the sent invoice the due date it was asked to carry", async () => {
 	});
 });
 
+it("answers invoice creation with the named error body, and marks it not retryable when asked", async () => {
+	const stripe = stripeFake({
+		invoiceFailure: {
+			status: 402,
+			type: "card_error",
+			message: "Card declined",
+			retry: false,
+		},
+	});
+
+	const failed = await stripe.fetch("https://api.stripe.com/v1/invoices", {
+		method: "POST",
+	});
+
+	expect(failed.status).toBe(402);
+	expect(failed.headers.get("stripe-should-retry")).toBe("false");
+	expect(await failed.json()).toEqual({
+		error: { type: "card_error", message: "Card declined" },
+	});
+});
+
+it("drops the connection on invoice creation when asked to", async () => {
+	const stripe = stripeFake({ invoiceFailure: "connection" });
+
+	await expect(
+		stripe.fetch("https://api.stripe.com/v1/invoices", { method: "POST" }),
+	).rejects.toThrow("socket hang up");
+});
+
+it("answers the send call with a draft that has no hosted URL when asked to", async () => {
+	const stripe = stripeFake({
+		unusableSend: true,
+		dueDate: "2026-10-07T12:00:00Z",
+	});
+
+	const sent = await stripe.fetch(
+		"https://api.stripe.com/v1/invoices/in_fake/send",
+		{ method: "POST" },
+	);
+
+	const body = await sent.json();
+
+	expect(body).toMatchObject({ status: "draft" });
+	expect(body).not.toHaveProperty("hosted_invoice_url");
+	expect(body).not.toHaveProperty("due_date");
+});
+
 it("records the Idempotency-Key header of each request", async () => {
 	const stripe = stripeFake();
 
