@@ -545,3 +545,10 @@ describe("audio project messages", () => {
 		sql.close();
 	});
 });
+
+it.each([null, undefined, 42, ["Make the hook feel more open."]])(
+	"returns null for a message that is not text (%j)",
+	(value) => {
+		expect(validateProjectMessage(value)).toBeNull();
+	},
+);

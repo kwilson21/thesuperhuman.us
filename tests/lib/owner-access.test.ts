@@ -1,62 +1,32 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyOwnerAccess } from "~/lib/owner-access";
-import { partial } from "../helpers/doubles";
+import {
+	ownerAccessEnv,
+	ownerAccessToken,
+	ownerEmail,
+	serveOwnerCertificates,
+} from "../helpers/owner-access";
 
-const issuer = "https://owner-test.cloudflareaccess.com";
-const audience = "owner-application-audience";
-const ownerEmail = "owner@example.com";
-const keyPair = generateKeyPair("RS256");
-
-async function signedRequest(
-	claims: { email?: string; audience?: string } = {},
-) {
-	const { privateKey, publicKey } = await keyPair;
-
-	const key = {
-		...(await exportJWK(publicKey)),
-		kid: "owner-test-key",
-		alg: "RS256",
-		use: "sig",
-	};
-
-	vi.stubGlobal(
-		"fetch",
-		vi.fn(async () => Response.json({ keys: [key] })),
-	);
-
-	const token = await new SignJWT({
-		email: claims.email ?? ownerEmail,
-		type: "app",
-	})
-		.setProtectedHeader({ alg: "RS256", kid: key.kid })
-		.setIssuer(issuer)
-		.setAudience(claims.audience ?? audience)
-		.setIssuedAt()
-		.setExpirationTime("5m")
-		.sign(privateKey);
-
+function requestWith(token: string): Request {
 	return new Request("https://thesuperhuman.us/owner", {
 		headers: { "cf-access-jwt-assertion": token },
 	});
 }
 
-const env = partial<Env>({
-	OWNER_ACCESS_TEAM_DOMAIN: issuer,
-	OWNER_ACCESS_AUD: audience,
-	OWNER_EMAIL: ownerEmail,
+beforeEach(async () => {
+	await serveOwnerCertificates();
 });
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("owner Access verification", () => {
 	it("accepts a signed application token for the configured owner", async () => {
-		const first = await signedRequest();
-		const second = await signedRequest();
-		await expect(verifyOwnerAccess(first, env)).resolves.toEqual({
+		const first = requestWith(await ownerAccessToken());
+		const second = requestWith(await ownerAccessToken());
+		await expect(verifyOwnerAccess(first, ownerAccessEnv)).resolves.toEqual({
 			email: ownerEmail,
 		});
-		await expect(verifyOwnerAccess(second, env)).resolves.toEqual({
+		await expect(verifyOwnerAccess(second, ownerAccessEnv)).resolves.toEqual({
 			email: ownerEmail,
 		});
 		expect(fetch).toHaveBeenCalledTimes(1);
@@ -64,32 +34,38 @@ describe("owner Access verification", () => {
 
 	it("rejects missing, wrong-audience and wrong-owner tokens", async () => {
 		await expect(
-			verifyOwnerAccess(new Request("https://thesuperhuman.us/owner"), env),
-		).resolves.toBeNull();
-		await expect(
-			verifyOwnerAccess(await signedRequest({ audience: "other-app" }), env),
+			verifyOwnerAccess(
+				new Request("https://thesuperhuman.us/owner"),
+				ownerAccessEnv,
+			),
 		).resolves.toBeNull();
 		await expect(
 			verifyOwnerAccess(
-				await signedRequest({ email: "other@example.com" }),
-				env,
+				requestWith(await ownerAccessToken(ownerEmail, "other-app")),
+				ownerAccessEnv,
+			),
+		).resolves.toBeNull();
+		await expect(
+			verifyOwnerAccess(
+				requestWith(await ownerAccessToken("other@example.com")),
+				ownerAccessEnv,
 			),
 		).resolves.toBeNull();
 	});
 
 	it("rejects invalid signatures and incomplete configuration", async () => {
-		const request = await signedRequest();
-		const token = request.headers.get("cf-access-jwt-assertion")!;
+		const token = await ownerAccessToken();
 		const parts = token.split(".");
 		parts[2] = `${parts[2][0] === "a" ? "b" : "a"}${parts[2].slice(1)}`;
 
-		const invalid = new Request(request.url, {
-			headers: { "cf-access-jwt-assertion": parts.join(".") },
-		});
-
-		await expect(verifyOwnerAccess(invalid, env)).resolves.toBeNull();
 		await expect(
-			verifyOwnerAccess(request, { ...env, OWNER_ACCESS_AUD: "" }),
+			verifyOwnerAccess(requestWith(parts.join(".")), ownerAccessEnv),
+		).resolves.toBeNull();
+		await expect(
+			verifyOwnerAccess(requestWith(token), {
+				...ownerAccessEnv,
+				OWNER_ACCESS_AUD: "",
+			}),
 		).resolves.toBeNull();
 	});
 });

@@ -1,4 +1,5 @@
 import { clientSoftwareLabels } from "./software-inquiry";
+import { ownLabel } from "./type-guards";
 import { renderEmail } from "./email-template";
 
 const site = "https://thesuperhuman.us";
@@ -130,7 +131,7 @@ export function softwareBriefEmail(
 		"Thanks for sending this. I’ll read it myself and reply within two business days with a fixed-price first milestone, or a question or two.",
 		"Here’s what you sent:",
 		...Object.entries(brief).map(
-			([key, answer]) => `${clientSoftwareLabels[key]}\n${answer}`,
+			([key, answer]) => `${ownLabel(clientSoftwareLabels, key)}\n${answer}`,
 		),
 		"Kazon",
 		"Reply to this email if you want to add anything.",

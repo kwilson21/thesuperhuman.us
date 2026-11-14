@@ -21,7 +21,7 @@
     "check": "astro check",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:quint": "node scripts/verify-quint.mjs",

@@ -9,7 +9,8 @@ const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));
 const codeLifetimeMs = 10 * 60 * 1000;
 const sessionLifetimeMs = 14 * 24 * 60 * 60 * 1000;
 
-export function normalizeClientEmail(input: unknown): string | null {
+/** `input` is the email field of a request body. Every caller passes a string; the schema still rejects anything that is not a valid address. */
+export function normalizeClientEmail(input: string): string | null {
 	const parsed = emailSchema.safeParse(input);
 
 	return parsed.success ? parsed.data : null;

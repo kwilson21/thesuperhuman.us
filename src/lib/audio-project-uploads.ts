@@ -1,3 +1,4 @@
+import type { RawValue } from "./fields";
 import {
 	privateProjectObjectKey,
 	type ProjectFile,
@@ -237,7 +238,7 @@ export async function finishProjectUpload(
 }
 
 /** R2 reports an upload it no longer has as error 10024, "The specified multipart upload does not exist." */
-export function multipartUploadGone(error: unknown): boolean {
+export function multipartUploadGone(error: RawValue): boolean {
 	return (
 		error instanceof Error &&
 		/\b10024\b|multipart upload does not exist/i.test(error.message)
