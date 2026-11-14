@@ -66,6 +66,11 @@ export const signinMutants = {
 	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
 	signinNoRowCap: { property: "liveRowsBounded" },
 	signinFreshCookie: { property: "cookieOpensEmailedCode" },
+	signinKeepOnRefusal: { property: "otherAddressKillsEarlier" },
+	signinChargeAnyVersion: { property: "chargeOnlyTheCodeRead" },
+	signinNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinNoCapGuard: { property: "liveRowsBounded" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent

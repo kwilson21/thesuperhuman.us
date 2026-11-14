@@ -15,7 +15,8 @@
 //   live codes per address CAP 3 (code: 6 = 2 x 3). The model's cap is lower than 2 x EMAILS so that a random search reaches it;
 //   what is checked is that the cap holds and is never made room for by dropping another browser's live code.
 //
-// Browsers: 0 is the client's own, 1 is the client's other browser (it can read the client's inbox, so it knows every
+// Two addresses (1 and 2), each with a project that is open to begin with and that can be closed at any time; a code request is
+// for one of them. Browsers: 0 is the client's own, 1 is the client's other browser (it can read the client's inbox, so it knows every
 // delivered code, but it holds no pending sign-in cookie unless it asked for a code itself), 2 is a stranger who knows
 // the address and never learns a code; 3 and 4 are more strangers. Any browser can ask for a code (a stranger solves the
 // captcha), and each browser holds at most one pending cookie, so up to five rows can be live at once.
@@ -33,39 +34,63 @@ module signinCodes {
   //   "no-row-cap"           the live-row cap is not enforced
   //   "ignore-expiry"        an expired code still signs in
   //   "reuse-used"           a used code signs in again
-  //   "fresh-cookie"         each request answers with a fresh cookie value, a refused one with an unrelated value (the code before this
-  //                          fix); with two requests from one browser in flight, the later response can overwrite the cookie of the code
-  //                          the earlier one emailed
+  //   "fresh-cookie"         each request answers with a fresh cookie value, a refused one with an unrelated value (the code before
+  //                          the previous round); with two requests from one browser in flight, the later response can overwrite
+  //                          the cookie of the code the earlier one emailed
+  //   "keep-on-refusal"      a request for another address deletes the browser's earlier code only when it issues a new one, so the
+  //                          answer shows whether that address has a project (the code of the previous round)
+  //   "charge-any-version"   the attempt is counted on the browser's row whatever its stored code is, so a code issued after the
+  //                          guess was read is charged
+  //   "no-open-guard"        the write does not re-check that a project is still open: a code and its audit row are written
+  //                          for a project closed after the facts were read
+  //   "accept-no-open-guard" the sign-in does not re-check that a project is still open
+  //   "no-cap-guard"         the write does not re-check the address's live codes, only the count read earlier
   const MUTANT: str
 
-  val LIMIT = 3
+  val LIMIT = 2
   val EMAILS = 2
   val WINDOW = 2
   val LIFE = 4
   val THROTTLE = 1
-  val CAP = 3
-  val MAX_ROWS = 8    // codes asked for in one run (row ids 1..8)
-  val MAX_NOW = 10    // ticks in one run
+  val CAP = 2
+  val MAX_ROWS = 6     // cookie values (row ids) handed out in one run
+  val MAX_NOW = 10     // ticks in one run
+  val MAX_FLIGHTS = 3  // code requests in progress at once, from any browsers
+  val MAX_GUESSES = 2  // entries of a code in progress at once
   val CLIENT = 0
   val STRANGER = 2
-  val MAX_FLIGHTS = 3 // requests in flight at once, from any browsers
 
-  // issued: the id has been used. owner: the browser whose cookie the row is bound to. delivered: the email reached the
-  // inbox, so browsers 0 and 1 know the code. attempts: the stored count. own: guesses its owner made that were charged
-  // (a ghost). compared: guesses actually compared with the code (a ghost). rehashed: a browser other than the owner
-  // changed the code (a ghost).
+  // issued: the id has been used. owner: the browser whose cookie the row is bound to. addr: the address the code is for.
+  // ver: how many codes this id has held (a replaced code is a new version). delivered: the email reached the inbox, so
+  // browsers 0 and 1 know the code. attempts: the stored count. own: guesses its owner made that were charged (a ghost).
+  // compared: guesses actually compared with the code (a ghost). rehashed: a browser other than the owner changed the code
+  // (a ghost).
   type Row = {
-    issued: bool, owner: int, delivered: bool, attempts: int, own: int, compared: int,
+    issued: bool, owner: int, addr: int, ver: int, delivered: bool, attempts: int, own: int, compared: int,
     created: int, expires: int, used: bool, present: bool, rehashed: bool,
   }
-  // A request is two steps: the server's write (send), then the browser receiving the response and storing the cookie
-  // value it carries (receive). Several can be in flight at once, so a later response can arrive before an earlier one.
-  // bare: the browser sent no cookie.
-  type Flight = { live: bool, b: int, value: int, bare: bool }
+  // A code request is three steps: the server READS the facts (sendRead), then WRITES in one guarded batch after other steps
+  // may have changed them (sendWrite), then the browser receives the response and stores the cookie value it carries
+  // (receive). Several can be in flight at once. phase: "idle", "read" (facts read, nothing written), "sent" (written,
+  // response on its way). The s-fields are the facts it read.
+  type Flight = {
+    phase: str, b: int, a: int, value: int, c: int, bare: bool,
+    sOpen: bool, sLiveOthers: int, sOwnAddr: int,
+  }
+  // Entering a code is two steps: READ the browser's row (guessRead), then WRITE the counted attempt and the sign-in in guarded
+  // statements (guessWrite). The s-fields are the row as it was read.
+  type Guess = {
+    phase: str, b: int, t: int, right: bool, c: int,
+    sPresent: bool, sUsed: bool, sExp: int, sAtt: int, sVer: int, sAddr: int, sOpen: bool,
+  }
   type Ghost = {
     noCookieSignIn: bool,   // a sign-in happened for a browser whose cookie was not the row's
     badSignIn: bool,        // a used or expired code signed someone in
     clientRejected: bool,   // the client entered its own valid code with attempts left and was refused
+    badKeep: bool,          // a request for another address left the browser's earlier code alive
+    badCharge: bool,        // an attempt was counted on, or a sign-in accepted for, a code other than the one the guess read
+    badAudit: bool,         // an audit row was written for a project that was closed
+    clientCleared: bool,    // the client's own request for another address deleted its earlier code, as it must
   }
 
   var rows: int -> Row
@@ -78,15 +103,23 @@ module signinCodes {
   var flights: int -> Flight
   var lastIssued: int -> int  // browser -> the row of its latest request that issued a code (a ghost), 0 none
   var exempt: Set[int]        // browsers that sent two cookie-less requests at once (a ghost; see property 8)
+  var open: int -> bool       // address -> its project is open
+  var gflights: int -> Guess
 
   val blank: Row = {
-    issued: false, owner: 0, delivered: false, attempts: 0, own: 0, compared: 0,
+    issued: false, owner: 0, addr: 0, ver: 0, delivered: false, attempts: 0, own: 0, compared: 0,
     created: 0, expires: 0, used: false, present: false, rehashed: false,
+  }
+
+  val idleFlight: Flight = { phase: "idle", b: 0, a: 0, value: 0, c: 0, bare: false, sOpen: false, sLiveOthers: 0, sOwnAddr: 0 }
+  val idleGuess: Guess = {
+    phase: "idle", b: 0, t: 0, right: false, c: 0,
+    sPresent: false, sUsed: false, sExp: 0, sAtt: 0, sVer: 0, sAddr: 0, sOpen: false,
   }
 
   pure def isLive(r: Row, t: int): bool = r.issued and r.present and not(r.used) and t < r.expires
 
-  // What the completing query accepts. The mutants relax it.
+  // What the completing write accepts (the guard re-checking what the guess read). The mutants relax it.
   pure def accepts(r: Row, t: int): bool =
     r.issued and r.present and (MUTANT == "reuse-used" or not(r.used)) and (MUTANT == "ignore-expiry" or t < r.expires)
 
@@ -94,110 +127,178 @@ module signinCodes {
 
   pure def minOf(ids: Set[int]): int = ids.fold(MAX_ROWS + 1, (m, i) => if (i < m) i else m)
 
+  def liveAt(a: int): Set[int] = rows.keys().filter(i => isLive(rows.get(i), now) and rows.get(i).addr == a)
+
   action init = all {
     rows' = 1.to(MAX_ROWS).mapBy(_ => blank),
-    cookie' = 0.to(4).mapBy(_ => 0),
+    cookie' = 0.to(3).mapBy(_ => 0),
     now' = 0, nextId' = 1, winStart' = 0, winUses' = 0,
-    ghost' = { noCookieSignIn: false, badSignIn: false, clientRejected: false },
-    flights' = 1.to(MAX_FLIGHTS).mapBy(_ => { live: false, b: 0, value: 0, bare: false }),
-    lastIssued' = 0.to(4).mapBy(_ => 0),
+    ghost' = {
+      noCookieSignIn: false, badSignIn: false, clientRejected: false, badKeep: false, badCharge: false, badAudit: false,
+      clientCleared: false,
+    },
+    flights' = 1.to(MAX_FLIGHTS).mapBy(_ => idleFlight),
+    lastIssued' = 0.to(3).mapBy(_ => 0),
     exempt' = Set(),
+    open' = Map(1 -> true, 2 -> true),
+    gflights' = 1.to(MAX_GUESSES).mapBy(_ => idleGuess),
   }
 
   // ---- Asking for a code (code.ts, issueClientCode) ----------------------------------------------------------------
-  // The browser sends its pending cookie, if any. The allowance counts first (a fixed window opened by its first use). The
-  // address's room is decided on the live codes other than the browser's own. If there is room, the code is issued under the
-  // browser's own cookie value when it sent one (its earlier code is replaced in place), or under a newly allocated value
-  // when it sent none; the response carries that value whether or not a code was issued, so a refused request does not
-  // change the browser's cookie. The "fresh-cookie" mutant is the code before this fix: every response carries a fresh
-  // value, and a refused one an unrelated value.
-  action send(f: int, b: int): bool = {
+  // READ. The browser sends its pending cookie, if any. The allowance counts first (a fixed window opened by its first use).
+  // The facts are read the same way whatever the address: whether the address's project is open, how many live codes the
+  // address has other than the browser's own, and which address the browser's own earlier code (the row its cookie names) is
+  // for. A browser with no cookie is given a newly allocated value; one with a cookie keeps it (the "fresh-cookie" mutant
+  // gives every request a fresh one).
+  action sendRead(f: int, b: int, a: int): bool = {
     val c = cookie.get(b)
     val windowOpen = winUses > 0 and now - winStart < WINDOW
     val usesNow = if (windowOpen) winUses else 0
     val allowed = MUTANT == "no-allowance" or usesNow < EMAILS
-    val liveIds = rows.keys().filter(i => isLive(rows.get(i), now))
-    val liveOthers = liveIds.filter(i => i != c).size()
+    val alloc = MUTANT == "fresh-cookie" or c == 0
+    val value = if (alloc) nextId else c
+    val ownAddr = if (c != 0 and rows.get(c).issued and rows.get(c).present) rows.get(c).addr else 0
+    val bareFlight = flights.keys().exists(g => flights.get(g).phase != "idle" and flights.get(g).b == b and flights.get(g).bare)
+    all {
+      allowed,
+      flights.get(f).phase == "idle",
+      not(alloc) or nextId <= MAX_ROWS,
+      winStart' = if (windowOpen) winStart else now,
+      winUses' = usesNow + 1,
+      nextId' = if (alloc) nextId + 1 else nextId,
+      flights' = flights.set(f, {
+        phase: "read", b: b, a: a, value: value, c: c, bare: c == 0,
+        sOpen: open.get(a), sLiveOthers: liveAt(a).filter(i => i != c).size(), sOwnAddr: ownAddr }),
+      exempt' = if (c == 0 and bareFlight) exempt.union(Set(b)) else exempt,
+      rows' = rows, cookie' = cookie, now' = now, ghost' = ghost, lastIssued' = lastIssued, open' = open, gflights' = gflights
+    }
+  }
+
+  // WRITE. The rule (decideIssue) decides from what was read: issue when the project was open and the address had room, and,
+  // whatever the outcome, delete the browser's earlier code when it was for a different address. The write is one guarded
+  // batch: the code is issued only if, now, the project is still open and the address's live codes other than the browser's
+  // own are still under the cap (otherwise nothing is issued and the request is answered like a refusal; there is no retry).
+  // The delete of an earlier code for another address does not depend on the guard.
+  action sendWrite(f: int): bool = {
+    val fl = flights.get(f)
+    val b = fl.b
+    val a = fl.a
+    val c = fl.c
+    val liveIds = liveAt(a)
+    val liveOthersNow = liveIds.filter(i => i != c).size()
     val anyYoung = liveIds.exists(i => rows.get(i).created + THROTTLE > now)
     // The code before this fix answered "sent" without a new code when the address's row was under 30 seconds old. The
     // fixed code has no pause: a browser that asks again replaces its own row, and the email allowance bounds the mail.
     val throttled = (MUTANT == "single-row" or MUTANT == "replace-live") and anyYoung
-    val room = MUTANT == "no-row-cap" or MUTANT == "evict-oldest" or liveOthers < CAP
-    val oldest = minOf(liveIds.filter(i => i != c))
+    val roomRead = MUTANT == "no-row-cap" or MUTANT == "evict-oldest" or fl.sLiveOthers < CAP
+    val decided = fl.sOpen and roomRead and not(throttled)
+    val guardOpen = MUTANT == "no-open-guard" or open.get(a)
+    val guardRoom = MUTANT == "no-cap-guard" or MUTANT == "no-row-cap" or MUTANT == "evict-oldest" or liveOthersNow < CAP
+    val issueOk = decided and guardOpen and guardRoom
     val fresh: Row = {
-      issued: true, owner: b, delivered: false, attempts: 0, own: 0, compared: 0,
+      issued: true, owner: b, addr: a, ver: rows.get(fl.value).ver + 1, delivered: true, attempts: 0, own: 0, compared: 0,
       created: now, expires: now + LIFE, used: false, present: true, rehashed: false,
     }
     // replace-live: the code of the oldest live row is changed in place and the requester's cookie now names it.
     val target = minOf(liveIds)
-    val replaceInPlace = MUTANT == "replace-live" and liveIds.size() > 0 and not(throttled)
-    val alloc = (MUTANT == "fresh-cookie" or c == 0) and not(replaceInPlace)
-    val value = if (replaceInPlace) target else if (alloc) nextId else c
+    val replaceInPlace = MUTANT == "replace-live" and liveIds.size() > 0 and not(throttled) and fl.sOpen
+    val insert = issueOk and not(replaceInPlace)
+    val oldest = minOf(liveIds.filter(i => i != c))
+    // The browser's earlier code, when it was for another address: deleted for every outcome (the "keep-on-refusal" mutant
+    // deletes it only when a new code is issued).
+    val clearDecided = fl.sOwnAddr != 0 and fl.sOwnAddr != a
+    val clearApplied = clearDecided and c != 0 and rows.get(c).present and rows.get(c).addr == fl.sOwnAddr
+      and (MUTANT != "keep-on-refusal" or insert)
     val removed: Set[int] =
       if (MUTANT == "single-row") rows.keys()
-      else if (MUTANT == "evict-oldest" and liveOthers >= CAP) Set(c, oldest)
+      else if (MUTANT == "evict-oldest" and liveOthersNow >= CAP and insert) Set(oldest)
       else if (MUTANT == "fresh-cookie") Set(c)
       else Set()
-    val cleared = rows.keys().mapBy(i => if (removed.contains(i)) { ...rows.get(i), present: false } else rows.get(i))
-    val insert = not(throttled) and not(replaceInPlace) and room
-    val bareFlight = flights.keys().exists(g => flights.get(g).live and flights.get(g).b == b and flights.get(g).bare)
+    val removedAll = if (clearApplied) removed.union(Set(c)) else removed
+    val cleared = rows.keys().mapBy(i => if (removedAll.contains(i)) { ...rows.get(i), present: false } else rows.get(i))
+    val newRows =
+      if (replaceInPlace)
+        rows.set(target, { ...rows.get(target), delivered: true, attempts: 0, created: now, expires: now + LIFE,
+          rehashed: rows.get(target).rehashed or rows.get(target).owner != b })
+      else if (insert) cleared.set(fl.value, fresh)
+      else cleared
+    val issuedId = if (replaceInPlace) target else fl.value
     all {
-      allowed,
-      not(flights.get(f).live),
-      not(alloc) or nextId <= MAX_ROWS,
-      winStart' = if (windowOpen) winStart else now,
-      winUses' = usesNow + 1,
-      rows' =
-        if (replaceInPlace)
-          rows.set(target, { ...rows.get(target), delivered: false, attempts: 0, created: now, expires: now + LIFE,
-            rehashed: rows.get(target).rehashed or rows.get(target).owner != b })
-        else if (insert) cleared.set(value, fresh)
-        else rows,
-      nextId' = if (alloc) nextId + 1 else nextId,
-      flights' = flights.set(f, { live: true, b: b, value: value, bare: c == 0 }),
-      lastIssued' = if (insert or replaceInPlace) lastIssued.set(b, value) else lastIssued,
-      exempt' = if (c == 0 and bareFlight) exempt.union(Set(b)) else exempt,
-      cookie' = cookie, now' = now, ghost' = ghost,
+      fl.phase == "read",
+      rows' = newRows,
+      flights' = flights.set(f, { ...fl, phase: "sent", value: if (replaceInPlace) target else fl.value }),
+      lastIssued' = if (insert or replaceInPlace) lastIssued.set(b, issuedId) else lastIssued,
+      ghost' = { ...ghost,
+        badKeep: ghost.badKeep or (clearDecided and c != 0 and newRows.get(c).present and newRows.get(c).addr == fl.sOwnAddr),
+        badAudit: ghost.badAudit or (insert and not(open.get(a))),
+        clientCleared: ghost.clientCleared or (b == CLIENT and clearApplied) },
+      cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, exempt' = exempt, open' = open, gflights' = gflights
     }
   }
 
   // The browser receives the response and stores the cookie value it carries.
   action receive(f: int): bool = all {
-    flights.get(f).live,
+    flights.get(f).phase == "sent",
     cookie' = cookie.set(flights.get(f).b, flights.get(f).value),
-    flights' = flights.set(f, { ...flights.get(f), live: false }),
-    rows' = rows, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost,
-    lastIssued' = lastIssued, exempt' = exempt,
+    flights' = flights.set(f, idleFlight),
+    rows' = rows, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
   }
 
-  // The email reaches the inbox.
-  action deliver(t: int): bool = all {
-    rows.get(t).issued, rows.get(t).present, not(rows.get(t).delivered),
-    rows' = rows.set(t, { ...rows.get(t), delivered: true }),
-    cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost,
-    flights' = flights, lastIssued' = lastIssued, exempt' = exempt,
+  // A project is closed (by the owner), at any time, between any two steps.
+  action closeProject(a: int): bool = all {
+    open.get(a),
+    open' = open.set(a, false),
+    rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, gflights' = gflights
   }
 
   // ---- Entering a code (session.ts, completeClientCode) ------------------------------------------------------------
   // Browser b sends its pending cookie (if any) and the code of row t. A browser can send the right code only if it can
   // read the inbox (browsers 0 and 1) and the email was delivered; the stranger always sends a wrong code.
-  // With a cookie: the row the cookie names is charged one attempt (while it is unused, unexpired and under the limit) and
-  // accepts the code only when the code is its own (the code's hash covers the cookie's nonce, so another row's code never
-  // matches). Without a cookie nothing is looked up and nothing changes.
-  action guess(b: int, t: int, right: bool): bool = {
+  // READ: the row the cookie names, as it is (present, used, expiry, attempts, which code it holds, which address, whether
+  // that address's project is open). Without a cookie nothing is looked up.
+  action guessRead(g: int, b: int, t: int, right: bool): bool = {
     val c = cookie.get(b)
     val r = if (c != 0) rows.get(c) else blank
+    all {
+      gflights.get(g).phase == "idle",
+      rows.get(t).issued,
+      right implies (b < STRANGER and rows.get(t).delivered),
+      gflights' = gflights.set(g, {
+        phase: "read", b: b, t: t, right: right, c: c,
+        sPresent: r.present, sUsed: r.used, sExp: r.expires, sAtt: r.attempts, sVer: r.ver, sAddr: r.addr,
+        sOpen: r.addr != 0 and open.get(r.addr) }),
+      rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open
+    }
+  }
+
+  // WRITE. The rule (decideComplete) decides from what was read: count the attempt if the code was live with attempts left,
+  // and accept if it is also the right code and the project was open. The write is guards re-checking, now, the same facts
+  // and that the row still holds the code that was read: the attempt is counted only on that code (the "charge-any-version"
+  // mutant counts it on whatever code the row holds now), and the sign-in needs the counted attempt, the same code, and a
+  // project still open.
+  action guessWrite(g: int): bool = {
+    val fl = gflights.get(g)
+    val b = fl.b
+    val c = fl.c
+    val t = fl.t
+    val right = fl.right
+    val r = if (c != 0) rows.get(c) else blank
     val rt = rows.get(t)
-    val charged = c != 0 and accepts(r, now) and hasAttempts(r)
-    val success = charged and right and t == c
-    val shouldSucceed = c != 0 and t == c and r.issued and not(r.used) and now < r.expires and r.own < LIMIT
+    val chargeable = c != 0 and fl.sPresent and (MUTANT == "reuse-used" or not(fl.sUsed)) and (MUTANT == "ignore-expiry" or now < fl.sExp)
+      and (MUTANT == "no-attempt-cap" or fl.sAtt < LIMIT)
+    val matches = right and t == c
+    val sameCode = r.ver == fl.sVer
+    val charged = chargeable and accepts(r, now) and hasAttempts(r) and (MUTANT == "charge-any-version" or sameCode)
+    val success = charged and matches and fl.sOpen
+      and (MUTANT == "accept-no-open-guard" or open.get(r.addr))
+    val shouldSucceed = c != 0 and t == c and right and r.issued and sameCode and not(r.used) and now < r.expires and r.own < LIMIT
+      and open.get(r.addr)
     // cookie-not-required: the address is looked up by the code alone.
     val bare = MUTANT == "cookie-not-required" and c == 0 and right and accepts(rt, now) and hasAttempts(rt)
     // address-attempts: every guess charges the address's live rows.
     val spread = MUTANT == "address-attempts" and c == 0
     all {
-      rt.issued,
-      right implies (b < STRANGER and rt.delivered),
+      fl.phase == "read",
       rows' =
         if (charged)
           rows.set(c, { ...r, attempts: r.attempts + 1, own: r.own + (if (b == r.owner) 1 else 0),
@@ -207,13 +308,14 @@ module signinCodes {
         else if (spread)
           rows.keys().mapBy(i => if (accepts(rows.get(i), now)) { ...rows.get(i), attempts: rows.get(i).attempts + 1 } else rows.get(i))
         else rows,
-      ghost' = {
+      gflights' = gflights.set(g, idleGuess),
+      ghost' = { ...ghost,
         noCookieSignIn: ghost.noCookieSignIn or bare,
         badSignIn: ghost.badSignIn or (success and (r.used or now >= r.expires)) or (bare and (rt.used or now >= rt.expires)),
-        clientRejected: ghost.clientRejected or (b == CLIENT and right and shouldSucceed and not(success)),
-      },
-      cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses,
-      flights' = flights, lastIssued' = lastIssued, exempt' = exempt,
+        clientRejected: ghost.clientRejected or (b == CLIENT and shouldSucceed and not(success)),
+        badCharge: ghost.badCharge or (charged and not(sameCode)) or (success and not(sameCode)),
+        badAudit: ghost.badAudit or (success and not(open.get(r.addr))) },
+      cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open
     }
   }
 
@@ -221,8 +323,7 @@ module signinCodes {
   action tick = all {
     now < MAX_NOW,
     now' = now + 1,
-    rows' = rows, cookie' = cookie, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost,
-    flights' = flights, lastIssued' = lastIssued, exempt' = exempt,
+    rows' = rows, cookie' = cookie, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
   }
 
   // The sweep removes expired rows (the issue transaction deletes them). The "sweep-live" mutant keys it on the wrong
@@ -232,37 +333,44 @@ module signinCodes {
       val r = rows.get(i)
       if (r.issued and (now >= r.expires or (MUTANT == "sweep-live" and r.created < now))) { ...r, present: false } else r
     }),
-    cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost,
-    flights' = flights, lastIssued' = lastIssued, exempt' = exempt,
+    cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses, ghost' = ghost, flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights
   }
 
   action step = any {
     nondet f = 1.to(MAX_FLIGHTS).oneOf()
-    nondet b = 0.to(4).oneOf()
-    send(f, b),
+    nondet b = 0.to(3).oneOf()
+    nondet a = 1.to(2).oneOf()
+    sendRead(f, b, a),
+    nondet f = 1.to(MAX_FLIGHTS).oneOf()
+    sendWrite(f),
     nondet f = 1.to(MAX_FLIGHTS).oneOf()
     receive(f),
-    nondet t = 1.to(MAX_ROWS).oneOf()
-    deliver(t),
-    nondet b = 0.to(4).oneOf()
+    nondet a = 1.to(2).oneOf()
+    closeProject(a),
+    nondet g = 1.to(MAX_GUESSES).oneOf()
+    nondet b = 0.to(3).oneOf()
     nondet t = 1.to(MAX_ROWS).oneOf()
     nondet right = Set(true, false).oneOf()
-    guess(b, t, right),
+    guessRead(g, b, t, right),
+    nondet g = 1.to(MAX_GUESSES).oneOf()
+    guessWrite(g),
     tick,
     sweep,
   }
 
   // ---- Properties --------------------------------------------------------------------------------------------------
+  def noFlight(b: int): bool =
+    flights.keys().forall(f => not(flights.get(f).phase != "idle" and flights.get(f).b == b))
+    and gflights.keys().forall(g => not(gflights.get(g).phase != "idle" and gflights.get(g).b == b))
+
   // 1. A client who asked for a code and enters it correctly from the same browser while it is valid is signed in, unless
   //    that browser used up its own attempts, whatever other browsers do. As states: the client's current row is still
-  //    there, with attempts left and its code unchanged, and no correct entry of it was refused.
-  def noFlight(b: int): bool = flights.keys().forall(f => not(flights.get(f).live and flights.get(f).b == b))
-
+  //    there, with attempts left and its code unchanged, and no correct entry of it was refused. Exempt while the client's own
+  //    request or entry is in progress, and once its own request for another address has deleted the code (as it must).
   val clientNeverLockedOut = and {
     not(ghost.clientRejected),
-    // While the client's own request is in flight its earlier code may already be replaced; that is what it asked for.
     Set(cookie.get(CLIENT)).forall(c =>
-      if (c == 0 or not(noFlight(CLIENT))) true
+      if (c == 0 or not(noFlight(CLIENT)) or ghost.clientCleared or not(open.get(1)) or not(open.get(2))) true
       else {
         val r = rows.get(c)
         (not(r.used) and now < r.expires and r.own < LIMIT) implies (r.present and r.attempts < LIMIT and not(r.rehashed))
@@ -288,19 +396,29 @@ module signinCodes {
   // 6. A used or expired code never signs anyone in.
   val deadCodeNeverSignsIn = not(ghost.badSignIn)
 
-  // 7. Live rows for the address are bounded.
-  val liveRowsBounded = rows.keys().filter(i => isLive(rows.get(i), now)).size() <= CAP
+  // 7. Live rows for each address are bounded, also when requests are in progress at the same time.
+  val liveRowsBounded = 1.to(2).forall(a => liveAt(a).size() <= CAP)
 
   // 8. If a code was emailed for a request from this browser, and no later request from it issued another, then once every
   //    response to this browser has arrived its stored cookie names that code. The browser's responses can arrive in any
   //    order. Exempt: a browser that sent two cookie-less requests at once (nothing ties its two responses together; the
   //    consequence is that it asks again).
-  val cookieOpensEmailedCode = 0.to(4).forall(b =>
+  val cookieOpensEmailedCode = 0.to(3).forall(b =>
     (noFlight(b) and not(exempt.contains(b)) and lastIssued.get(b) != 0) implies cookie.get(b) == lastIssued.get(b))
+
+  // 9. Asking for a different address always deletes the browser's earlier code, whatever the answer for that address is (it
+  //    has a project, it has none, it is full, the write lost a race).
+  val otherAddressKillsEarlier = not(ghost.badKeep)
+
+  // 10. An attempt is counted on, and a sign-in accepted for, only the code the guess read, never a code issued after it.
+  val chargeOnlyTheCodeRead = not(ghost.badCharge)
+
+  // 11. An audit row is never written for a project that has been closed.
+  val noAuditForClosedProject = not(ghost.badAudit)
 
   val allProperties = and {
     clientNeverLockedOut, cookieRequired, othersUntouched, attemptsBounded, emailsBounded, deadCodeNeverSignsIn,
-    liveRowsBounded, cookieOpensEmailedCode,
+    liveRowsBounded, cookieOpensEmailedCode, otherAddressKillsEarlier, chargeOnlyTheCodeRead, noAuditForClosedProject,
   }
 }
 
@@ -319,3 +437,8 @@ module signinNoRowCap { import signinCodes(MUTANT = "no-row-cap").* }
 module signinIgnoreExpiry { import signinCodes(MUTANT = "ignore-expiry").* }
 module signinReuseUsed { import signinCodes(MUTANT = "reuse-used").* }
 module signinFreshCookie { import signinCodes(MUTANT = "fresh-cookie").* }
+module signinKeepOnRefusal { import signinCodes(MUTANT = "keep-on-refusal").* }
+module signinChargeAnyVersion { import signinCodes(MUTANT = "charge-any-version").* }
+module signinNoOpenGuard { import signinCodes(MUTANT = "no-open-guard").* }
+module signinAcceptNoOpenGuard { import signinCodes(MUTANT = "accept-no-open-guard").* }
+module signinNoCapGuard { import signinCodes(MUTANT = "no-cap-guard").* }

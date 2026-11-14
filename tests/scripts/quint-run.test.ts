@@ -200,7 +200,7 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(8);
+		expect(properties.length).toBeGreaterThanOrEqual(11);
 		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
 
 		for (const { property } of Object.values<{ property: string }>(
