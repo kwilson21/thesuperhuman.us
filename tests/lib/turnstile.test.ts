@@ -1,6 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { verifyTurnstile } from "~/lib/turnstile";
+import { checkTurnstile, verifyTurnstile } from "~/lib/turnstile";
 import { double } from "../helpers/doubles";
+
+describe("checkTurnstile", () => {
+	let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+
+	beforeEach(() => {
+		fetchMock = vi.fn<typeof fetch>();
+		vi.stubGlobal("fetch", fetchMock);
+	});
+
+	it("passes when Cloudflare says success", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => ({ success: true }) }),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("passed");
+	});
+
+	it("refuses when a parsed answer does not say success is true", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => ({ success: false }) }),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => ({ success: "true" }) }),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => [] }),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
+	});
+
+	it("is unavailable when fetch rejects or times out", async () => {
+		fetchMock.mockRejectedValueOnce(new Error("network"));
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+			"unavailable",
+		);
+		fetchMock.mockRejectedValueOnce(new DOMException("slow", "TimeoutError"));
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+			"unavailable",
+		);
+	});
+
+	it("is unavailable when the answer is not OK, even with success in the body", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: false, json: async () => ({ success: true }) }),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+			"unavailable",
+		);
+	});
+
+	it("is unavailable when the answer is not JSON", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({
+				ok: true,
+				json: async () => {
+					throw new SyntaxError("Unexpected token <");
+				},
+			}),
+		);
+		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe(
+			"unavailable",
+		);
+	});
+});
 
 describe("verifyTurnstile", () => {
 	let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
@@ -8,6 +73,19 @@ describe("verifyTurnstile", () => {
 	beforeEach(() => {
 		fetchMock = vi.fn<typeof fetch>();
 		vi.stubGlobal("fetch", fetchMock);
+	});
+
+	it("is true only for a passed check, false for refused and unavailable", async () => {
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => ({ success: true }) }),
+		);
+		expect(await verifyTurnstile("tok", "secret", "1.2.3.4")).toBe(true);
+		fetchMock.mockResolvedValueOnce(
+			double<Response>({ ok: true, json: async () => ({ success: false }) }),
+		);
+		expect(await verifyTurnstile("tok", "secret", "1.2.3.4")).toBe(false);
+		fetchMock.mockRejectedValueOnce(new Error("network"));
+		expect(await verifyTurnstile("tok", "secret", "1.2.3.4")).toBe(false);
 	});
 
 	it("returns true when Cloudflare says success", async () => {
