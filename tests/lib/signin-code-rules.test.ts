@@ -25,7 +25,14 @@ describe("issuing a sign-in code", () => {
 	const row = (
 		nonceHash: string,
 		over: Partial<IssueFacts["codes"][number]> = {},
-	) => ({ nonceHash, email: address, usedAt: null, expiresAt: later, ...over });
+	) => ({
+		nonceHash,
+		email: address,
+		codeHash: `code-${nonceHash}`,
+		usedAt: null,
+		expiresAt: later,
+		...over,
+	});
 
 	const facts = (
 		projects: IssueFacts["projects"],
@@ -49,14 +56,14 @@ describe("issuing a sign-in code", () => {
 						kind: "refuse",
 						refusal: "NoOpenProject",
 						clearEarlierEmail: null,
-						expiredNonceHashes: [],
+						expiredCodes: [],
 					}
 				: liveOthers >= cap
 					? {
 							kind: "refuse",
 							refusal: "AddressFull",
 							clearEarlierEmail: null,
-							expiredNonceHashes: [],
+							expiredCodes: [],
 						}
 					: {
 							kind: "issue",
@@ -64,7 +71,7 @@ describe("issuing a sign-in code", () => {
 							auditRequestIds: projects.map((project) => project.requestId),
 							liveOthersBelow: cap,
 							clearEarlierEmail: null,
-							expiredNonceHashes: [],
+							expiredCodes: [],
 						};
 
 			it(`${name}, ${liveOthers} other live codes`, () => {
@@ -114,7 +121,10 @@ describe("issuing a sign-in code", () => {
 
 		for (const projects of [[open], []])
 			expect(decideIssue(facts(projects, codes), cap)).toMatchObject({
-				expiredNonceHashes: ["old", "older"],
+				expiredCodes: [
+					{ nonceHash: "old", codeHash: "code-old" },
+					{ nonceHash: "older", codeHash: "code-older" },
+				],
 			});
 	});
 

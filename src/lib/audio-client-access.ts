@@ -171,7 +171,7 @@ export async function issueClientCode(
 	const [projectRows, codeRows] = await db.batch<ProjectRow & CodeRow>([
 		projectFacts(db, email),
 		db
-			.prepare(`SELECT nonce_hash AS nonceHash,email,used_at AS usedAt,expires_at AS expiresAt
+			.prepare(`SELECT nonce_hash AS nonceHash,email,code_hash AS codeHash,used_at AS usedAt,expires_at AS expiresAt
       FROM audio_client_signin_codes WHERE email=? OR nonce_hash=?`)
 			.bind(email, nonceHash),
 	]);
@@ -189,12 +189,18 @@ export async function issueClientCode(
 
 	// The sweep, and the browser's earlier code for another address: for every answer, and kept when the write below fails.
 	await db.batch([
-		// Expired rows among those read, deleted by key (the decision named them).
+		// The expired rows `decideIssue` named, deleted by key. The guard re-checks the decided fact at write time: a row goes only if
+		// it is still expired and still holds the code that was read, so a fresh code another request stored under the same key
+		// since the read is never deleted.
 		db
-			.prepare(
-				"DELETE FROM audio_client_signin_codes WHERE nonce_hash IN (SELECT value FROM json_each(?))",
-			)
-			.bind(JSON.stringify(answer.expiredNonceHashes)),
+			.prepare(`DELETE FROM audio_client_signin_codes WHERE expires_at<=?
+        AND (nonce_hash,code_hash) IN (SELECT json_extract(j.value,'$[0]'),json_extract(j.value,'$[1]') FROM json_each(?) j)`)
+			.bind(
+				issuedAt,
+				JSON.stringify(
+					answer.expiredCodes.map((row) => [row.nonceHash, row.codeHash]),
+				),
+			),
 		db
 			.prepare(
 				"DELETE FROM audio_client_signin_codes WHERE nonce_hash=? AND email=?",

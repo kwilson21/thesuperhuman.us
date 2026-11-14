@@ -18,8 +18,16 @@ export type SigninProject = {
 export type IssueCode = {
 	readonly nonceHash: string;
 	readonly email: string;
+	/** The hash of the code the row held when it was read: it names which code the row was, so a replaced row is told apart. */
+	readonly codeHash: string;
 	readonly usedAt: string | null;
 	readonly expiresAt: string;
+};
+
+/** An expired row as it was read: its key and the code it held. */
+export type ExpiredCode = {
+	readonly nonceHash: string;
+	readonly codeHash: string;
 };
 
 export type IssueFacts = {
@@ -43,13 +51,13 @@ export type IssueDecision =
 			/** The write's guard: the address's other live codes must still be fewer than this. */
 			readonly liveOthersBelow: number;
 			readonly clearEarlierEmail: string | null;
-			readonly expiredNonceHashes: readonly string[];
+			readonly expiredCodes: readonly ExpiredCode[];
 	  }
 	| {
 			readonly kind: "refuse";
 			readonly refusal: "NoOpenProject" | "AddressFull";
 			readonly clearEarlierEmail: string | null;
-			readonly expiredNonceHashes: readonly string[];
+			readonly expiredCodes: readonly ExpiredCode[];
 	  };
 
 /**
@@ -66,17 +74,18 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 	const clearEarlierEmail =
 		own !== undefined && own.email !== facts.address ? own.email : null;
 
-	// The rows read that have expired (the instant of expiry is expired): they are deleted by key, whatever the answer is.
-	const expiredNonceHashes = facts.codes
+	// The rows read that have expired (the instant of expiry is expired): they are deleted by key, whatever the answer is, and only
+	// while each row still holds the code that was read (the write re-checks it).
+	const expiredCodes = facts.codes
 		.filter((code) => code.expiresAt <= facts.now)
-		.map((code) => code.nonceHash);
+		.map((code) => ({ nonceHash: code.nonceHash, codeHash: code.codeHash }));
 
 	if (!facts.projects.some((project) => !project.withdrawn))
 		return {
 			kind: "refuse",
 			refusal: "NoOpenProject",
 			clearEarlierEmail,
-			expiredNonceHashes,
+			expiredCodes,
 		};
 
 	const liveOthers = facts.codes.filter(
@@ -92,7 +101,7 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 			kind: "refuse",
 			refusal: "AddressFull",
 			clearEarlierEmail,
-			expiredNonceHashes,
+			expiredCodes,
 		};
 
 	return {
@@ -100,7 +109,7 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 		auditRequestIds: facts.projects.map((project) => project.requestId),
 		liveOthersBelow: cap,
 		clearEarlierEmail,
-		expiredNonceHashes,
+		expiredCodes,
 	};
 }
 
