@@ -7,9 +7,18 @@ import { musicRequest } from "~/lib/music-request";
 import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
 import { saveOwnerRequest } from "~/lib/owner-requests";
 import { checkRateLimit } from "~/lib/rate-limit";
-import { verifyTurnstile } from "~/lib/turnstile";
+import { checkTurnstile } from "~/lib/turnstile";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+
+const ROUTE = "/api/audio-intake";
+
+const unstored =
+	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
+
+const unavailable =
+	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
@@ -49,14 +58,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+		const check = await checkTurnstile(
+			input.turnstileToken,
+			env.TURNSTILE_SECRET_KEY,
+			ip,
+		);
 
-		if (
-			!(await verifyTurnstile(
-				input.turnstileToken,
-				env.TURNSTILE_SECRET_KEY,
-				ip,
-			))
-		)
+		// A captcha service that cannot answer is an outage, not a refused challenge: the visitor keeps the form.
+		if (check === "unavailable")
+			return Response.json({ ok: false, error: unavailable }, { status: 503 });
+
+		if (check === "refused")
 			return Response.json(
 				{
 					ok: false,
@@ -80,8 +92,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				env.MUSIC_DB,
 				ownerRequestForIntake(input),
 			);
-		} catch {
-			await env.RATE_LIMIT.delete(`rl:audio:${ip}`);
+		} catch (error) {
+			// Giving back the allowance is best effort: the owner must hear of a lost request even when the counter cannot be cleared.
+			try {
+				await env.RATE_LIMIT.delete(`rl:audio:${ip}`);
+			} catch (releaseError) {
+				logUnexpected(ROUTE, releaseError);
+			}
+			logUnexpected(ROUTE, error);
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
 				route: "/api/audio-intake",
@@ -90,14 +108,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				occurredAt: new Date().toISOString(),
 			});
 
-			return Response.json(
-				{
-					ok: false,
-					error:
-						"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.",
-				},
-				{ status: 503 },
-			);
+			return Response.json({ ok: false, error: unstored }, { status: 500 });
 		}
 
 		// Best-effort notices: neither blocks the response, and neither can undo the stored request.
@@ -128,14 +139,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		else await pending;
 
 		return Response.json({ ok: true });
-	} catch {
-		return Response.json(
-			{
-				ok: false,
-				error:
-					"Sending is temporarily unavailable. Your details are still here. Please try again later.",
-			},
-			{ status: 503 },
-		);
+	} catch (error) {
+		// An unexpected failure of the rate limit store (or anything else not handled above) gets the route's fixed sentence.
+		logUnexpected(ROUTE, error);
+
+		return Response.json({ ok: false, error: unavailable }, { status: 500 });
 	}
 };

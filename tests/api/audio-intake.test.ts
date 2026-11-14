@@ -178,7 +178,7 @@ describe("intake endpoint", () => {
 		vi.mocked(saveOwnerRequest).mockRejectedValueOnce(
 			new Error("database unavailable"),
 		);
-		expect((await POST(context())).status).toBe(503);
+		expect((await POST(context())).status).toBe(500);
 		expect(sendUrgentOwnerAlert).toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({
@@ -186,6 +186,46 @@ describe("intake endpoint", () => {
 				route: "/api/audio-intake",
 			}),
 		);
+	});
+	it("still sends the owner alert when giving back the allowance fails", async () => {
+		const ctx = context();
+		ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+			get: rateLimitGet,
+			put: vi.fn(async () => {}),
+			delete: vi.fn(async () => {
+				throw new Error("kv down");
+			}),
+		});
+		vi.mocked(saveOwnerRequest).mockRejectedValueOnce(
+			new Error("database unavailable"),
+		);
+		const response = await POST(ctx);
+		expect(response.status).toBe(500);
+		expect(sendUrgentOwnerAlert).toHaveBeenCalledTimes(1);
+	});
+	it("answers 503 with the temporary sentence when the captcha service cannot be reached", async () => {
+		vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+		const response = await POST(context());
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error:
+				"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+		});
+		expect(saveOwnerRequest).not.toHaveBeenCalled();
+	});
+	it("answers 500 with the temporary sentence when the rate limit store fails", async () => {
+		const ctx = context();
+		ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+			get: vi.fn(async () => {
+				throw new Error("kv down");
+			}),
+			put: vi.fn(async () => {}),
+			delete: vi.fn(async () => {}),
+		});
+		const response = await POST(ctx);
+		expect(response.status).toBe(500);
+		expect(saveOwnerRequest).not.toHaveBeenCalled();
 	});
 	it("rejects empty specific direction before external calls", async () => {
 		const response = await POST(
