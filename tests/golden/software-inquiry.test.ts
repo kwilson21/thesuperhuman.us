@@ -44,14 +44,16 @@ import {
 //     bodies that are not objects      null, array, string, number, empty object (first issue per field wins)
 //   503 "Sending is unavailable"       no MUSIC_DB, no Turnstile secret, no RATE_LIMIT
 //   429 attempt limit                  ten attempts; a count that is not a number
-//   403 Turnstile                      refused, 5xx, network down, unreadable
+//   403 Turnstile                      refused (a parsed answer without success === true)
+//   503 "temporarily unavailable"      the captcha service cannot answer: network down, timeout, non-2xx, unreadable
 //   duplicate submission id            same email (any case), different email (409), stored copy status sent, uncertain,
-//                                      failed, absent; the lookup throws (alert, 503); a duplicate does not touch the
+//                                      failed, absent; the lookup throws (alert, 500); a duplicate does not touch the
 //                                      request counter
 //   429 request limit                  one saved brief per address per window
-//   saving                             insert batch throws (counter cleared, alert), another request saved the same id
-//                                      first (same email: 200 with the stored brief; different email: 409), the delete
-//                                      throws (outer catch), the read-back throws
+//   saving                             insert batch throws (counter cleared, alert, 500), another request saved the same
+//                                      id first (same email: 200 with the stored brief; different email: 409), clearing
+//                                      the counter throws too (the alert still goes out), a read-back after the insert is
+//                                      never made
 //   the client copy                    sent, refused 400, 5xx and network down (uncertain), no key, sender or owner
 //                                      address (failed), the claim finds nothing (status null), the claim throws, the
 //                                      status write throws after the provider started or before it, both throw, the
@@ -795,7 +797,7 @@ const cases: Case[] = [
 		insertOther("someone@else.test"),
 	),
 	single(
-		"the read-back after the insert fails (the row stays stored)",
+		"a read-back failure after the insert is never made (one request, 200)",
 		workflow,
 		fails(/SELECT id,kind,release_id,service_id/),
 	),
