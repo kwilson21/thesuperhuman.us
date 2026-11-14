@@ -32,7 +32,7 @@ export const studioUpdateEmail = (origin?: string) =>
 		reason: "You received this because your studio project has an update.",
 	});
 
-export const studioCodeEmail = (code: string, origin?: string) =>
+export const studioCodeEmail = (code: string) =>
 	renderEmail({
 		preheader: "Your studio sign-in code.",
 		kicker: "Sign in",
@@ -40,7 +40,6 @@ export const studioCodeEmail = (code: string, origin?: string) =>
 		paragraphs: [],
 		code,
 		note: "This code expires in 10 minutes. Enter it in the browser where you asked for it. If you didn’t ask for it, you can ignore this email.",
-		link: { label: "Open the sign-in page", href: studioSignIn(origin) },
 		reason: "You received this because you requested a studio sign-in code.",
 	});
 

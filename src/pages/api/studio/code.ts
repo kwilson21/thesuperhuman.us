@@ -132,7 +132,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							from: env.CONTACT_FROM_EMAIL,
 							to: [email],
 							subject: "Your studio sign-in code",
-							...studioCodeEmail(code, env.SITE_ORIGIN),
+							...studioCodeEmail(code),
 						},
 					});
 
