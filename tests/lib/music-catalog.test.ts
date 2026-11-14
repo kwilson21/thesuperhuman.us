@@ -204,3 +204,10 @@ it.each([
 		validateCatalog({ recordings: [track], releases: [], examples: [] }),
 	).toThrow();
 });
+
+it.each([null, "text", 42, []])(
+	"refuses a catalog that is not an object (%j)",
+	(input) => {
+		expect(() => validateCatalog(input)).toThrow();
+	},
+);

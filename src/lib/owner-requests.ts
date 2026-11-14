@@ -18,6 +18,7 @@ import {
 	type OwnerRequestKind,
 	type OwnerRequestRow,
 	type OwnerRequestStatus,
+	type RequestDetails,
 } from "./owner-model";
 
 export type NewOwnerRequest = {
@@ -29,7 +30,7 @@ export type NewOwnerRequest = {
 	email: string;
 	cityRegion?: string;
 	summary: string;
-	details?: Record<string, unknown>;
+	details?: RequestDetails;
 	submissionId?: string;
 };
 

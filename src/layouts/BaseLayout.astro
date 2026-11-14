@@ -7,20 +7,8 @@ import {
 	ogSceneFor,
 	type OgScene,
 } from "~/lib/og-media";
+import type { JsonValue } from "~/lib/json-value";
 import SiteNav from "~/components/SiteNav.astro";
-
-/** A JSON-LD value: JSON scalars, arrays and objects, as the pages write them. */
-type JsonLdValue =
-	| string
-	| number
-	| boolean
-	| null
-	| JsonLdValue[]
-	| JsonLdObject;
-
-interface JsonLdObject {
-	[key: string]: JsonLdValue;
-}
 
 interface Props {
 	title: string;
@@ -30,7 +18,8 @@ interface Props {
 	/** Forces a link-preview scene, for pages whose URL does not identify them (the 404 page). */
 	ogScene?: OgScene;
 	noindex?: boolean;
-	jsonLd?: JsonLdObject;
+	/** JSON-LD: the object the page writes, serialised into the document head. */
+	jsonLd?: { [key: string]: JsonValue };
 }
 
 const {
@@ -57,7 +46,7 @@ const preview = scene ? ogMedia(scene) : null;
 const ogImageUrl = new URL(preview?.image ?? ogImage!, canonical).toString();
 const ogVideoUrl = preview && new URL(preview.video, canonical).toString();
 
-function jsonLdString(data: JsonLdObject): string {
+function jsonLdString(data: { [key: string]: JsonValue }): string {
 	return JSON.stringify(data)
 		.replace(/</g, "\\u003c")
 		.replace(/>/g, "\\u003e")
