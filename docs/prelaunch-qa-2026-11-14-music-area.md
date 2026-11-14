@@ -4,11 +4,11 @@ Three things are gated: pull request #270 (test tooling for the conversion proof
 
 Date: November 14, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `e252a871` (review round 1 added one commit to A). Neither has a pull request number yet.
+Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `58a3f5b9` (review round 1 added one commit to A). Neither has a pull request number yet.
 Pull requests: #270 is merged as `f4c96c4c`.
 Target: production
 Reviewer: both branches were written by a Claude Sonnet 5.5 builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). One independent Claude review round ran (round 1, below); Greptile and Codex have not run and are not recorded here.
-Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `e252a871`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
+Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `58a3f5b9`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
 
 ## Scope
 
@@ -61,7 +61,7 @@ A defect in the two routes now writes one redacted log line through `logUnexpect
 - Finding, real and present on both branches: recording a playback made two separate database calls, the duplicate read (by event id) and the last-event read. Another request could store the same event between them; the first read missed it, the second showed its place taken, and the rule refused it as out of sequence (409) before any insert, so the retry never ran. A client retrying its own event got 409 instead of 200 duplicate. The Quint model read both facts in one step, so it could not see this.
 - Fix on A (`claude/effect-10-music-fixes`): the two reads are one D1 batch (one transaction, one snapshot), with the decision still in TypeScript. A failing route-level test (`tests/api/music-outages.test.ts`) and a new corpus case reproduced it first (409). The batch is right here: D1 runs a batch in one transaction, the golden harness records and fails it as one statement group, and a failure of either read still fails the request as before. Note: the last-event read now also runs when the id is already stored (a read only; no response or effect changes).
 - Fix on B: `readPlaybackFacts` in `src/server/music-store.ts` issues the same batch and the flow takes both facts from it.
-- Corpus: on A the music-event fixture changes in D1 statements only (68 cases neutral with D1 changes, the two reads becoming one batch), plus one added case, "another request stores the same event between the duplicate lookup and the last-event lookup" (200 `{"ok":true}`, nothing more stored). No other case changes its response or any other effect. `music-interest` is unchanged.
+- Corpus: on A the music-event fixture changes in D1 statements only (68 cases against the previous A tip `e252a871` (against `origin/main`: 62 neutral with D1 changes, and the 8 changed on purpose), the two reads becoming one batch), plus one added case, "another request stores the same event between the duplicate lookup and the last-event lookup" (200 `{"ok":true}`, nothing more stored). No other case changes its response or any other effect. `music-interest` is unchanged.
 - Model: `verification/music-playback.qnt` matches the code (one atomic read step) and says so; the new mutant `split-read` reads the two facts in separate steps and breaks `sameEventNeverConflicts`, which now also covers a delivery that read its own event as stored and still ended refused. The real design passes at the driver's 20,000 samples (and an ad hoc 100,000).
 
 ## Evidence and limits
@@ -74,17 +74,17 @@ Pull request #270 (as reported, not re-observed here):
 - Live pages answered 200.
 - UNVERIFIED: to be confirmed by the operator.
 
-Branch A at `e252a871` (on `origin/main` at `f4c96c4c`):
+Branch A at `58a3f5b9` (on `origin/main` at `f4c96c4c`):
 
 - `pnpm exec biome format .`: no fixes applied (742 files).
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 288 test files, 12,579 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 288 test files, 12,581 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
 - `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`; wall time 43.2 s (43.1 s on `origin/main`).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 53 problems, the same as `origin/main` (`no-module-mocking`: 18).
 - `pnpm run check`: `Result (768 files): 0 errors, 0 warnings, 17 hints`.
-- `pnpm run golden:neutral --all origin/main claude/effect-10-music-fixes`: NOT NEUTRAL, on purpose: `music-event` 108 identical, 8 not neutral, 1 added; `music-interest` 62 identical, 13 not neutral. Every one of the 21 cases is explained in the table below.
+- `pnpm run golden:neutral --all origin/main claude/effect-10-music-fixes`: NOT NEUTRAL, on purpose: `music-event` 46 identical, 62 neutral with D1 changes (the one-batch read), 8 not neutral, 2 added; `music-interest` 62 identical, 13 not neutral. Every one of the 21 cases is explained in the table below.
 
 Changed cases (from `pnpm run golden:diff`; status is the HTTP status; the body of an outage is `{"ok":false,"error":"Your request could not be saved. Please try again shortly."}` before and after):
 
@@ -99,17 +99,17 @@ Changed cases (from `pnpm run golden:diff`; status is the HTTP status; the body 
 | music-interest: the interest write fails and the alert is sent; the batch fails on the request insert; the batch fails on the audit insert; a failed write and Resend answers 400, answers 500, is unreachable, has no key, has no sender, has no owner address; a storage failure then a retry | 503 | 500 | A store failure; the alert, the allowance given back and every other effect are unchanged. |
 | music-interest: a failed write and the counter delete throws first | 503, no alert | 500, alert sent | A failed cleanup no longer hides the failure from the owner. |
 
-Branch B at `45c6dcce` (A's tip `e252a871` merged in, plus the conversion and review round 1; this record is committed after it):
+Branch B at `7804be94` (A's tip `58a3f5b9` merged in, plus the conversion and review round 1; this record is committed after it):
 
 - `pnpm exec biome format .`: no fixes applied (756 files).
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed; the bundle manifest is unchanged (no browser-reachable module changed; `music-catalog.ts` is server-only and `ReleaseInterest.astro` reads `MERCHANDISE` in its frontmatter).
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,679 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice: 292 test files, 12,681 tests passed, 1 skipped, both runs; `git status` unchanged by the runs.
 - `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`, with the new model; wall time 44.7 s (43.2 s on A).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm exec oxlint`: 51 problems (53 on A); `no-module-mocking` 16 (18 on A): the two `vi.mock` calls of `tests/api/music-demand.test.ts` are gone with the file, and no new finding is in the area.
 - `pnpm run check`: `Result (782 files): 0 errors, 0 warnings, 17 hints`.
-- `pnpm run golden:neutral --all e252a871 HEAD` (exit 0): `music-event` 111 identical, 6 neutral with D1 changes, 0 not neutral, 0 not comparable, 0 added, 0 removed, 0 renamed; `music-interest` 46 identical, 29 neutral with D1 changes, 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,015 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commit, and no case was added, removed or renamed in it.
+- `pnpm run golden:neutral --all 58a3f5b9 HEAD` (exit 0): `music-event` 112 identical, 6 neutral with D1 changes, 0 not neutral, 0 not comparable, 0 added, 0 removed, 0 renamed; `music-interest` 46 identical, 29 neutral with D1 changes, 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,016 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commit, and no case was added, removed or renamed in it.
 - Differential tests against the frozen Zod 3 schemas (`tests/fixtures/legacy-validators/music-demand.ts`, a sixth reference copy): the interest body and the event body, thousands of seeded inputs each, zero differences (values, error keys in order, every sentence).
 
 Limits: a defect answer is shown by forcing a throw in the clock and the id source (the services cannot be swapped from outside a route); no browser run of the release page form or player; the player's retry on a 5xx treats 500 as it treated 503 (read in `src/scripts/music-playback.ts`, not run); the interest form shows `result.error` for any non-400 status (read in `src/scripts/form-submission.ts`, not run). The Quint model is checked by random simulation, not by Apalache. The rate limit store has a small read-then-write window that this area does not change (see `src/lib/rate-limit.ts`).
@@ -151,7 +151,7 @@ Limits: a defect answer is shown by forcing a throw in the clock and the id sour
 - PASS, 7.1 Required checks: the local gates above for each branch.
 - UNVERIFIED, 7.2 Exact diff review on each pull request head and independent code and security review: not run.
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The trigger `music_events_archive_before_delete` is on `music_events`, a table neither route reads or writes, so the converted code relies on no trigger (issue #242 still tracks moving the five that write).
-- PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: A's tip `e252a871`).
+- PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: A's tip `58a3f5b9`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed. For #270 the operator reported "build succeeded, pages 200"; to be confirmed by the operator.
 - PASS, 7.6 Receipt and QA evidence for the local gates, with the four states reported separately (below).
 
