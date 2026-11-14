@@ -44,7 +44,10 @@ export { asFixture, sameRecord } from "./fixtures";
 
 export { signStripeWebhook } from "./stripe";
 
+export type { OptionalTrigger } from "./triggers";
+
 export {
+	CASE_TIMEOUT_MS,
 	defineCorpus,
 	generatedBody,
 	runCase,

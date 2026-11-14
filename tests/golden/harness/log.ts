@@ -5,9 +5,7 @@ import type { ByteRecord, Recorded } from "./plain";
 export type Phase = "request" | "background";
 
 /** What a statement or call gave back that a caller can see: how many rows, how many changes, or that it threw. */
-export type D1Outcome =
-	| { rows: number; changes: number | null }
-	| { threw: string };
+export type D1Outcome = { rows: number; changes: number } | { threw: string };
 
 export type D1Statement = {
 	sql: string;
@@ -35,6 +33,19 @@ export type EffectBody =
 	| {
 			kind: "interleave";
 			label: string;
+	  }
+	/**
+	 * Which statement an injected failure or an interleave hit: the operation, the table and whether it reads or writes,
+	 * never the SQL text, the pattern or `nth`, which a conversion legitimately edits. The hook fires before the statement
+	 * runs (an injected failure never runs it), so whether a write changed a row is not known here.
+	 */
+	| {
+			kind: "trigger-hit";
+			trigger: "failure" | "interleave";
+			/** The failure's message or the interleave's label. */
+			name: string;
+			db: string;
+			hits: { op: string; table: string | null; access: "read" | "write" }[];
 	  }
 	| {
 			kind: "r2";
@@ -74,7 +85,35 @@ export type EffectBody =
 	| { kind: "advance"; ms: number }
 	| { kind: "console"; level: "error" | "warn"; args: Recorded[] };
 
-export type Effect = EffectBody & { step: number; phase: Phase };
+/** The databases as they were at one moment (see digest.ts): one digest each. */
+export type DatabaseStates = { music: string; publication: string };
+
+/**
+ * The state of the databases when an outside effect happened, or when the response had been read: the two digests, and
+ * the names of the tables that committed row-changing writes had touched so far in the step (names only: no operation,
+ * no count). The digests cannot see a same-value UPDATE, or a row inserted and deleted again; the table set can, and it
+ * is the same for a statement rewritten as a DELETE and an INSERT of the same table.
+ */
+export type EffectState = DatabaseStates & { touched: string[] };
+
+export type Effect = EffectBody & {
+	step: number;
+	phase: Phase;
+	/**
+	 * Every effect that is not a D1 statement or a marker of the harness carries the digest of both databases as they were
+	 * when it happened: what existed when the email, the Stripe call, the R2 or KV operation, the AI call or the console
+	 * line went out.
+	 */
+	state?: EffectState;
+};
+
+export const UNSTATED = new Set([
+	"d1",
+	"d1-batch",
+	"interleave",
+	"trigger-hit",
+	"advance",
+]);
 
 /** The shared, ordered log. Every fake writes here; the runner sets the step and phase. */
 export class EffectLog {
@@ -83,10 +122,45 @@ export class EffectLog {
 	phase: Phase = "request";
 	private quiet = 0;
 
+	/** False while off-record work (sign-in, seeding, a hook) runs. */
+	get recording() {
+		return this.quiet === 0;
+	}
+
+	/** Answers the state of the databases now; set by the runner once they are open. */
+	probe: (() => DatabaseStates) | undefined;
+
+	/** Per step, the tables that committed row-changing writes have touched. */
+	private readonly written = new Map<number, Set<string>>();
+
+	/** The tables touched so far in the current step, by name. */
+	touched(): string[] {
+		return [...(this.written.get(this.step) ?? [])].sort();
+	}
+
+	/**
+	 * Notes tables whose rows changed in the current step. The D1 wrapper calls it as a statement runs (a batch when it
+	 * commits), so the set and the state digest describe the same instant, whatever order parallel calls settle in.
+	 */
+	touch(tables: readonly string[]) {
+		if (this.quiet > 0 || tables.length === 0) return;
+
+		const set = this.written.get(this.step) ?? new Set<string>();
+
+		for (const table of tables) set.add(table);
+
+		this.written.set(this.step, set);
+	}
+
 	push(body: EffectBody) {
 		if (this.quiet > 0) return;
 
-		this.entries.push({ ...body, step: this.step, phase: this.phase });
+		const entry: Effect = { ...body, step: this.step, phase: this.phase };
+
+		if (this.probe && !UNSTATED.has(body.kind))
+			entry.state = { ...this.probe(), touched: this.touched() };
+
+		this.entries.push(entry);
 	}
 
 	/** Runs `work` without recording, for setup that is not part of the case (sign-in, seeding). */

@@ -7,7 +7,8 @@
 //
 // The fixture files in tests/golden/fixtures are the answers of the routes as they were before the Effect conversion.
 // A test compares against them and never writes them. They are written only when UPDATE_GOLDEN=1, and a converted
-// route that differs from them is wrong: change the route, not the fixture.
+// route that differs from them is wrong: change the route, not the fixture. The one allowed re-record for a conversion
+// is a behaviour-neutral one that `pnpm run golden:neutral` passes (tests/golden/README.md).
 import type { APIContext } from "astro";
 import { vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
@@ -168,15 +169,24 @@ function fakeNamespace(
 	log: Log,
 	step: () => number,
 	store: Map<string, string | ArrayBuffer>,
+	fired: Set<string>,
 ) {
 	const fails = setup.fails ?? {};
+
+	const failIf = (op: "get" | "put" | "delete") => {
+		if (!fails[op]) return;
+
+		fired.add(`kv ${label} fails ${op}`);
+
+		throw new Error(`kv ${op} failed`);
+	};
 
 	return double<KVNamespace>({
 		// SAFETY: the routes call get with a key and, for the PDF, the "arrayBuffer" type; the fake answers the string or the bytes the store holds, which is what the overload they pick returns.
 		get: (async (key: string, type?: string) => {
 			log.push({ step: step(), kv: label, op: "get", key, type: type ?? null });
 
-			if (fails.get) throw new Error("kv get failed");
+			failIf("get");
 			const held = store.get(key);
 
 			if (held === undefined) return null;
@@ -200,13 +210,13 @@ function fakeNamespace(
 				options: options ?? null,
 			});
 
-			if (fails.put) throw new Error("kv put failed");
+			failIf("put");
 			store.set(key, value);
 		},
 		delete: async (key: string) => {
 			log.push({ step: step(), kv: label, op: "delete", key });
 
-			if (fails.delete) throw new Error("kv delete failed");
+			failIf("delete");
 			store.delete(key);
 		},
 	});
@@ -335,10 +345,19 @@ export async function record(
 		Object.entries(c.resumeStore?.seed ?? {}),
 	);
 
+	const fired = new Set<string>();
+
 	const namespaces = {
 		RATE_LIMIT: c.rateLimit?.missing
 			? undefined
-			: fakeNamespace("RATE_LIMIT", c.rateLimit ?? {}, log, step, rateStore),
+			: fakeNamespace(
+					"RATE_LIMIT",
+					c.rateLimit ?? {},
+					log,
+					step,
+					rateStore,
+					fired,
+				),
 		RESUME_STORE: c.resumeStore?.missing
 			? undefined
 			: fakeNamespace(
@@ -347,6 +366,7 @@ export async function record(
 					log,
 					step,
 					resumeStore,
+					fired,
 				),
 	};
 
@@ -374,6 +394,25 @@ export async function record(
 			answers.push({ outcome: "rejected" });
 		}
 	}
+
+	// A declared KV failure that never fired leaves a case recording the happy path under the name of an outage.
+	const unfired = (
+		[
+			["RATE_LIMIT", c.rateLimit?.fails],
+			["RESUME_STORE", c.resumeStore?.fails],
+		] as const
+	).flatMap(([label, declared]) =>
+		(["get", "put", "delete"] as const).flatMap((op) =>
+			declared?.[op] && !fired.has(`kv ${label} fails ${op}`)
+				? [`kv ${label} fails ${op}`]
+				: [],
+		),
+	);
+
+	if (unfired.length > 0)
+		throw new Error(
+			`golden recorder: case "${c.name}" declared triggers that did not fire: ${unfired.join("; ")}.`,
+		);
 
 	return { name: c.name, answers, effects: log };
 }

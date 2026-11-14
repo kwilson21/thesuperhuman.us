@@ -1,0 +1,81 @@
+name: Golden neutrality
+
+# tests/golden/README.md, "A conversion is neutral when". A pull request that carries the `conversion` label must prove that
+# it changed nothing visible: this job fails unless `golden:neutral --all` says NEUTRAL. Without the label it only reports
+# (a behaviour fix changes fixtures on purpose). A usage or read error fails the job either way.
+#
+# It is its own workflow, not a step of validate.yml, so that adding or removing a label re-runs only this job (a minute)
+# and never cancels or repeats the full validation, and `push` is untouched.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-neutrality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  neutrality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # An expression that yields exactly true or false. The label text itself is never put on a shell line.
+      CONVERSION: ${{ contains(github.event.pull_request.labels.*.name, 'conversion') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Two commits: on a pull request the checkout is the merge of the head into the base, so its first parent is the
+          # base branch tip and HEAD^1..HEAD is exactly what the pull request changes.
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Golden neutrality report
+        run: |
+          set +e
+          # A pull request must not judge itself with a tool it edited: when the base branch has the comparison scripts,
+          # run the base's copies (the tool and every local module it imports), extracted from HEAD^1.
+          tool_dir="$RUNNER_TEMP/base-tool"
+          mkdir -p "$tool_dir"
+          tool="scripts/golden-neutral.mjs"
+          copy="the pull request's copy (the base branch has no golden-neutral.mjs)"
+          if git cat-file -e HEAD^1:scripts/golden-neutral.mjs 2>/dev/null; then
+            for file in golden-neutral.mjs golden-diff.mjs ran-directly.mjs; do
+              git show "HEAD^1:scripts/$file" > "$tool_dir/$file" 2>/dev/null || rm -f "$tool_dir/$file"
+            done
+            tool="$tool_dir/golden-neutral.mjs"
+            copy="the base branch's copy, extracted from HEAD^1"
+          fi
+          echo "Comparison tool: $copy"
+          node "$tool" --all HEAD^1 HEAD > "$RUNNER_TEMP/neutral.txt" 2>&1
+          status=$?
+          {
+            echo "### Golden neutrality: base \`$(git rev-parse --short HEAD^1)\` against the merge result \`$(git rev-parse --short HEAD)\`"
+            echo
+            echo "Tool: $copy. Exit code $status (0 neutral, 1 not neutral or not comparable, 2 error). Label \`conversion\`: $CONVERSION."
+            echo
+            echo '```'
+            head -c 900000 "$RUNNER_TEMP/neutral.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/neutral.txt"
+          if [ "$status" -ge 2 ]; then exit "$status"; fi
+          # Exit 0 and 1 are the tool's own verdicts, and the tool always ends its output with a verdict line. A tool that
+          # crashed (a missing module, a syntax error) also exits 1: that is a failure of the job, labelled or not, never
+          # "not neutral". So the LAST non-empty line of the output must be a verdict line that agrees with the exit code.
+          last=$(grep -v '^[[:space:]]*$' "$RUNNER_TEMP/neutral.txt" | tail -n 1)
+          verdict=""
+          if [ "$status" -eq 0 ] && { [ "$last" = "golden:neutral: NEUTRAL" ] || printf '%s' "$last" | grep -Eq '^golden:neutral: identical, [0-9]+ cases$'; }; then verdict="$last"; fi
+          if [ "$status" -eq 1 ] && [ "$last" = "golden:neutral: NOT NEUTRAL" ]; then verdict="$last"; fi
+          if [ -z "$verdict" ]; then
+            echo "::error::The comparison tool ended without a verdict that matches its exit code ($status), so it did not run to completion."
+            exit 3
+          fi
+          if [ "$CONVERSION" = "true" ] && [ "$status" -ne 0 ]; then
+            echo "::error::This pull request has the conversion label, so every golden case must be neutral."
+            exit 1
+          fi

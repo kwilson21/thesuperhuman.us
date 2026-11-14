@@ -51,7 +51,12 @@ jobs:
       - name: Quint models keep their properties and their mutants fail
         run: pnpm run verify:quint:all
       - run: pnpm run check
+      # The golden harness checks itself on every run here: the cached database digests against full ones, and every recorded
+      # D1 change count against SQLite's total_changes() (tests/golden/README.md). It costs about 25 seconds.
       - run: pnpm test
+        env:
+          GOLDEN_VERIFY_DIGESTS: "1"
+          GOLDEN_VERIFY_COUNTS: "1"
       - run: pnpm run build
         env:
           PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}

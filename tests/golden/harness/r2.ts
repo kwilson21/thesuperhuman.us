@@ -6,6 +6,7 @@
 import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import type { EffectLog } from "./log";
+import type { Triggers } from "./triggers";
 import {
 	byteRecord,
 	concat,
@@ -174,6 +175,7 @@ export function recordingR2(
 	log: EffectLog,
 	now: () => Date,
 	nextId: () => string,
+	triggers: Triggers,
 ): RecordedR2 {
 	const store = new Map<string, Held>();
 	const fails = new Set(setup.fails ?? []);
@@ -225,8 +227,14 @@ export function recordingR2(
 	const note = (op: string, key: string | null, detail: Recorded) =>
 		log.push({ kind: "r2", bucket: label, op, key, detail });
 
+	for (const op of fails) triggers.declare(`r2 ${label} fails ${op}`);
+
 	const failIf = (op: string) => {
-		if (fails.has(op)) throw new Error(`r2 ${op} failed`);
+		if (!fails.has(op)) return;
+
+		triggers.see(`r2 ${label} fails ${op}`);
+
+		throw new Error(`r2 ${op} failed`);
 	};
 
 	const info = (key: string, held: Held) => ({

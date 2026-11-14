@@ -2,6 +2,7 @@
 // limits, ctx.waitUntil, a frozen clock, and the ordered effect log they all write to. Then the runner that sends a
 // case's steps through a route handler and records what came back.
 import type { APIContext } from "astro";
+import { createHash } from "node:crypto";
 import { afterAll, describe, it, vi } from "vitest";
 import { isText } from "~/lib/type-guards";
 import { double, partial } from "../../helpers/doubles";
@@ -21,13 +22,14 @@ import {
 } from "./d1";
 import { expectRecorded, settleFixture } from "./fixtures";
 import { recordingKv, type KvSetup } from "./kv";
-import { EffectLog, type Effect } from "./log";
+import { EffectLog, type Effect, type EffectState } from "./log";
 import {
 	byHost,
 	json,
 	recordingAi,
 	recordingFetch,
 	recordingRateLimit,
+	trackedResponder,
 	type AiAnswer,
 	type Responder,
 } from "./net";
@@ -39,6 +41,8 @@ import {
 	type Recorded,
 } from "./plain";
 import { recordingR2, type R2Setup } from "./r2";
+import { DatabaseDigester, type DatabaseDigest } from "./digest";
+import { Triggers, type MustNotFire, type OptionalTrigger } from "./triggers";
 
 export type Handler = (context: APIContext) => Response | Promise<Response>;
 
@@ -180,10 +184,39 @@ export type Case = {
 	readonly noContext?: boolean;
 	readonly interleave?: readonly Interleave[];
 	readonly failures?: readonly InjectedFailure[];
+	/**
+	 * Every declared trigger (a D1 failure or interleave, an R2 or KV `fails` entry, a `byHost` answer that throws, an AI
+	 * answer that throws or never answers) must fire as often as declared, or the case fails and names it. List here one
+	 * that may legitimately stay quiet: the text is the one the failure message prints, and the reason is required.
+	 */
+	readonly optionalTriggers?: readonly OptionalTrigger[];
+	/**
+	 * Declared triggers that must stay quiet: a control proving a statement or call is never reached. The case fails if one
+	 * fires (an `nth` trigger fires when its n-th match comes).
+	 */
+	readonly mustNotFire?: readonly MustNotFire[];
 	/** Runs once before the first step, off the record, to seed with code (raw SQL on the databases). */
 	readonly setup?: (world: World) => void | Promise<void>;
 	/** Record these tables' rows (and stores) after the last step. */
 	readonly final?: Dump;
+};
+
+/** The digest of every database, R2 and KV after a step (see digest.ts): a write to any table shows here. */
+export type StateDigest = {
+	music: string;
+	publication: string;
+	r2: string;
+	kv: string;
+	/** The databases, and the tables written so far, when the response had been read, before any background work ran. */
+	atResponse: EffectState;
+};
+
+/** The state at the end of a case: per-table digests of both databases, and the whole of R2 and KV. */
+export type FinalState = {
+	music: DatabaseDigest;
+	publication: DatabaseDigest;
+	r2: Recorded;
+	kv: { [name: string]: Recorded };
 };
 
 export type StepRecord = {
@@ -203,13 +236,17 @@ export type StepRecord = {
 		  }
 		| { outcome: "rejected" };
 	state: Recorded | null;
+	digest: StateDigest;
 };
 
 export type CaseRecord = {
 	name: string;
+	/** Fixture format. 4 adds the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. */
+	format: 4;
 	steps: StepRecord[];
 	effects: Effect[];
 	final: Recorded | null;
+	finalState: FinalState;
 };
 
 /** What a case can reach while it runs, in `setup`, `before` and `interleave` hooks. */
@@ -220,6 +257,9 @@ export type World = {
 	/** Move the clock. Recorded. */
 	advance(ms: number): void;
 };
+
+/** The time limit of every generated case: the slowest PDF cases take about 2 seconds alone, so 20 seconds tolerates a loaded machine without letting a hung case run for long. */
+export const CASE_TIMEOUT_MS = 20_000;
 
 type Pending = { id: number; promise: Promise<void> };
 
@@ -356,8 +396,19 @@ async function runOn(
 
 	if (c.publication?.seed) seed(publication, c.publication.seed);
 
-	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? []);
-	const r2 = recordingR2("AUDIO", c.r2 ?? {}, log, clock.now, clock.nextFakeId);
+	const triggers = new Triggers(() => log.recording);
+	const hooks = new SqlHooks(c.interleave ?? [], c.failures ?? [], triggers);
+	const musicDigest = new DatabaseDigester(music);
+	const publicationDigest = new DatabaseDigester(publication);
+
+	const r2 = recordingR2(
+		"AUDIO",
+		c.r2 ?? {},
+		log,
+		clock.now,
+		clock.nextFakeId,
+		triggers,
+	);
 
 	const kvNames: KvName[] = ["RATE_LIMIT", "RESUME_STORE", "OAUTH_KV"];
 
@@ -367,7 +418,9 @@ async function runOn(
 
 	const kvs = Object.fromEntries(
 		kvNames.flatMap((name) =>
-			bound(name) ? [[name, recordingKv(name, c.kv?.[name] ?? {}, log)]] : [],
+			bound(name)
+				? [[name, recordingKv(name, c.kv?.[name] ?? {}, log, triggers)]]
+				: [],
 		),
 	);
 
@@ -376,10 +429,16 @@ async function runOn(
 	for (const name of c.omit ?? []) delete env[name];
 
 	if (!c.music?.missing)
-		env.MUSIC_DB = recordingD1("MUSIC_DB", music, log, hooks);
+		env.MUSIC_DB = recordingD1("MUSIC_DB", music, log, hooks, musicDigest);
 
 	if (!c.publication?.missing)
-		env.PUBLICATION_DB = recordingD1("PUBLICATION_DB", publication, log, hooks);
+		env.PUBLICATION_DB = recordingD1(
+			"PUBLICATION_DB",
+			publication,
+			log,
+			hooks,
+			publicationDigest,
+		);
 
 	if (!c.r2?.missing) env.AUDIO = r2.binding;
 
@@ -389,7 +448,7 @@ async function runOn(
 
 	if (kvs.OAUTH_KV) env.OAUTH_KV = kvs.OAUTH_KV.binding;
 
-	if (c.ai) env.AI = recordingAi(c.ai, log);
+	if (c.ai) env.AI = recordingAi(c.ai, log, triggers);
 
 	for (const name of [
 		"BRIEF_SUGGEST_RATE_LIMIT",
@@ -400,9 +459,14 @@ async function runOn(
 		if (script) env[name] = recordingRateLimit(name, script, log);
 	}
 
-	let responder: Responder =
+	let responder: Responder = trackedResponder(
 		c.fetches ??
-		(() => ({ kind: "throws", message: "golden harness: no fetch scripted" }));
+			(() => ({
+				kind: "throws",
+				message: "golden harness: no fetch scripted",
+			})),
+		triggers,
+	);
 
 	vi.stubGlobal(
 		"fetch",
@@ -589,6 +653,28 @@ async function runOn(
 		return out;
 	};
 
+	const sha = (value: Recorded) =>
+		createHash("sha256").update(JSON.stringify(value)).digest("hex");
+
+	const kvStates = () =>
+		Object.fromEntries(
+			kvNames.map((name) => [name, kvs[name]?.state() ?? null]),
+		);
+
+	const databases = () => ({
+		music: musicDigest.current().sha256,
+		publication: publicationDigest.current().sha256,
+	});
+
+	log.probe = databases;
+
+	const digest = (atResponse: StateDigest["atResponse"]): StateDigest => ({
+		...databases(),
+		r2: sha(r2.snapshot()),
+		kv: sha(kvStates()),
+		atResponse,
+	});
+
 	const records: StepRecord[] = [];
 
 	const prior: Prior = {
@@ -678,6 +764,7 @@ async function runOn(
 		}
 
 		log.phase = "background";
+		const atResponse = { ...databases(), touched: log.touched() };
 		await drain();
 		log.phase = "request";
 
@@ -685,14 +772,29 @@ async function runOn(
 			request: { actor: actorLabel(actor), method, path, body: record },
 			answer,
 			state: stores(step.dump),
+			digest: digest(atResponse),
 		});
 	}
 
+	const unfired = triggers.problems(c.optionalTriggers, c.mustNotFire);
+
+	if (unfired.length > 0)
+		throw new Error(
+			`golden harness: case "${c.name}" declared triggers that did not fire, so it would record the happy path under a name that claims otherwise. ${unfired.join("; ")}.`,
+		);
+
 	return {
 		name: c.name,
+		format: 4,
 		steps: records,
 		effects: log.entries,
 		final: stores(c.final),
+		finalState: {
+			music: musicDigest.current(),
+			publication: publicationDigest.current(),
+			r2: r2.snapshot(),
+			kv: kvStates(),
+		},
 	};
 }
 
@@ -711,9 +813,13 @@ export function defineCorpus(
 		});
 
 		for (const c of cases)
-			it(c.name, async () => {
-				expectRecorded(area, await runCase(handler, c));
-			});
+			it(
+				c.name,
+				async () => {
+					expectRecorded(area, await runCase(handler, c));
+				},
+				CASE_TIMEOUT_MS,
+			);
 
 		afterAll(() => settleFixture(area, names));
 	});

@@ -1388,6 +1388,13 @@ const outages: Case[] = [
 		[post(pub({ expectedRevision: Number.MAX_SAFE_INTEGER }))],
 		{
 			failures: [{ on: /INSERT INTO publication_events/, message: "d1 down" }],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /INSERT INTO publication_events/",
+					reason:
+						"a control: the case claims the request never reaches the database, so this failure must stay unused",
+				},
+			],
 		},
 	),
 	feed(
@@ -1395,6 +1402,13 @@ const outages: Case[] = [
 		[post(pub({ version: 2 }))],
 		{
 			failures: [{ on: /INSERT INTO publication_events/, message: "d1 down" }],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /INSERT INTO publication_events/",
+					reason:
+						"a control: the case claims the request never reaches the database, so this failure must stay unused",
+				},
+			],
 		},
 	),
 ];

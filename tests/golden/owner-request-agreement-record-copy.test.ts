@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	MSA_ID,
@@ -19,8 +18,6 @@ import {
 	type Scene,
 } from "./areas/signing";
 import { asOwner, asVisitor, defineCorpus, rows, type Case } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "record-alternate-copy": the owner records that a
 // signed copy was handed over another way (the client or the contractor, by a method the owner types). One batch
