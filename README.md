@@ -272,7 +272,7 @@ Apply music migration `0020_software_offers.sql` before deploying code that uses
 
 Apply music migration `0021_software_projects.sql` after 0020 and before deploying code that uses software projects. This code requires 0021. Deploying it before the migration breaks studio sign-in (audio too) and the owner Today page. It stores project term snapshots, private updates, messages and audit records. Do not edit previously applied migrations.
 
-Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It pins invoice records to requests and immutable offers, including deposits before project start, and preserves existing software audit ids and notes. It has not been applied in production. Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
+Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It pins invoice records to requests and immutable offers, including deposits before project start, and preserves existing software audit ids and notes. It was applied in production (the migration ledger, listed read-only on 2026-11-13, shows no earlier migration pending). Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
 
 ### Software agreement signing
 
@@ -298,8 +298,9 @@ selections or the extended review-window field. It snapshots the planned items
 included in each shared delivery while acceptance remains tied to the complete
 agreed milestone. It also stores executed-agreement review windows longer than
 30 business days without changing the earlier column constraint. Both
-migrations remain pending production approval; do not deploy this code before
-the required schema is applied.
+migrations are applied in production (the migration ledger, listed read-only on
+2026-11-13, shows only 0027 pending); do not deploy code that reads a migration's
+schema before that migration is applied.
 
 ### Agreement template labels
 
@@ -307,7 +308,7 @@ Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_sug
 
 ### Sign-in codes migration
 
-Apply music migration `0027_audio_client_signin_codes.sql` after `0026_agreement_template_labels.sql` and **before** deploying code that reads it; deploying first breaks studio sign-in (every code request and sign-in answers 503). Nothing in this repository applies migrations (no deploy script, no workflow step); the owner applies them by hand and then deploys (`wrangler.jsonc` names `migrations/music` as the migrations directory for `MUSIC_DB`). How the Workers Builds deploy is configured is not in the repository. The command is `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` to see what is pending, then `pnpm exec wrangler d1 migrations apply MUSIC_DB --remote` (this README names no `MUSIC_DB` command for the earlier migrations; these are the same Wrangler commands `docs/publication-deployment.md` uses for `PUBLICATION_DB`). `apply` runs every pending migration in order, so read the `list` output first: if 0022 to 0024 (described above as not yet applied in production) are still pending, they are applied in the same run. The migration only adds a table and leaves `audio_client_codes` alone, so the code running before the deploy keeps working on the migrated database. Codes pending when the new code goes live stop working (they expire within 10 minutes anyway); the client asks for a new one. Sign-ins in progress are not affected: sessions are a separate table. After the deploy is live, a later migration (0028, not in this change) drops `audio_client_codes`, which sign-in no longer reads. It is not part of 0027 because applying both together would break the code still running; until then retention, owner health and access closure still clear it, and a database without it is fine.
+Apply music migration `0027_audio_client_signin_codes.sql` after `0026_agreement_template_labels.sql` and **before** deploying code that reads it; deploying first breaks studio sign-in (every code request and sign-in answers 503). Nothing in this repository applies migrations (no deploy script, no workflow step); the owner applies them by hand and then deploys (`wrangler.jsonc` names `migrations/music` as the migrations directory for `MUSIC_DB`). How the Workers Builds deploy is configured is not in the repository. The command is `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` to see what is pending, then `pnpm exec wrangler d1 migrations apply MUSIC_DB --remote` (this README names no `MUSIC_DB` command for the earlier migrations; these are the same Wrangler commands `docs/publication-deployment.md` uses for `PUBLICATION_DB`). `apply` runs every pending migration in order, so read the `list` output first. The production ledger, listed read-only on 2026-11-13, showed exactly one pending migration, `0027_audio_client_signin_codes.sql`; the earlier warning that 0022 to 0024 might still be pending is out of date.
 
 A code request sets a pending sign-in cookie (HttpOnly, SameSite=Lax, 10 minutes; over https `__Host-studio_pending` with Path `/` and Secure, on plain-http localhost `studio_pending` with Path `/api/studio`) and a code is accepted only with that cookie, so it must be entered in the browser that asked for it. Each request is its own row (keyed by a hash of the cookie value) with its own five attempts; at most six live codes exist per address; expired rows are deleted when a new code is issued; closing a client's access deletes every code for the address.
 

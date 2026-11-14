@@ -342,6 +342,20 @@ export default {
 			cookie,
 		});
 		await shot("Software sign-in", "/studio/sign-in?for=software", "signin");
+		// The step after a code is requested needs Turnstile and an emailed code, so it is shown by revealing the form that the
+		// page script shows once a code has been sent. Fictional, local data only; nothing is sent.
+		await shot(
+			"Software sign-in, check your email step (the form shown as after a code is sent)",
+			"/studio/sign-in?for=software",
+			"signin-check-email",
+			{
+				prepare: async (page) => {
+					await page.evaluate(() => {
+						document.querySelector("#studio-code-verify").hidden = false;
+					});
+				},
+			},
+		);
 		await shot(
 			"Unknown project unavailable",
 			"/studio/software/unavailable",

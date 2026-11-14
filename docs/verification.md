@@ -180,9 +180,9 @@ stateDiagram-v2
 
 A browser with no cookie, or a cookie that matches no row, is not looked up at all: nothing is charged and nothing changes. Another browser asking for a code adds its own row and leaves the others alone.
 
-**State.** The rows (owner browser, delivered or not, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the requests in flight (each a write, then a response the browser stores later), the time, and the emails allowance window. Browsers: the client's own (0), the client's other browser that can read the inbox but holds no cookie (1), and three strangers who know the address and never learn a code (2 to 4). Numbers are scaled from the code: 3 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 4 ticks (10 minutes), 3 live rows (6).
+**State.** The rows (owner browser, the address each code is for, which code it holds, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the requests and entries in progress (each with the facts it read), whether each address's project is open, the time, and the emails allowance window. Two addresses, each with a project that is open to begin with and that can be closed at any time. Browsers: the client's own (0), the client's other browser that can read the inbox but holds no cookie (1), and two strangers who know the address and never learn a code (2 and 3). Numbers are scaled from the code: 2 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 4 ticks (10 minutes), 2 live rows per address (6). The allowance is one count for both addresses, and the email arrives the moment a code is issued.
 
-**Actions.** Send a request (the server's write), receive a response (the browser stores the cookie value it carries; up to three requests are in flight, so responses can arrive in any order), deliver a code, guess (with the right code only if the browser can read the inbox and the email was delivered), let a tick of time pass, and sweep expired rows.
+**Actions.** A code request is three steps: read the facts (`sendRead`), a guarded write that may find the facts changed (`sendWrite`), and the browser storing the cookie value the response carries (`receive`). Entering a code is two: read the browser's row (`guessRead`), then the guarded writes (`guessWrite`). Up to three requests and two entries are in progress at once, any other step can happen between a read and its write (including closing a project), a response can arrive in any order, and time passes (`tick`) and expired rows are swept (`sweep`). A browser can send the right code only if it can read the inbox (browsers 0 and 1); the strangers always send a wrong code.
 
 **Properties** (all must hold in every state):
 1. `clientNeverLockedOut`: a client who asked for a code and enters it correctly from the same browser while it is valid is signed in unless that browser used up its own attempts, whatever others do (others asking for codes up to the allowance included). As states: the client's current row is still there, with attempts left and its code unchanged, and no correct entry of it was refused.
@@ -191,8 +191,11 @@ A browser with no cookie, or a cookie that matches no row, is not looked up at a
 4. `attemptsBounded`: the guesses that can ever be compared with one code are bounded by the limit.
 5. `emailsBounded`: emails asked for an address in one window are bounded.
 6. `deadCodeNeverSignsIn`: a used or expired code never signs anyone in.
-7. `liveRowsBounded`: live rows for the address are bounded.
+7. `liveRowsBounded`: live rows for each address are bounded, also when requests overlap.
 8. `cookieOpensEmailedCode`: if a code was emailed for a request from a browser and no later request from it issued another, then once every response to that browser has arrived its stored cookie names that code, whatever order the responses arrive in. Exempt: a browser that sent two cookie-less requests at once.
+9. `otherAddressKillsEarlier`: asking for a different address always deletes the browser's earlier code, whatever the answer for that address is (it has a project, it has none, it is full, the write lost a race).
+10. `chargeOnlyTheCodeRead`: an attempt is counted on, and a sign-in accepted for, only the code the entry read, never a code issued after it.
+11. `noAuditForClosedProject`: an audit row is never written for a project that has been closed.
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -207,23 +210,31 @@ A browser with no cookie, or a cookie that matches no row, is not looked up at a
 | `IgnoreExpiry` | An expired code still signs in | `deadCodeNeverSignsIn` |
 | `ReuseUsed` | A used code signs in again | `deadCodeNeverSignsIn` |
 | `NoRowCap` | The live-row cap is not enforced | `liveRowsBounded` |
+| `KeepOnRefusal` | A request for another address deletes the browser's earlier code only when it issues a new one, so the answer shows whether that address has a project | `otherAddressKillsEarlier` |
+| `ChargeAnyVersion` | The attempt is counted on whatever code the row holds now, so a code issued after the entry was read is charged | `chargeOnlyTheCodeRead` |
+| `NoOpenGuard` | The write does not re-check that a project is still open, so a code and its audit row are written for a project closed after the facts were read | `noAuditForClosedProject` |
+| `AcceptNoOpenGuard` | The sign-in does not re-check that a project is still open | `noAuditForClosedProject` |
+| `NoCapGuard` | The write does not re-check the address's live codes, only the count read earlier | `liveRowsBounded` |
 | `FreshCookie` | Each response carries a fresh cookie value and a refused one an unrelated value (the code before this change): a later response, a refused one included, can overwrite the cookie of the code an earlier request of the browser emailed | `cookieOpensEmailedCode` |
 
-**How the code is arranged.** Nothing decides in SQL: the facts are read, a pure function decides (`decideIssue` and `decideComplete` in `src/lib/signin-code-rules.ts`, unit-tested over every combination in `tests/lib/signin-code-rules.test.ts`), and the write keeps only guards that re-check the facts the decision relied on. They are plain functions in `src/lib`, not `rule()` in `src/server/rules/`, because `src/lib` may not load from `src/server` and these functions are called from the routes and many tests; they are written as the same named conditions so they convert unchanged when the studio area is converted. Every statement of the sign-in code path:
+**How the code is arranged.** Nothing decides in SQL: the facts are read, a pure function decides (`decideIssue`, `decideComplete` and `decideDiscard` in `src/lib/signin-code-rules.ts`, unit-tested over every combination in `tests/lib/signin-code-rules.test.ts`), and the write keeps only statements that re-check, at write time, a fact the decision relied on, or that write values the decision computed. Which codes are live (unused, expiring after now), whether a project is open and whether there is room are all decided in those functions from rows that were read. They are plain functions in `src/lib`, not `rule()` in `src/server/rules/`, because `src/lib` may not load from `src/server` and these functions are called from the routes and many tests; they are written as the same named conditions so they convert unchanged when the studio area is converted. A statement that repeats a predicate such as "unused and unexpired" is a guard: it exists to notice that a fact changed since it was read, and the decision was already made in TypeScript.
+
+Issuing a code makes the same three round trips with the same statements, whatever the address and the answer, and entering a code makes the same two with the same statements, whatever the state of the code; a statement that does not apply is bound to match no row. A lost race on the code route is not retried (a retry would add round trips only for an address with a project) and is answered like a refusal. Every statement of the sign-in code path:
 
 | Statement | Class |
 |---|---|
-| Allowance upsert and stale-window delete (`reserveStudioAllowance`, twice per request) | write (a counter; the limit is compared in TypeScript) |
-| The address's projects; its other live codes (one batch, the same for every address) | read |
-| Delete of expired codes | write (clean-up by age) |
-| `SELECT CASE WHEN <a project is open> AND <other live codes below the cap> ... json_extract` | guard (re-checks the two facts `decideIssue` used; a failed guard is a lost race, read and decided again, three tries, then no code is issued) |
-| Delete of the browser's code row; insert of the new row; audit inserts | write (values only) |
-| The browser's code row; the address's projects (entering a code) | read |
-| `UPDATE ... SET attempts=attempts+1 WHERE <unused, unexpired, under the limit>` | guarded write (the same facts `decideComplete` used) |
-| `UPDATE ... SET used_at ... WHERE <unused, unexpired, stored hash as read, the attempt landed, a project open>` | guarded write |
-| Session insert and signed-in audit inserts, each conditional on the session existing | guarded write |
-| Discard of an undelivered code: the row read, the guard, audit inserts, the delete | read, guard, write, guarded write |
-| Decisions in SQL | none |
+| Allowance upsert and stale-window delete (`reserveStudioAllowance`, twice per request) | write of a computed value (a counter; the limit is compared in TypeScript) |
+| Issue, round trip 1: the address's projects; the address's code rows and the browser's own row | read |
+| Issue, round trip 2: delete of expired codes; delete of the browser's earlier code for another address (the address read, or none) | write (clean-up by age; a delete of the row `decideIssue` named, guarded by its address) |
+| Issue, round trip 3: `SELECT CASE WHEN ?=0 OR (<a project is open> AND <other live codes below the cap>) ... json_extract` | guard re-checking the two facts `decideIssue` used (the flag is the decision) |
+| Issue, round trip 3: delete of the browser's own row; insert of the new row; audit insert over the project ids `decideIssue` named | write of computed values, each bound to do nothing unless `decideIssue` said to issue; the audit insert is guarded by the project still being open |
+| Enter, round trip 1: the browser's code row; the address's projects | read |
+| Enter, round trip 2: `UPDATE ... SET attempts=attempts+1 WHERE <the decision to count> AND <the stored hash read> AND <unused, unexpired, under the limit>` | guarded write (re-checks the facts `decideComplete` used and that the code was not replaced) |
+| Enter, round trip 2: `UPDATE ... SET used_at ... WHERE <the decision to accept> AND <the stored hash read> AND <unused, unexpired> AND <the attempt landed> AND <a project is open>` | guarded write |
+| Enter, round trip 2: session insert (only if the code was accepted); signed-in audit insert (only if the session exists, for projects still open) | guarded write |
+| Discard of an undelivered code: the code row and the projects | read |
+| Discard: guard that the code is still the unused one read; audit insert for projects still open; delete of that code | guard, guarded write, guarded write |
+| Decisions in SQL | none: every `WHERE` or `CASE` above either carries a decision made in TypeScript (a bound flag, a stored hash, an address) or repeats a fact the decision used so that a change since the read is noticed |
 
 **Choices the model records.** A browser that sent its cookie gets that same value back whether or not a code was issued, and its code is issued under that value (an earlier code is replaced in place): a refused or lost request cannot move the cookie away from an emailed code, and the answer does not depend on whether the address has a project. A browser with no cookie gets a fresh random value. That leaves one case the model exempts: a browser with no cookie that sends two requests at once, where nothing ties its two responses together; the worst case is that it asks again. A full address refuses the new request (it does not drop another browser's code), because dropping the oldest breaks property 1 (`EvictOldest`). The model's cap is 3 against an allowance of 2 per window so a random search can reach it; the code's cap is 6 (two windows of the allowance of 3).
 
@@ -234,6 +245,7 @@ Limits that remain, stated so they are not mistaken for properties:
 - **Cookie scope.** Over https the pending cookie is `__Host-studio_pending` (Secure, `Path=/`, no `Domain`), so a sibling subdomain cannot plant or shadow it; the plain name on `Path=/api/studio` is ignored over https. Sending it on every path for its ten-minute life is harmless: it is HttpOnly, random, useless without the matching code, and only the sign-in routes read it. Plain-http localhost cannot hold a `__Host-` cookie and keeps the plain name on `Path=/api/studio`. A browser that sent a cookie gets the same value back, so the value is not renewed on every request; over https the `__Host-` prefix means only this origin can set it, so it cannot be fixed on a browser in advance. Only on plain-http localhost could another party set it.
 - **Cookies blocked.** A browser that blocks cookies never holds the pending cookie and gets the refusal sentence that tells it to enter the code in the browser where it asked for it.
 - **Two tabs.** Two code requests from one browser at once each get a code and an email and the later cookie wins; the email allowance bounds it.
+- **Timing.** Issuing and entering a code make the same round trips with the same statements for every address and code state, so the number of database calls does not show whether an address has a project or what state its code is in. The work inside a statement still depends on the rows it touches, and the email is sent after the response, so response time is not claimed to be constant.
 - **Retired table.** `audio_client_codes` is no longer read or written by sign-in. Until a later migration drops it, retention, owner health and access closure still clear it (`tests/architecture/retired-sign-in-codes.test.ts` keeps the application from using it for anything else).
 
 ## The discount-offers model
