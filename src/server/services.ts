@@ -278,19 +278,30 @@ export const liveTurnstile = (secret: string) =>
 	});
 
 // The owner alert: an urgent email that a valid visitor request could not be stored (src/lib/owner-alerts.ts). It says nothing
-// of the visitor. The alert is best effort: it answers whether Resend took it, and no caller stops on the answer.
+// of the visitor. The alert is best effort: a caller that cannot send it carries on with what it was doing.
+
+/** The alert could not be sent: Resend refused it, was not asked (no key or address), or the call failed. */
+export class OwnerAlertFailed extends Data.TaggedError("OwnerAlertFailed") {}
 
 export class OwnerAlert extends Context.Service<
 	OwnerAlert,
-	{ readonly send: (incident: OwnerIncident) => Effect.Effect<void> }
+	{
+		readonly send: (
+			incident: OwnerIncident,
+		) => Effect.Effect<void, OwnerAlertFailed>;
+	}
 >()("site/OwnerAlert") {}
 
 /** The owner alert through Resend, with the keys and addresses the request's env gives. */
 export const liveOwnerAlert = (env: Env) =>
 	Context.make(OwnerAlert, {
 		send: (incident) =>
-			// sendUrgentOwnerAlert answers every failure as false, so a rejection here would be a bug: a defect is intended, as the old route let it escape.
-			Effect.promise(() => sendUrgentOwnerAlert(env, incident)).pipe(
-				Effect.asVoid,
+			Effect.tryPromise({
+				try: () => sendUrgentOwnerAlert(env, incident),
+				catch: () => new OwnerAlertFailed(),
+			}).pipe(
+				Effect.flatMap((sent) =>
+					sent ? Effect.void : Effect.fail(new OwnerAlertFailed()),
+				),
 			),
 	});

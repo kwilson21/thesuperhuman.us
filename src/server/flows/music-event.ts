@@ -6,7 +6,6 @@
 // It builds no response text; the route maps each named failure.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import { decideAndSave } from "../guarded-save";
 import {
 	findCampaignTag,
@@ -39,10 +38,6 @@ export type PlaybackReport = {
 	readonly now: () => Date;
 };
 
-/** A rule that refuses nothing and has something to do always answers a write. */
-const always = <W>(answer: Effect.Effect<Option.Option<W>>) =>
-	Effect.map(answer, Option.getOrThrow);
-
 export const recordPlayback = (report: PlaybackReport) =>
 	Effect.gen(function* () {
 		const { input, ip, visitor } = report;
@@ -65,11 +60,12 @@ export const recordPlayback = (report: PlaybackReport) =>
 				? yield* findCampaignTag({ campaignId, channel, creative })
 				: null;
 
-		const tag = Option.getOrNull(
-			yield* tagPlayback.decide({ campaignId, channel, creative }, stored),
+		const tag = yield* tagPlayback.decide(
+			{ campaignId, channel, creative },
+			stored,
 		);
 
-		const metadata = yield* always(classifyVisitor.decide(visitor, {}));
+		const metadata = yield* classifyVisitor.decide(visitor, {});
 		const now = report.now();
 
 		return yield* decideAndSave({

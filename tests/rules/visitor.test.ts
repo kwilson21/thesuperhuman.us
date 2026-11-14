@@ -1,6 +1,7 @@
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import { type Visitor, classifyVisitor } from "../../src/server/rules/visitor";
-import { answerOf } from "../helpers/rule-answers";
+import { write } from "../helpers/rule-answers";
 
 // The visitor rule as stories: Cloudflare's verdict, the user agent and the location, and what the playback table keeps.
 
@@ -13,7 +14,7 @@ const person: Visitor = {
 };
 
 const kept = (over: Partial<Visitor>) =>
-	answerOf(classifyVisitor.decide({ ...person, ...over }, {}));
+	write(Effect.runSync(classifyVisitor.decide({ ...person, ...over }, {})));
 
 describe("who played", () => {
 	it("is a person with a browser's user agent and no location", () => {

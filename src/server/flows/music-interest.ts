@@ -6,7 +6,6 @@
 // response text; each refusal carries the sentence the form shows.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import { saveInterest } from "../music-store";
 import type { InterestInput } from "../music-input";
 import { recordInterest } from "../rules/music-interest";
@@ -52,10 +51,7 @@ export const submitInterest = (submission: InterestSubmission) =>
 		if (!(yield* countRequest(ip, "rl:music-interest:")))
 			return yield* Effect.fail(new TooManyInterests());
 
-		// A rule that refuses nothing and has something to do always answers a write.
-		const write = yield* recordInterest
-			.decide(input, {})
-			.pipe(Effect.map(Option.getOrThrow));
+		const write = yield* recordInterest.decide(input, {});
 
 		const stored = now().toISOString();
 		const requestIds = write.requests.map(() => `music-${newId()}`);
@@ -68,13 +64,16 @@ export const submitInterest = (submission: InterestSubmission) =>
 
 					const alert = yield* OwnerAlert;
 
-					yield* alert.send({
-						category: "request-storage",
-						route: "/api/music-interest",
-						requestId: newId(),
-						code: "d1-write-failed",
-						occurredAt: now().toISOString(),
-					});
+					// The alert is best effort: when it cannot be sent the store failure is still what the route answers.
+					yield* alert
+						.send({
+							category: "request-storage",
+							route: "/api/music-interest",
+							requestId: newId(),
+							code: "d1-write-failed",
+							occurredAt: now().toISOString(),
+						})
+						.pipe(Effect.ignore);
 				}),
 			),
 		);

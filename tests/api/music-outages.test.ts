@@ -497,3 +497,52 @@ describe("a campaign that ends between the lookup and the insert", () => {
 		]);
 	});
 });
+
+describe("a defect in a converted route answers the fixed sentence", () => {
+	const logged = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+	afterEach(() => vi.restoreAllMocks());
+
+	it("music-event: a clock that throws", async () => {
+		const log = logged();
+		const { env } = world();
+		const request = context("/api/music-event", start, env);
+
+		vi.stubGlobal(
+			"Date",
+			class {
+				constructor() {
+					throw new Error("clock down");
+				}
+			},
+		);
+
+		const response = await event(request).finally(() => vi.unstubAllGlobals());
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(String(log.mock.calls[0][0])).toContain("/api/music-event");
+	});
+
+	it("music-interest: an id source that throws, with the visitor's address and email kept out of the log", async () => {
+		const log = logged();
+		const { env } = world();
+
+		vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
+			throw new Error("entropy down for fan@example.com");
+		});
+
+		const response = await want(wish, env);
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });
+		expect(log).toHaveBeenCalledTimes(1);
+
+		const text = log.mock.calls[0].map(String).join(" ");
+
+		expect(text).toContain("/api/music-interest");
+		expect(text).not.toContain("fan@example.com");
+		expect(text).not.toContain("203.0.113.7");
+	});
+});

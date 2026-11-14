@@ -2,7 +2,7 @@
 // crawler, spider, slurp or link preview is automated, and a location part is kept only when it is plain text of at most
 // 80 characters. It decides from what the edge read of the request (src/server/music-input.ts `readVisitor`).
 import * as Predicate from "effect/Predicate";
-import { rule } from "../terms";
+import { alwaysWrites } from "../terms";
 
 /** What the edge read of one request: Cloudflare's verdict on the client, the user agent, and the location it gave. */
 export type Visitor = {
@@ -36,8 +36,8 @@ function locationPart(value: string | undefined) {
 		: "";
 }
 
-// Every playback has a visitor to record, so the rule names no nothing-to-do term and refuses nothing.
-export const classifyVisitor = rule({
+// Every playback has a visitor to record, so it is an `alwaysWrites` rule (no nothing-to-do term) and refuses nothing.
+export const classifyVisitor = alwaysWrites({
 	name: "Classify a playback's visitor",
 	given: (request: Visitor, _facts: Record<string, never>) => request,
 	refusals: [],

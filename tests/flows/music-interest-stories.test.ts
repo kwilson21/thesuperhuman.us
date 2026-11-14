@@ -6,6 +6,7 @@ import type { InterestInput } from "../../src/server/music-input";
 import {
 	MusicDb,
 	OwnerAlert,
+	OwnerAlertFailed,
 	RateLimit,
 	Turnstile,
 	TurnstileFailed,
@@ -40,7 +41,11 @@ type Told = { alerts: OwnerIncident[]; ids: number };
 const send = async (
 	world: ReturnType<typeof musicWorld>,
 	input: InterestInput,
-	options: { captcha?: "pass" | "fail"; kv?: ReturnType<typeof fakeKv> } = {},
+	options: {
+		captcha?: "pass" | "fail";
+		kv?: ReturnType<typeof fakeKv>;
+		alertFails?: boolean;
+	} = {},
 ) => {
 	const told: Told = { alerts: [], ids: 0 };
 	const round = (rounds.get(world) ?? 0) + 1;
@@ -65,9 +70,11 @@ const send = async (
 					}),
 					Context.add(OwnerAlert, {
 						send: (incident: OwnerIncident) =>
-							Effect.sync(() => {
-								told.alerts.push(incident);
-							}),
+							options.alertFails
+								? Effect.fail(new OwnerAlertFailed())
+								: Effect.sync(() => {
+										told.alerts.push(incident);
+									}),
 					}),
 				),
 			),
@@ -228,6 +235,15 @@ describe("a storage failure", () => {
 		expect(answer).toEqual(refuseWith("MusicStoreFailed", {}));
 		expect(told.alerts).toHaveLength(1);
 		expect(world.counts.has(COUNTER)).toBe(true);
+	});
+
+	it("still fails by the store's name when the alert cannot be sent", async () => {
+		const world = musicWorld(failing());
+		const { answer, told } = await send(world, said, { alertFails: true });
+
+		expect(answer).toEqual(refuseWith("MusicStoreFailed", {}));
+		expect(told.alerts).toEqual([]);
+		expect(world.counts.has(COUNTER)).toBe(false);
 	});
 
 	it("leaves no half-stored interest when a later statement of the batch fails", async () => {

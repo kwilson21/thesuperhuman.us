@@ -1,7 +1,8 @@
+import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import type { InterestInput } from "../../src/server/music-input";
 import { recordInterest } from "../../src/server/rules/music-interest";
-import { answerOf } from "../helpers/rule-answers";
+import { write } from "../helpers/rule-answers";
 
 // The interest rule as stories: what a listener said, and the standing interest and owner requests that opens.
 
@@ -17,7 +18,7 @@ const said: InterestInput = {
 };
 
 const saved = (over: Partial<InterestInput>) =>
-	answerOf(recordInterest.decide({ ...said, ...over }, {}));
+	write(Effect.runSync(recordInterest.decide({ ...said, ...over }, {})));
 
 describe("what an interest opens", () => {
 	it("a song opens a purchase request with no details", () => {

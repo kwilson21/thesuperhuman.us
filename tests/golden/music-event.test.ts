@@ -14,7 +14,7 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 // listen30, complete, replay). The route validates the body, checks the release and recording against the real catalog
 // (src/content: release "old-news-single" with recording "old-news-recording", 160 seconds, audio and video), limits the
 // address twice, resolves the campaign tag, classifies the visitor and stores the event. Playback evidence is checked
-// in saveEvent (src/lib/music-demand.ts): the sequence, the accumulated seconds and the server's own clock.
+// by judgePlayback (src/server/rules/playback.ts): the sequence, the accumulated seconds and the server's own clock.
 //
 // Every response branch, and the cases that reach it:
 //
@@ -30,12 +30,12 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                                       the release does not list, and a video event for a recording with no video. The
 //                                       catalog has one recording, which has a video, so neither is reachable here.)
 //   503 "could not be saved"            no MUSIC_DB; no RATE_LIMIT
-//   500 "could not be saved"            KV read or write throws; a database error in any statement of saveEvent
+//   500 "could not be saved"            KV read or write throws; a database error in any statement of the playback flow
 //                                       (duplicate lookup, last-event lookup, insert, campaign lookup). An unexpected
 //                                       failure, never the error's own text.
 //   429 { ok: false }                   the all-events counter (240 a window), the per-event counter (60 a window),
 //                                       counts just below the limits, a count that is not a number
-//   409 { ok: false }  PlaybackSequenceError
+//   409 { ok: false }  a playback refusal (src/server/rules/playback.ts)
 //                                       an event id reused by another session, playthrough or sequence; a start or replay
 //                                       that is not the first, not sequence 1 or not at 0 seconds; a progress, listen30
 //                                       or complete with no earlier event, a sequence gap or repeat, seconds going back;

@@ -64,3 +64,14 @@ export async function musicRequest(
 		return Response.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
 	}
 }
+
+/** The sentence a listener is shown when what they sent could not be stored. */
+const NOT_SAVED = "Your request could not be saved. Please try again shortly.";
+
+/** A binding or secret this deployment does not have: a deliberate 503. */
+export const musicUnavailable = () =>
+	Response.json({ ok: false, error: NOT_SAVED }, { status: 503 });
+
+/** A store that failed unexpectedly, or a defect: the same sentence, and 500 because nothing is known to be unavailable. */
+export const musicFailed = () =>
+	Response.json({ ok: false, error: NOT_SAVED }, { status: 500 });

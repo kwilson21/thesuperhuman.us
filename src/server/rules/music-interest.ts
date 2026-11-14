@@ -4,7 +4,7 @@
 // details. Ids and the time are inputs. Nothing here reads a store: a listener's earlier interest is replaced, not
 // consulted, so no fact is read first and the save's only guard is the table's primary key (release and email), which
 // makes a second submission replace the first.
-import { rule } from "../terms";
+import { alwaysWrites } from "../terms";
 import type { InterestInput } from "../music-input";
 
 /** One thing the owner has to read: what the listener wants. */
@@ -30,9 +30,9 @@ export type InterestWrite = {
 /** The consent text the listener agreed to. A new text is a new version. */
 export const CONSENT_VERSION = "availability-v1";
 
-// Every submission is stored, so the rule names no nothing-to-do term, and it refuses nothing: the edge has already
+// Every submission is stored, so it is an `alwaysWrites` rule (no nothing-to-do term), and it refuses nothing: the edge has already
 // refused what the form must not send.
-export const recordInterest = rule({
+export const recordInterest = alwaysWrites({
 	name: "Record a listener's interest in a release",
 	given: (request: InterestInput, _facts: Record<string, never>) => ({
 		...request,

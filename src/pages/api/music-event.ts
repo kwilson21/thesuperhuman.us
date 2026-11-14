@@ -1,14 +1,13 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { loadMusicCatalog } from "~/lib/music-content";
-import { musicRequest } from "~/lib/music-request";
-import { recordPlayback } from "~/server/flows/music-event";
 import {
 	musicFailed,
+	musicRequest,
 	musicUnavailable,
-	readEventInput,
-	readVisitor,
-} from "~/server/music-input";
+} from "~/lib/music-request";
+import { recordPlayback } from "~/server/flows/music-event";
+import { readEventInput, readVisitor } from "~/server/music-input";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";
 
@@ -80,5 +79,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				RateLimitStoreFailed: () => Effect.succeed(musicFailed()),
 			}),
 		),
+		// A defect is the route's own fixed sentence, logged once without what was sent.
+		{ route: "/api/music-event", answer: musicFailed },
 	);
 };

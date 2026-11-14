@@ -1,8 +1,9 @@
 // The edge for the two public music routes: what a listener's JSON body must hold, and the sentence each field gives when
-// it does not. These replace the Zod schemas in src/lib/music-demand.ts and answer exactly as they did (the differential
-// test in tests/server/validators-differential.test.ts holds them to the frozen Zod 3 copy): the same sentences, the same
-// trimming, the error keys in field order, and a field's LAST failing check as its sentence. The route's own answers
-// for a store that is unavailable or fails are here too, so both routes say the same words.
+// it does not, plus who is playing, read from the request. Effect Schema readers that answer as the Zod 3 schemas they
+// replaced did (the differential test in tests/server/validators-differential.test.ts holds them to the frozen copy in
+// tests/fixtures/legacy-validators/music-demand.ts): the same sentences, the same trimming, the error keys in field order,
+// and a field's LAST failing check as its sentence. The routes' answers for an unavailable or failing store are in
+// src/lib/music-request.ts, next to `musicRequest`, which reads the raw body before these readers run.
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { emailPattern, uuidPattern } from "../lib/fields";
@@ -116,7 +117,7 @@ function choiceSentence(item: RawValue): string | undefined {
 		: `Invalid enum value. Expected ${MERCHANDISE_SENTENCE}, received '${item}'`;
 }
 
-/** Zod checked the length of a list before its choices, so a bad choice's sentence (the last one) wins over the length's. */
+/** The merchandise chosen: a choice that is not one of the four gives its sentence (the last bad one), which wins over the sentence for more than four. */
 const merchandiseField = fieldOf<(typeof MERCHANDISE_KEYS)[number][]>((raw) => {
 	if (!Array.isArray(raw))
 		return { say: `Expected array, received ${receivedKind(raw)}` };
@@ -140,7 +141,7 @@ const emailField = fieldOf<string>((raw) => {
 	if (!Predicate.isString(raw))
 		return { say: `Expected string, received ${receivedKind(raw)}` };
 
-	// Zod made the address lower case before it checked it, so the check sees the lower-case text.
+	// The address is made lower case before it is checked, so the pattern and the length see the lower-case text.
 	const text = raw.trim().toLowerCase();
 
 	if (text.length > 120) return { say: tooLong(120) };
@@ -183,7 +184,7 @@ const interestFields = {
 
 export type InterestInput = FieldValues<typeof interestFields>;
 
-/** Whether Zod would have stopped at the field (a value of the wrong type or kind) rather than gone on with it as it was. */
+/** Whether a field's value is of the wrong type or kind (a value that cannot be read as the field at all, not one that only fails a length or pattern). */
 function stops(body: { readonly [name: string]: RawValue }) {
 	const text = (raw: RawValue) => Predicate.isString(raw);
 	const optionalText = (raw: RawValue) => raw === undefined || text(raw);
@@ -203,9 +204,9 @@ function stops(body: { readonly [name: string]: RawValue }) {
 }
 
 /**
- * A song interest takes no merchandise and no suggestion. Zod ran this check on the whole body only when no field had
- * stopped it, and it ran when a field had only failed a length or pattern check, so it is read here from the raw body
- * under the same condition.
+ * A song interest takes no merchandise and no suggestion. This is checked on the raw body, and only when no field is of the
+ * wrong type or kind (see `stops`), so a field that only fails a length or pattern still reports this as well, and the
+ * sentence is the merchandise field's.
  */
 function songWithExtras(body: { readonly [name: string]: RawValue }) {
 	if (stops(body) || body.interest !== "song") return {};
@@ -237,17 +238,6 @@ export const readInterestInput = <Body>(body: Body) =>
 		defaults: { merchandise: [], suggestion: "", cityRegion: "" },
 		alongside: songWithExtras,
 	});
-
-/** The sentence a listener is shown when what they sent could not be stored. */
-const NOT_SAVED = "Your request could not be saved. Please try again shortly.";
-
-/** A binding or secret this deployment does not have: a deliberate 503. */
-export const musicUnavailable = () =>
-	Response.json({ ok: false, error: NOT_SAVED }, { status: 503 });
-
-/** A store that failed unexpectedly: the same sentence, and 500 because nothing is known to be unavailable. */
-export const musicFailed = () =>
-	Response.json({ ok: false, error: NOT_SAVED }, { status: 500 });
 
 /** The request's `cf` object, as a Worker gives it: location parts are optional text, and the bot verdict is optional. */
 type RequestCf = {
