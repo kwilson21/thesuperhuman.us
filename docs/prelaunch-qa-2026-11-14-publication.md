@@ -104,7 +104,30 @@ There is no (c) and no (d): every decision that was in the old INSERT's WHERE, C
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Results are filled in below from the last runs at each tip.
 
-RESULTS_PLACEHOLDER
+Branch A at `46e85258` (on `origin/main` at `3561a541`). The full suite ran on the commit before the last one, which only formats and spaces two files (`oauth-login.ts`, `publication-login.test.ts`); the touched tests, the format check, oxlint and `check` were rerun at the tip.
+
+- `pnpm run format:check`: `Checked 757 files in 90ms. No fixes applied.`
+- `pnpm run build`: completed.
+- `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 293 test files, 12,694 tests passed, 1 skipped; `git status` unchanged by the run.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: every line `ok`.
+- `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
+- `pnpm exec oxlint`: 51 problems, the same as `origin/main` (counted from its output; the summary line was not printed in the builder's runs).
+- `pnpm run check`: `Result (783 files): 0 errors, 0 warnings, 17 hints`.
+- `pnpm run golden:neutral --all origin/main`: NOT NEUTRAL, on purpose: 2 of 77 fixtures differ (`work-feed`, `publication-oauth`), 18 cases, each explained above.
+
+Branch B at the merge of A's tip (this record is committed after the results below):
+
+- `pnpm run format:check`: `Checked 775 files in 86ms. No fixes applied.`
+- `pnpm run build`: completed.
+- `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 295 test files, 12,716 tests passed, 1 skipped; `git status` unchanged by the run.
+- `pnpm run golden:neutral --all claude/effect-12-publication-fixes HEAD`: `publication-mcp` 42 identical, 18 neutral with D1 changes; `publication-token` 38 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,016 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commit.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: 52 lines, every one `ok`, with the new model; wall time about 47 s on a machine shared with two other builders (the music record's 44.7 s was on an idle one).
+- `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
+- `pnpm exec oxlint`: 50 problems (51 on A). The pre-existing findings in this area that remain are the unknown-typed inputs of `canonical.ts`, `contract.ts` (`parsePublication`) and `delivery.ts`, which read what arrives; the two module mocks of `tests/api/publication.test.ts` are gone with that file.
+- `pnpm run check`: `Result (801 files): 0 errors, 0 warnings, 17 hints`.
+- Differential test against the frozen validator (`tests/fixtures/legacy-validators/publication-contract.ts`): 6,000 seeded inputs plus the fixed pool, zero differences, key order included.
 
 Limits: the sign-in against a real GitHub and the real OAuth library on a deployed Worker were not run; the corpus drives the library on a fake KV. The consent page was not seen in a browser (its markup and policy are byte-identical in the corpus). UNVERIFIED: any live call (no live publication endpoint was called). The Quint model is checked by random simulation, not by Apalache.
 
