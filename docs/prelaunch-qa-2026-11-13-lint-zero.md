@@ -63,12 +63,12 @@ Enforcement: a reviewer's throwaway finding made `oxlint` exit 1; on the older b
 
 ## Reviews
 
-- On the older base: four rounds of independent Claude review; Greptile and Codex raised five P2 findings on the first pushed heads. Four were fixed there and the fixes carried over (manual payment tested with Stripe on, a review seeded in the future, the invitation template not pinned, test databases not closed). The fifth, a symlinked launch of the two music scripts, no longer applies, because `main`'s versions of those scripts stand. Those comment threads are still open on #256 and #257 and point at superseded code.
+- On the older base: four rounds of independent Claude review; Greptile and Codex raised five P2 findings on the first pushed heads. Four were fixed there and the fixes carried over (manual payment tested with Stripe on, a review seeded in the future, the invitation template not pinned, test databases not closed). The fifth, a symlinked launch of the two music scripts, no longer applies, because `main`'s versions of those scripts stand. All five threads (one on #256, four on #257) have since been answered and resolved one at a time: four as fixed, the symlink one as superseded.
 - On the new base: one round by an Opus and a Sonnet subagent found no blocker; its should-fix items were fixed (use `RawValue`, restore the text check in `currentSiteHref` and its tests, leave the frozen validator copy frozen, port three agreement tests, build the Resend stand-in on the golden harness). A second round by two Sonnet subagents on those fixes and the #266 merge found one should-fix (an inferred type left in a test helper) and nits, all fixed.
+- A Sonnet subagent then reviewed the catch-up to `07d2613d`, the pushed layers and this record: the code and layering were clean; this record was corrected from its findings, and that correction was not reviewed again.
 - A third round by two Sonnet subagents on the last commit of nits, the clean merge of #265, the pushed layers and this record: the code check was clean; this record was corrected from its findings and that last correction was not reviewed again.
 - Greptile's check passed on the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`) when read. Codex did not review those heads (its last reviews are of the first pushed heads); a fresh Codex review was requested on the heads pushed with this update.
-
-- The catch-up to `07d2613d` was a merge with one conflict, `tests/api/music-demand.test.ts`, which `main` deleted and this stack had rewritten; `main`'s deletion was taken. `src/lib/music-request.ts` merged without conflict. The esbuild comparison above was made before this catch-up.
+- The catch-up to `07d2613d` was a merge with one conflict, `tests/api/music-demand.test.ts`, which `main` deleted and this stack had rewritten; `main`'s deletion was taken. `src/lib/music-request.ts` merged without conflict. The esbuild comparison above was made before this catch-up; for the two source files `main` also changed since (`src/lib/music-request.ts`, `src/lib/music-catalog.ts`), a reviewer read the diff and found the stack's change is a type import and a signature type only.
 
 ## Found, not changed here
 
@@ -141,7 +141,7 @@ Item numbers follow `docs/prelaunch-checklist.md`, in its order.
 
 - N/A, 8.1 Access identity and 8.2 owner response headers: `src/middleware.ts` and the owner routes' responses are identical to `main`.
 - N/A, 8.3 schema and migration ledger, 8.5 traffic summary, 8.6 playback and campaign rules, 8.7 and 8.10 retention, 8.8 studio enablement, 8.9 and 8.11 payment launch scope, 8.14 rollback procedures, 8.15 `owner:health`: no migration, binding, retention or payment setting changed.
-- PASS (local tests only), 8.4 Valid request persists before success and a storage failure gives an honest retry with an alert that carries no request content: `tests/api/audio-intake.test.ts` and `tests/api/music-demand.test.ts`, now against a real SQLite database and a recorded alert email.
+- PASS (local tests only), 8.4 Valid request persists before success and a storage failure gives an honest retry with an alert that carries no request content: `tests/api/audio-intake.test.ts`, now against a real SQLite database and a recorded alert email. The music routes' storage-failure and alert cases are `main`'s `tests/api/music-outages.test.ts` (#273), which this stack does not change.
 - PASS (local tests only), 8.12 Invalid Stripe signatures change no data and invoice actions do not duplicate: `tests/api/stripe-webhook.test.ts` (real signature verification, 173 cases) and `tests/api/owner-payment.test.ts` (idempotency keys asserted). UNVERIFIED in Stripe test mode.
 - UNVERIFIED, 8.13 No Stripe secret or customer identifier in owner HTML or API responses: not re-checked; `src/pages/owner/requests/[id].astro` changed in types only.
 - UNVERIFIED, owner and studio journeys end to end in a browser.
@@ -158,6 +158,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-No deployment is authorized by this record. Merging follows the owner's standing rule and the delegation recorded under Owner decisions, once every gate above is observed clean.
+This record authorizes neither merge nor deployment. The delegation under Owner decisions is a second-hand report, not the owner's own words. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
