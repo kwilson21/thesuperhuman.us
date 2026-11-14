@@ -146,6 +146,17 @@ Item numbers follow `docs/prelaunch-checklist.md`, in its order.
 - UNVERIFIED, 8.13 No Stripe secret or customer identifier in owner HTML or API responses: not re-checked; `src/pages/owner/requests/[id].astro` changed in types only.
 - UNVERIFIED, owner and studio journeys end to end in a browser.
 
+## Merge and deployment (added after the merge)
+
+- Merged 2026-11-14 12:14 UTC: #256, #257 and #258 landed on `main` together as one merge commit, `440b28ef`, whose first parent is `dc7fc1aa`.
+- Before the merge, read on the final heads (`e56edb30`, `a2260300`, `138b4587`): `validate` with the lint step, Workers Builds and Greptile passed on all three, `capture` passed on #256, Codex's code and security reviews had no open finding, and no review thread was open. `main` had moved to `dc7fc1aa` (a documentation change); the stack merged with it passed lint, format check, type check, build and the full test suite locally (298 files, 12,747 tests).
+- Merged under the owner's standing rule for a complete pull request, with the delegation noted under Owner decisions.
+- Production build: the Workers Builds check on `440b28ef` completed with success.
+- After the build, `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made: forms, the owner center, payments and signing were not exercised live.
+- Rollback: revert the merge commit `440b28ef` to undo all three layers and return to `dc7fc1aa`. The layers did not land as separate merge commits, so they cannot be reverted one at a time that way.
+
+Implemented: yes. Verified locally: yes. Deployed: yes. Verified live: two pages answer 200; nothing else.
+
 ## Delivery status and remaining gates
 
 On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`), read on 2026-11-14: `validate`, Workers Builds and Greptile passed on all three, including the new lint step on #258, and `capture` passed on #256.
