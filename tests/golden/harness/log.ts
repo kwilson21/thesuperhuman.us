@@ -158,6 +158,47 @@ export class EffectLog {
 	/** Told when an effect arrives at the gate, so a runner that is waiting for something else can wake. */
 	onHeld: (() => void) | undefined;
 
+	private flying = 0;
+
+	/** Told when work in flight outside the gate ends, so a runner that is waiting for it can wake. */
+	onChange: (() => void) | undefined;
+
+	/**
+	 * Asynchronous work that leaves the microtask queue (a real timer, a WebCrypto digest or signature) and is not an
+	 * effect at the gate. The runner decides nothing while any is in flight, so a label never depends on how fast the
+	 * machine finishes it. Returns the function to call when the work ends. Off when the log is not driven.
+	 */
+	begin(): () => void {
+		if (!this.gating) return () => {};
+
+		this.flying += 1;
+		let ended = false;
+
+		return () => {
+			if (ended) return;
+
+			ended = true;
+			this.flying -= 1;
+			this.onChange?.();
+		};
+	}
+
+	get inflight() {
+		return this.flying;
+	}
+
+	/** True once the answer of the current step has been produced (set by the runner at that moment). */
+	answered = false;
+
+	/**
+	 * A macrotask began: tracked work that left the microtask queue has come back (a timer fired, a digest finished). Every
+	 * line a route writes from here on is after the answer, if the answer was produced: nothing real time can reorder is
+	 * decided here, because only work that must cross a macrotask calls it.
+	 */
+	boundary() {
+		if (this.answered) this.phase = "background";
+	}
+
 	/** How many effects wait at the gate. */
 	get waiting() {
 		return this.held.length;

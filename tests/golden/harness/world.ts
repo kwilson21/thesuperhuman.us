@@ -731,6 +731,7 @@ async function runOn(
 
 		let answer: StepRecord["answer"];
 
+		log.answered = false;
 		log.gating = true;
 
 		try {
@@ -743,7 +744,7 @@ async function runOn(
 				log,
 				clock,
 				(async () => readAnswer(await run(context)))(),
-				{ phase: "request", flush: false, timers: clock.virtualTimers },
+				{ phase: "request", flush: false, timers: true },
 			);
 		} catch {
 			answer = { outcome: "rejected" };
@@ -756,10 +757,11 @@ async function runOn(
 		await drive(log, clock, drain(), {
 			phase: "background",
 			flush: true,
-			timers: false,
+			timers: true,
 		});
 
 		log.gating = false;
+		log.answered = false;
 		log.phase = "request";
 
 		records.push({

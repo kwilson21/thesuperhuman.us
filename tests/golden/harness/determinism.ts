@@ -95,10 +95,49 @@ function consoleArg(arg: Passed): Recorded {
 	}
 }
 
+/** What setTimeout returns on real timers: enough of a Node Timeout for the code that holds one. */
+class QueuedTimeout {
+	ref() {
+		return this;
+	}
+
+	unref() {
+		return this;
+	}
+
+	hasRef() {
+		return false;
+	}
+
+	refresh() {
+		return this;
+	}
+}
+
+/** The WebCrypto operations that run on a thread, so they finish on a later macrotask. */
+const THREADED = [
+	"digest",
+	"sign",
+	"verify",
+	"encrypt",
+	"decrypt",
+	"deriveBits",
+	"deriveKey",
+] as const;
+
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
 	virtualTimers = false;
 
+	private queued: {
+		handle: QueuedTimeout;
+		due: number;
+		order: number;
+		callback: () => void;
+	}[] = [];
+
+	private logical = 0;
+	private created = 0;
 	private ids = 0;
 	private uploads = 0;
 	private restores: (() => void)[] = [];
@@ -164,6 +203,7 @@ export class Determinism {
 		const warnings = spyOnConsole("warn");
 
 		this.restores = [
+			...this.trackAsyncWork(),
 			() => errors.mockRestore(),
 			() => warnings.mockRestore(),
 			() => generate.mockRestore(),
@@ -172,6 +212,92 @@ export class Determinism {
 			() => math.mockRestore(),
 			() => vi.useRealTimers(),
 		];
+	}
+
+	/**
+	 * Makes the asynchronous work that leaves the microtask queue visible to the runner: WebCrypto operations that run on a
+	 * thread (digest, sign, verify, encrypt, decrypt, key derivation) and, on real timers, setTimeout. Each counts as in
+	 * flight until it ends (EffectLog.begin), and the macrotask it comes back on is a boundary (EffectLog.boundary).
+	 * Returns what puts the originals back.
+	 */
+	private trackAsyncWork(): (() => void)[] {
+		const restores: (() => void)[] = [];
+
+		const replace = (target: object, name: string, value: unknown) => {
+			const original = Reflect.getOwnPropertyDescriptor(target, name);
+
+			Object.defineProperty(target, name, {
+				value,
+				configurable: true,
+				writable: true,
+			});
+
+			restores.push(() => {
+				if (original) Object.defineProperty(target, name, original);
+				else Reflect.deleteProperty(target, name);
+			});
+		};
+
+		for (const name of THREADED) {
+			const real = Reflect.get(crypto.subtle, name);
+
+			replace(crypto.subtle, name, (...args: unknown[]) => {
+				const end = this.log.begin();
+				const promise = Reflect.apply(real, crypto.subtle, args);
+
+				promise.then(
+					() => {
+						this.log.boundary();
+						end();
+					},
+					() => {
+						this.log.boundary();
+						end();
+					},
+				);
+
+				return promise;
+			});
+		}
+
+		// On real timers a route's setTimeout is queued, not scheduled: the runner fires it when nothing else can make
+		// progress (fireNextTimer), in the order of its due time. How long the machine takes never decides when it fires.
+		if (!this.virtualTimers) {
+			this.queued.length = 0;
+			this.logical = 0;
+
+			replace(
+				globalThis,
+				"setTimeout",
+				(
+					callback: (...args: unknown[]) => void,
+					ms?: number,
+					...args: unknown[]
+				) => {
+					const handle = new QueuedTimeout();
+
+					this.queued.push({
+						handle,
+						due: this.logical + Math.max(0, Number(ms) || 0),
+						order: this.created,
+						callback: () => callback(...args),
+					});
+
+					this.created += 1;
+					this.log.onChange?.();
+
+					return handle;
+				},
+			);
+
+			replace(globalThis, "clearTimeout", (handle: unknown) => {
+				const index = this.queued.findIndex((timer) => timer.handle === handle);
+
+				if (index >= 0) this.queued.splice(index, 1);
+			});
+		}
+
+		return restores;
 	}
 
 	/** Where the id sequence is, so setup that draws ids of its own (sign-in) can put it back. */
@@ -185,11 +311,27 @@ export class Determinism {
 	}
 
 	/**
-	 * Moves the clock to the next virtual timer, recorded as an advance, so a route's timeout fires without the test
-	 * waiting for it. False when timers are real or none is pending.
+	 * Fires the next timer a route set, so a timeout comes without the test waiting for it. On virtual timers the clock
+	 * moves to it, recorded as an advance; otherwise it is the next queued setTimeout, in due order, and the clock does not
+	 * move. False when none is pending.
 	 */
 	async fireNextTimer(): Promise<boolean> {
-		if (!this.virtualTimers || vi.getTimerCount() === 0) return false;
+		if (!this.virtualTimers) {
+			const [first] = [...this.queued].sort(
+				(a, b) => a.due - b.due || a.order - b.order,
+			);
+
+			if (!first) return false;
+
+			this.queued.splice(this.queued.indexOf(first), 1);
+			this.logical = first.due;
+			this.log.boundary();
+			first.callback();
+
+			return true;
+		}
+
+		if (vi.getTimerCount() === 0) return false;
 
 		const before = Date.now();
 		await vi.advanceTimersToNextTimerAsync();
