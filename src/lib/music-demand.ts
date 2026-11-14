@@ -178,12 +178,39 @@ async function readJudgeAndStoreEvent(
 	metadata: PlaybackMetadata,
 	now: Date,
 ) {
-	const duplicate = await db
-		.prepare(
-			`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`,
-		)
-		.bind(input.eventId)
-		.first<{ session_id: string; playthrough_id: string; sequence: number }>();
+	// The two facts are read in one batch (one transaction), so another request cannot store this very event between them:
+	// were the duplicate read first and the last event read after, a request that stored it in between would make this
+	// event look out of sequence (409) instead of a duplicate (200). Both are read even when the id is already stored.
+	const [duplicateRead, lastRead] = await db.batch<{
+		session_id: string;
+		playthrough_id: string;
+		sequence: number;
+		accumulated_seconds: number;
+		event: string;
+		occurred_at: string;
+		started_at: string | null;
+	}>([
+		db
+			.prepare(
+				`SELECT session_id,playthrough_id,sequence FROM music_playback_events WHERE id=?`,
+			)
+			.bind(input.eventId),
+		db
+			.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
+      (SELECT occurred_at FROM music_playback_events first_event
+        WHERE first_event.session_id=? AND first_event.playthrough_id=? AND first_event.sequence=1) AS started_at
+    FROM music_playback_events
+    WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
+			.bind(
+				input.sessionId,
+				input.playthroughId,
+				input.sessionId,
+				input.playthroughId,
+			),
+	]);
+
+	const duplicate = duplicateRead.results[0];
+	const last = lastRead.results[0];
 
 	if (duplicate) {
 		if (
@@ -194,26 +221,6 @@ async function readJudgeAndStoreEvent(
 			return { status: "duplicate" as const };
 		throw new PlaybackSequenceError("Playback event identity was reused.");
 	}
-
-	const last = await db
-		.prepare(`SELECT sequence,accumulated_seconds,event,occurred_at,
-      (SELECT occurred_at FROM music_playback_events first_event
-        WHERE first_event.session_id=? AND first_event.playthrough_id=? AND first_event.sequence=1) AS started_at
-    FROM music_playback_events
-    WHERE session_id=? AND playthrough_id=? ORDER BY sequence DESC LIMIT 1`)
-		.bind(
-			input.sessionId,
-			input.playthroughId,
-			input.sessionId,
-			input.playthroughId,
-		)
-		.first<{
-			sequence: number;
-			accumulated_seconds: number;
-			event: string;
-			occurred_at: string;
-			started_at: string | null;
-		}>();
 
 	const first = input.event === "start" || input.event === "replay";
 

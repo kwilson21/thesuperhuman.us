@@ -341,6 +341,31 @@ describe("a playback event that loses a race", () => {
 	});
 });
 
+describe("the same event stored between the two reads", () => {
+	it("is a duplicate delivery (200), not out of sequence: both facts come from one snapshot", async () => {
+		let act = () => {};
+
+		const { sql, env } = world({
+			before: [/SELECT sequence,accumulated_seconds/, () => act()],
+		});
+
+		// Another request stores this very event after the id was looked up and before the last event is read.
+		let stored1 = false;
+
+		act = () => {
+			if (stored1) return;
+			stored1 = true;
+			seedEvent(sql, eid(1), 1, "2026-11-13T11:59:59.000Z");
+		};
+
+		const response = await play(start, env);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ ok: true });
+		expect(stored(sql)).toEqual([{ id: eid(1), sequence: 1 }]);
+	});
+});
+
 describe("a playthrough whose first event is gone", () => {
 	it("is refused, not accepted without the server clock to check it against", async () => {
 		const { sql, env } = world();

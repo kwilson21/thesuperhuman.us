@@ -53,7 +53,8 @@ function context(
 		batch: async (statements: D1PreparedStatement[]) => {
 			for (const statement of statements) await statement.run();
 
-			return [];
+			// A read in a batch answers no rows; a write answers nothing the code uses.
+			return statements.map(() => ({ success: true, results: [] }));
 		},
 	});
 
