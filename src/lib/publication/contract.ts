@@ -1,6 +1,7 @@
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
+import type { RawValue } from "../fields";
 
 /** Public transport only. Audience review happens before constructing this envelope. */
 export interface Story {
@@ -143,7 +144,7 @@ const storyKeys = [
 ];
 
 /** An object that has exactly these members as its OWN, enumerable, string-keyed properties (an inherited or hidden member does not count, and none may be extra). */
-function hasExactly(value: unknown, keys: readonly string[]): boolean {
+function hasExactly(value: RawValue, keys: readonly string[]): boolean {
 	if (!Predicate.isObject(value)) return false;
 	const own = Object.keys(value);
 
@@ -161,6 +162,7 @@ export function parsePublication(value: unknown): Publication | null {
 	const story = new Map(Object.entries(value)).get("story");
 
 	if (Predicate.isObject(story) && !hasExactly(story, storyKeys)) return null;
+
 	const read = Schema.decodeUnknownResult(publication)(value, {
 		onExcessProperty: "error",
 	});

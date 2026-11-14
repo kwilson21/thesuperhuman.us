@@ -353,6 +353,7 @@ describe("a failure part-way through the commit batch", () => {
 		const world = publicationWorld();
 
 		failingErase(world);
+
 		const setting = {
 			ownerId: "1",
 			allowlist: "threadline",

@@ -15,6 +15,7 @@ export const readFeed = (projectId: string) =>
 			yield* readFeedIndex(projectId),
 			{},
 		);
+
 		const texts = yield* readFeedTexts(projectId, revisionsToRead(choice));
 
 		return yield* showFeed.decide({ projectId, choice }, { texts });

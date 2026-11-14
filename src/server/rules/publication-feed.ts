@@ -211,9 +211,11 @@ function assemble(
 	texts: FeedTexts,
 ): ShowGiven {
 	const { projectId, choice } = request;
+
 	const current = choice.current
 		? entryOf(choice.current, texts.get(choice.current.revision))
 		: nothing;
+
 	const history = choice.history.map((pick) =>
 		entryOf(pick, texts.get(pick.revision)),
 	);

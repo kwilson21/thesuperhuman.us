@@ -55,9 +55,11 @@ const index = (
 ): FeedIndex => ({
 	latestRevision: events.length === 0 ? null : events.length,
 	events,
-	days: events
-		.filter((e) => e.operation === "publish")
-		.map((e) => ({ entryId: e.entryId, day: days[e.entryId] ?? "2026-11-01" })),
+	days: events.flatMap((e) =>
+		e.operation === "publish"
+			? [{ entryId: e.entryId, day: days[e.entryId] ?? "2026-11-01" }]
+			: [],
+	),
 });
 
 const choice = (i: FeedIndex) => Effect.runSync(chooseFeed.decide(i, {}));
@@ -67,6 +69,7 @@ const textsFor = (i: FeedIndex, erased: readonly number[] = []): FeedTexts =>
 	new Map(
 		revisionsToRead(choice(i)).map((revision): [number, string | null] => {
 			const picked = i.events.find((e) => e.revision === revision);
+
 			const day =
 				i.days.find((d) => d.entryId === picked?.entryId)?.day ?? "2026-11-01";
 
@@ -137,6 +140,7 @@ describe("what the public sees of a journal", () => {
 
 	it("reads the text of the shown entries only: at most 100 in history, and the current entry once", () => {
 		const events = Array.from({ length: 150 }, (_, i) => event(i + 1, `e${i}`));
+
 		const days = Object.fromEntries(
 			events.map((e, i) => [
 				e.entryId,
@@ -156,6 +160,7 @@ describe("what the public sees of a journal", () => {
 			a: "2026-11-01",
 			b: "2026-11-02",
 		});
+
 		const answer = feed(i, textsFor(i, [2]));
 
 		// b was current and in history; its text is gone, so it is neither.

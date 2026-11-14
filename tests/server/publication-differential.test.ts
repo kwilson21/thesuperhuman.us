@@ -154,6 +154,7 @@ describe("the publication envelope reader against the validator it replaced", ()
 					input.story = random.pick([null, story(), {}, [], "s"]);
 				else target[key] = memberFrom(pool, random);
 			}
+
 			run.run(input);
 		}
 

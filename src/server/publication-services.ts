@@ -105,6 +105,7 @@ const github = (url: string, init: RequestInit) =>
 
 			// Unavailable: 5xx and 429 (rate limiting) are GitHub's state, not a refusal of our request.
 			if (response.status >= 500 || response.status === 429) return null;
+
 			const json = await response.json().then(
 				(body): { readonly body: unknown } | null => ({ body }),
 				() => null,
