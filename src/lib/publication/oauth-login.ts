@@ -249,6 +249,7 @@ export async function publicationLogin(
 					))
 			)
 				return fail();
+
 			const client = await library(() =>
 				env.OAUTH_PROVIDER.lookupClient(auth.clientId),
 			);
@@ -379,12 +380,12 @@ export async function publicationLogin(
 
 			const { redirectTo } = await library(() =>
 				env.OAUTH_PROVIDER.completeAuthorization({
-				request: state.request,
-				userId: String(user.id),
-				scope: state.request.scope,
-				metadata: {},
-				props: { ownerId: String(user.id), scopes: state.request.scope },
-			}),
+					request: state.request,
+					userId: String(user.id),
+					scope: state.request.scope,
+					metadata: {},
+					props: { ownerId: String(user.id), scopes: state.request.scope },
+				}),
 			);
 
 			return redirect(redirectTo, "", 0);
