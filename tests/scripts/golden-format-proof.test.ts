@@ -671,7 +671,10 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 		state,
 	});
 
-	const background = (effect: object) => ({ ...effect, phase: "background" });
+	const background = <Effect extends { phase: string }>(effect: Effect) => ({
+		...effect,
+		phase: "background",
+	});
 
 	// A write to the music database, as the harness records it (the writer rule reads the database name).
 	const musicWrite = (sql: string) => ({ ...d1(sql, 1), db: "MUSIC_DB" });
