@@ -5,9 +5,9 @@ Four merges are gated here, three already on main and one in review: pull reques
 Date: November 13, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch for the conversion proof: `claude/effect-9-conversion-proof`, cut from `origin/main` at `0a296a0a`
-Pull requests: #264 merged as `7f28f299`; #266 merged as `416eb8d1`; #265 merged as `0a296a0a`; the conversion proof is not yet a pull request number known to the builder.
+Pull requests: #264 merged as `7f28f299`; #266 merged as `416eb8d1`; #265 merged as `0a296a0a`; the conversion proof is pull request 270.
 Target: production `https://thesuperhuman.us`
-Reviewer: the conversion proof was written by a Claude Sonnet 5.5 builder subagent working from a brief. No independent review round, Greptile or Codex review has run on it yet. For #264, #266 and #265, the results below are as reported to the builder by the owner's task; the builder did not re-observe them. This record does not certify the checks listed as UNVERIFIED.
+Reviewer: the conversion proof was built by a Claude Sonnet subagent and reviewed by independent Claude subagents; Greptile and Codex also reviewed pull request 270 (as reported to the builder). For #264, #266 and #265, the results below are as reported to the builder by the owner's task; the builder did not re-observe them. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: for #264 the parent of `7f28f299`, for #266 the parent of `416eb8d1`, for #265 the parent of `0a296a0a` (`git log --first-parent`); for the conversion proof, re-check `origin/main` with `git fetch` before merge. Nothing in the conversion proof changes `src/`, so it has no deployed behaviour to roll back.
 
 ## Scope
@@ -15,19 +15,20 @@ Rollback revision: for #264 the parent of `7f28f299`, for #266 the parent of `41
 1. Pull request #264, merged to main as `7f28f299`: the server code and its tests stopped using module mocks and take their collaborators as injected parameters instead. This record gates its release evidence only; it does not review its diff.
 2. Pull request #266, merged to main as `416eb8d1`: six security corrections. This record gates its release evidence only; it does not review its diff, and it does not list the six corrections.
 3. Pull request #265, merged to main as `0a296a0a`: the discount design. It adds a plan, a Quint model and a LemmaScript contract, and no file under `src/`.
-4. The conversion proof (this branch): tests, tooling and documentation only. It adds:
-   - `pnpm run golden:neutral` (`scripts/golden-neutral.mjs`, tested in `tests/scripts/golden-neutral.test.ts`), which decides from two revisions of a golden fixture whether a conversion left behaviour alone. The rule is in `tests/golden/README.md` ("A conversion is neutral when") and in the Back-end rules of `CLAUDE.md` and `AGENTS.md`.
-   - A harness check that a failure, outage or race a golden case declares actually fires (`tests/golden/harness/triggers.ts`, tested in `tests/golden/harness/triggers.test.ts`), for D1 failures and interleaves, R2 and KV `fails`, fetch answers that throw and AI answers that throw or never answer, and for KV failures in the older recorder. Four existing cases declared a trigger that stays quiet by design; each is now listed with a reason in its test file (`owner-request-project-start.test.ts`, `work-feed.test.ts` twice, `harness/gaps.test.ts`). No fixture changed.
-   - A 60 second time limit per generated golden case, set once in `defineCorpus` (`CASE_TIMEOUT_MS`).
+4. The conversion proof (this branch, pull request 270): tests, tooling and documentation only. It adds:
+   - `pnpm run golden:neutral` (`scripts/golden-neutral.mjs`, `scripts/sql-effects.mjs`; tests in `tests/scripts/golden-neutral.test.ts`), which decides from two revisions of a golden fixture whether a conversion left behaviour alone. The rule is in `tests/golden/README.md` ("A conversion is neutral when") and in the Back-end rules of `CLAUDE.md` and `AGENTS.md`.
+   - Fixture format 2: after every step and at the end of every case, a row count and SHA-256 of every table of both databases, and the contents of R2 and KV, so a write to a table a case does not dump is seen. All 74 database fixtures were re-recorded in their own commit on unchanged `src/`; `scripts/golden-format-proof.mjs` shows the only differences are the added fields. The three older recorder fixtures are unchanged.
+   - A harness check that a failure, outage or race a golden case declares actually fires, with `optionalTriggers` (one case) and `mustNotFire` (three control cases) for the exceptions, and a `trigger-hit` log entry naming the operation and table each injected failure or interleave hit.
+   - One 20 second time limit per generated golden case, set once in `defineCorpus`, replacing eleven per-file 60 second limits.
+   - A pull request step in `validate.yml` that writes `golden:neutral --all` to the job summary and fails only on a usage or read error.
    - This record.
 
-   `git diff origin/main --stat -- src tests/golden/fixtures` is empty (checked locally). No golden fixture's recorded content changed.
+   `git diff origin/main --stat -- src` is empty (checked locally). No pre-existing field of any golden fixture changed.
 
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: use Effect for rules, Effect Schema for input and XState with the bridge, matching Tally; convert one area at a time; no behavior change.
-- Owner, 2026-10-12 (global instructions): Claude subagents may write code in this repository, tests first, with independent Claude review each round and Greptile and Codex review on the pull request.
-- The rule that a conversion may re-record a golden fixture when `golden:neutral` passes is the task the owner gave this branch. It is not a recorded owner decision in a document yet; it becomes the written rule when this branch merges.
+- The rule that a conversion may re-record a golden fixture when `golden:neutral` passes is part of this branch. It becomes the written rule when the branch merges.
 
 ## Evidence and limits
 
@@ -54,19 +55,32 @@ Pull request #265 (as reported; not re-observed here):
 - Live pages answered 200.
 - No file under `src/` changed.
 
+Review round on the conversion proof (as reported to the builder; not re-observed): an independent Claude review, Greptile and Codex on head `484a1685` found that D1 writes to undumped tables were invisible, that the position rule missed the moves it exists to catch, that a misspelled fixture name or flag passed, that allowances went stale silently, that renames could hide a dropped case, and that trigger hits could silently move to another statement. The commits after that head close each of them, tests first. Review of those commits: not yet.
+
 Conversion proof, local, macOS arm64, Node 26, pnpm 12.20.0, in this worktree. No logs retained.
 
-- `pnpm exec biome format .`: `Checked 730 files in 187ms. No fixes applied.`
+- `pnpm exec biome format .`: no fixes applied.
 - `pnpm run build`: `Complete!`
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `pnpm test`, run twice: 282 test files passed each time; 12,373 tests passed, 1 skipped; wall time 58.9 s and 69.7 s (vitest `Duration`); no case timed out; `git status` showed no change under `tests/golden/fixtures` or `src`.
-- `pnpm run verify:quint:all`: every model passed and every mutant failed as it must.
-- `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.` (private note lookup skipped, no token, local build).
-- `pnpm exec oxlint`: 53 findings.
-- The five slowest golden cases, measured in one full run of `tests/golden` with the suites in parallel, are all in `owner-request-software-offer-signing.test.ts` (PDF rendering): "two attachments" 1.89 s, "one attachment" 1.84 s, "a standard offer with valid details" 1.74 s, a request email seeded in capitals with spaces 1.68 s, "three milestones with two checkpoints" 1.58 s.
-- `golden:neutral` on real history, run between `05b669ce^1` and `05b669ce` (pull request #251, a behaviour fix plus bind-only changes): of 77 fixtures, 3 differ. `owner-request-invoices` (177 identical, 3 D1-only) and `owner-request-payment` (218 identical, 3 D1-only) are neutral. `stripe-webhook` (157 identical, 103 D1-only) reports exactly the cases whose outcome changed as NOT neutral: one case by name, and two cases the fix renamed (reported as removed, or as NOT neutral pairs when a rename file maps them). That is the intended answer for a fix.
+- `pnpm test`, run twice: 285 test files and 12,429 tests passed, 1 skipped, both times; vitest `Duration` 59.7 s and 55.1 s (the earlier head, before the digests: 58.9 s and 69.7 s); no case timed out; `git status` clean and the fixtures byte-identical between the two runs.
+- Fixture re-record, proof script: 77 fixtures before and after, 9,014 cases; stored size 3,041,562 bytes before and 4,279,661 after (141%); as JSON text 60.9 MB before and 73.3 MB after (121%); the only differences are `format`, `finalState`, the per-step `digest` and the `trigger-hit` log entries.
+- Slowest golden case: about 1.9 s alone and about 4.8 s with three golden suites running at once (all PDF cases of `owner-request-software-offer-signing`), so the 20 second limit leaves more than four times the headroom measured under that load.
+- `golden:neutral --all 05b669ce^1 05b669ce` (pull request 251, old format on both sides): 3 of 77 fixtures differ; exactly one case is reported NOT neutral (`delivery out of order: the older paid arrives after a newer sent`), and the two cases the fix renamed are reported removed. No false position finding.
+- `golden:neutral --all origin/main HEAD` (format 1 against format 2): every database fixture reported NOT COMPARABLE, `NOT NEUTRAL`, exit 1, as designed.
+- The position rule over the 26 most recent commits that re-recorded fixtures: no finding on any commit that changed no behaviour. It reported 292 moved effects in `0234f63f` (the captcha-before-allowance reorder, a deliberate behaviour change) and 9 in `1ac7c584` (an allowance row now written before the Turnstile call in six `offer-draft` cases, in a commit named for header cleaning), which the owner may want to look at. The ordered and the order-insensitive modes gave identical results on all of them.
+- `pnpm run verify:quint:all`, `pnpm run publicist:gate`, `pnpm exec oxlint` (53 findings) and `pnpm run check`: results in the hand-off report.
 
-Limits: nothing is deployed from this branch; no independent review, Greptile, Codex or CI result on the final head is recorded here; the trigger check does not see a fetch outage written as a hand-made responder function (only `byHost` answers declare one), and does not check rate-limit refusals; `golden:neutral` recognises a write from the SQL text, so an unusual statement form is not seen as one; whether a case's inputs changed is the reviewer's check, not the tool's.
+Limits, after the fixes:
+
+- Where the tool has no evidence: the history above holds almost no real conversion, so how often the position rule flags a legitimate conversion is untested; the order-insensitive default and the `--ordered` option are chosen from reasoning, not from data.
+- The position rule reads writes from the SQL text and a row count. A write that changed no row, the order of writes between two effects, and the written values (the digests see those) are not part of it; a statement form the reader cannot attribute to a table is an error.
+- The five database triggers that still write (issue 242) change rows without the statement saying so; they show in the digests, not in the position rule.
+- The trigger check covers D1 failures and interleaves, R2 and KV `fails`, `byHost` fetch answers that throw and AI answers that throw or never answer, and KV failures in the older recorder. A hand-written fetch responder declares nothing, and rate-limit refusals are not checked.
+- The `trigger-hit` marker says which operation and table were hit, not whether a write changed a row (the hook fires before the statement runs).
+- A fixture format change cannot be shown neutral; the next change of format needs the same proof script and the same separate commit.
+- The CI step is UNVERIFIED until it runs on a pull request: it needs the checkout to be a merge ref with two commits. It reports; it does not gate.
+- The schema script seeds one row with SQLite's wall clock; the harness now fixes it, which is the only change to what a route can read. The publication database defaults `published_at` to the wall clock when an insert leaves it out; no case does today, and a case that did would fail the determinism check.
+- Whether a case's inputs changed in a conversion is still the reviewer's check.
 
 ## Checklist
 
@@ -106,7 +120,7 @@ Limits: nothing is deployed from this branch; no independent review, Greptile, C
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks: for #264, #266 and #265, Workers Builds succeeded on each merge commit and, for #265, CI `validate` including the Dafny contracts and the pooled Quint step passed (all as reported). For the conversion proof, the local gates above; CI on its head is UNVERIFIED.
-- UNVERIFIED, 7.2 Exact diff review and independent code and security review: #266 had three independent review rounds (as reported). The reviews of #264 and #265 are not recorded here. The conversion proof has had no independent review yet.
+- UNVERIFIED, 7.2 Exact diff review and independent code and security review: #266 had three independent review rounds (as reported). The reviews of #264 and #265 are not recorded here. The conversion proof had one review round (independent Claude review, Greptile and Codex, as reported), whose findings are closed in later commits; those commits have not been reviewed yet.
 - UNVERIFIED, 7.3 Production bindings, secrets, HTTPS, host routing and response headers: no binding, secret or migration changed in the conversion proof or #265; the same is not claimed for #264 and #266. Nothing deployed from this branch.
 - PASS, 7.4 Rollback is the previous deployed revision: the parents of `7f28f299`, `416eb8d1` and `0a296a0a` (as reported); for the conversion proof, re-check `origin/main` with `git fetch` before merge.
 - PASS, 7.5 for #264, #266 and #265 (as reported): the live pages named above answered 200 after deployment, and the #266 refusals answered as listed. UNVERIFIED for the conversion proof: nothing deployed; to be completed after merge (Workers Builds result on the merge commit, and `/`, `/software/start` and `/work` answering 200).
@@ -128,4 +142,4 @@ No deployment is authorized by this record.
 
 #264: implemented yes, verified locally yes (as reported), deployed yes (as reported), verified live partly (200 answers and the sign-in redirect, as reported). #266: implemented yes, verified locally yes (as reported), deployed yes (as reported), verified live partly (200 answers and three refusals, as reported; signed-in checks not done). #265: design only, merged yes, no behavior change, live pages 200 (as reported). Conversion proof: implemented yes, verified locally yes, deployed no, verified live no.
 
-The conversion proof was built by a Claude subagent. This record does not certify the checks listed as UNVERIFIED.
+The conversion proof was built by a Claude Sonnet subagent and reviewed by independent Claude subagents. This record does not certify the checks listed as UNVERIFIED.
