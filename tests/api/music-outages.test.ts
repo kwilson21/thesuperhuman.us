@@ -517,7 +517,9 @@ describe("a defect in a converted route answers the fixed sentence", () => {
 			},
 		);
 
-		const response = await event(request).finally(() => vi.unstubAllGlobals());
+		const response = await Promise.resolve(event(request));
+
+		vi.unstubAllGlobals();
 
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });

@@ -1,7 +1,6 @@
 // The edge for the two public music routes: what a listener's JSON body must hold, and the sentence each field gives when
 // it does not, plus who is playing, read from the request. Effect Schema readers that answer as the Zod 3 schemas they
-// replaced did (the differential test in tests/server/validators-differential.test.ts holds them to the frozen copy in
-// tests/fixtures/legacy-validators/music-demand.ts): the same sentences, the same trimming, the error keys in field order,
+// replaced did (the differential test for the music bodies holds them to a frozen copy of those schemas): the same sentences, the same trimming, the error keys in field order,
 // and a field's LAST failing check as its sentence. The routes' answers for an unavailable or failing store are in
 // src/lib/music-request.ts, next to `musicRequest`, which reads the raw body before these readers run.
 import * as Predicate from "effect/Predicate";
