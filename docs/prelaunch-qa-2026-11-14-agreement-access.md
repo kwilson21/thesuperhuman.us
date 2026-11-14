@@ -77,11 +77,26 @@ Results are recorded at the tips listed under Evidence. Oxlint: 50 findings on b
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the agreement worktree. Logs are not retained.
 
-- Branch A tip `8832acd6` (after the guard-recogniser move and the type fix): `pnpm run check` gave "Result (783 files): 0 errors, 0 warnings, 17 hints" and exit 0 (the reviewer's request, item 6). The earlier A tip `e380fbd2` ran the full suite: "Test Files 292 passed (292)", "Tests 12683 passed | 1 skipped (12684)"; the one skipped test is "renders the real v1 agreements and embeds exact signing evidence" in `tests/lib/agreement-pdf.test.ts`, which is gated on a private file (`.private/signing/templates.json`) that is absent here. It is UNVERIFIED.
-- `golden:neutral --all` between A's tip and B: "compared 77 fixtures and 9016 cases; 0 of 77 fixtures differ" and "golden:neutral: identical, 9016 cases". The three fixtures A changed on purpose are unchanged on B.
-- `verify:quint:all` on B: exit 0 (the new `agreementLink` model keeps every property and each of its five mutants breaks the named property).
-- `publicist:gate`: passed, 84 entries.
-- UNVERIFIED: `AGREEMENT_PRIVATE_TEMPLATES` was not set. The template test in `tests/lib/software-agreements.test.ts` returns without checking when it is unset.
+Branch A tip `8832acd6` (the merge into B is `ce852098`):
+
+- `pnpm run format:check`: clean (757 files). `pnpm run build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test`: 292 files passed; 12683 tests passed, 1 skipped (12684).
+- `golden:neutral --all origin/main HEAD`: 3 of 77 fixtures differ on purpose (the file, attachment and link corpora); NOT NEUTRAL, as expected.
+- `verify:quint:all`: exit 0. `publicist:gate`: passed, 84 entries checked.
+- Oxlint: 50 findings (51 on `origin/main`).
+- `pnpm run check`: "Result (783 files): 0 errors, 0 warnings, 17 hints", exit 0.
+
+Branch B tip `ee2b94fa` (the record commit follows it):
+
+- `pnpm run format:check`: clean (768 files). `pnpm run build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test`: 293 files passed; 12690 tests passed, 1 skipped (12691).
+- `golden:neutral --all claude/effect-13-agreement-access-fixes HEAD`: "compared 77 fixtures and 9016 cases; 0 of 77 fixtures differ" and "golden:neutral: identical, 9016 cases".
+- `verify:quint:all`: exit 0 (the new `agreementLink` model and its five mutants included). `publicist:gate`: passed, 84 entries checked.
+- Oxlint: 50 findings. `pnpm run check`: "Result (794 files): 0 errors, 0 warnings, 17 hints", exit 0.
+
+The one skipped test is "renders the real v1 agreements and embeds exact signing evidence" in `tests/lib/agreement-pdf.test.ts`. It is gated on the private file `.private/signing/templates.json`, which is absent here. UNVERIFIED for the private templates. The template test in `tests/lib/software-agreements.test.ts` returns without checking when `AGREEMENT_PRIVATE_TEMPLATES` is unset, so it passes without checking anything. UNVERIFIED.
+
+Parity test: `tests/server/agreement-download-routes.test.ts` passes on B. The statement-parity case for a signing session and for a studio session fails on `origin/main`'s module (checked on the module before the route moved); the archive-session case passed on `origin/main` as well and was removed (an archive session reads the same statements for an unknown id and another client's agreement on the old code, so it proved nothing).
 
 ## Checklist
 
