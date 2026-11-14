@@ -630,6 +630,113 @@ describe("two requests on one cookie for different addresses", () => {
 				expect(answers[name]).toEqual(answers.none);
 		},
 	);
+
+	it("does not delete a code that another browser got under the same cookie while this request's clean-up was waiting", async () => {
+		// Browser Y has an expired code. Browser X's request reads the address's rows (it sees Y's expired code), then Y asks again
+		// and gets a fresh code under the same cookie, then X's clean-up runs. Y's fresh code must still sign Y in.
+		const yValue = "6".repeat(64);
+		const yCookie = `${pendingName}=${yValue}`;
+
+		sql
+			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+        VALUES (?,?,'old',0,?,?)`)
+			.run(
+				await hashOf(yValue),
+				address,
+				new Date(Date.now() - 700_000).toISOString(),
+				new Date(Date.now() - 60_000).toISOString(),
+			);
+
+		const script = [
+			"X.read",
+			"Y.read",
+			"Y.clear",
+			"Y.write",
+			"X.clear",
+			"X.write",
+		];
+
+		await Promise.all([
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{ ip: "203.0.113.51", database: scripted("X", script) },
+				),
+			),
+			requestCode(
+				context(
+					"/api/studio/code",
+					{ email: address, turnstileToken: "ok" },
+					{
+						cookie: yCookie,
+						ip: "203.0.113.52",
+						database: scripted("Y", script),
+					},
+				),
+			),
+		]);
+
+		await Promise.all(background.splice(0));
+
+		const statuses = [];
+
+		for (const mail of mails)
+			statuses.push((await enter(codeIn(mail), { cookie: yCookie })).status);
+
+		expect(statuses).toContain(200);
+	});
+
+	it("keeps a code that a concurrent request for the same address stored under the cookie, when this request's clean-up targets the browser's earlier code for another address", async () => {
+		const value = "7".repeat(64);
+		const cookie = `${pendingName}=${value}`;
+
+		sql
+			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+        VALUES (?,?,'earlier',0,?,?)`)
+			.run(
+				await hashOf(value),
+				"other@example.com",
+				new Date().toISOString(),
+				new Date(Date.now() + 600_000).toISOString(),
+			);
+
+		// Both requests are from one browser for this address; both read the earlier code for the other address. The second one
+		// deletes it and stores its code before the first one's delete runs, which must not remove the second one's code.
+		const script = [
+			"A.read",
+			"B.read",
+			"B.clear",
+			"B.write",
+			"A.clear",
+			"A.write",
+		];
+
+		await Promise.all(
+			["A", "B"].map((who, index) =>
+				requestCode(
+					context(
+						"/api/studio/code",
+						{ email: address, turnstileToken: "ok" },
+						{
+							cookie,
+							ip: `203.0.113.${60 + index}`,
+							database: scripted(who, script),
+						},
+					),
+				),
+			),
+		);
+
+		await Promise.all(background.splice(0));
+
+		const statuses = [];
+
+		for (const mail of mails)
+			statuses.push((await enter(codeIn(mail), { cookie })).status);
+
+		expect(statuses).toContain(200);
+	});
 });
 
 describe("races", () => {
