@@ -58,6 +58,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+
 		const check = await checkTurnstile(
 			input.turnstileToken,
 			env.TURNSTILE_SECRET_KEY,
@@ -99,7 +100,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			} catch (releaseError) {
 				logUnexpected(ROUTE, releaseError);
 			}
+
 			logUnexpected(ROUTE, error);
+
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
 				route: "/api/audio-intake",

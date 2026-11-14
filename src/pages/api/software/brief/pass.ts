@@ -28,6 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		const parsed = schema.safeParse(await musicRequest(request, 4096));
 
 		if (!parsed.success) return Response.json({ ok: false }, { headers });
+
 		const check = await checkTurnstile(
 			parsed.data.token,
 			env.TURNSTILE_SECRET_KEY,

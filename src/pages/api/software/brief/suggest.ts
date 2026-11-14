@@ -49,14 +49,11 @@ const empty = () =>
 	);
 
 /** A store, limiter or model failure: the same empty body, with 500 so the failure is not taken for a quiet answer. */
-const failed = (error: unknown) => {
-	logUnexpected(ROUTE, error);
-
-	return Response.json(
+const failedAnswer = () =>
+	Response.json(
 		{ suggestion: "" },
 		{ status: 500, headers: { "cache-control": "no-store" } },
 	);
-};
 
 /** Whether the model returned a response string; the timeout branch resolves to null. */
 function hasResponseText(
@@ -153,7 +150,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							.run(),
 					)
 					.then(() => {})
-					.catch((error: unknown) => logUnexpected(ROUTE, error));
+					.catch((error) => logUnexpected(ROUTE, error));
 
 				locals.runtime?.ctx?.waitUntil(cleanup);
 			}
@@ -188,7 +185,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ headers: { "cache-control": "no-store" } },
 		);
 	} catch (error) {
-		return failed(error);
+		logUnexpected(ROUTE, error);
+
+		return failedAnswer();
 	} finally {
 		if (timer) clearTimeout(timer);
 	}

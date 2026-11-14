@@ -80,6 +80,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+
 		const check = await checkTurnstile(
 			input.turnstileToken,
 			env.TURNSTILE_SECRET_KEY,
@@ -142,13 +143,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
 		} catch (error) {
 			// A rival that stored the same submission first is answered with its own brief, as a retry would be.
-			const raced = await existing(env.MUSIC_DB, input.submissionId).catch(
-				(lookupError: unknown) => {
-					logUnexpected(ROUTE, lookupError);
+			let raced: Awaited<ReturnType<typeof existing>> = null;
 
-					return null;
-				},
-			);
+			try {
+				raced = await existing(env.MUSIC_DB, input.submissionId);
+			} catch (lookupError) {
+				logUnexpected(ROUTE, lookupError);
+			}
 
 			if (raced)
 				return raced.email.toLowerCase() === input.email.toLowerCase()
@@ -170,6 +171,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					{ status: 400 },
 				);
 			}
+
 			logUnexpected(ROUTE, error);
 			await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
 			await sendUrgentOwnerAlert(env, {

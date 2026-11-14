@@ -51,15 +51,18 @@ describe("owner requests", () => {
 	it("returns the stored request without reading it back", async () => {
 		const { db } = fixture();
 		const reads: string[] = [];
+
 		const watched = double<D1Database>({
 			prepare: (query: string) => {
-				if (query.trimStart().toUpperCase().startsWith("SELECT"))
+				if (query.trimStart().toUpperCase().startsWith("SELECT")) {
 					reads.push(query);
+				}
 
 				return db.prepare(query);
 			},
 			batch: (statements) => db.batch(statements),
 		});
+
 		const request = await saveOwnerRequest(watched, {
 			...purchase,
 			details: { format: "digital", nested: { keep: [1, "two"] } },

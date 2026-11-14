@@ -565,18 +565,17 @@ it("still alerts the owner when clearing the counter fails after a storage failu
 			throw new Error("D1 unavailable");
 		},
 	});
-	const response = await POST(
-		context(base, {
-			db: failing,
-			rate: fakeKv({
-				get: async () => null,
-				put: async () => {},
-				delete: async () => {
-					throw new Error("kv down");
-				},
-			}),
-		}),
-	);
+
+	const rate = fakeKv({
+		get: async () => null,
+		put: async () => {},
+		delete: async () => {
+			throw new Error("kv down");
+		},
+	});
+
+	const response = await POST(context(base, { db: failing, rate }));
+
 	expect(response.status).toBe(500);
 	expect(
 		vi
