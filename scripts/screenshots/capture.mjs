@@ -40,6 +40,8 @@ import {
 import { loadOrCreateAccessKey } from "./access-key.mjs";
 import { browserClockScript, stepTime } from "./clock.mjs";
 import { createStepper } from "./clock-steps.mjs";
+import { waitForImages } from "./images.mjs";
+import { seededRandomScript } from "./random.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
@@ -190,6 +192,7 @@ async function capture({
 	prepare,
 	expectedResponses = [],
 	expectedResourceErrors = [],
+	seed,
 }) {
 	await nextStep();
 
@@ -208,6 +211,11 @@ async function capture({
 		// preview's own origin gets it; third-party frames such as Turnstile keep the real clock.
 		await context.addInitScript({
 			content: browserClockScript(new URL(BASE).origin, Date.now()),
+		});
+
+		// The preview's own pages get the same Math.random sequence on every capture (see random.mjs).
+		await context.addInitScript({
+			content: seededRandomScript(new URL(BASE).origin, seed),
 		});
 
 		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.
@@ -285,6 +293,14 @@ async function capture({
 		await timings.time(scope, "prepare", () =>
 			prepareWithDiagnostics(page, prepare, OUT, currentScenario, file),
 		);
+	await timings.time(scope, "images", () =>
+		waitForImages(page, {
+			file,
+			prepared: Boolean(prepare),
+			record: (reason) => settles.record(reason, file),
+		}),
+	);
+
 	const target = selector ? page.locator(selector).first() : page;
 	const screenshotOptions = { path: `${OUT}/${file}`, animations: "disabled" };
 
@@ -433,6 +449,9 @@ async function shoot(page, viewport) {
 		status: page.status ?? 200,
 	};
 
+	// Only a page with its own seed records one, so the other entries keep the same shape.
+	if (page.seed !== undefined) params.seed = page.seed;
+
 	const earlier = reference?.pages?.[file];
 
 	if (
@@ -440,6 +459,7 @@ async function shoot(page, viewport) {
 		earlier.path === params.path &&
 		earlier.owner === params.owner &&
 		earlier.status === params.status &&
+		earlier.seed === params.seed &&
 		(await reusable([file]))
 	) {
 		const responses = await timings.time("pages", "replay", () =>
@@ -465,6 +485,7 @@ async function shoot(page, viewport) {
 		viewport: viewport.name,
 		owner: page.owner,
 		status: page.status,
+		seed: page.seed,
 	});
 	const requests = requestsByFile.get(file);
 

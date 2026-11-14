@@ -3,6 +3,7 @@
 // Stripe. Seeds only what needs an outside service: the request (Turnstile intake) and the
 // client's session and message (an emailed code). Client notices fail without a Resend key.
 import { createHash } from "node:crypto";
+import { waitForPlayers } from "../media.mjs";
 
 const at = "2026-09-22T12:00:00.000Z";
 const id = "screenshot-studio";
@@ -209,7 +210,11 @@ export default {
 				"The client hears the review",
 				`/studio/projects/${id}`,
 				"studio-project",
-				{ cookie },
+				{
+					cookie,
+					// The duration label fills in once the player's metadata loads (see media.mjs).
+					prepare: (page) => waitForPlayers(page),
+				},
 			),
 		);
 		steps.push(

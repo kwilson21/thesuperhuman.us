@@ -125,7 +125,7 @@ export default {
 				),
 			)[0]?.results?.[0]?.updated_at ?? "";
 
-		const shot = async (title, path, name, options = {}) => {
+		const shot = async (title, path, name, { note, ...options } = {}) => {
 			const images = [];
 
 			for (const viewport of ["desktop", "phone"])
@@ -136,7 +136,7 @@ export default {
 						viewport,
 						...options,
 					}),
-					caption: `Fictional data: ${title}`,
+					caption: `Fictional data: ${title}${note ? `. ${note}` : ""}`,
 				});
 			steps.push({ title, images });
 		};

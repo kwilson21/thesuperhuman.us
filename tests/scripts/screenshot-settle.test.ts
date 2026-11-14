@@ -9,6 +9,8 @@ import {
 	settle,
 	trackRequests,
 	WIDGET_PAINT_MS,
+	WIDGET_STABLE_MS,
+	widgetBoxes,
 	widgetsHoldTokens,
 } from "../../scripts/screenshots/settle.mjs";
 
@@ -83,6 +85,23 @@ describe("createRequestTracker", () => {
 
 		expect(tracker.inFlight()).toBe(0);
 		expect(tracker.quiet()).toBe(true);
+	});
+
+	it("records the status of a counted request's response from the page's response event", () => {
+		const clock = fakeClock();
+		const page = new EventEmitter();
+
+		const tracker = trackRequests(
+			page,
+			createRequestTracker({ now: clock.now }),
+		);
+
+		const request = { url: () => SITE };
+
+		page.emit("request", request);
+		page.emit("response", { request: () => request, status: () => 200 });
+
+		expect(tracker.firstStatus()).toBe(200);
 	});
 
 	it.each([
@@ -204,6 +223,34 @@ describe("createRequestTracker", () => {
 
 		tracker.finish("a");
 		expect(tracker.firstUrl()).toBe("https://thesuperhuman.us/other.js");
+	});
+
+	it("records the status of a response to a pending request, which is not a finish", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.start("a", SITE);
+		expect(tracker.firstStatus()).toBeUndefined();
+
+		tracker.response("a", 200);
+
+		expect(tracker.firstStatus()).toBe(200);
+		expect(tracker.inFlight()).toBe(1);
+		expect(tracker.quiet()).toBe(false);
+	});
+
+	it("ignores a response to a request that is not pending", () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		tracker.response("never-started", 200);
+		tracker.start("a", SITE);
+		tracker.finish("a");
+		tracker.response("a", 500);
+
+		expect(tracker.inFlight()).toBe(0);
+		expect(tracker.firstUrl()).toBeUndefined();
+		expect(tracker.firstStatus()).toBeUndefined();
 	});
 });
 
@@ -354,7 +401,7 @@ describe("settle", () => {
 		tracker.start("a", SITE);
 
 		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
-			`cap: 1 requests in flight, first ${SITE}`,
+			`cap: 1 requests in flight, first ${SITE}, no response`,
 		);
 		expect(clock.now()).toBe(SETTLE_CAP_MS);
 	});
@@ -367,7 +414,7 @@ describe("settle", () => {
 		tracker.start("a", SITE);
 
 		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
-			`cap: 1 requests in flight, first ${SITE}; turnstile token missing`,
+			`cap: 1 requests in flight, first ${SITE}, no response; turnstile token missing`,
 		);
 		// The check adds no waiting: the cap is still the time settle takes.
 		expect(clock.now()).toBe(SETTLE_CAP_MS);
@@ -382,7 +429,7 @@ describe("settle", () => {
 		tracker.start("a", SITE);
 
 		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
-			`cap: 1 requests in flight, first ${SITE}`,
+			`cap: 1 requests in flight, first ${SITE}, no response`,
 		);
 	});
 
@@ -417,7 +464,7 @@ describe("settle", () => {
 		const reason = await settle(page, tracker, { pause: clock.pause });
 
 		expect(reason).toBe(
-			"cap: 1 requests in flight, first https://thesuperhuman.us/api/owner/file.json",
+			"cap: 1 requests in flight, first https://thesuperhuman.us/api/owner/file.json, no response",
 		);
 		expect(reason).not.toContain("secret-value");
 		expect(reason).not.toContain("#frag");
@@ -434,7 +481,7 @@ describe("settle", () => {
 		);
 
 		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
-			"cap: 1 requests in flight, first blob:http://127.0.0.1:4321",
+			"cap: 1 requests in flight, first blob:http://127.0.0.1:4321, no response",
 		);
 	});
 
@@ -466,7 +513,7 @@ describe("settle", () => {
 		const reason = await settle(page, tracker, { pause: clock.pause });
 
 		expect(reason).toBe(
-			`cap: 1 requests in flight, first ${long.slice(0, 120)}`,
+			`cap: 1 requests in flight, first ${long.slice(0, 120)}, no response`,
 		);
 	});
 
@@ -485,7 +532,58 @@ describe("settle", () => {
 		expect(page.waitForFunction.mock.calls[0][2]).toEqual({
 			timeout: SETTLE_CAP_MS,
 		});
+		// The paint window is the wait: the widget's box must hold still through it, so it ends at WIDGET_PAINT_MS.
 		expect(clock.now()).toBe(WIDGET_PAINT_MS);
+	});
+
+	it("sees a widget resize that happens during the paint window, and waits a stable window after it", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		let boxReads = 0;
+
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) => {
+				if (script === countVisibleWidgets) return 1;
+
+				if (script === widgetBoxes) {
+					boxReads += 1;
+
+					return clock.now() >= 400 ? "300x90" : "300x80";
+				}
+
+				return true;
+			}),
+			waitForFunction: vi.fn(async () => true),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"quiet",
+		);
+		// The resize at 400 ms is inside the paint window, so the box must hold still until 400 + WIDGET_STABLE_MS.
+		expect(clock.now()).toBe(400 + WIDGET_STABLE_MS);
+		expect(boxReads).toBeGreaterThan(0);
+	});
+
+	it("reports the paint cap, not a size change, when the token arrives too late to confirm a still box", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) =>
+				script === countVisibleWidgets ? 1 : "300x80",
+			),
+			waitForFunction: vi.fn(async () => {
+				// The token arrives 100 ms before the cap.
+				await clock.pause(SETTLE_CAP_MS - 100);
+
+				return true;
+			}),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: turnstile paint",
+		);
+		expect(clock.now()).toBe(SETTLE_CAP_MS);
 	});
 
 	it("reports the cap when a widget never gets its token, and carries on", async () => {
@@ -496,6 +594,71 @@ describe("settle", () => {
 		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
 			"cap: turnstile token",
 		);
+	});
+
+	it("says a pending request's response arrived, with its status, and still drops the query string", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+		const page = fakePage();
+
+		tracker.start(
+			"a",
+			"https://thesuperhuman.us/api/owner/requests/x/messages?cache=1",
+		);
+		tracker.response("a", 200);
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: 1 requests in flight, first https://thesuperhuman.us/api/owner/requests/x/messages, response 200",
+		);
+	});
+
+	it("reports turnstile size when the box changed within the stable window of the cap", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		// The token is in at once, and the box changes at every reading, so it never holds still for the window.
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) => {
+				if (script === countVisibleWidgets) return 1;
+
+				if (script === widgetBoxes) return String(Math.floor(clock.now() / 50));
+
+				return true;
+			}),
+			waitForFunction: vi.fn(async () => true),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: turnstile size",
+		);
+		expect(clock.now()).toBe(SETTLE_CAP_MS);
+	});
+
+	it("reports turnstile paint, not a size change, when the box changed earlier and then held to the cap", async () => {
+		const clock = fakeClock();
+		const tracker = createRequestTracker({ now: clock.now });
+
+		// The token arrives at 4.6 s; the box changes at 4.65 s and holds still to the 5 s cap, too late to confirm.
+		const page = {
+			evaluate: vi.fn(async (script: () => boolean | number | string) => {
+				if (script === countVisibleWidgets) return 1;
+
+				if (script === widgetBoxes)
+					return clock.now() >= 4_650 ? "300x90" : "300x80";
+
+				return true;
+			}),
+			waitForFunction: vi.fn(async () => {
+				await clock.pause(4_600);
+
+				return true;
+			}),
+		};
+
+		await expect(settle(page, tracker, { pause: clock.pause })).resolves.toBe(
+			"cap: turnstile paint",
+		);
+		expect(clock.now()).toBe(SETTLE_CAP_MS);
 	});
 
 	it("reports a page error while settling as stopped, without throwing", async () => {
