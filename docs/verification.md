@@ -229,7 +229,9 @@ File: `verification/publication-journal.qnt`, written for the conversion of the 
 
 **State.** The stored events (event id, entry, operation, expected revision, the revision taken and the delivery that stored it), four deliveries and one ghost flag. Two event ids, two entries and expected revisions 0 to 3.
 
-**Properties** (`allProperties`): `oneRowPerRevision`; `contiguousFromOne` (the revisions are 1, 2, 3 with none missing); `entryNeverResurrected` (nothing of an entry is stored after its withdrawal); `onePublishPerEntry`; `correctionHasTarget` (a correction follows an event of its entry); `retryNeverConflicts` (an event that is stored is never answered as a conflict when it is delivered again).
+**Properties** (`allProperties`): `oneRowPerRevision`; `contiguousFromOne` (the revisions are 1, 2, 3 with none missing); `entryNeverResurrected` (nothing of an entry is stored after its withdrawal); `onePublishPerEntry`; `correctionHasTarget` (a correction follows an event of its entry); `retryNeverConflicts` (an event that was stored when a delivery last read, or that its insert last met as a constraint, is never answered as a conflict when it is delivered again: the loser of a race reads again and finds it. A conflict for a read that came before the store is right, even though the same envelope is stored by the time the delivery judges, so the ghost judges what was stored at the delivery's last read or at its insert's last constraint hit, not what is stored when it judges).
+
+**Scripted run and witness.** The scripted run `staleReadTest` replays the stale-read trace on which this property was first stated wrongly (run 1 reads an empty journal, run 2 stores another entry, run 3 stores run 1's envelope, then run 1 judges its stale read and answers conflict); the ghost must stay false and the journal holds the envelope once. `tests/scripts/publication-journal-trace.test.ts` runs it with `quint test` on every `pnpm test`. The witness `neverRaced` (negated by hand) reaches a state where two deliveries took the same envelope at once, one stored it and the other answered duplicate, so the properties are not vacuous over the race.
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -241,7 +243,7 @@ File: `verification/publication-journal.qnt`, written for the conversion of the 
 | `NoRetry` | A lost race answers conflict at once, without reading again | `retryNeverConflicts` |
 | `SplitRead` | The event id and the latest revision are read in two steps, not one snapshot | `retryNeverConflicts` |
 
-**What it does not cover.** The content and the erasure of a withdrawn entry's text, the hash, the origin (backfill changes the feed, not the journal's rules), the allowlist and token checks, and the feed (a pure rule over one read, `tests/rules/publication-feed.test.ts`). The event id key adds nothing a property could see once the revision key and the rule are in place (every accepted write takes the next revision), so no property or mutant names it.
+**What it does not cover.** The content and the erasure of a withdrawn entry's text, the hash, the origin (backfill changes the feed, not the journal's rules), the allowlist and token checks, and the feed (pure rules over plain reads, `tests/rules/publication-feed.test.ts`, and its interleaving with a withdrawal, `tests/flows/publication-commit-stories.test.ts`). The event id key adds nothing a property could see once the revision key and the rule are in place (every accepted write takes the next revision), so no property or mutant names it.
 
 ## Verified modules
 
