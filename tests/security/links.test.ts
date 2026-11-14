@@ -100,6 +100,8 @@ describe("message text", () => {
 		"re: mailto:me@x.com",
 		"mailto:someone@example.com",
 		"blob:notes",
+		// Only the https part of this could ever be linked, and it is checked where it is linked.
+		"blob:https://example.com/1",
 	])("accepts %j", (body) => {
 		expect(validateProjectMessage(body)).toBe(body);
 	});

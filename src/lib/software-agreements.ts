@@ -113,6 +113,50 @@ export function sessionGuard(db: D1Database, s: AgreementSession) {
 	);
 }
 
+/**
+ * Positive evidence that another request changed the client row this review named, read after the batch failed with a
+ * foreign key error. For a client that was new to this review, a row with the same natural key (the table's unique key:
+ * recipient email, legal name key, entity type and jurisdiction) now exists under another id, so this batch's insert of
+ * its own row was skipped. For a client that already existed, that row is gone. Anything else, and any failure to read,
+ * is no evidence: the caller rethrows the original error, which is then a fault.
+ */
+async function otherRequestChangedClient(
+	db: D1Database,
+	earlierId: string | undefined,
+	clientId: string,
+	key: {
+		recipient_email: string;
+		legal_name_key: string;
+		entity_type: string;
+		jurisdiction: string;
+	},
+) {
+	try {
+		if (earlierId)
+			return !(await db
+				.prepare("SELECT 1 FROM software_agreement_clients WHERE id=?")
+				.bind(earlierId)
+				.first());
+
+		return Boolean(
+			await db
+				.prepare(
+					"SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=? AND id<>?",
+				)
+				.bind(
+					key.recipient_email,
+					key.legal_name_key,
+					key.entity_type,
+					key.jurisdiction,
+					clientId,
+				)
+				.first(),
+		);
+	} catch {
+		return false;
+	}
+}
+
 export async function reviewAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
@@ -325,18 +369,12 @@ export async function reviewAgreements(
 	try {
 		await db.batch(batch);
 	} catch (error) {
-		// Another tab can create the same legal party under its own id, so this batch's insert of the client is skipped and
-		// the agreements then name a client that does not exist. That is a lost race. A foreign key failure while the
-		// client row exists is not, and stays a fault.
 		if (
 			error instanceof Error &&
 			/FOREIGN KEY/.test(error.message) &&
-			!(await db
-				.prepare("SELECT 1 FROM software_agreement_clients WHERE id=?")
-				.bind(clientId)
-				.first())
+			(await otherRequestChangedClient(db, previous?.id, clientId, identity))
 		)
-			throw new LostRace("The client row was created by another request.");
+			throw new LostRace("Another request changed the client row.");
 
 		throw error;
 	}

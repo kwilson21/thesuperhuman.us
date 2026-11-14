@@ -1,4 +1,8 @@
+import Stripe from "stripe";
+import * as Schema from "effect/Schema";
+import { z } from "astro/zod";
 import { afterEach, expect, it, vi } from "vitest";
+import { FieldsRefused } from "~/lib/fields";
 import { LostRace, ReaderMessage } from "~/lib/reader-message";
 import { classifyFailure, logUnexpected } from "~/server/failure";
 
@@ -80,4 +84,110 @@ it("logs the route, the name and a clean, cut message, and leaves out a message 
 		["Software invoice failed unexpectedly:", "Error", ""],
 		["Agreement review failed unexpectedly:", "UnknownError", ""],
 	]);
+});
+
+// The log never carries a message that can quote input, whatever the error calls itself.
+
+function logged(error: Error) {
+	const lines: unknown[][] = [];
+
+	vi.spyOn(console, "error").mockImplementation((...args) => {
+		lines.push(args);
+	});
+	logUnexpected("Software invoice", error);
+
+	return lines[0];
+}
+
+const quoting: [string, () => Error][] = [
+	[
+		"a Stripe invalid request error",
+		() =>
+			new Stripe.errors.StripeInvalidRequestError({
+				type: "invalid_request_error",
+				message: "Invalid email address: grace@example.test",
+				code: "email_invalid",
+				statusCode: 400,
+			}),
+	],
+	[
+		"a Stripe error renamed by a wrapper",
+		() => {
+			const error = new Stripe.errors.StripeAPIError({
+				type: "api_error",
+				message: "No such customer: 'cus_grace@example.test'",
+				statusCode: 500,
+			});
+
+			error.name = "Error";
+
+			return error;
+		},
+	],
+	[
+		"a JSON parse error",
+		() => {
+			try {
+				JSON.parse('{"email":"grace@example.test",');
+			} catch (error) {
+				return error as Error;
+			}
+
+			throw new Error("unreachable");
+		},
+	],
+	[
+		"a Zod error",
+		() => {
+			const read = z.enum(["a"]).safeParse("grace@example.test");
+
+			return read.error as Error;
+		},
+	],
+	[
+		"an Effect schema error",
+		() => {
+			try {
+				Schema.decodeUnknownSync(Schema.Literal("a"))("grace@example.test");
+			} catch (error) {
+				return error as Error;
+			}
+
+			throw new Error("unreachable");
+		},
+	],
+	["a refused form", () => new FieldsRefused({ email: "grace@example.test" })],
+];
+
+it.each(quoting)("never logs the message of %s", (_name, make) => {
+	const line = logged(make());
+
+	expect(JSON.stringify(line)).not.toMatch(/grace|example\.test|cus_/);
+	expect(line?.[2] ?? "").not.toContain("@");
+});
+
+it("logs only the type, code and status of a Stripe error", () => {
+	const line = logged(
+		new Stripe.errors.StripeInvalidRequestError({
+			type: "invalid_request_error",
+			message: "Invalid email address: grace@example.test",
+			code: "email_invalid",
+			statusCode: 400,
+		}),
+	);
+
+	expect(line).toEqual([
+		"Software invoice failed unexpectedly:",
+		"StripeInvalidRequestError",
+		"code=email_invalid status=400",
+	]);
+});
+
+it("cleans and cuts the logged name", () => {
+	const error = new Error("x");
+
+	error.name = `Bad\r\nName${"y".repeat(100)}`;
+	const [, name] = logged(error) ?? [];
+
+	expect(name).toBe(`Bad Name${"y".repeat(52)}`);
 });

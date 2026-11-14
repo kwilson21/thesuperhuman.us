@@ -20,7 +20,7 @@ const KEY =
 const answers = async (
 	name: string,
 	sql: string,
-	failure?: { on: RegExp; message: string },
+	failures: { on: RegExp; message: string; nth?: number }[] = [],
 ) => {
 	const [json] = scenario(name, {
 		wires: ["json"],
@@ -35,7 +35,7 @@ const answers = async (
 						},
 					]
 				: [],
-			failures: failure ? [{ ...failure, nth: 1 }] : [],
+			failures: failures.map((failure) => ({ nth: 1, ...failure })),
 		},
 	});
 
@@ -45,6 +45,9 @@ const answers = async (
 	return {
 		status: "status" in answer ? answer.status : undefined,
 		body: "body" in answer ? answer.body : undefined,
+		logged: JSON.stringify(
+			record.effects.filter((effect) => effect.kind === "console"),
+		),
 	};
 };
 
@@ -70,10 +73,35 @@ it("answers 409 when another offer's MSA for the party appears before the batch"
 });
 
 it("answers 500 when a lookup fails for a reason no request explains", async () => {
-	const result = await answers("outage", "", {
-		on: /SELECT \* FROM software_agreement_templates/,
-		message: "d1 down",
-	});
+	const result = await answers("outage", "", [
+		{
+			on: /SELECT \* FROM software_agreement_templates/,
+			message: "d1 down",
+		},
+	]);
 
 	expect(result.status).toBe(500);
+});
+
+const AGREEMENTS_INSERT = /INSERT INTO software_agreements\(/;
+const FOREIGN_KEY = "FOREIGN KEY constraint failed";
+
+it("answers 500 and logs the original error for a foreign key failure no race explains", async () => {
+	const result = await answers("foreign key with no race", "", [
+		{ on: AGREEMENTS_INSERT, message: FOREIGN_KEY },
+	]);
+
+	expect(result.status).toBe(500);
+	expect(result.logged).toContain(FOREIGN_KEY);
+});
+
+it("answers 500 and logs the original error when the check for a race fails too", async () => {
+	const result = await answers("foreign key and a failing check", "", [
+		{ on: AGREEMENTS_INSERT, message: FOREIGN_KEY },
+		{ on: /AND id<>\?/, message: "the follow-up read is down" },
+	]);
+
+	expect(result.status).toBe(500);
+	expect(result.logged).toContain(FOREIGN_KEY);
+	expect(result.logged).not.toContain("follow-up");
 });
