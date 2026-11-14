@@ -1,22 +1,29 @@
 import type { APIContext } from "astro";
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { byteRange, bytesStream } from "../helpers/r2";
+import { clearSuppliedEntries, supplyEntries } from "../helpers/astro-content";
+import { GET } from "~/pages/audio/file/[slug]";
 
-vi.mock("astro:content", () => {
-	return {
-		getCollection: vi.fn(async () => [
-			{
-				id: "private-software",
-				data: { file: "software/request/update/visual.png" },
-			},
-			{ id: "slow-burn", data: { file: "tracks/slow-burn.mp3" } },
-		]),
-	};
+// The audio-tracks collection has no files in this repository, so the test gives it its entries through the
+// astro:content helper's seam. The route still reads them with getCollection.
+beforeEach(() => {
+	supplyEntries("audio-tracks", [
+		{
+			id: "private-software",
+			collection: "audio-tracks",
+			data: { file: "software/request/update/visual.png" },
+		},
+		{
+			id: "slow-burn",
+			collection: "audio-tracks",
+			data: { file: "tracks/slow-burn.mp3" },
+		},
+	]);
 });
 
-import { GET } from "~/pages/audio/file/[slug]";
+afterEach(() => clearSuppliedEntries());
 
 function makeR2(body = new Uint8Array([1, 2, 3, 4, 5]), size = 5) {
 	return double<R2Bucket>({
