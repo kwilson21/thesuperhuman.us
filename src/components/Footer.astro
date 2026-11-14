@@ -49,7 +49,8 @@ const year = new Date().getFullYear();
   setupPinnedContact();
 </script>
 <style>
-  .compact-footer { margin-top: var(--site-section-space); padding-bottom: var(--space-8); }
+  /* The side gutter is rem-based, so it doubles with enlarged text and squeezes the closing panel at phone widths. Capped by the viewport, and never below 24px, it equals the site gutter at every width at the default size. */
+  .compact-footer { margin-top: var(--site-section-space); padding-inline: min(var(--site-gutter), max(24px, 7.5vw)); padding-bottom: var(--space-8); }
   .closing-panel { display: grid; justify-items: center; text-align: center; padding: 3rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
   /* Each link gets a 44px-tall tap area from a pseudo-element, so the text and layout keep their look.
      Wrapped rows sit 44px apart (row gap = 44px minus one line), so neighbouring areas never overlap. */
@@ -63,8 +64,10 @@ const year = new Date().getFullYear();
   /* Accent on the panel is below 4.5:1 for small text, so footer links use muted and ink. */
   .compact-footer nav a { color: var(--muted); }
   @media (hover: hover) and (pointer: fine) { .compact-footer nav a:hover { color: var(--ink); } }
+  /* The Get in touch button may wrap its label at any width, so enlarged text reflows inside the panel. */
+  .closing-panel .site-button-large { white-space: normal; text-align: center; }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
-  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem 1.25rem 1.75rem; } }
+  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
     .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) var(--site-gutter) calc(var(--space-4) + env(safe-area-inset-bottom)); background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); pointer-events: none; }

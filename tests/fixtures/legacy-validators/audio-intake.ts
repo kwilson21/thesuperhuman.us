@@ -6,35 +6,47 @@
 // `RawValue`. A later edit to either moves both sides of the differential together.
 import { z } from "astro/zod";
 import type { RawValue } from "../../../src/lib/fields";
+import { isObject, isText } from "../../../src/lib/type-guards";
 import { directionFields } from "../../../src/lib/audio-intake";
+
+// Added with the Effect version (security fixes, 2026-11): a control character is refused, as in the software inquiry. Both
+// sides of the differential move together; the line break and the tab stay allowed in the two free-text answers.
+const noControl = (value: string) =>
+	!/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(value);
+
+const noControlMessage = "Remove control characters.";
 
 const short = (max: number) => z.string().trim().max(max);
 
-const optionalLink = short(2048).refine((value) => {
-	if (!value) return true;
+const optionalLink = short(2048)
+	.refine((value) => {
+		if (!value) return true;
 
-	try {
-		const url = new URL(value);
+		try {
+			const url = new URL(value);
 
-		return url.protocol === "https:" && !url.username && !url.password;
-	} catch {
-		return false;
-	}
-}, "Use a complete HTTPS link, or leave this blank.");
+			return url.protocol === "https:" && !url.username && !url.password;
+		} catch {
+			return false;
+		}
+	}, "Use a complete HTTPS link, or leave this blank.")
+	.refine(noControl, noControlMessage);
 
 const schema = z.object({
 	service: z.enum(["vocal-mix", "mastering", "bundle", "custom"]),
 	title: short(120)
 		.min(1, "Add a song or project title.")
-		.refine((v) => !/[\r\n]/.test(v)),
+		.refine((v) => !/[\r\n]/.test(v))
+		.refine(noControl, noControlMessage),
 	direction: z.enum(["judgment", "preferences", "specific"]),
 	preferences: z.record(z.string().max(30), z.string().max(30)).default({}),
-	preserve: short(1200).default(""),
+	preserve: short(1200).refine(noControl, noControlMessage).default(""),
 	referenceUrl: optionalLink.default(""),
-	referenceNote: short(2000).default(""),
+	referenceNote: short(2000).refine(noControl, noControlMessage).default(""),
 	name: short(100)
 		.min(1, "Add your name.")
-		.refine((v) => !/[\r\n]/.test(v)),
+		.refine((v) => !/[\r\n]/.test(v))
+		.refine(noControl, noControlMessage),
 	email: short(120).email("Add a valid email address."),
 	permission: z.literal(true, {
 		errorMap: () => ({ message: "Allow access to the files for this review." }),
@@ -45,12 +57,28 @@ const schema = z.object({
 
 export type LegacyIntakeInput = z.infer<typeof schema>;
 
+// Added with the Effect version, as for the control-character refusal: a vertical tab or form feed in the two free-text
+// answers is read as a line break. The same preprocessing runs on both sides of the differential, so the comparison is
+// still of the two schemas.
+function withLineBreaks(input: RawValue): RawValue {
+	if (!isObject(input) || Array.isArray(input)) return input;
+
+	return Object.fromEntries(
+		Object.entries(input).map(([name, value]) => [
+			name,
+			(name === "preserve" || name === "referenceNote") && isText(value)
+				? value.replace(/[\u000b\u000c]/g, "\n")
+				: value,
+		]),
+	);
+}
+
 export function legacyValidateIntake(
-	input: RawValue,
+	rawInput: RawValue,
 ):
 	| { ok: true; value: LegacyIntakeInput }
 	| { ok: false; errors: Record<string, string> } {
-	const result = schema.safeParse(input);
+	const result = schema.safeParse(withLineBreaks(rawInput));
 
 	if (!result.success)
 		return {

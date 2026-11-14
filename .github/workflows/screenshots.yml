@@ -2,9 +2,9 @@ name: Screenshots
 
 # Runs the pull request's own code, so it gets a read-only token. It only captures images and
 # uploads them as an artifact; screenshots-publish.yml (always main's copy) publishes them.
-# Only UI changes: pages, components, layouts, styles, browser scripts, page content and
-# static assets. Server-only code (API routes, src/lib, middleware), migrations and
-# dependency or Worker config changes don't trigger it.
+# Only UI changes: pages, components, layouts, styles, browser scripts (scripts/screenshots and
+# tests/browser), page content and static assets. Server-only code (API routes, src/lib,
+# middleware), migrations and dependency or Worker config changes don't trigger it.
 # Runs on main too, so pull requests have a recent run to reuse unchanged images from. The
 # full-screenshots label makes a pull request capture everything. A scheduled run every three days
 # keeps that reference fresh, since GitHub deletes caches that go unused for seven days.
@@ -25,6 +25,7 @@ on:
       - 'astro.config.mjs'
       - 'tailwind.config.mjs'
       - 'scripts/screenshots/**'
+      - 'tests/browser/**'
       - '.github/workflows/screenshots.yml'
 
   push:
@@ -43,6 +44,7 @@ on:
       - 'astro.config.mjs'
       - 'tailwind.config.mjs'
       - 'scripts/screenshots/**'
+      - 'tests/browser/**'
       - '.github/workflows/screenshots.yml'
 
   # GitHub deletes caches that go unused for seven days, so this keeps a recent reference on main.
@@ -99,6 +101,10 @@ jobs:
         env:
           PW_ARTIFACT_DIR: screenshots
         run: node tests/browser/personal-name.cjs
+      - name: Check large text reflow
+        env:
+          PW_ARTIFACT_DIR: screenshots
+        run: node tests/browser/text-scale.cjs
       - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: screenshots

@@ -1,3 +1,4 @@
+import { tinyImages } from "../fixtures/tiny-images";
 import type { APIContext } from "astro";
 import { partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
@@ -102,7 +103,11 @@ const terms = {
 const termsJson = JSON.stringify(terms, null, 2),
 	secret = "studio-code-key-for-tests-32-characters";
 
-const visualBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]);
+// A complete image: a visual must be whole (see src/lib/image-structure.ts).
+const visualBytes = Uint8Array.from(atob(tinyImages.png), (c) =>
+	c.charCodeAt(0),
+);
+
 const bucket = { put: vi.fn(), get: vi.fn(), delete: vi.fn(), list: vi.fn() };
 
 function request(

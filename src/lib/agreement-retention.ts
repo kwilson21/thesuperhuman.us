@@ -4,6 +4,7 @@ import { agreementEvent } from "./agreement-events";
 import { softwareGuard } from "./software-projects";
 import type { Agreement } from "./software-agreements";
 import { isText } from "./type-guards";
+import { ReaderMessage } from "./reader-message";
 
 export type RetentionManifest = {
 	version: 1;
@@ -91,7 +92,7 @@ export async function previewAgreementRetention(
 			for (const object of listed.objects) {
 				const value = await bucket.get(object.key);
 
-				if (!value) throw new Error("Archive changed.");
+				if (!value) throw new ReaderMessage("Archive changed.");
 				objects.push({
 					key: object.key,
 					sha256: await hashBytes(await value.arrayBuffer()),
@@ -263,6 +264,9 @@ export async function applyAgreementRetention(
 	manifest: RetentionManifest,
 	now = new Date(),
 ) {
+	// The manifest is whatever the owner's page sent back; one that is missing or not an object is stale, not a fault.
+	if (!manifest || !Array.isArray(manifest.agreements))
+		throw new ReaderMessage("Review is stale or belongs to different storage.");
 	const age = now.getTime() - Date.parse(manifest.created_at);
 
 	if (
@@ -282,7 +286,7 @@ export async function applyAgreementRetention(
 			(!Array.isArray(manifest.orphan_attachments) ||
 				manifest.orphan_attachments.length > 100))
 	)
-		throw new Error("Review is stale or belongs to different storage.");
+		throw new ReaderMessage("Review is stale or belongs to different storage.");
 
 	const fresh = await previewAgreementRetention(db, bucket, binding, now, {
 		cursor: manifest.orphan_scan_cursor ?? null,
@@ -295,7 +299,7 @@ export async function applyAgreementRetention(
 		canonicalJson(fresh.orphan_attachments) !==
 			canonicalJson(manifest.orphan_attachments ?? [])
 	)
-		throw new Error("Archive changed. Preview again.");
+		throw new ReaderMessage("Archive changed. Preview again.");
 	const manifestHash = await hashOfferToken(canonicalJson(manifest));
 
 	for (const item of manifest.agreements) {
@@ -344,7 +348,7 @@ export async function applyAgreementRetention(
 				stored &&
 				(await hashBytes(await stored.arrayBuffer())) !== object.sha256
 			)
-				throw new Error("Object changed.");
+				throw new ReaderMessage("Object changed.");
 			await bucket.delete(object.key);
 		}
 
@@ -461,14 +465,14 @@ export async function applyAgreementRetention(
 				created_by: string;
 			}>();
 
-		if (!metadata) throw new Error("Archive changed. Preview again.");
+		if (!metadata) throw new ReaderMessage("Archive changed. Preview again.");
 		const stored = await bucket.get(attachment.key);
 
 		if (
 			stored &&
 			(await hashBytes(await stored.arrayBuffer())) !== attachment.sha256
 		)
-			throw new Error("Unattached PDF changed.");
+			throw new ReaderMessage("Unattached PDF changed.");
 		// Deleting the metadata row in the same transaction as the final reference check reserves
 		// the object: offer saves require this row, so they cannot attach it after this point.
 		await db.batch([
@@ -540,14 +544,14 @@ export async function applyAgreementRetention(
 			uploadedAt > now.getTime() - 30 * 86400000 ||
 			!orphan.key.startsWith("agreements/attachments/")
 		)
-			throw new Error("Archive changed. Preview again.");
+			throw new ReaderMessage("Archive changed. Preview again.");
 		const stored = await bucket.get(orphan.key);
 
 		if (
 			!stored ||
 			(await hashBytes(await stored.arrayBuffer())) !== orphan.sha256
 		)
-			throw new Error("Orphan attachment changed.");
+			throw new ReaderMessage("Orphan attachment changed.");
 		// If the process stops here, the next preview can rediscover this R2 object.
 		// Offer saves require metadata; manifests, metadata and offers are checked again
 		// immediately before deletion.

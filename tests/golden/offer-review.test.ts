@@ -55,10 +55,11 @@ import {
 //                                        country, an invalid reviewer, approver or notice email, no portfolio choice
 //   200 documents                        MSA and SOW created (reviewAgreements), the MSA reused from an executed agreement, an earlier review
 //                                        replaced, invoice and standard payment, two milestones, a checkpoint, attachments, every portfolio choice
-//   409 with the error text              the text of any thrown error that does not start with "[" (this includes database and JavaScript error
-//                                        messages: see the bugs in the report), "The agreement could not be reviewed." otherwise (a Zod error)
-//                                        A signature is already saved; the MSA does not match; another offer has a pending MSA; templates
-//                                        unavailable; unresolved blanks; unsupported character; missing milestone details; a guard failing
+//   409 with the error text              a sentence the code wrote for the client (a ReaderMessage): a signature is already saved; the MSA does
+//                                        not match; another offer has a pending MSA; templates unavailable; unresolved blanks; unsupported
+//                                        character; missing milestone details
+//   409 "The agreement could not be reviewed."  a guard failing (the facts changed), a Zod error or a refused draft
+//   500 "The agreement could not be reviewed."  any other error (a database, parser or JavaScript fault), logged without its message
 //   303 /offer/<token>/sign?review=1     form success
 //   rejected                             a statement outside the try throwing (the signing lookup, the offer lookup, the session lookup)
 //   GET (download)
@@ -442,7 +443,7 @@ const posts: Case[] = [
 	...one("the MSA template is not pinned", {
 		opts: { offer: { msa_template_id: null } },
 	}),
-	...one("the offer terms are not JSON (the parser message is returned)", {
+	...one("the offer terms are not JSON (the parser message is not returned)", {
 		opts: raw("terms_json", "not json"),
 	}),
 	...one("the offer terms fail their schema", {
@@ -467,7 +468,7 @@ const posts: Case[] = [
 		opts: offerWith({ terms: checkpointTerms }),
 	}),
 	...one(
-		"the contractor snapshot is missing (a JavaScript error message is returned)",
+		"the contractor snapshot is missing (a JavaScript error message is not returned)",
 		{ opts: raw("contractor_snapshot_json", null) },
 	),
 	...one("the contractor snapshot fails its schema", {
@@ -660,7 +661,7 @@ const posts: Case[] = [
 		/SELECT \* FROM software_agreement_sessions WHERE token_hash/,
 	),
 	...outage(
-		"the draft save batch fails (its message is returned)",
+		"the draft save batch fails (its message is not returned)",
 		DRAFT_INSERT,
 	),
 	...outage(
@@ -690,7 +691,10 @@ const posts: Case[] = [
 		"the pending MSA lookup fails",
 		/SELECT \* FROM software_agreements WHERE client_id=\? AND template_id=\?/,
 	),
-	...outage("the review batch fails (its message is returned)", CLIENTS_INSERT),
+	...outage(
+		"the review batch fails (its message is not returned)",
+		CLIENTS_INSERT,
+	),
 	// races between the reads and the review batch
 	...race(
 		"the session is revoked before the review batch",

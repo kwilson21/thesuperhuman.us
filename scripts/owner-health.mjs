@@ -3,7 +3,6 @@ import { siteOrigin } from "../src/lib/site-origin.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { openMusicDatabase } from "./music-analytics.mjs";
 import { renderMusicReport } from "./music-report-view.mjs";
 import { parseJsonc } from "./screenshots/config.mjs";
@@ -562,10 +561,7 @@ async function main() {
 	}
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-)
+if (import.meta.main)
 	main().catch(() => {
 		console.error(
 			"Owner health could not complete. Check local authentication and bindings.",

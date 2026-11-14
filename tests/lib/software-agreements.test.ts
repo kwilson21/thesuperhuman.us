@@ -2433,7 +2433,7 @@ it.each([false, true])(
 );
 
 it.each(["agreement", "archive"] as const)(
-	"invalid Turnstile requests preserve the recipient allowance for %s",
+	"invalid Turnstile requests count only the address allowance, not the recipient's, for %s",
 	async (purpose) => {
 		vi.mocked(fetch).mockResolvedValue(
 			new Response('{"success":false}', { status: 200 }),
@@ -2450,9 +2450,10 @@ it.each(["agreement", "archive"] as const)(
 			expect(response.status).toBe(403);
 		}
 
+		// Only the address allowance counts the failed checks; the recipient's own allowance is untouched.
 		expect(
 			sql.prepare("SELECT uses FROM audio_client_allowances").all(),
-		).toEqual([]);
+		).toEqual([{ uses: 3 }]);
 		vi.mocked(fetch).mockImplementation(
 			async () => new Response('{"success":true}', { status: 200 }),
 		);
@@ -2469,11 +2470,12 @@ it.each(["agreement", "archive"] as const)(
 			sql
 				.prepare("SELECT uses FROM audio_client_allowances ORDER BY uses")
 				.all(),
-		).toEqual(
-			Array.from({ length: purpose === "archive" ? 3 : 2 }, () => ({
+		).toEqual([
+			...Array.from({ length: purpose === "archive" ? 2 : 1 }, () => ({
 				uses: 1,
 			})),
-		);
+			{ uses: 4 },
+		]);
 	},
 );
 
