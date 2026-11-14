@@ -13,6 +13,10 @@ export type StripeFakeOptions = {
 	readonly invoiceIds?: readonly string[];
 	/** Refuse invoice creation with a 400, which the SDK does not retry. */
 	readonly refuseInvoices?: boolean;
+	/** Refuse the first n invoice creations with a 400, then answer as usual. Default 0. */
+	readonly refuseFirstInvoices?: number;
+	/** The due date (ISO 8601) the sent invoice carries, as Stripe's due_date. Omitted when not given. */
+	readonly dueDate?: string;
 };
 
 /** One request the Stripe SDK made: its method, path, form-encoded body and Idempotency-Key header (null if none). */
@@ -23,7 +27,7 @@ export type StripeCall = {
 	readonly idempotencyKey: string | null;
 };
 
-const refused = json(400, {
+const refusal = json(400, {
 	error: {
 		type: "invalid_request_error",
 		message: "Stripe unavailable",
@@ -33,8 +37,11 @@ const refused = json(400, {
 function stripeAnswers({
 	invoiceIds = ["in_fake"],
 	refuseInvoices = false,
+	refuseFirstInvoices = 0,
+	dueDate,
 }: StripeFakeOptions): Responder {
 	let created = 0;
+	let refused = 0;
 
 	return ({ url, method }) => {
 		const { pathname } = new URL(url);
@@ -45,7 +52,13 @@ function stripeAnswers({
 			return json(200, { id: "cus_1", object: "customer" });
 
 		if (method === "POST" && pathname === "/v1/invoices") {
-			if (refuseInvoices) return refused;
+			if (refuseInvoices) return refusal;
+
+			if (refused < refuseFirstInvoices) {
+				refused += 1;
+
+				return refusal;
+			}
 
 			const id =
 				invoiceIds[Math.min(created, invoiceIds.length - 1)] ?? "in_fake";
@@ -67,6 +80,10 @@ function stripeAnswers({
 				object: "invoice",
 				status: "open",
 				hosted_invoice_url: `https://invoice.stripe.com/${send[1]}`,
+				due_date:
+					dueDate === undefined
+						? undefined
+						: Math.floor(Date.parse(dueDate) / 1000),
 			});
 
 		return json(404, {
