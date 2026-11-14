@@ -22,8 +22,8 @@ import {
 
 // The golden corpus for POST /api/music-interest: a listener says they want a release (the song, merchandise or both).
 // The route validates the body, checks the release against the real catalog (src/content: one release,
-// "old-news-single", reached here through the astro:content test alias), limits the address, verifies the Turnstile
-// challenge, then upserts the interest and opens one owner request per kind in a single batch. A failed write clears the
+// "old-news-single", reached here through the astro:content test alias), counts the address's attempts, verifies the Turnstile
+// challenge, counts the address's allowance, then upserts the interest and opens one owner request per kind in a single batch. A failed write clears the
 // address's counter and sends the urgent owner alert.
 //
 // Every response branch, and the cases that reach it:

@@ -55,9 +55,8 @@ import { allowanceRow } from "./areas/studio-access";
 //   404 {ok:false}                      request origin is not SITE_ORIGIN (another host, an invalid SITE_ORIGIN), host header differs
 //   503 unavailable                     no MUSIC_DB, code key, Resend key, from address, Turnstile secret (and the empty string)
 //   400 "Enter a valid email address."  after the schema: not an address, empty, spaces, markup, unicode
-//   403 security check again            Turnstile success false, HTTP 500, network down, answer not JSON (before any allowance)
-//   429 "wait a few minutes"            archive-link-ip at 20 uses, archive-link-email at 3 uses (the second only after the first
-//                                       was counted); 19 and 2 pass; windows five minutes old are pruned
+//   403 security check again            Turnstile success false, HTTP 500, network down, answer not JSON (after the address allowance, before the email's)
+//   429 "wait a few minutes"            archive-link-ip at 20 uses (before the security check), archive-link-email at 3 uses (after it); 19 and 2 pass; windows five minutes old are pruned
 //   429 "wait at least 30 seconds"      the cooldown row is under 30 seconds old; a repeat; the guard SELECT in the link batch
 //                                       fails (a link issued under 30 seconds ago, or the batch throwing)
 //   200 receipt, no mail                no executed agreement for the email (the cooldown is still taken and the allowances spent)

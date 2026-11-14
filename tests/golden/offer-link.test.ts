@@ -58,7 +58,7 @@ import { allowanceRow } from "./areas/studio-access";
 //   404 "unavailable for signing"       bad token shape, unknown token, revoked offer link, offer draft, superseded or withdrawn, request
 //                                       withdrawn, resolved or without an email, offer with no recipient snapshot or no MSA template
 //   400 "Enter a valid email address."  no token in the params (the route then takes the archive path and the body has no email)
-//   403 security check again            Turnstile fails (before any allowance is charged)
+//   403 security check again            Turnstile fails (after the address allowance, before the email's)
 //   429 "wait a few minutes"            agreement-link-ip at 20, agreement-link-email at 3
 //   429 "wait at least 30 seconds"      a link issued under 30 seconds ago; liveSigningGuard fails inside the link batch (a started
 //                                       project, a revoked offer link, a withdrawn request, signing switched off); the batch throwing

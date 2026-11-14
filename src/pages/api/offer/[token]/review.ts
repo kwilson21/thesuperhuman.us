@@ -12,6 +12,8 @@ import {
 	agreementRequest,
 	nativeAgreementResponse,
 } from "~/lib/agreement-request";
+import { FieldsRefused } from "~/lib/fields";
+import { classifyFailure, logUnexpected } from "~/server/failure";
 import { getLinkedOffer } from "~/lib/software-offers";
 import { reviewAgreements, offerAgreements } from "~/lib/software-agreements";
 
@@ -104,12 +106,24 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			`/offer/${params.token}/sign?review=1`,
 		);
 	} catch (error) {
+		const failure = classifyFailure(error),
+			refused = error instanceof FieldsRefused || error instanceof z.ZodError;
+
+		if (failure.kind === "unexpected" && !refused) {
+			logUnexpected("Agreement review", error);
+
+			return agreementJson(
+				{ ok: false, error: "The agreement could not be reviewed." },
+				500,
+			);
+		}
+
 		return agreementJson(
 			{
 				ok: false,
 				error:
-					error instanceof Error && !error.message.startsWith("[")
-						? error.message
+					failure.kind === "sentence"
+						? failure.say
 						: "The agreement could not be reviewed.",
 			},
 			409,
