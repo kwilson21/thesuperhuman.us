@@ -1,3 +1,5 @@
+import type { RawValue } from "../fields";
+
 /** Public transport only. Audience review happens before constructing this envelope. */
 export interface Story {
 	headline: string;
@@ -50,7 +52,7 @@ export interface PublicationJournal {
 	commit(publication: Publication): Promise<CommitResult>;
 }
 
-function record(value: unknown): value is object {
+function record(value: RawValue): value is object {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -94,7 +96,7 @@ function day(value: unknown): value is string {
 }
 
 /** Strict shape validation, NOT content sanitization or publication permission. */
-export function parsePublication(value: unknown): Publication | null {
+export function parsePublication(value: RawValue): Publication | null {
 	if (!record(value)) return null;
 	const fields = new Map<string, unknown>(Object.entries(value));
 

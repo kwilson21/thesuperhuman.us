@@ -1,3 +1,4 @@
+import type { RawValue } from "../fields";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -59,7 +60,7 @@ const envelope = z
 	})
 	.strict();
 
-const result = (value: unknown, isError = false) => ({
+const result = (value: RawValue, isError = false) => ({
 	content: [{ type: "text" as const, text: JSON.stringify(value) }],
 	isError,
 });
