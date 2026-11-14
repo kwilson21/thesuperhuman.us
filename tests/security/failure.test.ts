@@ -373,24 +373,48 @@ it("leaves a five-part dotted number alone and still redacts an address at the e
 	);
 });
 
-it("redacts in linear time on long adversarial messages", () => {
-	const inputs = [
-		"1".repeat(50_000),
-		":".repeat(50_000),
-		"1.".repeat(20_000),
-		"a:".repeat(25_000),
-		"a:1:".repeat(12_500),
-		`${"f".repeat(30_000)}::`,
-		`${"f:".repeat(7)}${"g".repeat(40_000)}`,
-		`${"1:".repeat(25_000)}%`,
-		`x ${"1.1.1.".repeat(10_000)}1`,
-		`${"::1 ".repeat(10_000)}`,
-	];
+// Each adversarial input is built at a size n. The repeat counts are fractions of n, so n = 50_000 gives the
+// messages this test has always used.
+const adversarialInputs: ReadonlyArray<(n: number) => string> = [
+	(n) => "1".repeat(n),
+	(n) => ":".repeat(n),
+	(n) => "1.".repeat(n * 0.4),
+	(n) => "a:".repeat(n * 0.5),
+	(n) => "a:1:".repeat(n * 0.25),
+	(n) => `${"f".repeat(n * 0.6)}::`,
+	(n) => `${"f:".repeat(7)}${"g".repeat(n * 0.8)}`,
+	(n) => `${"1:".repeat(n * 0.5)}%`,
+	(n) => `x ${"1.1.1.".repeat(n * 0.2)}1`,
+	(n) => `${"::1 ".repeat(n * 0.2)}`,
+];
 
-	for (const text of inputs) {
+/** The fastest of several runs, so one slow run under load does not count. */
+const fastest = (text: string) => {
+	let best = Number.POSITIVE_INFINITY;
+
+	for (let run = 0; run < 5; run += 1) {
 		const started = performance.now();
 
 		redactAddresses(text);
-		expect(performance.now() - started).toBeLessThan(50);
+		best = Math.min(best, performance.now() - started);
 	}
+
+	return best;
+};
+
+it("redacts in linear time on long adversarial messages", () => {
+	// Linear work makes the time at 8n about eight times the time at n, and quadratic work about sixty-four times.
+	// The bound sits between the two. It reads growth, so the machine's speed and its load do not decide it.
+	const small = 6_250;
+	const large = small * 8;
+
+	adversarialInputs.forEach((attack, index) => {
+		redactAddresses(attack(small));
+
+		const ratio = fastest(attack(large)) / fastest(attack(small));
+
+		expect(ratio, `adversarial input ${index} grew by ${ratio}`).toBeLessThan(
+			24,
+		);
+	});
 });
