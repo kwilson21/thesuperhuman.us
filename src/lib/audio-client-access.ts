@@ -102,6 +102,7 @@ type ProjectRow = { requestId: string; withdrawn: number };
 type CodeRow = {
 	nonceHash: string;
 	email: string;
+	codeHash: string;
 	usedAt: string | null;
 	expiresAt: string;
 };
