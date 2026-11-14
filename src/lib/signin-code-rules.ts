@@ -39,7 +39,7 @@ export type IssueFacts = {
 	readonly now: string;
 	/** Every project of the address whose access is not closed (a withdrawn one included). */
 	readonly projects: readonly SigninProject[];
-	/** The address's code rows and the browser's own row, whatever its address. */
+	/** The address's code rows, and only them: a request for an address never reads another address's rows. */
 	readonly codes: readonly IssueCode[];
 };
 
@@ -50,13 +50,11 @@ export type IssueDecision =
 			readonly auditRequestIds: readonly string[];
 			/** The write's guard: the address's other live codes must still be fewer than this. */
 			readonly liveOthersBelow: number;
-			readonly clearEarlierEmail: string | null;
 			readonly expiredCodes: readonly ExpiredCode[];
 	  }
 	| {
 			readonly kind: "refuse";
 			readonly refusal: "NoOpenProject" | "AddressFull";
-			readonly clearEarlierEmail: string | null;
 			readonly expiredCodes: readonly ExpiredCode[];
 	  };
 
@@ -64,16 +62,10 @@ export type IssueDecision =
  * Issue a code, or refuse. A code is live when it is unused and expires after `now` (the instant of expiry is expired).
  * Refuses (in this order) when the address has no project that is open (none, or every one is withdrawn), and when it
  * already has `cap` live codes other than the browser's own. Both refusals are answered like any other: the person is told
- * nothing about which it was. Whatever the answer, the browser's earlier code is to be deleted when it is for a different
- * address (`clearEarlierEmail` names that address), so asking for any other address always ends the earlier code; an earlier
- * code for the same address is left alone by a refusal.
+ * nothing about which it was. The decision reads, and the write acts on, only rows of this address, so nothing about
+ * this address (its project, its cap, a lost race) can change a code of another address.
  */
 export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
-	const own = facts.codes.find((code) => code.nonceHash === facts.ownNonceHash);
-
-	const clearEarlierEmail =
-		own !== undefined && own.email !== facts.address ? own.email : null;
-
 	// The rows read that have expired (the instant of expiry is expired): they are deleted by key, whatever the answer is, and only
 	// while each row still holds the code that was read (the write re-checks it).
 	const expiredCodes = facts.codes
@@ -84,7 +76,6 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 		return {
 			kind: "refuse",
 			refusal: "NoOpenProject",
-			clearEarlierEmail,
 			expiredCodes,
 		};
 
@@ -100,7 +91,6 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 		return {
 			kind: "refuse",
 			refusal: "AddressFull",
-			clearEarlierEmail,
 			expiredCodes,
 		};
 
@@ -108,7 +98,6 @@ export function decideIssue(facts: IssueFacts, cap: number): IssueDecision {
 		kind: "issue",
 		auditRequestIds: facts.projects.map((project) => project.requestId),
 		liveOthersBelow: cap,
-		clearEarlierEmail,
 		expiredCodes,
 	};
 }

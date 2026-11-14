@@ -382,38 +382,69 @@ describe("the pending sign-in cookie", () => {
 describe("a browser's own earlier code", () => {
 	const otherAddress = "other@example.com";
 
-	it("is removed when the browser asks for a code for a different address", async () => {
+	it("keeps the code for the first address when the browser asks for another address that has a project", async () => {
 		sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
       VALUES ('song-2','service','${otherAddress}','Another song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 
 		const first = await ask();
-
-		const second = await ask(
-			{ cookie: `${pendingName}=${nonceFrom(first)}` },
-			otherAddress,
-		);
+		const cookie = `${pendingName}=${nonceFrom(first)}`;
+		const second = await ask({ cookie }, otherAddress);
 
 		expect(second.status).toBe(200);
+		expect(nonceFrom(second)).toBe(nonceFrom(first));
 		expect(
-			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
-		).toEqual([{ email: otherAddress }]);
+			sql
+				.prepare("SELECT email FROM audio_client_signin_codes ORDER BY email")
+				.all(),
+		).toEqual([{ email: address }, { email: otherAddress }]);
+
+		// Each code opens its own address, from the same browser.
+		expect((await enter(codeIn(mails[0]), { cookie })).status).toBe(200);
+		expect(
+			(await enter(codeIn(mails[1]), { cookie }, otherAddress)).status,
+		).toBe(200);
 	});
 
-	it("ends the browser's code when it asks for an address with no project, whatever that address is", async () => {
-		const first = await ask();
-		const nonce = nonceFrom(first)!;
+	it("keeps the code for the first address whatever the other address is: a project, none, or full", async () => {
+		const statuses = [];
 
-		const refused = await ask(
-			{ cookie: `${pendingName}=${nonce}` },
-			"nobody@example.com",
-		);
+		for (const [toAddress, prepare] of [
+			["none@example.com", () => {}],
+			[
+				"full@example.com",
+				() => {
+					sql.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
+            VALUES ('song-3','service','full@example.com','Third','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 
-		// The cookie is the same value, so the answer is the same as for any address.
-		expect(nonceFrom(refused)).toBe(nonce);
-		expect(
-			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}` }))
-				.status,
-		).toBe(401);
+					for (let index = 0; index < 6; index++)
+						sql
+							.prepare(
+								`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at) VALUES (?,?,?,0,?,?)`,
+							)
+							.run(
+								`full${index}`,
+								"full@example.com",
+								`c${index}`,
+								new Date().toISOString(),
+								new Date(Date.now() + 600_000).toISOString(),
+							);
+				},
+			],
+		] as const) {
+			sql.exec("DELETE FROM audio_client_signin_codes");
+			sql.exec("DELETE FROM audio_client_allowances");
+			mails.length = 0;
+
+			const first = await ask();
+			const cookie = `${pendingName}=${nonceFrom(first)}`;
+
+			prepare();
+			sql.exec("DELETE FROM audio_client_allowances");
+			await ask({ cookie }, toAddress);
+			statuses.push((await enter(codeIn(mails[0]), { cookie })).status);
+		}
+
+		expect(statuses).toEqual([200, 200]);
 	});
 });
 
@@ -441,10 +472,7 @@ describe("two requests on one cookie for different addresses", () => {
 
 			if (first.includes("AS requestId")) return "read";
 
-			if (
-				/^\s*DELETE FROM audio_client_signin_codes/i.test(first) &&
-				items.length === 2
-			)
+			if (/^\s*DELETE FROM audio_client_signin_codes/i.test(first))
 				return "clear";
 
 			if (/^\s*SELECT CASE WHEN \?=0/i.test(first)) return "write";
@@ -683,57 +711,6 @@ describe("two requests on one cookie for different addresses", () => {
 
 		for (const mail of mails)
 			statuses.push((await enter(codeIn(mail), { cookie: yCookie })).status);
-
-		expect(statuses).toContain(200);
-	});
-
-	it("keeps a code that a concurrent request for the same address stored under the cookie, when this request's clean-up targets the browser's earlier code for another address", async () => {
-		const value = "7".repeat(64);
-		const cookie = `${pendingName}=${value}`;
-
-		sql
-			.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
-        VALUES (?,?,'earlier',0,?,?)`)
-			.run(
-				await hashOf(value),
-				"other@example.com",
-				new Date().toISOString(),
-				new Date(Date.now() + 600_000).toISOString(),
-			);
-
-		// Both requests are from one browser for this address; both read the earlier code for the other address. The second one
-		// deletes it and stores its code before the first one's delete runs, which must not remove the second one's code.
-		const script = [
-			"A.read",
-			"B.read",
-			"B.clear",
-			"B.write",
-			"A.clear",
-			"A.write",
-		];
-
-		await Promise.all(
-			["A", "B"].map((who, index) =>
-				requestCode(
-					context(
-						"/api/studio/code",
-						{ email: address, turnstileToken: "ok" },
-						{
-							cookie,
-							ip: `203.0.113.${60 + index}`,
-							database: scripted(who, script),
-						},
-					),
-				),
-			),
-		);
-
-		await Promise.all(background.splice(0));
-
-		const statuses = [];
-
-		for (const mail of mails)
-			statuses.push((await enter(codeIn(mail), { cookie })).status);
 
 		expect(statuses).toContain(200);
 	});

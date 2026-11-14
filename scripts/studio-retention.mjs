@@ -232,7 +232,7 @@ function sources(now) {
 		columns: "nonce_hash,email,created_at",
 		from: "audio_client_signin_codes",
 		where: `COALESCE(used_at,expires_at)<${old}`,
-		order: "nonce_hash",
+		order: "nonce_hash,email",
 		limit: 1000,
 	});
 
@@ -635,7 +635,7 @@ export async function applyStudioRetention(
 		),
 		`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id IN (${projectIds}) AND revoked_at IS NULL)
       THEN 1 ELSE json_extract('access-open','$') END`,
-		`DELETE FROM audio_client_signin_codes WHERE nonce_hash IN (${ids(values.codes)})`,
+		`DELETE FROM audio_client_signin_codes WHERE (nonce_hash,email) IN (VALUES ${values.codes.length ? values.codes.map(([nonce, email]) => `(${quote(nonce)},${quote(email)})`).join(",") : "('','')"})`,
 		...(retiredExists
 			? [
 					guard(sql.retiredCodes, values.retiredCodes),

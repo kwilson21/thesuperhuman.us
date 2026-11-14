@@ -55,14 +55,12 @@ describe("issuing a sign-in code", () => {
 				? {
 						kind: "refuse",
 						refusal: "NoOpenProject",
-						clearEarlierEmail: null,
 						expiredCodes: [],
 					}
 				: liveOthers >= cap
 					? {
 							kind: "refuse",
 							refusal: "AddressFull",
-							clearEarlierEmail: null,
 							expiredCodes: [],
 						}
 					: {
@@ -70,7 +68,6 @@ describe("issuing a sign-in code", () => {
 							// Every project that is not closed is audited, a withdrawn one included.
 							auditRequestIds: projects.map((project) => project.requestId),
 							liveOthersBelow: cap,
-							clearEarlierEmail: null,
 							expiredCodes: [],
 						};
 
@@ -126,32 +123,6 @@ describe("issuing a sign-in code", () => {
 					{ nonceHash: "older", codeHash: "code-older" },
 				],
 			});
-	});
-
-	describe("the browser's earlier code", () => {
-		it("is cleared when it is for a different address, whatever the answer is", () => {
-			const earlier = row(own, { email: "other@example.com" });
-			const full = Array.from({ length: cap }, (_, index) => row(`o${index}`));
-
-			for (const [projects, codes] of [
-				[[open], [earlier]],
-				[[], [earlier]],
-				[[open], [earlier, ...full]],
-			] as const)
-				expect(decideIssue(facts(projects, codes), cap)).toMatchObject({
-					clearEarlierEmail: "other@example.com",
-				});
-		});
-
-		it("is left alone when it is for the same address, or when there is none", () => {
-			expect(decideIssue(facts([], [row(own)]), cap)).toMatchObject({
-				kind: "refuse",
-				clearEarlierEmail: null,
-			});
-			expect(decideIssue(facts([open], []), cap)).toMatchObject({
-				clearEarlierEmail: null,
-			});
-		});
 	});
 });
 

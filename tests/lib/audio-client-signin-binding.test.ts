@@ -347,7 +347,7 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 		sql.close();
 	});
 
-	it("replaces the browser's earlier code when it asks for a different address, and ends it when nothing is issued", async () => {
+	it("keeps the browser's code for one address when it asks for another, whatever the other is", async () => {
 		const { sql, db } = fixture();
 		const first = (await issueClientCode(db, address, secret, now))!;
 
@@ -359,24 +359,44 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 			first.nonce,
 		))!;
 
-		expect(second).not.toBeNull();
-		expect(
-			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
-		).toEqual([{ email: otherAddress }]);
+		expect(second.nonce).toBe(first.nonce);
 
-		// A request for yet another address that issues nothing ends the browser's code too.
+		// A request for an address with no project or one that issues nothing changes no row of another address.
 		expect(
 			await issueClientCode(
 				db,
 				"nobody@example.com",
 				secret,
 				later(6),
-				second.nonce,
+				first.nonce,
 			),
 		).toBeNull();
 		expect(
-			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
-		).toEqual({ n: 0 });
+			sql
+				.prepare("SELECT email FROM audio_client_signin_codes ORDER BY email")
+				.all(),
+		).toEqual([{ email: address }, { email: otherAddress }]);
+
+		expect(
+			await completeClientCode(
+				db,
+				address,
+				first.code,
+				first.nonce,
+				secret,
+				later(7),
+			),
+		).toBeTruthy();
+		expect(
+			await completeClientCode(
+				db,
+				otherAddress,
+				second.code,
+				second.nonce,
+				secret,
+				later(8),
+			),
+		).toBeTruthy();
 		sql.close();
 	});
 });

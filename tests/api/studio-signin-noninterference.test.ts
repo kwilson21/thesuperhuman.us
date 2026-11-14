@@ -735,7 +735,9 @@ describe("regression checks from earlier rounds", () => {
 			),
 		);
 
-		expect(guesses.map((response) => response.status)).toEqual(Array(8).fill(401));
+		expect(guesses.map((response) => response.status)).toEqual(
+			Array(8).fill(401),
+		);
 		expect(
 			sql
 				.prepare("SELECT attempts FROM audio_client_signin_codes WHERE email=?")

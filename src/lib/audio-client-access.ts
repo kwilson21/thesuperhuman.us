@@ -134,17 +134,18 @@ const auditInsert = (
 
 /**
  * Issues a code for the browser holding `pending` (its pending sign-in cookie value), or for a newly minted value when it
- * holds none; the value used is returned with the code. A browser's earlier code for the same address is replaced in place,
- * and its earlier code for a different address is deleted whatever the answer is. Other browsers' codes are never touched.
+ * holds none; the value used is returned with the code. A code is keyed by the cookie value and the address: the browser's
+ * earlier code for this address is replaced in place, and a request for an address reads, writes and deletes only rows of
+ * that address, so nothing it does (issue, refuse, hit the cap, lose a race) can change a code of another address.
  * Returns null when no code was issued: the address has no open project, it already has the most live codes, or the facts
  * changed under the write (a lost race, answered like a refusal and not retried, so a request never makes extra round
  * trips that depend on the address).
  *
  * Every request makes the same three round trips with the same statements, whatever the address and the answer:
- *   1. read (one batch): the address's projects, and its code rows with the browser's own row
- *   2. delete (one batch): expired codes, and the browser's earlier code when `decideIssue` says it is for another address
- *   3. write (one batch): a guard, the replaced own row, the new row and the audit rows. Each is bound to do nothing when
- *      `decideIssue` did not say to issue.
+ *   1. read (one batch): the address's projects, and the address's code rows
+ *   2. clean-up (one batch): the address's expired rows `decideIssue` named, each only while it still holds the code read
+ *   3. write (one batch, about this address only): a guard, the replaced row, the new row and the audit rows. Each is bound
+ *      to do nothing when `decideIssue` did not say to issue.
  * Which codes are live, whether the address has an open project, and whether there is room are decided in
  * `decideIssue` (src/lib/signin-code-rules.ts) from what was read. The guard re-checks, at write time, the two facts that
  * decision used: a project of the address is still open, and its live codes other than this browser's are still under the
@@ -173,8 +174,8 @@ export async function issueClientCode(
 		projectFacts(db, email),
 		db
 			.prepare(`SELECT nonce_hash AS nonceHash,email,code_hash AS codeHash,used_at AS usedAt,expires_at AS expiresAt
-      FROM audio_client_signin_codes WHERE email=? OR nonce_hash=?`)
-			.bind(email, nonceHash),
+      FROM audio_client_signin_codes WHERE email=?`)
+			.bind(email),
 	]);
 
 	const answer = decideIssue(
@@ -190,23 +191,19 @@ export async function issueClientCode(
 
 	// The sweep, and the browser's earlier code for another address: for every answer, and kept when the write below fails.
 	await db.batch([
-		// The expired rows `decideIssue` named, deleted by key. The guard re-checks the decided fact at write time: a row goes only if
-		// it is still expired and still holds the code that was read, so a fresh code another request stored under the same key
-		// since the read is never deleted.
+		// The expired rows of this address that `decideIssue` named, deleted by key. The guard re-checks the decided fact at write
+		// time: a row goes only if it is still expired and still holds the code that was read, so a fresh code another request
+		// stored under the same key since the read is never deleted. Only rows of this address are touched.
 		db
-			.prepare(`DELETE FROM audio_client_signin_codes WHERE expires_at<=?
+			.prepare(`DELETE FROM audio_client_signin_codes WHERE email=? AND expires_at<=?
         AND (nonce_hash,code_hash) IN (SELECT json_extract(j.value,'$[0]'),json_extract(j.value,'$[1]') FROM json_each(?) j)`)
 			.bind(
+				email,
 				issuedAt,
 				JSON.stringify(
 					answer.expiredCodes.map((row) => [row.nonceHash, row.codeHash]),
 				),
 			),
-		db
-			.prepare(
-				"DELETE FROM audio_client_signin_codes WHERE nonce_hash=? AND email=?",
-			)
-			.bind(nonceHash, answer.clearEarlierEmail ?? ""),
 	]);
 
 	const issue = answer.kind === "issue";
@@ -226,11 +223,13 @@ export async function issueClientCode(
 					issuedAt,
 					answer.kind === "issue" ? answer.liveOthersBelow : 0,
 				),
-			// Replaces the browser's row whatever address it is for: the table has one row per cookie value, so the insert below
-			// can never collide on it, however requests sharing a cookie interleave.
+			// Replaces the browser's row for this address: the table has one row per (cookie value, address), so the insert below
+			// can never collide on it, however requests sharing a cookie interleave, and no row of another address is touched.
 			db
-				.prepare("DELETE FROM audio_client_signin_codes WHERE nonce_hash=?")
-				.bind(issue ? nonceHash : ""),
+				.prepare(
+					"DELETE FROM audio_client_signin_codes WHERE nonce_hash=? AND email=?",
+				)
+				.bind(issue ? nonceHash : "", issue ? email : ""),
 			db
 				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at,used_at,session_token_hash)
         SELECT ?,?,?,0,?,?,NULL,NULL WHERE ?=1`)
@@ -428,8 +427,8 @@ export async function completeClientCode(
 			),
 		db
 			.prepare(`INSERT INTO audio_client_sessions(token_hash,email,created_at,expires_at,last_seen_at)
-      SELECT ?,email,?,?,? FROM audio_client_signin_codes WHERE nonce_hash=? AND session_token_hash=?`)
-			.bind(tokenHash, at, expiresAt, at, nonceHash, tokenHash),
+      SELECT ?,email,?,?,? FROM audio_client_signin_codes WHERE nonce_hash=? AND email=? AND session_token_hash=?`)
+			.bind(tokenHash, at, expiresAt, at, nonceHash, email, tokenHash),
 		db
 			.prepare(`INSERT INTO audio_client_access_audit(request_id,action,occurred_at)
       SELECT j.value,'signed-in',? FROM json_each(?) j
