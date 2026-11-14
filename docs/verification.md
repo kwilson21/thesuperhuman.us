@@ -227,14 +227,7 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart
 from work it waited for); `background` means the answer had been produced and read before the effect began (work handed to
-`ctx.waitUntil`, or left floating), and the state digest "at the response" does not include it. The harness decides this by
-letting the event loop go quiet and releasing what the answer needs, never by counting promise turns, so a conversion that
-adds turns records the same phases. A conversion onto an Effect runtime does too for the yields the tests cover
-(`Effect.yieldNow`, a `setImmediate` yield, and the automatic yield after 2,048 operations), because the harness tracks
-the `setImmediate` calls the scheduler makes. Two things are not observed: the body read of a Blob or compressed stream
-answer, and key operations other than the cipher and digest calls. Moving work across the response is a NOT NEUTRAL
-change. `tests/golden/README.md` ("What is recorded") has the rule, the tracked work, the known limits (a route that keeps
-awaiting after `waitUntil`, and the two above), and the comparison tool.
+`ctx.waitUntil`, or left floating), and the state digest "at the response" does not include it. The harness decides this with a gate and a driver, never by counting promise turns, and it does not let the machine's speed decide anything. Threaded WebCrypto operations and `setImmediate` callbacks take a place in a delivery order when they start, and the route receives each result only in that order, one per driver turn. So a route's next step (a timer it creates, an effect it starts) follows from its structure, and a route that keeps awaiting after `waitUntil` gets the same labels on every run, under load included. A conversion onto an Effect runtime records the same phases for the yields the tests cover (`Effect.yieldNow`, a `setImmediate` yield, and the automatic yield after 2,048 operations). Not observed: the body read of a Blob or compressed stream answer, `timers/promises`, and key operations other than the cipher and digest calls. Moving work across the response is a NOT NEUTRAL change. `tests/golden/README.md` ("What is recorded") has the rule, the tracked work, the known limits, and the proof and comparison tools.
 
 ## Verified modules
 
