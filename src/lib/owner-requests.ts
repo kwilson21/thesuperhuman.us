@@ -126,7 +126,7 @@ export async function saveOwnerRequest(
 		email: input.email.trim().toLowerCase(),
 		cityRegion: input.cityRegion?.trim() ?? "",
 		summary: input.summary.trim(),
-		details: JSON.parse(details) as Record<string, unknown>,
+		details: JSON.parse(details),
 		status: "new",
 		privateNote: "",
 		createdAt: now,

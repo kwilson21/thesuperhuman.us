@@ -6,13 +6,8 @@ const ENDPOINT = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
  */
 export type TurnstileOutcome = "passed" | "refused" | "unavailable";
 
-function isPassedAnswer(value: unknown): boolean {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"success" in value &&
-		value.success === true
-	);
+function hasSuccessFlag(value: unknown): value is { success: unknown } {
+	return typeof value === "object" && value !== null && "success" in value;
 }
 
 export async function checkTurnstile(
@@ -40,7 +35,7 @@ export async function checkTurnstile(
 		return "unavailable";
 	}
 
-	return isPassedAnswer(data) ? "passed" : "refused";
+	return hasSuccessFlag(data) && data.success === true ? "passed" : "refused";
 }
 
 export async function verifyTurnstile(
