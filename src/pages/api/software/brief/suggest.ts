@@ -49,6 +49,12 @@ const empty = () =>
 	);
 
 /** A store, limiter or model failure: the same empty body, with 500 so the failure is not taken for a quiet answer. */
+const modelUnavailable = () =>
+	Response.json(
+		{ suggestion: "" },
+		{ status: 503, headers: { "cache-control": "no-store" } },
+	);
+
 const failedAnswer = () =>
 	Response.json(
 		{ suggestion: "" },
@@ -150,13 +156,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							.run(),
 					)
 					.then(() => {})
-					.catch((error) => logUnexpected(ROUTE, error));
+					.catch((error: Error) => logUnexpected(ROUTE, error));
 
 				locals.runtime?.ctx?.waitUntil(cleanup);
 			}
 		}
 
-		const result = await Promise.race([
+		const answer = await Promise.race([
 			env.AI.run("@cf/meta/llama-3.2-1b-instruct", {
 				messages: [
 					{
@@ -168,13 +174,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				],
 				temperature: 0.1,
 				max_tokens: 12,
-			}),
-			new Promise<null>((resolve) => {
-				timer = setTimeout(() => resolve(null), 1200);
+			}).then(
+				(value) => ({ kind: "answered" as const, value }),
+				() => ({ kind: "failed" as const }),
+			),
+			new Promise<{ kind: "timeout" }>((resolve) => {
+				timer = setTimeout(() => resolve({ kind: "timeout" }), 1200);
 			}),
 		]);
 
-		const raw = hasResponseText(result) ? result.response.trim() : "";
+		// A model failure is a known unavailable dependency. Its error is not logged: it may quote what the visitor typed.
+		if (answer.kind === "failed") {
+			logUnexpected(ROUTE, new Error("Workers AI call failed"));
+
+			return modelUnavailable();
+		}
+
+		const raw =
+			answer.kind === "answered" && hasResponseText(answer.value)
+				? answer.value.response.trim()
+				: "";
 
 		if (!raw || /[\r\n"\x00-\x1f]/.test(raw) || raw.length > 100)
 			return empty();

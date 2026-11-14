@@ -275,11 +275,43 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 	).toBe(1);
 });
 
-it("returns no suggestion on error, empty model output or timeout", async () => {
-	run.mockRejectedValueOnce(new Error("unavailable"));
+it("logs one line when the cleanup of old budget rows fails, and still answers", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const failingCleanup = double<D1Database>({
+		prepare: (sql: string) =>
+			sql.startsWith("DELETE")
+				? double<D1PreparedStatement>({
+						bind: () =>
+							double<D1PreparedStatement>({
+								run: async () => {
+									throw new Error("cleanup refused");
+								},
+							}),
+					})
+				: database.prepare(sql),
+	});
+	const waitUntil = vi.fn();
+	const ctx = context(input, { MUSIC_DB: failingCleanup });
+	ctx.locals.runtime.ctx = double<ExecutionContext>({ waitUntil });
+	const response = await POST(ctx);
+	expect(response.status).toBe(200);
+	await waitUntil.mock.calls[0][0];
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
+});
+
+it("answers 503 with no suggestion when the model fails, and logs no text of the model's error", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	run.mockRejectedValueOnce(new Error("model quoted MARKER-VISITOR-TEXT"));
 	const failed = await POST(context());
-	expect(failed.status).toBe(500);
+	expect(failed.status).toBe(503);
 	expect(await failed.json()).toEqual({ suggestion: "" });
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(JSON.stringify(log.mock.calls)).not.toContain("MARKER-VISITOR-TEXT");
+	log.mockRestore();
+});
+
+it("returns no suggestion on empty model output or timeout", async () => {
 	run.mockResolvedValueOnce({ response: "" });
 	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 	run.mockImplementationOnce(() => new Promise(() => {}));

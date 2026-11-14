@@ -373,6 +373,131 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 	).toHaveLength(0);
 });
 
+it("gives back the allowance when a rival stored the same submission first", async () => {
+	const racing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			sql
+				.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at,submission_id)
+      VALUES ('raced','software','workflow','Alex','alex@example.com','Stored summary',?,'new','now','now',?)`)
+				.run(JSON.stringify({ path: "workflow", today: "Stored answer" }), id);
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+
+	const response = await POST(context(base, { db: racing }));
+	expect(response.status).toBe(200);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(0);
+	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
+	// Only the rival's request is stored: the loser stored nothing.
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{
+			n: 1,
+		},
+	);
+});
+
+/** The text of every console.error line the route wrote, with nothing else from the call. */
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+	return JSON.stringify(spy.mock.calls);
+}
+
+it("logs the rival lookup failure once without the visitor's details", async () => {
+	let lookups = 0;
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	// One line for the failed save and one for the rival lookup that could not be made.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+});
+
+it("logs the give-back failure once and still answers 400 on the too-large path", async () => {
+	const oversized = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			throw new RequestDetailsTooLargeError();
+		},
+	});
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(
+		context(base, {
+			db: oversized,
+			rate: fakeKv({
+				get: async () => null,
+				put: async () => {},
+				delete: async () => {
+					throw new Error("kv down");
+				},
+			}),
+		}),
+	);
+	expect(response.status).toBe(400);
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+});
+
+it("answers 500 and still alerts when the lookup after a failed save also throws", async () => {
+	let lookups = 0;
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			// Only the second lookup, the one after the failed save, throws.
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
+});
+
 it("preserves input and clears success limit after a storage failure", async () => {
 	const failing = fakeD1({
 		prepare: db.prepare.bind(db),
@@ -539,6 +664,10 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
+	// A failed read is reported as a read, so the owner is not told that a write was lost.
+	expect(JSON.parse(String(alertCall[1]?.body)).text).toContain(
+		"Failure code: d1-read-failed",
+	);
 	expect(JSON.stringify(JSON.parse(String(alertCall[1]?.body)))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
