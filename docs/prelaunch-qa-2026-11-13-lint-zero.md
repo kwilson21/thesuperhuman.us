@@ -6,7 +6,7 @@ Branches: a stack of three, bottom to top: `claude/lint-zero-1-source`, `claude/
 Pull requests: #256, #257 and #258, linked as GitHub stack 259 (`https://github.com/kwilson21/thesuperhuman.us/stack/259`)
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in several independent AI review rounds, then by Greptile and Codex on the pull requests. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: the production revision at merge time. When this record was last updated that was `origin/main` `07d2613d` (pull request #267), which the stack is built on; re-check with `git fetch` before merge. After merge, the rollback for each layer is its merge commit's first parent; reverting one merge commit undoes only that layer.
+Rollback revision: `dc7fc1aa`, the first parent of the merge commit `440b28ef`. Reverting that merge commit undoes all three layers at once.
 
 ## Scope
 
@@ -127,11 +127,11 @@ Item numbers follow `docs/prelaunch-checklist.md`, in its order.
 ### 7. Release and final QA
 
 - PASS (local), 7.1 Required type, test and build checks: see Evidence and limits.
-- UNVERIFIED, 7.2 Diff review: see Reviews. Codex has not reviewed these heads, and the last correction to this record was not reviewed again.
+- PASS, 7.2 Diff review: see Reviews and "Merge and deployment". Before the merge, Codex's reviews of the final heads had no open finding and every review thread was resolved. The last corrections to this record were not reviewed again by an independent reviewer.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, routing, cache and headers: nothing changed; no deployed response observed.
-- UNVERIFIED, 7.4 Rollback version: `origin/main` `07d2613d` when last updated; it is fixed only at merge time. `main` moved in four steps during this work.
-- UNVERIFIED, 7.5 Post-deployment verification: not deployed.
-- PASS, 7.6 Receipt and evidence. Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+- PASS, 7.4 Rollback version: `dc7fc1aa`, the first parent of the merge commit `440b28ef`. See "Merge and deployment".
+- UNVERIFIED, 7.5 Post-deployment verification, apart from two observations: the production build succeeded and two pages answered 200. Journeys, forms, sitemap, metadata, the owner center, payments and signing were not checked live.
+- PASS, 7.6 Receipt and evidence. Implemented: yes. Verified locally: yes. Deployed: yes (`440b28ef`). Verified live: two pages answer 200; nothing else.
 
 ### Software agreement signing
 
@@ -157,7 +157,9 @@ Item numbers follow `docs/prelaunch-checklist.md`, in its order.
 
 Implemented: yes. Verified locally: yes. Deployed: yes. Verified live: two pages answer 200; nothing else.
 
-## Delivery status and remaining gates
+## Delivery status before the merge (historical)
+
+This section is kept as it stood before the merge. "Merge and deployment" above is the current state.
 
 On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`), read on 2026-11-14: `validate`, Workers Builds and Greptile passed on all three, including the new lint step on #258, and `capture` passed on #256.
 
@@ -169,6 +171,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-This record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the party coordinating this work, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
+As written before the merge: this record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the party coordinating this work, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
-Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`440b28ef`). Verified live: two pages answer 200; nothing else.

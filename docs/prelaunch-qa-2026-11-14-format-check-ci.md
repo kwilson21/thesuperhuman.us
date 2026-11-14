@@ -9,7 +9,9 @@ Rollback revision: the production revision when this reaches `main`; after that,
 
 ## Scope
 
-One step, `pnpm run format:check`, added to the Validate workflow after `pnpm run lint`, and one line each in `CLAUDE.md` and `README.md`. No source, test, dependency or configuration file changed. `pnpm run format:check` is `biome format .`. Biome checks `src`, `scripts`, `tests` and the root config files named in `biome.json` (including `.astro` and `.mjs` files there); it does not check CSS, Markdown, `package.json`, `.github`, `docs`, or the few generated files `biome.json` excludes.
+One step, `pnpm run format:check`, added to the Validate workflow after `pnpm run lint`, and one line each in `CLAUDE.md` and `README.md`. No source, test, dependency or configuration file changed.
+
+This pull request also carries a documentation update for the lint stack that merged before it: `docs/prelaunch-qa-2026-11-13-lint-zero.md` gains a "Merge and deployment" section (merge commit, production build, the two pages checked, rollback), and its release statuses and closing lines are brought in line with that. No other part of that record's evidence changed. `pnpm run format:check` is `biome format .`. Biome checks `src`, `scripts`, `tests` and the root config files named in `biome.json` (including `.astro` and `.mjs` files there); it does not check CSS, Markdown, `package.json`, `.github`, `docs`, or the few generated files `biome.json` excludes.
 
 ## Owner decisions
 
@@ -30,7 +32,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch and scope: see the header and Scope. Deployment authorization: see Owner decisions.
+- PASS, 1.1 Project, branch and scope: see the header and Scope. UNVERIFIED, deployment authorization: the owner's approval covers adding the check; merging and deploying follow the owner's standing rule for a complete pull request, and this record does not authorize either.
 - N/A, 1.2 to 1.5: no page, copy, media, link or route changed.
 
 ### 2. Search and sharing
@@ -56,7 +58,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 ### 7. Release and final QA
 
 - PASS (local), 7.1 Required checks: see Evidence and limits. The full test suite and build were not re-run for this branch alone, since no code changed; they ran on the branch stacked above it.
-- UNVERIFIED, 7.2 Diff review: independent review done locally; Greptile and Codex not yet read.
+- UNVERIFIED, 7.2 Diff review: independent review done locally on the workflow and doc lines; the lint record update described under Scope was added afterwards and reviewed only by Codex on the pull request.
 - N/A, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed.
 - UNVERIFIED, 7.4 Rollback version: fixed at merge time.
 - UNVERIFIED, 7.5 Post-deployment verification: not deployed.
