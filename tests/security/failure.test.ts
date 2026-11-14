@@ -77,7 +77,7 @@ it("logs the route, the name and a clean, cut message, and leaves out a message 
 		[
 			"Agreement review failed unexpectedly:",
 			"Error",
-			"D1_ERROR: no such table: x Bcc: a@b.c",
+			"D1_ERROR: no such table: x Bcc: [email]",
 		],
 		["Agreement review failed unexpectedly:", "Error", "x".repeat(300)],
 		["Agreement review failed unexpectedly:", "SyntaxError", ""],
@@ -184,4 +184,114 @@ it("cleans and cuts the logged name", () => {
 	const [, name] = logged(error) ?? [];
 
 	expect(name).toBe(`Bad Name${"y".repeat(52)}`);
+});
+
+// logUnexpected runs inside a route's catch block, so it must never throw itself.
+
+const PREFIX = "Software invoice failed unexpectedly:";
+const FIXED = [PREFIX, "(details unavailable)"];
+
+function logLine<T>(error: T) {
+	const lines: unknown[][] = [];
+
+	vi.spyOn(console, "error").mockImplementation((...args) => {
+		lines.push(args);
+	});
+	expect(() => logUnexpected("Software invoice", error)).not.toThrow();
+
+	return lines[0];
+}
+
+function withProperty(property: string, value: PropertyDescriptor) {
+	const error = new Error("plain");
+
+	Object.defineProperty(error, property, value);
+
+	return error;
+}
+
+it("logs a fixed line when the error's own fields cannot be read or are not text", () => {
+	const throwing = {
+		get() {
+			throw new Error("getter");
+		},
+	};
+
+	expect(logLine(withProperty("name", { value: 42 }))?.[1]).toBe("Error");
+	expect(logLine(withProperty("name", { value: { a: 1 } }))?.[1]).toBe("Error");
+	expect(logLine(withProperty("name", throwing))).toEqual(FIXED);
+	expect(logLine(withProperty("message", { value: 42 }))?.[2]).toBe("");
+	expect(logLine(withProperty("message", throwing))).toEqual(FIXED);
+	expect(logLine(Object.freeze(new Error("frozen")))).toEqual([
+		PREFIX,
+		"Error",
+		"frozen",
+	]);
+	expect(logLine(null)).toEqual([PREFIX, "UnknownError", ""]);
+	expect(logLine(undefined)).toEqual([PREFIX, "UnknownError", ""]);
+});
+
+it("redacts the userinfo and query of a URL, and any email address, from the logged message", () => {
+	expect(
+		logLine(
+			new Error(
+				"Failed to parse URL from http://grace@example.test:99999/?k=v",
+			),
+		)?.[2],
+	).toBe(
+		"Failed to parse URL from http://[redacted]@example.test:99999/?[redacted]",
+	);
+	expect(
+		logLine(
+			new Error("bad link /verify?t=abc123&email=grace%40example.test failed"),
+		)?.[2],
+	).toBe("bad link /verify?[redacted] failed");
+	expect(logLine(new Error("Cannot send to grace@example.test now"))?.[2]).toBe(
+		"Cannot send to [email] now",
+	);
+	expect(
+		logLine(
+			new Error(
+				"D1_ERROR: UNIQUE constraint failed: software_invoices.request_id: SQLITE_CONSTRAINT",
+			),
+		)?.[2],
+	).toBe(
+		"D1_ERROR: UNIQUE constraint failed: software_invoices.request_id: SQLITE_CONSTRAINT",
+	);
+});
+
+it("logs the class of a cause and never its message, and drops a message that wraps a quoting cause", () => {
+	const inner = new Stripe.errors.StripeInvalidRequestError({
+		type: "invalid_request_error",
+		message: "Invalid email address: grace@example.test",
+		statusCode: 400,
+	});
+
+	const wrapped = new Error(`Invoice failed: ${inner.message}`, {
+		cause: inner,
+	});
+
+	expect(logLine(wrapped)).toEqual([
+		PREFIX,
+		"Error",
+		"",
+		"cause=StripeInvalidRequestError",
+	]);
+
+	const plain = new Error("Invoice failed: no such table", {
+		cause: new TypeError("secret detail"),
+	});
+
+	expect(logLine(plain)).toEqual([
+		PREFIX,
+		"Error",
+		"Invoice failed: no such table",
+		"cause=TypeError",
+	]);
+
+	const parser = new Error("Could not read: x", {
+		cause: thrown(() => JSON.parse("{")),
+	});
+
+	expect(logLine(parser)).toEqual([PREFIX, "Error", "", "cause=SyntaxError"]);
 });

@@ -36,6 +36,7 @@
 import Stripe from "stripe";
 import { z } from "astro/zod";
 import * as Schema from "effect/Schema";
+import { isText } from "~/lib/type-guards";
 import { FieldsRefused } from "~/lib/fields";
 import { LostRace, ReaderMessage } from "~/lib/reader-message";
 import { isUniqueViolation, raisedByJsonGuard } from "./guarded-save";
@@ -75,6 +76,18 @@ const CONTROLS = new RegExp(
 const clean = (text: string, limit: number) =>
 	text.replace(CONTROLS, " ").trim().slice(0, limit);
 
+// What a message may quote of what was sent is removed, not listed by word: the userinfo and the query string of anything
+// that looks like a URL, any other query string, and anything shaped like an email address.
+const USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/?#"'<>]*@/gi;
+const QUERY = /\?[^\s"'<>]+/g;
+const EMAIL = /[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g;
+
+const redact = (text: string) =>
+	text
+		.replace(USERINFO, "$1[redacted]@")
+		.replace(QUERY, "?[redacted]")
+		.replace(EMAIL, "[email]");
+
 /** Errors whose message quotes the input they read or the values they were sent, found by what they are, not by name. */
 const quotesInput = <T>(error: T): boolean =>
 	error instanceof SyntaxError ||
@@ -94,25 +107,45 @@ const quotesInput = <T>(error: T): boolean =>
  * recognised by what they are (`instanceof`), not by their name, because a Stripe error never sets `name`.
  */
 export function logUnexpected<T>(route: string, error: T) {
-	if (error instanceof Stripe.errors.StripeError) {
-		console.error(
-			`${route} failed unexpectedly:`,
-			clean(error.type, NAME_LIMIT),
-			`code=${clean(String(error.code ?? "none"), NAME_LIMIT)} status=${error.statusCode ?? "none"}`,
-		);
-
-		return;
+	try {
+		console.error(`${route} failed unexpectedly:`, ...describe(error));
+	} catch {
+		// This runs inside a route's catch block, so it must not throw: an error whose fields cannot be read gets a fixed line.
+		console.error(`${route} failed unexpectedly:`, "(details unavailable)");
 	}
+}
 
-	const name =
-		error instanceof Error ? clean(error.name, NAME_LIMIT) : "UnknownError";
+/** The class name of an error's cause, which is all that is logged of it: its message can quote what was sent. */
+function causeClass(error: Error): string[] {
+	const { cause } = error;
+
+	return cause instanceof Error
+		? [`cause=${clean(cause.constructor.name, NAME_LIMIT)}`]
+		: [];
+}
+
+function describe<T>(error: T): string[] {
+	if (error instanceof Stripe.errors.StripeError)
+		return [
+			clean(String(error.type), NAME_LIMIT),
+			`code=${clean(String(error.code ?? "none"), NAME_LIMIT)} status=${error.statusCode ?? "none"}`,
+		];
+
+	if (!(error instanceof Error)) return ["UnknownError", ""];
+	const name = isText(error.name) ? clean(error.name, NAME_LIMIT) : "Error";
+	const cause = causeClass(error);
+
+	// A message built from a Stripe, parser or validator error's can quote it, so it goes with it.
+	const wraps =
+		error.cause instanceof Stripe.errors.StripeError ||
+		quotesInput(error.cause);
+
+	const text = error.message;
 
 	const message =
-		error instanceof Error &&
-		!quotesInput(error) &&
-		!NAMES_SECRET.test(error.message)
-			? clean(error.message, LOG_LIMIT)
+		isText(text) && !quotesInput(error) && !wraps && !NAMES_SECRET.test(text)
+			? clean(redact(clean(text, 2000)), LOG_LIMIT)
 			: "";
 
-	console.error(`${route} failed unexpectedly:`, name, message);
+	return [name, message, ...cause];
 }
