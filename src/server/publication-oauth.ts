@@ -11,12 +11,13 @@ import {
 	type LoginEnv,
 } from "../lib/publication/oauth-login";
 import { publicationMcp } from "../lib/publication/mcp";
-import { readBounded } from "./bounded-body";
+import { BodyUnreadable, readBounded } from "./bounded-body";
 import { progressTool, publishTool } from "./flows/publication-tools";
 import { publicationLogin } from "./publication-login";
 import { bindingsOrUnavailable } from "./services";
 import {
 	listedProjects,
+	keySafeValue,
 	narrowScopes,
 	scopeFor,
 	signedInOwner,
@@ -65,6 +66,54 @@ function isConfigured(env: Env): env is LoginEnv {
 }
 
 const headers = { "Cache-Control": "no-store" };
+
+/** A visitor's value as it may go to the library: too long to be part of a KV key becomes a stub. */
+const safe = (value: string) =>
+	Effect.runSync(keySafeValue.decide({ value }, {}));
+
+/** The request with every credential part a visitor sent held to a length the library can use as a KV key. */
+const keySafe = (request: Request) =>
+	Effect.gen(function* () {
+		const url = new URL(request.url);
+		const headers = new Headers(request.headers);
+		const basic = headers.get("authorization");
+
+		if (basic?.startsWith("Basic ") && basic.length > 1024)
+			headers.set("authorization", "Basic x");
+
+		if (request.method === "GET") {
+			url.searchParams.set(
+				"client_id",
+				safe(url.searchParams.get("client_id") ?? ""),
+			);
+
+			return new Request(url, { method: request.method, headers });
+		}
+
+		if (
+			!(headers.get("content-type") ?? "").startsWith(
+				"application/x-www-form-urlencoded",
+			)
+		)
+			return new Request(request, { headers });
+
+		const fields = new URLSearchParams(
+			yield* Effect.tryPromise({
+				try: () => request.text(),
+				catch: () => new BodyUnreadable(),
+			}),
+		);
+
+		for (const name of ["client_id", "code", "refresh_token"])
+			if (fields.has(name)) fields.set(name, safe(fields.get(name) ?? ""));
+		headers.delete("content-length");
+
+		return new Request(url, {
+			method: request.method,
+			headers,
+			body: fields.toString(),
+		});
+	});
 
 /** The route's one answer for the site's own faults: the same sentence whatever failed, never a failure's text. */
 const unavailable = () =>
@@ -203,7 +252,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 							body: bytes,
 						});
 
-			return yield* provide(limited, env, locals.runtime.ctx);
+			return yield* provide(yield* keySafe(limited), env, locals.runtime.ctx);
 		}).pipe(
 			Effect.catchTags({
 				BodyTooLarge: () =>

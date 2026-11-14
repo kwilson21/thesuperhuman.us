@@ -97,15 +97,24 @@ export class GithubSignIn extends Context.Service<
 	}
 >()("site/GithubSignIn") {}
 
-/** Calls GitHub. A call that cannot be made, a 5xx answer, and a body that is not JSON are all GitHub being unavailable. */
+/** Calls GitHub. A call that cannot be made, a 5xx or 429 answer, and a success whose body is not JSON are all GitHub being unavailable; any other 4xx is a refusal. */
 const github = (url: string, init: RequestInit) =>
 	Effect.tryPromise({
 		try: async (): Promise<GithubAnswer | null> => {
 			const response = await fetch(url, init);
 
-			if (response.status >= 500) return null;
+			// Unavailable: 5xx and 429 (rate limiting) are GitHub's state, not a refusal of our request.
+			if (response.status >= 500 || response.status === 429) return null;
+			const json = await response.json().then(
+				(body): { readonly body: unknown } | null => ({ body }),
+				() => null,
+			);
 
-			return { ok: response.ok, body: await response.json() };
+			// A body that is not JSON is GitHub being unavailable on a success, and GitHub refusing the request on any other 4xx.
+			if (json === null)
+				return response.status < 400 ? null : { ok: false, body: null };
+
+			return { ok: response.ok, body: json.body };
 		},
 		catch: () => new GithubUnavailable(),
 	}).pipe(
