@@ -189,6 +189,25 @@ describe("an outage in a store answers 500 with the route's own sentence", () =>
 		expect(await response.json()).toEqual({ ok: false, error: SENTENCE });
 	});
 
+	it("music-event: an insert that fails for any reason but a unique constraint is tried once", async () => {
+		let attempts = 0;
+
+		const { env } = world({
+			before: [
+				/INSERT INTO music_playback_events/,
+				() => {
+					attempts += 1;
+					throw new Error("d1 down");
+				},
+			],
+		});
+
+		const response = await play(start, env);
+
+		expect(response.status).toBe(500);
+		expect(attempts).toBe(1);
+	});
+
 	it("music-event: the campaign lookup fails", async () => {
 		const { env } = world({
 			before: [/FROM owner_campaign_tags/, fails("d1 down")],
