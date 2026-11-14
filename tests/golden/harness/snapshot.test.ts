@@ -2,7 +2,13 @@ import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
 import { freshMusicDb } from "./db";
 import { digestDatabase } from "./digest";
-import { asVisitor, runCase, type Case, type CaseRecord, type Handler } from "./index";
+import {
+	asVisitor,
+	runCase,
+	type Case,
+	type CaseRecord,
+	type Handler,
+} from "./index";
 
 // The digest at the response is the state of the databases when the response was read, before any background work. These
 // tests check that mechanism with synthetic handlers on the real harness. The expected digests are computed here, from
@@ -12,14 +18,16 @@ const env = (context: APIContext) => context.locals.runtime.env;
 const ctxOf = (context: APIContext) => context.locals.runtime.ctx;
 
 /** Row A: a budget row, in brief_suggestion_budget. Written by the request. */
-const ROW_A = "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('a', 's', 1)";
+const ROW_A =
+	"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('a', 's', 1)";
 
 /** Row B: an unmatched Stripe event, in a different table. Written by background work. */
 const ROW_B =
 	"INSERT INTO stripe_unmatched_events (event_id, event_type, invoice_id, request_id, installment, status, occurred_at, received_at, reason) VALUES ('e1', 'invoice.paid', 'inv_1', 'req_1', 'booking', 'unmatched', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'request-not-found')";
 
 /** Row C: a second budget row, written by the second step. */
-const ROW_C = "INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('c', 's', 1)";
+const ROW_C =
+	"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('c', 's', 1)";
 
 const write = async (context: APIContext, sql: string): Promise<void> => {
 	await env(context).MUSIC_DB?.prepare(sql).run();
@@ -64,7 +72,12 @@ async function twentyTimes<T>(
 
 const phases = (got: CaseRecord) =>
 	got.effects
-		.filter((effect) => effect.kind === "d1" || effect.kind === "d1-batch" || effect.kind === "waitUntil")
+		.filter(
+			(effect) =>
+				effect.kind === "d1" ||
+				effect.kind === "d1-batch" ||
+				effect.kind === "waitUntil",
+		)
 		.map((effect) => `${effect.kind}:${effect.phase}`);
 
 describe("the digest at the response: the snapshot mechanism", () => {
@@ -90,7 +103,9 @@ describe("the digest at the response: the snapshot mechanism", () => {
 					"d1:background",
 				]);
 
-				const waitUntil = got.effects.find((effect) => effect.kind === "waitUntil");
+				const waitUntil = got.effects.find(
+					(effect) => effect.kind === "waitUntil",
+				);
 
 				expect(waitUntil?.state).toEqual({
 					music: atResponse?.music,
@@ -123,9 +138,7 @@ describe("the digest at the response: the snapshot mechanism", () => {
 					"brief_suggestion_budget",
 				]);
 
-				const statements = got.effects.filter(
-					(effect) => effect.kind === "d1",
-				);
+				const statements = got.effects.filter((effect) => effect.kind === "d1");
 
 				expect(statements.map((effect) => effect.phase)).toEqual([
 					"request",
@@ -176,8 +189,7 @@ describe("the digest at the response: the snapshot mechanism", () => {
 		};
 
 		await twentyTimes(
-			() =>
-				runCase(first, one([step, { ...step, handler: second }])),
+			() => runCase(first, one([step, { ...step, handler: second }])),
 			(got) => {
 				expect(got.steps[0]?.digest.atResponse.music).toBe(digestWith(ROW_A));
 				expect(got.steps[1]?.digest.atResponse.music).toBe(

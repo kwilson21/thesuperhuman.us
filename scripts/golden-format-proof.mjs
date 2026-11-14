@@ -125,7 +125,8 @@ const ownTables = (entry) => {
 	});
 };
 
-const databaseOf = (entry) => (entry.db === "MUSIC_DB" ? "music" : "publication");
+const databaseOf = (entry) =>
+	entry.db === "MUSIC_DB" ? "music" : "publication";
 
 /** The database state of a recorded entry, as the proof compares it: music, publication and the tables touched in the step. */
 const stateKey = (state) =>
@@ -140,7 +141,9 @@ const entriesOfStep = (next, s) =>
 /** The last request-labelled entry of a step that carries a state: the response is read right after it (rule 1). */
 const anchorOf = (items) =>
 	items
-		.filter(({ entry }) => entry.phase === "request" && entry.state !== undefined)
+		.filter(
+			({ entry }) => entry.phase === "request" && entry.state !== undefined,
+		)
 		.at(-1);
 
 /**
@@ -443,7 +446,9 @@ function provePhases(old, next, problems) {
 		} else {
 			if (
 				reference.state !== undefined &&
-				!reference.state.touched.every((table) => response.touched.includes(table))
+				!reference.state.touched.every((table) =>
+					response.touched.includes(table),
+				)
 			)
 				return fail(
 					`step ${s}: a table touched before the last request effect is missing from the touched tables at the response`,

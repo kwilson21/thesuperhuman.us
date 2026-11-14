@@ -703,7 +703,9 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 		after
 			? background(musicWrite("UPDATE b SET x = 1"))
 			: musicWrite("UPDATE b SET x = 1"),
-		after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+		after
+			? background(mail(stateOf("m2", ["a", "b"])))
+			: mail(stateOf("m2", ["a", "b"])),
 	];
 
 	const was = cased(4, flow(false), [step(digest("m2", "m2", ["a", "b"]))]);
@@ -773,11 +775,17 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 			d1("UPDATE a SET x = 1", 1),
 			waitAt(stateOf("m1", ["a"])),
 			kvAt(stateOf("m1", ["a"])),
-			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
-			after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+			after
+				? background(musicWrite("UPDATE b SET x = 1"))
+				: musicWrite("UPDATE b SET x = 1"),
+			after
+				? background(mail(stateOf("m2", ["a", "b"])))
+				: mail(stateOf("m2", ["a", "b"])),
 		];
 
-		const old = cased(4, withPut(false), [step(digest("m2", "m2", ["a", "b"]))]);
+		const old = cased(4, withPut(false), [
+			step(digest("m2", "m2", ["a", "b"])),
+		]);
 
 		expect(
 			proveFixture(
@@ -800,11 +808,17 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 			d1("UPDATE a SET x = 1", 1),
 			waitAt(stateOf("m1", ["a"])),
 			kvAt(stateOf("m1", ["a"])),
-			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
-			after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+			after
+				? background(musicWrite("UPDATE b SET x = 1"))
+				: musicWrite("UPDATE b SET x = 1"),
+			after
+				? background(mail(stateOf("m2", ["a", "b"])))
+				: mail(stateOf("m2", ["a", "b"])),
 		];
 
-		const old = cased(4, withPut(false), [step(digest("m2", "m2", ["a", "b"]))]);
+		const old = cased(4, withPut(false), [
+			step(digest("m2", "m2", ["a", "b"])),
+		]);
 
 		const got = proveFixture(
 			[old],
@@ -819,18 +833,29 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 		// Already covered by the forged-both case; this is the other direction: a response that differs from the end of a
 		// step where no relabelled effect could have written.
 		const got = proveFixture(
-			[cased(4, [waitAt(stateOf("m1", ["a"])), mail(stateOf("m1", ["a"]))], [step(digest("m2", "m1", ["a"]))])],
+			[
+				cased(
+					4,
+					[waitAt(stateOf("m1", ["a"])), mail(stateOf("m1", ["a"]))],
+					[step(digest("m2", "m1", ["a"]))],
+				),
+			],
 			[
 				cased(
 					5,
-					[waitAt(stateOf("m1", ["a"])), background(mail(stateOf("m1", ["a"])))],
+					[
+						waitAt(stateOf("m1", ["a"])),
+						background(mail(stateOf("m1", ["a"]))),
+					],
 					[step(digest("m2", "m1", ["a"]))],
 				),
 			],
 		);
 
 		expect(got).toHaveLength(1);
-		expect(got[0]).toContain("no relabelled effect could have written to music");
+		expect(got[0]).toContain(
+			"no relabelled effect could have written to music",
+		);
 	});
 
 	it("bounded: a request write logged after the last request effect is checked as a bound, and its table must be touched", () => {
@@ -838,11 +863,17 @@ describe("golden format proof, format 4 to 5: the structural checks of the chang
 			d1("UPDATE a SET x = 1", 1),
 			waitAt(stateOf("m1", ["a"])),
 			d1("UPDATE c SET x = 1", 1),
-			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
-			after ? background(mail(stateOf("m2", ["a", "b", "c"]))) : mail(stateOf("m2", ["a", "b", "c"])),
+			after
+				? background(musicWrite("UPDATE b SET x = 1"))
+				: musicWrite("UPDATE b SET x = 1"),
+			after
+				? background(mail(stateOf("m2", ["a", "b", "c"])))
+				: mail(stateOf("m2", ["a", "b", "c"])),
 		];
 
-		const old = cased(4, withWrite(false), [step(digest("m2", "m2", ["a", "b", "c"]))]);
+		const old = cased(4, withWrite(false), [
+			step(digest("m2", "m2", ["a", "b", "c"])),
+		]);
 
 		const accepted = proveFixtureDetailed(
 			[old],
