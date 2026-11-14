@@ -137,3 +137,74 @@ it.each([
 		body: "Not found",
 	});
 });
+
+// The database statements a verified visitor's request runs are the same whatever the id is, so the number and order of
+// round trips cannot tell an unknown id from an agreement of another client or of another offer of their own.
+function traced(agreement: Row, cookie: string) {
+	const sql: string[] = [];
+
+	const db = fakeD1({
+		prepare: (query: string) => {
+			sql.push(query);
+
+			return partial<D1PreparedStatement>({
+				bind: () =>
+					partial<D1PreparedStatement>({
+						first: async () =>
+							/FROM software_agreement_sessions/.test(query)
+								? {
+										recipient_email: "me@example.test",
+										offer_id: "o-mine",
+										token_hash: "h",
+									}
+								: /FROM software_offers o JOIN software_offer_links/.test(query)
+									? { ok: 1 }
+									: /FROM software_agreements a JOIN/.test(query)
+										? agreement
+										: null,
+					}),
+			});
+		},
+	});
+
+	return agreementDownload(
+		partial<Env>({ MUSIC_DB: db, AUDIO: double<R2Bucket>({}) }),
+		new Request("https://thesuperhuman.us/api/agreements/a1/file", {
+			headers: { cookie },
+		}),
+		"a1",
+	).then(async (response) => ({ ...(await answer(response)), sql }));
+}
+
+it.each([
+	[
+		"an archive session, someone else's agreement",
+		`agreement_archive=${TOKEN}`,
+		{
+			id: "a1",
+			offer_id: "o-other",
+			request_id: "r-other",
+			recipient_email: "other@example.test",
+		},
+	],
+	[
+		"a signing session, the same client's agreement on another offer",
+		`agreement_session=${TOKEN}`,
+		{
+			id: "a1",
+			offer_id: "o-other",
+			request_id: "r-other",
+			recipient_email: "me@example.test",
+		},
+	],
+])(
+	"runs the same statements for an unknown id and for %s",
+	async (_name, cookie, theirs) => {
+		const unknown = await traced(null, cookie);
+		const other = await traced(theirs, cookie);
+
+		expect(other.sql).toEqual(unknown.sql);
+		expect(other.status).toBe(unknown.status);
+		expect(other.body).toBe(unknown.body);
+	},
+);

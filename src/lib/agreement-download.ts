@@ -1,7 +1,7 @@
 import { agreementSession, agreementHeaders } from "./agreement-access";
 import {
 	studioSessionFromRequest,
-	clientSoftwareProjectForSession,
+	clientSoftwareProjectsForSession,
 } from "./audio-client-access";
 import { hashBytes } from "./agreement-artifacts";
 import type { AgreementArtifact } from "./agreement-artifacts";
@@ -50,6 +50,14 @@ export async function agreementDownload(
 
 	if (!owner && !archive && !signing && !studioIdentity) return signInFirst();
 
+	// A verified visitor gets the same reads whatever the id is: the same statements run in the same order for an unknown id,
+	// an agreement that is not executed or is closed, and one of another client, so the number of database round trips
+	// does not tell them apart. Only the decision below uses the results.
+	const studioProjects =
+		!owner && studio
+			? await clientSoftwareProjectsForSession(db, studio)
+			: null;
+
 	const agreement = await db
 		.prepare(
 			"SELECT a.id,a.offer_id,a.request_id,c.recipient_email FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.status='executed' AND a.archive_closed_at IS NULL",
@@ -62,46 +70,39 @@ export async function agreementDownload(
 			recipient_email: string;
 		}>();
 
-	if (!agreement) return notFound();
-
 	if (!owner) {
-		const project = studio
-			? await clientSoftwareProjectForSession(db, studio, agreement.request_id)
-			: null;
+		const reused = await db
+			.prepare("SELECT 1 FROM software_offers WHERE id=? AND reused_msa_id=?")
+			.bind(signing?.offer_id ?? null, id)
+			.first();
 
-		const projectAgreement = project
-			? await db
-					.prepare(
-						"SELECT agreement_id FROM software_projects WHERE request_id=?",
-					)
-					.bind(project.request_id)
-					.first<{ agreement_id: string }>()
-			: null;
+		const project =
+			studioProjects?.find(
+				(candidate) => candidate.request_id === agreement?.request_id,
+			) ?? null;
 
-		const linked = projectAgreement?.agreement_id
-			? await db
-					.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
-					.bind(projectAgreement.agreement_id)
-					.first<{ msa_id: string }>()
-			: null;
+		const projectAgreement = await db
+			.prepare("SELECT agreement_id FROM software_projects WHERE request_id=?")
+			.bind(project?.request_id ?? null)
+			.first<{ agreement_id: string }>();
+
+		const linked = await db
+			.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
+			.bind(projectAgreement?.agreement_id ?? null)
+			.first<{ msa_id: string }>();
 
 		const allowed =
-			archive?.recipient_email === agreement.recipient_email ||
-			(signing?.recipient_email === agreement.recipient_email &&
-				(signing.offer_id === agreement.offer_id ||
-					Boolean(
-						await db
-							.prepare(
-								"SELECT 1 FROM software_offers WHERE id=? AND reused_msa_id=?",
-							)
-							.bind(signing.offer_id, id)
-							.first(),
-					))) ||
-			(studioIdentity?.email === agreement.recipient_email &&
-				(projectAgreement?.agreement_id === id || linked?.msa_id === id));
+			Boolean(agreement) &&
+			(archive?.recipient_email === agreement?.recipient_email ||
+				(signing?.recipient_email === agreement?.recipient_email &&
+					(signing?.offer_id === agreement?.offer_id || Boolean(reused))) ||
+				(studioIdentity?.email === agreement?.recipient_email &&
+					(projectAgreement?.agreement_id === id || linked?.msa_id === id)));
 
 		if (!allowed) return notFound();
 	}
+
+	if (!agreement) return notFound();
 
 	const artifact = await db
 		.prepare(
@@ -118,13 +119,42 @@ export async function agreementDownload(
 				headers: agreementHeaders,
 			},
 		);
-	const object = await env.AUDIO.get(artifact.pdf_key);
 
-	if (!object)
+	if (owner) {
+		const object = await env.AUDIO.get(artifact.pdf_key);
+
+		if (!object)
+			return new Response("Signed copy unavailable. Contact Kazon.", {
+				status: 503,
+				headers: agreementHeaders,
+			});
+
+		return signedCopy(object, artifact);
+	}
+
+	// A visitor whose copy is missing from the bucket gets the same 404 as an unknown id. A bucket read that throws is an
+	// outage: the fixed sentence, as a 500.
+	let object: R2ObjectBody | null;
+
+	try {
+		object = await env.AUDIO.get(artifact.pdf_key);
+	} catch {
 		return new Response("Signed copy unavailable. Contact Kazon.", {
-			status: 503,
+			status: 500,
 			headers: agreementHeaders,
 		});
+	}
+
+	if (!object)
+		return new Response("Not found", {
+			status: 404,
+			headers: agreementHeaders,
+		});
+
+	return signedCopy(object, artifact);
+}
+
+async function signedCopy(object: R2ObjectBody, artifact: AgreementArtifact) {
 	const bytes = await object.arrayBuffer();
 
 	if (!artifact.pdf_sha256 || (await hashBytes(bytes)) !== artifact.pdf_sha256)
