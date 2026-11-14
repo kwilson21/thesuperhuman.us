@@ -1,3 +1,38 @@
+/**
+ * The SOW number the signing screenshots show. The server makes a new random id for each SOW it builds
+ * (src/lib/software-agreements.ts), so the number, and the SHA-256 of the text that contains it, differ on
+ * every run. The capture replaces both on screen with these fixed fictional values. The stored agreement is
+ * unchanged; only the image shows the fixed values.
+ */
+export const FIXED_SOW_NUMBER = "SOW-00000000-0000-4000-8000-000000000009";
+export const FIXED_AGREEMENT_HASH = "0123456789abcdef".repeat(4);
+
+/**
+ * Runs in the page: in each document of the terms reader, shows the fixed hash and SOW number (see
+ * FIXED_SOW_NUMBER). Self-contained, so Playwright can run it in the page; the constants above are repeated
+ * here for that reason.
+ */
+export function fixDisplayedAgreementIds(
+	root = document.querySelector("[data-terms-reader]"),
+) {
+	const sowNumber =
+		/SOW-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+
+	for (const block of root.querySelectorAll(".terms-document")) {
+		const hash = block.querySelector(".terms-hash");
+		const legal = block.querySelector("pre.terms-legal");
+
+		if (hash)
+			hash.textContent = `SHA-256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`;
+
+		if (legal)
+			legal.textContent = legal.textContent.replace(
+				sowNumber,
+				"SOW-00000000-0000-4000-8000-000000000009",
+			);
+	}
+}
+
 // Exercise the real read-only controls with keyboard navigation before capturing a stage.
 export async function prepareAgreedTerms(page, stage = 0, full = false) {
 	const mutations = [];
@@ -135,6 +170,8 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 			throw new Error(
 				`Reading terms must not submit mutations: ${mutations.join(", ")}`,
 			);
+		// The generated SOW number and hash are fixed for the image (see fixDisplayedAgreementIds).
+		await page.evaluate(fixDisplayedAgreementIds);
 		// Reset focus-induced scroll before the harness captures a tall element/full page.
 		// Otherwise sticky summaries are frozen halfway down a full-page screenshot.
 		await page.evaluate(() => window.scrollTo(0, 0));

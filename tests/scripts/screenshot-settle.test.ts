@@ -9,6 +9,7 @@ import {
 	settle,
 	trackRequests,
 	WIDGET_PAINT_MS,
+	WIDGET_STABLE_MS,
 	widgetsHoldTokens,
 } from "../../scripts/screenshots/settle.mjs";
 
@@ -485,7 +486,8 @@ describe("settle", () => {
 		expect(page.waitForFunction.mock.calls[0][2]).toEqual({
 			timeout: SETTLE_CAP_MS,
 		});
-		expect(clock.now()).toBe(WIDGET_PAINT_MS);
+		// The widget's box must also hold still for WIDGET_STABLE_MS before the paint pause.
+		expect(clock.now()).toBe(WIDGET_STABLE_MS + WIDGET_PAINT_MS);
 	});
 
 	it("reports the cap when a widget never gets its token, and carries on", async () => {

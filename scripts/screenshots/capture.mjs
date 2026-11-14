@@ -40,6 +40,7 @@ import {
 import { loadOrCreateAccessKey } from "./access-key.mjs";
 import { browserClockScript, stepTime } from "./clock.mjs";
 import { createStepper } from "./clock-steps.mjs";
+import { seededRandomScript } from "./random.mjs";
 import { prepareWithDiagnostics } from "./prepare.mjs";
 import { createSettleLog, settle, trackRequests } from "./settle.mjs";
 import { createTimings } from "./timings.mjs";
@@ -208,6 +209,11 @@ async function capture({
 		// preview's own origin gets it; third-party frames such as Turnstile keep the real clock.
 		await context.addInitScript({
 			content: browserClockScript(new URL(BASE).origin, Date.now()),
+		});
+
+		// The preview's own pages get the same Math.random sequence on every capture (see random.mjs).
+		await context.addInitScript({
+			content: seededRandomScript(new URL(BASE).origin),
 		});
 
 		// Access adds this header at the edge, so only our own origin sees it. Fonts and other hosts reject it.

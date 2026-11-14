@@ -168,6 +168,11 @@ export default {
 						.first()
 						.filter({ hasText: "Changes from v2026-09-30" })
 						.waitFor();
+					// The fill and the preview click scroll the textarea to its caret, which lands at the
+					// bottom or the top depending on focus timing. Show the start of the template every time.
+					await text.evaluate((element) => {
+						element.scrollTop = 0;
+					});
 				},
 			},
 		);

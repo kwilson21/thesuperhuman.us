@@ -63,15 +63,27 @@ What still reads the real clock, and whether it reaches an image:
 
 After a page loads, `settle.mjs` decides when it is ready to photograph. A request counts while it is in flight, and the page is quiet once no counted request has started or finished for 500 ms. Requests to `challenges.cloudflare.com` (Turnstile's script) never count, because that script keeps requesting in the background. A `blob:` URL counts by the host it wraps, so the blobs Turnstile creates on that host are ignored too, while a blob of the preview's own origin counts. `data:` and `about:` URLs count.
 
-If the page has a drawn `.cf-turnstile` widget, settle also waits until every drawn widget has a non-empty `cf-turnstile-response` input (read from the light DOM, since the widget's iframe is not reachable), then 500 ms more so the success state paints. A widget inside a hidden container (a later form step, a closed `<details>`) is not waited for: it is not in the image, and it may never get a token until someone opens it. Settling never takes more than 5 seconds, counted from its start. At that cap it checks the drawn widgets' tokens once, without waiting, and the capture carries on as it is. `settle` returns its reason:
+If the page has a drawn `.cf-turnstile` widget, settle also waits until every drawn widget has a non-empty `cf-turnstile-response` input (read from the light DOM, since the widget's iframe is not reachable). After that it waits until the widget's size holds still: the container and every element inside it are read every 50 ms, and the sizes must stay the same for 200 ms. The Turnstile frame can resize as its content loads, so a token alone does not mean the widget has its final size. Then 500 ms more so the success state paints. A widget inside a hidden container (a later form step, a closed `<details>`) is not waited for: it is not in the image, and it may never get a token until someone opens it. Settling never takes more than 5 seconds, counted from its start. At that cap it checks the drawn widgets' tokens once, without waiting, and the capture carries on as it is. `settle` returns its reason:
 
 - `quiet`: the page settled in time.
 - `cap: N requests in flight`, followed by `, first <url>` only when a request is pending. A blob is named by its origin alone (such as `blob:http://127.0.0.1:4321`); other URLs lose their query string and fragment, and the named URL is at most 120 characters.
 - `; turnstile token missing`, added to a cap reason when a drawn widget has no token.
 - `cap: turnstile token`: the cap ran out while waiting for a widget's token.
+- `cap: turnstile size`: the cap ran out while a widget's size was still changing after its token arrived.
 - `stopped: <message>`: the page closed or errored while settling.
 
 The capture log prints its `Settle` lines after the `Timing` lines: one per reason that was not `quiet`, with how many captures hit it and the first file.
+
+## Randomness and generated values
+
+Two sources of variation between runs are fixed in the capture tooling, not in the site:
+
+- `random.mjs` gives the preview's own pages a seeded `Math.random` (mulberry32, one fixed seed), installed before any page script runs. The 404 page picks one of two scenes with `Math.random`, so an unseeded capture could photograph either. Other origins (Turnstile's frames) keep real randomness, and `crypto.randomUUID` and `crypto.getRandomValues` in the browser are not touched.
+- The server makes new random ids when it builds an agreement, and the SOW number and the SHA-256 of the text that holds it depend on them. The site's code is not changed and the server process is not shimmed. Instead, `fixDisplayedAgreementIds` in `agreed-terms.mjs` shows a fixed fictional SOW number (`SOW-00000000-0000-4000-8000-000000000009`) and a fixed hash (`0123456789abcdef` repeated four times) in the guided terms reader. The stored agreement is unchanged, and only the image shows the fixed values.
+
+## Audio player waits
+
+The studio's project players show `0:00` until the audio's metadata has loaded, then `0:00 / <duration>`. `media.mjs` waits for the metadata first. The site's `project-player.ts` only renders the label on `loadedmetadata`, so if the metadata loads before its listener is attached, the label never updates on its own. The capture then dispatches the same `loadedmetadata` event so the page's own render runs. If the metadata has not loaded within 15 seconds, the capture fails with a message naming the wait. The studio project captures use this in their `prepare` step.
 
 ## Scenario seeds
 
