@@ -67,6 +67,10 @@ function conceptPng() {
 	);
 }
 
+// Shown on each caption where the documents' SOW number and hash appear (see fixDisplayedAgreementIds).
+const FIXED_IDS_NOTE =
+	"SOW number and document hash shown as fixed fictional values";
+
 export default {
 	title: "Software project start, private updates and studio access",
 	async run({ capture, sql, ownerFetch }) {
@@ -125,7 +129,7 @@ export default {
 				),
 			)[0]?.results?.[0]?.updated_at ?? "";
 
-		const shot = async (title, path, name, options = {}) => {
+		const shot = async (title, path, name, { note, ...options } = {}) => {
 			const images = [];
 
 			for (const viewport of ["desktop", "phone"])
@@ -136,7 +140,7 @@ export default {
 						viewport,
 						...options,
 					}),
-					caption: `Fictional data: ${title}`,
+					caption: `Fictional data: ${title}${note ? `. ${note}` : ""}`,
 				});
 			steps.push({ title, images });
 		};
@@ -324,6 +328,7 @@ export default {
 				cookie,
 				selector: "[data-terms-reader]",
 				prepare: (page) => prepareAgreedTerms(page, 3, true),
+				note: FIXED_IDS_NOTE,
 			},
 		);
 		sql(

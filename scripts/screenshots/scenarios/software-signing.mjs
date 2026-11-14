@@ -7,6 +7,10 @@ import { readFileSync } from "node:fs";
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 
+// Shown on each caption where the documents' SOW number and hash appear (see fixDisplayedAgreementIds).
+const FIXED_IDS_NOTE =
+	"SOW number and document hash shown as fixed fictional values";
+
 export default {
 	title: "Software agreement review, signatures and retained copies",
 	async run({ capture, sql, ownerFetch, templates }) {
@@ -99,7 +103,7 @@ export default {
    INSERT INTO software_agreement_sessions VALUES(${quote(hash(session))},'agreement','screenshot-signing-offer',${quote(hash(token))},'signer@example.com','screenshot-challenge',${quote(at)},'2099-01-01',NULL,'screenshot-csrf');`);
 		const steps = [];
 
-		async function shot(name, title, path, options = {}) {
+		async function shot(name, title, path, { note, ...options } = {}) {
 			for (const viewport of ["desktop", "phone"])
 				steps.push({
 					title: `${title}, ${viewport}`,
@@ -137,7 +141,7 @@ export default {
 									}
 								},
 							}),
-							caption: title,
+							caption: note ? `${title}. ${note}` : title,
 						},
 					],
 				});
@@ -656,6 +660,7 @@ export default {
 				cookie: { name: "studio_session", value: studio },
 				selector: "[data-terms-reader]",
 				prepare: (page) => prepareAgreedTerms(page, 3, true),
+				note: FIXED_IDS_NOTE,
 			},
 		);
 

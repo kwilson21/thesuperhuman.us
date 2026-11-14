@@ -7,29 +7,37 @@
 export const FIXED_SOW_NUMBER = "SOW-00000000-0000-4000-8000-000000000009";
 export const FIXED_AGREEMENT_HASH = "0123456789abcdef".repeat(4);
 
+/** The generated SOW number, as a regular expression source (the page function builds its RegExp from it). */
+export const SOW_NUMBER_PATTERN =
+	"SOW-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+
 /**
- * Runs in the page: in each document of the terms reader, shows the fixed hash and SOW number (see
- * FIXED_SOW_NUMBER). Self-contained, so Playwright can run it in the page; the constants above are repeated
- * here for that reason.
+ * Runs in the page: replaces the generated SOW number in each document of the terms reader. A document's hash
+ * is replaced only when its own legal text held the generated number, since only that document's real hash
+ * varies between runs. The MSA's text has no SOW number, so its real hash stays, and no two documents share a
+ * hash. `root` defaults to the reader in the page. Self-contained: Playwright serializes this function, so the
+ * constants come in as the argument (see prepareAgreedTerms and FIXED_SOW_NUMBER).
  */
-export function fixDisplayedAgreementIds(
+export function fixDisplayedAgreementIds({
 	root = document.querySelector("[data-terms-reader]"),
-) {
-	const sowNumber =
-		/SOW-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+	sowNumber,
+	sowHash,
+	sowPattern,
+}) {
+	const generated = new RegExp(sowPattern);
 
 	for (const block of root.querySelectorAll(".terms-document")) {
 		const hash = block.querySelector(".terms-hash");
 		const legal = block.querySelector("pre.terms-legal");
 
-		if (hash)
-			hash.textContent = `SHA-256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef`;
+		if (!legal || !generated.test(legal.textContent)) continue;
 
-		if (legal)
-			legal.textContent = legal.textContent.replace(
-				sowNumber,
-				"SOW-00000000-0000-4000-8000-000000000009",
-			);
+		if (hash) hash.textContent = `SHA-256 ${sowHash}`;
+
+		legal.textContent = legal.textContent.replace(
+			new RegExp(sowPattern, "g"),
+			sowNumber,
+		);
 	}
 }
 
@@ -171,7 +179,11 @@ export async function prepareAgreedTerms(page, stage = 0, full = false) {
 				`Reading terms must not submit mutations: ${mutations.join(", ")}`,
 			);
 		// The generated SOW number and hash are fixed for the image (see fixDisplayedAgreementIds).
-		await page.evaluate(fixDisplayedAgreementIds);
+		await page.evaluate(fixDisplayedAgreementIds, {
+			sowNumber: FIXED_SOW_NUMBER,
+			sowHash: FIXED_AGREEMENT_HASH,
+			sowPattern: SOW_NUMBER_PATTERN,
+		});
 		// Reset focus-induced scroll before the harness captures a tall element/full page.
 		// Otherwise sticky summaries are frozen halfway down a full-page screenshot.
 		await page.evaluate(() => window.scrollTo(0, 0));
