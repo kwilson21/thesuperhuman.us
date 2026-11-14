@@ -76,7 +76,7 @@ const clean = (text: string, limit: number) =>
 	text.replace(CONTROLS, " ").trim().slice(0, limit);
 
 /** Errors whose message quotes the input they read or the values they were sent, found by what they are, not by name. */
-const quotesInput = <T>(error: T) =>
+const quotesInput = <T>(error: T): boolean =>
 	error instanceof SyntaxError ||
 	error instanceof z.ZodError ||
 	error instanceof FieldsRefused ||

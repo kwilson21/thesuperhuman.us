@@ -100,7 +100,7 @@ function logged(error: Error) {
 }
 
 /** The error a call throws, which a test needs as a real instance. */
-function thrown(run: () => unknown): Error {
+function thrown(run: () => void): Error {
 	try {
 		run();
 	} catch (error) {
