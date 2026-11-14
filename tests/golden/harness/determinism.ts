@@ -120,6 +120,9 @@ export class Determinism {
 		callback: () => void;
 	}[] = [];
 
+	/** Timers the runner has fired in the current step (both passes), so a timer loop is an error (settle.ts, TIMER_LIMIT). */
+	timersFired = 0;
+
 	private logical = 0;
 	private created = 0;
 	private ids = 0;
@@ -391,6 +394,7 @@ export class Determinism {
 
 			this.queued.splice(this.queued.indexOf(first), 1);
 			this.logical = first.due;
+			this.timersFired += 1;
 			this.log.boundary();
 			first.callback();
 
@@ -400,10 +404,27 @@ export class Determinism {
 		if (vi.getTimerCount() === 0) return false;
 
 		const before = Date.now();
+		this.timersFired += 1;
 		await vi.advanceTimersToNextTimerAsync();
 		this.log.push({ kind: "advance", ms: Date.now() - before });
 
 		return true;
+	}
+
+	/**
+	 * Drops every real-timer route timer still queued at the end of a step, so none fires in a later step (settle.ts).
+	 * Returns how many were dropped. Virtual timers are not dropped: on a virtual clock the test moves time on explicitly
+	 * (advance), and a timer set in one step is due in the step that moves the clock past it (gaps.test.ts). Whether an
+	 * automatic virtual fire may reach a timer of an earlier step is not decided here (see tests/golden/README.md).
+	 */
+	abandonTimers(): number {
+		if (this.virtualTimers) return 0;
+
+		const count = this.queued.length;
+
+		this.queued.length = 0;
+
+		return count;
 	}
 
 	advance(ms: number) {

@@ -4,7 +4,6 @@ import {
 	asFixture,
 	asVisitor,
 	byHost,
-	CASE_TIMEOUT_MS,
 	json,
 	runCase,
 	type Case,
@@ -12,11 +11,10 @@ import {
 	type Handler,
 } from "./index";
 
-/**
- * The timeout of a test that makes `recordings` recordings: the corpus's per-case budget (CASE_TIMEOUT_MS, 20 s) for each
- * one. A loaded CI runner takes several times longer than an idle one, so a test that counts on a shorter limit fails at random.
- */
-const recordingTimeout = (recordings: number) => CASE_TIMEOUT_MS * recordings;
+// A recording takes about 20 ms. These budgets leave a loaded CI runner room (60 s for the 40-recording tests, 30 s for
+// the 30-recording ones) without letting a real loop run until the test's own timeout.
+const FORTY_RECORDINGS_TIMEOUT_MS = 60_000;
+const THIRTY_RECORDINGS_TIMEOUT_MS = 30_000;
 
 // WebCrypto runs on a thread and a real timer fires on a later macrotask, so how long they take depends on the machine.
 // The harness does not deliver a finished threaded operation (or a finished setImmediate) when it finishes: it holds
@@ -191,7 +189,7 @@ describe("work that leaves the microtask queue does not change a label", () => {
 
 				expect(seen.size).toBe(1);
 			},
-			recordingTimeout(RUNS),
+			FORTY_RECORDINGS_TIMEOUT_MS,
 		);
 
 	// The pairings that made the record depend on machine speed before the delivery order was fixed: a deferred digest
@@ -237,7 +235,7 @@ describe("work that leaves the microtask queue does not change a label", () => {
 
 				expect(seen.size).toBe(1);
 			},
-			recordingTimeout(RUNS),
+			FORTY_RECORDINGS_TIMEOUT_MS,
 		);
 });
 
@@ -305,7 +303,7 @@ describe("the background pass waits for every undelivered slot before it release
 
 				expect(seen.size).toBe(1);
 			},
-			recordingTimeout(RUNS),
+			FORTY_RECORDINGS_TIMEOUT_MS,
 		);
 
 		it(
@@ -318,7 +316,7 @@ describe("the background pass waits for every undelivered slot before it release
 
 				expect(seen.size).toBe(1);
 			},
-			recordingTimeout(RUNS),
+			FORTY_RECORDINGS_TIMEOUT_MS,
 		);
 	}
 });
@@ -435,7 +433,7 @@ describe("floating work that is still running when a step ends is delivered, in 
 					expect(JSON.stringify(got.final)).toContain('"f"');
 				}
 			},
-			recordingTimeout(30),
+			THIRTY_RECORDINGS_TIMEOUT_MS,
 		);
 
 		it(
@@ -458,7 +456,7 @@ describe("floating work that is still running when a step ends is delivered, in 
 					expect(JSON.stringify(got.final)).toContain('"m"');
 				}
 			},
-			recordingTimeout(30),
+			THIRTY_RECORDINGS_TIMEOUT_MS,
 		);
 	}
 });

@@ -35,6 +35,23 @@ const POLL_LIMIT = 100;
 /** setImmediate deliveries in a row with no effect released and no answer: a route that yields to the event loop forever. */
 const YIELD_LIMIT = 50_000;
 
+/**
+ * Timers fired in one step, both passes together. A route's timers are few (a timeout per call, a retry loop of a few
+ * attempts). The largest count in the golden corpus is recorded in tests/golden/README.md; a loop of timers that goes past
+ * this is an error that names the case and step, never a run that lasts until the test's own timeout.
+ */
+const TIMER_LIMIT = 10_000;
+
+/**
+ * Work that a background pass keeps running: the ctx.waitUntil promises, taken in batches. `start` takes every promise
+ * registered so far that no batch has taken, and returns false when there is none or a batch is still running. `busy`
+ * is true while a batch runs. The batch's settlements are recorded when it ends, and the runner is told then.
+ */
+export type Backlog = {
+	start(): boolean;
+	busy(): boolean;
+};
+
 export type Driving = {
 	/** The phase given to the effects released while the work runs. */
 	readonly phase: Phase;
@@ -44,6 +61,8 @@ export type Driving = {
 	readonly timers: boolean;
 	/** What is being driven, named in an error (the case and the step). */
 	readonly where: string;
+	/** Late ctx.waitUntil work, drained by this same loop: the pass ends only when none is pending or running. */
+	readonly backlog?: Backlog;
 };
 
 /** A failure of the harness itself (a handler nothing can move, tracked work that never ends, a route that never stops yielding): never a rejected answer. */
@@ -118,6 +137,10 @@ export async function drive<T>(
 				continue;
 			}
 
+			// Late ctx.waitUntil work is taken as soon as nothing else is undelivered, so a waitUntil registered after the
+			// background pass began is drained here, not dropped.
+			if (driving.backlog?.start()) continue;
+
 			// Gated effects are released only when no tracked operation is undelivered, in both passes: a release while a
 			// digest is still running would let the machine's speed decide which effect comes first. The work's own status
 			// decides whether a pass still waits for effects (`!settled`), and the background pass also releases.
@@ -133,15 +156,27 @@ export async function drive<T>(
 			}
 
 			// The request pass ends once its answer has been read. The background pass ends only when nothing waits at the
-			// gate and no tracked operation is undelivered, so floating work at the end of a step is recorded like any other.
+			// gate, no tracked operation is undelivered and no waitUntil is pending or running. Work that waits on a timer
+			// is not waited for here: a timer still queued at this point is abandoned with its step (the caller).
 			if (
 				settled &&
-				(!driving.flush || (log.waiting === 0 && log.inflight === 0))
+				(!driving.flush ||
+					(log.waiting === 0 && log.inflight === 0 && !driving.backlog?.busy()))
 			)
 				break;
 
-			if (log.inflight === 0 && driving.timers && (await clock.fireNextTimer()))
+			if (
+				log.inflight === 0 &&
+				driving.timers &&
+				(await clock.fireNextTimer())
+			) {
+				if (clock.timersFired > TIMER_LIMIT)
+					throw new HarnessError(
+						`golden harness: ${driving.where}: the route fired more than ${TIMER_LIMIT} timers in one step, so it never ends (a timer loop).`,
+					);
+
 				continue;
+			}
 
 			// Whatever happened while a timer fired is looked at before waiting.
 			if (events !== seen) continue;

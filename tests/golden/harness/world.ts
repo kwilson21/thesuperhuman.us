@@ -14,7 +14,7 @@ import { POST as studioSession } from "~/pages/api/studio/session";
 import { actorLabel, asVisitor, OWNER_EMAIL, type Actor } from "./actors";
 import { dump, freshMusicDb, freshPublicationDb, seed, type Seed } from "./db";
 import { Determinism } from "./determinism";
-import { drive, HarnessError } from "./settle";
+import { type Backlog, drive, HarnessError } from "./settle";
 import {
 	recordingD1,
 	SqlHooks,
@@ -483,32 +483,64 @@ async function runOn(
 			const id = ++nextWaitId;
 			log.push({ kind: "waitUntil", id });
 			pending.push({ id, promise });
+			// Told at once, so a background pass that is waiting for work to end takes this one too.
+			log.onChange?.();
 			// Like the platform, a rejection here is not an unhandled one: the settlement is recorded by the drain.
 			promise.then(undefined, () => {});
 		},
 		passThroughOnException: () => {},
 	});
 
+	// Takes every waitUntil promise no batch has taken, and returns the batch's settlement once it ends (undefined when
+	// there is none). The settlements are recorded in the order the promises were registered.
+	let batchRunning = false;
+
+	const takeBatch = (): Promise<void> | undefined => {
+		if (drained >= pending.length) return undefined;
+
+		const batch = pending.slice(drained);
+		drained = pending.length;
+
+		return Promise.allSettled(batch.map((item) => item.promise)).then(
+			(settled) => {
+				for (const [index, result] of settled.entries())
+					log.push({
+						kind: "waitUntil-settled",
+						id: batch[index].id,
+						outcome: result.status,
+						error:
+							result.status === "rejected" && result.reason instanceof Error
+								? errorText(result.reason)
+								: null,
+					});
+			},
+		);
+	};
+
+	// Used before a case's own requests (sign-in): drains everything registered so far, then returns.
 	const drain = async () => {
-		while (drained < pending.length) {
-			const batch = pending.slice(drained);
-			drained = pending.length;
+		for (let batch = takeBatch(); batch; batch = takeBatch()) await batch;
+	};
 
-			const settled = await Promise.allSettled(
-				batch.map((item) => item.promise),
-			);
+	// Used by the background pass (settle.ts): one batch at a time, and the runner is told when each batch has ended, so
+	// work registered while one runs is taken next.
+	const backlog: Backlog = {
+		busy: () => batchRunning,
+		start: () => {
+			if (batchRunning) return false;
 
-			for (const [index, result] of settled.entries())
-				log.push({
-					kind: "waitUntil-settled",
-					id: batch[index].id,
-					outcome: result.status,
-					error:
-						result.status === "rejected" && result.reason instanceof Error
-							? errorText(result.reason)
-							: null,
-				});
-		}
+			const batch = takeBatch();
+
+			if (!batch) return false;
+
+			batchRunning = true;
+			void batch.then(() => {
+				batchRunning = false;
+				log.onChange?.();
+			});
+
+			return true;
+		},
 	};
 
 	const world: World = {
@@ -733,6 +765,7 @@ async function runOn(
 
 		log.answered = false;
 		log.gating = true;
+		clock.timersFired = 0;
 
 		try {
 			// The handler and the reading of its answer are driven together (settle.ts): what they start waits at the log's
@@ -760,14 +793,17 @@ async function runOn(
 		log.phase = "background";
 		const atResponse = { ...databases(), touched: log.touched() };
 
-		// What is still at the gate was never waited for: ctx.waitUntil work, and anything a route left floating.
-		await drive(log, clock, drain(), {
+		// What is still at the gate was never waited for: ctx.waitUntil work (taken as it is registered, backlog), and
+		// anything a route left floating. Work still waiting on a timer when this pass ends is abandoned with the step.
+		await drive(log, clock, Promise.resolve(), {
 			phase: "background",
 			flush: true,
 			timers: true,
 			where: `case "${c.name}", step ${index}`,
+			backlog,
 		});
 
+		clock.abandonTimers();
 		log.gating = false;
 		log.answered = false;
 		log.phase = "request";
