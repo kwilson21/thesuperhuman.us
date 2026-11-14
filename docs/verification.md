@@ -228,7 +228,7 @@ Issuing a code makes the same three round trips with the same statements, whatev
 | Allowance upsert (`reserveStudioAllowance`, twice per request) | write of a computed value (a counter; the limit is compared in TypeScript) |
 | Allowance stale-window delete (`DELETE ... WHERE window_start<=?`, the first statement of that batch; it predates this change and is left as it is) | bulk clean-up by age that decides no outcome (the count and the limit are decided in TypeScript from the upsert's row) |
 | Issue, round trip 1: the address's projects; the address's code rows and the browser's own row | read |
-| Issue, round trip 2: delete of the expired rows `decideIssue` named from the rows it read, by key; delete of the browser's earlier code for another address (the address read, or none) | write of computed values (deletes by key, the second guarded by the address read) |
+| Issue, round trip 2: delete of the expired rows `decideIssue` named from the rows it read, by key, only while each is still expired and still holds the code that was read; delete of the browser's earlier code for another address (the address read, or none) | write of computed values (deletes by key, the second guarded by the address read) |
 | Issue, round trip 3: `SELECT CASE WHEN ?=0 OR (<a project is open> AND <other live codes below the cap>) ... json_extract` | guard re-checking the two facts `decideIssue` used (the flag is the decision) |
 | Issue, round trip 3: delete of the row that holds the browser's cookie value (whatever its address, so the insert below cannot collide on the key); insert of the new row; audit insert over the project ids `decideIssue` named | write of computed values, each bound to do nothing unless `decideIssue` said to issue; the audit insert is guarded by the project still being open |
 | Enter, round trip 1: the browser's code row; the address's projects | read |
@@ -242,6 +242,21 @@ Issuing a code makes the same three round trips with the same statements, whatev
 | Retention (`scripts/studio-retention.mjs`): snapshot of codes whose use or expiry is older than 30 days; the matching delete by key, guarded by the snapshot | read; guarded write (the age predicate selects the rows the owner reviews, and the apply deletes exactly the reviewed keys) |
 | Owner health (`scripts/owner-health.mjs`): the table list, and counts of codes older than 30 days | read |
 | Decisions in SQL | none that decide an outcome for a person: every `WHERE` or `CASE` in the issue and entry paths either carries a decision made in TypeScript (a bound flag, a stored hash, an address, a key) or repeats a fact the decision used so that a change since the read is noticed. The remaining age predicates are bulk clean-up that decides no outcome: the allowance stale-window delete (left as it was) and the retention review (which the owner reviews first). The sweep of expired codes is now done by key from rows TypeScript read, so only the rows of the address that asks are swept on a request; the others wait for retention |
+
+**Statements that act on a row identified in an earlier batch.** A request reads, then writes in later batches, and another request can change the rows in between (including replacing a row under the same cookie value). For each statement that acts on a row (or a project) named by an earlier batch, the read fact it relies on and the guard that re-checks it at write time:
+
+| Statement | Row or project identified by | Read fact it relies on | Guard that re-checks it at write time |
+|---|---|---|---|
+| Issue 2: delete of expired rows | the key and code hash of each row read | the row had expired and held that code | `expires_at<=now` and `(nonce_hash, code_hash)` equal to the pair read: a row replaced under the same key holds a different code and is never deleted (the model's `liveCodeNeverSwept`, mutant `SweepUnguarded`) |
+| Issue 2: delete of the browser's earlier code for another address | the cookie value and the address of the browser's own row as read | that row was for a different address than this request's | `email=` the address read. A row that a concurrent request for this request's own address stored under the cookie has another address and survives (a route test); a row stored again for the other address is deleted, which is right because this request asks for a different address |
+| Issue 3: the guard | not a row: it re-reads | a project is open and the address's other live codes are below the cap | it re-counts at write time (the model's `NoCapGuard` and `NoOpenGuard`) |
+| Issue 3: delete of the row that holds the browser's cookie value | the cookie value, not an earlier read | none: replacing the browser's own row is the aim, and it cannot touch another browser's row | none needed; it is what lets the insert below it never collide on the key |
+| Issue 3: insert | none (a new row) | the decision to issue | the guard above, in the same batch |
+| Issue 3 and Enter: audit inserts | the project ids read | each project was not closed | `EXISTS` a project with that id that is still open (the model's `NoOpenGuard`) |
+| Enter 2: counted attempt | the browser's row and the code hash read | the row was unused, unexpired, under the limit, and held that code | the same `WHERE`, with `code_hash=` the hash read (the model's `ChargeAnyVersion`) |
+| Enter 2: use of the code | the same row | the code was right and a project was open | the same `WHERE`, `changes()=1` (the attempt landed) and a project still open |
+| Enter 2: session insert | the row just marked used | the code was accepted | it selects only the row whose `session_token_hash` is the new token |
+| Discard: guard, audit, delete | the row by address, cookie value and code hash | the code was still unused | the guard re-checks it, and the delete repeats `used_at IS NULL` |
 
 **What can throw on the code route.** A database error that only some addresses can reach would show which address has an open project, so every constraint of `audio_client_signin_codes` and every statement of the three batches was checked against any interleaving of requests that share a cookie or an address:
 
