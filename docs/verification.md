@@ -229,9 +229,12 @@ The recorded effects of a route carry a phase. `request` means the response wait
 from work it waited for); `background` means the answer had been produced and read before the effect began (work handed to
 `ctx.waitUntil`, or left floating), and the state digest "at the response" does not include it. The harness decides this by
 letting the event loop go quiet and releasing what the answer needs, never by counting promise turns, so a conversion that
-adds turns (an Effect runtime) records the same phases, and moving work across the response is a NOT NEUTRAL change.
-`tests/golden/README.md` ("What is recorded") has the rule, its one known limit (a route that keeps awaiting after
-`waitUntil`), and the comparison tool.
+adds turns records the same phases. A conversion onto an Effect runtime does too for the yields the tests cover
+(`Effect.yieldNow`, a `setImmediate` yield, and the automatic yield after 2,048 operations), because the harness tracks
+the `setImmediate` calls the scheduler makes. Two things are not observed: the body read of a Blob or compressed stream
+answer, and key operations other than the cipher and digest calls. Moving work across the response is a NOT NEUTRAL
+change. `tests/golden/README.md` ("What is recorded") has the rule, the tracked work, the known limits (a route that keeps
+awaiting after `waitUntil`, and the two above), and the comparison tool.
 
 ## Verified modules
 

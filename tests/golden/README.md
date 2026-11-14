@@ -279,23 +279,59 @@ been produced without the effect, or it cannot be told apart from work the answe
 had been produced and read while the effect had not yet begun (work handed to `ctx.waitUntil`, or left floating). The
 digest `atResponse` is the state of the databases at that moment, so work the response did not wait for has not run in it.
 
-The harness decides this with a gate (`harness/settle.ts`, `EffectLog.start`): every fake (fetch, D1, KV, R2, AI, rate
-limits) waits at the gate before it does anything. The runner lets the event loop go quiet (a real macrotask turn, so
-every promise a route chains has run, however many turns that takes). If the answer has not been produced, whatever waits
-is released as `request` and the loop goes round again. Once the answer has been produced and read, whatever still waits,
-and whatever starts later, is `background`, and runs after the digest `atResponse` is taken. So a route that takes extra
-promise turns (an `Effect.runPromise` wrapper, say) records the same phases and order. Entries are kept in the order the
-effects finish, except that a line a route writes itself (`console`, `waitUntil`) sits after the effects released before
-it and before those released after it. Work that is neither awaited nor handed to `waitUntil` is `background`, and still
-runs and is recorded before the next step. A rejecting handler is answered "rejected", and what it deferred is `background`.
+**How the two phases are decided.** The harness uses a gate (`harness/settle.ts`, `EffectLog.start`). Every fake (fetch, D1,
+KV, R2, AI, rate limits) waits at the gate before it does anything. The driver (`drive`) takes one real macrotask turn,
+then looks at what waits. While the handler and the reading of its answer have not finished, and no tracked work is in
+flight, whatever waits is released as `request` and the loop goes round again. Once the answer has been read, whatever
+still waits, and whatever starts later, is `background`, and runs after the digest `atResponse` is taken. The driver
+decides nothing while tracked work is in flight, so how fast the machine finishes that work never changes a label. A
+route that takes extra promise turns (an `Effect.runPromise` wrapper, say) records the same phases and order. Entries are
+kept in the order the effects finish, except that a line a route writes itself (`console`, `waitUntil`) sits after the
+effects released before it and before those released after it. Work that is neither awaited nor handed to `waitUntil` is
+`background`, and still runs and is recorded before the next step. A rejecting handler is answered "rejected", and what it
+deferred is `background`.
 
-Known limit: a route that calls `waitUntil` and then keeps awaiting other work cannot be told from outside: deferred work
-already in flight is `request`, because the response is still waiting and nothing separates them. That label is stable
-under extra promise turns, but not under a change that splits the awaited work into more sequential steps, where a later
-step of the deferred work may change label. Call `waitUntil` last, or keep the deferred work to one step. Work that is
-started and not awaited, while the route awaits something else, is `request` for the same reason. Waiting on real
-asynchronous platform work the harness does not gate (`crypto.subtle`, a real timer) is likewise seen as the response
-waiting.
+**Faked route timers.** `setTimeout` is faked for every case. Under virtual timers (`vi.useFakeTimers`) the frozen clock
+fires them. Otherwise a route's timer is queued, and the driver fires the next queued timer (in order of due time) only when
+nothing else can make progress. A timer never fires because real time has passed.
+
+**Tracked work in flight.** Work that leaves the microtask queue is counted from the call until it ends (`EffectLog.begin`),
+and its return is a boundary (`EffectLog.boundary`):
+
+- WebCrypto `digest`, `sign`, `verify`, `encrypt`, `decrypt` and `deriveBits` (`harness/determinism.ts`, `trackAsyncWork`).
+- `setImmediate`. Effect's scheduler yields with it, and reads the global each time it schedules, so a route that yields
+  to the event loop has a macrotask in flight. A `clearImmediate` ends the work without a callback.
+
+Tracked work is in flight until its callback has run, so the driver waits for it and does not release anything meanwhile.
+
+**Stuck detector.** When nothing is in flight, nothing waits and no timer is queued, the handler cannot finish. After two
+real seconds (`STUCK_MS` in `settle.ts`) the driver throws, naming the case, instead of waiting forever.
+
+**Effect runtimes.** A conversion onto an Effect runtime records the same phases as the plain route for the yields
+`phases.test.ts` covers ("macrotask yields change nothing"): `Effect.yieldNow`, a `setImmediate` yield, and the scheduler's
+automatic yield after 2,048 operations (a 3,000-step flow, before the return and inside deferred work). The `setImmediate`
+tracking is what makes the scheduler's yields count; without it, a converted route records a different phase.
+
+**Not observed.** A route that depends on one of these can record a different phase than it would in production:
+
+- Blob and compressed stream answers. Node runs macrotasks inside the read of a Blob body or a `CompressionStream` output,
+  and the harness cannot see them. Tracking the read as in flight holds the gate shut against a stream that reads an
+  effect (the stream test in `phases.test.ts`), so this is a limit. Such an answer records its deferred fetch as `request`
+  (pinned by the "known limit" tests there). `src/lib/audio-project-files.ts` answers with an R2 object body, which is a
+  stream, so its deferred work is affected.
+- Key operations other than the cipher and digest calls: `importKey`, `exportKey`, `deriveKey`, `wrapKey` and `unwrapKey`
+  are not wrapped. The harness's own `generateKey` fake calls `importKey`. A probe that imported and exported a key after
+  `waitUntil` recorded the same phases, but a probe is not a proof.
+- `MessageChannel` and `MessagePort`, and `setInterval`: no route in `src/` uses them, and the Effect scheduler on this
+  path does not. `queueMicrotask` is a microtask and needs nothing. A new use must be wrapped before a route relies on it.
+
+**Known limit.** A route that calls `waitUntil` and then keeps awaiting other work cannot be told from outside. Deferred
+work still in flight while the awaited work runs is `request`, because the response is still waiting and nothing separates
+them. Which way it goes depends on how many sequential steps follow the `waitUntil` call, and on how the deferred work
+compares in time with the answer: a deferred digest that outlives the answer by two queued timer turns is `background`,
+and the same digest with no extra turns is `request` (the last test in the "work that leaves the microtask queue" block of
+`harness/threads.test.ts` pins this). So call `waitUntil` last, and keep the deferred work to one step. Work that is
+started and not awaited, while the route awaits something else, is `request` for the same reason.
 
 - D1: each executed statement (`first`, `all`, `run`) with the SQL exactly as prepared, bound arguments, database, and
   result shape (row count, `meta.changes`, or the error). A `batch` is one entry with its statements in order and
