@@ -98,10 +98,10 @@ describe("digestDatabase", () => {
 });
 
 describe("the record of a case", () => {
-	it("is format 3, with a digest per step and the final state of both databases, R2 and KV", async () => {
+	it("is format 4, with a digest per step and the final state of both databases, R2 and KV", async () => {
 		const got = await runCase(idle, case1());
 
-		expect(got.format).toBe(3);
+		expect(got.format).toBe(4);
 		expect(Object.keys(got.steps[0]?.digest ?? {})).toEqual([
 			"music",
 			"publication",
@@ -619,6 +619,59 @@ describe("D1 change counts", () => {
 		expect(batch).toMatchObject({
 			statements: [{ outcome: { changes: 1 } }, { outcome: { changes: 0 } }],
 		});
+	});
+});
+
+describe("D1 change counts under parallel calls", () => {
+	it("a read that runs beside a write is recorded with its own count, not the write's", async () => {
+		const got = await runCase(async (context) => {
+			const db = env(context).MUSIC_DB;
+
+			await Promise.all([
+				db?.prepare("SELECT * FROM software_signing_settings").all(),
+				db
+					?.prepare("UPDATE software_signing_settings SET updated_by = 'z'")
+					.run(),
+			]);
+
+			return new Response("ok");
+		}, case1());
+
+		const counts = got.effects
+			.filter((entry) => entry.kind === "d1")
+			.map((entry) => [entry.sql.split(" ")[0], entry.outcome]);
+
+		expect(counts).toEqual([
+			["SELECT", { rows: 1, changes: 0 }],
+			["UPDATE", { rows: 0, changes: 1 }],
+		]);
+	});
+
+	it("two writes that run beside each other each keep their own count", async () => {
+		const got = await runCase(async (context) => {
+			const db = env(context).MUSIC_DB;
+
+			await Promise.all([
+				db
+					?.prepare(
+						"UPDATE software_signing_settings SET updated_by = 'a' RETURNING id",
+					)
+					.first(),
+				db
+					?.prepare(
+						"UPDATE software_signing_settings SET updated_by = 'b' WHERE 0",
+					)
+					.all(),
+			]);
+
+			return new Response("ok");
+		}, case1());
+
+		const counts = got.effects
+			.filter((entry) => entry.kind === "d1")
+			.map((entry) => entry.outcome.changes);
+
+		expect(counts).toEqual([1, 0]);
 	});
 });
 

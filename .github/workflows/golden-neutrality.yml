@@ -37,12 +37,26 @@ jobs:
       - name: Golden neutrality report
         run: |
           set +e
-          node scripts/golden-neutral.mjs --all HEAD^1 HEAD > "$RUNNER_TEMP/neutral.txt" 2>&1
+          # A pull request must not judge itself with a tool it edited: when the base branch has the comparison scripts,
+          # run the base's copies (the tool and every local module it imports), extracted from HEAD^1.
+          tool_dir="$RUNNER_TEMP/base-tool"
+          mkdir -p "$tool_dir"
+          tool="scripts/golden-neutral.mjs"
+          copy="the pull request's copy (the base branch has no golden-neutral.mjs)"
+          if git cat-file -e HEAD^1:scripts/golden-neutral.mjs 2>/dev/null; then
+            for file in golden-neutral.mjs golden-diff.mjs sql-effects.mjs; do
+              git show "HEAD^1:scripts/$file" > "$tool_dir/$file" 2>/dev/null || rm -f "$tool_dir/$file"
+            done
+            tool="$tool_dir/golden-neutral.mjs"
+            copy="the base branch's copy, extracted from HEAD^1"
+          fi
+          echo "Comparison tool: $copy"
+          node "$tool" --all HEAD^1 HEAD > "$RUNNER_TEMP/neutral.txt" 2>&1
           status=$?
           {
             echo "### Golden neutrality: base \`$(git rev-parse --short HEAD^1)\` against the merge result \`$(git rev-parse --short HEAD)\`"
             echo
-            echo "Exit code $status (0 neutral, 1 not neutral or not comparable, 2 error). Label \`conversion\`: $CONVERSION."
+            echo "Tool: $copy. Exit code $status (0 neutral, 1 not neutral or not comparable, 2 error). Label \`conversion\`: $CONVERSION."
             echo
             echo '```'
             head -c 900000 "$RUNNER_TEMP/neutral.txt"

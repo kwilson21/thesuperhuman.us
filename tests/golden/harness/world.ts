@@ -22,7 +22,7 @@ import {
 } from "./d1";
 import { expectRecorded, settleFixture } from "./fixtures";
 import { recordingKv, type KvSetup } from "./kv";
-import { EffectLog, type Effect } from "./log";
+import { EffectLog, type Effect, type EffectState } from "./log";
 import {
 	byHost,
 	json,
@@ -207,8 +207,8 @@ export type StateDigest = {
 	publication: string;
 	r2: string;
 	kv: string;
-	/** The databases as they were when the response had been read, before any background work ran. */
-	atResponse: { music: string; publication: string };
+	/** The databases, and the tables written so far, when the response had been read, before any background work ran. */
+	atResponse: EffectState;
 };
 
 /** The state at the end of a case: per-table digests of both databases, and the whole of R2 and KV. */
@@ -241,8 +241,8 @@ export type StepRecord = {
 
 export type CaseRecord = {
 	name: string;
-	/** Fixture format. 3 adds the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. */
-	format: 3;
+	/** Fixture format. 4 adds the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. */
+	format: 4;
 	steps: StepRecord[];
 	effects: Effect[];
 	final: Recorded | null;
@@ -738,7 +738,7 @@ async function runOn(
 		}
 
 		log.phase = "background";
-		const atResponse = databases();
+		const atResponse = { ...databases(), touched: log.touched() };
 		await drain();
 		log.phase = "request";
 
@@ -759,7 +759,7 @@ async function runOn(
 
 	return {
 		name: c.name,
-		format: 3,
+		format: 4,
 		steps: records,
 		effects: log.entries,
 		final: stores(c.final),

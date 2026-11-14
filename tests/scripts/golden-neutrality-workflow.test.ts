@@ -46,9 +46,7 @@ describe("golden-neutrality.yml", () => {
 	});
 
 	it("compares the base branch tip (the first parent of the merge ref) with the merge result, for every fixture", () => {
-		expect(workflow).toContain(
-			"node scripts/golden-neutral.mjs --all HEAD^1 HEAD",
-		);
+		expect(workflow).toContain('node "$tool" --all HEAD^1 HEAD');
 		expect(workflow).toMatch(/fetch-depth: 2\b/);
 		expect(workflow).not.toMatch(/fetch-depth: 0\b/);
 	});
@@ -78,12 +76,60 @@ describe("golden-neutrality.yml", () => {
 		for (const used of uses) expect(used).toMatch(/@[0-9a-f]{40}$/);
 	});
 
+	it("runs the BASE branch's copy of the tool and every local module it imports, falling back to the pull request's own only when the base has none, and says which ran", () => {
+		expect(workflow).toContain(
+			"git cat-file -e HEAD^1:scripts/golden-neutral.mjs",
+		);
+		expect(workflow).toContain('git show "HEAD^1:scripts/$file"');
+		expect(workflow).toContain('tool="$tool_dir/golden-neutral.mjs"');
+		expect(workflow).toContain('node "$tool" --all HEAD^1 HEAD');
+		expect(workflow).toContain("the base branch's copy, extracted from HEAD^1");
+		expect(workflow).toContain(
+			"the pull request's copy (the base branch has no golden-neutral.mjs)",
+		);
+		expect(workflow).toContain('echo "Comparison tool: $copy"');
+	});
+
+	it("extracts every local module the tool imports, however deep", () => {
+		const listed =
+			workflow.match(/for file in ([^;]+); do/)?.[1]?.split(" ") ?? [];
+
+		const wanted = new Set<string>();
+
+		const walk = (file: string) => {
+			if (wanted.has(file)) return;
+
+			wanted.add(file);
+
+			const source = readFileSync(
+				new URL(`../../scripts/${file}`, import.meta.url),
+				"utf8",
+			);
+
+			for (const match of source.matchAll(/from "\.\/([\w.-]+\.mjs)"/g))
+				walk(match[1] ?? "");
+		};
+
+		walk("golden-neutral.mjs");
+
+		for (const file of wanted) expect(listed).toContain(file);
+	});
+
 	it("needs no install: the tool uses Node and git only", () => {
 		expect(workflow).not.toContain("pnpm install");
 	});
 });
 
 describe("validate.yml", () => {
+	const testStep = validate.slice(validate.indexOf("      - run: pnpm test\n"));
+
+	it("runs the golden harness's self-checks in the test step", () => {
+		const env = testStep.slice(0, testStep.indexOf("\n      - ", 10));
+
+		expect(env).toContain('GOLDEN_VERIFY_DIGESTS: "1"');
+		expect(env).toContain('GOLDEN_VERIFY_COUNTS: "1"');
+	});
+
 	it("is unchanged by the label: it still runs on pull requests (default types) and on pushes to main only", () => {
 		expect(validate).toMatch(
 			/on:\n {2}pull_request:\n {2}push:\n {4}branches: \[main\]/,

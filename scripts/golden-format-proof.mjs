@@ -1,92 +1,134 @@
-// Proves that a fixture FORMAT change added fields and changed nothing else.
+// Proves that the fixture format 3 to 4 re-record changed only what it is allowed to (see ALLOWED below).
 //
 //   node scripts/golden-format-proof.mjs <from> [<to>]
 //
-// For every fixture, in either revision, and every case: the later case and the earlier case, each with the ADDED fields removed, must be equal, field for field. The added fields are listed below and nothing else may differ. Prints the number of
-// fixtures and cases and the size of all fixtures before and after (compressed as stored, and as JSON text), and exits 1
-// on any difference.
+// For every fixture, in either revision, and every case, the later case must equal the earlier one field for field,
+// apart from the allowed differences. Prints the number of fixtures and cases, the size of all fixtures before and after
+// (compressed as stored, and as JSON text), how many recorded change counts changed and in which fixtures, and exits 1 on
+// any other difference.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { differences, fromDisk, fromRevision } from "./golden-diff.mjs";
+import { statementOf } from "./sql-effects.mjs";
 
 const DIRECTORY = "tests/golden/fixtures";
 
 /**
- * What a format change may add or replace: on a case, on every step, on every outside effect, and log entries of these
- * kinds. A D1 outcome that was recorded as `changes: null` may now hold the real count. Nothing else may differ.
+ * What the format 3 to format 4 re-record may change, and nothing else:
+ *
+ * - `format` goes from 3 to 4 (a case in neither format, the older recorder's, must be identical);
+ * - each outside effect's `state` and each step's `digest.atResponse` gain `touched`, the sorted names of the tables
+ *   that committed row-changing writes had touched so far in the step;
+ * - a D1 `changes` count may change, and only where the statement is a read and the new count is 0: the count of a read
+ *   that ran beside a write used to be the write's. A changed count of a write is NOT accepted here (the harness verified
+ *   every recorded count against SQLite's `total_changes()` when it recorded them; see GOLDEN_VERIFY_COUNTS in
+ *   tests/golden/README.md), so one would be reported and need its own explanation.
+ *
+ * `trigger-hit` entries, the step digests, the final state and every other field are compared exactly.
  */
-export const ADDED = {
-	caseFields: ["format", "finalState"],
-	stepFields: ["digest"],
-	effectFields: ["state"],
-	effectKinds: ["trigger-hit"],
+export const ALLOWED = {
+	fromFormat: 3,
+	toFormat: 4,
+	added: "touched",
 };
 
-/** The case without the fields a format change adds. */
-export function withoutAdded(entry) {
-	const kept = { ...entry };
+const isSortedNames = (list) =>
+	Array.isArray(list) &&
+	list.every((name) => typeof name === "string") &&
+	JSON.stringify(list) === JSON.stringify([...list].sort());
 
-	for (const field of ADDED.caseFields) delete kept[field];
+/** The later case without the allowed additions, or a reason it cannot be compared. */
+function reduce(entry, problems, name) {
+	const kept = structuredClone(entry);
 
-	kept.effects = kept.effects
-		.filter((effect) => !ADDED.effectKinds.includes(effect.kind))
-		.map((effect) => {
-			const copy = { ...effect };
+	delete kept.format;
 
-			for (const field of ADDED.effectFields) delete copy[field];
+	for (const effect of kept.effects)
+		if (effect.state && "touched" in effect.state) {
+			if (!isSortedNames(effect.state.touched))
+				problems.push(
+					`${name}: an effect's touched is not a sorted list of table names`,
+				);
 
-			return copy;
-		});
+			delete effect.state.touched;
+		}
 
-	if (kept.steps)
-		kept.steps = kept.steps.map((step) => {
-			const copy = { ...step };
+	for (const step of kept.steps ?? [])
+		if (step.digest?.atResponse && "touched" in step.digest.atResponse) {
+			if (!isSortedNames(step.digest.atResponse.touched))
+				problems.push(
+					`${name}: atResponse.touched is not a sorted list of table names`,
+				);
 
-			for (const field of ADDED.stepFields) delete copy[field];
-
-			return copy;
-		});
+			delete step.digest.atResponse.touched;
+		}
 
 	return kept;
 }
 
-/** Whether a later change count is the real number for an earlier null. */
-const filledIn = (was, now) =>
-	was === null && Number.isInteger(now) && now >= 0;
+/** Whether the later count may replace the earlier one: a read, and now 0. */
+const readNowZero = (sql, was, now) => {
+	if (was === now) return true;
 
-/** The later effects with each `changes` the earlier record left null put back to null, so only real differences remain. */
-function nullChanges(old, next) {
-	return next.map((effect, index) => {
+	try {
+		return now === 0 && !statementOf(sql).write;
+	} catch {
+		return false;
+	}
+};
+
+/** The D1 `changes` of the later effects put back to the earlier value where the change is allowed; counts those. */
+function acceptCounts(old, next) {
+	let accepted = 0;
+
+	for (const [index, effect] of next.entries()) {
 		const was = old[index];
 
-		if (!was || was.kind !== effect.kind) return effect;
+		if (!was || was.kind !== effect.kind) continue;
 
 		if (
 			effect.kind === "d1" &&
-			filledIn(was.outcome?.changes, effect.outcome?.changes)
-		)
-			return { ...effect, outcome: { ...effect.outcome, changes: null } };
+			readNowZero(effect.sql, was.outcome?.changes, effect.outcome?.changes)
+		) {
+			if (was.outcome?.changes !== effect.outcome?.changes) accepted += 1;
+
+			effect.outcome = { ...effect.outcome, changes: was.outcome?.changes };
+		}
 
 		if (effect.kind === "d1-batch")
-			return {
-				...effect,
-				statements: effect.statements.map((statement, at) =>
-					filledIn(
-						was.statements?.[at]?.outcome?.changes,
+			effect.statements = effect.statements.map((statement, at) => {
+				const before = was.statements?.[at];
+
+				if (
+					!before ||
+					!readNowZero(
+						statement.sql,
+						before.outcome?.changes,
 						statement.outcome?.changes,
 					)
-						? { ...statement, outcome: { ...statement.outcome, changes: null } }
-						: statement,
-				),
-			};
+				)
+					return statement;
 
-		return effect;
-	});
+				if (before.outcome?.changes !== statement.outcome?.changes)
+					accepted += 1;
+
+				return {
+					...statement,
+					outcome: { ...statement.outcome, changes: before.outcome?.changes },
+				};
+			});
+	}
+
+	return accepted;
 }
 
-/** The differences between two revisions of one fixture's cases, after removing the added fields from both. */
-export function proveFixture(before, after) {
+/**
+ * The differences between two revisions of one fixture's cases, as { problems, counts }: `counts` is how many recorded
+ * D1 change counts changed, all of them reads that now say 0.
+ */
+export function proveFixtureDetailed(before, after) {
 	const problems = [];
+	let counts = 0;
 
 	if (before.length !== after.length)
 		problems.push(`${before.length} cases before, ${after.length} after`);
@@ -101,10 +143,30 @@ export function proveFixture(before, after) {
 			continue;
 		}
 
-		const earlier = withoutAdded(old);
-		const later = withoutAdded(next);
+		if (old.format === undefined && next.format === undefined) {
+			const found = differences(old, next);
 
-		later.effects = nullChanges(earlier.effects, later.effects);
+			if (found.length > 0)
+				problems.push(
+					`${old.name}: ${found[0].path || "(root)"} differs (${found.length} differences)`,
+				);
+
+			continue;
+		}
+
+		if (old.format !== ALLOWED.fromFormat || next.format !== ALLOWED.toFormat) {
+			problems.push(
+				`${old.name}: format ${old.format} to ${next.format}, not ${ALLOWED.fromFormat} to ${ALLOWED.toFormat}`,
+			);
+			continue;
+		}
+
+		const earlier = structuredClone(old);
+		const later = reduce(next, problems, old.name);
+
+		delete earlier.format;
+
+		counts += acceptCounts(earlier.effects, later.effects);
 
 		const found = differences(earlier, later);
 
@@ -114,8 +176,12 @@ export function proveFixture(before, after) {
 			);
 	}
 
-	return problems;
+	return { problems, counts };
 }
+
+/** The problems only (see `proveFixtureDetailed`). */
+export const proveFixture = (before, after) =>
+	proveFixtureDetailed(before, after).problems;
 
 const git = (args) =>
 	execFileSync("git", args, {
@@ -156,6 +222,7 @@ function main([from, to]) {
 	let storedAfter = 0;
 	let textBefore = 0;
 	let textAfter = 0;
+	const changedCounts = new Map();
 
 	for (const fixture of [...new Set([...before, ...after])].sort()) {
 		if (!before.has(fixture) || !after.has(fixture)) {
@@ -172,7 +239,11 @@ function main([from, to]) {
 		textBefore += JSON.stringify(old).length;
 		textAfter += JSON.stringify(next).length;
 
-		for (const problem of proveFixture(old, next))
+		const proved = proveFixtureDetailed(old, next);
+
+		if (proved.counts > 0) changedCounts.set(fixture, proved.counts);
+
+		for (const problem of proved.problems)
 			problems.push(`${fixture}: ${problem}`);
 	}
 
@@ -188,12 +259,18 @@ function main([from, to]) {
 		`as JSON text: ${textBefore} bytes before, ${textAfter} bytes after (${((textAfter / textBefore) * 100).toFixed(0)}%)`,
 	);
 
+	const total = [...changedCounts.values()].reduce((sum, n) => sum + n, 0);
+
+	console.log(
+		`recorded change counts that changed: ${total}${[...changedCounts].map(([fixture, n]) => `\n  ${fixture}: ${n}`).join("")}`,
+	);
+
 	for (const problem of problems.slice(0, 20))
 		console.log(`  DIFFERENT: ${problem}`);
 
 	console.log(
 		problems.length === 0
-			? "golden-format-proof: the only differences are the added fields (format, finalState, step digest, effect state, trigger-hit entries) and the real count in place of a null `changes`"
+			? "golden-format-proof: the only differences are format 3 to 4, the added `touched` sets, and read change counts that now say 0"
 			: `golden-format-proof: ${problems.length} problems, so this is not only a format change`,
 	);
 

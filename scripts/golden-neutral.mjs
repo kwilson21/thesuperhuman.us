@@ -19,9 +19,12 @@
 // different database at the response. One statement replaced by a DELETE and an INSERT of the same row, an INSERT OR
 // REPLACE, or an upsert turned into an UPDATE, changes nothing a digest sees, so it is neutral.
 //
-// Format 1 and 2 fixtures (recorded before the digests were complete) and format 3 fixtures cannot be compared with each
-// other: the digests exist on one side only, or differ in kind, so neutrality cannot be shown, and the tool says so and
-// exits 1.
+// Different formats cannot be compared with each other: the digests exist on one side only, or differ in kind, so
+// neutrality cannot be shown, and the tool says so and exits 1. Within one format below 4 (recorded before the state at
+// each outside effect and at the response was complete) a case whose D1 statements differ is NOT COMPARABLE too, since an
+// effect may have moved across a write unseen; a case with identical D1 statements is compared field for field as usual.
+// The older recorder's fixtures (contact, resume-request, resume-approve) have no D1 entries, so they are always compared
+// field for field: what the tool shows for them is that responses and every KV and fetch effect are identical.
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { differences, fromDisk, fromRevision } from "./golden-diff.mjs";
@@ -83,6 +86,9 @@ const rest = ({ name: _name, effects: _effects, ...others }) => others;
 
 const formatOf = (entry) => entry.format ?? 1;
 
+/** The first format that records the state of the databases at every outside effect and at the response. */
+const STATE_FORMAT = 4;
+
 /** Where in the later log an effect difference is, as a name: the n-th outside effect, in words. */
 function effectAt(path, list) {
 	const index = /^\[(\d+)\]/.exec(path)?.[1];
@@ -133,8 +139,8 @@ export function compareCase(before, after) {
 		const [{ path, expected, actual }] = moved;
 		const sorted = (list) => list.map((item) => JSON.stringify(item)).sort();
 
-		const how = /\.state\.[a-z]+$/.test(path)
-			? "the database changed before this effect, so a write moved or changed"
+		const how = /\.state\.[a-z]+/.test(path)
+			? "the database or the tables written before this effect changed, so a write moved or changed"
 			: old.length > next.length
 				? "an effect was removed"
 				: old.length < next.length
@@ -154,6 +160,25 @@ export function compareCase(before, after) {
 			},
 		};
 	}
+
+	// The D1 entries differ and the rest is identical. With the state at every outside effect recorded, that is neutral.
+	// Without it (format 1 to 3, and the older recorder's cases, which have no D1 entries and so never reach here), an
+	// email may have moved across a write and nothing recorded would show it.
+	if (
+		formatOf(before) < STATE_FORMAT &&
+		JSON.stringify(before.effects.filter(isD1)) !==
+			JSON.stringify(after.effects.filter(isD1))
+	)
+		return {
+			status: "not-comparable",
+			difference: {
+				area: "no state at each outside effect",
+				path: "case.effects",
+				reason: `format ${formatOf(before)} recordings do not hold the database state at each outside effect, so a change in the D1 statements cannot be shown not to have moved an effect across a write`,
+				expected: formatOf(before),
+				actual: formatOf(after),
+			},
+		};
 
 	return { status: "d1-only" };
 }
@@ -197,7 +222,7 @@ export function compareFixture(before, after, { renames = {} } = {}) {
 	}
 
 	/**
-	 * @type {{ identical: string[], d1Only: string[], nonNeutral: { name: string }[], notComparable: { name: string, expected?: number, actual?: number }[], added: string[], removed: string[], renamed: { from: string, to: string, status: string }[], compared: number, neutral: boolean }}
+	 * @type {{ identical: string[], d1Only: string[], nonNeutral: { name: string }[], notComparable: { name: string, expected?: number, actual?: number, reason?: string }[], added: string[], removed: string[], renamed: { from: string, to: string, status: string }[], compared: number, neutral: boolean }}
 	 */
 	const result = {
 		identical: [],
@@ -263,10 +288,12 @@ function print(fixture, result) {
 	);
 
 	if (result.notComparable.length > 0) {
-		const [{ expected, actual }] = result.notComparable;
+		const [{ expected, actual, reason }] = result.notComparable;
 
 		console.log(
-			`  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. The digests differ between formats, so neutrality cannot be shown across a format change.`,
+			reason
+				? `  NOT COMPARABLE: ${result.notComparable.length} cases have different D1 statements and were recorded in format ${expected}, which ${reason.replace(/^format \d+ recordings do not hold/, "does not hold")}.`
+				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. The digests differ between formats, so neutrality cannot be shown across a format change.`,
 		);
 
 		for (const item of result.notComparable.slice(0, 3))

@@ -151,6 +151,9 @@ export class SqlHooks {
 	}
 }
 
+/** With GOLDEN_VERIFY_COUNTS=1 every recorded count is compared with SQLite's `total_changes()` measured around the statement. */
+const VERIFY_COUNTS = process.env.GOLDEN_VERIFY_COUNTS === "1";
+
 /**
  * Counts the rows each statement run through the database changed, so the record holds the real number for every D1
  * method (first(), all(), run() and batch()), never a null that reads as "no row". A statement that is not a write
@@ -161,10 +164,6 @@ class ChangeMeter {
 	readonly counts: number[] = [];
 
 	constructor(private readonly sqlite: SqliteDatabase) {}
-
-	get last(): number {
-		return this.counts[this.counts.length - 1] ?? 0;
-	}
 
 	private changes(sql: string): number {
 		let write = true;
@@ -180,11 +179,89 @@ class ChangeMeter {
 		return Number(this.sqlite.prepare("SELECT changes() AS n").get()?.n ?? 0);
 	}
 
+	private total(): number {
+		return Number(
+			this.sqlite.prepare("SELECT total_changes() AS n").get()?.n ?? 0,
+		);
+	}
+
+	/** Whether SQLite's `total_changes()` also counts rows this statement's table writes elsewhere (triggers, foreign key actions, REPLACE). */
+	private writesElsewhere(sql: string): boolean {
+		let table: string | null = null;
+
+		try {
+			table = statementOf(sql).table;
+		} catch {
+			return true;
+		}
+
+		if (/\bOR\s+REPLACE\b|^\s*REPLACE\b/i.test(sql)) return true;
+
+		const triggers = this.sqlite
+			.prepare(
+				"SELECT 1 AS n FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?",
+			)
+			.get(table ?? "");
+
+		if (triggers) return true;
+
+		const tables = this.sqlite
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+			.all();
+
+		return tables.some((row) =>
+			this.sqlite
+				.prepare(
+					`PRAGMA foreign_key_list("${String(row.name).replaceAll('"', '""')}")`,
+				)
+				.all()
+				.some(
+					(key) =>
+						key.table === table &&
+						!["NO ACTION", "RESTRICT"].includes(
+							`${key.on_update}`.toUpperCase(),
+						),
+				),
+		);
+	}
+
+	/**
+	 * The check behind GOLDEN_VERIFY_COUNTS=1: the count recorded for a statement against the difference in SQLite's
+	 * `total_changes()` measured around it. A read changes nothing (0 and 0). A write on a table with no trigger, foreign
+	 * key action or REPLACE changes exactly the recorded count; on one that has them, `total_changes()` also counts what
+	 * they wrote, so the check is that the statement changed a row exactly when SQLite says rows changed, and no more rows
+	 * than SQLite counted.
+	 */
+	private verify(sql: string, count: number, delta: number) {
+		let write = true;
+
+		try {
+			write = statementOf(sql).write;
+		} catch {
+			// Treated as a write.
+		}
+
+		const fine = !write
+			? count === 0 && delta === 0
+			: this.writesElsewhere(sql)
+				? count <= delta && count > 0 === delta > 0
+				: count === delta;
+
+		if (!fine)
+			throw new Error(
+				`golden harness: the recorded change count ${count} does not agree with the ${delta} rows SQLite's total_changes() counted around this statement: ${sql.slice(0, 160)}`,
+			);
+	}
+
 	private watch(sql: string, statement: StatementSync): StatementSync {
 		const measured = <T>(work: () => T): T => {
+			const before = VERIFY_COUNTS ? this.total() : 0;
 			const result = work();
+			const count = this.changes(sql);
 
-			this.counts.push(this.changes(sql));
+			if (VERIFY_COUNTS) this.verify(sql, count, this.total() - before);
+
+			this.counts.push(count);
 
 			return result;
 		};
@@ -261,12 +338,17 @@ export function recordingD1(
 		const ran = async <T>(
 			via: "first" | "all" | "run",
 			work: () => Promise<T>,
-			outcome: (value: T) => D1Outcome,
+			outcome: (value: T, changes: number) => D1Outcome,
 		): Promise<T> => {
 			guard(via);
 
 			try {
-				const value = await work();
+				// The statement runs on the database synchronously, as the call starts, so its count is the next one the
+				// meter holds; reading it after the await would take whatever statement a parallel call ran meanwhile.
+				const position = meter.counts.length;
+				const pending = work();
+				const changes = meter.counts[position] ?? 0;
+				const value = await pending;
 
 				log.push({
 					kind: "d1",
@@ -274,7 +356,7 @@ export function recordingD1(
 					via,
 					sql,
 					args: argRecords(args),
-					outcome: outcome(value),
+					outcome: outcome(value, changes),
 				});
 
 				return value;
@@ -303,7 +385,7 @@ export function recordingD1(
 				return ran(
 					"first",
 					() => inner.first(),
-					(row) => ({ rows: row === null ? 0 : 1, changes: meter.last }),
+					(row, changes) => ({ rows: row === null ? 0 : 1, changes }),
 				);
 			}) as D1PreparedStatement["first"],
 			// SAFETY: as for first().
@@ -311,7 +393,7 @@ export function recordingD1(
 				ran(
 					"all",
 					() => inner.all(),
-					(result) => ({ rows: result.results.length, changes: meter.last }),
+					(result, changes) => ({ rows: result.results.length, changes }),
 				)) as D1PreparedStatement["all"],
 			// SAFETY: as for first().
 			run: (() =>
@@ -370,10 +452,14 @@ export function recordingD1(
 				throw new Error(failure);
 			}
 
+			// The whole batch runs on the database synchronously, as the call starts (see `ran`), so its statements' counts
+			// are the next ones the meter holds.
 			const first = meter.counts.length;
+			const pending = real.batch(parts.map((part) => part.inner));
+			const counts = meter.counts.slice(first);
 
 			try {
-				const results = await real.batch(parts.map((part) => part.inner));
+				const results = await pending;
 
 				log.push({
 					kind: "d1-batch",
@@ -383,7 +469,7 @@ export function recordingD1(
 					statements: records(
 						results.map((result, index) => ({
 							rows: result.results.length,
-							changes: result.meta.changes ?? meter.counts[first + index] ?? 0,
+							changes: counts[index] ?? 0,
 						})),
 					),
 				});

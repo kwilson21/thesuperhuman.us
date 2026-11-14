@@ -1,4 +1,5 @@
 // The ordered effect log of one case, and the entries in it.
+import { statementOf } from "../../../scripts/sql-effects.mjs";
 import type { ByteRecord, Recorded } from "./plain";
 
 /** Where an effect happened: while the handler ran, or after it had answered (ctx.waitUntil work). */
@@ -85,8 +86,16 @@ export type EffectBody =
 	| { kind: "advance"; ms: number }
 	| { kind: "console"; level: "error" | "warn"; args: Recorded[] };
 
-/** The state of the databases when an outside effect happened: one digest per database (see digest.ts). */
-export type EffectState = { music: string; publication: string };
+/** The databases as they were at one moment (see digest.ts): one digest each. */
+export type DatabaseStates = { music: string; publication: string };
+
+/**
+ * The state of the databases when an outside effect happened, or when the response had been read: the two digests, and
+ * the names of the tables that committed row-changing writes had touched so far in the step (names only: no operation,
+ * no count). The digests cannot see a same-value UPDATE, or a row inserted and deleted again; the table set can, and it
+ * is the same for a statement rewritten as a DELETE and an INSERT of the same table.
+ */
+export type EffectState = DatabaseStates & { touched: string[] };
 
 export type Effect = EffectBody & {
 	step: number;
@@ -120,14 +129,50 @@ export class EffectLog {
 	}
 
 	/** Answers the state of the databases now; set by the runner once they are open. */
-	probe: (() => EffectState) | undefined;
+	probe: (() => DatabaseStates) | undefined;
+
+	/** Per step, the tables that committed row-changing writes have touched. */
+	private readonly written = new Map<number, Set<string>>();
+
+	/** The tables touched so far in the current step, by name. */
+	touched(): string[] {
+		return [...(this.written.get(this.step) ?? [])].sort();
+	}
+
+	/** Notes the tables a D1 entry changed: a statement that ran and changed a row, or a batch that committed. */
+	private note(body: EffectBody) {
+		const changed = (sql: string, changes: number) =>
+			changes > 0 && statementOf(sql).write ? [statementOf(sql).table] : [];
+
+		const tables =
+			body.kind === "d1" && !("threw" in body.outcome)
+				? changed(body.sql, body.outcome.changes)
+				: body.kind === "d1-batch" && body.result === "committed"
+					? body.statements.flatMap((statement) =>
+							"threw" in statement.outcome
+								? []
+								: changed(statement.sql, statement.outcome.changes),
+						)
+					: [];
+
+		if (tables.length === 0) return;
+
+		const set = this.written.get(this.step) ?? new Set<string>();
+
+		for (const table of tables) if (table) set.add(table);
+
+		this.written.set(this.step, set);
+	}
 
 	push(body: EffectBody) {
 		if (this.quiet > 0) return;
 
 		const entry: Effect = { ...body, step: this.step, phase: this.phase };
 
-		if (this.probe && !UNSTATED.has(body.kind)) entry.state = this.probe();
+		this.note(body);
+
+		if (this.probe && !UNSTATED.has(body.kind))
+			entry.state = { ...this.probe(), touched: this.touched() };
 
 		this.entries.push(entry);
 	}

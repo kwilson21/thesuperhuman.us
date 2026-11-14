@@ -71,6 +71,7 @@ const make = (
 	} = {},
 ) => ({
 	name,
+	format: 4,
 	steps: [
 		{
 			request: { actor: "owner", method: "POST", path: "/x", body: null },
@@ -302,7 +303,7 @@ describe("compareCase: the state when an outside effect happened", () => {
 	/** A format 3 case: every outside effect carries the digest of the databases as they were when it happened. */
 	const stated = (effects: Json[], over: Json = {}) => ({
 		...make("a case", { effects }),
-		format: 3,
+		format: 4,
 		...over,
 	});
 
@@ -527,11 +528,83 @@ describe("compareCase: the state when an outside effect happened", () => {
 describe("compareCase: the fixture format", () => {
 	const v2 = (extra: Json = {}) => ({ ...base, format: 2, ...extra });
 
+	/** A case recorded before the `format` field existed (format 1). */
+	const v1 = (effects?: Json[]) => {
+		const { format: _format, ...rest } = base;
+
+		return effects ? { ...rest, effects } : rest;
+	};
+
 	it("format 1 against format 2 is not comparable", () => {
-		const got = compareCase(base, v2());
+		const got = compareCase(v1(), v2());
 
 		expect(got.status).toBe("not-comparable");
 		expect(got.difference).toMatchObject({ expected: 1, actual: 2 });
+	});
+
+	describe("a case recorded before the state at each outside effect", () => {
+		const other = (sql: string) => [read("SELECT 1"), write(sql), email()];
+
+		it.each([undefined, 2, 3])(
+			"in format %s, with D1 statements that differ, is NOT COMPARABLE, never neutral",
+			(format) => {
+				const was = { ...base, format };
+
+				const now = {
+					...make("a case", { effects: other("UPDATE items SET value = 'c'") }),
+					format,
+				};
+
+				const got = compareCase(was, now);
+
+				expect(got.status).toBe("not-comparable");
+				expect(got.difference?.area).toBe("no state at each outside effect");
+				expect(got.difference?.reason).toContain(
+					"cannot be shown not to have moved an effect across a write",
+				);
+			},
+		);
+
+		it.each([undefined, 2, 3])(
+			"in format %s, with identical D1 statements, is identical",
+			(format) => {
+				expect(
+					compareCase({ ...base, format }, { ...base, format }).status,
+				).toBe("identical");
+			},
+		);
+
+		it.each([undefined, 2, 3])(
+			"in format %s, a difference outside the D1 statements is still reported as not neutral",
+			(format) => {
+				const got = compareCase(
+					{ ...base, format },
+					{ ...make("a case", { answer: answer({ status: 500 }) }), format },
+				);
+
+				expect(got.status).toBe("non-neutral");
+			},
+		);
+
+		it("in format 4 the same D1 difference is neutral", () => {
+			expect(
+				compareCase(
+					base,
+					make("a case", { effects: other("UPDATE items SET value = 'c'") }),
+				).status,
+			).toBe("d1-only");
+		});
+
+		it("an older recorder case (no D1 entries) is compared field for field, whatever its format", () => {
+			const legacy = (key: string): Json => ({
+				name: "legacy",
+				answers: [{ outcome: "response", status: 200, headers: {}, body: "" }],
+				effects: [{ step: 0, kv: "RATE_LIMIT", op: "get", key, type: null }],
+			});
+
+			expect(compareCase(legacy("k"), legacy("k")).status).toBe("identical");
+			expect(compareCase(legacy("k"), legacy("j")).status).toBe("non-neutral");
+		});
 	});
 
 	it("two format 2 cases are compared, digests included", () => {
