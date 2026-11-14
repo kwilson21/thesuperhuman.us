@@ -12,7 +12,7 @@ import {
 } from "../lib/publication/oauth-login";
 import { publicationMcp } from "../lib/publication/mcp";
 import { BodyUnreadable, readBounded } from "./bounded-body";
-import { progressTool, publishTool } from "./flows/publication-tools";
+import { publicationTools } from "./publication-mcp";
 import { publicationLogin } from "./publication-login";
 import { bindingsOrUnavailable } from "./services";
 import {
@@ -160,21 +160,12 @@ const provide = (request: Request, env: LoginEnv, ctx: ExecutionContext) =>
 							connection: identity.success,
 						};
 
-						// A tool answers in the MCP protocol's shape whatever happens inside (see flows/publication-tools.ts).
-						return publicationMcp(req, identity.success, {
-							progress: (projectId) =>
-								Effect.runPromise(
-									progressTool(setting, projectId).pipe(
-										Effect.provideContext(services.services),
-									),
-								),
-							publish: (projectId, publication) =>
-								Effect.runPromise(
-									publishTool(setting, projectId, publication).pipe(
-										Effect.provideContext(services.services),
-									),
-								),
-						});
+						// A tool answers in the MCP protocol's shape whatever happens inside (see publication-mcp.ts).
+						return publicationMcp(
+							req,
+							identity.success,
+							publicationTools(setting, services.services),
+						);
 					},
 				},
 				defaultHandler: { fetch: publicationLogin },
