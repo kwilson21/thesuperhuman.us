@@ -225,3 +225,73 @@ describe("work that leaves the microtask queue does not change a label", () => {
 			expect(seen.size).toBe(1);
 		}, 240_000);
 });
+
+describe("the background pass waits for every undelivered slot before it releases an effect", () => {
+	// Two deferred chains: the first digests and then writes "a", the second reads and then writes "b". The digest takes a
+	// slot in the delivery order, so "b" must wait for it (its gate stays shut until the slot is delivered), whatever the
+	// machine's speed. Each size is recorded RUNS times and every recording must give one record.
+	const pair = (size: number): Handler => async (context) => {
+		ctxOf(context).waitUntil(
+			(async () => {
+				await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+				await env(context).RATE_LIMIT.put("a", "1");
+			})(),
+		);
+
+		ctxOf(context).waitUntil(
+			(async () => {
+				await env(context).RATE_LIMIT.get("g");
+				await env(context).RATE_LIMIT.put("b", "1");
+			})(),
+		);
+
+		return new Response("ok");
+	};
+
+	const triple = (size: number): Handler => async (context) => {
+		ctxOf(context).waitUntil(
+			(async () => {
+				await crypto.subtle.digest("SHA-256", new Uint8Array(size));
+				await env(context).RATE_LIMIT.put("a", "1");
+			})(),
+		);
+
+		ctxOf(context).waitUntil(
+			(async () => {
+				await env(context).RATE_LIMIT.get("g");
+				await env(context).RATE_LIMIT.put("b", "1");
+			})(),
+		);
+
+		ctxOf(context).waitUntil(
+			(async () => {
+				await env(context).RATE_LIMIT.get("h");
+				await env(context).RATE_LIMIT.put("c", "1");
+			})(),
+		);
+
+		return new Response("ok");
+	};
+
+	const sizes = [300_000, 3_000_000, 6_000_000];
+
+	for (const size of sizes) {
+		it(`two deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`, async () => {
+			const seen = new Set<string>();
+
+			for (let run = 0; run < RUNS; run += 1)
+				seen.add(bytes(await runCase(pair(size), one())));
+
+			expect(seen.size).toBe(1);
+		}, 240_000);
+
+		it(`three deferred chains, digest of ${size} bytes: ${RUNS} recordings are identical`, async () => {
+			const seen = new Set<string>();
+
+			for (let run = 0; run < RUNS; run += 1)
+				seen.add(bytes(await runCase(triple(size), one())));
+
+			expect(seen.size).toBe(1);
+		}, 240_000);
+	}
+});
