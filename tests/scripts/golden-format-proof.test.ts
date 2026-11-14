@@ -386,7 +386,7 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 				wait(stateOf("before", ["a"])),
 				{ ...mail(stateOf("m", ["a"])), phase: "background" },
 			],
-			{ steps: [step({ ...digestOf("m", ["a"]) })] },
+			{ steps: [step(digestOf("before", ["a"]))] },
 		);
 
 		const got = proveFixtureDetailed([was], [now]);
@@ -620,6 +620,85 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 					[five([entry, mail(stateOf("m", ["a"])), mail(stateOf("m", ["a"]))])],
 				),
 			).toHaveLength(1);
+		});
+		it("derives the digest at the response from the last request effect: a made-up digest in a relabelled step is rejected", () => {
+			const was = four([mail(stateOf("m", ["a"])), d1("SELECT 1", 0)]);
+
+			const later = (digest: JsonObject) =>
+				five(
+					[
+						mail(stateOf("m", ["a"])),
+						{ ...d1("SELECT 1", 0), phase: "background" },
+					],
+					{ steps: [step(digest)] },
+				);
+
+			expect(proveFixture([was], [later(digestOf("m", ["a"]))])).toEqual([]);
+
+			const made = proveFixture([was], [later(digestOf("made-up", ["a"]))]);
+
+			expect(made).toHaveLength(1);
+			expect(made[0]).toContain("not the state its request effects imply");
+		});
+
+		it("derives a waitUntil state from the state before it: a made-up state in a relabelled step is rejected", () => {
+			const end = { music: sha("end"), publication: sha("p"), touched: [] };
+
+			const wait = (state: JsonObject) => ({
+				kind: "waitUntil",
+				id: 2,
+				step: 1,
+				phase: "request",
+				state,
+			});
+
+			const late = (phase: string) => ({
+				...mail(stateOf("m", ["a"])),
+				step: 1,
+				phase,
+			});
+
+			const digestAt = (state: JsonObject) => ({
+				...digestOf("m", ["a"]),
+				atResponse: state,
+			});
+
+			const steps = (state: JsonObject) => [
+				step(digestOf("m", ["a"])),
+				step(digestAt(state)),
+			];
+
+			const was = four(
+				[mail(stateOf("m", ["a"])), wait(end), late("request")],
+				{
+					steps: steps(end),
+				},
+			);
+
+			expect(
+				proveFixture(
+					[was],
+					[
+						five([mail(stateOf("m", ["a"])), wait(end), late("background")], {
+							steps: steps(end),
+						}),
+					],
+				),
+			).toEqual([]);
+
+			const made = stateOf("made-up", []);
+
+			const got = proveFixture(
+				[was],
+				[
+					five([mail(stateOf("m", ["a"])), wait(made), late("background")], {
+						steps: steps(made),
+					}),
+				],
+			);
+
+			expect(got).toHaveLength(1);
+			expect(got[0]).toContain("does not imply");
 		});
 	});
 });

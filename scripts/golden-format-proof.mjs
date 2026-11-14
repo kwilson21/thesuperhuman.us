@@ -52,6 +52,17 @@ export const ALLOWED = {
  *   the written lines keep their order and content exactly (a `waitUntil` entry's `state` aside).
  *
  * Everything else (requests, answers, the digest after each step, dumps, the final state) is compared exactly.
+ *
+ * In a step that holds a relabel, the later recording must also agree with itself: the digest at the response is the
+ * state recorded at the step's last request effect, and a waitUntil entry's state is the state recorded before it in
+ * its step, unless a request statement (for the digest) or a statement before the entry (for a waitUntil) may have written
+ * rows in between. Then the state may differ, but its touched tables may only grow. Those writes are read from the SQL
+ * (`statementOf`); a statement the tool cannot read counts as a write.
+ *
+ * What this cannot see (a limit of the proof): a relabel of a step's LAST awaited effect, when that effect does not
+ * change the databases, is indistinguishable from an allowed suffix. The later recording then implies the same digest and
+ * states as before the relabel, so the proof accepts it. Such an effect (a fetch, a KV or R2 call, an AI call) is
+ * compared only through its own recorded fields, which the proof keeps exact.
  */
 export const ALLOWED_PHASES = {
 	fromFormat: 4,
@@ -76,6 +87,117 @@ const layout = (effects) =>
  * of its step (in the later recording), and the digest at the response and the state of a waitUntil entry may differ only
  * in a step that holds a relabel. Counts that do not match are a problem, never a thrown error.
  */
+/** Whether a recorded D1 entry may have changed rows: a batch if any of its statements may. A statement that cannot be read counts as a write. */
+const mayWrite = (entry) => {
+	const sqls =
+		entry.kind === "d1-batch"
+			? entry.statements.map((statement) => statement.sql)
+			: [entry.sql];
+
+	return sqls.some((sql) => {
+		try {
+			return statementOf(sql).write;
+		} catch {
+			return true;
+		}
+	});
+};
+
+const isD1 = (entry) => entry.kind === "d1" || entry.kind === "d1-batch";
+
+/** The database state of a recorded entry, as the proof compares it: music, publication and the tables touched in the step. */
+const stateKey = (state) =>
+	json([state.music, state.publication, state.touched]);
+
+/**
+ * What the digest at the response of a relabelled step must be, derived from the later recording alone: the state
+ * recorded at the step's last effect that is still request (or the state at the start of the step, from the step before,
+ * with no tables touched yet). A write by a request statement after that point may have changed the state; then the
+ * digest may differ, but the touched tables may only grow. Returns { exact: state } or { after: state } or undefined when
+ * the step has no earlier state to derive from.
+ */
+function responseExpectation(next, s, previous) {
+	let candidate = -1;
+
+	next.effects.forEach((entry, index) => {
+		if (entry.step === s && entry.phase === "request" && entry.state)
+			candidate = index;
+	});
+
+	let base;
+
+	if (candidate >= 0) base = next.effects[candidate].state;
+	else if (s > 0)
+		base = {
+			music: previous.digest.music,
+			publication: previous.digest.publication,
+			touched: [],
+		};
+	else return undefined;
+
+	const writesLater = next.effects.some(
+		(entry, index) =>
+			index > candidate &&
+			entry.step === s &&
+			entry.phase === "request" &&
+			isD1(entry) &&
+			mayWrite(entry),
+	);
+
+	return writesLater ? { after: base } : { exact: base };
+}
+
+/**
+ * What a waitUntil entry's state must be, derived from the later recording alone: the state of the nearest earlier entry of
+ * its step that carries a state, and any write by a statement between the two. Undefined where there is no such entry.
+ */
+function waitStateExpectation(next, index, previous) {
+	const at = next.effects[index];
+	let prior = -1;
+
+	for (let back = index - 1; back >= 0; back -= 1) {
+		const entry = next.effects[back];
+
+		if (entry.step === at.step && entry.state) {
+			prior = back;
+			break;
+		}
+	}
+
+	let base;
+
+	if (prior >= 0) base = next.effects[prior].state;
+	else if (at.step > 0)
+		base = {
+			music: previous.digest.music,
+			publication: previous.digest.publication,
+			touched: [],
+		};
+	else return undefined;
+
+	const writesBetween = next.effects.some(
+		(entry, between) =>
+			between > prior &&
+			between < index &&
+			entry.step === at.step &&
+			isD1(entry) &&
+			mayWrite(entry),
+	);
+
+	return writesBetween ? { after: base } : { exact: base };
+}
+
+/** Checks a derived expectation against a recorded state; a touched set may only grow where a write was allowed. */
+function matchesExpectation(expected, state) {
+	if (expected.exact) return stateKey(expected.exact) === stateKey(state);
+
+	return (
+		expected.after.music !== undefined &&
+		Array.isArray(state.touched) &&
+		expected.after.touched.every((name) => state.touched.includes(name))
+	);
+}
+
 function provePhases(old, next, problems) {
 	const stats = { relabelled: 0, atResponse: 0, waitUntilState: 0, moved: 0 };
 
@@ -237,6 +359,35 @@ function provePhases(old, next, problems) {
 			);
 
 		stats.atResponse += 1;
+	}
+
+	// In a relabelled step the digest at the response and the state of each waitUntil entry must be the state the later
+	// recording implies at that point (responseExpectation, waitStateExpectation). A step with no earlier state to derive
+	// from is not checked (step 0 before any state-carrying effect).
+	for (const s of relabelledSteps) {
+		const at = next.steps[s]?.digest?.atResponse;
+		const expected = responseExpectation(next, s, next.steps[s - 1]);
+
+		if (at && expected && !matchesExpectation(expected, at))
+			return fail(
+				`step ${s}: the digest at the response is not the state its request effects imply`,
+			);
+	}
+
+	for (const [index, entry] of next.effects.entries()) {
+		if (entry.kind !== "waitUntil" || !relabelledSteps.has(entry.step))
+			continue;
+
+		const expected = waitStateExpectation(
+			next,
+			index,
+			next.steps[entry.step - 1],
+		);
+
+		if (expected && !matchesExpectation(expected, entry.state))
+			return fail(
+				`waitUntil ${entry.id} in step ${entry.step} has a state that its position does not imply`,
+			);
 	}
 
 	if (layout(old.effects) !== layout(next.effects)) stats.moved += 1;
