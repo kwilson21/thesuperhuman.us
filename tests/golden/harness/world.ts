@@ -14,7 +14,7 @@ import { POST as studioSession } from "~/pages/api/studio/session";
 import { actorLabel, asVisitor, OWNER_EMAIL, type Actor } from "./actors";
 import { dump, freshMusicDb, freshPublicationDb, seed, type Seed } from "./db";
 import { Determinism } from "./determinism";
-import { drive } from "./settle";
+import { drive, HarnessError } from "./settle";
 import {
 	recordingD1,
 	SqlHooks,
@@ -744,9 +744,16 @@ async function runOn(
 				log,
 				clock,
 				(async () => readAnswer(await run(context)))(),
-				{ phase: "request", flush: false, timers: true },
+				{
+					phase: "request",
+					flush: false,
+					timers: true,
+					where: `case "${c.name}", step ${index}`,
+				},
 			);
-		} catch {
+		} catch (error) {
+			if (error instanceof HarnessError) throw error;
+
 			answer = { outcome: "rejected" };
 		}
 
@@ -758,6 +765,7 @@ async function runOn(
 			phase: "background",
 			flush: true,
 			timers: true,
+			where: `case "${c.name}", step ${index}`,
 		});
 
 		log.gating = false;

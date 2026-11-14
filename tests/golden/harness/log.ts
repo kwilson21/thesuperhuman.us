@@ -1,5 +1,6 @@
 // The ordered effect log of one case, and the entries in it.
 import type { ByteRecord, Recorded } from "./plain";
+import { Sequencer } from "./sequencer";
 
 /**
  * Whether the response waited for an effect. "request": the answer (its status, headers and the whole body) could not
@@ -158,33 +159,19 @@ export class EffectLog {
 	/** Told when an effect arrives at the gate, so a runner that is waiting for something else can wake. */
 	onHeld: (() => void) | undefined;
 
-	private flying = 0;
-
 	/** Told when work in flight outside the gate ends, so a runner that is waiting for it can wake. */
 	onChange: (() => void) | undefined;
 
 	/**
-	 * Asynchronous work that leaves the microtask queue (a real timer, a WebCrypto digest or signature) and is not an
-	 * effect at the gate. The runner decides nothing while any is in flight, so a label never depends on how fast the
-	 * machine finishes it. Returns the function to call when the work ends. Off when the log is not driven.
+	 * Threaded WebCrypto operations and setImmediate callbacks that the route waits on (tests/golden/harness/sequencer.ts).
+	 * Each takes its place in the delivery order when it starts, and is delivered in that order. The runner decides nothing
+	 * while any of them is not yet delivered.
 	 */
-	begin(): () => void {
-		if (!this.gating) return () => {};
+	readonly threads = new Sequencer(() => this.onChange?.());
 
-		this.flying += 1;
-		let ended = false;
-
-		return () => {
-			if (ended) return;
-
-			ended = true;
-			this.flying -= 1;
-			this.onChange?.();
-		};
-	}
-
+	/** Work in flight: tracked operations that the route has not been given yet. */
 	get inflight() {
-		return this.flying;
+		return this.threads.pending;
 	}
 
 	/** True once the answer of the current step has been produced (set by the runner at that moment). */

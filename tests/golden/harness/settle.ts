@@ -1,19 +1,20 @@
 // Drives a request to its end, and decides for each outside effect whether the response waited for it.
 //
-// Every fake waits at the log's gate before it starts (see `EffectLog.start`). This driver lets the event loop go quiet (a
-// real macrotask turn, so every microtask a route chains has run, however many turns that takes), then looks at what is
-// waiting. It decides nothing while work that leaves the microtask queue is still in flight (a real timer, a WebCrypto
-// digest: `EffectLog.begin`, wrapped in determinism.ts), so how fast the machine finishes that work never changes a label.
+// Every fake waits at the log's gate before it starts (see `EffectLog.start`). Threaded WebCrypto operations and
+// setImmediate callbacks take a place in a delivery order when they start, and their results reach the route one at a
+// time, oldest first, at a driver turn (sequencer.ts). This driver lets the event loop go quiet (a real macrotask turn,
+// so every microtask a route chains has run), delivers the next finished operation, and then looks at what waits.
 //
 //   * The work being driven (the handler, then the reading of its answer) has not finished: what waits at the gate is
 //     work the response may be waiting for. It is released and labelled "request", and the loop goes round again.
 //   * The work has finished: nothing waited for what is still at the gate. It stays there, and the caller labels it
 //     "background" when it drives the rest (ctx.waitUntil work and anything left floating).
 //
-// Because the decision is made only when everything but the gate is quiet, a route that takes two more promise turns to
-// resolve (an Effect.runPromise wrapper, say), or that starts deferred work after a few turns, or that waits on a thread,
-// records the same phases. No real-time wait decides anything: the only real timeout is the failure detector below, which
-// throws.
+// Nothing here depends on real time. The order in which the route sees its results is the order it started them, so a
+// route's timers and effects come in the same order on every machine. Two cases are not a label but an error, and they
+// are the only places a real timer is read: a handler that nothing can move (STUCK_MS), and tracked work that never
+// finishes (IN_FLIGHT_MS). A handler that yields to the event loop without end (a setImmediate loop with nothing waiting
+// at the gate) is counted, not timed: YIELD_LIMIT in a row, then an error.
 import type { Determinism } from "./determinism";
 import type { EffectLog, Phase } from "./log";
 
@@ -25,6 +26,15 @@ const realSetImmediate = globalThis.setImmediate;
 /** How long, in real milliseconds, a handler may be stuck (nothing in flight, nothing held, no timer to fire) before the harness says so. */
 const STUCK_MS = 2000;
 
+/** How long, in real milliseconds, tracked work may stay unfinished before the harness says so. A digest takes far less. */
+const IN_FLIGHT_MS = 30_000;
+
+/** setImmediate deliveries in a row with effects waiting at the gate: the route is treated as waiting for them (a poll loop). */
+const POLL_LIMIT = 100;
+
+/** setImmediate deliveries in a row with no effect released and no answer: a route that yields to the event loop forever. */
+const YIELD_LIMIT = 50_000;
+
 export type Driving = {
 	/** The phase given to the effects released while the work runs. */
 	readonly phase: Phase;
@@ -32,7 +42,12 @@ export type Driving = {
 	readonly flush: boolean;
 	/** Fire virtual timers when nothing else is happening, so a route's timeout comes without the test waiting for it. */
 	readonly timers: boolean;
+	/** What is being driven, named in an error (the case and the step). */
+	readonly where: string;
 };
+
+/** A failure of the harness itself (a handler nothing can move, tracked work that never ends, a route that never stops yielding): never a rejected answer. */
+export class HarnessError extends Error {}
 
 const turn = () => new Promise<void>((resolve) => realSetImmediate(resolve));
 
@@ -48,6 +63,7 @@ export async function drive<T>(
 ): Promise<T> {
 	let settled = false;
 	let events = 0;
+	let yields = 0;
 	let wake: (() => void) | undefined;
 
 	/** Something changed that the loop may need to look at again. */
@@ -74,10 +90,39 @@ export async function drive<T>(
 
 			const seen = events;
 
+			// The oldest tracked operation is handed over once it has finished, and nothing else is looked at meanwhile.
+			const delivered = log.threads.deliverNext();
+
+			if (delivered !== undefined) {
+				yields = delivered === "immediate" ? yields + 1 : 0;
+
+				if (yields > YIELD_LIMIT)
+					throw new HarnessError(
+						`golden harness: ${driving.where}: the route yielded to the event loop ${YIELD_LIMIT} times in a row without an answer or an effect, so it never ends.`,
+					);
+
+				// A setImmediate loop waits for the effects at the gate (the route cannot finish without them): with no
+				// threaded operation left, they are released, as the answer is still pending.
+				if (
+					delivered === "immediate" &&
+					yields >= POLL_LIMIT &&
+					!settled &&
+					log.waiting > 0 &&
+					log.threads.onlyImmediates
+				) {
+					log.release(driving.phase);
+
+					yields = 0;
+				}
+
+				continue;
+			}
+
 			// A request pass waits for work in flight before it labels anything; the background pass labels everything the same.
 			if (log.waiting > 0 && (!settled || driving.flush)) {
 				if (driving.flush || log.inflight === 0) {
 					log.release(driving.phase);
+					yields = 0;
 
 					continue;
 				}
@@ -89,14 +134,18 @@ export async function drive<T>(
 			// Whatever happened while a timer fired is looked at before waiting.
 			if (events !== seen) continue;
 
-			// Nothing to do until something changes: an effect arrives, work in flight ends, or the work settles.
+			// Nothing to do until something changes: an effect arrives, tracked work finishes, or the work settles.
 			let stuck: ReturnType<typeof realSetTimeout> | undefined;
 
 			const quiet = new Promise<boolean>((resolve) => {
 				wake = () => resolve(true);
 
-				if (log.inflight === 0 && log.waiting === 0)
-					stuck = realSetTimeout(() => resolve(false), STUCK_MS);
+				const idle = log.inflight === 0 && log.waiting === 0;
+
+				stuck = realSetTimeout(
+					() => resolve(false),
+					idle ? STUCK_MS : IN_FLIGHT_MS,
+				);
 			});
 
 			const woken = await quiet;
@@ -105,8 +154,10 @@ export async function drive<T>(
 			realClearTimeout(stuck);
 
 			if (!woken)
-				throw new Error(
-					"golden harness: the handler never settled: nothing is in flight, nothing waits and no timer is pending.",
+				throw new HarnessError(
+					log.inflight > 0
+						? `golden harness: ${driving.where}: tracked work never finished (${log.inflight} operation${log.inflight === 1 ? "" : "s"} still undelivered after ${IN_FLIGHT_MS / 1000} seconds).`
+						: `golden harness: ${driving.where}: the handler never settled: nothing is in flight, nothing waits and no timer is pending.`,
 				);
 		}
 	} finally {

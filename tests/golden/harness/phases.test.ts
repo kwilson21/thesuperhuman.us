@@ -1,5 +1,6 @@
 import type { APIContext } from "astro";
 import * as Effect from "effect/Effect";
+import { setImmediate as nextTurn } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
 import { compareFixture } from "../../../scripts/golden-neutral.mjs";
 import {
@@ -797,5 +798,81 @@ describe("known limit: an answer read from a Blob or a compressed stream", () =>
 			"fetch:request",
 			"kv:background",
 		]);
+	});
+});
+
+describe("a setImmediate loop, a stuck handler, and the event loop's own timers", () => {
+	it("a poll loop that waits for an effect records it as request, and the loop ends", async () => {
+		const got = await record(async (context) => {
+			let done = false;
+
+			void env(context)
+				.RATE_LIMIT.put("k", "1")
+				.then(() => {
+					done = true;
+				});
+
+			while (!done) await new Promise<void>((resolve) => setImmediate(resolve));
+
+			return new Response("ok");
+		});
+
+		expect(phases(got)).toEqual(["kv:request"]);
+		expect(got.steps[0]?.answer).toMatchObject({ outcome: "response" });
+	});
+
+	it("a setImmediate loop with nothing to wait for is a harness error that names the case and step", async () => {
+		await expect(
+			record(async () => {
+				for (;;) await new Promise<void>((resolve) => setImmediate(resolve));
+			}),
+		).rejects.toThrow(/case "case", step 0.*never ends/);
+	}, 120_000);
+
+	it("a handler that nothing can move is a harness error that names the case and step, within the detector's time", async () => {
+		const started = Date.now();
+
+		await expect(record(() => new Promise<Response>(() => {}))).rejects.toThrow(
+			/case "case", step 0: the handler never settled/,
+		);
+
+		expect(Date.now() - started).toBeLessThan(10_000);
+	}, 60_000);
+
+	it("timers/promises is not observed: its yield is not tracked, so the record rests on the order Node runs its immediates in", async () => {
+		const got = await record(async (context) => {
+			ctxOf(context).waitUntil(
+				(async () => {
+					await env(context).RATE_LIMIT.put("k", "1");
+				})(),
+			);
+
+			await nextTurn();
+
+			return new Response("ok");
+		});
+
+		expect(phases(got)).toEqual(["waitUntil:request", "kv:background"]);
+	});
+
+	it("setImmediate with a non-function callback throws synchronously, as Node does", async () => {
+		let thrown: unknown;
+
+		await record(async () => {
+			try {
+				// Node must reject a non-function callback, so this call is the test.
+				// -expect-error: the wrong type on purpose.
+				setImmediate(42);
+			} catch (error) {
+				thrown = error;
+			}
+
+			return new Response("ok");
+		});
+
+		expect(thrown).toBeInstanceOf(TypeError);
+		expect(thrown).toMatchObject({
+			message: expect.stringMatching(/callback/),
+		});
 	});
 });

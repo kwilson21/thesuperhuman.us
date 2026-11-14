@@ -5,6 +5,7 @@
 // only with `advance(ms)`, and the move is recorded.
 import { vi } from "vitest";
 import type { EffectLog } from "./log";
+import type { Slot } from "./sequencer";
 import { isText } from "~/lib/type-guards";
 import { errorText, plain, type Passed, type Recorded } from "./plain";
 
@@ -99,7 +100,14 @@ function consoleArg(arg: Passed): Recorded {
 const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
 const realSetImmediate = globalThis.setImmediate;
+
 const realClearImmediate = globalThis.clearImmediate;
+
+// Whether setImmediate was given a function. Anything else is passed to Node unchanged, so Node throws as it does.
+const isCallback = <Value>(
+	value: Value,
+): value is Extract<Value, (...args: never[]) => void> =>
+	typeof value === "function";
 
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
@@ -217,22 +225,41 @@ export class Determinism {
 			});
 		};
 
+		// A threaded operation takes its place in the delivery order when it starts, and the route gets its result only
+		// when the driver delivers that place (sequencer.ts), so the order the machine finished things in never reaches
+		// the route. Outside a driven request nothing is held.
 		const tracked =
 			<Args extends unknown[], Result>(
 				work: (...args: Args) => Promise<Result>,
 			) =>
 			(...args: Args): Promise<Result> => {
-				const end = this.log.begin();
 				const promise = work(...args);
 
-				const settle = () => {
-					this.log.boundary();
-					end();
-				};
+				if (!this.log.gating) {
+					promise.then(
+						() => this.log.boundary(),
+						() => this.log.boundary(),
+					);
 
-				promise.then(settle, settle);
+					return promise;
+				}
 
-				return promise;
+				const slot = this.log.threads.start("threads");
+
+				return new Promise<Result>((resolve, reject) => {
+					promise.then(
+						(value) =>
+							this.log.threads.finish(slot, () => {
+								this.log.boundary();
+								resolve(value);
+							}),
+						(error: Error) =>
+							this.log.threads.finish(slot, () => {
+								this.log.boundary();
+								reject(error);
+							}),
+					);
+				});
 			};
 
 		const subtle = crypto.subtle;
@@ -288,30 +315,30 @@ export class Determinism {
 			);
 		}
 
-		// Effect's scheduler yields with setImmediate (Scheduler.js reads the global when it schedules), so a route that
-		// yields to the event loop has a macrotask in flight. It counts like a digest: in flight until its callback has
-		// run, and a boundary when it comes back. A clearImmediate ends it without a callback.
-		const immediates = new Map<object, () => void>();
+		// Effect's scheduler yields with setImmediate (Scheduler.js reads the global when it schedules). A yield is work the
+		// route waits on, so it takes a place in the delivery order like a threaded operation (sequencer.ts). A
+		// clearImmediate delivers an empty place. A non-function callback is passed on, so Node throws as it does.
+		const immediates = new Map<object, Slot>();
 
 		replace(
 			globalThis,
 			"setImmediate",
 			// SAFETY: setImmediate is overloaded by its arguments; the fake forwards them unchanged and returns the real handle.
 			((callback: (...args: unknown[]) => void, ...args: unknown[]) => {
-				const end = this.log.begin();
+				if (!isCallback(callback) || !this.log.gating)
+					return realSetImmediate(callback, ...args);
+
+				const slot = this.log.threads.start("immediate");
 
 				const handle: object = realSetImmediate(() => {
 					immediates.delete(handle);
-					this.log.boundary();
-
-					try {
+					this.log.threads.finish(slot, () => {
+						this.log.boundary();
 						callback(...args);
-					} finally {
-						end();
-					}
+					});
 				});
 
-				immediates.set(handle, end);
+				immediates.set(handle, slot);
 
 				return handle;
 			}) as typeof setImmediate,
@@ -326,11 +353,11 @@ export class Determinism {
 
 				realClearImmediate(handle);
 
-				const end = immediates.get(handle);
+				const slot = immediates.get(handle);
 
-				if (end) {
+				if (slot) {
 					immediates.delete(handle);
-					end();
+					this.log.threads.finish(slot, () => {});
 				}
 			}) as typeof clearImmediate,
 		);
