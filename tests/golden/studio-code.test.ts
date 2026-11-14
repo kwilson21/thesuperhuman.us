@@ -603,23 +603,35 @@ const cases: Case[] = [
 			}),
 		},
 	}),
-	open("expired codes of any address are swept by the next request", {
-		music: {
-			seed: mergeSeeds(client, {
-				audio_client_signin_codes: [
-					await codeRow(
-						OTHER,
-						"11111111",
-						{
-							created_at: "2026-11-13T11:40:00.000Z",
-							expires_at: "2026-11-13T11:50:00.000Z",
-						},
-						"7".repeat(64),
-					),
-				],
-			}),
+	open(
+		"expired codes of the address are swept by its next request, and those of another address stay for retention",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await codeRow(
+							OTHER,
+							"11111111",
+							{
+								created_at: "2026-11-13T11:40:00.000Z",
+								expires_at: "2026-11-13T11:50:00.000Z",
+							},
+							"7".repeat(64),
+						),
+						await codeRow(
+							GRACE,
+							"22222222",
+							{
+								created_at: "2026-11-13T11:40:00.000Z",
+								expires_at: "2026-11-13T11:50:00.000Z",
+							},
+							"8".repeat(64),
+						),
+					],
+				}),
+			},
 		},
-	}),
+	),
 	open("two requests 10 seconds apart: the second replaces the first", {
 		steps: [form(), form({ advanceMs: 10_000 })],
 	}),
