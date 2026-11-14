@@ -22,6 +22,8 @@ describe("the frozen Zod validators", () => {
 			"agreement-draft-fields.ts",
 			"agreement-fields.ts",
 			"audio-intake.ts",
+			"brief-pass.ts",
+			"brief-suggest.ts",
 			"music-demand.ts",
 			"software-inquiry.ts",
 		]);
