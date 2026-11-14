@@ -90,17 +90,19 @@ describe("golden format proof, format 3 to 4", () => {
 			problems: [],
 			counts: 1,
 			touched: [],
-			unanchored: [],
 			phases: {
 				cases: 0,
 				relabelled: 0,
 				atResponse: 0,
+				derived: 0,
+				bounded: 0,
+				writerDiffer: 0,
+				writerEqual: 0,
+				writerHook: 0,
 				waitUntilState: 0,
+				waitUntilConsistent: 0,
+				waitUntilNotApplicable: 0,
 				moved: 0,
-				exactAtResponse: 0,
-				exactWaitUntilState: 0,
-				unanchoredAtResponse: 0,
-				unanchoredWaitUntilState: 0,
 			},
 		});
 	});
@@ -381,11 +383,17 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 	const four = (effects: object[], over = {}) =>
 		five(effects, { format: 4, ...over });
 
+	// A digest whose end of step equals its response: no database changed after the response was read.
+	const settled = (at: string, touched: string[] = []) => ({
+		...digestOf(at, touched),
+		music: sha(at),
+	});
+
 	it("accepts a relabel from request to background, with the digest at the response and a waitUntil state", () => {
 		const was = four(
 			[wait(stateOf("early", ["a"])), mail(stateOf("m", ["a"]))],
 			{
-				steps: [step(digestOf("early", ["a"]))],
+				steps: [step({ ...digestOf("early", ["a"]), music: sha("m") })],
 			},
 		);
 
@@ -394,7 +402,7 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 				wait(stateOf("m", ["a"])),
 				{ ...mail(stateOf("m", ["a"])), phase: "background" },
 			],
-			{ steps: [step(digestOf("m", ["a"]))] },
+			{ steps: [step(settled("m", ["a"]))] },
 		);
 
 		const got = proveFixtureDetailed([was], [now]);
@@ -405,11 +413,14 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 			cases: 1,
 			relabelled: 1,
 			atResponse: 1,
+			derived: 1,
+			bounded: 0,
+			writerDiffer: 0,
+			writerEqual: 1,
+			writerHook: 0,
 			waitUntilState: 1,
-			exactAtResponse: 1,
-			exactWaitUntilState: 0,
-			unanchoredAtResponse: 0,
-			unanchoredWaitUntilState: 1,
+			waitUntilConsistent: 1,
+			waitUntilNotApplicable: 0,
 			moved: 0,
 		});
 	});
@@ -502,7 +513,14 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 		it("accepts the same relabel when everything after it in its step is background", () => {
 			const reads = [d1("SELECT 1", 0), d1("SELECT 2", 0)];
 
-			expect(proveFixture([four(reads)], [five(reads.map(later))])).toEqual([]);
+			const steps = [step(settled("m", ["a"]))];
+
+			expect(
+				proveFixture(
+					[four(reads, { steps })],
+					[five(reads.map(later), { steps })],
+				),
+			).toEqual([]);
 		});
 
 		it("rejects a changed digest at the response in a step that holds no relabel", () => {
@@ -633,93 +651,42 @@ describe("golden format proof, format 4 to 5 (the phase is what the response wai
 				),
 			).toHaveLength(1);
 		});
-		it("derives the digest at the response from the last request effect: a made-up digest in a relabelled step is rejected", () => {
-			const was = four([mail(stateOf("m", ["a"])), d1("SELECT 1", 0)]);
-
-			const later = (digest: JsonObject) =>
-				five(
-					[
-						mail(stateOf("m", ["a"])),
-						{ ...d1("SELECT 1", 0), phase: "background" },
-					],
-					{ steps: [step(digest)] },
-				);
-
-			expect(proveFixture([was], [later(digestOf("m", ["a"]))])).toEqual([]);
-
-			const made = proveFixture([was], [later(digestOf("made-up", ["a"]))]);
-
-			expect(made).toHaveLength(1);
-			expect(made[0]).toContain("not the state its request effects imply");
-		});
-
-		it("derives a waitUntil state from the state before it: a made-up state in a relabelled step is rejected", () => {
-			const end = { music: sha("end"), publication: sha("p"), touched: [] };
-
-			const wait = (state: JsonObject) => ({
-				kind: "waitUntil",
-				id: 2,
-				step: 1,
-				phase: "request",
-				state,
-			});
-
-			const late = (phase: string) => ({
-				...mail(stateOf("m", ["a"])),
-				step: 1,
-				phase,
-			});
-
-			const digestAt = (state: JsonObject) => ({
-				...digestOf("m", ["a"]),
-				atResponse: state,
-			});
-
-			const steps = (state: JsonObject) => [
-				step(digestOf("m", ["a"])),
-				step(digestAt(state)),
-			];
-
-			const was = four(
-				[mail(stateOf("m", ["a"])), wait(end), late("request")],
-				{
-					steps: steps(end),
-				},
-			);
-
-			expect(
-				proveFixture(
-					[was],
-					[
-						five([mail(stateOf("m", ["a"])), wait(end), late("background")], {
-							steps: steps(end),
-						}),
-					],
-				),
-			).toEqual([]);
-
-			const made = stateOf("made-up", []);
-
-			const got = proveFixture(
-				[was],
-				[
-					five([mail(stateOf("m", ["a"])), wait(made), late("background")], {
-						steps: steps(end),
-					}),
-				],
-			);
-
-			expect(got).toHaveLength(1);
-			expect(got[0]).toContain("does not imply");
-		});
 	});
 });
 
-describe("golden format proof, format 4 to 5: the state at the response and at each waitUntil is anchored, never another such value", () => {
-	// Anchors are effects whose state the proof keeps exact, never a waitUntil entry: a forgery that changes a waitUntil
-	// state and the digest at the response together must not be able to vouch for itself. The forgeries are garbage, the
-	// state after the background writes (a kv effect's state), and the final digest (the state after the background writes
-	// again, taken for the response).
+describe("golden format proof, format 4 to 5: the structural checks of the changed values", () => {
+	// The scenario: step 0 writes table a (request), calls waitUntil (request), then background work writes table b and
+	// sends a mail. In the old recording everything was request, so the response read the state after b. The new one reads
+	// the state at the waitUntil call: music m1, touched [a]. The end of the step is m2, touched [a, b].
+	const digest = (final: string, at: string, touched: string[]) => ({
+		...digestOf(at, touched),
+		music: sha(final),
+	});
+
+	const waitAt = (state: JsonObject, phase = "request") => ({
+		kind: "waitUntil",
+		id: 1,
+		step: 0,
+		phase,
+		state,
+	});
+
+	const background = (effect: object) => ({ ...effect, phase: "background" });
+
+	// A write to the music database, as the harness records it (the writer rule reads the database name).
+	const musicWrite = (sql: string) => ({ ...d1(sql, 1), db: "MUSIC_DB" });
+
+	const kvAt = (state: JsonObject, phase = "request") => ({
+		kind: "kv",
+		namespace: "RATE_LIMIT",
+		op: "put",
+		key: "k",
+		detail: {},
+		step: 0,
+		phase,
+		state,
+	});
+
 	const cased = (format: number, effects: object[], steps: object[]) => ({
 		...oldCase(),
 		format,
@@ -727,116 +694,189 @@ describe("golden format proof, format 4 to 5: the state at the response and at e
 		steps,
 	});
 
-	const dig = (final: string, atResponse: string) => ({
-		...digestOf(final),
-		atResponse: stateOf(atResponse),
-	});
+	const flow = (after: boolean) => [
+		d1("UPDATE a SET x = 1", 1),
+		waitAt(stateOf("m1", ["a"])),
+		after
+			? background(musicWrite("UPDATE b SET x = 1"))
+			: musicWrite("UPDATE b SET x = 1"),
+		after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+	];
 
-	const wait = (state: JsonObject, at = 0) => ({
-		kind: "waitUntil",
-		id: 1,
-		step: at,
-		phase: "request",
-		state,
-	});
+	const was = cased(4, flow(false), [step(digest("m2", "m2", ["a", "b"]))]);
 
-	const fetchAt = (name: string, at = 0, phase = "request") => ({
-		...mail(stateOf(name)),
-		step: at,
-		phase,
-	});
-
-	const write = (at = 0, phase = "background") => ({
-		...d1("UPDATE a SET x = 1", 1),
-		step: at,
-		phase,
-	});
-
-	const kvAt = (name: string, at = 0, phase = "background") => ({
-		kind: "kv",
-		namespace: "RATE_LIMIT",
-		op: "put",
-		key: "k",
-		detail: {},
-		step: at,
-		phase,
-		state: stateOf(name),
-	});
-
-	// The layout that a self-anchored proof gets wrong: a request statement writes a row, then the route calls waitUntil
-	// (no effect between them), and the floating kv put that follows is background. The response and the waitUntil state
-	// are both "post" here (the state after the write, which the background kv put records). The waitUntil entry's own
-	// state must not be able to vouch for itself.
-	const stepZero = (format: number, name: string, label: string) =>
-		cased(
-			format,
-			[
-				fetchAt("end"),
-				write(0, "request"),
-				wait(stateOf(name)),
-				kvAt("post", 0, label),
-			],
-			[step(dig("post", name))],
+	it("accepts the response read at the waitUntil call, and counts each check", () => {
+		const got = proveFixtureDetailed(
+			[was],
+			[cased(5, flow(true), [step(digest("m2", "m1", ["a"]))])],
 		);
-
-	// The same layout in step 1, after a step 0 that ends in state "end".
-	const stepOne = (format: number, name: string, label: string) =>
-		cased(
-			format,
-			[
-				fetchAt("end", 0),
-				fetchAt("end", 1),
-				write(1, "request"),
-				wait(stateOf(name), 1),
-				kvAt("post", 1, label),
-			],
-			[step(digestOf("end")), step(dig("post", name))],
-		);
-
-	const was0 = stepZero(4, "post", "request");
-	const was1 = stepOne(4, "post", "request");
-
-	it("step 0: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
-		expect(proveFixture([was0], [stepZero(5, "post", "background")])).toEqual(
-			[],
-		);
-
-		for (const forged of ["X", "end"])
-			expect(
-				proveFixture([was0], [stepZero(5, forged, "background")]),
-				`forgery ${forged}`,
-			).toHaveLength(1);
-	});
-
-	it("a later step: the correct relabel is accepted, and the forgeries applied to both fields are rejected", () => {
-		expect(proveFixture([was1], [stepOne(5, "post", "background")])).toEqual(
-			[],
-		);
-
-		for (const forged of ["X", "end"])
-			expect(
-				proveFixture([was1], [stepOne(5, forged, "background")]),
-				`forgery ${forged}`,
-			).toHaveLength(1);
-	});
-
-	it("a step with no anchor it can use is reported as unanchored, not silently accepted", () => {
-		const was = cased(
-			4,
-			[wait(stateOf("pre")), write(0, "request"), write(0, "request")],
-			[step(dig("end", "pre"))],
-		);
-
-		const now = cased(
-			5,
-			[wait(stateOf("pre")), write(0, "request"), write(0, "background")],
-			[step(dig("end", "pre"))],
-		);
-
-		const got = proveFixtureDetailed([was], [now]);
 
 		expect(got.problems).toEqual([]);
-		expect(got.unanchored).toHaveLength(2);
-		expect(got.unanchored[0]).toContain("step 0");
+		expect(got.phases).toMatchObject({
+			relabelled: 2,
+			atResponse: 1,
+			derived: 1,
+			bounded: 0,
+			writerDiffer: 1,
+			waitUntilState: 0,
+		});
+	});
+
+	it("rule 3: a waitUntil state and the response both forged to the end of the step are rejected", () => {
+		const got = proveFixture(
+			[was],
+			[
+				cased(
+					5,
+					[
+						d1("UPDATE a SET x = 1", 1),
+						waitAt(stateOf("m2", ["a", "b"])),
+						background(musicWrite("UPDATE b SET x = 1")),
+						background(mail(stateOf("m2", ["a", "b"]))),
+					],
+					[step(digest("m2", "m2", ["a", "b"]))],
+				),
+			],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("equals the digest at the end of the step");
+	});
+
+	it("rule 2: a waitUntil state that differs from the response, with no request effect after it, is rejected", () => {
+		const got = proveFixture(
+			[was],
+			[
+				cased(
+					5,
+					[
+						d1("UPDATE a SET x = 1", 1),
+						waitAt(stateOf("forged", ["a"])),
+						background(musicWrite("UPDATE b SET x = 1")),
+						background(mail(stateOf("m2", ["a", "b"]))),
+					],
+					[step(digest("m2", "m1", ["a"]))],
+				),
+			],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("differs from the digest at the response");
+	});
+
+	it("rule 1: a response whose touched tables are not those of the last request effect is rejected", () => {
+		// A request kv put follows the waitUntil, so rule 2 does not apply, and the last request effect is the put.
+		const withPut = (after: boolean) => [
+			d1("UPDATE a SET x = 1", 1),
+			waitAt(stateOf("m1", ["a"])),
+			kvAt(stateOf("m1", ["a"])),
+			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
+			after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+		];
+
+		const old = cased(4, withPut(false), [step(digest("m2", "m2", ["a", "b"]))]);
+
+		expect(
+			proveFixture(
+				[old],
+				[cased(5, withPut(true), [step(digest("m2", "m1", ["a"]))])],
+			),
+		).toEqual([]);
+
+		const got = proveFixture(
+			[old],
+			[cased(5, withPut(true), [step(digest("m2", "m1", ["a", "b"]))])],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("touched tables at the response are not those");
+	});
+
+	it("rule 1: a digest at the response that is not the last request effect's state is rejected", () => {
+		const withPut = (after: boolean) => [
+			d1("UPDATE a SET x = 1", 1),
+			waitAt(stateOf("m1", ["a"])),
+			kvAt(stateOf("m1", ["a"])),
+			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
+			after ? background(mail(stateOf("m2", ["a", "b"]))) : mail(stateOf("m2", ["a", "b"])),
+		];
+
+		const old = cased(4, withPut(false), [step(digest("m2", "m2", ["a", "b"]))]);
+
+		const got = proveFixture(
+			[old],
+			[cased(5, withPut(true), [step(digest("m2", "zz", ["a"]))])],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("not the state the last request effect recorded");
+	});
+
+	it("rule 3: a response that equals the end of the step is rejected when a relabelled statement wrote rows", () => {
+		// Already covered by the forged-both case; this is the other direction: a response that differs from the end of a
+		// step where no relabelled effect could have written.
+		const got = proveFixture(
+			[cased(4, [waitAt(stateOf("m1", ["a"])), mail(stateOf("m1", ["a"]))], [step(digest("m2", "m1", ["a"]))])],
+			[
+				cased(
+					5,
+					[waitAt(stateOf("m1", ["a"])), background(mail(stateOf("m1", ["a"])))],
+					[step(digest("m2", "m1", ["a"]))],
+				),
+			],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("no relabelled effect could have written to music");
+	});
+
+	it("bounded: a request write logged after the last request effect is checked as a bound, and its table must be touched", () => {
+		const withWrite = (after: boolean) => [
+			d1("UPDATE a SET x = 1", 1),
+			waitAt(stateOf("m1", ["a"])),
+			d1("UPDATE c SET x = 1", 1),
+			after ? background(musicWrite("UPDATE b SET x = 1")) : musicWrite("UPDATE b SET x = 1"),
+			after ? background(mail(stateOf("m2", ["a", "b", "c"]))) : mail(stateOf("m2", ["a", "b", "c"])),
+		];
+
+		const old = cased(4, withWrite(false), [step(digest("m2", "m2", ["a", "b", "c"]))]);
+
+		const accepted = proveFixtureDetailed(
+			[old],
+			[cased(5, withWrite(true), [step(digest("m2", "m3", ["a", "c"]))])],
+		);
+
+		expect(accepted.problems).toEqual([]);
+		expect(accepted.phases).toMatchObject({ bounded: 1, derived: 0 });
+
+		const got = proveFixture(
+			[old],
+			[cased(5, withWrite(true), [step(digest("m2", "m3", ["a"]))])],
+		);
+
+		expect(got).toHaveLength(1);
+		expect(got[0]).toContain("a request write to c is missing");
+	});
+
+	it("a step with no stateful request effect is bounded by its start, and its response must differ from the end when a relabelled write did", () => {
+		const oldCaseStart = cased(
+			4,
+			[d1("SELECT 1", 0), musicWrite("UPDATE b SET x = 1")],
+			[step(digest("m2", "m2", ["b"]))],
+		);
+
+		const got = proveFixtureDetailed(
+			[oldCaseStart],
+			[
+				cased(
+					5,
+					[d1("SELECT 1", 0), background(musicWrite("UPDATE b SET x = 1"))],
+					[step(digest("m2", "m1", ["b"]))],
+				),
+			],
+		);
+
+		expect(got.problems).toEqual([]);
+		expect(got.phases).toMatchObject({ bounded: 1, writerDiffer: 1 });
 	});
 });
