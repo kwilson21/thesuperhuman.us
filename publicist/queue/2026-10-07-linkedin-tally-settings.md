@@ -7,7 +7,8 @@ kind: new
 link: https://thesuperhuman.us/building/tally#tally-settings
 media: src/assets/projects/tally/settings-edit-annotated.webp
 alt: Tally's Settings page on demo data with one category open for editing, and numbered pointers to its budget, Archive, Move up and Move down, and Add category.
-status: draft
+status: skipped
+skip_reason: retired in the 2026-11-07 queue refresh (owner, in conversation, 2026-11-07: "I'd find a way to convert the ones that have potential for high engagement and convert them to a higher engagement format")
 ---
 A new Tally household starts with no data, so it needs a way to set up categories and monthly budgets before real use.
 

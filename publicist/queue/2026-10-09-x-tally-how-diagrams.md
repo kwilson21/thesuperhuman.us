@@ -7,6 +7,7 @@ kind: new
 link: https://thesuperhuman.us/building/tally#tally-how-diagrams
 media: src/assets/projects/tally/how-diagrams-annotated.webp
 alt: Diagrams from How Tally works on demo data, with their worked examples.
-status: draft
+status: skipped
+skip_reason: retired in the 2026-11-07 queue refresh (owner, in conversation, 2026-11-07: "I'd find a way to convert the ones that have potential for high engagement and convert them to a higher engagement format")
 ---
 How Tally works now has a diagram for each section: boxes and arrows for Budget, Transactions and Categories, one bar for Excluding. Each is drawn from the demo's own numbers, and a test checks it matches the example.
