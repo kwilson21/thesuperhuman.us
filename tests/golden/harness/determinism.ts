@@ -98,6 +98,8 @@ function consoleArg(arg: Passed): Recorded {
 // The real timers, kept before any case replaces the global ones: a queued timer's handle is a real, already cleared Timeout.
 const realSetTimeout = globalThis.setTimeout;
 const realClearTimeout = globalThis.clearTimeout;
+const realSetImmediate = globalThis.setImmediate;
+const realClearImmediate = globalThis.clearImmediate;
 
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
@@ -285,6 +287,53 @@ export class Determinism {
 				},
 			);
 		}
+
+		// Effect's scheduler yields with setImmediate (Scheduler.js reads the global when it schedules), so a route that
+		// yields to the event loop has a macrotask in flight. It counts like a digest: in flight until its callback has
+		// run, and a boundary when it comes back. A clearImmediate ends it without a callback.
+		const immediates = new Map<object, () => void>();
+
+		replace(
+			globalThis,
+			"setImmediate",
+			// SAFETY: setImmediate is overloaded by its arguments; the fake forwards them unchanged and returns the real handle.
+			((callback: (...args: unknown[]) => void, ...args: unknown[]) => {
+				const end = this.log.begin();
+
+				const handle: object = realSetImmediate(() => {
+					immediates.delete(handle);
+					this.log.boundary();
+
+					try {
+						callback(...args);
+					} finally {
+						end();
+					}
+				});
+
+				immediates.set(handle, end);
+
+				return handle;
+			}) as typeof setImmediate,
+		);
+
+		replace(
+			globalThis,
+			"clearImmediate",
+			// SAFETY: a handle is only ever one this fake returned (a NodeJS.Immediate), so the cast names the same object.
+			((handle: NodeJS.Immediate | undefined) => {
+				if (handle === undefined) return;
+
+				realClearImmediate(handle);
+
+				const end = immediates.get(handle);
+
+				if (end) {
+					immediates.delete(handle);
+					end();
+				}
+			}) as typeof clearImmediate,
+		);
 
 		return restores;
 	}

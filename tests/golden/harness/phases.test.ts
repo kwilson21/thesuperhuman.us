@@ -652,3 +652,150 @@ describe("known limit: a route that calls waitUntil and then keeps awaiting", ()
 		expect(phases(got)).toEqual(["fetch:request", "d1:request"]);
 	});
 });
+
+describe("macrotask yields change nothing", () => {
+	// A route that yields to the event loop with a macrotask (setImmediate, which the Effect scheduler uses) has tracked
+	// work in flight, so the answer waits for it. Each case records the route with and without the yield and must give
+	// one record.
+	const yieldMacrotask = () =>
+		new Promise<void>((resolve) => setImmediate(resolve));
+
+	const flow = (steps: number) =>
+		Effect.runPromise(
+			Effect.forEach(
+				Array.from({ length: steps }, (_, index) => index),
+				() => Effect.void,
+				{ discard: true },
+			),
+		);
+
+	const scenarios: {
+		readonly name: string;
+		readonly expected: string[];
+		readonly handler: (yielded: boolean) => Handler;
+	}[] = [
+		{
+			name: "a setImmediate yield between waitUntil and the return",
+			expected: ["fetch:request", "waitUntil:request", "kv:background"],
+			handler: (yielded) => async (context) => {
+				await mail();
+				ctxOf(context).waitUntil(
+					(async () => {
+						await env(context).RATE_LIMIT.put("k", "1");
+					})(),
+				);
+
+				if (yielded) await yieldMacrotask();
+
+				return new Response("ok");
+			},
+		},
+		{
+			name: "an Effect.yieldNow between waitUntil and the return",
+			expected: ["fetch:request", "waitUntil:request", "kv:background"],
+			handler: (yielded) => async (context) => {
+				await mail();
+				ctxOf(context).waitUntil(
+					(async () => {
+						await env(context).RATE_LIMIT.put("k", "1");
+					})(),
+				);
+
+				if (yielded) await Effect.runPromise(Effect.yieldNow);
+
+				return new Response("ok");
+			},
+		},
+		{
+			name: "a 3,000-step Effect flow before the return, after waitUntil",
+			expected: ["fetch:request", "waitUntil:request", "kv:background"],
+			handler: (yielded) => async (context) => {
+				await mail();
+				ctxOf(context).waitUntil(
+					(async () => {
+						await env(context).RATE_LIMIT.put("k", "1");
+					})(),
+				);
+
+				if (yielded) await flow(3_000);
+
+				return new Response("ok");
+			},
+		},
+		{
+			name: "a 3,000-step Effect flow inside the deferred work",
+			expected: ["waitUntil:request", "fetch:background", "kv:background"],
+			handler: (yielded) => async (context) => {
+				ctxOf(context).waitUntil(
+					(async () => {
+						if (yielded) await flow(3_000);
+
+						await mail();
+						await env(context).RATE_LIMIT.put("k", "1");
+					})(),
+				);
+
+				return new Response("ok");
+			},
+		},
+	];
+
+	for (const scenario of scenarios)
+		it(`${scenario.name}: the same phases with and without the yield`, async () => {
+			const plain = await record(scenario.handler(false));
+			const yielded = await record(scenario.handler(true));
+
+			expect(phases(yielded)).toEqual(scenario.expected);
+			expect(bytes(yielded)).toBe(bytes(plain));
+		});
+});
+
+describe("known limit: an answer read from a Blob or a compressed stream", () => {
+	// Node runs macrotasks inside the read of a Blob body or a compressed stream. The harness cannot see them: they do
+	// not go through the global setImmediate or timers. Tracking the read as work in flight would hold the gate shut
+	// against a stream that reads an effect (see the stream test above), so this is a limit, not a fix. Answers whose body
+	// is a Blob or a stream are the case here: src/lib/audio-project-files.ts returns an R2 object body, which is a stream.
+	// A deferred effect of such an answer is labelled request, unlike a string answer.
+	const answer =
+		(kind: "text" | "blob" | "gzip") => async (context: APIContext) => {
+			ctxOf(context).waitUntil(
+				(async () => {
+					await mail();
+					await env(context).RATE_LIMIT.put("k", "1");
+				})(),
+			);
+
+			if (kind === "blob") return new Response(new Blob(["ok"]));
+
+			if (kind === "gzip")
+				return new Response(
+					new Blob(["ok"]).stream().pipeThrough(new CompressionStream("gzip")),
+				);
+
+			return new Response("ok");
+		};
+
+	it("a string answer records the background phases", async () => {
+		expect(phases(await record(answer("text")))).toEqual([
+			"waitUntil:request",
+			"fetch:background",
+			"kv:background",
+		]);
+	});
+
+	it("a Blob answer records its deferred fetch as request (the limit)", async () => {
+		expect(phases(await record(answer("blob")))).toEqual([
+			"waitUntil:request",
+			"fetch:request",
+			"kv:background",
+		]);
+	});
+
+	it("a compressed stream answer records its deferred fetch as request (the limit)", async () => {
+		expect(phases(await record(answer("gzip")))).toEqual([
+			"waitUntil:request",
+			"fetch:request",
+			"kv:background",
+		]);
+	});
+});
