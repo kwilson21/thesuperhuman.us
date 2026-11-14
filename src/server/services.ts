@@ -9,6 +9,7 @@ import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { AudioPayment } from "../lib/audio-payments";
+import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
 import { sendMail } from "../lib/resend";
 import { verifyTurnstile } from "../lib/turnstile";
 
@@ -76,7 +77,7 @@ type ServiceOf = {
  *
  * A binding counts as missing when it is falsy, as `!env.MUSIC_DB` does in the routes today. The route answers a missing
  * binding as it does today (`isAudioIntakeAvailable` and `musicUnavailable` in src/lib/audio-intake.ts and
- * src/lib/music-request.ts: a 503); the services it gets promise only the bindings it named. Secrets such as
+ * src/server/music-input.ts: a 503); the services it gets promise only the bindings it named. Secrets such as
  * TURNSTILE_SECRET_KEY are not bindings and are not checked here: they belong to the live service that reads them.
  */
 export function bindingsOrUnavailable<
@@ -272,6 +273,35 @@ export const liveTurnstile = (secret: string) =>
 			Effect.promise(() => verifyTurnstile(token, secret, remoteIp)).pipe(
 				Effect.flatMap((passed) =>
 					passed ? Effect.void : Effect.fail(new TurnstileFailed()),
+				),
+			),
+	});
+
+// The owner alert: an urgent email that a valid visitor request could not be stored (src/lib/owner-alerts.ts). It says nothing
+// of the visitor. The alert is best effort: a caller that cannot send it carries on with what it was doing.
+
+/** The alert could not be sent: Resend refused it, was not asked (no key or address), or the call failed. */
+export class OwnerAlertFailed extends Data.TaggedError("OwnerAlertFailed") {}
+
+export class OwnerAlert extends Context.Service<
+	OwnerAlert,
+	{
+		readonly send: (
+			incident: OwnerIncident,
+		) => Effect.Effect<void, OwnerAlertFailed>;
+	}
+>()("site/OwnerAlert") {}
+
+/** The owner alert through Resend, with the keys and addresses the request's env gives. */
+export const liveOwnerAlert = (env: Env) =>
+	Context.make(OwnerAlert, {
+		send: (incident) =>
+			Effect.tryPromise({
+				try: () => sendUrgentOwnerAlert(env, incident),
+				catch: () => new OwnerAlertFailed(),
+			}).pipe(
+				Effect.flatMap((sent) =>
+					sent ? Effect.void : Effect.fail(new OwnerAlertFailed()),
 				),
 			),
 	});

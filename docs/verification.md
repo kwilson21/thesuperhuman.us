@@ -195,6 +195,34 @@ File: `verification/discount-offers.qnt`, written before the code from the desig
 
 **Exhaustive.** `discount` is in the exhaustive list. Run once at 3 steps (2026-11-13, Apalache 0.62.4): no violation, 15 seconds. Run it deeper before changing a modelled rule of the offer flow.
 
+## The music-playback model
+
+File: `verification/music-playback.qnt`, written for the conversion of the public music routes (module `music`). A player on a release page reports a playthrough's events (start, progress, listen30, complete, replay) one after another, and retries on a 5xx; the Worker serves several requests at once. Each delivery is three steps: deliver, read (the stored event with this id, and the playthrough's last event, as ONE step: the code reads them in a single D1 batch, one snapshot, which is what the model assumes), then judge and store in one step against the table as it is then, guarded by the table's two unique constraints (the event id; the session, playthrough and sequence). A delivery whose insert meets a constraint reads and judges again, three tries in all (`decideAndSave`).
+
+**State.** The stored events (id, playthrough, sequence, seconds, and the delivery that stored them), four deliveries (their event and what they read, tries and outcome) and one ghost flag. Three event ids, two playthroughs, three places and two values of seconds: enough for every race and ordering the properties need, and small enough for 20,000 random runs of up to 20 steps in about two seconds.
+
+**Properties** (`allProperties`):
+1. `oneRowPerId`: no two stored events share an event id.
+2. `oneRowPerPlace`: no two stored events share a place in a playthrough.
+3. `contiguousFromOne`: each playthrough's places are 1, 2, 3 and so on, with none missing.
+4. `secondsNeverFall`: seconds never fall along a playthrough.
+5. `sameEventNeverConflicts`: the same event delivered twice at once is never answered as a refusal or a conflict: a delivery that read its own event as stored (at any place in the playthrough, not only as its newest row), or whose insert meets it, answers duplicate (the loser reads again and finds it).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoIdKey` | The event id is not unique (an id reused in another playthrough then stores twice) | `oneRowPerId` |
+| `NoPlaceKey` | The place in the playthrough is not unique (two events at the same place) | `oneRowPerPlace` |
+| `NoSequenceRule` | The rule accepts any sequence number whose place is free | `contiguousFromOne` |
+| `NoSecondsRule` | The rule accepts seconds that go backwards | `secondsNeverFall` |
+| `NoRetry` | A lost race answers 409 at once, without reading again | `sameEventNeverConflicts` |
+| `SplitRead` | The id and the last event are read in two separate steps (the code before the fix to PR 272: two D1 calls); another request stores this very event between them, so the second read shows its place taken and the rule refuses a duplicate as out of sequence | `sameEventNeverConflicts` |
+
+**Found by review.** Greptile found that the first version of the code read the two facts in two calls (the model read them in one step, so it could not see the bug); the model now has the `SplitRead` mutant, and the code reads both in one batch.
+
+**Found by writing it.** The event id key and the place key guard different things: within one playthrough the place key and the sequence rule already stop a repeated id, so the id key is only needed because an id can arrive in another playthrough (the first version of the model, with one playthrough, could not break `NoIdKey`).
+
+**What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
+
 ## Verified modules
 
 Tally's four questions decide whether a function carries a contract: is it pure, does its rule involve a sum, count, partition or conservation law, would a break lose or miscount money, and can the rule be said in one plain sentence. The decision function is pure and a break loses money. Question two is met loosely (the rule is "money received is never lost"), and the owner asked for it (2026-11-13), so it is in. `guardTime` is not: it is one conditional, a test says it as clearly, and the model checks that its value is never stored.

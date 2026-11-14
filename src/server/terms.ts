@@ -76,6 +76,34 @@ export const rule = <
 	},
 });
 
+/**
+ * A rule that always has something to do: the same parts as `rule`, without `nothingToDoIf`, so its `decide` answers what
+ * to save (never "nothing") or fails with the first refusal. A rule that refuses nothing therefore cannot fail at all
+ * (its error type is `never`), and its caller has no empty answer to unwrap.
+ */
+export const alwaysWrites = <
+	Request,
+	Facts,
+	G,
+	const R extends readonly Unless<G, Refusal>[],
+	W,
+>(parts: {
+	name: string;
+	given: (request: Request, facts: Facts) => G;
+	refusals: R;
+	writes: (given: G) => W;
+	writesText: string;
+}) => ({
+	...parts,
+	decide: (request: Request, facts: Facts) => {
+		const given = parts.given(request, facts);
+
+		return check(given, parts.refusals).pipe(
+			Effect.map(() => parts.writes(given)),
+		);
+	},
+});
+
 /** A rule's answer as a plain value: what to save, nothing to do, or the refusal. */
 export type Decided<W, E> =
 	| { kind: "write"; save: W }

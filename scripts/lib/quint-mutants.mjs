@@ -51,6 +51,17 @@ export const discountMutants = {
 	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
 };
 
+// verification/music-playback.qnt: one playthrough's playback events delivered by a retrying player to concurrent handlers
+// (src/server/flows/music-event.ts). Module name -> the property its change must break.
+export const musicMutants = {
+	musicNoIdKey: { property: "oneRowPerId" },
+	musicNoPlaceKey: { property: "oneRowPerPlace" },
+	musicNoSequenceRule: { property: "contiguousFromOne" },
+	musicNoSecondsRule: { property: "secondsNeverFall" },
+	musicNoRetry: { property: "sameEventNeverConflicts" },
+	musicSplitRead: { property: "sameEventNeverConflicts" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -70,5 +81,13 @@ export const models = [
 		equivalents: [],
 		exhaustive: ["discount"],
 		samples: "10000",
+	},
+	{
+		file: "verification/music-playback.qnt",
+		current: ["music"],
+		mutants: musicMutants,
+		equivalents: [],
+		exhaustive: ["music"],
+		samples: "20000",
 	},
 ];

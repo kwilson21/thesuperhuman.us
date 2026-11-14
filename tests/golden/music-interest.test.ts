@@ -38,10 +38,10 @@ import {
 //                                       empty; a song with merchandise or a suggestion; an unknown merchandise kind; five
 //                                       merchandise kinds; a body that is null, a list or a string (the "_form" key)
 //   404 { ok: false }                   an unknown release id, the release's slug (not its id), a hidden-looking id
-//   503 "could not be saved"            no MUSIC_DB, no Turnstile secret (after the 404 check, so an unknown release
-//                                       with a missing binding is still 404); the outer catch: no RATE_LIMIT, KV read or
-//                                       write throws; a failed write (batch throws) whose cleanup either finishes or
-//                                       throws
+//   503 "could not be saved"            no MUSIC_DB, no RATE_LIMIT, no Turnstile secret (after the 404 check, so an
+//                                       unknown release with a missing binding is still 404)
+//   500 "could not be saved"            KV read or write throws; a failed write (batch throws), whose cleanup either
+//                                       finishes or throws (the alert is sent either way)
 //   429 limit                           the address already has a count, a count that is not a number, KV count high
 //   403 Turnstile                       refused, 5xx, network down, malformed answer, success sent as text
 //   200 { ok: true }                    song, merchandise, both; repeated merchandise choices; the same listener twice
@@ -49,7 +49,7 @@ import {
 //                                       padded email; a conflicting row that appears just before the batch (a race)
 //
 //   effects after a failed write
-//   rate counter                        deleted before the alert, so a delete that throws skips the alert
+//   rate counter                        deleted before the alert; a delete that throws does not skip the alert
 //   urgent owner alert                  sent, refused 400, 5xx, network down, no key, no sender, no owner address
 //
 //   sequences                           the same listener changes their mind; two listeners; a retry after a storage failure
