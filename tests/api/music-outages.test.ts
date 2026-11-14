@@ -433,3 +433,48 @@ describe("the public routes' other answers", () => {
 		);
 	});
 });
+
+describe("a campaign that ends between the lookup and the insert", () => {
+	it("still labels the one playback that looked it up, as it always did, and nothing else", async () => {
+		let act = () => {};
+
+		const { sql, env } = world({
+			before: [/INSERT INTO music_playback_events/, () => act()],
+		});
+
+		sql.exec(`INSERT INTO owner_campaigns (id,subject_type,subject_id,name,primary_goal,starts_at,status,created_at,updated_at)
+      VALUES ('old-news','release','old-news-single','Old News launch','Listening','2026-09-16','active','now','now');
+      INSERT INTO owner_campaign_tags VALUES ('old-news','instagram','lyric-clip');`);
+		act = () => sql.exec("UPDATE owner_campaigns SET status='complete'");
+
+		const tagged = {
+			...start,
+			campaignId: "old-news",
+			channel: "instagram",
+			creative: "lyric-clip",
+		};
+
+		expect((await play(tagged, env)).status).toBe(200);
+
+		const again = {
+			...tagged,
+			eventId: eid(2),
+			sequence: 2,
+			event: "progress",
+			accumulatedSeconds: 0,
+		};
+
+		expect((await play(again, env)).status).toBe(200);
+		expect(
+			sql
+				.prepare(
+					"SELECT sequence,campaign_id FROM music_playback_events ORDER BY sequence",
+				)
+				.all()
+				.map((row) => ({ ...row })),
+		).toEqual([
+			{ sequence: 1, campaign_id: "old-news" },
+			{ sequence: 2, campaign_id: null },
+		]);
+	});
+});
