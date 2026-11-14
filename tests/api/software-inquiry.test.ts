@@ -488,8 +488,13 @@ it("answers 500 and still alerts when the lookup after a failed save also throws
 			throw new Error("D1 unavailable");
 		},
 	});
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 	const response = await POST(context(base, { db: failing }));
 	expect(response.status).toBe(500);
+	// The failed save and the failed lookup are each logged once, without the visitor's details.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
 	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
 	expect(
 		vi
