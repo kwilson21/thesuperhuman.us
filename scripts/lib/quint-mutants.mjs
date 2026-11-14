@@ -50,4 +50,5 @@ export const signinMutants = {
 	signinIgnoreExpiry: { property: "deadCodeNeverSignsIn" },
 	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
 	signinNoRowCap: { property: "liveRowsBounded" },
+	signinFreshCookie: { property: "cookieOpensEmailedCode" },
 };
