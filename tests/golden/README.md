@@ -170,6 +170,12 @@ across a format change. `node scripts/golden-format-proof.mjs <from> [<to>]` pro
 only the allowed things (see its header): trigger-hit entries and the older digests are compared exactly, and a recorded
 count may change only for a read that now says 0.
 
+**Fixture format 5.** The tool accepts format 5, which has the shape of format 4 above. Two fields mean something else in it:
+the `phase` of an effect records whether the response waited for that effect, and the digest at the response (`atResponse`)
+is taken when the answer has been produced and read, not when the response is sent. A format 5 recording is NOT COMPARABLE
+with a recording in any other format, as stated above. The harness that writes format 5 arrives in the next change; this
+change only lets the tool read it.
+
 A recording from before format 4 (formats 1 to 3: no table sets, and in format 3 counts that could belong to another
 statement) cannot show that an effect did not move across a write. So `golden:neutral` reports every case of such a
 recording that has D1 entries and is not byte-identical as NOT COMPARABLE (exit 1, never NEUTRAL), whatever differs: a
