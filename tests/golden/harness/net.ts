@@ -355,6 +355,7 @@ export function recordingRateLimit(
 		limit: async (options: { key: string }) => {
 			const at = await log.start();
 			const success = script[n++];
+
 			if (success === undefined) {
 				const message = "golden harness: no rate-limit answer scripted";
 
@@ -366,10 +367,7 @@ export function recordingRateLimit(
 				throw new Error(message);
 			}
 
-			log.push(
-				{ kind: "rate-limit", binding, key: options.key, success },
-				at,
-			);
+			log.push({ kind: "rate-limit", binding, key: options.key, success }, at);
 
 			return { success };
 		},

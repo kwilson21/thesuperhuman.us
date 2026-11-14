@@ -242,8 +242,8 @@ export type StepRecord = {
 
 export type CaseRecord = {
 	name: string;
-	/** Fixture format. 4 adds the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. */
-	format: 4;
+	/** Fixture format. 4 added the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. 5 changes what `phase` and the digest at the response mean: whether the response waited for the effect, not when it happened to start (settle.ts). */
+	format: 5;
 	steps: StepRecord[];
 	effects: Effect[];
 	final: Recorded | null;
@@ -779,7 +779,7 @@ async function runOn(
 
 	return {
 		name: c.name,
-		format: 4,
+		format: 5,
 		steps: records,
 		effects: log.entries,
 		final: stores(c.final),

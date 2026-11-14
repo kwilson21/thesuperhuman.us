@@ -223,6 +223,16 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The golden corpus: what "request" and "background" mean
+
+The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart
+from work it waited for); `background` means the answer had been produced and read before the effect began (work handed to
+`ctx.waitUntil`, or left floating), and the state digest "at the response" does not include it. The harness decides this by
+letting the event loop go quiet and releasing what the answer needs, never by counting promise turns, so a conversion that
+adds turns (an Effect runtime) records the same phases, and moving work across the response is a NOT NEUTRAL change.
+`tests/golden/README.md` ("What is recorded") has the rule, its one known limit (a route that keeps awaiting after
+`waitUntil`), and the comparison tool.
+
 ## Verified modules
 
 Tally's four questions decide whether a function carries a contract: is it pure, does its rule involve a sum, count, partition or conservation law, would a break lose or miscount money, and can the rule be said in one plain sentence. The decision function is pure and a break loses money. Question two is met loosely (the rule is "money received is never lost"), and the owner asked for it (2026-11-13), so it is in. `guardTime` is not: it is one conditional, a test says it as clearly, and the model checks that its value is never stored.

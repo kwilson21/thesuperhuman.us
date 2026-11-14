@@ -90,6 +90,13 @@ describe("golden format proof, format 3 to 4", () => {
 			problems: [],
 			counts: 1,
 			touched: [],
+			phases: {
+				cases: 0,
+				relabelled: 0,
+				atResponse: 0,
+				waitUntilState: 0,
+				moved: 0,
+			},
 		});
 	});
 
@@ -268,7 +275,7 @@ describe("golden format proof, format 3 to 4", () => {
 				[oldCase([hit, mail(withoutTouched(stateOf())), batch(1)])],
 				[newCase([hit, mail(stateOf("m", ["a"])), batch(0)])],
 			),
-		).toEqual({ problems: [], counts: 1, touched: [] });
+		).toMatchObject({ problems: [], counts: 1, touched: [] });
 	});
 
 	it("rejects a case that is not format 3 before and format 4 after", () => {
@@ -342,5 +349,113 @@ describe("golden format proof, format 4 to 4 (the table sets are derived differe
 		});
 
 		expect(proveFixture([was], [four(["a"])])).toHaveLength(1);
+	});
+});
+
+describe("golden format proof, format 4 to 5 (the phase is what the response waited for)", () => {
+	const wait = (state: JsonObject, phase = "request") => ({
+		kind: "waitUntil",
+		id: 1,
+		step: 0,
+		phase,
+		state,
+	});
+
+	const log = (phase: string, over: object[] = []) => [
+		wait(stateOf("m", ["a"])),
+		{ ...mail(stateOf("m", ["a"])), phase },
+		...over,
+	];
+
+	const five = (effects: object[], over = {}) => ({
+		...newCase(effects, { steps: [step(digestOf("m", ["a"]))] }),
+		format: 5,
+		...over,
+	});
+
+	const four = (effects: object[], over = {}) =>
+		five(effects, { format: 4, ...over });
+
+	it("accepts a relabel from request to background, with the digest at the response and a waitUntil state", () => {
+		const was = four(log("request"), {
+			steps: [step(digestOf("early", ["a"]))],
+		});
+
+		const now = five(
+			[
+				wait(stateOf("before", ["a"])),
+				{ ...mail(stateOf("m", ["a"])), phase: "background" },
+			],
+			{ steps: [step({ ...digestOf("m", ["a"]) })] },
+		);
+
+		const got = proveFixtureDetailed([was], [now]);
+
+		expect(got.problems).toEqual([]);
+
+		expect(got.phases).toEqual({
+			cases: 1,
+			relabelled: 1,
+			atResponse: 1,
+			waitUntilState: 1,
+			moved: 0,
+		});
+	});
+
+	it("counts a written line that sits at another place among the effects", () => {
+		const was = four([mail(stateOf("m", ["a"])), wait(stateOf("m", ["a"]))]);
+		const now = five([wait(stateOf("m", ["a"])), mail(stateOf("m", ["a"]))]);
+
+		expect(proveFixtureDetailed([was], [now]).phases.moved).toBe(1);
+		expect(proveFixtureDetailed([was], [now]).problems).toEqual([]);
+	});
+
+	it("rejects a relabel from background to request", () => {
+		expect(
+			proveFixture([four(log("background"))], [five(log("request"))]),
+		).toHaveLength(1);
+	});
+
+	it("rejects every other difference: an effect's state or order, a D1 statement, a count, the answer, the final state", () => {
+		const base = four([...log("request"), d1("SELECT 1", 0)]);
+
+		for (const changed of [
+			five([...log("request"), d1("SELECT 2", 0)]),
+			five([...log("request"), d1("SELECT 1", 0)].reverse()),
+			five([
+				wait(stateOf("m", ["a"])),
+				{ ...mail(stateOf("other", ["a"])), phase: "request" },
+				d1("SELECT 1", 0),
+			]),
+			five([...log("request")]),
+			five([...log("request"), d1("SELECT 1", 0)], {
+				steps: [step(digestOf("m", ["a"]), { answer: { status: 201 } })],
+			}),
+			five([...log("request"), d1("SELECT 1", 0)], {
+				finalState: { ...finalStateOf(), r2: { k: 1 } },
+			}),
+			five([...log("request"), d1("SELECT 1", 0)], {
+				steps: [step({ ...digestOf("m", ["a"]), music: sha("changed") })],
+			}),
+		])
+			expect(proveFixture([base], [changed]).length).toBeGreaterThan(0);
+	});
+
+	it("lets only a waitUntil entry change its state, not a console line's", () => {
+		const line = (state: JsonObject) => ({
+			kind: "console",
+			level: "error",
+			args: [],
+			step: 0,
+			phase: "request",
+			state,
+		});
+
+		expect(
+			proveFixture(
+				[four([line(stateOf("m", ["a"]))])],
+				[five([line(stateOf("n", ["a"]))])],
+			),
+		).toHaveLength(1);
 	});
 });

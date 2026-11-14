@@ -5,7 +5,7 @@
 // clock. An object holds what was put; a read gives back a copy.
 import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
-import type { EffectLog, Phase } from "./log";
+import type { EffectLog, Ticket } from "./log";
 import type { Triggers } from "./triggers";
 import {
 	byteRecord,
@@ -224,12 +224,8 @@ export function recordingR2(
 		});
 	}
 
-	const note = (
-		at: Phase,
-		op: string,
-		key: string | null,
-		detail: Recorded,
-	) => log.push({ kind: "r2", bucket: label, op, key, detail }, at);
+	const note = (at: Ticket, op: string, key: string | null, detail: Recorded) =>
+		log.push({ kind: "r2", bucket: label, op, key, detail }, at);
 
 	for (const op of fails) triggers.declare(`r2 ${label} fails ${op}`);
 
@@ -557,7 +553,7 @@ export function recordingR2(
 		},
 		resumeMultipartUpload: (key: string, uploadId: string) => {
 			// It returns at once, so it cannot wait at the gate: it takes the log's own phase.
-			const at = log.phase;
+			const at = log.ticket();
 
 			note(at, "resumeMultipartUpload", key, { uploadId });
 

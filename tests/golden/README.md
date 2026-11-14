@@ -43,11 +43,13 @@ compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the 
 and exits 0 only when every case that existed before is neutral. It prints the two commits it resolved, how many fixtures
 and cases it compared, and refuses (exit 2) a fixture that exists in neither revision, a revision git cannot find, an
 unknown flag, extra arguments, a malformed allow file, a run that compared no case, a record in a format it does not
-understand (it knows formats 1 to 4; any other number, higher or not, on either side), and a format 4 record whose shape
+understand (it knows formats 1 to 5; any other number, higher or not, on either side), and a format 4 or 5 record whose shape
 is not complete (an outside effect without its `state` and sorted `touched`, a step without its `digest` and
 `atResponse`, a missing `finalState` or change count, a `threw` that is not a message, a committed batch with no
 `statements`, a name twice in `touched`): every case of both revisions is validated, added and removed ones included, and
-recordings in formats 1 to 3 get no shape checks. The message names the fixture, case, step or effect and the field,
+recordings in formats 1 to 3 get no shape checks. A format 4 and a format 5 recording of the same case are NOT COMPARABLE
+(exit 1, never NEUTRAL): the phase and the digest at the response mean something else, so re-record the earlier
+revision's fixture with the later revision's harness before comparing. The message names the fixture, case, step or effect and the field,
 and it is an error, never NEUTRAL, so a harness that stops recording a field cannot make every later comparison pass on
 "missing against missing". For each case and each step,
 these must be byte-identical before and after:
@@ -129,7 +131,13 @@ differing field and both values, shortened), NOT COMPARABLE, added, removed and 
 or read error. If a conversion needs a case's input changed, that is not a conversion: record
 it as a fix.
 
-**Fixture format 4.** Each case records `format: 4` and:
+**Fixture format 5** has the shape of format 4 below. What changed is the meaning of `phase` and of `atResponse` (see "What
+is recorded"). `node scripts/golden-format-proof.mjs <from> [<to>]` proves the 4 to 5 re-record changed only the allowed
+things: effects relabelled from `request` to `background` (never the other way), the digest `atResponse`, the `state` of
+`waitUntil` entries, and the place of the lines a route writes itself among the effects; every other effect keeps its order,
+content and state exactly.
+
+**Fixture format 4.** Each case records `format: 4` (format 5 from the phase change on) and:
 
 - on every outside effect (not a D1 statement or a harness marker), `state`: one SHA-256 per database as it was when the
   effect happened, and `touched`, the sorted names of the tables whose rows had changed so far in the step (by a
@@ -265,9 +273,29 @@ it when a second corpus needs another table, rather than writing the defaults ag
 
 ## What is recorded
 
-One ordered effect log per case. Each entry carries its `step` and a `phase`: `request` while the handler runs and
-until its response body is read, `background` after (work handed to `ctx.waitUntil` that is still running, awaited
-before the case ends). "Background" means what can be observed: work a route starts before it returns shows as `request`.
+One ordered effect log per case. Each entry carries its `step` and a `phase`, which says **whether the response waited
+for the effect**, not when it happened to start. `request`: the answer (status, headers and the whole body) could not have
+been produced without the effect, or it cannot be told apart from work the answer waited for. `background`: the answer
+had been produced and read while the effect had not yet begun (work handed to `ctx.waitUntil`, or left floating). The
+digest `atResponse` is the state of the databases at that moment, so work the response did not wait for has not run in it.
+
+The harness decides this with a gate (`harness/settle.ts`, `EffectLog.start`): every fake (fetch, D1, KV, R2, AI, rate
+limits) waits at the gate before it does anything. The runner lets the event loop go quiet (a real macrotask turn, so
+every promise a route chains has run, however many turns that takes). If the answer has not been produced, whatever waits
+is released as `request` and the loop goes round again. Once the answer has been produced and read, whatever still waits,
+and whatever starts later, is `background`, and runs after the digest `atResponse` is taken. So a route that takes extra
+promise turns (an `Effect.runPromise` wrapper, say) records the same phases and order. Entries are kept in the order the
+effects finish, except that a line a route writes itself (`console`, `waitUntil`) sits after the effects released before
+it and before those released after it. Work that is neither awaited nor handed to `waitUntil` is `background`, and still
+runs and is recorded before the next step. A rejecting handler is answered "rejected", and what it deferred is `background`.
+
+Known limit: a route that calls `waitUntil` and then keeps awaiting other work cannot be told from outside: deferred work
+already in flight is `request`, because the response is still waiting and nothing separates them. That label is stable
+under extra promise turns, but not under a change that splits the awaited work into more sequential steps, where a later
+step of the deferred work may change label. Call `waitUntil` last, or keep the deferred work to one step. Work that is
+started and not awaited, while the route awaits something else, is `request` for the same reason. Waiting on real
+asynchronous platform work the harness does not gate (`crypto.subtle`, a real timer) is likewise seen as the response
+waiting.
 
 - D1: each executed statement (`first`, `all`, `run`) with the SQL exactly as prepared, bound arguments, database, and
   result shape (row count, `meta.changes`, or the error). A `batch` is one entry with its statements in order and

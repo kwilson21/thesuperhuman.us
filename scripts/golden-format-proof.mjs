@@ -1,4 +1,5 @@
-// Proves that the fixture format 3 to 4 re-record changed only what it is allowed to (see ALLOWED below).
+// Proves that a fixture format re-record changed only what it is allowed to: format 3 to 4 (see ALLOWED below), or
+// format 4 to 5 (see ALLOWED_PHASES).
 //
 //   node scripts/golden-format-proof.mjs <from> [<to>]
 //
@@ -35,6 +36,139 @@ export const ALLOWED = {
 	toFormat: 4,
 	added: "touched",
 };
+
+/**
+ * What the format 4 to format 5 re-record may change, and nothing else. Format 5 decides the phase of an effect, and the
+ * state at the response, by what the response waited for instead of by when the effect happened to start:
+ *
+ * - `format` goes from 4 to 5, and both cases have the whole shape the formats require;
+ * - an effect's `phase` may change from "request" to "background", never the other way: work the response did not wait
+ *   for is no longer reported as started in the request;
+ * - a step's `digest.atResponse` may differ: work not waited for has not begun when the response is read;
+ * - the `state` of a `waitUntil` entry may differ, for the same reason: work handed to waitUntil begins after the call;
+ * - the lines the route writes itself (`waitUntil`, `waitUntil-settled`, `console`) may sit at another place among the
+ *   effects, because an effect now takes its place when it is released, not when it was first called. Every other effect
+ *   (D1 statements and batches, R2, KV, fetch, AI, rate limits, markers) keeps its order, content and `state` exactly, and
+ *   the written lines keep their order and content exactly (a `waitUntil` entry's `state` aside).
+ *
+ * Everything else (requests, answers, the digest after each step, dumps, the final state) is compared exactly.
+ */
+export const ALLOWED_PHASES = {
+	fromFormat: 4,
+	toFormat: 5,
+};
+
+const WRITTEN = new Set(["waitUntil", "waitUntil-settled", "console"]);
+
+const isWritten = (effect) => WRITTEN.has(effect.kind);
+
+const json = (value) => JSON.stringify(value);
+
+const withoutPhase = ({ phase: _phase, ...rest }) => rest;
+
+/** Which entries of a log are the route's own lines ("w") and which are effects ("e"), in order. */
+const layout = (effects) =>
+	effects.map((effect) => (isWritten(effect) ? "w" : "e")).join("");
+
+/**
+ * Compares a format 4 case with its format 5 recording as ALLOWED_PHASES says. Returns the counts of what changed, and
+ * pushes a problem for the first thing that is not allowed.
+ */
+function provePhases(old, next, problems) {
+	const stats = { relabelled: 0, atResponse: 0, waitUntilState: 0, moved: 0 };
+
+	const fail = (what) => {
+		problems.push(`${old.name}: ${what}`);
+
+		return stats;
+	};
+
+	try {
+		assertCompleteRecord(old);
+		assertCompleteRecord(next);
+	} catch (error) {
+		return fail(error instanceof Error ? error.message : String(error));
+	}
+
+	if (old.effects.length !== next.effects.length)
+		return fail(
+			`${old.effects.length} effects before, ${next.effects.length} after`,
+		);
+
+	/** Whether the later phase is allowed; counts a relabel. */
+	const phaseOk = (before, after) => {
+		if (before.phase === after.phase) return true;
+
+		if (before.phase !== "request" || after.phase !== "background")
+			return false;
+
+		stats.relabelled += 1;
+
+		return true;
+	};
+
+	const effectsOld = old.effects.filter((effect) => !isWritten(effect));
+	const effectsNext = next.effects.filter((effect) => !isWritten(effect));
+
+	for (const [index, effect] of effectsOld.entries()) {
+		const after = effectsNext[index];
+
+		if (json(withoutPhase(effect)) !== json(withoutPhase(after)))
+			return fail(`effect ${index} (${effect.kind}) differs beyond its phase`);
+
+		if (!phaseOk(effect, after))
+			return fail(
+				`effect ${index} (${effect.kind}) went from ${effect.phase} to ${after.phase}`,
+			);
+	}
+
+	const writtenOld = old.effects.filter(isWritten);
+	const writtenNext = next.effects.filter(isWritten);
+
+	for (const [index, effect] of writtenOld.entries()) {
+		const after = writtenNext[index];
+		const { state: was, ...before } = withoutPhase(effect);
+		const { state: now, ...later } = withoutPhase(after);
+
+		if (json(before) !== json(later))
+			return fail(
+				`line ${index} (${effect.kind}) differs beyond its phase and place`,
+			);
+
+		if (json(was) !== json(now)) {
+			if (effect.kind !== "waitUntil")
+				return fail(`line ${index} (${effect.kind}) has another state`);
+
+			stats.waitUntilState += 1;
+		}
+
+		if (!phaseOk(effect, after))
+			return fail(
+				`line ${index} (${effect.kind}) went from ${effect.phase} to ${after.phase}`,
+			);
+	}
+
+	if (layout(old.effects) !== layout(next.effects)) stats.moved += 1;
+
+	for (const [index, step] of old.steps.entries()) {
+		const after = next.steps[index];
+		const { atResponse: was, ...before } = step.digest;
+		const { atResponse: now, ...later } = after.digest;
+
+		if (json({ ...step, digest: before }) !== json({ ...after, digest: later }))
+			return fail(`step ${index} differs beyond its digest at the response`);
+
+		if (json(was) !== json(now)) stats.atResponse += 1;
+	}
+
+	const { effects: _a, steps: _b, format: _c, ...restOld } = old;
+	const { effects: _d, steps: _e, format: _f, ...restNext } = next;
+
+	if (json(restOld) !== json(restNext))
+		return fail("the final state or another field of the case differs");
+
+	return stats;
+}
 
 const isSortedNames = (list) =>
 	Array.isArray(list) &&
@@ -141,6 +275,15 @@ function acceptCounts(old, next) {
 export function proveFixtureDetailed(before, after) {
 	const problems = [];
 	const touched = [];
+
+	const phases = {
+		cases: 0,
+		relabelled: 0,
+		atResponse: 0,
+		waitUntilState: 0,
+		moved: 0,
+	};
+
 	let counts = 0;
 
 	if (before.length !== after.length)
@@ -163,6 +306,19 @@ export function proveFixtureDetailed(before, after) {
 				problems.push(
 					`${old.name}: ${found[0].path || "(root)"} differs (${found.length} differences)`,
 				);
+
+			continue;
+		}
+
+		if (
+			old.format === ALLOWED_PHASES.fromFormat &&
+			next.format === ALLOWED_PHASES.toFormat
+		) {
+			const stats = provePhases(old, next, problems);
+
+			if (Object.values(stats).some((count) => count > 0)) phases.cases += 1;
+
+			for (const key of Object.keys(stats)) phases[key] += stats[key];
 
 			continue;
 		}
@@ -222,7 +378,7 @@ export function proveFixtureDetailed(before, after) {
 			);
 	}
 
-	return { problems, counts, touched };
+	return { problems, counts, touched, phases };
 }
 
 /** The problems only (see `proveFixtureDetailed`). */
@@ -270,6 +426,7 @@ function main([from, to]) {
 	let textAfter = 0;
 	const changedCounts = new Map();
 	const changedSets = new Map();
+	const changedPhases = new Map();
 
 	for (const fixture of [...new Set([...before, ...after])].sort()) {
 		if (!before.has(fixture) || !after.has(fixture)) {
@@ -291,6 +448,8 @@ function main([from, to]) {
 		if (proved.counts > 0) changedCounts.set(fixture, proved.counts);
 
 		if (proved.touched.length > 0) changedSets.set(fixture, proved.touched);
+
+		if (proved.phases.cases > 0) changedPhases.set(fixture, proved.phases);
 
 		for (const problem of proved.problems)
 			problems.push(`${fixture}: ${problem}`);
@@ -333,12 +492,29 @@ function main([from, to]) {
 			.join("")}`,
 	);
 
+	const sum = (key) =>
+		[...changedPhases.values()].reduce((total, item) => total + item[key], 0);
+
+	if (changedPhases.size > 0)
+		console.log(
+			`format 4 to 5: ${sum("cases")} cases differ in ${changedPhases.size} fixtures: ${sum("relabelled")} effects relabelled request to background, ${sum("atResponse")} digests at the response, ${sum("waitUntilState")} waitUntil states, ${sum("moved")} cases where a written line (waitUntil, console) sits at another place${[
+				...changedPhases,
+			]
+				.map(
+					([fixture, item]) =>
+						`\n  ${fixture}: ${item.cases} cases, ${item.relabelled} relabelled, ${item.atResponse} at the response, ${item.waitUntilState} waitUntil states, ${item.moved} moved`,
+				)
+				.join("")}`,
+		);
+
 	for (const problem of problems.slice(0, 20))
 		console.log(`  DIFFERENT: ${problem}`);
 
 	console.log(
 		problems.length === 0
-			? "golden-format-proof: the only differences are the format number, the `touched` sets, and read change counts that now say 0"
+			? changedPhases.size > 0
+				? "golden-format-proof: the only differences are the format number, effects relabelled request to background, the digests at the response, the states of waitUntil entries, and the place of the lines a route writes itself"
+				: "golden-format-proof: the only differences are the format number, the `touched` sets, and read change counts that now say 0"
 			: `golden-format-proof: ${problems.length} problems, so this is not only a format change`,
 	);
 

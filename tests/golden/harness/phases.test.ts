@@ -252,7 +252,10 @@ describe("the phase says whether the response waited for the effect", () => {
 			},
 			one({
 				failures: [
-					{ on: /INSERT INTO brief_suggestion_budget/, message: "late failure" },
+					{
+						on: /INSERT INTO brief_suggestion_budget/,
+						message: "late failure",
+					},
 				],
 			}),
 		);
@@ -268,7 +271,9 @@ describe("the phase says whether the response waited for the effect", () => {
 		const got = await record(
 			async (context) => {
 				await Promise.race([
-					env(context).AI?.run("@cf/model" as never, {} as never),
+					env(context).AI?.run("@cf/meta/llama-3.2-1b-instruct", {
+						prompt: "p",
+					}),
 					new Promise((resolve) => setTimeout(resolve, 1_000)),
 				]);
 
@@ -306,12 +311,17 @@ describe("the phase says whether the response waited for the effect", () => {
 	});
 
 	it("the state at the response is the state before what was never waited for", async () => {
-		const handler = (deferred: boolean): Handler => async (context) => {
-			if (deferred) ctxOf(context).waitUntil(Promise.resolve(budget(context, "d")).then(() => {}));
-			else await budget(context, "d");
+		const handler =
+			(deferred: boolean): Handler =>
+			async (context) => {
+				if (deferred)
+					ctxOf(context).waitUntil(
+						Promise.resolve(budget(context, "d")).then(() => {}),
+					);
+				else await budget(context, "d");
 
-			return new Response("ok");
-		};
+				return new Response("ok");
+			};
 
 		const awaited = await record(handler(false));
 		const deferred = await record(handler(true));
@@ -355,7 +365,9 @@ describe("a change that moves work across the response is caught", () => {
 	};
 
 	const writeDeferred: Handler = async (context) => {
-		ctxOf(context).waitUntil(Promise.resolve(budget(context, "w")).then(() => {}));
+		ctxOf(context).waitUntil(
+			Promise.resolve(budget(context, "w")).then(() => {}),
+		);
 
 		return new Response("ok");
 	};
@@ -402,7 +414,7 @@ describe("a change that moves work across the response is caught", () => {
 });
 
 describe("extra promise turns change nothing", () => {
-	type Shape = {
+	type Scenario = {
 		readonly name: string;
 		/** The handler, with `extra` turns between the points the test varies and `wrap` around its body. */
 		readonly handler: (
@@ -412,7 +424,7 @@ describe("extra promise turns change nothing", () => {
 		readonly expected: string[];
 	};
 
-	const shapes: Shape[] = [
+	const scenarios: Scenario[] = [
 		{
 			name: "turns between deciding the answer and resolving",
 			expected: ["waitUntil:request", "fetch:background", "kv:background"],
@@ -479,6 +491,20 @@ describe("extra promise turns change nothing", () => {
 				}),
 		},
 		{
+			name: "a line the route writes after an effect was released stays after it",
+			expected: ["kv:request", "fetch:request", "waitUntil:request"],
+			handler: (extra, wrap) => (context) =>
+				wrap(async () => {
+					const started = mail();
+
+					await env(context).RATE_LIMIT.put("k", "1");
+					await turns(extra);
+					ctxOf(context).waitUntil(started.then(() => {}));
+
+					return new Response("ok");
+				}),
+		},
+		{
 			name: "an effect the route awaits stays request when the turns around it change",
 			expected: ["fetch:request", "d1:request"],
 			handler: (extra, wrap) => (context) =>
@@ -494,19 +520,19 @@ describe("extra promise turns change nothing", () => {
 		},
 	];
 
-	for (const shape of shapes)
-		describe(shape.name, () => {
-			it(`records ${shape.expected.join(", ")}`, async () => {
-				const got = await record(shape.handler(0, wrappers.plain));
+	for (const scenario of scenarios)
+		describe(scenario.name, () => {
+			it(`records ${scenario.expected.join(", ")}`, async () => {
+				const got = await record(scenario.handler(0, wrappers.plain));
 
-				expect(phases(got)).toEqual(shape.expected);
+				expect(phases(got)).toEqual(scenario.expected);
 			});
 
 			for (const [wrapper, wrap] of Object.entries(wrappers))
 				for (const extra of EXTRA)
 					it(`is byte for byte the same with ${extra} extra turns, ${wrapper}`, async () => {
-						const base = await record(shape.handler(0, wrappers.plain));
-						const got = await record(shape.handler(extra, wrap));
+						const base = await record(scenario.handler(0, wrappers.plain));
+						const got = await record(scenario.handler(extra, wrap));
 
 						expect(bytes(got)).toBe(bytes(base));
 						expect(verdict(base, got).neutral).toBe(true);
@@ -515,7 +541,7 @@ describe("extra promise turns change nothing", () => {
 
 	it("the real move is still told apart at every number of turns", async () => {
 		for (const extra of EXTRA) {
-			const awaited = await record(async (context) => {
+			const awaited = await record(async () => {
 				await turns(extra);
 				await mail();
 
@@ -539,12 +565,12 @@ describe("the gate", () => {
 	it("passes straight through when it is not driven, and when the work is off the record", async () => {
 		const log = new EffectLog();
 
-		expect(await log.start()).toBe("request");
+		expect((await log.start()).phase).toBe("request");
 
 		log.gating = true;
 
 		await log.unrecorded(async () => {
-			expect(await log.start()).toBe("request");
+			expect((await log.start()).phase).toBe("request");
 		});
 
 		expect(log.waiting).toBe(0);
@@ -562,8 +588,67 @@ describe("the gate", () => {
 
 		log.release("background");
 
-		expect(await first).toBe("background");
-		expect(await second).toBe("background");
+		expect((await first).phase).toBe("background");
+		expect((await second).phase).toBe("background");
 		expect(log.waiting).toBe(0);
+	});
+});
+
+describe("known limit: a route that calls waitUntil and then keeps awaiting", () => {
+	// From outside, deferred work that is already in flight cannot be told from work the response waits for, so what
+	// starts before the answer is read is request. It is stable under extra promise turns but not under a change that
+	// splits the awaited work into more sequential steps: keep the deferred work to one step, or call waitUntil last
+	// (every route in the corpus but one does; the exception defers a single statement).
+	const deferredTwice = (context: APIContext) =>
+		ctxOf(context).waitUntil(
+			(async () => {
+				await mail();
+				await mail();
+			})(),
+		);
+
+	it("one awaited step after waitUntil: the deferred work's later step is background", async () => {
+		const got = await record(async (context) => {
+			deferredTwice(context);
+			await budget(context, "one");
+
+			return new Response("ok");
+		});
+
+		expect(phases(got)).toEqual([
+			"waitUntil:request",
+			"fetch:request",
+			"d1:request",
+			"fetch:background",
+		]);
+	});
+
+	it("two awaited steps after waitUntil: the deferred work's later step is request too", async () => {
+		const got = await record(async (context) => {
+			deferredTwice(context);
+			await budget(context, "one");
+			await budget(context, "two");
+
+			return new Response("ok");
+		});
+
+		expect(phases(got)).toEqual([
+			"waitUntil:request",
+			"fetch:request",
+			"d1:request",
+			"fetch:request",
+			"d1:request",
+		]);
+	});
+
+	it("work started and not awaited, while the route awaits other work, is request", async () => {
+		const got = await record(async (context) => {
+			void mail().catch(() => {});
+			await budget(context, "one");
+
+			return new Response("ok");
+		});
+
+		expect(phases(got)).toEqual(["fetch:request", "d1:request"]);
 	});
 });

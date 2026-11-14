@@ -99,10 +99,10 @@ describe("digestDatabase", () => {
 });
 
 describe("the record of a case", () => {
-	it("is format 4, with a digest per step and the final state of both databases, R2 and KV", async () => {
+	it("is format 5, with a digest per step and the final state of both databases, R2 and KV", async () => {
 		const got = await runCase(idle, case1());
 
-		expect(got.format).toBe(4);
+		expect(got.format).toBe(5);
 		expect(Object.keys(got.steps[0]?.digest ?? {})).toEqual([
 			"music",
 			"publication",

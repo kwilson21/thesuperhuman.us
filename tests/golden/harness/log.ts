@@ -10,6 +10,18 @@ import type { ByteRecord, Recorded } from "./plain";
  */
 export type Phase = "request" | "background";
 
+/**
+ * What `start` gives an effect: its phase, and its place among the lines the route writes itself. The place is taken when
+ * the effect is released, so an entry that finishes late still sits before a line (a console message, a waitUntil call)
+ * the route wrote after the release. Entries of effects keep the order they finish in. `released` is false for an entry
+ * that never waited at the gate and was written at once.
+ */
+export type Ticket = {
+	readonly phase: Phase;
+	readonly slot: number;
+	readonly released: boolean;
+};
+
 /** What a statement or call gave back that a caller can see: how many rows, how many changes, or that it threw. */
 export type D1Outcome = { rows: number; changes: number } | { threw: string };
 
@@ -132,7 +144,16 @@ export class EffectLog {
 	/** While true, an effect that starts waits at the gate until the runner releases it (see `start`). Off outside a driven request. */
 	gating = false;
 
-	private readonly held: ((phase: Phase) => void)[] = [];
+	private readonly held: ((ticket: Ticket) => void)[] = [];
+	private slots = 0;
+	private readonly slotOf = new WeakMap<Effect, Ticket>();
+
+	/** A place in the log, now. */
+	ticket(phase: Phase = this.phase, released = false): Ticket {
+		this.slots += 1;
+
+		return { phase, slot: this.slots, released };
+	}
 
 	/** Told when an effect arrives at the gate, so a runner that is waiting for something else can wake. */
 	onHeld: (() => void) | undefined;
@@ -147,11 +168,11 @@ export class EffectLog {
 	 * here, so whether it ran before the response was read depends only on whether the response needed it, never on how
 	 * many microtask turns the route took to get there: the runner lets the event loop go quiet, and an effect still
 	 * waiting then is one the response is waiting for (it is released as "request"), unless the answer has already been
-	 * read, in which case nothing waited for it (it is released as "background"). Resolves with the effect's phase.
+	 * read, in which case nothing waited for it (it is released as "background"). Resolves with the effect's ticket.
 	 * Off-record work and an undriven log pass straight through.
 	 */
-	start(): Promise<Phase> {
-		if (!this.gating || this.quiet > 0) return Promise.resolve(this.phase);
+	start(): Promise<Ticket> {
+		if (!this.gating || this.quiet > 0) return Promise.resolve(this.ticket());
 
 		return new Promise((resolve) => {
 			this.held.push(resolve);
@@ -161,7 +182,8 @@ export class EffectLog {
 
 	/** Lets every waiting effect begin, in the order they arrived, labelled `phase`. */
 	release(phase: Phase) {
-		for (const resolve of this.held.splice(0)) resolve(phase);
+		for (const resolve of this.held.splice(0))
+			resolve(this.ticket(phase, true));
 	}
 
 	/** False while off-record work (sign-in, seeding, a hook) runs. */
@@ -194,16 +216,33 @@ export class EffectLog {
 		this.written.set(this.step, set);
 	}
 
-	/** Records an effect. `phase` is the one `start` gave it; an effect that never waited at the gate has the log's own. */
-	push(body: EffectBody, phase: Phase = this.phase) {
+	/** Records an effect at the place `start` gave it; a line the route writes itself takes its place now. */
+	push(body: EffectBody, at: Ticket = this.ticket()) {
 		if (this.quiet > 0) return;
 
-		const entry: Effect = { ...body, step: this.step, phase };
+		const entry: Effect = { ...body, step: this.step, phase: at.phase };
 
 		if (this.probe && !UNSTATED.has(body.kind))
 			entry.state = { ...this.probe(), touched: this.touched() };
 
-		this.entries.push(entry);
+		// An effect that finishes late sits before the lines the route wrote after it was released, and after every other effect that finished before it.
+		let index = this.entries.length;
+
+		while (index > 0 && at.released) {
+			const previous = this.slotOf.get(this.entries[index - 1]);
+
+			if (
+				previous === undefined ||
+				previous.released ||
+				previous.slot < at.slot
+			)
+				break;
+
+			index -= 1;
+		}
+
+		this.entries.splice(index, 0, entry);
+		this.slotOf.set(entry, at);
 	}
 
 	/** Runs `work` without recording, for setup that is not part of the case (sign-in, seeding). */

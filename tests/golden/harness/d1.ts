@@ -13,7 +13,7 @@ import { statementOf } from "../../../scripts/sql-effects.mjs";
 import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
-import type { D1Outcome, D1Statement, Phase } from "./log";
+import type { D1Outcome, D1Statement, Ticket } from "./log";
 import type { DatabaseDigester } from "./digest";
 import type { EffectLog } from "./log";
 import { argRecord, errorText } from "./plain";
@@ -103,7 +103,7 @@ export class SqlHooks {
 		name: string,
 		db: string,
 		matching: readonly string[],
-		at: Phase,
+		at: Ticket,
 	) {
 		log.push(
 			{
@@ -127,7 +127,7 @@ export class SqlHooks {
 		sqls: readonly string[],
 		sqlite: SqliteDatabase,
 		log: EffectLog,
-		at: Phase,
+		at: Ticket,
 	): string | null {
 		if (this.paused > 0) return null;
 
@@ -445,7 +445,7 @@ export function recordingD1(
 	): D1PreparedStatement => {
 		const inner = real.prepare(sql).bind(...args);
 
-		const guard = (via: "first" | "all" | "run", at: Phase) => {
+		const guard = (via: "first" | "all" | "run", at: Ticket) => {
 			const failure = hooks.before(label, [sql], sqlite, log, at);
 
 			if (failure === null) return;
