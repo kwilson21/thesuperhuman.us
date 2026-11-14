@@ -9,6 +9,7 @@ import { double, partial } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	abortProjectUpload,
+	multipartUploadGone,
 	beginProjectUpload,
 	expectedPartLength,
 	finishProjectUpload,
@@ -480,4 +481,18 @@ it("stops reading an upload body as soon as it passes the expected size", async 
 	expect([...new Uint8Array((await readBodyWithin(exact, 3))!)]).toEqual([
 		1, 2, 3,
 	]);
+});
+
+it("recognises R2's missing multipart upload error and nothing else", () => {
+	expect(
+		multipartUploadGone(
+			new Error("The specified multipart upload does not exist. (10024)"),
+		),
+	).toBe(true);
+	expect(multipartUploadGone(new Error("network reset"))).toBe(false);
+	expect(
+		multipartUploadGone("The specified multipart upload does not exist."),
+	).toBe(false);
+	expect(multipartUploadGone(null)).toBe(false);
+	expect(multipartUploadGone(42)).toBe(false);
 });

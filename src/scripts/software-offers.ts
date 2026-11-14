@@ -1,4 +1,5 @@
 import type { OfferTerms } from "~/lib/software-offers";
+import { ownLabel } from "~/lib/type-guards";
 
 const editableSections = () => [
 	...document.querySelectorAll<HTMLElement>(
@@ -15,10 +16,6 @@ export const markRequestPageClean = () =>
 	editableSections().forEach((section) => {
 		section.dataset.dirty = "false";
 	});
-
-// Own-key lookup for a label or name table. Returns undefined for any other key.
-const ownValue = (table: Record<string, string>, key: string) =>
-	Object.hasOwn(table, key) ? table[key] : undefined;
 
 export function setupSoftwareOffers() {
 	const sessionValue = (key: string, value?: string | null) => {
@@ -158,11 +155,11 @@ export function setupSoftwareOffers() {
 
 					scope
 						?.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-							`[name="${ownValue(names, key) ?? key}"]`,
+							`[name="${ownLabel(names, key) ?? key}"]`,
 						)
 						.forEach((input) => input.setAttribute("aria-invalid", "true"));
 
-					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${ownValue(labels, key) ?? "Offer"}: ${message}`;
+					return `${milestone ? `Milestone ${Number(parts[1]) + 1} ` : ""}${ownLabel(labels, key) ?? "Offer"}: ${message}`;
 				},
 			);
 

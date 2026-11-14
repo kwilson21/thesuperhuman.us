@@ -1,18 +1,14 @@
-import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendStudioSignInNotice } from "~/lib/audio-resend";
+import { createRequire } from "node:module";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	deliverProjectInvitation,
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
-import { double, partial } from "../helpers/doubles";
-import { sqliteD1 } from "../helpers/sqlite-d1";
 import { fakeFirst } from "../helpers/d1";
-
-vi.mock("~/lib/audio-resend", () => ({
-	sendStudioSignInNotice: vi.fn(async () => ({ ok: true })),
-}));
+import { double, partial } from "../helpers/doubles";
+import { stubResend } from "../helpers/resend-fetch";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -21,8 +17,12 @@ const baseline = readFileSync(
 	"utf8",
 );
 
+/** Databases opened by the current test, closed after it even when an assertion fails. */
+const openDatabases: { close(): void }[] = [];
+
 function fixture() {
 	const sql = new DatabaseSync(":memory:");
+	openDatabases.push(sql);
 	sql.exec("PRAGMA foreign_keys=ON");
 	sql.exec(baseline);
 
@@ -36,11 +36,15 @@ function fixture() {
 	return { sql, db };
 }
 
-beforeEach(() => vi.clearAllMocks());
+afterEach(() => {
+	for (const sql of openDatabases.splice(0)) sql.close();
+	vi.unstubAllGlobals();
+});
 
 describe("project invitations", () => {
 	it("sends one sign-in notice and records success", async () => {
 		const { sql, db } = fixture();
+		const emails = stubResend();
 
 		const env = partial<Env>({
 			RESEND_API_KEY: "test",
@@ -51,15 +55,18 @@ describe("project invitations", () => {
 			deliverProjectInvitation(db, "song-1", env),
 			deliverProjectInvitation(db, "song-1", env),
 		]);
-		expect(sendStudioSignInNotice).toHaveBeenCalledTimes(1);
-		expect(sendStudioSignInNotice).toHaveBeenCalledWith(
-			"test",
-			"studio@example.com",
-			"artist@example.com",
-			"Your private studio project",
-			"invitation",
-			undefined,
-		);
+		expect(emails).toHaveLength(1);
+		expect(emails[0]).toMatchObject({
+			authorization: "Bearer test",
+			from: "studio@example.com",
+			to: ["artist@example.com"],
+			subject: "Your private studio project",
+		});
+		// The invitation template's wording, and not the update template's.
+		expect(emails[0]?.text).toContain("Your song has a private studio.");
+		expect(emails[0]?.html).toContain("Your song has a private studio.");
+		expect(emails[0]?.text).not.toContain("You have a new studio update.");
+		expect(emails[0]?.html).not.toContain("You have a new studio update.");
 		expect(
 			sql
 				.prepare(
@@ -68,18 +75,17 @@ describe("project invitations", () => {
 				.get(),
 		).toEqual({ invitation_status: "sent", delivered: 1 });
 		expect(await queueProjectInvitation(db, "song-1")).toBe(false);
-		sql.close();
 	});
 
 	it("retains a failed invitation for an explicit retry", async () => {
 		const { sql, db } = fixture();
+		const emails = stubResend({ resend: [{ status: 422 }] });
 
 		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
 
-		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({ ok: false });
 		await deliverProjectInvitation(db, "song-1", env);
 		expect(
 			sql
@@ -90,22 +96,18 @@ describe("project invitations", () => {
 		).toEqual({ invitation_status: "failed" });
 		expect(await queueProjectInvitation(db, "song-1")).toBe(true);
 		await deliverProjectInvitation(db, "song-1", env);
-		expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
-		sql.close();
+		expect(emails).toHaveLength(2);
 	});
 
 	it("requires checking Resend before retrying an uncertain invitation", async () => {
 		const { sql, db } = fixture();
+		const emails = stubResend({ resend: [{ status: 500 }] });
 
 		const env = partial<Env>({
 			RESEND_API_KEY: "test",
 			CONTACT_FROM_EMAIL: "studio@example.com",
 		});
 
-		vi.mocked(sendStudioSignInNotice).mockResolvedValueOnce({
-			ok: false,
-			uncertain: true,
-		});
 		await deliverProjectInvitation(db, "song-1", env);
 		expect(
 			sql
@@ -131,12 +133,12 @@ describe("project invitations", () => {
 			),
 		).toBe(true);
 		await deliverProjectInvitation(db, "song-1", env);
-		expect(sendStudioSignInNotice).toHaveBeenCalledTimes(2);
-		sql.close();
+		expect(emails).toHaveLength(2);
 	});
 
 	it("does not invite a withdrawn or revoked project", async () => {
 		const { sql, db } = fixture();
+		const emails = stubResend();
 
 		const env = partial<Env>({
 			RESEND_API_KEY: "test",
@@ -148,12 +150,12 @@ describe("project invitations", () => {
 			.run();
 		await deliverProjectInvitation(db, "song-1", env);
 		expect(await queueProjectInvitation(db, "song-1")).toBe(false);
-		expect(sendStudioSignInNotice).not.toHaveBeenCalled();
-		sql.close();
+		expect(emails).toHaveLength(0);
 	});
 
 	it("does not send an invitation when access closes after the delivery claim", async () => {
 		const { sql, db } = fixture();
+		const emails = stubResend();
 
 		const env = partial<Env>({
 			RESEND_API_KEY: "test",
@@ -188,7 +190,7 @@ describe("project invitations", () => {
 		});
 
 		await deliverProjectInvitation(interleavedDb, "song-1", env);
-		expect(sendStudioSignInNotice).not.toHaveBeenCalled();
+		expect(emails).toHaveLength(0);
 		expect(
 			sql
 				.prepare(
@@ -196,6 +198,5 @@ describe("project invitations", () => {
 				)
 				.get(),
 		).toEqual({ invitation_status: "sending" });
-		sql.close();
 	});
 });

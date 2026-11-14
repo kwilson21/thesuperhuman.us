@@ -1,25 +1,12 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import type { JsonObject } from "../helpers/json";
-
-const invoiceMocks = vi.hoisted(() => ({
-	booking: vi.fn(),
-	balance: vi.fn(),
-}));
-
-vi.mock("~/lib/stripe-invoicing", () => ({
-	createBookingInvoice: invoiceMocks.booking,
-	createBalanceInvoice: invoiceMocks.balance,
-	stripeAvailable: (env: Partial<Record<string, string>>) =>
-		env.STRIPE_PAYMENTS_ENABLED === "true" &&
-		Boolean(env.STRIPE_SECRET_KEY) &&
-		Boolean(env.STRIPE_WEBHOOK_SECRET),
-}));
+import { stripeFake } from "../helpers/stripe-fetch";
 
 import { POST } from "~/pages/api/owner/requests/[id]/payment";
 import {
@@ -29,9 +16,9 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 let sql: InstanceType<typeof DatabaseSync>, db: D1Database;
+let stripe: ReturnType<typeof stripeFake>;
 
 beforeEach(() => {
-	vi.clearAllMocks();
 	sql = new DatabaseSync(":memory:");
 	sql.exec(
 		readFileSync(new URL("../../db/music.sql", import.meta.url), "utf8"),
@@ -40,18 +27,13 @@ beforeEach(() => {
     VALUES ('request-1','service','two-track-mix-master','Artist','artist@example.com','Old News mix','reviewed','2026-09-19T12:00:00Z','2026-09-19T12:00:00Z')`);
 
 	db = sqliteD1(sql);
-	invoiceMocks.booking.mockResolvedValue({
-		stripeCustomerId: "cus_1",
-		invoiceId: "in_booking",
-		hostedInvoiceUrl: "https://invoice.stripe.com/booking",
-		status: "open",
-	});
-	invoiceMocks.balance.mockResolvedValue({
-		stripeCustomerId: "cus_1",
-		invoiceId: "in_balance",
-		hostedInvoiceUrl: "https://invoice.stripe.com/balance",
-		status: "open",
-	});
+	stripe = stripeFake({ invoiceIds: ["in_booking", "in_replacement"] });
+	vi.stubGlobal("fetch", stripe.fetch);
+});
+
+afterEach(() => {
+	sql.close();
+	vi.unstubAllGlobals();
 });
 
 const stripeEnv = {
@@ -78,7 +60,11 @@ function context(
 		locals: partial<APIContext["locals"]>({
 			owner: owner ? { email: "owner@example.com" } : undefined,
 			runtime: partial<TestRuntime>({
-				env: partial<TestRuntime["env"]>({ MUSIC_DB: db, ...env }),
+				env: partial<TestRuntime["env"]>({
+					MUSIC_DB: db,
+					...stripeEnv,
+					...env,
+				}),
 			}),
 		}),
 	});
@@ -149,7 +135,7 @@ it("persists approved terms before any Stripe call", async () => {
 	);
 
 	expect(response.status).toBe(200);
-	expect(invoiceMocks.booking).not.toHaveBeenCalled();
+	expect(stripe.calls()).toEqual([]);
 	expect(
 		sql
 			.prepare("SELECT total_amount_cents,booking_status FROM audio_payments")
@@ -194,23 +180,33 @@ it("creates and records one booking invoice after approval", async () => {
 		}),
 	);
 
-	const response = await POST(
-		context({ action: "create-booking-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "create-booking-invoice" }));
 
 	expect(response.status).toBe(200);
-	expect(invoiceMocks.booking).toHaveBeenCalledWith(
-		expect.anything(),
-		expect.objectContaining({ email: "artist@example.com" }),
-		expect.objectContaining({ bookingAmountCents: 10_000 }),
-	);
+	expect(
+		stripe
+			.calls()
+			.find((call) => call.path === "/v1/customers")
+			?.form.get("email"),
+	).toBe("artist@example.com");
+	expect(
+		stripe
+			.calls()
+			.find((call) => call.path === "/v1/invoiceitems")
+			?.form.get("amount"),
+	).toBe("10000");
+	expect(
+		stripe.calls().find((call) => call.path === "/v1/invoices")?.idempotencyKey,
+	).toBe("audio-request:request-1:booking:attempt-0:invoice");
 	expect(
 		sql
 			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
 			.get(),
 	).toEqual({ booking_invoice_id: "in_booking", booking_status: "open" });
-	await POST(context({ action: "create-booking-invoice" }, true, stripeEnv));
-	expect(invoiceMocks.booking).toHaveBeenCalledTimes(1);
+	await POST(context({ action: "create-booking-invoice" }));
+	expect(
+		stripe.calls().filter((call) => call.path === "/v1/invoices"),
+	).toHaveLength(1);
 });
 
 it("does not create an invoice after retention deletes a withdrawn request", async () => {
@@ -283,12 +279,10 @@ it("does not create an invoice after retention deletes a withdrawn request", asy
 		});
 	};
 
-	const response = await POST(
-		context({ action: "create-booking-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "create-booking-invoice" }));
 
 	expect(response.status).toBe(409);
-	expect(invoiceMocks.booking).not.toHaveBeenCalled();
+	expect(stripe.calls()).toEqual([]);
 	expect(
 		sql
 			.prepare("SELECT name,email FROM owner_requests WHERE id=?")
@@ -306,12 +300,10 @@ it("does not create a balance invoice before Stripe confirms the booking payment
 		}),
 	);
 
-	const response = await POST(
-		context({ action: "create-balance-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "create-balance-invoice" }));
 
 	expect(response.status).toBe(409);
-	expect(invoiceMocks.balance).not.toHaveBeenCalled();
+	expect(stripe.calls()).toEqual([]);
 });
 
 it("returns service unavailable without calling Stripe when invoice creation is disabled", async () => {
@@ -331,7 +323,7 @@ it("returns service unavailable without calling Stripe when invoice creation is 
 	);
 
 	expect(response.status).toBe(503);
-	expect(invoiceMocks.booking).not.toHaveBeenCalled();
+	expect(stripe.calls()).toEqual([]);
 });
 
 it("does not record invoice success when Stripe fails", async () => {
@@ -343,13 +335,15 @@ it("does not record invoice success when Stripe fails", async () => {
 			offerAccepted: true,
 		}),
 	);
-	invoiceMocks.booking.mockRejectedValueOnce(new Error("Stripe unavailable"));
+	stripe = stripeFake({ refuseInvoices: true });
+	vi.stubGlobal("fetch", stripe.fetch);
 
-	const response = await POST(
-		context({ action: "create-booking-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "create-booking-invoice" }));
 
 	expect(response.status).toBe(502);
+	expect(
+		stripe.calls().filter((call) => call.path === "/v1/invoices"),
+	).toHaveLength(1);
 	expect(
 		sql
 			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
@@ -378,16 +372,16 @@ it("reports pending recovery when D1 fails after Stripe sends the invoice", asyn
 		},
 	});
 
-	const response = await POST(
-		context({ action: "create-booking-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "create-booking-invoice" }));
 
 	expect(response.status).toBe(503);
 	expect(await response.json()).toMatchObject({
 		ok: false,
 		recoveryPending: true,
 	});
-	expect(invoiceMocks.booking).toHaveBeenCalledOnce();
+	expect(
+		stripe.calls().filter((call) => call.path === "/v1/invoices"),
+	).toHaveLength(1);
 });
 
 it("creates a replacement after a voided booking invoice", async () => {
@@ -399,24 +393,27 @@ it("creates a replacement after a voided booking invoice", async () => {
 			offerAccepted: true,
 		}),
 	);
-	await POST(context({ action: "create-booking-invoice" }, true, stripeEnv));
+	await POST(context({ action: "create-booking-invoice" }));
 	sql
 		.prepare(
 			"UPDATE audio_payments SET booking_status='void' WHERE request_id='request-1'",
 		)
 		.run();
-	invoiceMocks.booking.mockResolvedValueOnce({
-		stripeCustomerId: "cus_1",
-		invoiceId: "in_replacement",
-		hostedInvoiceUrl: "https://invoice.stripe.com/replacement",
-		status: "open",
-	});
 
-	const response = await POST(
-		context({ action: "replace-booking-invoice" }, true, stripeEnv),
-	);
+	const response = await POST(context({ action: "replace-booking-invoice" }));
 
 	expect(response.status).toBe(200);
+
+	const invoices = stripe
+		.calls()
+		.filter((call) => call.path === "/v1/invoices");
+
+	expect(invoices).toHaveLength(2);
+	// The replacement is a new attempt, so Stripe does not return the voided invoice for its key.
+	expect(invoices.map((call) => call.idempotencyKey)).toEqual([
+		"audio-request:request-1:booking:attempt-0:invoice",
+		"audio-request:request-1:booking:attempt-1:invoice",
+	]);
 	expect(
 		sql
 			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
@@ -432,7 +429,44 @@ it("records a payment received outside Stripe with invoices off, and never calls
 		received: true,
 	};
 
-	expect((await POST(context(received))).status).toBe(409);
+	// Stripe is off for every request in this test: no payment provider keys and invoices disabled.
+	const stripeOff = {
+		STRIPE_PAYMENTS_ENABLED: "false",
+		STRIPE_SECRET_KEY: "",
+		STRIPE_WEBHOOK_SECRET: "",
+	};
+
+	const off = (body: JsonObject, owner = true) =>
+		context(body, owner, stripeOff);
+
+	expect((await POST(off(received))).status).toBe(409);
+	await POST(
+		off({
+			action: "approve",
+			approvedService: "Mix",
+			totalAmountCents: 15_000,
+			offerAccepted: true,
+		}),
+	);
+	expect((await POST(off({ ...received, received: false }))).status).toBe(400);
+	expect((await POST(off({ ...received, method: "Bitcoin" }))).status).toBe(
+		400,
+	);
+	expect((await POST(off(received, false))).status).toBe(403);
+	expect((await POST(off(received))).status).toBe(200);
+	expect(
+		sql
+			.prepare("SELECT booking_status,booking_invoice_id FROM audio_payments")
+			.get(),
+	).toEqual({ booking_status: "paid", booking_invoice_id: null });
+	// Stripe is configured again here, so the 409 comes from the paid booking and not from Stripe being off.
+	expect(
+		(await POST(context({ action: "create-booking-invoice" }))).status,
+	).toBe(409);
+	expect(stripe.calls()).toEqual([]);
+});
+
+it("records a payment received outside Stripe without a Stripe request while Stripe is configured", async () => {
 	await POST(
 		context({
 			action: "approve",
@@ -441,24 +475,20 @@ it("records a payment received outside Stripe with invoices off, and never calls
 			offerAccepted: true,
 		}),
 	);
-	expect((await POST(context({ ...received, received: false }))).status).toBe(
-		400,
-	);
-	expect((await POST(context({ ...received, method: "Bitcoin" }))).status).toBe(
-		400,
-	);
-	expect((await POST(context(received, false))).status).toBe(403);
-	expect((await POST(context(received))).status).toBe(200);
+
 	expect(
-		sql
-			.prepare("SELECT booking_status,booking_invoice_id FROM audio_payments")
-			.get(),
-	).toEqual({ booking_status: "paid", booking_invoice_id: null });
-	expect(
-		(await POST(context({ action: "create-booking-invoice" }, true, stripeEnv)))
-			.status,
-	).toBe(409);
-	expect(invoiceMocks.booking).not.toHaveBeenCalled();
+		(
+			await POST(
+				context({
+					action: "record-payment-received",
+					installment: "booking",
+					method: "Zelle",
+					received: true,
+				}),
+			)
+		).status,
+	).toBe(200);
+	expect(stripe.calls()).toEqual([]);
 });
 
 it("records the balance only after the booking and rejects a reference that is not a transaction ID", async () => {
