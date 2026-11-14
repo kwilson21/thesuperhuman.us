@@ -1,6 +1,6 @@
 # Studio sign-in codes bound to the browser release gate
 
-Date: November 14, 2026
+Date: November 13, 2026 (the date this record was last written; the file name keeps the planned release date)
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/fix-signin-codes`, merged with `origin/main` (a merge commit, never a rebase)
 Commits: see the pull request; the final head is recorded in the pull request description.
@@ -33,13 +33,23 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
 
 ## Reviews
 
-- Round 1 (security, independent, head `ccf2779f`): no code must-fix. Five items: the retired table was no longer cleared by retention, owner health or access closure; a browser's earlier row for another address stayed live; two tabs at once create two codes; the guessing budget and the cookie scope needed stating; the code email's link contradicts the new note.
-- Round 2 (security, independent, head `233de829`): clean, with one note: the cleanup of the retired table ran after the revocation had committed and could report a failed revocation, so it became best effort with a fixed log line.
-- Round 3 (Codex at `233de829`, then two independent reviewers at `a90d6926`):
-  - Codex found two things: decisions (which codes are live, the cap, project eligibility) were made in SQL strings, and a cap race let a refused request overwrite the cookie of a code another request of the same browser had just emailed. Both were fixed (pure decision functions; the cookie value the browser sent is returned whatever the outcome), with the model extended to two-step requests.
-  - The security reviewer found three ways to learn whether an address has a project, all from the rewrite: a request that issued nothing kept the browser's earlier code, entering a code made a different number of round trips depending on the row, and the attempt was counted on a code issued after it was read; also audit rows could be written for a project closed in between, and a stale code route comment.
-- Repo-rules round (same head): the live-code predicate still decided inside the COUNT, the model did not cover the read-to-write gap, the "check your email" step had no screenshot, and this record was missing. This revision fixes each.
-- Each finding was verified against the code and fixed with a test that failed first. Greptile and Codex review the pull request head.
+Four security rounds and two repo-rules rounds, each finding verified against the code and fixed with a test that failed first:
+
+- Security round 1 (independent, head `ccf2779f`): no code must-fix. Five items: the retired table was no longer cleared by retention, owner health or access closure; a browser's earlier row for another address stayed live; two tabs at once create two codes; the guessing budget and the cookie scope needed stating; the code email's link contradicts the new note.
+- Security round 2 (independent, head `233de829`): clean, with one note: the cleanup of the retired table ran after the revocation had committed and could report a failed revocation, so it became best effort with a fixed log line.
+- Security round 3 (Codex at `233de829`, then two independent reviewers at `a90d6926`): Codex found decisions (which codes are live, the cap, project eligibility) made in SQL strings and a cap race that let a refused request overwrite the cookie of a code another request of the same browser had just emailed. The security reviewer found three ways to learn whether an address has a project, all from the rewrite: a request that issued nothing kept the browser's earlier code, entering a code made a different number of round trips depending on the row, and the attempt was counted on a code issued after it was read; also audit rows could be written for a project closed in between, and a stale comment. All fixed.
+- Security round 4 (the security reviewer and Greptile, head `efb1ec3f`): a lost race on the code route answered 503 only when the target address had an open project, because the write replaced the browser's row only for the same address and two requests on one cookie for different addresses collided on the table's key. Fixed: the write replaces the row that holds the cookie value whatever its address, and the model now includes the key.
+- Repo-rules round 1 (head `a90d6926`): the live-code predicate still decided inside a COUNT, the model did not cover the read-to-write gap, the "check your email" step had no screenshot, and this record was missing.
+- Repo-rules round 2 (head `efb1ec3f`): the document's "no decisions in SQL" line was not exactly true for the expired-row sweep and the allowance clean-up, the guard did not use the rule's cap, the Hallmark audit had not been recorded, and this record's checklist items, ledger wording and date needed fixing.
+- Greptile and Codex review the pull request head.
+
+## Hallmark audit (`docs/design-standard.md`, "Auditing before review")
+
+- Audited: `src/pages/studio/sign-in.astro`, the only UI file this pull request changes (one sentence added to an existing paragraph, with no new markup, style or token). `hallmark audit` is a verb of the vendored agent skill (`.agents/skills/hallmark/references/verbs/audit.md`), not a command line program, so it was run as that document describes: a read-only read of the page against `design.md` and the skill's named tells, with the mechanical gates (`pnpm run design:check`: passed, 6 gates, 12 allowlisted exceptions).
+- Defects introduced by this pull request: none. The added sentence uses the page's existing `.studio-intro.small` style (muted ink on paper, 8.4:1), adds no colour, transition or font, and has no em-dash.
+- Findings that are not this pull request's, listed and not changed (design choices for the owner): the page sets its form text in Inter, which `design.md` assigns to private UI (a recorded decision); one kicker eyebrow above the heading (the page's existing design); the corner picture's mask uses `#000` stops, which the standard treats as transparency, not colour (a false positive).
+- Limits: a static read plus the mechanical gates. The rendered "check your email" step is captured by the CI Screenshots workflow (see section 3), and the Hallmark standard's own review of the renders is left to that run.
+- Result: PASS, with limits.
 
 ## Evidence
 
@@ -50,10 +60,11 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
 
 ## Migration ledger and deployment
 
-- Production migration ledger, listed read-only on 2026-11-13 (command `pnpm exec wrangler d1 migrations list MUSIC_DB --remote`, nothing applied): exactly one pending migration, `0027_audio_client_signin_codes.sql`. The README's earlier warning that 0022 to 0024 might still be pending was out of date and is corrected in this pull request.
+- Production migration ledger, as observed by the operator on 2026-11-13: `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` (read-only, nothing applied) listed exactly one pending migration, `0027_audio_client_signin_codes.sql`. This was not re-run by the author of this record.
+- **UNVERIFIED · Re-list immediately before applying.** To be completed by the operator: list the ledger again and confirm that `0027_audio_client_signin_codes.sql` is still the only pending migration; stop and ask if anything else is pending. The README's earlier warning that 0022 to 0024 might still be pending was out of date and is corrected in this pull request.
 - `apply` runs every pending migration in order, so only 0027 will be applied.
 - Order: apply 0027 first, then merge (merging deploys production). Deploying the code first answers 503 to every code request and sign-in. The migration leaves `audio_client_codes` alone, so the code running before the deploy keeps working on the migrated database; codes pending at the deploy stop working and the client asks for a new one (they expire in 10 minutes).
-- A follow-up migration, `0028`, drops `audio_client_codes` after this deploy is live. It is not part of this pull request, because applying it together with 0027 would break the code still running.
+- A follow-up migration, `0028`, drops `audio_client_codes` after this deploy is live ([issue 271](https://github.com/kwilson21/thesuperhuman.us/issues/271)). It is not part of this pull request, because applying it together with 0027 would break the code still running.
 
 ## 1. Purpose and content
 
@@ -98,11 +109,21 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
 
 ## 8. Private owner center
 
-- **PASS · Reconcile the production MUSIC_DB migration ledger before applying any migration.** Done read-only on 2026-11-13 (see above). Backup and recovery evidence is separate and is UNVERIFIED above.
+- **PASS, as observed by the operator · Reconcile the production MUSIC_DB migration ledger before applying any migration.** The operator listed it read-only on 2026-11-13 (see above) and it is to be listed again immediately before applying (UNVERIFIED above). Backup and recovery evidence is separate and is UNVERIFIED above.
+- **PASS, locally; production UNVERIFIED · Studio-retention preview (`pnpm run studio:retention:preview`) and manifest inspection.** `scripts/studio-retention.mjs` changed (it also reviews and deletes the retired table). Run locally through the preview function against a seeded in-memory copy of `db/music.sql` (one closed project, two retired and two current codes, half of each older than 30 days): with the retired table present the review counts `projects: 1`, `codes: 1`, `retiredCodes: 1` (one old row each); with it dropped `retiredCodes: 0` and the rest equal. The review holds counts and source hashes only: no address, code hash or cookie value. The apply is covered by tests (`tests/scripts/studio-retention.test.ts`) in both states. **UNVERIFIED:** the preview against the production database and a reviewed manifest. To be completed by the operator.
+- **PASS, locally; production UNVERIFIED · `pnpm run owner:health` against the target environment.** `scripts/owner-health.mjs` changed (it counts old rows of the retired table while it exists). Run locally through `ownerHealth` against the same seeded database: `schema: pass` with the table present and absent, and `studio-retention: attention: 3 studio retention items need review` with it present and 2 with it dropped (the rest pass). **UNVERIFIED:** `owner:health --remote` against production, which also reports a missing `audio_client_signin_codes` until 0027 is applied. To be completed by the operator after applying.
+- **UNVERIFIED · Production bindings, secrets and migrations.** The change reads no new binding or secret (`AUDIO_CLIENT_CODE_KEY`, `MUSIC_DB`, Turnstile and Resend are unchanged). The operator confirms them against the target environment, together with the migration and backup steps in section 7.
 - **PASS · Access closure.** Closing a client's access still deletes every sign-in code for the address, and best-effort clears the retired table.
+
+## Status
+
+- Implemented: yes (the head recorded in the pull request).
+- Verified locally: yes, as listed under Evidence and above.
+- Deployed: no. Merging deploys production, and the operator applies 0027 first.
+- Verified live: no. See the UNVERIFIED items in section 7.
 
 ## Remaining work
 
 - CI green on the pull request head with the pooled Quint step inside its budget; Greptile and Codex reviews on the head.
 - The operator's UNVERIFIED items above, immediately before merge.
-- The follow-up migration `0028` (drop `audio_client_codes`) after this deploy is live.
+- The follow-up migration `0028` (drop `audio_client_codes`, [issue 271](https://github.com/kwilson21/thesuperhuman.us/issues/271)) after this deploy is live.

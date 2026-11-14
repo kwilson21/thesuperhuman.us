@@ -3,7 +3,7 @@ import { join, relative } from "node:path";
 import { expect, it } from "vitest";
 
 // The sign-in codes moved to audio_client_signin_codes. The old audio_client_codes table is dropped by a later migration,
-// after the deploy that stops reading it, so until then the code may only delete from it (retention and access closure).
+// after the deploy that stops reading it (migration 0028, https://github.com/kwilson21/thesuperhuman.us/issues/271), so until then the code may only delete from it (retention and access closure).
 
 const root = new URL("../../", import.meta.url).pathname;
 
