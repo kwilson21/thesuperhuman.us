@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/offer/[token]/sign";
 import {
 	BOTH,
@@ -45,8 +44,6 @@ import {
 	type Step,
 } from "./harness";
 import type { JsonValue } from "../helpers/json";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/offer/[token]/sign: the verified client signs the MSA and SOW the owner sent. It is
 // legal signing, so every guard, every state of the two documents, the two wire formats (JSON, and an urlencoded form

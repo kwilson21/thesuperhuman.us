@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	BOTH,
@@ -25,8 +24,6 @@ import {
 	type Scene,
 } from "./areas/signing";
 import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "abandon": the owner abandons the signing action
 // the client already signed. One batch abandons the documents, supersedes the offer, revokes the client's link and

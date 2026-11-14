@@ -256,8 +256,8 @@ export type World = {
 	advance(ms: number): void;
 };
 
-/** The time limit of every generated case. Cases that render PDFs run close to the 5 second default under load. */
-export const CASE_TIMEOUT_MS = 60_000;
+/** The time limit of every generated case: the slowest PDF cases take about 2 seconds alone, so 20 seconds tolerates a loaded machine without letting a hung case run for long. */
+export const CASE_TIMEOUT_MS = 20_000;
 
 type Pending = { id: number; promise: Promise<void> };
 
