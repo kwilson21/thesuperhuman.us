@@ -25,6 +25,8 @@ module discountOffers {
   //   "no-sign-guards"         the sign batch checks neither that the offer is still sent nor that the review session
   //                            survived a resend (liveSigningGuard and retireRequestSigning gone)
   //   "send-after-sign"        a new version can be sent after the client signed (the signing guard of send gone)
+  //   "start-copies-newest"    the project copies the newest version's terms instead of the signed offer's
+  //   "start-drops-discount"   the project copies the signed offer's terms without the discount fields
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
   // a new offer) and keep the random runs fast; the manual Apalache check uses the same module.
@@ -62,6 +64,10 @@ module discountOffers {
   var review: Review           // v 0: none
   var signed: Signed           // v 0: not signed
   var project: int             // the version the project started from, 0 none
+  // software_projects.terms_json: the terms copied from the offer at start. The client's project page states the
+  // installments from this copy, while reserveSoftwareInvoice computes each invoice from the offer's terms_json, so the
+  // two must be the signed terms.
+  var projectTerms: Terms
   var bills: int -> Bill   // by slot number (slotOf)
   var pending: Pending
   var ghost: Ghost
@@ -114,6 +120,7 @@ module discountOffers {
     review' = { v: 0, terms: noTerms, revoked: false },
     signed' = { v: 0, terms: noTerms },
     project' = 0,
+    projectTerms' = noTerms,
     bills' = slots.mapBy(_ => { status: "none", amount: 0 }),
     pending' = { active: false, slot: 0, amount: 0 },
     ghost' = { badSign: false, badInvoice: false },
@@ -122,7 +129,7 @@ module discountOffers {
   // Everything else stays as it is.
   action keepOffers = all { offers' = offers, versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent }
   action keepClient = all { review' = review, signed' = signed }
-  action keepMoney = all { bills' = bills, pending' = pending, project' = project }
+  action keepMoney = all { bills' = bills, pending' = pending, project' = project, projectTerms' = projectTerms }
 
   // The owner saves a new draft (the next version), with any terms: any discount on each milestone, either mode.
   action newDraft = {
@@ -219,12 +226,18 @@ module discountOffers {
     signed.v != 0, project == 0, requestOpen, offers.get(signed.v).status == "sent",
     not(offers.get(signed.v).terms.std) or bills.get(slotOf(signed.v, 0, "deposit")).status == "paid",
     project' = signed.v,
+    // INSERT INTO software_projects ... SELECT ... terms_json FROM software_offers WHERE id = the signed offer.
+    projectTerms' =
+      if (MUTANT == "start-copies-newest") offers.get(versions).terms
+      else if (MUTANT == "start-drops-discount") { ...offers.get(signed.v).terms, d0: 0, d1: 0 }
+      else offers.get(signed.v).terms,
     bills' = bills, pending' = pending,
     keepOffers, keepClient, requestOpen' = requestOpen, ghost' = ghost,
   }
 
   // reserveSoftwareInvoice, the reads: the offer (sent, or the project's), the slot (before the project only the first
-  // deposit), no live invoice in the slot; the amount comes from the terms read now.
+  // deposit), no live invoice in the slot; the amount comes from the offer's terms_json as read now, also after the
+  // project started (the code reads software_offers, not the project's copy).
   action invoiceRead = {
     nondet k = slots.oneOf()
     val t = offers.get(vOf(k)).terms
@@ -236,7 +249,7 @@ module discountOffers {
       project != 0 or (mOf(k) == 0 and kindOf(k) == "deposit"),
       not(live(bills.get(k))),
       pending' = { active: true, slot: k, amount: installment(amountTerms, mOf(k), kindOf(k)) },
-      bills' = bills, project' = project,
+      bills' = bills, project' = project, projectTerms' = projectTerms,
       keepOffers, keepClient, requestOpen' = requestOpen, ghost' = ghost,
     }
   }
@@ -252,7 +265,7 @@ module discountOffers {
       pending' = { ...pending, active: false },
       bills' = if (writes) bills.set(k, { status: "open", amount: pending.amount }) else bills,
       ghost' = { ...ghost, badInvoice: ghost.badInvoice or (writes and not(offerOk)) },
-      project' = project, keepOffers, keepClient, requestOpen' = requestOpen,
+      project' = project, projectTerms' = projectTerms, keepOffers, keepClient, requestOpen' = requestOpen,
     }
   }
 
@@ -263,7 +276,7 @@ module discountOffers {
     all {
       bills.get(k).status == "open",
       bills' = bills.set(k, { ...bills.get(k), status: outcome }),
-      pending' = pending, project' = project,
+      pending' = pending, project' = project, projectTerms' = projectTerms,
       keepOffers, keepClient, requestOpen' = requestOpen, ghost' = ghost,
     }
   }
@@ -283,10 +296,11 @@ module discountOffers {
   // ---- Properties -------------------------------------------------------------------------------------------------
   // 1. The total invoiced for a signed offer equals the amount the client signed for: every live invoice of the signed
   //    version is the installment the signed terms give for its slot (a slot has at most one live invoice), so a fully
-  //    invoiced offer adds up to the signed total. The project runs on the signed terms.
+  //    invoiced offer adds up to the signed total. Invoices read the offer's terms and the project page reads the project's
+  //    copy, so both must be the signed terms.
   val invoicedMatchesSigned = signed.v == 0 or and {
     liveSlots.forall(k => vOf(k) != signed.v or bills.get(k).amount == installment(signed.terms, mOf(k), kindOf(k))),
-    project == 0 or offers.get(project).terms == signed.terms,
+    project == 0 or (offers.get(project).terms == signed.terms and projectTerms == signed.terms),
   }
 
   // 2. A discount change never alters a sent or signed offer version: a version keeps the terms it was sent with, and
@@ -340,3 +354,5 @@ module discountTodayDepositGuard { import discountOffers(MUTANT = "today-deposit
 module discountNoWriteStatusGuard { import discountOffers(MUTANT = "no-write-status-guard", VERSIONS = 2).* }
 module discountNoSignGuards { import discountOffers(MUTANT = "no-sign-guards", VERSIONS = 2).* }
 module discountSendAfterSign { import discountOffers(MUTANT = "send-after-sign", VERSIONS = 2).* }
+module discountStartCopiesNewest { import discountOffers(MUTANT = "start-copies-newest", VERSIONS = 2).* }
+module discountStartDropsDiscount { import discountOffers(MUTANT = "start-drops-discount", VERSIONS = 2).* }

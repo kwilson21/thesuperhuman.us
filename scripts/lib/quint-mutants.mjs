@@ -47,6 +47,8 @@ export const discountMutants = {
 	discountNoWriteStatusGuard: { property: "supersededInert" },
 	discountNoSignGuards: { property: "supersededInert" },
 	discountSendAfterSign: { property: "supersededInert" },
+	discountStartCopiesNewest: { property: "invoicedMatchesSigned" },
+	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent

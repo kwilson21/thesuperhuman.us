@@ -132,6 +132,7 @@ Once per offer, after the milestones:
 
 New error sentences:
 
+- "Use whole dollars."
 - "Use a discount of at least $1."
 - "The client must pay at least $1 for this milestone. Lower the discount."
 - "Add a discount to a milestone, or clear the label."
@@ -259,7 +260,8 @@ The amount is the reserved amount, so the invoice total equals the SOW installme
 
 Inside `terms_json` (on `software_offers`, copied to `software_projects.terms_json` at project start):
 
-- `milestones[i].discountCents`: optional whole cents, absent when there is no discount. Never stored as 0.
+- `milestones[i].discountCents`: optional, a whole number of dollars in cents (a multiple of 100, at least 100), absent
+  when there is no discount. Never stored as 0.
 - `discountLabel`: optional one-line text, at most 60 characters, absent when blank.
 
 No migration and no new column: both live in the JSON that is already versioned with the offer and frozen once it is
@@ -272,11 +274,11 @@ A sketch; the offers conversion fixes the final shape. New fields have no Zod pr
 sentences rather than Zod's.
 
 ```ts
-/** Whole cents from `least` to `most`, each failed check with its own sentence. */
-const cents = (least: number, most: number, says: { whole: string; least: string; most: string }) =>
+/** Whole dollars, in cents, from `least` to `most`, each failed check with its own sentence. */
+const dollars = (least: number, most: number, says: { whole: string; least: string; most: string }) =>
 	leaf(
 		Schema.Number.check(
-			Schema.makeFilter((n: number) => Number.isInteger(n) || says.whole),
+			Schema.makeFilter((n: number) => (Number.isInteger(n) && n % 100 === 0) || says.whole),
 			Schema.makeFilter((n: number) => n >= least || says.least),
 			Schema.makeFilter((n: number) => n <= most || says.most),
 		),
@@ -284,8 +286,8 @@ const cents = (least: number, most: number, says: { whole: string; least: string
 	);
 
 const discountCents = optional(
-	cents(100, 99_999_900, {
-		whole: "Use whole cents.",
+	dollars(100, 99_999_900, {
+		whole: "Use whole dollars.",
 		least: "Use a discount of at least $1.",
 		most: "Use a discount of $999,999 or less.",
 	}),
@@ -329,17 +331,20 @@ with no Effect imports beyond Schema.
 `.gitignore`, as for `invoice-event-order.ts`). Contracts:
 
 - `installmentOf`: an installment of a fee is between 0 and the fee.
-- `discountedInstallment`: for every usual fee up to $1,000,000 and discount that leaves at least $1, the installment
+- `discountedInstallment`: for every usual fee up to $1,000,000 and whole-dollar discount (a multiple of 100 cents)
+  that leaves at least $1, the installment
   is whole and non-negative, never more than the same installment without the discount, equal to it when the discount
   is 0, and a deposit is at least 50 cents.
 - `milestoneCharged`: a milestone's installments add up to its usual fee less its discount.
+- `allowedMilestone`: exactly the validation rule; a discount that is not whole dollars, or leaves less than $1, is
+  refused.
 - `offerCharged`: every installment of up to three milestones adds up to the usual total less every discount, and is at
   least $1.
 
 `tests/verification/discount-installments.test.ts` anchors the rule to live code: with no discount it equals
 `softwareInvoiceTerms` on a table of fees (odd and even cents, minimum, maximum) for every milestone and kind; with a
-discount it equals `softwareInvoiceTerms` on the lower fee; and it samples the contract over every usual fee from $1.00
-to $4.60 and every allowed discount.
+discount it equals `softwareInvoiceTerms` on the lower fee; it samples the contract over every usual fee from $1.00
+to $25.00 and every whole-dollar discount that leaves at least $1; and it checks that 101 and 150 cents are refused.
 
 Result: the contracts passed in CI on `87de79fa` (the "LemmaScript contracts (Dafny)" step, Dafny 4.9.0, its first real
 run). Dafny is not installed on the machine this was written on, so they were not run locally, and no planted bug has
@@ -353,7 +358,10 @@ describes it with the invoice-events model. One request, two offer versions, two
 where 1 is the $1 minimum) and any discount on each, either payment mode. The moves: new draft, edit draft, send,
 decline, reopen, review, sign, start, invoice reserve (read), invoice batch (write), and Stripe pay or void, in any
 order. Review and sign are separate steps, and so are the invoice read and write, so the owner can edit, send or decline
-between them.
+between them. The project keeps its own copy of the terms, set at start, as `software_projects.terms_json` does; the client's
+project page states installments from that copy, while each invoice is computed from the offer's `terms_json` (as
+`reserveSoftwareInvoice` and the invoice route read it, also after the project starts), so the model checks both against
+the signed terms.
 
 The module `discount` is the design: today's code plus decision 9 (the send guard counts a paid deposit on any other
 version). So the passing run includes a guard the code does not have yet; today's guard is the mutant
@@ -361,7 +369,7 @@ version). So the passing run includes a guard the code does not have yet; today'
 
 | Property | Meaning | Mutant that breaks it |
 |---|---|---|
-| `invoicedMatchesSigned` | Every open or paid invoice of the signed version is the installment the signed terms give, so the invoices of a signed offer add up to what the client signed for; the project runs on the signed terms | `discountLatestTerms`: the amount is computed from the newest version's terms |
+| `invoicedMatchesSigned` | Every open or paid invoice of the signed version is the installment the signed terms give, so the invoices of a signed offer add up to what the client signed for; the project's own copy of the terms (what the client's project page states) is the signed terms | `discountLatestTerms`: the amount is computed from the newest version's terms; `discountStartCopiesNewest`: start copies the newest version's terms; `discountStartDropsDiscount`: start copies the terms without the discount |
 | `sentTermsFrozen` | A version keeps the terms (discount included) it was sent with; the signed terms are that version's | `discountEditSent`: the draft update does not require status draft |
 | `oneVersionInvoiced` | All open or paid invoices belong to one version | `discountNoDepositGuard`: send ignores a deposit; `discountTodayDepositGuard`: today's guard, see decision 9 |
 | `installmentsSum` | Every version's installments add up to its discounted total | `discountDepositFromUsual`: the deposit is half the usual fee |

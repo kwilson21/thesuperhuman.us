@@ -72,8 +72,8 @@ describe("with no discount the reference rule is today's softwareInvoiceTerms", 
 describe("with a discount the installments are today's installments of the lower fee", () => {
 	const cases = [
 		[240_000, 40_000],
-		[240_001, 1],
-		[101, 1],
+		[240_001, 100],
+		[201, 100],
 		[200, 100],
 		[100_000_000, 99_999_900],
 		[2_401, 2_300],
@@ -91,12 +91,13 @@ describe("with a discount the installments are today's installments of the lower
 });
 
 describe("the contract, sampled (Dafny checks it for every input)", () => {
-	it("every allowed fee and discount gives whole, non-negative installments that sum to the fee less the discount", () => {
+	it("every allowed fee and whole-dollar discount gives whole, non-negative installments that sum to the fee less the discount", () => {
 		// Plain checks collected into one list, so the 130,000 or so cases stay fast; the list must stay empty.
 		const broken: string[] = [];
 
-		for (let usual = 100; usual <= 460; usual++)
-			for (let off = 0; usual - off >= 100; off++)
+		// Every usual fee in cents from $1.00 to $25.00, and every whole-dollar discount that leaves at least $1.
+		for (let usual = 100; usual <= 2_500; usual++)
+			for (let off = 0; usual - off >= 100; off += 100)
 				for (const { standard, kinds } of plans) {
 					const at = `usual ${usual}, discount ${off}, standard ${standard}`;
 					let sum = 0;
@@ -125,7 +126,12 @@ describe("the contract, sampled (Dafny checks it for every input)", () => {
 		expect(broken).toEqual([]);
 	});
 
-	it("refuses a discount that leaves less than $1, or a usual fee over $1,000,000", () => {
+	it("refuses a discount that is not whole dollars, leaves less than $1, or a usual fee over $1,000,000", () => {
+		expect(allowedMilestone(240_000, 150)).toBe(false);
+		expect(allowedMilestone(240_000, 101)).toBe(false);
+		expect(allowedMilestone(240_000, 1)).toBe(false);
+		expect(allowedMilestone(240_000, 100)).toBe(true);
+		expect(allowedMilestone(240_000, 239_900)).toBe(true);
 		expect(allowedMilestone(240_000, 239_901)).toBe(false);
 		expect(allowedMilestone(240_000, 240_000)).toBe(false);
 		expect(allowedMilestone(240_000, -1)).toBe(false);
@@ -136,9 +142,9 @@ describe("the contract, sampled (Dafny checks it for every input)", () => {
 	it("the whole offer is the usual total less every discount, to the cent", () => {
 		const offers = [
 			[240_000, 40_000, 0, 0, 0, 0],
-			[120_001, 20_001, 60_000, 0, 60_001, 1],
-			[100, 0, 101, 1, 199, 99],
-			[100_000_000, 1, 100_000_000, 99_999_900, 100, 0],
+			[120_001, 20_000, 60_000, 0, 60_001, 100],
+			[100, 0, 201, 100, 299, 100],
+			[100_000_000, 100, 100_000_000, 99_999_900, 100, 0],
 		] as const;
 
 		for (const [u1, d1, u2, d2, u3, d3] of offers)

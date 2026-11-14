@@ -3,10 +3,12 @@
 // (LemmaScript-files.txt, docs/verification.md), and tests/verification/discount-installments.test.ts holds the rule
 // to today's softwareInvoiceTerms, so the contract is anchored to live behaviour and not to a copy of it.
 //
-// The rule in one sentence: a milestone's discount is a whole number of cents taken off its usual fee, the client pays
-// the rest (at least $1, today's minimum fee), and that lower fee is split into installments exactly as today (the
-// deposit is half, rounded down to the cent, and the balance is the rest; on invoice terms the milestone is one invoice).
-// Arguments are plain numbers in cents. Up to three milestones, as an offer allows; an absent milestone is 0 and 0.
+// The rule in one sentence: a milestone's discount is a whole number of dollars taken off its usual fee (decision 6 of the
+// plan: whole dollars, at least $1 off), the client pays the rest (at least $1, today's minimum fee), and that lower fee
+// is split into installments exactly as today (the deposit is half, rounded down to the cent, and the balance is the
+// rest; on invoice terms the milestone is one invoice). Arguments are plain numbers in cents, so a discount is a
+// multiple of 100 (0 means none). The usual fee may have cents, as feeCents may today. Up to three milestones, as an
+// offer allows; an absent milestone is 0 and 0.
 
 /** The installment kinds of the two payment modes: standard is deposit then balance, invoice terms is one invoice. */
 export type InstallmentKind = "deposit" | "balance" | "milestone";
@@ -45,7 +47,7 @@ export function discountedInstallment(
 	kind: InstallmentKind,
 ): number {
 	//@ verify
-	//@ requires discount >= 0 && usualFee - discount >= 100 && usualFee <= 100000000
+	//@ requires discount >= 0 && discount % 100 === 0 && usualFee - discount >= 100 && usualFee <= 100000000
 	//@ requires standard ? (kind === "deposit" || kind === "balance") : kind === "milestone"
 	//@ ensures \result >= 0
 	//@ ensures \result <= installmentOf(usualFee, standard, kind)
@@ -61,7 +63,7 @@ export function milestoneCharged(
 	standard: boolean,
 ): number {
 	//@ verify
-	//@ requires discount >= 0 && usualFee - discount >= 100 && usualFee <= 100000000
+	//@ requires discount >= 0 && discount % 100 === 0 && usualFee - discount >= 100 && usualFee <= 100000000
 	//@ ensures \result === usualFee - discount
 	return standard
 		? discountedInstallment(usualFee, discount, true, "deposit") +
@@ -69,13 +71,17 @@ export function milestoneCharged(
 		: discountedInstallment(usualFee, discount, false, "milestone");
 }
 
-/** An allowed milestone: absent (0 and 0), or a usual fee and a discount that leave the client at least $1 to pay. */
+/**
+ * An allowed milestone: absent (0 and 0), or a usual fee and a whole-dollar discount (none, or at least $1) that leave
+ * the client at least $1 to pay.
+ */
 export function allowedMilestone(usualFee: number, discount: number): boolean {
 	//@ verify
-	//@ ensures \result <==> ((usualFee === 0 && discount === 0) || (discount >= 0 && usualFee - discount >= 100 && usualFee <= 100000000))
+	//@ ensures \result <==> ((usualFee === 0 && discount === 0) || (discount >= 0 && discount % 100 === 0 && usualFee - discount >= 100 && usualFee <= 100000000))
 	return (
 		(usualFee === 0 && discount === 0) ||
 		(discount >= 0 &&
+			discount % 100 === 0 &&
 			usualFee - discount >= MINIMUM_FEE_CENTS &&
 			usualFee <= MAXIMUM_FEE_CENTS)
 	);
@@ -88,7 +94,7 @@ function chargedOrNone(
 	standard: boolean,
 ): number {
 	//@ verify
-	//@ requires (usualFee === 0 && discount === 0) || (discount >= 0 && usualFee - discount >= 100 && usualFee <= 100000000)
+	//@ requires (usualFee === 0 && discount === 0) || (discount >= 0 && discount % 100 === 0 && usualFee - discount >= 100 && usualFee <= 100000000)
 	//@ ensures \result === usualFee - discount
 	return usualFee === 0 ? 0 : milestoneCharged(usualFee, discount, standard);
 }
@@ -107,9 +113,9 @@ export function offerCharged(
 	standard: boolean,
 ): number {
 	//@ verify
-	//@ requires discount1 >= 0 && usual1 - discount1 >= 100 && usual1 <= 100000000
-	//@ requires (usual2 === 0 && discount2 === 0) || (discount2 >= 0 && usual2 - discount2 >= 100 && usual2 <= 100000000)
-	//@ requires (usual3 === 0 && discount3 === 0) || (discount3 >= 0 && usual3 - discount3 >= 100 && usual3 <= 100000000)
+	//@ requires discount1 >= 0 && discount1 % 100 === 0 && usual1 - discount1 >= 100 && usual1 <= 100000000
+	//@ requires (usual2 === 0 && discount2 === 0) || (discount2 >= 0 && discount2 % 100 === 0 && usual2 - discount2 >= 100 && usual2 <= 100000000)
+	//@ requires (usual3 === 0 && discount3 === 0) || (discount3 >= 0 && discount3 % 100 === 0 && usual3 - discount3 >= 100 && usual3 <= 100000000)
 	//@ ensures \result === (usual1 + usual2 + usual3) - (discount1 + discount2 + discount3)
 	//@ ensures \result >= 100
 	return (
