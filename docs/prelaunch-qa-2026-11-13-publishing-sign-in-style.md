@@ -23,7 +23,7 @@ Evidence: the renders and the 320px and 200% measurements were gathered at code 
 
 - "Restyle the sign in page but I want to see it": restyle the page to match the site. The owner saw the first render.
 - On seeing the first render with fallback fonts: "We should def load libron". This is the reason for the `@font-face` rules and `font-src 'self'`.
-- Not yet decided by the owner: the heading minimum change (1.25rem, from this revision). It is a small size change, shown in the 320px large-text render below. Show it to the owner before merge.
+- Owner decision on the heading minimum (1.25rem): the coordinating session told the owner in conversation on 2026-11-13 that the minimum was lowered so the heading keeps whole words at 320px with doubled text and that it changes nothing at the default text size; he then approved the merge ("#261 is good to go"). He was sent the desktop, phone, focus and large-text renders with Libron; the 320px large-text render was not sent separately.
 
 ## Reviews
 
@@ -128,7 +128,7 @@ No production behaviour was changed and no bypass was added. Option for the owne
 
 ## 1. Purpose and content
 
-- **UNVERIFIED · Project, branch, local changes, instructions and audience.** One branch from `origin/main`; the changes are the code commits listed above and the document commit. Deployment authorization: not given by this record; the owner authorized the merge in conversation on 2026-11-13. The owner has not yet seen the 1.25rem heading minimum (see Owner decisions).
+- **UNVERIFIED · Project, branch, local changes, instructions and audience.** One branch from `origin/main`; the changes are the code commits listed above and the document commit. Deployment authorization: not given by this record; the owner authorized the merge in conversation on 2026-11-13. The owner was told of the 1.25rem heading minimum before he approved the merge (see Owner decisions).
 - **PASS · Approved design and truthful claims.** The look is the owner's approved restyle. No professional claim, copy or image changed.
 - **N/A · Explanatory copy.** No copy changed; the consent sentences are as before.
 - **N/A · First screen and next step.** This is a consent page, not a site page. Its one action is the button, which the renders show at every width measured.
@@ -189,7 +189,7 @@ No production behaviour was changed and no bypass was added. Option for the owne
 - **PASS · Type, test, asset and build checks.** `pnpm run check`: 0 errors, 0 warnings, 17 hints. `pnpm run design:check`: passed. `pnpm test`: 264 files, 11,988 passed, 1 skipped. `pnpm run build`: exit 0.
 - **FAIL (pre-existing, not from this change) · Lint.** 64 findings, none in a file this PR touches. Open PRs #256 to #258 remove these findings, per the closing-legal record.
 - **PASS · Exact diff.** The diff is limited to the files listed under Scope and the document commit. No secrets, no unrelated changes, no generated files committed (`.screenshots/` and `.jolli/` are not committed).
-- **UNVERIFIED · Production bindings, secrets and headers on dynamic responses.** Not deployed; no production response was observed.
+- **UNVERIFIED · Production bindings, secrets and headers on dynamic responses.** Deployed by the merge on 2026-11-13 (see the production verification entry below). No binding or secret changed. The consent page's own response headers were not observed in production, because the page answers only a valid authorization request; the one production response seen from the route was the 400 for a bare request.
 - **PASS · Rollback version.** `fad7694e`. No backup is needed: the PR writes no data and adds no migration.
 - **UNVERIFIED · Post-deploy verification.** Merged to `main` on 2026-11-13 21:42:57 UTC as `57e26842`, and the production build succeeded. Live check by the coordinating session on 2026-11-13 after the merge: `https://thesuperhuman.us/` returned 200; `https://thesuperhuman.us/fonts/libron-v0.25/Libron-Regular.woff2` returned 200 (the font file the page loads, same origin); a bare request to `/api/publication/authorize` without a valid authorization request returned 400, as expected. The restyled page itself was NOT viewed in production, because it renders only for a valid authorization request. This record does not by itself authorize deployment.
 - **UNVERIFIED · Receipt and monitoring.** Monitoring was not checked. Status: implemented: yes. Verified locally: yes. Verified in CI: `validate`, Greptile and the Cloudflare build succeeded on the final head. Deployed: yes (merged 2026-11-13 as `57e26842`, production build succeeded). Verified live: in part (the three responses above); the restyled page was not viewed in production.
@@ -200,7 +200,6 @@ No production behaviour was changed and no bypass was added. Option for the owne
 
 ## Remaining work
 
-- Owner decision: the 1.25rem heading minimum (new in this revision). Show the 320px large-text render before merge.
 - Owner decision: the body domain "thesuperhuman.us" breaks inside the word at 320px with 200% text, and its full stop sits alone at 390px with 200% text (see Heading fit). A fix would change how long tokens wrap in the body copy.
 - Noindex: decide whether the consent response should carry `X-Robots-Tag: noindex`. It is not added here, because it changes behavior.
 - Follow-up outside this PR (pre-existing): reject redirect origins containing `;` or `,` when a client registers. An injected directive can only tighten the policy.
