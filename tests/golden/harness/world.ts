@@ -14,6 +14,7 @@ import { POST as studioSession } from "~/pages/api/studio/session";
 import { actorLabel, asVisitor, OWNER_EMAIL, type Actor } from "./actors";
 import { dump, freshMusicDb, freshPublicationDb, seed, type Seed } from "./db";
 import { Determinism } from "./determinism";
+import { drive } from "./settle";
 import {
 	recordingD1,
 	SqlHooks,
@@ -482,6 +483,8 @@ async function runOn(
 			const id = ++nextWaitId;
 			log.push({ kind: "waitUntil", id });
 			pending.push({ id, promise });
+			// Like the platform, a rejection here is not an unhandled one: the settlement is recorded by the drain.
+			promise.then(undefined, () => {});
 		},
 		passThroughOnException: () => {},
 	});
@@ -728,15 +731,19 @@ async function runOn(
 
 		let answer: StepRecord["answer"];
 
+		log.gating = true;
+
 		try {
-			// With real timers the handler is awaited directly, so the order of its background work against the answer is
-			// exactly what the platform gives; only a case on virtual timers is driven by the runner.
+			// The handler and the reading of its answer are driven together (settle.ts): what they start waits at the log's
+			// gate and is released as "request" while they have not finished, so the order of background work against the
+			// answer never depends on how many promise turns a route takes.
 			const run = step.handler ?? handler;
 
-			answer = await readAnswer(
-				clock.virtualTimers
-					? await clock.untilSettled(Promise.resolve(run(context)))
-					: await run(context),
+			answer = await drive(
+				log,
+				clock,
+				(async () => readAnswer(await run(context)))(),
+				{ phase: "request", flush: false, timers: clock.virtualTimers },
 			);
 		} catch {
 			answer = { outcome: "rejected" };
@@ -744,7 +751,15 @@ async function runOn(
 
 		log.phase = "background";
 		const atResponse = { ...databases(), touched: log.touched() };
-		await drain();
+
+		// What is still at the gate was never waited for: ctx.waitUntil work, and anything a route left floating.
+		await drive(log, clock, drain(), {
+			phase: "background",
+			flush: true,
+			timers: false,
+		});
+
+		log.gating = false;
 		log.phase = "request";
 
 		records.push({

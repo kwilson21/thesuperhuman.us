@@ -1,7 +1,13 @@
 // The ordered effect log of one case, and the entries in it.
 import type { ByteRecord, Recorded } from "./plain";
 
-/** Where an effect happened: while the handler ran, or after it had answered (ctx.waitUntil work). */
+/**
+ * Whether the response waited for an effect. "request": the answer (its status, headers and the whole body) could not
+ * have been produced without the effect finishing, or the effect cannot be told apart from work the answer waited for.
+ * "background": the answer was produced and read while the effect had not yet begun (work handed to ctx.waitUntil, or
+ * left floating). It is decided by what the answer waited for (see `start` below), never by how many microtask turns a
+ * route takes.
+ */
 export type Phase = "request" | "background";
 
 /** What a statement or call gave back that a caller can see: how many rows, how many changes, or that it threw. */
@@ -119,8 +125,44 @@ export const UNSTATED = new Set([
 export class EffectLog {
 	readonly entries: Effect[] = [];
 	step = 0;
+	/** The phase of an effect that cannot wait at the gate (a console line, a waitUntil call, a clock move): request until the answer has been read. */
 	phase: Phase = "request";
 	private quiet = 0;
+
+	/** While true, an effect that starts waits at the gate until the runner releases it (see `start`). Off outside a driven request. */
+	gating = false;
+
+	private readonly held: ((phase: Phase) => void)[] = [];
+
+	/** Told when an effect arrives at the gate, so a runner that is waiting for something else can wake. */
+	onHeld: (() => void) | undefined;
+
+	/** How many effects wait at the gate. */
+	get waiting() {
+		return this.held.length;
+	}
+
+	/**
+	 * The first thing every fake does, before it reads or changes anything. While a request is driven the effect waits
+	 * here, so whether it ran before the response was read depends only on whether the response needed it, never on how
+	 * many microtask turns the route took to get there: the runner lets the event loop go quiet, and an effect still
+	 * waiting then is one the response is waiting for (it is released as "request"), unless the answer has already been
+	 * read, in which case nothing waited for it (it is released as "background"). Resolves with the effect's phase.
+	 * Off-record work and an undriven log pass straight through.
+	 */
+	start(): Promise<Phase> {
+		if (!this.gating || this.quiet > 0) return Promise.resolve(this.phase);
+
+		return new Promise((resolve) => {
+			this.held.push(resolve);
+			this.onHeld?.();
+		});
+	}
+
+	/** Lets every waiting effect begin, in the order they arrived, labelled `phase`. */
+	release(phase: Phase) {
+		for (const resolve of this.held.splice(0)) resolve(phase);
+	}
 
 	/** False while off-record work (sign-in, seeding, a hook) runs. */
 	get recording() {
@@ -152,10 +194,11 @@ export class EffectLog {
 		this.written.set(this.step, set);
 	}
 
-	push(body: EffectBody) {
+	/** Records an effect. `phase` is the one `start` gave it; an effect that never waited at the gate has the log's own. */
+	push(body: EffectBody, phase: Phase = this.phase) {
 		if (this.quiet > 0) return;
 
-		const entry: Effect = { ...body, step: this.step, phase: this.phase };
+		const entry: Effect = { ...body, step: this.step, phase };
 
 		if (this.probe && !UNSTATED.has(body.kind))
 			entry.state = { ...this.probe(), touched: this.touched() };

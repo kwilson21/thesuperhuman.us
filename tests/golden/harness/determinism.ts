@@ -95,9 +95,6 @@ function consoleArg(arg: Passed): Recorded {
 	}
 }
 
-// The real timer, kept before any case fakes the global one, for the short real waits of `untilSettled`.
-const realSetTimeout = globalThis.setTimeout;
-
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
 	virtualTimers = false;
@@ -188,43 +185,17 @@ export class Determinism {
 	}
 
 	/**
-	 * Waits for `work`. On virtual timers, whenever it has made no progress for a few real milliseconds the clock
-	 * moves to the next timer (recorded as an advance), so a route's timeout fires without the test waiting for it.
+	 * Moves the clock to the next virtual timer, recorded as an advance, so a route's timeout fires without the test
+	 * waiting for it. False when timers are real or none is pending.
 	 */
-	async untilSettled<T>(work: Promise<T>): Promise<T> {
-		if (!this.virtualTimers) return work;
+	async fireNextTimer(): Promise<boolean> {
+		if (!this.virtualTimers || vi.getTimerCount() === 0) return false;
 
-		let settled = false;
+		const before = Date.now();
+		await vi.advanceTimersToNextTimerAsync();
+		this.log.push({ kind: "advance", ms: Date.now() - before });
 
-		const watched = work.finally(() => {
-			settled = true;
-		});
-
-		watched.catch(() => {});
-
-		for (let idle = 0; !settled; ) {
-			await new Promise<void>((resolve) => realSetTimeout(resolve, 5));
-
-			if (settled) break;
-
-			if (vi.getTimerCount() === 0) {
-				idle += 1;
-
-				if (idle > 200)
-					throw new Error(
-						"golden harness: the handler never settled and no timer is pending.",
-					);
-
-				continue;
-			}
-
-			idle = 0;
-			const before = Date.now();
-			await vi.advanceTimersToNextTimerAsync();
-			this.log.push({ kind: "advance", ms: Date.now() - before });
-		}
-
-		return work;
+		return true;
 	}
 
 	advance(ms: number) {
