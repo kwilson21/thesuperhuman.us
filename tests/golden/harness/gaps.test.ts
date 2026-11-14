@@ -528,6 +528,7 @@ describe("console output", () => {
 				args: ["failed", "Error: boom", { id: 1 }],
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 			{
 				kind: "console",
@@ -535,6 +536,7 @@ describe("console output", () => {
 				args: ["careful"],
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 		]);
 	});
@@ -927,6 +929,7 @@ describe("a rate limit with no scripted answer", () => {
 				success: false,
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 			{
 				kind: "rate-limit",
@@ -935,6 +938,7 @@ describe("a rate limit with no scripted answer", () => {
 				threw: "golden harness: no rate-limit answer scripted",
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 		]);
 	});

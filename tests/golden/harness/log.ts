@@ -5,9 +5,7 @@ import type { ByteRecord, Recorded } from "./plain";
 export type Phase = "request" | "background";
 
 /** What a statement or call gave back that a caller can see: how many rows, how many changes, or that it threw. */
-export type D1Outcome =
-	| { rows: number; changes: number | null }
-	| { threw: string };
+export type D1Outcome = { rows: number; changes: number } | { threw: string };
 
 export type D1Statement = {
 	sql: string;
@@ -87,7 +85,27 @@ export type EffectBody =
 	| { kind: "advance"; ms: number }
 	| { kind: "console"; level: "error" | "warn"; args: Recorded[] };
 
-export type Effect = EffectBody & { step: number; phase: Phase };
+/** The state of the databases when an outside effect happened: one digest per database (see digest.ts). */
+export type EffectState = { music: string; publication: string };
+
+export type Effect = EffectBody & {
+	step: number;
+	phase: Phase;
+	/**
+	 * Every effect that is not a D1 statement or a marker of the harness carries the digest of both databases as they were
+	 * when it happened: what existed when the email, the Stripe call, the R2 or KV operation, the AI call or the console
+	 * line went out.
+	 */
+	state?: EffectState;
+};
+
+const UNSTATED = new Set([
+	"d1",
+	"d1-batch",
+	"interleave",
+	"trigger-hit",
+	"advance",
+]);
 
 /** The shared, ordered log. Every fake writes here; the runner sets the step and phase. */
 export class EffectLog {
@@ -101,10 +119,17 @@ export class EffectLog {
 		return this.quiet === 0;
 	}
 
+	/** Answers the state of the databases now; set by the runner once they are open. */
+	probe: (() => EffectState) | undefined;
+
 	push(body: EffectBody) {
 		if (this.quiet > 0) return;
 
-		this.entries.push({ ...body, step: this.step, phase: this.phase });
+		const entry: Effect = { ...body, step: this.step, phase: this.phase };
+
+		if (this.probe && !UNSTATED.has(body.kind)) entry.state = this.probe();
+
+		this.entries.push(entry);
 	}
 
 	/** Runs `work` without recording, for setup that is not part of the case (sign-in, seeding). */

@@ -36,7 +36,7 @@ golden fixtures did not change.
 ## A conversion is neutral when
 
 ```
-pnpm run golden:neutral <fixture|--all> [<from> [<to>]] [--allow-renames <file>] [--allow-positions <file>]
+pnpm run golden:neutral <fixture|--all> [<from> [<to>]] [--allow-renames <file>]
 ```
 
 compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the working tree, `--all` runs every fixture)
@@ -47,65 +47,91 @@ these must be byte-identical before and after:
 
 - the request, and the response: status, headers, every set-cookie value, and the body;
 - what the step dumped of the databases, R2 and KV, and the final dump;
-- the digests (see "Fixture format 2" below): after every step and at the end, a row count and SHA-256 of every table of
-  both databases, and the contents of R2 and KV, so a write to a table the case does not dump is seen;
+- the digests (see "Fixture format 3" below): a row count and SHA-256 of every table of both databases, and R2 and KV in
+  full, after every step; both databases as they were when the response had been read; and both databases as they were at
+  every outside effect, so a write to a table the case does not dump is seen, and so is the state that existed when each
+  email or Stripe call went out;
 - every effect that is not a D1 statement, in order, with its step and phase: outgoing HTTP (Stripe, Resend, Turnstile)
   with method, URL, headers and body, Workers AI calls, R2 and KV operations, `console.error` and `console.warn`,
   `waitUntil` registrations and how they settled, rate-limit calls, clock moves, interleave markers and trigger-hit
-  markers (which operation and table an injected failure or interleave hit).
+  markers (which operation and table an injected failure or interleave hit). Each outside effect carries the digest of
+  both databases as they were when it happened.
 
 Only the D1 entries may differ: SQL text, binds, how many statements, where the batches begin and end, and each
 statement's result. The tool removes the D1 entries from both logs and requires what is left to be identical.
 
-**Order against D1.** An email that was sent after the write and is now sent before it is a behaviour change, so the
-tool checks what state existed when each outside effect happened. Only a committed write that changed at least one row
-counts: a read, a write that changed no row, a statement that threw and a batch that did not commit are ignored, so a
-conversion may split one statement into a read and a guarded write. Each such write is read as (operation, table, phase),
-for example `UPDATE owner_requests request`. Two checks follow, and a difference in either FAILS the run:
+**Order against D1.** An email that was sent after the write and is now sent before it is a behaviour change, and the
+digests are what catch it, with no rule of their own: each outside effect records the digest of both databases at that
+moment, so "mark as sent, then send" and "send, then mark as sent" differ at the email even when the end state is the same
+(two writes to one table that swap places around an email are NOT neutral). The response is an event too: the digest taken
+when the response had been read differs if a write moved from before the response to the background phase or back. What
+each mechanism catches:
 
-1. For every outside effect, the writes that came before it in its step, as a multiset: which tables had been changed, by
-   which operation, in which phase, and how many times, but not in what order, so writes to different tables that sit
-   between the same two effects may be reordered. (`--ordered` makes the order count too; on every re-record in this
-   repository's history it gave the same result.)
-2. For every step, all its writes with their phase, so a write that moved across the response boundary (from `request` to
-   `background` or back) is caught.
+- the step and final digests: any change to any table, R2 or KV by the end of a step or the case, including a write to a
+  table the case does not dump, one more column set, a dropped background write, a changed AUTOINCREMENT counter or a
+  changed KV expiry or metadata;
+- the digests at every outside effect: a write that moved across an email, Stripe call, R2 or KV operation, AI call or
+  console line, or a write that changed or was added before one;
+- the digest at the response: a write that moved across the response boundary, even when the state at every effect is the
+  same;
+- the trigger-hit markers: an injected failure or interleave that, after the conversion, hits another operation or table.
 
-A failure is listed with the effect it concerns (`step 0: fetch POST https://api.resend.com/emails #1`, numbered when an
-effect repeats; the per-step check is `step 0: writes by phase`). It passes only when that exact effect is named, with a
-reason, in the file given to `--allow-positions`: `{ "<fixture>": { "<case name, after the conversion>": { "<effect>":
-"<reason>" } } }`. One entry covers one effect. What this does not see: a write that changed no row, the order of writes
-within one effect's window, what the written values were (the digests see that), and a write whose SQL the reader cannot
-attribute to a table (that is an error, not a pass).
+What is deliberately not compared, because a conversion may change it: the D1 statements themselves. So one UPDATE
+replaced by a DELETE and an INSERT of the same row, an INSERT OR REPLACE, an upsert turned into an UPDATE, a statement
+split into a read and a guarded write, and writes to different tables reordered between the same two effects are all
+neutral, because the state at every effect is the same. An earlier version of this tool also read the committed writes
+before each effect from the SQL; with the digests at every effect it caught nothing they miss, so it was removed. What the
+digests do not see: where in time a write happened between two effects (only the states at the effects and at the
+response), and a write whose effect on state is undone before the next digest.
 
 **Cases.** An added case is listed and does not fail (it has no earlier record to compare). A removed case fails. A
 renamed case is a removed case and an added one unless `--allow-renames` maps it (`{ "<fixture>": { "<old name>":
 "<new name>" } }`). The map must be one to one: every source exists in the earlier revision and no longer exists in the
 later one, every destination exists in the later revision and not in the earlier one, and no two sources share a
-destination. A mapped pair is compared as one case and must itself be neutral. Both allow files are checked in full
-before anything runs: a fixture or case or effect named in either that matches nothing actually compared is an error or a
-failure, in single-fixture and `--all` runs alike, so an allowance cannot go stale.
+destination. A mapped pair is compared as one case and must itself be neutral. The rename file is checked in full
+before anything runs, and a fixture named in it that is not compared is an error, in single-fixture and `--all` runs
+alike.
 
 The tool prints, per fixture, how many cases are identical, neutral with D1 changes, NOT neutral (each with the first
 differing field and both values, shortened), NOT COMPARABLE, added, removed and renamed, then `golden:neutral: NEUTRAL`,
 `golden:neutral: identical, N cases` or `NOT NEUTRAL`. Exit codes: 0 neutral, 1 not neutral (or not comparable), 2 usage
-or read error. Judgement calls: a write is recognised from the SQL text (its first keyword, or the statement a `WITH`
-ends in) and attributed to its table (INSERT INTO, UPDATE, DELETE FROM); a write run through `first()` or `all()` (with
-RETURNING) counts when it returned a row. If a conversion needs a case's input changed, that is not a conversion: record
+or read error. If a conversion needs a case's input changed, that is not a conversion: record
 it as a fix.
 
-**Fixture format 2.** Each case records `format: 2`, a `digest` after every step (one SHA-256 per database, one for R2 and
-one for KV), and at the end a `finalState`: for each database a digest over all its tables and, per table that holds rows,
-the row count and SHA-256 of its rows (read in primary key order, or rowid order for a table without one, all columns,
-with a type tag for NULL, numbers, text and blobs); R2 and KV in full (keys with size and digest). A fixture from before
-format 2 (no `format` field) cannot be compared with a format 2 one: the digests exist on one side only, so the tool says
-NOT COMPARABLE and exits 1, because neutrality cannot be shown across the change. The three older recorder fixtures
-(contact, resume-request and resume-approve) have no database and stay as they are. `pnpm exec node
-scripts/golden-format-proof.mjs <from> [<to>]` proves a format change only added fields.
+**Fixture format 3.** Each case records `format: 3` and:
 
-**In CI.** On a pull request, the `validate` workflow runs `golden:neutral --all` between the merge base and the head and
-writes the result to the job summary. It never fails the job for a result that is not neutral, because a behaviour fix
-legitimately changes fixtures, but it fails on a usage or read error (exit 2). Reviewers read that summary: a conversion
-pull request's summary must say NEUTRAL, and a fix's must list exactly the cases the fix is meant to change.
+- on every outside effect (not a D1 statement or a harness marker), `state`: one SHA-256 per database, as it was when the
+  effect happened;
+- after every step, `digest`: one SHA-256 per database, one for R2 and one for KV (with each key's expiry and metadata),
+  and `atResponse`, the two databases when the response had been read, before any background work;
+- at the end, `finalState`: for each database a digest over all its tables and, per table that holds rows, the row count
+  and SHA-256 of its rows; R2 and KV in full;
+- on every D1 statement, the real number of rows it changed, whichever method ran it (`first`, `all`, `run`, `batch`);
+- `trigger-hit` entries (see "Hooks for races and outages").
+
+A table is read in primary key order (rowid order when it has none; `sqlite_sequence`, the AUTOINCREMENT counters, in name
+order), starting with its column names, with every cell tagged from SQLite's `typeof()` (NULL, integer, real, text, blob;
+an integer is read as text so a value above 2^53 keeps every digit). The digest of a database is not recomputed while
+SQLite's `total_changes()`, schema version and AUTOINCREMENT counters have not moved; setting `GOLDEN_VERIFY_DIGESTS=1`
+also computes every cached answer in full and fails on a difference (it was run over every fixture when format 3 was
+recorded). Formats cannot be compared with each other: the tool says NOT COMPARABLE and exits 1, because neutrality
+cannot be shown across a format change. `node scripts/golden-format-proof.mjs <from> [<to>]` proves a format change only
+added fields (and filled in the real change count where a `null` was recorded).
+
+The three older recorder fixtures (contact, resume-request and resume-approve) stay on the older recorder and carry no
+digests and no D1: they use their own record shape (`answers` and a flat effect list, without steps or effect kinds), so
+bringing them onto this harness would rename every pre-existing field and cannot be shown to keep them. Their routes use
+KV and fetch only, and every KV operation and fetch is a compared effect, so the state those routes can change is already
+in the log.
+
+**In CI.** The `Golden neutrality` workflow runs on every pull request, and again when a label is added or removed. It
+compares the base branch tip (the first parent of the merge ref the job checks out) with the merge result, runs
+`golden:neutral --all`, and writes the report to the job summary. Without the `conversion` label it only reports, since a
+behaviour fix changes fixtures on purpose; it fails only on a usage or read error. A pull request that carries the
+`conversion` label fails unless every case is neutral. A conversion pull request carries the label and its CI proves
+neutrality; a behaviour fix does not, and explains each changed case. Reviewers read the summary: a conversion's must say
+NEUTRAL, and a fix's must list exactly the cases the fix is meant to change. (This pull request changes the fixture
+format, so its own report says NOT COMPARABLE; it is not a conversion.)
 
 ## Reviewing a fixture change
 

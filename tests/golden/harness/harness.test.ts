@@ -311,6 +311,7 @@ describe("what is recorded", () => {
 			answered: "200",
 			step: 0,
 			phase: "request",
+			state: expect.any(Object),
 		});
 
 		expect(JSON.stringify(got.effects)).not.toContain("secret");

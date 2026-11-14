@@ -31,7 +31,11 @@ export type KvSetup = {
 type Held = string | Uint8Array;
 
 /** A value and the time (milliseconds since the epoch, on the case's clock) at which the namespace drops it. */
-type Entry = { held: Held; expiresAt: number | null };
+type Entry = {
+	held: Held;
+	expiresAt: number | null;
+	metadata: string | null;
+};
 
 const isEntry = (
 	value: KvSeedValue,
@@ -52,7 +56,13 @@ function expiryOf(options: {
 }
 
 /** A recording namespace, and what it holds now (keys sorted; bytes as a length and a digest). */
-export type RecordedKv = { binding: KVNamespace; snapshot: () => Recorded };
+export type RecordedKv = {
+	binding: KVNamespace;
+	/** The live keys and their values (what `dump` records). */
+	snapshot: () => Recorded;
+	/** The same, with each key's expiry (milliseconds on the case's clock) and metadata: the whole state. */
+	state: () => Recorded;
+};
 
 export function recordingKv(
 	label: string,
@@ -64,8 +74,8 @@ export function recordingKv(
 		Object.entries(setup.seed ?? {}).map(([key, given]) => [
 			key,
 			isEntry(given)
-				? { held: given.value, expiresAt: expiryOf(given) }
-				: { held: given, expiresAt: null },
+				? { held: given.value, expiresAt: expiryOf(given), metadata: null }
+				: { held: given, expiresAt: null, metadata: null },
 		]),
 	);
 
@@ -150,7 +160,11 @@ export function recordingKv(
 			});
 
 			failIf("put");
-			store.set(key, { held, expiresAt: expiryOf(options ?? {}) });
+			store.set(key, {
+				held,
+				expiresAt: expiryOf(options ?? {}),
+				metadata: options?.metadata ?? null,
+			});
 		},
 		delete: async (key: string) => {
 			log.push({
@@ -196,6 +210,28 @@ export function recordingKv(
 						const held = live(key);
 
 						return held === undefined ? [] : [[key, plain(held)]];
+					}),
+			),
+		state: () =>
+			Object.fromEntries(
+				[...store.keys()]
+					.sort((a, b) => a.localeCompare(b))
+					.flatMap((key) => {
+						const held = live(key);
+						const entry = store.get(key);
+
+						return held === undefined || entry === undefined
+							? []
+							: [
+									[
+										key,
+										{
+											value: plain(held),
+											expiresAt: entry.expiresAt,
+											metadata: entry.metadata,
+										},
+									],
+								];
 					}),
 			),
 	};

@@ -1,19 +1,28 @@
-// A digest of the whole of a database, so a write to a table a case does not dump still shows in the fixture.
+// A digest of the whole of a database, so a write to a table a case does not dump still shows in the fixture, and so the
+// state that existed when an email or a Stripe call went out is part of the record.
 //
 // Dumps hold only the tables a case names, and the music database has dozens, so an extra INSERT into an audit table, or
-// an UPDATE of another column, would leave the fixture untouched. Every step and the end of every case therefore records,
-// for EVERY table of every database the case has, a row count and a SHA-256 over a canonical serialisation of all its rows
-// (see `fixture format 2` in tests/golden/README.md). Tables are read in primary key order, or rowid order when the table
-// has no primary key, with all columns in schema order. Each cell is written with a type tag and, for text and blobs, a
-// length, so no two different tables serialise alike: NULL as `N;`, a number as `D<number>;`, a bigint as `I<number>;`,
-// text as `T<bytes>:<text>`, a blob as `B<bytes>:<hex>`.
+// an UPDATE of another column, would leave a fixture untouched. The record therefore holds, for EVERY table of every
+// database the case has, a row count and a SHA-256 over a canonical serialisation of all its rows (see `Fixture format`
+// in tests/golden/README.md):
+//
+// - Tables are read in primary key order, or rowid order when the table has no primary key (`sqlite_sequence`, which
+//   holds the AUTOINCREMENT counters, in name order). It is part of the state.
+// - Each table's digest starts with its column names in schema order, so a schema difference cannot hide, even in an
+//   empty table.
+// - Every cell is written with a tag from SQLite's own `typeof()` of the stored value, so 1 and 1.0 differ: NULL as `N;`,
+//   an integer as `I<digits>;` (read through CAST(... AS TEXT), so a value above 2^53 keeps every digit), a real as
+//   `R<number>;`, text as `T<bytes>:<text>`, a blob as `B<bytes>:<hex>;`.
 //
 // A table with no rows is not listed in the per-table record (it is `rows: 0` by absence), but it is part of the database
 // digest, which covers every table by name, so a table that gains a row changes it.
+//
+// `DatabaseDigester` answers "what is the digest now" many times a case (at every outside effect). It hashes again only
+// when SQLite's `total_changes()`, `schema_version` or AUTOINCREMENT counters have moved since the last answer:
+// `total_changes()` counts every row changed through the connection, by a statement, a trigger, a hook or a setup script
+// alike, and the counters are the one write that moves without a row (an ignored INSERT). With GOLDEN_VERIFY_DIGESTS=1 every answer taken from the cache is also computed in full and compared.
 import { createHash } from "node:crypto";
 import type { SQLOutputValue } from "node:sqlite";
-import { isText } from "~/lib/type-guards";
-import { isBigint } from "./plain";
 import type { SqliteDatabase } from "../../helpers/sqlite-d1";
 
 export type TableDigest = { rows: number; sha256: string };
@@ -27,17 +36,24 @@ export type DatabaseDigest = {
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-function cellText(value: SQLOutputValue): string {
-	if (value === null) return "N;";
+const VERIFY = process.env.GOLDEN_VERIFY_DIGESTS === "1";
 
-	if (isBigint(value)) return `I${value};`;
-
-	if (value instanceof Uint8Array)
-		return `B${value.byteLength}:${Buffer.from(value).toString("hex")};`;
-
-	if (isText(value)) return `T${Buffer.byteLength(value)}:${value};`;
-
-	return `D${Object.is(value, -0) ? "-0" : value};`;
+/** The text a stored cell is serialised as, from its SQLite type and the value read for it. */
+function cellText(type: SQLOutputValue, value: SQLOutputValue): string {
+	switch (type) {
+		case "null":
+			return "N;";
+		case "integer":
+			return `I${value};`;
+		case "real":
+			return `R${Object.is(value, -0) ? "-0" : value};`;
+		case "blob":
+			return value instanceof Uint8Array
+				? `B${value.byteLength}:${Buffer.from(value).toString("hex")};`
+				: "B?;";
+		default:
+			return `T${Buffer.byteLength(String(value))}:${value};`;
+	}
 }
 
 function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
@@ -49,16 +65,33 @@ function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
 		.sort((a, b) => Number(a.pk) - Number(b.pk))
 		.map((column) => quote(String(column.name)));
 
-	const order = keys.length > 0 ? keys.join(",") : "rowid";
+	const order =
+		table === "sqlite_sequence"
+			? "name"
+			: keys.length > 0
+				? keys.join(",")
+				: "rowid";
+
+	const selected = columns
+		.map(
+			(column, index) =>
+				`typeof(${quote(column)}) AS t${index}, CASE WHEN typeof(${quote(column)}) = 'integer' THEN CAST(${quote(column)} AS TEXT) ELSE ${quote(column)} END AS v${index}`,
+		)
+		.join(", ");
 
 	const rows = sqlite
-		.prepare(`SELECT * FROM ${quote(table)} ORDER BY ${order}`)
+		.prepare(`SELECT ${selected} FROM ${quote(table)} ORDER BY ${order}`)
 		.all();
 
 	const hash = createHash("sha256");
 
+	hash.update(
+		`${columns.map((column) => `${column.length}:${column}`).join(",")}\n`,
+	);
+
 	for (const row of rows) {
-		for (const column of columns) hash.update(cellText(row[column] ?? null));
+		for (const index of columns.keys())
+			hash.update(cellText(row[`t${index}`], row[`v${index}`]));
 
 		hash.update("\n");
 	}
@@ -66,11 +99,11 @@ function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
 	return { rows: rows.length, sha256: hash.digest("hex") };
 }
 
-/** The digest of every table of the database. */
+/** The digest of every table of the database, computed in full. */
 export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
 	const names = sqlite
 		.prepare(
-			"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+			"SELECT name FROM sqlite_master WHERE type = 'table' AND (name NOT LIKE 'sqlite\\_%' ESCAPE '\\' OR name = 'sqlite_sequence') ORDER BY name",
 		)
 		.all()
 		.map((row) => String(row.name));
@@ -87,4 +120,67 @@ export function digestDatabase(sqlite: SqliteDatabase): DatabaseDigest {
 	}
 
 	return { sha256: whole.digest("hex"), tables };
+}
+
+/** The digest of one database now, hashed again only after something was written (or the schema changed). */
+export class DatabaseDigester {
+	private stamp = "";
+	private cached: DatabaseDigest | undefined;
+
+	constructor(private readonly sqlite: SqliteDatabase) {}
+
+	/**
+	 * What says the database may have changed: row changes, the schema, and the AUTOINCREMENT counters, which an ignored
+	 * INSERT moves without changing a row.
+	 */
+	private stampNow(): string {
+		const changes = this.sqlite.prepare("SELECT total_changes() AS n").get();
+		const schema = this.sqlite.prepare("PRAGMA schema_version").get();
+		let counters = "";
+
+		try {
+			counters = JSON.stringify(
+				this.sqlite
+					.prepare("SELECT name, seq FROM sqlite_sequence ORDER BY name")
+					.all(),
+			);
+		} catch {
+			// No AUTOINCREMENT table yet: the schema version moves when one is created.
+		}
+
+		return `${changes?.n}:${schema?.schema_version}:${counters}`;
+	}
+
+	current(): DatabaseDigest {
+		const stamp = this.stampNow();
+
+		if (this.cached && stamp === this.stamp) {
+			if (VERIFY) {
+				const full = digestDatabase(this.sqlite);
+
+				if (full.sha256 !== this.cached.sha256) {
+					const names = new Set([
+						...Object.keys(full.tables),
+						...Object.keys(this.cached.tables),
+					]);
+
+					const differing = [...names].filter(
+						(name) =>
+							full.tables[name]?.sha256 !== this.cached?.tables[name]?.sha256,
+					);
+
+					throw new Error(
+						`golden harness: the cached database digest differs from the full one in ${differing.join(", ") || "an empty table or a schema"}; something wrote to the database without changing total_changes().`,
+					);
+				}
+			}
+
+			return this.cached;
+		}
+
+		this.cached = digestDatabase(this.sqlite);
+		this.stamp = stamp;
+
+		return this.cached;
+	}
 }

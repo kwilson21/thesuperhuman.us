@@ -41,7 +41,7 @@ import {
 	type Recorded,
 } from "./plain";
 import { recordingR2, type R2Setup } from "./r2";
-import { digestDatabase, type DatabaseDigest } from "./digest";
+import { DatabaseDigester, type DatabaseDigest } from "./digest";
 import { Triggers, type MustNotFire, type OptionalTrigger } from "./triggers";
 
 export type Handler = (context: APIContext) => Response | Promise<Response>;
@@ -207,6 +207,8 @@ export type StateDigest = {
 	publication: string;
 	r2: string;
 	kv: string;
+	/** The databases as they were when the response had been read, before any background work ran. */
+	atResponse: { music: string; publication: string };
 };
 
 /** The state at the end of a case: per-table digests of both databases, and the whole of R2 and KV. */
@@ -239,8 +241,8 @@ export type StepRecord = {
 
 export type CaseRecord = {
 	name: string;
-	/** Fixture format. 2 adds `digest` to every step, `finalState`, and the `trigger-hit` entries of the effect log. */
-	format: 2;
+	/** Fixture format. 3 adds the digests (per database at every outside effect, at the response, after the step and per table at the end), `finalState`, the `trigger-hit` entries and the real `changes` of every D1 statement. */
+	format: 3;
 	steps: StepRecord[];
 	effects: Effect[];
 	final: Recorded | null;
@@ -627,14 +629,24 @@ async function runOn(
 
 	const kvStates = () =>
 		Object.fromEntries(
-			kvNames.map((name) => [name, kvs[name]?.snapshot() ?? null]),
+			kvNames.map((name) => [name, kvs[name]?.state() ?? null]),
 		);
 
-	const digest = (): StateDigest => ({
-		music: digestDatabase(music).sha256,
-		publication: digestDatabase(publication).sha256,
+	const musicDigest = new DatabaseDigester(music);
+	const publicationDigest = new DatabaseDigester(publication);
+
+	const databases = () => ({
+		music: musicDigest.current().sha256,
+		publication: publicationDigest.current().sha256,
+	});
+
+	log.probe = databases;
+
+	const digest = (atResponse: StateDigest["atResponse"]): StateDigest => ({
+		...databases(),
 		r2: sha(r2.snapshot()),
 		kv: sha(kvStates()),
+		atResponse,
 	});
 
 	const records: StepRecord[] = [];
@@ -726,6 +738,7 @@ async function runOn(
 		}
 
 		log.phase = "background";
+		const atResponse = databases();
 		await drain();
 		log.phase = "request";
 
@@ -733,7 +746,7 @@ async function runOn(
 			request: { actor: actorLabel(actor), method, path, body: record },
 			answer,
 			state: stores(step.dump),
-			digest: digest(),
+			digest: digest(atResponse),
 		});
 	}
 
@@ -746,13 +759,13 @@ async function runOn(
 
 	return {
 		name: c.name,
-		format: 2,
+		format: 3,
 		steps: records,
 		effects: log.entries,
 		final: stores(c.final),
 		finalState: {
-			music: digestDatabase(music),
-			publication: digestDatabase(publication),
+			music: musicDigest.current(),
+			publication: publicationDigest.current(),
 			r2: r2.snapshot(),
 			kv: kvStates(),
 		},

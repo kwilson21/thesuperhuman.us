@@ -8,7 +8,7 @@
 // Two hooks make a branch that only a race or an outage reaches testable. A `Interleave` runs raw SQL on the database
 // just before the n-th statement that matches (another request got there first), and an `InjectedFailure` makes the
 // n-th matching statement or batch throw without running. Both appear in the log, so a fixture shows them.
-import type { SQLInputValue } from "node:sqlite";
+import type { SQLInputValue, StatementSync } from "node:sqlite";
 import { statementOf } from "../../../scripts/sql-effects.mjs";
 import { double } from "../../helpers/doubles";
 import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
@@ -151,6 +151,60 @@ export class SqlHooks {
 	}
 }
 
+/**
+ * Counts the rows each statement run through the database changed, so the record holds the real number for every D1
+ * method (first(), all(), run() and batch()), never a null that reads as "no row". A statement that is not a write
+ * changed nothing; for a write the count is SQLite's own `changes()` after it ran.
+ */
+class ChangeMeter {
+	/** One count per executed statement, in the order they ran. */
+	readonly counts: number[] = [];
+
+	constructor(private readonly sqlite: SqliteDatabase) {}
+
+	get last(): number {
+		return this.counts[this.counts.length - 1] ?? 0;
+	}
+
+	private changes(sql: string): number {
+		let write = true;
+
+		try {
+			write = statementOf(sql).write;
+		} catch {
+			// A write the reader cannot attribute still counts: ask SQLite.
+		}
+
+		if (!write) return 0;
+
+		return Number(this.sqlite.prepare("SELECT changes() AS n").get()?.n ?? 0);
+	}
+
+	private watch(sql: string, statement: StatementSync): StatementSync {
+		const measured = <T>(work: () => T): T => {
+			const result = work();
+
+			this.counts.push(this.changes(sql));
+
+			return result;
+		};
+
+		return double<StatementSync>({
+			get: (...args: SQLInputValue[]) => measured(() => statement.get(...args)),
+			all: (...args: SQLInputValue[]) => measured(() => statement.all(...args)),
+			run: (...args: SQLInputValue[]) => measured(() => statement.run(...args)),
+		});
+	}
+
+	/** The database, with every statement it runs measured. The fake D1 uses only `prepare` and `exec`. */
+	get database(): SqliteDatabase {
+		return double<SqliteDatabase>({
+			prepare: (sql: string) => this.watch(sql, this.sqlite.prepare(sql)),
+			exec: (sql: string) => this.sqlite.exec(sql),
+		});
+	}
+}
+
 type Wrapped = {
 	sql: string;
 	args: SQLInputValue[];
@@ -170,7 +224,8 @@ export function recordingD1(
 	log: EffectLog,
 	hooks: SqlHooks,
 ): D1Database {
-	const real = sqliteD1(sqlite);
+	const meter = new ChangeMeter(sqlite);
+	const real = sqliteD1(meter.database);
 	const wrapped = new WeakMap<D1PreparedStatement, Wrapped>();
 
 	const argRecords = (args: readonly SQLInputValue[]) =>
@@ -244,7 +299,7 @@ export function recordingD1(
 				return ran(
 					"first",
 					() => inner.first(),
-					(row) => ({ rows: row === null ? 0 : 1, changes: null }),
+					(row) => ({ rows: row === null ? 0 : 1, changes: meter.last }),
 				);
 			}) as D1PreparedStatement["first"],
 			// SAFETY: as for first().
@@ -252,7 +307,7 @@ export function recordingD1(
 				ran(
 					"all",
 					() => inner.all(),
-					(result) => ({ rows: result.results.length, changes: null }),
+					(result) => ({ rows: result.results.length, changes: meter.last }),
 				)) as D1PreparedStatement["all"],
 			// SAFETY: as for first().
 			run: (() =>
@@ -311,6 +366,8 @@ export function recordingD1(
 				throw new Error(failure);
 			}
 
+			const first = meter.counts.length;
+
 			try {
 				const results = await real.batch(parts.map((part) => part.inner));
 
@@ -320,9 +377,9 @@ export function recordingD1(
 					result: "committed",
 					error: null,
 					statements: records(
-						results.map((result) => ({
+						results.map((result, index) => ({
 							rows: result.results.length,
-							changes: result.meta.changes ?? null,
+							changes: result.meta.changes ?? meter.counts[first + index] ?? 0,
 						})),
 					),
 				});

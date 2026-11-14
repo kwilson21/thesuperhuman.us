@@ -1,16 +1,26 @@
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
-import { digestDatabase } from "./digest";
+import { DatabaseDigester, digestDatabase } from "./digest";
 import { freshMusicDb, freshPublicationDb } from "./db";
-import { asVisitor, runCase, type Case, type Handler } from "./index";
+import {
+	asVisitor,
+	byHost,
+	json,
+	runCase,
+	type Case,
+	type Handler,
+} from "./index";
 
 // Every table of every database is digested after each step and at the end of a case, so a write to a table the case
 // does not dump still shows in the record.
 
 const env = (context: APIContext) => context.locals.runtime.env;
 
+const mailOk = byHost({ resend: json(200, {}) });
+
 const case1 = (extra: Partial<Case> = {}): Case => ({
 	name: "digest case",
+	fetches: mailOk,
 	steps: [{ path: "/api/x", method: "POST", as: asVisitor() }],
 	...extra,
 });
@@ -34,9 +44,9 @@ describe("digestDatabase", () => {
 		const b = freshMusicDb();
 
 		expect(digestDatabase(a)).toEqual(digestDatabase(b));
-		expect(Object.keys(digestDatabase(a).tables)).toEqual([
+		expect(Object.keys(digestDatabase(a).tables)).toContain(
 			"software_signing_settings",
-		]);
+		);
 	});
 
 	it("changes when a row is added to any table, however obscure", () => {
@@ -88,15 +98,16 @@ describe("digestDatabase", () => {
 });
 
 describe("the record of a case", () => {
-	it("is format 2, with a digest per step and the final state of both databases, R2 and KV", async () => {
+	it("is format 3, with a digest per step and the final state of both databases, R2 and KV", async () => {
 		const got = await runCase(idle, case1());
 
-		expect(got.format).toBe(2);
+		expect(got.format).toBe(3);
 		expect(Object.keys(got.steps[0]?.digest ?? {})).toEqual([
 			"music",
 			"publication",
 			"r2",
 			"kv",
+			"atResponse",
 		]);
 
 		expect(Object.keys(got.finalState)).toEqual([
@@ -329,5 +340,303 @@ describe("must-not-fire triggers", () => {
 				}),
 			),
 		).rejects.toThrow("matches no declared trigger");
+	});
+});
+
+describe("the state at every outside effect", () => {
+	const settings = (sql: string) =>
+		`UPDATE software_signing_settings SET ${sql}`;
+
+	/** Two writes with an outgoing email between them. */
+	const around =
+		(before: string, after: string): Handler =>
+		async (context) => {
+			await env(context).MUSIC_DB?.prepare(before).run();
+			await fetch("https://api.resend.com/emails", {
+				method: "POST",
+				body: "{}",
+			});
+			await env(context).MUSIC_DB?.prepare(after).run();
+
+			return new Response("ok");
+		};
+
+	const mail = (got: Awaited<ReturnType<typeof runCase>>) =>
+		got.effects.find((effect) => effect.kind === "fetch");
+
+	it("two writes to the same table that swap places around an email leave the same end state and a different state at the email", async () => {
+		const x = settings("updated_by = 'x'");
+		const y = settings("software_signing_enabled = 1");
+
+		const sendThenMark = await runCase(around(x, y), case1());
+		const markThenSend = await runCase(around(y, x), case1());
+
+		expect(sendThenMark.finalState.music.sha256).toBe(
+			markThenSend.finalState.music.sha256,
+		);
+		expect(sendThenMark.steps[0]?.digest.music).toBe(
+			markThenSend.steps[0]?.digest.music,
+		);
+		expect(mail(sendThenMark)?.state?.music).not.toBe(
+			mail(markThenSend)?.state?.music,
+		);
+	});
+
+	it("an outside effect carries the state of both databases; a D1 entry and a marker do not", async () => {
+		const got = await runCase(
+			around(settings("updated_by = 'x'"), settings("updated_by = 'y'")),
+			case1({
+				interleave: [{ on: /updated_by = 'y'/, label: "race", run: () => {} }],
+			}),
+		);
+
+		const kinds = got.effects.map((effect) => [
+			effect.kind,
+			effect.state !== undefined,
+		]);
+
+		expect(kinds).toContainEqual(["fetch", true]);
+		expect(kinds).toContainEqual(["d1", false]);
+		expect(kinds).toContainEqual(["interleave", false]);
+		expect(kinds).toContainEqual(["trigger-hit", false]);
+	});
+
+	it("an effect that happens before any write has the state the case started in, and an unchanged database gives an unchanged digest", async () => {
+		const got = await runCase(async () => {
+			await fetch("https://api.resend.com/emails", {
+				method: "POST",
+				body: "a",
+			});
+			await fetch("https://api.resend.com/emails", {
+				method: "POST",
+				body: "b",
+			});
+
+			return new Response("ok");
+		}, case1());
+
+		const states = got.effects
+			.filter((effect) => effect.kind === "fetch")
+			.map((effect) => effect.state);
+
+		expect(states[0]).toEqual(states[1]);
+	});
+
+	it("the state at the response is taken before background work runs", async () => {
+		const later: Handler = async (context) => {
+			context.locals.runtime.ctx.waitUntil(
+				(async () => {
+					await new Promise<void>((resolve) => setTimeout(resolve, 5));
+					await env(context)
+						.MUSIC_DB?.prepare(settings("updated_by = 'later'"))
+						.run();
+				})(),
+			);
+
+			return new Response("ok");
+		};
+
+		const quiet = await runCase(idle, case1());
+		const got = await runCase(later, case1());
+		const digest = got.steps[0]?.digest;
+
+		expect(digest?.atResponse.music).toBe(quiet.steps[0]?.digest.music);
+		expect(digest?.music).not.toBe(digest?.atResponse.music);
+	});
+});
+
+describe("digest precision", () => {
+	const table = () => {
+		const sqlite = freshPublicationDb();
+		sqlite.exec("CREATE TABLE probe (id INTEGER PRIMARY KEY, v)");
+
+		return sqlite;
+	};
+
+	const digestOf = (value: string) => {
+		const sqlite = table();
+		sqlite.exec(`INSERT INTO probe VALUES (1, ${value})`);
+
+		return digestDatabase(sqlite).tables.probe?.sha256;
+	};
+
+	it("an integer and a real of the same value differ", () => {
+		expect(digestOf("1")).not.toBe(digestOf("1.0"));
+	});
+
+	it("integers above 2 to the 53rd keep every digit and never throw", () => {
+		expect(digestOf("9007199254740993")).not.toBe(digestOf("9007199254740992"));
+		expect(digestOf("9223372036854775807")).toBeDefined();
+		expect(digestOf("-9223372036854775808")).toBeDefined();
+	});
+
+	it("column names are part of the digest, so a schema difference cannot hide in an empty table", () => {
+		const one = freshPublicationDb();
+		const two = freshPublicationDb();
+
+		one.exec("CREATE TABLE probe (id INTEGER PRIMARY KEY, a)");
+		two.exec("CREATE TABLE probe (id INTEGER PRIMARY KEY, b)");
+
+		expect(digestDatabase(one).sha256).not.toBe(digestDatabase(two).sha256);
+	});
+
+	it("AUTOINCREMENT counters (sqlite_sequence) are part of the state", () => {
+		const one = freshPublicationDb();
+		const two = freshPublicationDb();
+
+		for (const sqlite of [one, two])
+			sqlite.exec("CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)");
+
+		one.exec("INSERT INTO seq (v) VALUES (1)");
+		two.exec(
+			"INSERT INTO seq (v) VALUES (1); DELETE FROM seq; INSERT INTO seq (v) VALUES (1)",
+		);
+
+		// The same rows in both tables except the id, which the counter explains.
+		expect(Object.keys(digestDatabase(one).tables)).toContain(
+			"sqlite_sequence",
+		);
+		expect(digestDatabase(one).sha256).not.toBe(digestDatabase(two).sha256);
+	});
+
+	it("negative zero, text that looks like a number and blobs are all told apart", () => {
+		const seen = new Set(
+			["-0.0", "0.0", "'0'", "x'30'", "NULL", "0"].map((value) =>
+				digestOf(value),
+			),
+		);
+
+		expect(seen.size).toBe(6);
+	});
+});
+
+describe("the cached digest equals the full one", () => {
+	it("after statements, exec, triggers, hooks and a schema change alike", () => {
+		const sqlite = freshPublicationDb();
+		const digester = new DatabaseDigester(sqlite);
+
+		const agree = () =>
+			expect(digester.current().sha256).toBe(digestDatabase(sqlite).sha256);
+
+		agree();
+		sqlite.exec(
+			"CREATE TABLE a (id INTEGER PRIMARY KEY, v); CREATE TABLE log (n)",
+		);
+		agree();
+		sqlite.exec(
+			"CREATE TRIGGER t AFTER INSERT ON a BEGIN INSERT INTO log VALUES (new.id); END",
+		);
+		agree();
+		sqlite.prepare("INSERT INTO a (v) VALUES (?)").run(1);
+		agree();
+		agree();
+		sqlite.exec("UPDATE a SET v = 2");
+		agree();
+		sqlite.exec("DELETE FROM log");
+		agree();
+		sqlite.exec("ALTER TABLE a ADD COLUMN w");
+		agree();
+		// An ignored INSERT moves the AUTOINCREMENT counter without changing a row.
+		sqlite.exec(
+			"CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, k UNIQUE)",
+		);
+		sqlite.exec("INSERT INTO seq (k) VALUES ('a')");
+		agree();
+		sqlite.exec("INSERT OR IGNORE INTO seq (k) VALUES ('a')");
+		agree();
+	});
+});
+
+describe("D1 change counts", () => {
+	const effect = async (sql: string, via: "first" | "all" | "run") => {
+		const got = await runCase(async (context) => {
+			const statement = env(context).MUSIC_DB?.prepare(sql);
+
+			await (via === "first"
+				? statement?.first()
+				: via === "all"
+					? statement?.all()
+					: statement?.run());
+
+			return new Response("ok");
+		}, case1());
+
+		return got.effects.find((entry) => entry.kind === "d1");
+	};
+
+	it("a write run through first() or all() without RETURNING records its real row count, not null", async () => {
+		const update = "UPDATE software_signing_settings SET updated_by = 'z'";
+
+		for (const via of ["first", "all", "run"] as const)
+			expect(await effect(update, via)).toMatchObject({
+				outcome: { changes: 1 },
+			});
+	});
+
+	it("a write that changes no row records 0, and a read records 0 even straight after a write", async () => {
+		expect(
+			await effect(
+				"UPDATE software_signing_settings SET updated_by = 'z' WHERE 0",
+				"first",
+			),
+		).toMatchObject({ outcome: { changes: 0 } });
+
+		const got = await runCase(async (context) => {
+			await env(context)
+				.MUSIC_DB?.prepare(
+					"UPDATE software_signing_settings SET updated_by = 'z'",
+				)
+				.run();
+
+			await env(context)
+				.MUSIC_DB?.prepare("SELECT * FROM software_signing_settings")
+				.all();
+
+			return new Response("ok");
+		}, case1());
+
+		const reads = got.effects.filter((entry) => entry.kind === "d1");
+
+		expect(reads[1]).toMatchObject({ outcome: { changes: 0 } });
+	});
+
+	it("a batch statement that returns rows records its real count too", async () => {
+		const got = await runCase(async (context) => {
+			const db = env(context).MUSIC_DB;
+
+			await db?.batch([
+				db.prepare(
+					"UPDATE software_signing_settings SET updated_by = 'z' RETURNING id",
+				),
+				db.prepare("SELECT id FROM software_signing_settings"),
+			]);
+
+			return new Response("ok");
+		}, case1());
+
+		const batch = got.effects.find((entry) => entry.kind === "d1-batch");
+
+		expect(batch).toMatchObject({
+			statements: [{ outcome: { changes: 1 } }, { outcome: { changes: 0 } }],
+		});
+	});
+});
+
+describe("KV state", () => {
+	it("holds each key's expiry and metadata, so a TTL change shows in state and not only in the log", async () => {
+		const putting = (options: { expirationTtl?: number; metadata?: string }) =>
+			runCase(async (context) => {
+				await env(context).RATE_LIMIT?.put("k", "v", options);
+
+				return new Response("ok");
+			}, case1());
+
+		const short = await putting({ expirationTtl: 60 });
+		const long = await putting({ expirationTtl: 3600 });
+		const meta = await putting({ expirationTtl: 60, metadata: "m" });
+
+		expect(short.steps[0]?.digest.kv).not.toBe(long.steps[0]?.digest.kv);
+		expect(short.steps[0]?.digest.kv).not.toBe(meta.steps[0]?.digest.kv);
+		expect(JSON.stringify(short.finalState.kv)).toContain("expiresAt");
 	});
 });
