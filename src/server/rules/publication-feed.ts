@@ -1,12 +1,16 @@
-// The feed rules: what a project's journal shows the public, in two pure steps over two plain reads, so a request reads
-// the journal's small columns for the project and the text of the entries it shows, never the text of all of them.
-//   chooseFeed  from the small columns of every event (no text), picks the CURRENT entry (the newest published entry of
-//               live work, if its newest live event is not a withdrawal) and the HISTORY (every entry that was not
-//               withdrawn, once, at its newest event, newest day first, at most 100). Backfilled entries are history only.
+// The feed rules: what a project's journal shows the public, in pure steps over plain reads, so a request reads the
+// journal's small columns for the project, the day of each entry that may be shown, and the text of the entries it
+// shows, never the text of all of them.
+//   daysToRead  from the small columns of every event (no text), the publish events whose day the choice needs: those of
+//               the entries that are not withdrawn.
+//   chooseFeed  from the small columns and those days, picks the CURRENT entry (the newest published entry of live work, if
+//               its newest live event is not a withdrawal) and the HISTORY (every entry that was not withdrawn, once, at
+//               its newest event, newest day first), the first 100 and a few spare. Backfilled entries are history only.
 //   showFeed    from the text of the picked events, reads each as a publication and builds the feed. A picked event whose
-//               text is gone by now (a withdrawal landed between the two reads and erased it) is treated as withdrawn and
-//               left out. A story that is shown and does not read as a publication makes the whole feed refuse, because the
-//               journal holds something this site did not write.
+//               text is gone by now (a withdrawal landed between the reads and erased it) is treated as withdrawn and
+//               left out, and the next spare entry takes its place, so the history has the 100 a request just after the
+//               withdrawal would show. A story that is shown and does not read as a publication makes the whole feed
+//               refuse, because the journal holds something this site did not write.
 // Neither reads a store or writes anything, so no write-time guard applies. Nothing is decided in SQL: the store returns
 // columns and text, and the choices above are made here.
 import * as Data from "effect/Data";
@@ -26,19 +30,15 @@ export type FeedEvent = {
 	readonly publishedAt: string;
 };
 
-/** The day a published entry says the work happened, read from the stored text of its publish event; null when it names none. */
-export type PublishedDay = {
-	readonly entryId: string;
-	readonly day: string | null;
-};
-
-/** What the first read gives: the latest revision (null when the project has no event), every event's small columns, and each publish event's day. */
+/** What the first read gives: the latest revision (null when the project has no event) and every event's small columns. */
 export type FeedIndex = {
 	readonly latestRevision: number | null;
 	/** Every event of the project, oldest revision first. */
 	readonly events: readonly FeedEvent[];
-	readonly days: readonly PublishedDay[];
 };
+
+/** The day each publish event says the work happened, by revision, read from its stored text; null when it names none or the text is gone. */
+export type FeedDays = ReadonlyMap<number, string | null>;
 
 /** An event picked to be shown, with what the entry needs besides its text. */
 export type FeedPick = {
@@ -66,6 +66,12 @@ export class StoredPublicationInvalid extends Data.TaggedError(
 
 const MOST_IN_HISTORY = 100;
 
+/**
+ * Entries read beyond the 100 shown. A withdrawal that lands between the reads erases a picked entry, and the entry just
+ * after the hundredth takes its place, as it would for a request made just after the withdrawal. The read stays bounded.
+ */
+const SPARE_IN_HISTORY = 10;
+
 /** The newest event of each entry. */
 function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
 	const newest = new Map<string, FeedEvent>();
@@ -82,7 +88,33 @@ function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
 
 type ChooseGiven = { readonly choice: FeedChoice };
 
-function choose(index: FeedIndex): ChooseGiven {
+/** The newest publish event of each entry: the one whose day and origin the entry shows. */
+function publishOfEach(events: readonly FeedEvent[]) {
+	return new Map(
+		events.flatMap((event): [string, FeedEvent][] =>
+			event.operation === "publish" ? [[event.entryId, event]] : [],
+		),
+	);
+}
+
+/** The entries that may be in the history: not erased, not withdrawn, and published. */
+function historyEvents(events: readonly FeedEvent[]) {
+	const publishOf = publishOfEach(events);
+
+	return newestOfEach(events).flatMap((event) => {
+		const published = publishOf.get(event.entryId);
+
+		return !event.erased && event.operation !== "withdraw" && published
+			? [{ event, published }]
+			: [];
+	});
+}
+
+/** The revisions of the publish events whose day the choice needs: those of the entries that may be in the history. */
+export const daysToRead = (index: FeedIndex): number[] =>
+	historyEvents(index.events).map(({ published }) => published.revision);
+
+function choose(index: FeedIndex, days: FeedDays): ChooseGiven {
 	const live = index.events.filter((event) => event.origin !== "backfill");
 
 	const newestPublish = live
@@ -98,22 +130,12 @@ function choose(index: FeedIndex): ChooseGiven {
 			)[0]
 		: undefined;
 
-	const dayOf = new Map(index.days.map((d) => [d.entryId, d.day]));
-
-	const publishOf = new Map(
-		index.events
-			.filter((event) => event.operation === "publish")
-			.map((event) => [event.entryId, event]),
-	);
-
-	const history = newestOfEach(index.events)
-		.flatMap((event) => {
-			const published = publishOf.get(event.entryId);
-
-			return !event.erased && event.operation !== "withdraw" && published
-				? [{ event, published, day: dayOf.get(event.entryId) ?? null }]
-				: [];
-		})
+	const history = historyEvents(index.events)
+		.map(({ event, published }) => ({
+			event,
+			published,
+			day: days.get(published.revision) ?? null,
+		}))
 		.sort((a, b) => {
 			// Newest day first; a story with no day last; the later publish first on the same day.
 			if (a.day !== b.day) {
@@ -126,7 +148,7 @@ function choose(index: FeedIndex): ChooseGiven {
 
 			return b.published.revision - a.published.revision;
 		})
-		.slice(0, MOST_IN_HISTORY)
+		.slice(0, MOST_IN_HISTORY + SPARE_IN_HISTORY)
 		.map(
 			({ event, published, day }): FeedPick => ({
 				revision: event.revision,
@@ -157,7 +179,10 @@ function choose(index: FeedIndex): ChooseGiven {
 
 export const chooseFeed = alwaysWrites({
 	name: "Choose the current entry and the history of a project's journal",
-	given: (index: FeedIndex, _facts: Record<string, never>) => choose(index),
+	given: (
+		request: { readonly index: FeedIndex; readonly days: FeedDays },
+		_facts: Record<string, never>,
+	) => choose(request.index, request.days),
 	refusals: [],
 	writes: (g) => g.choice,
 	writesText: "the events whose text the feed shows",
@@ -206,6 +231,11 @@ function entryOf(pick: FeedPick, payload: string | null | undefined): Shown {
 
 type ShowGiven = { readonly valid: boolean; readonly feed: ProjectFeed };
 
+const refused = (projectId: string, revision: number): ShowGiven => ({
+	valid: false,
+	feed: { projectId, revision, current: null, history: [] },
+});
+
 function assemble(
 	request: { readonly projectId: string; readonly choice: FeedChoice },
 	texts: FeedTexts,
@@ -216,20 +246,20 @@ function assemble(
 		? entryOf(choice.current, texts.get(choice.current.revision))
 		: nothing;
 
-	const history = choice.history.map((pick) =>
-		entryOf(pick, texts.get(pick.revision)),
-	);
+	if (!current.ok) return refused(projectId, choice.revision);
 
-	if (!current.ok || history.some((item) => !item.ok))
-		return {
-			valid: false,
-			feed: {
-				projectId,
-				revision: choice.revision,
-				current: null,
-				history: [],
-			},
-		};
+	// The first 100 entries that still have text; one that does not read as a publication refuses the feed. A spare that
+	// is not reached is never read as one.
+	const history: PublicEntry[] = [];
+
+	for (const pick of choice.history) {
+		if (history.length >= MOST_IN_HISTORY) break;
+		const item = entryOf(pick, texts.get(pick.revision));
+
+		if (!item.ok) return refused(projectId, choice.revision);
+
+		if (item.entry) history.push(item.entry);
+	}
 
 	return {
 		valid: true,
@@ -237,9 +267,7 @@ function assemble(
 			projectId,
 			revision: choice.revision,
 			current: current.entry,
-			history: history.flatMap((item) =>
-				item.ok && item.entry ? [item.entry] : [],
-			),
+			history,
 		},
 	};
 }

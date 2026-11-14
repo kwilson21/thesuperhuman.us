@@ -12,7 +12,7 @@ import type {
 	CommitWrite,
 	StoredEvent,
 } from "./rules/publication-commit";
-import type { FeedIndex, FeedTexts } from "./rules/publication-feed";
+import type { FeedDays, FeedIndex, FeedTexts } from "./rules/publication-feed";
 import { PublicationDb } from "./services";
 
 /** The publication database failed, and nothing says it is only unavailable: an outage, a bad statement, a failed batch. */
@@ -160,23 +160,17 @@ export const insertEvent = (write: CommitWrite) =>
 	});
 
 /**
- * Reads, in ONE batch, what choosing a project's feed needs and no text: the latest revision, the small columns of every
- * event (`erased` says its text was erased by a withdrawal), and each publish event's day, taken from its stored text by
- * `json_extract` (a projection of one field, not a decision). Which entry is current and which are history is the feed
- * rule's decision (src/server/rules/publication-feed.ts).
+ * Reads, in ONE batch, the latest revision and the small columns of every event of a project (`erased` says its text was
+ * erased by a withdrawal), and no text. Which entry is current and which are history is the feed rule's decision
+ * (src/server/rules/publication-feed.ts).
  */
 export const readFeedIndex = (projectId: string) =>
 	asked(async (db): Promise<FeedIndex> => {
-		const [latest, events, days] = await db.batch<EventRow>([
+		const [latest, events] = await db.batch<EventRow>([
 			latestRevision(db, projectId),
 			db
 				.prepare(
 					"SELECT revision,entry_id,operation,origin,payload IS NULL AS erased,published_at FROM publication_events WHERE project_id=?1 ORDER BY revision",
-				)
-				.bind(projectId),
-			db
-				.prepare(
-					"SELECT entry_id,json_extract(payload,'$.occurredOn') AS occurred_on FROM publication_events WHERE project_id=?1 AND operation='publish'",
 				)
 				.bind(projectId),
 		]);
@@ -202,16 +196,60 @@ export const readFeedIndex = (projectId: string) =>
 							},
 						],
 			),
-			days: days.results.flatMap((row) =>
-				row.entry_id === undefined
-					? []
-					: [{ entryId: row.entry_id, day: row.occurred_on ?? null }],
-			),
 		};
 	});
 
 /** Most revisions in one statement: D1 allows 100 bound values in a statement, and one is the project. */
 const REVISIONS_PER_STATEMENT = 50;
+
+/** One plain read per chunk of revisions: `columns` of the project's events with these revisions (a key). */
+async function readByRevision(
+	db: D1Database,
+	projectId: string,
+	revisions: readonly number[],
+	columns: string,
+): Promise<EventRow[]> {
+	const chunks: number[][] = [];
+
+	for (let at = 0; at < revisions.length; at += REVISIONS_PER_STATEMENT)
+		chunks.push(revisions.slice(at, at + REVISIONS_PER_STATEMENT));
+
+	const results = await db.batch<EventRow>(
+		chunks.map((chunk) =>
+			db
+				.prepare(
+					`SELECT ${columns} FROM publication_events WHERE project_id=?1 AND revision IN (${chunk.map((_, i) => `?${i + 2}`).join(",")})`,
+				)
+				.bind(projectId, ...chunk),
+		),
+	);
+
+	return results.flatMap((result) => result.results);
+}
+
+/**
+ * Reads the day each of these publish events says the work happened, by project and revision, from its stored text by
+ * `json_extract` (a projection of one field, not a decision), in ONE batch. The feed rule asks only for the entries that
+ * may be shown, so a stored text of an entry that is withdrawn is never parsed. A text a withdrawal erased since the index
+ * was read gives no day.
+ */
+export const readFeedDays = (projectId: string, revisions: readonly number[]) =>
+	asked(async (db): Promise<FeedDays> => {
+		if (revisions.length === 0) return new Map();
+
+		const rows = await readByRevision(
+			db,
+			projectId,
+			revisions,
+			"revision,json_extract(payload,'$.occurredOn') AS occurred_on",
+		);
+
+		return new Map(
+			rows.flatMap((row): [number, string | null][] =>
+				row.revision == null ? [] : [[row.revision, row.occurred_on ?? null]],
+			),
+		);
+	});
 
 /**
  * Reads the stored text of the picked events, by project and revision (a key), in ONE batch of plain reads. A text that a
@@ -223,28 +261,19 @@ export const readFeedTexts = (
 ) =>
 	asked(async (db): Promise<FeedTexts> => {
 		if (revisions.length === 0) return new Map();
-		const chunks: number[][] = [];
 
-		for (let at = 0; at < revisions.length; at += REVISIONS_PER_STATEMENT)
-			chunks.push(revisions.slice(at, at + REVISIONS_PER_STATEMENT));
-
-		const results = await db.batch<EventRow>(
-			chunks.map((chunk) =>
-				db
-					.prepare(
-						`SELECT revision,payload FROM publication_events WHERE project_id=?1 AND revision IN (${chunk.map((_, i) => `?${i + 2}`).join(",")})`,
-					)
-					.bind(projectId, ...chunk),
-			),
+		const rows = await readByRevision(
+			db,
+			projectId,
+			revisions,
+			"revision,payload",
 		);
 
 		return new Map(
-			results.flatMap((result) =>
-				result.results.flatMap((row): [number, string | null][] =>
-					row.revision == null || row.payload === undefined
-						? []
-						: [[row.revision, row.payload]],
-				),
+			rows.flatMap((row): [number, string | null][] =>
+				row.revision == null || row.payload === undefined
+					? []
+					: [[row.revision, row.payload]],
 			),
 		);
 	});

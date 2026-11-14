@@ -391,15 +391,11 @@ describe("the feed's two reads", () => {
 		await deliver(world, base);
 		world.batches.length = 0;
 		await feed(world);
-		const [index, texts] = world.batches;
+		const [index, days, texts] = world.batches;
 
-		expect(
-			index.some((q) =>
-				/SELECT[^;]*\bpayload\b(?! IS NULL)/.test(
-					q.replace(/json_extract\(payload[^)]*\)/g, ""),
-				),
-			),
-		).toBe(false);
+		expect(index.some((q) => /\bpayload\b(?! IS NULL)/.test(q))).toBe(false);
+		expect(days).toHaveLength(1);
+		expect(days[0]).toMatch(/json_extract\(payload/);
 		expect(texts).toHaveLength(1);
 		expect(texts[0]).toMatch(/revision IN \(\?2\)/);
 	});
@@ -408,7 +404,7 @@ describe("the feed's two reads", () => {
 		const world = publicationWorld();
 
 		await deliver(world, base);
-		world.before(/revision IN/, async () => {
+		world.before(/SELECT revision,payload/, async () => {
 			await deliver(
 				world,
 				withdrawal({ eventId: "remove", expectedRevision: 1 }),
@@ -418,6 +414,37 @@ describe("the feed's two reads", () => {
 
 		expect(shown.current).toBeNull();
 		expect(shown.history).toEqual([]);
+	});
+
+	it("shows the 100 entries a request just after a withdrawal would, when the withdrawal lands between the reads", async () => {
+		const world = publicationWorld();
+
+		for (let i = 0; i < 101; i += 1)
+			await deliver(world, {
+				...base,
+				eventId: `e${i}`,
+				entryId: `n${i}`,
+				expectedRevision: i,
+			});
+		// All on one day, so the newest 100 are shown and n0, the oldest, is the spare.
+		world.before(/SELECT revision,payload/, async () => {
+			await deliver(
+				world,
+				withdrawal({
+					eventId: "remove",
+					entryId: "n50",
+					expectedRevision: 101,
+				}),
+			);
+		});
+		const raced = await feed(world);
+		const after = await feed(world);
+
+		expect(raced.history).toHaveLength(100);
+		expect(raced.history.map((e) => e.entryId)).toContain("n0");
+		expect(raced.history.map((e) => e.entryId)).not.toContain("n50");
+		expect(raced.history).toEqual(after.history);
+		expect(raced.current).toEqual(after.current);
 	});
 
 	it("reads a long history in statements of at most 50 revisions", async () => {
@@ -434,6 +461,7 @@ describe("the feed's two reads", () => {
 		const shown = await feed(world);
 
 		expect(shown.history).toHaveLength(100);
-		expect(world.batches[1]).toHaveLength(2);
+		expect(world.batches[1]).toHaveLength(3);
+		expect(world.batches[2]).toHaveLength(3);
 	});
 });

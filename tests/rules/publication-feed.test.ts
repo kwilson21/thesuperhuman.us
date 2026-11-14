@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import { canonicalPublication } from "../../src/lib/publication/canonical";
 import {
 	chooseFeed,
+	daysToRead,
 	revisionsToRead,
 	showFeed,
 	type FeedEvent,
+	type FeedDays,
 	type FeedIndex,
 	type FeedTexts,
 } from "../../src/server/rules/publication-feed";
@@ -48,30 +50,38 @@ const event = (
 	...over,
 });
 
-/** An index whose publish events carry these days (by entry). */
+/** An index and the days the day read would give for it: its publish events carry these days (by entry). */
+type Journal = FeedIndex & { readonly days: FeedDays };
+
 const index = (
 	events: FeedEvent[],
 	days: { [entryId: string]: string } = {},
-): FeedIndex => ({
+): Journal => ({
 	latestRevision: events.length === 0 ? null : events.length,
 	events,
-	days: events.flatMap((e) =>
-		e.operation === "publish"
-			? [{ entryId: e.entryId, day: days[e.entryId] ?? "2026-11-01" }]
-			: [],
+	days: new Map(
+		events.flatMap((e): [number, string][] =>
+			e.operation === "publish"
+				? [[e.revision, days[e.entryId] ?? "2026-11-01"]]
+				: [],
+		),
 	),
 });
 
-const choice = (i: FeedIndex) => Effect.runSync(chooseFeed.decide(i, {}));
+const choice = (i: Journal) =>
+	Effect.runSync(chooseFeed.decide({ index: i, days: i.days }, {}));
 
 /** The text store as it would answer for each picked event: the canonical text of a publication on its day. */
-const textsFor = (i: FeedIndex, erased: readonly number[] = []): FeedTexts =>
+const textsFor = (i: Journal, erased: readonly number[] = []): FeedTexts =>
 	new Map(
 		revisionsToRead(choice(i)).map((revision): [number, string | null] => {
 			const picked = i.events.find((e) => e.revision === revision);
 
-			const day =
-				i.days.find((d) => d.entryId === picked?.entryId)?.day ?? "2026-11-01";
+			const published = i.events.find(
+				(e) => e.entryId === picked?.entryId && e.operation === "publish",
+			);
+
+			const day = i.days.get(published?.revision ?? 0) ?? "2026-11-01";
 
 			return [
 				revision,
@@ -82,14 +92,14 @@ const textsFor = (i: FeedIndex, erased: readonly number[] = []): FeedTexts =>
 		}),
 	);
 
-const shown = (i: FeedIndex, texts: FeedTexts = textsFor(i)) =>
+const shown = (i: Journal, texts: FeedTexts = textsFor(i)) =>
 	Effect.runSync(
 		Effect.result(
 			showFeed.decide({ projectId: "p", choice: choice(i) }, { texts }),
 		),
 	);
 
-const feed = (i: FeedIndex, texts?: FeedTexts) => {
+const feed = (i: Journal, texts?: FeedTexts) => {
 	const answer = shown(i, texts);
 
 	return Result.isSuccess(answer) ? answer.success : null;
@@ -138,7 +148,8 @@ describe("what the public sees of a journal", () => {
 		expect(feed(i)?.history.map((e) => e.entryId)).toEqual(["a"]);
 	});
 
-	it("reads the text of the shown entries only: at most 100 in history, and the current entry once", () => {
+	/** 150 published entries, one a day or so apart, so the history has more than it shows. */
+	const long = () => {
 		const events = Array.from({ length: 150 }, (_, i) => event(i + 1, `e${i}`));
 
 		const days = Object.fromEntries(
@@ -148,11 +159,66 @@ describe("what the public sees of a journal", () => {
 			]),
 		);
 
+		return { events, days };
+	};
+
+	it("reads the text of the shown entries and a few spare only: never all 150, and the current entry once", () => {
+		const { events, days } = long();
 		const i = index(events, days);
 
 		expect(feed(i)?.history).toHaveLength(100);
-		// 100 history picks; the current entry (the newest publish) is one of them or one more, never a read of all 150.
-		expect(revisionsToRead(choice(i)).length).toBeLessThanOrEqual(101);
+		// 100 shown, 10 spare; the current entry (the newest publish) is one of them or one more.
+		expect(revisionsToRead(choice(i)).length).toBeLessThanOrEqual(111);
+		expect(revisionsToRead(choice(i)).length).toBeGreaterThan(100);
+	});
+
+	it("shows 100 entries when a withdrawal erased one of them between the reads, as a request just after it would", () => {
+		const { events, days } = long();
+		const i = index(events, days);
+		const picked = choice(i).history[40];
+
+		// The same journal after the withdrawal: that entry's event is erased in the index itself.
+		const after = index(
+			events.map((e) =>
+				e.revision === picked.revision ? { ...e, erased: true } : e,
+			),
+			days,
+		);
+
+		const raced = feed(i, textsFor(i, [picked.revision]));
+
+		expect(raced?.history).toHaveLength(100);
+		expect(raced?.history.map((e) => e.entryId)).not.toContain(picked.entryId);
+		expect(raced?.history).toEqual(feed(after)?.history);
+	});
+
+	it("does not read a spare entry as a publication unless it is shown", () => {
+		const { events, days } = long();
+		const i = index(events, days);
+		const spare = choice(i).history[100];
+		const texts = new Map(textsFor(i)).set(spare.revision, "not json");
+
+		expect(feed(i, texts)?.history).toHaveLength(100);
+		// With one of the first 100 erased, that spare is shown, and it does not read.
+		const erased = new Map(texts).set(choice(i).history[3].revision, null);
+		const answer = shown(i, erased);
+
+		expect(Result.isFailure(answer) && answer.failure._tag).toBe(
+			"StoredPublicationInvalid",
+		);
+	});
+
+	it("asks for the day of the entries that are not withdrawn only", () => {
+		const i = index([
+			event(1, "a"),
+			event(2, "gone"),
+			event(3, "gone", { operation: "withdraw", erased: true }),
+			event(4, "erased", { erased: true }),
+			event(5, "a", { operation: "correct" }),
+		]);
+
+		// a: its publish event (1); gone: withdrawn; erased: nothing left of it.
+		expect(daysToRead(i)).toEqual([1]);
 	});
 
 	it("leaves out an entry whose text a withdrawal erased between the two reads, as a withdrawn one", () => {
