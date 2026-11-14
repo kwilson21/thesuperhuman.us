@@ -382,7 +382,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -525,7 +525,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -542,6 +542,47 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 	expect(JSON.stringify(JSON.parse(String(alertCall[1]?.body)))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
+});
+
+it("answers 503 with the temporary sentence when the captcha service cannot be reached", async () => {
+	vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+	const response = await POST(context());
+	expect(response.status).toBe(503);
+	expect(await readJson<{ error: string }>(response)).toEqual({
+		ok: false,
+		error:
+			"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+	});
+	expect(
+		sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get(),
+	).toEqual({ n: 0 });
+});
+
+it("still alerts the owner when clearing the counter fails after a storage failure", async () => {
+	const failing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+	const response = await POST(
+		context(base, {
+			db: failing,
+			rate: fakeKv({
+				get: async () => null,
+				put: async () => {},
+				delete: async () => {
+					throw new Error("kv down");
+				},
+			}),
+		}),
+	);
+	expect(response.status).toBe(500);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
 });
 
 it("rejects overlength and line breaks in every text field", () => {

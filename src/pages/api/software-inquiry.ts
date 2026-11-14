@@ -14,12 +14,18 @@ import {
 	softwareRequest,
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
-import { verifyTurnstile } from "~/lib/turnstile";
+import { checkTurnstile } from "~/lib/turnstile";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
+const ROUTE = "/api/software-inquiry";
+
 const preserved =
 	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
+
+const unavailable =
+	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
 
 async function existing(db: D1Database, submissionId: string) {
 	const row = await db
@@ -28,6 +34,15 @@ async function existing(db: D1Database, submissionId: string) {
 		.first<{ id: string }>();
 
 	return row ? getOwnerRequest(db, row.id) : null;
+}
+
+/** Gives back one count; a failure is logged, and the caller still answers what it would have answered. */
+async function giveBack(kv: KVNamespace, key: string) {
+	try {
+		await kv.delete(key);
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+	}
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -65,14 +80,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				{ ok: false, error: "Please wait a few minutes before sending again." },
 				{ status: 429 },
 			);
+		const check = await checkTurnstile(
+			input.turnstileToken,
+			env.TURNSTILE_SECRET_KEY,
+			ip,
+		);
 
-		if (
-			!(await verifyTurnstile(
-				input.turnstileToken,
-				env.TURNSTILE_SECRET_KEY,
-				ip,
-			))
-		)
+		// A captcha service that cannot answer is an outage, not a refused challenge: the visitor keeps the form.
+		if (check === "unavailable")
+			return Response.json({ ok: false, error: unavailable }, { status: 503 });
+
+		if (check === "refused")
 			return Response.json(
 				{
 					ok: false,
@@ -86,7 +104,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 		try {
 			prior = await existing(env.MUSIC_DB, input.submissionId);
-		} catch {
+		} catch (error) {
+			logUnexpected(ROUTE, error);
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
 				route: "/api/software-inquiry",
@@ -95,7 +114,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				occurredAt: new Date().toISOString(),
 			});
 
-			return Response.json({ ok: false, error: preserved }, { status: 503 });
+			return Response.json({ ok: false, error: preserved }, { status: 500 });
 		}
 
 		if (prior)
@@ -122,8 +141,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		try {
 			saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
 		} catch (error) {
+			// A rival that stored the same submission first is answered with its own brief, as a retry would be.
 			const raced = await existing(env.MUSIC_DB, input.submissionId).catch(
-				() => null,
+				(lookupError: unknown) => {
+					logUnexpected(ROUTE, lookupError);
+
+					return null;
+				},
 			);
 
 			if (raced)
@@ -136,7 +160,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					: Response.json({ ok: false, error: preserved }, { status: 409 });
 
 			if (error instanceof RequestDetailsTooLargeError) {
-				await env.RATE_LIMIT.delete(`rl:software:${ip}`);
+				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
 
 				return Response.json(
 					{
@@ -146,8 +170,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 					{ status: 400 },
 				);
 			}
-
-			await env.RATE_LIMIT.delete(`rl:software:${ip}`);
+			logUnexpected(ROUTE, error);
+			await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
 			await sendUrgentOwnerAlert(env, {
 				category: "request-storage",
 				route: "/api/software-inquiry",
@@ -156,7 +180,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				occurredAt: new Date().toISOString(),
 			});
 
-			return Response.json({ ok: false, error: preserved }, { status: 503 });
+			return Response.json({ ok: false, error: preserved }, { status: 500 });
 		}
 
 		const clientCopyStatus = await deliverSoftwareBriefCopy(
@@ -187,14 +211,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			brief: softwareBrief(saved),
 			clientCopyStatus,
 		});
-	} catch {
-		return Response.json(
-			{
-				ok: false,
-				error:
-					"Sending is temporarily unavailable. Your details are still here. Please try again later.",
-			},
-			{ status: 503 },
-		);
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
+		return Response.json({ ok: false, error: unavailable }, { status: 500 });
 	}
 };
