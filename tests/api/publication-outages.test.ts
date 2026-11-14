@@ -165,3 +165,88 @@ describe("the OAuth route when its KV namespace fails", () => {
 		expect(await response.text()).toBe("Publication connection unavailable.");
 	});
 });
+
+describe("values a visitor sends that would become part of a KV key", () => {
+	/** A KV namespace that refuses a key over 512 bytes, as Cloudflare's does, and holds nothing else. */
+	const strictKv = () =>
+		fakeKv({
+			get: async (key: string) => {
+				if (new TextEncoder().encode(key).length > 512)
+					throw new Error("KV GET failed: 414 UriTooLong");
+
+				return null;
+			},
+			put: async (key: string) => {
+				if (new TextEncoder().encode(key).length > 512)
+					throw new Error("KV PUT failed: 414 UriTooLong");
+			},
+		});
+
+	const call = (path: string, init?: RequestInit) =>
+		publicationOAuthRoute(
+			partial<APIContext>({
+				request: new Request("https://thesuperhuman.us" + path, init),
+				locals: partial<APIContext["locals"]>({
+					runtime: partial<APIContext["locals"]["runtime"]>({
+						env: partial<APIContext["locals"]["runtime"]["env"]>({
+							OAUTH_KV: strictKv(),
+							PUBLICATION_DB: double<D1Database>({}),
+							PUBLICATION_OWNER_ID: "10987837",
+							PUBLICATION_PROJECTS: "threadline",
+							PUBLICATION_GITHUB_CLIENT_ID: "client",
+							PUBLICATION_GITHUB_CLIENT_SECRET: "secret",
+							PUBLICATION_COOKIE_KEY: btoa("k".repeat(32)),
+						}),
+						ctx: double<ExecutionContext>({ waitUntil() {} }),
+					}),
+				}),
+			}),
+		);
+
+	const long = "a".repeat(600);
+
+	const form = (fields: { [name: string]: string }) => ({
+		method: "POST",
+		headers: { "content-type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams(fields),
+	});
+
+	it("answers a client id too long for a key as a refused request, not a server fault", async () => {
+		const query = new URLSearchParams({
+			response_type: "code",
+			client_id: long,
+			redirect_uri: "https://chatgpt.com/callback",
+			scope: "publication:threadline",
+		});
+
+		const response = await call(`/api/publication/authorize?${query}`);
+
+		expect(response.status).toBe(400);
+	});
+
+	it("answers a token request whose code, refresh token or client id is too long with a 4xx", async () => {
+		for (const fields of [
+			{ grant_type: "authorization_code", code: `1:2:${long}`, client_id: "c" },
+			{
+				grant_type: "refresh_token",
+				refresh_token: `1:2:${long}`,
+				client_id: "c",
+			},
+			{ grant_type: "authorization_code", code: "1:2:3", client_id: long },
+		]) {
+			const response = await call("/api/publication/token", form(fields));
+
+			expect(response.status).toBeGreaterThanOrEqual(400);
+			expect(response.status).toBeLessThan(500);
+		}
+	});
+
+	it("answers a bearer token too long for a key with a 4xx", async () => {
+		const response = await call("/api/publication/mcp", {
+			method: "POST",
+			headers: { authorization: `Bearer 1:2:${long}` },
+		});
+
+		expect(response.status).toBe(401);
+	});
+});

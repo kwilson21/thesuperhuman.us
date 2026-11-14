@@ -692,4 +692,47 @@ describe("publication sign-in when something other than the visitor's request fa
 		expect(result.status).toBe(500);
 		expect(await result.text()).toBe(SENTENCE);
 	});
+
+	it.each([
+		["HTML 429", 429, 503],
+		["HTML 403", 403, 400],
+		["HTML 404", 404, 400],
+	])(
+		"answers a non-JSON %s from the code exchange as %s",
+		async (_name, answered, wanted) => {
+			const { env } = fixture();
+			const { response, nonce } = await start(env);
+
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => new Response("<html>x</html>", { status: answered })),
+			);
+			expect(
+				(await publicationLogin(callback(nonce, response), env)).status,
+			).toBe(wanted);
+		},
+	);
+
+	it("answers a non-JSON 4xx from GitHub's user lookup as a refusal, and a 429 as unavailable", async () => {
+		for (const [answered, wanted] of [
+			[403, 400],
+			[429, 503],
+		]) {
+			const { env } = fixture();
+			const { response, nonce } = await start(env);
+
+			vi.stubGlobal(
+				"fetch",
+				vi
+					.fn()
+					.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+					.mockResolvedValueOnce(
+						new Response("<html>x</html>", { status: answered }),
+					),
+			);
+			expect(
+				(await publicationLogin(callback(nonce, response), env)).status,
+			).toBe(wanted);
+		}
+	});
 });

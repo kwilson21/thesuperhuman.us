@@ -57,6 +57,53 @@ async function bounded(request: Request): Promise<Request | null> {
 	});
 }
 
+/**
+ * A KV key may not be longer than 512 bytes, and the OAuth library builds keys from what a visitor sends (a client id, the
+ * parts of an authorization code or a refresh token). No real value comes near this long, so a longer one is replaced with a
+ * stub no credential equals, and the library refuses the request as it refuses any unknown client or invalid grant, with
+ * its own answer, before it reaches KV.
+ */
+const LONGEST_CREDENTIAL_PART = 256;
+
+const tooLong = (value: string) =>
+	new TextEncoder().encode(value).length > LONGEST_CREDENTIAL_PART;
+
+async function keySafe(request: Request): Promise<Request> {
+	const url = new URL(request.url);
+	const headers = new Headers(request.headers);
+	const basic = headers.get("authorization");
+
+	if (basic?.startsWith("Basic ") && basic.length > 1024)
+		headers.set("authorization", "Basic x");
+
+	if (request.method === "GET") {
+		if (tooLong(url.searchParams.get("client_id") ?? ""))
+			url.searchParams.set("client_id", "x");
+
+		return new Request(url, { method: request.method, headers });
+	}
+
+	if (
+		!(headers.get("content-type") ?? "").startsWith(
+			"application/x-www-form-urlencoded",
+		)
+	)
+		return new Request(request, { headers });
+
+	const fields = new URLSearchParams(await request.text());
+
+	for (const name of ["client_id", "code", "refresh_token"])
+		if (tooLong(fields.get(name) ?? "")) fields.set(name, "x");
+
+	headers.delete("content-length");
+
+	return new Request(url, {
+		method: request.method,
+		headers,
+		body: fields.toString(),
+	});
+}
+
 function isIdentity(value: unknown): value is PublicationIdentity {
 	return (
 		typeof value === "object" &&
@@ -157,7 +204,11 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			}),
 		});
 
-		const response = await provider.fetch(limited, env, locals.runtime.ctx);
+		const response = await provider.fetch(
+			await keySafe(limited),
+			env,
+			locals.runtime.ctx,
+		);
 
 		const wrapped = new Response(response.body, response);
 		wrapped.headers.set("Cache-Control", "no-store");
