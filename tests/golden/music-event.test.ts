@@ -46,7 +46,7 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                                       cannot be reached: the route always passes the catalog's 160 seconds.
 //   200 { ok: true }                    start and replay, audio and video; a duplicate delivery (same identity, nothing
 //                                       stored), including the same event stored by another request just before the
-//                                       insert; a full listen; the campaign tag matched, not matched, inactive, partial;
+//                                       insert or between the two reads; a full listen; the campaign tag matched, not matched, inactive, partial;
 //                                       the client's own duration ignored; the stored location, traffic class and the
 //                                       rules that blank a location part
 //
@@ -417,6 +417,22 @@ const cases: Case[] = [
 					run: (sqlite) =>
 						sqlite.exec(
 							`INSERT INTO music_playback_events (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,traffic_class,occurred_at) VALUES ('${eid(2)}','${RELEASE}','${RECORDING}','${SESSION}','${PLAY}',1,'audio','start',0,160,'human','2026-11-13T11:59:59.000Z')`,
+						),
+				},
+			],
+		},
+	),
+	withBody(
+		"another request stores the same event between the duplicate lookup and the last-event lookup",
+		{},
+		{
+			interleave: [
+				{
+					on: /SELECT sequence,accumulated_seconds/,
+					label: "the same event arrived from another connection",
+					run: (sqlite) =>
+						sqlite.exec(
+							`INSERT INTO music_playback_events (id,release_id,recording_id,session_id,playthrough_id,sequence,medium,event,accumulated_seconds,media_duration_seconds,traffic_class,occurred_at) VALUES ('${eid(1)}','${RELEASE}','${RECORDING}','${SESSION}','${PLAY}',1,'audio','start',0,160,'human','2026-11-13T11:59:59.000Z')`,
 						),
 				},
 			],
