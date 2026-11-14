@@ -340,7 +340,10 @@ export class Assistant extends Context.Service<
 	Assistant,
 	{
 		/** The model's answer to the chat `content`, as Workers AI gives it. */
-		readonly complete: (content: string) => Effect.Effect<unknown, ModelFailed>;
+		readonly complete: (
+				content: string,
+				timeoutMs: number,
+			) => Effect.Effect<AssistantReply, ModelFailed>;
 	}
 >()("site/Assistant") {}
 
@@ -390,12 +393,23 @@ export const liveSuggestLimits = (env: Env) =>
 			}).pipe(Effect.map((answer) => answer.success)),
 	});
 
-/** The Workers AI binding. The chat is built by the caller; the service only makes the call. */
+/** The model's answer: the reply as Workers AI gave it, or a timeout. */
+export type AssistantReply =
+	| { readonly kind: "answered"; readonly value: unknown }
+	| { readonly kind: "timeout" };
+
+/**
+ * The Workers AI binding. The chat is built here. The race with the timer is the one the suggest route always ran, kept as
+ * it was: the model's promise takes its own `then`, the race is awaited once, and the clean-up timer is cleared after the
+ * answer. The golden corpus (tests/golden) holds the order the promises settle in, which these hops set.
+ */
 export const liveAssistant = (ai: Ai) =>
 	Context.make(Assistant, {
-		complete: (content) =>
-			Effect.tryPromise({
-				try: () =>
+		complete: (content, timeoutMs) =>
+			Effect.suspend(() => {
+				let timer: ReturnType<typeof setTimeout> | undefined;
+
+				const race = Promise.race([
 					ai
 						.run("@cf/meta/llama-3.2-1b-instruct", {
 							messages: [
@@ -409,10 +423,28 @@ export const liveAssistant = (ai: Ai) =>
 							temperature: 0.1,
 							max_tokens: 12,
 						})
-						.then((reply) => reply),
-				// The extra turn is deliberate: the reply, or its failure, is seen after the old days' cleanup, which the route has
-				// always started first. The golden corpus (tests/golden) holds that order, so it is not removed.
-				catch: (cause) => new ModelFailed({ cause }),
+						.then(
+							(value): AssistantReply => ({ kind: "answered", value }),
+							() => ({ kind: "failed" as const }),
+						),
+					new Promise<AssistantReply>((resolve) => {
+						timer = setTimeout(() => resolve({ kind: "timeout" }), timeoutMs);
+					}),
+				]);
+
+				return Effect.promise(() => race).pipe(
+					Effect.ensuring(
+						Effect.sync(() => {
+							if (timer) clearTimeout(timer);
+						}),
+					),
+					Effect.flatMap(
+						(outcome): Effect.Effect<AssistantReply, ModelFailed> =>
+							outcome.kind === "failed"
+								? Effect.fail(new ModelFailed({ cause: undefined }))
+								: Effect.succeed(outcome),
+					),
+				);
 			}),
 	});
 

@@ -6,9 +6,7 @@
 // named error the route logs (the cause, as it always was) and answers 500; a model failure answers 503, logged as a fixed
 // line, never with the model's own text.
 import * as Data from "effect/Data";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import {
@@ -156,12 +154,9 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const assistant = yield* Assistant;
 
-		const reply = yield* assistant
-			.complete(submission.content)
-			.pipe(
-				Effect.timeoutOption(Duration.millis(MODEL_TIMEOUT_MS)),
-				Effect.result,
-			);
+		const reply = yield* Effect.result(
+			assistant.complete(submission.content, MODEL_TIMEOUT_MS),
+		);
 
 		if (Result.isFailure(reply)) {
 			yield* Effect.sync(() =>
@@ -171,7 +166,9 @@ export const suggest = (submission: SuggestSubmission) =>
 			return { kind: "modelUnavailable" } as const;
 		}
 
-		const answer = Option.getOrUndefined(reply.success);
+		// A timeout reads as no reply, as the route always read it: the empty suggestion follows.
+		const answer =
+			reply.success.kind === "answered" ? reply.success.value : undefined;
 
 		const raw = yield* Effect.try({
 			try: () => replyText(answer),
