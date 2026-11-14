@@ -347,7 +347,7 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 		sql.close();
 	});
 
-	it("removes the browser's earlier code when it asks for a different address", async () => {
+	it("replaces the browser's earlier code when it asks for a different address, and keeps it when nothing is issued", async () => {
 		const { sql, db } = fixture();
 		const first = (await issueClientCode(db, address, secret, now))!;
 
@@ -364,19 +364,19 @@ describe("a sign-in code belongs to the browser that asked for it", () => {
 			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
 		).toEqual([{ email: otherAddress }]);
 
-		// Also when nothing new is issued for the other address: the browser's cookie is replaced either way.
-		const third = await issueClientCode(
-			db,
-			"nobody@example.com",
-			secret,
-			later(6),
-			second.nonce,
-		);
-
-		expect(third).toBeNull();
+		// A request that issues nothing leaves the browser's code alone: its cookie does not change either.
 		expect(
-			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
-		).toEqual({ n: 0 });
+			await issueClientCode(
+				db,
+				"nobody@example.com",
+				secret,
+				later(6),
+				second.nonce,
+			),
+		).toBeNull();
+		expect(
+			sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
+		).toEqual([{ email: otherAddress }]);
 		sql.close();
 	});
 });

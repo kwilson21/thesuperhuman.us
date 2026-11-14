@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { double, partial } from "../helpers/doubles";
-import { fakeBatch } from "../helpers/d1";
+import { boundStatement, fakeBatch } from "../helpers/d1";
 import { readJson } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
@@ -309,41 +309,44 @@ describe("the pending sign-in cookie", () => {
 		).toBe(200);
 	});
 
-	it("returns a fresh value whether or not the address has a project, even when the browser sends one", async () => {
+	it("answers a browser that sent a cookie value with that same value, whether or not the address has a project", async () => {
 		const sent = "9".repeat(64);
 		const cookie = `${pendingName}=${sent}`;
 		const known = await ask({ cookie });
 		const unknown = await ask({ cookie }, "nobody@example.com");
 
-		expect(nonceFrom(known)).toMatch(/^[0-9a-f]{64}$/);
-		expect(nonceFrom(known)).not.toBe(sent);
-		expect(nonceFrom(unknown)).toMatch(/^[0-9a-f]{64}$/);
-		expect(nonceFrom(unknown)).not.toBe(sent);
+		// The same value both times, so the answer does not show which address has a project, and a refused or lost request
+		// cannot change the browser's cookie away from a code that another request of its own just emailed.
+		expect(nonceFrom(known)).toBe(sent);
+		expect(nonceFrom(unknown)).toBe(sent);
 	});
 
-	it("returns a fresh value to a browser that asks again at once, and the new code replaces its own earlier one", async () => {
+	it("gives a browser that sent no cookie a fresh random value, whether or not the address has a project", async () => {
+		const known = await ask();
+		const unknown = await ask({}, "nobody@example.com");
+
+		expect(nonceFrom(known)).toMatch(/^[0-9a-f]{64}$/);
+		expect(nonceFrom(unknown)).toMatch(/^[0-9a-f]{64}$/);
+		expect(nonceFrom(known)).not.toBe(nonceFrom(unknown));
+	});
+
+	it("replaces a browser's earlier code in place when it asks again, under the same cookie value", async () => {
 		const first = await ask();
 		const nonce = nonceFrom(first)!;
 		const second = await ask({ cookie: `${pendingName}=${nonce}` });
 
-		expect(nonceFrom(second)).not.toBe(nonce);
+		expect(nonceFrom(second)).toBe(nonce);
 		expect(mails).toHaveLength(2);
 		expect(
 			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
 		).toEqual({ n: 1 });
 		expect(
-			(
-				await enter(codeIn(mails[0]), {
-					cookie: `${pendingName}=${nonceFrom(second)}`,
-				})
-			).status,
+			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}` }))
+				.status,
 		).toBe(401);
 		expect(
-			(
-				await enter(codeIn(mails[1]), {
-					cookie: `${pendingName}=${nonceFrom(second)}`,
-				})
-			).status,
+			(await enter(codeIn(mails[1]), { cookie: `${pendingName}=${nonce}` }))
+				.status,
 		).toBe(200);
 	});
 
@@ -390,16 +393,96 @@ describe("a browser's own earlier code", () => {
 		).toEqual([{ email: otherAddress }]);
 	});
 
-	it("is removed when the browser asks for an address with no project", async () => {
+	it("keeps the browser's code when it asks for an address with no project, because its cookie does not change", async () => {
 		const first = await ask();
-
-		await ask(
-			{ cookie: `${pendingName}=${nonceFrom(first)}` },
+		const nonce = nonceFrom(first)!;
+		const refused = await ask(
+			{ cookie: `${pendingName}=${nonce}` },
 			"nobody@example.com",
 		);
+
+		expect(nonceFrom(refused)).toBe(nonce);
 		expect(
-			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
-		).toEqual({ n: 0 });
+			(await enter(codeIn(mails[0]), { cookie: `${pendingName}=${nonce}` }))
+				.status,
+		).toBe(200);
+	});
+});
+
+describe("what a code request shows", () => {
+	// The facts are read the same way for every address, so an address with a project, one without and a full one cost the
+	// same database round trips and the reads are the same statements.
+	async function recorded(who: string, prepare: () => void) {
+		prepare();
+
+		const real = db;
+		const batches: string[][] = [];
+
+		db = double<D1Database>({
+			prepare: (query: string) => real.prepare(query),
+			batch: async (items: D1PreparedStatement[]) => {
+				batches.push(items.map((item) => boundStatement(item).query));
+
+				return real.batch(items);
+			},
+		});
+
+		const response = await ask({}, who);
+
+		db = real;
+
+		return { response, batches };
+	}
+
+	it("reads the same facts, in the same round trips, for an address with a project, one without and a full one", async () => {
+		const known = await recorded(address, () => {});
+		const unknown = await recorded("nobody@example.com", () => {});
+
+		const full = await recorded(address, () => {
+			sql.exec("DELETE FROM audio_client_allowances");
+
+			for (let index = 0; index < 6; index++)
+				sql
+					.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+            VALUES (?,?,?,0,?,?)`)
+					.run(
+						`full${index}`,
+						address,
+						`c${index}`,
+						new Date().toISOString(),
+						new Date(Date.now() + 600_000).toISOString(),
+					);
+		});
+
+		const shapes = [known, unknown, full].map(({ batches }) => ({
+			trips: batches.length,
+			// The batch that reads the facts is the one that is all SELECTs and has two statements.
+			reads: batches.filter(
+				(batch) =>
+					batch.length === 2 &&
+					batch.every((query) => /^\s*SELECT/i.test(query)),
+			),
+		}));
+
+		expect(shapes[0].reads).toHaveLength(1);
+		expect(shapes[2].reads).toEqual(shapes[0].reads);
+		expect(shapes[1].trips).toBe(shapes[0].trips);
+		expect(shapes[2].trips).toBe(shapes[0].trips);
+
+		// And the answers are indistinguishable.
+		const answers = await Promise.all(
+			[known, unknown, full].map(async ({ response }) => ({
+				status: response.status,
+				body: await response.json(),
+				cookieShape: response.headers
+					.getSetCookie()[0]
+					.replace(/=[0-9a-f]{64}/, "=<value>"),
+			})),
+		);
+
+		expect(answers[1]).toEqual(answers[0]);
+		expect(answers[2]).toEqual(answers[0]);
+		expect(mails).toHaveLength(1);
 	});
 });
 
@@ -486,9 +569,10 @@ describe("races", () => {
 		).toEqual({ attempts: 0 });
 	});
 
-	it("lets two requests from one browser at once both succeed, and only the later cookie opens its code", async () => {
+	it("lets two requests from one browser at once both succeed and leaves the browser's cookie opening the later code, whatever order the responses arrive in", async () => {
 		const asked = await ask({ ip: "203.0.113.5" });
-		const cookie = `${pendingName}=${nonceFrom(asked)}`;
+		const nonce = nonceFrom(asked)!;
+		const cookie = `${pendingName}=${nonce}`;
 
 		const [one, two] = await Promise.all([
 			requestCode(
@@ -509,11 +593,142 @@ describe("races", () => {
 
 		await Promise.all(background.splice(0));
 		expect([one.status, two.status]).toEqual([200, 200]);
+		// Both responses carry the value the browser sent, so whichever arrives last stores a value that opens a code.
+		expect([nonceFrom(one), nonceFrom(two)]).toEqual([nonce, nonce]);
 		expect(mails).toHaveLength(3);
-		// The first code's row is gone; both new rows are live and bounded by the email allowance.
 		expect(
 			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
-		).toEqual({ n: 2 });
+		).toEqual({ n: 1 });
+
+		// Exactly one of the later two emailed codes is the stored one (the request that wrote last).
+		const opened = [];
+
+		for (const mail of mails.slice(1))
+			if ((await enter(codeIn(mail), { cookie })).status === 200)
+				opened.push(codeIn(mail));
+		expect(opened).toHaveLength(1);
+	});
+
+	it("keeps the browser's emailed code usable when it asks twice at once while the address has five other live codes", async () => {
+		for (let index = 0; index < 5; index++)
+			sql
+				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+          VALUES (?,?,?,0,?,?)`)
+				.run(
+					`n${index}`,
+					address,
+					`c${index}`,
+					new Date().toISOString(),
+					new Date(Date.now() + 600_000).toISOString(),
+				);
+
+		const nonce = "a".repeat(64);
+		const cookie = `${pendingName}=${nonce}`;
+
+		const responses = await Promise.all(
+			[20, 21].map((last) =>
+				requestCode(
+					context(
+						"/api/studio/code",
+						{ email: address, turnstileToken: "ok" },
+						{ cookie, ip: `203.0.113.${last}` },
+					),
+				),
+			),
+		);
+
+		await Promise.all(background.splice(0));
+		expect(responses.map((response) => nonceFrom(response))).toEqual([
+			nonce,
+			nonce,
+		]);
+		expect(mails.length).toBeGreaterThan(0);
+
+		const opened = [];
+
+		for (const mail of mails)
+			if ((await enter(codeIn(mail), { cookie })).status === 200)
+				opened.push(codeIn(mail));
+		expect(opened).toHaveLength(1);
+	});
+
+	it("never lets two different browsers at once push the address past six live codes, and answers the loser like any refusal", async () => {
+		for (let index = 0; index < 5; index++)
+			sql
+				.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at)
+          VALUES (?,?,?,0,?,?)`)
+				.run(
+					`n${index}`,
+					address,
+					`c${index}`,
+					new Date().toISOString(),
+					new Date(Date.now() + 600_000).toISOString(),
+				);
+
+		// Both requests read the facts before either writes.
+		const real = db;
+		let arrived = 0;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+
+		db = double<D1Database>({
+			prepare: (query: string) => real.prepare(query),
+			batch: async (items: D1PreparedStatement[]) => {
+				if (
+					boundStatement(items[0]).query.includes("COUNT(*)") &&
+					arrived < 2
+				) {
+					arrived++;
+					if (arrived === 2) release();
+					await gate;
+				}
+
+				return real.batch(items);
+			},
+		});
+
+		const responses = await Promise.all(
+			[30, 31].map((last) =>
+				requestCode(
+					context(
+						"/api/studio/code",
+						{ email: address, turnstileToken: "ok" },
+						{ ip: `203.0.113.${last}` },
+					),
+				),
+			),
+		);
+
+		await Promise.all(background.splice(0));
+		expect(responses.map((response) => response.status)).toEqual([200, 200]);
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: 6 });
+		expect(mails).toHaveLength(1);
+	});
+
+	it("does not accept a code that was replaced between the read and the write of the entry", async () => {
+		const asked = await ask({ ip: "203.0.113.5" });
+		const cookie = `${pendingName}=${nonceFrom(asked)}`;
+		const real = db;
+
+		db = double<D1Database>({
+			prepare: (query: string) => real.prepare(query),
+			batch: async (items: D1PreparedStatement[]) => {
+				if (boundStatement(items[0]).query.includes("SET attempts=")) {
+					// The browser asked again just now: the same row has a new code.
+					sql.exec("UPDATE audio_client_signin_codes SET code_hash='replaced'");
+					db = real;
+				}
+
+				return real.batch(items);
+			},
+		});
+
+		expect((await enter(codeIn(mails[0]), { cookie })).status).toBe(401);
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_sessions").get(),
+		).toEqual({ n: 0 });
 	});
 
 	it("keeps the client's code when a stranger's request commits between the client's request and entry", async () => {
