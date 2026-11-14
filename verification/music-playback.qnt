@@ -108,7 +108,9 @@ module musicPlayback {
     all {
       rows' = if (inserts) rows.union(Set({ id: ev.id, pt: ev.pt, seq: ev.seq, acc: ev.acc, by: r })) else rows,
       runs' = runs.set(r, after),
-      conflictedSame' = (conflictedSame or (guardFired and MUTANT == "no-retry" and sameStored)),
+      // Ghost: set from the real outcome, never from the mutant: the delivery ends as a conflict (it will not try again)
+      // while the very same event is stored.
+      conflictedSame' = (conflictedSame or (guardFired and not(keepsTrying) and sameStored)),
     }
   }
 
