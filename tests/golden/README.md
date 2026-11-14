@@ -308,6 +308,11 @@ a label the same on every run and under load. Two consequences are part of the r
   gate and no threaded work undelivered: the route is waiting for those effects, so they are released as `request`. A
   route that yields fewer times (Effect yields every 2,048 operations, so a 3,000-step flow yields about once) keeps its
   deferred work `background`.
+- The count is exact, so the threshold is the same on every machine. After a `waitUntil` write, 99 `setImmediate` yields
+  leave the write `background`, and 100 or more make it `request` (`threads.test.ts`, "the yield threshold"). Effect
+  yields every 2,048 operations, so an `Effect.forEach` of about 205,000 operations (100 times 2,048 is 204,800) after
+  `waitUntil` makes the deferred write `request`. This is one more form of the known limit below: a route that keeps
+  working after `waitUntil` may have its deferred work labelled `request`. Call `waitUntil` last.
 - A route that yields more than `YIELD_LIMIT` (50,000) times in a row without an answer or an effect is a harness error.
 
 **Faked route timers.** `setTimeout` is faked for every case. Under virtual timers (`vi.useFakeTimers`) the frozen clock
