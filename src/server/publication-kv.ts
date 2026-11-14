@@ -8,9 +8,11 @@
 // grant. The request itself reaches the library untouched.
 //
 // What the library does with the namespace (oauth-provider.js, version 0.x): `get` of `client:<id>`, `grant:<user>:<grant>`
-// and `token:<user>:<grant>:<hash>`, each partly visitor-driven; `put` and `delete` of keys it generated itself or read back
-// from a record it stored (a client id it generated, a grant or token of the signed-in owner), and of `transaction:<hash>`;
-// `list` by a prefix of those, only for a grant it has already found. `getWithMetadata` is not used.
+// and `token:<user>:<grant>:<hash>`, each partly visitor-driven; `get` and `put` of the client-assertion replay marker, a
+// fixed prefix plus the SHA-256 hex digest of the visitor-sent issuer and jti (a fixed length, so it never nears the limit);
+// `put` and `delete` of keys it generated itself or read back from a record it stored (a client id it generated, a grant or
+// token of the signed-in owner), and of `transaction:<hash>`; `list` by a prefix of those, only for a grant it has already
+// found. `getWithMetadata` is not used.
 
 const LONGEST_KEY = 512;
 

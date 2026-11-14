@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Publication } from "../../src/lib/publication/contract";
 import { commit } from "../../src/server/flows/publication-commit";
 import { readFeed } from "../../src/server/flows/publication-feed";
-import { publishTool } from "../../src/server/flows/publication-tools";
+import { progressTool, publishTool } from "../../src/server/flows/publication-tools";
 import { answerOfRun } from "../helpers/rule-answers";
 import {
 	publicationWorld,
@@ -312,6 +312,29 @@ describe("a failing database", () => {
 		await deliver(world, base);
 		world.sql.exec("UPDATE publication_events SET payload='not json'");
 		await expect(feed(world)).rejects.toThrow();
+	});
+
+	it("the progress tool answers the word unavailable when a shown entry's text is not valid JSON", async () => {
+		const world = publicationWorld();
+
+		await deliver(world, base);
+		world.sql.exec("UPDATE publication_events SET payload='not json {'");
+
+		const answer = await Effect.runPromise(
+			progressTool(
+				{
+					ownerId: "1",
+					allowlist: "threadline",
+					connection: { ownerId: "1", scopes: ["publication:threadline"] },
+				},
+				"threadline",
+			).pipe(Effect.provideContext(world.services)),
+		);
+
+		expect(answer).toEqual({
+			value: { status: "unavailable" },
+			isError: true,
+		});
 	});
 });
 
