@@ -41,7 +41,15 @@ import {
 	legacyResolveClientDetails,
 } from "../fixtures/legacy-validators/agreement-draft-fields";
 import { legacyValidateIntake } from "../fixtures/legacy-validators/audio-intake";
+import {
+	legacyReadEvent,
+	legacyReadInterest,
+} from "../fixtures/legacy-validators/music-demand";
 import { legacyValidateSoftwareInquiry } from "../fixtures/legacy-validators/software-inquiry";
+import {
+	readEventInput,
+	readInterestInput,
+} from "../../src/server/music-input";
 import {
 	differential,
 	emails,
@@ -1611,4 +1619,208 @@ describe("the owner agreement schemas against the frozen Zod 3 schemas", () => {
 			);
 		}, 60_000);
 	});
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The public music routes' bodies (src/server/music-input.ts)
+
+describe("the music interest body against the frozen Zod 3 schema", () => {
+	const base = {
+		releaseId: "old-news-single",
+		email: "fan@example.com",
+		interest: "both",
+		merchandise: ["shirts", "stickers"],
+		suggestion: "Please make hoodies",
+		cityRegion: "Roanoke, VA",
+		consent: true,
+		turnstileToken: "token-1",
+	};
+
+	const bases: Body[] = [
+		base,
+		{ ...base, interest: "song", merchandise: [], suggestion: "" },
+		{ ...base, interest: "merchandise" },
+		{
+			releaseId: "old-news-single",
+			email: "fan@example.com",
+			interest: "song",
+			consent: true,
+			turnstileToken: "t",
+		},
+	];
+
+	const kinds = ["shirts", "hoodies", "stickers", "digital-art"];
+
+	const pools = {
+		releaseId: [
+			...texts(100),
+			"old-news-single",
+			"Old News",
+			"a-b-c",
+			"-a",
+			"a-",
+			"a--b",
+			...notStrings,
+		],
+		email: [...emails, ...notStrings],
+		interest: [
+			"song",
+			"merchandise",
+			"both",
+			"tickets",
+			"SONG",
+			" song",
+			"",
+			"toString",
+			"__proto__",
+			...notStrings,
+		],
+		merchandise: [
+			[],
+			["shirts"],
+			kinds,
+			[...kinds, "shirts"],
+			["shirts", "posters"],
+			["posters", "shirts"],
+			["posters", 3],
+			[3, "posters"],
+			["shirts", "shirts"],
+			[null],
+			[[]],
+			["SHIRTS"],
+			"shirts",
+			...notStrings,
+		],
+		suggestion: [...texts(500), ...notStrings],
+		cityRegion: [...texts(120), ...notStrings],
+		consent: [true, false, "true", 1, 0, null, undefined, [], {}, "", "yes"],
+		turnstileToken: [...texts(2048), ...notStrings],
+	} satisfies Pools;
+
+	it("answers every generated body as the Zod schema did, errors in the same order", () => {
+		const found = differential(
+			legacyReadInterest,
+			readInterestInput,
+			(answer) => fingerprint(answer, true),
+		);
+
+		for (const body of bodies(bases, pools, 20261114, 6000)) found.run(body);
+
+		expect(found.count).toBeGreaterThan(6000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`music interest differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+});
+
+describe("the music event body against the frozen Zod 3 schema", () => {
+	const base = {
+		releaseId: "old-news-single",
+		recordingId: "old-news-recording",
+		sessionId: "22222222-2222-4222-8222-222222222222",
+		playthroughId: "33333333-3333-4333-8333-333333333333",
+		eventId: "00000000-0000-4000-8000-000000000001",
+		sequence: 1,
+		medium: "audio",
+		event: "start",
+		accumulatedSeconds: 0,
+		mediaDurationSeconds: 160,
+	};
+
+	const bases: Body[] = [
+		base,
+		{
+			...base,
+			campaignId: "spring-launch",
+			channel: "instagram",
+			creative: "reel-1",
+		},
+	];
+
+	const numbers = [
+		0,
+		1,
+		2,
+		9999,
+		10_000,
+		10_001,
+		86_400,
+		86_401,
+		-1,
+		1.5,
+		0.5,
+		"1",
+		"",
+		null,
+		undefined,
+		true,
+		[],
+		{},
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		-0,
+	];
+
+	const uuids = [
+		"22222222-2222-4222-8222-222222222222",
+		"22222222-2222-2222-2222-222222222222",
+		"2222222222224222822222222222",
+		"22222222-2222-4222-8222-22222222222",
+		"22222222-2222-4222-8222-2222222222222",
+		" 22222222-2222-4222-8222-222222222222",
+		"22222222-2222-4222-8222-222222222222\n",
+		"ZZZZZZZZ-2222-4222-8222-222222222222",
+		"",
+		...notStrings,
+	];
+
+	const ids = [
+		...texts(100),
+		"old-news-single",
+		"a",
+		"a-b",
+		"-a",
+		"A",
+		...notStrings,
+	];
+
+	const pools = {
+		releaseId: ids,
+		recordingId: ids,
+		sessionId: uuids,
+		playthroughId: uuids,
+		eventId: uuids,
+		sequence: numbers,
+		medium: ["audio", "video", "text", "AUDIO", "", ...notStrings],
+		event: [
+			"start",
+			"progress",
+			"listen30",
+			"complete",
+			"replay",
+			"pause",
+			"",
+			...notStrings,
+		],
+		accumulatedSeconds: numbers,
+		mediaDurationSeconds: numbers,
+		campaignId: ids,
+		channel: ids,
+		creative: ids,
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same values", () => {
+		const found = differential(legacyReadEvent, readEventInput, (answer) =>
+			answer.ok ? fingerprint(answer, true) : "refused",
+		);
+
+		for (const body of bodies(bases, pools, 20261115, 6000)) found.run(body);
+
+		expect(found.count).toBeGreaterThan(6000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`music event differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
 });

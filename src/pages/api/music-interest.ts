@@ -1,10 +1,20 @@
 import type { APIRoute } from "astro";
-import { interestSchema, saveInterest } from "~/lib/music-demand";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import { loadMusicCatalog } from "~/lib/music-content";
-import { musicRequest, musicUnavailable } from "~/lib/music-request";
-import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
-import { verifyTurnstile } from "~/lib/turnstile";
-import { checkRateLimit } from "~/lib/rate-limit";
+import {
+	musicFailed,
+	musicRequest,
+	musicUnavailable,
+} from "~/lib/music-request";
+import { submitInterest } from "~/server/flows/music-interest";
+import { readInterestInput } from "~/server/music-input";
+import { runRoute } from "~/server/run";
+import {
+	bindingsOrUnavailable,
+	liveOwnerAlert,
+	liveTurnstile,
+} from "~/server/services";
 
 export const prerender = false;
 
@@ -12,91 +22,51 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request);
 
 	if (body instanceof Response) return body;
-	const parsed = interestSchema.safeParse(body);
+	const read = readInterestInput(body);
 
-	if (!parsed.success)
-		return Response.json(
-			{
-				ok: false,
-				errors: Object.fromEntries(
-					parsed.error.issues.map((i) => [i.path[0] ?? "_form", i.message]),
-				),
-			},
-			{ status: 400 },
-		);
-	const input = parsed.data;
+	if (!read.ok)
+		return Response.json({ ok: false, errors: read.errors }, { status: 400 });
+	const input = read.value;
 	const catalog = await loadMusicCatalog();
 
 	if (!catalog.releases.some((r) => r.id === input.releaseId))
 		return Response.json({ ok: false }, { status: 404 });
 	const env = locals.runtime.env;
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
 
-	if (!env.MUSIC_DB || !env.TURNSTILE_SECRET_KEY) return musicUnavailable();
-	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+	if (!bindings.ok || !env.TURNSTILE_SECRET_KEY) return musicUnavailable();
 
-	try {
-		// A coarse count of attempts first, so the captcha service is not asked without bound; the visitor's own allowance
-		// is counted after the captcha, so a request that fails it never uses that allowance up.
-		if (
-			!(
-				await checkRateLimit(
-					env.RATE_LIMIT,
-					ip,
-					"rl:music-interest-attempt:",
-					10,
-				)
-			).allowed
-		)
-			return Response.json(
-				{
-					ok: false,
-					error: "Please wait a few minutes before sending another request.",
-				},
-				{ status: 429 },
-			);
-
-		if (
-			!(await verifyTurnstile(
-				input.turnstileToken,
-				env.TURNSTILE_SECRET_KEY,
-				ip,
-			))
-		)
-			return Response.json(
-				{ ok: false, error: "Verification expired. Please try again." },
-				{ status: 403 },
-			);
-
-		if (
-			!(await checkRateLimit(env.RATE_LIMIT, ip, "rl:music-interest:")).allowed
-		)
-			return Response.json(
-				{
-					ok: false,
-					error: "Please wait a few minutes before sending another request.",
-				},
-				{ status: 429 },
-			);
-
-		try {
-			await saveInterest(env.MUSIC_DB, input);
-		} catch (error) {
-			await env.RATE_LIMIT.delete(`rl:music-interest:${ip}`);
-			await sendUrgentOwnerAlert(env, {
-				category: "request-storage",
-				route: "/api/music-interest",
-				requestId: crypto.randomUUID(),
-				code: "d1-write-failed",
-				occurredAt: new Date().toISOString(),
-			});
-			throw error;
-		}
-
-		return Response.json(
-			{ ok: true },
-			{ headers: { "cache-control": "no-store" } },
-		);
-	} catch {
-		return musicUnavailable();
-	}
+	return runRoute(
+		Context.merge(
+			Context.merge(bindings.services, liveTurnstile(env.TURNSTILE_SECRET_KEY)),
+			liveOwnerAlert(env),
+		),
+		submitInterest({
+			input,
+			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			now: () => new Date(),
+			newId: () => crypto.randomUUID(),
+		}).pipe(
+			Effect.map(() =>
+				Response.json(
+					{ ok: true },
+					{ headers: { "cache-control": "no-store" } },
+				),
+			),
+			Effect.catchTags({
+				TooManyInterests: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 429 }),
+					),
+				VerificationExpired: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 403 }),
+					),
+				MusicStoreFailed: () => Effect.succeed(musicFailed()),
+				RateLimitStoreFailed: () => Effect.succeed(musicFailed()),
+			}),
+		),
+		// A defect is the route's own fixed sentence, logged once without what was sent.
+		{ route: "/api/music-interest", answer: musicFailed },
+	);
 };

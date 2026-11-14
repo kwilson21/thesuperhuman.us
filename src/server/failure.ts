@@ -77,16 +77,53 @@ const clean = (text: string, limit: number) =>
 	text.replace(CONTROLS, " ").trim().slice(0, limit);
 
 // What a message may quote of what was sent is removed, not listed by word: the userinfo and the query string of anything
-// that looks like a URL, any other query string, and anything shaped like an email address.
+// that looks like a URL, any other query string, anything shaped like an email address, and an IPv4 or IPv6 address.
 const USERINFO = /(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/?#"'<>]*@/gi;
 const QUERY = /\?[^\s"'<>]+/g;
 const EMAIL = /[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g;
 
-const redact = (text: string) =>
+// An IPv4 address is four dotted groups of digits, not inside a longer number or word and not followed by a fifth group
+// (so 4.1.4 and 1.2.3.4.5 are not one). An IPv6 address is eight full groups (the last two may be an IPv4 address), or a compressed form containing "::" (so
+// a time such as 12:30:45 and a port after a bracketed address are not one), with an optional IPv4 tail (the mapped
+// ::ffff:203.0.113.7 is one address) and an optional zone (fe80::1%eth0). None may sit inside a longer word. The patterns
+// have no nested repeats, and every repeat is bounded, so they run in linear time.
+const HEX = "[0-9a-f]{1,4}";
+const OCTETS = "(?:\\d{1,3}\\.){3}\\d{1,3}";
+
+const IPV4 = new RegExp(`(?<![\\w.])${OCTETS}(?!\\w|\\.\\d)`, "g");
+
+const IPV6 = new RegExp(
+	`(?<![\\w:])(?:(?:${HEX}:){7}${HEX}|(?:${HEX}:){6}${OCTETS}|(?:${HEX}(?::${HEX}){0,6})?::(?:(?:${HEX}:){0,5}${OCTETS}|${HEX}(?::${HEX}){0,6})?)(?:%[\\w.-]+)?(?![\\w:]|\\.\\d)`,
+	"gi",
+);
+
+/**
+ * Whether text that matched IPV6 is an address. A compressed form with no decimal digit and at most two groups (a bare "::",
+ * "cafe::", "abc::def", "a::b") cannot be told from a name, so it is left alone; every other match is redacted, since a
+ * real client address has a digit (a global address starts with 2 or 3, a link-local one is fe80) and a longer one is never
+ * left. Redacting wins: an all-letter address of two groups or fewer would be logged, and none is known to exist.
+ */
+function looksLikeAddress(match: string) {
+	if (!match.includes("::") || match.includes(".")) return true;
+
+	const groups = match.split(/[:%]/).filter((group) => group !== "");
+
+	return /\d/.test(match) || groups.length > 2;
+}
+
+/** Replaces IPv4 and IPv6 addresses with [ip] (exported for its own test, which feeds it long adversarial text). */
+export const redactAddresses = (text: string) =>
 	text
-		.replace(USERINFO, "$1[redacted]@")
-		.replace(QUERY, "?[redacted]")
-		.replace(EMAIL, "[email]");
+		.replace(IPV6, (match) => (looksLikeAddress(match) ? "[ip]" : match))
+		.replace(IPV4, "[ip]");
+
+const redact = (text: string) =>
+	redactAddresses(
+		text
+			.replace(USERINFO, "$1[redacted]@")
+			.replace(QUERY, "?[redacted]")
+			.replace(EMAIL, "[email]"),
+	);
 
 /** Errors whose message quotes the input they read or the values they were sent, found by what they are, not by name. */
 const quotesInput = <T>(error: T): boolean =>

@@ -1,7 +1,14 @@
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
-import { check, decided, rule, term, unless } from "../../src/server/terms";
+import {
+	alwaysWrites,
+	check,
+	decided,
+	rule,
+	term,
+	unless,
+} from "../../src/server/terms";
 import { answerOf, nothingToDo, refuse, write } from "../helpers/rule-answers";
 
 class TooLong extends Data.TaggedError("TooLong") {
@@ -90,6 +97,45 @@ describe("rule", () => {
 	it("keeps its name and its words for the rule sheet", () => {
 		expect(saveText.name).toBe("save the text");
 		expect(saveText.writesText).toBe("saves the text");
+	});
+});
+
+describe("alwaysWrites", () => {
+	const storeText = alwaysWrites({
+		name: "store the text",
+		given: (request: { text: string }, _facts: Record<string, never>) => ({
+			text: request.text,
+			already: false,
+		}),
+		refusals: [unless(shortEnough, () => new TooLong())],
+		writes: (g) => ({ text: g.text }),
+		writesText: "stores the text",
+	});
+
+	const keepText = alwaysWrites({
+		name: "keep the text",
+		given: (request: { text: string }, _facts: Record<string, never>) =>
+			request.text,
+		refusals: [],
+		writes: (text) => text,
+		writesText: "keeps the text",
+	});
+
+	it("answers what to save, never nothing", () => {
+		expect(Effect.runSync(storeText.decide({ text: "abc" }, {}))).toEqual({
+			text: "abc",
+		});
+	});
+
+	it("fails with the first refusal whose term does not hold", () => {
+		expect(
+			Effect.runSync(Effect.flip(storeText.decide({ text: "abcdef" }, {})))
+				._tag,
+		).toBe("TooLong");
+	});
+
+	it("cannot fail when it refuses nothing, so its answer needs no unwrapping", () => {
+		expect(Effect.runSync(keepText.decide({ text: "x" }, {}))).toBe("x");
 	});
 });
 

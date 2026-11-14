@@ -1,9 +1,11 @@
 import { z } from "astro/zod";
 
-export const musicId = z
-	.string()
-	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-	.max(100);
+/** What a release, recording, campaign, channel or creative id looks like (the music API reads it with the same pattern). */
+export const musicIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const musicIdMaxLength = 100;
+
+export const musicId = z.string().regex(musicIdPattern).max(musicIdMaxLength);
 
 export const methodologySchema = z.enum([
 	"two-track-vocals",
