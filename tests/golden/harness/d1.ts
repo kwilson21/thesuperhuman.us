@@ -13,7 +13,7 @@ import { statementOf } from "../../../scripts/sql-effects.mjs";
 import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import { sqliteD1, type SqliteDatabase } from "../../helpers/sqlite-d1";
-import type { D1Outcome, D1Statement } from "./log";
+import type { D1Outcome, D1Statement, Ticket } from "./log";
 import type { DatabaseDigester } from "./digest";
 import type { EffectLog } from "./log";
 import { argRecord, errorText } from "./plain";
@@ -103,18 +103,22 @@ export class SqlHooks {
 		name: string,
 		db: string,
 		matching: readonly string[],
+		at: Ticket,
 	) {
-		log.push({
-			kind: "trigger-hit",
-			trigger,
-			name,
-			db,
-			hits: matching.map((sql) => {
-				const { op, table, write } = statementOf(sql);
+		log.push(
+			{
+				kind: "trigger-hit",
+				trigger,
+				name,
+				db,
+				hits: matching.map((sql) => {
+					const { op, table, write } = statementOf(sql);
 
-				return { op, table, access: write ? "write" : "read" };
-			}),
-		});
+					return { op, table, access: write ? "write" : "read" };
+				}),
+			},
+			at,
+		);
 	}
 
 	/** Runs the interleaves due before these statements, and returns the failure to throw, if one is due. */
@@ -123,6 +127,7 @@ export class SqlHooks {
 		sqls: readonly string[],
 		sqlite: SqliteDatabase,
 		log: EffectLog,
+		at: Ticket,
 	): string | null {
 		if (this.paused > 0) return null;
 
@@ -131,8 +136,8 @@ export class SqlHooks {
 
 			if (!matching) continue;
 
-			log.push({ kind: "interleave", label: interleave.label });
-			this.marker(log, "interleave", interleave.label, db, matching);
+			log.push({ kind: "interleave", label: interleave.label }, at);
+			this.marker(log, "interleave", interleave.label, db, matching, at);
 			interleave.run(sqlite);
 		}
 
@@ -145,7 +150,7 @@ export class SqlHooks {
 
 			if (!matching) continue;
 
-			this.marker(log, "failure", failure.message, db, matching);
+			this.marker(log, "failure", failure.message, db, matching, at);
 			due ??= failure.message;
 		}
 
@@ -440,19 +445,22 @@ export function recordingD1(
 	): D1PreparedStatement => {
 		const inner = real.prepare(sql).bind(...args);
 
-		const guard = (via: "first" | "all" | "run") => {
-			const failure = hooks.before(label, [sql], sqlite, log);
+		const guard = (via: "first" | "all" | "run", at: Ticket) => {
+			const failure = hooks.before(label, [sql], sqlite, log, at);
 
 			if (failure === null) return;
 
-			log.push({
-				kind: "d1",
-				db: label,
-				via,
-				sql,
-				args: argRecords(args),
-				outcome: { threw: failure },
-			});
+			log.push(
+				{
+					kind: "d1",
+					db: label,
+					via,
+					sql,
+					args: argRecords(args),
+					outcome: { threw: failure },
+				},
+				at,
+			);
 
 			throw new Error(failure);
 		};
@@ -468,7 +476,9 @@ export function recordingD1(
 			work: () => Promise<T>,
 			outcome: (value: T, changes: number) => D1Outcome,
 		): Promise<T> => {
-			guard(via);
+			const at = await log.start();
+
+			guard(via, at);
 
 			try {
 				// The statement runs on the database synchronously, as the call starts, so its measure is the next one the
@@ -482,27 +492,33 @@ export function recordingD1(
 
 				const value = await pending;
 				const known = measureOf(measure, sql);
-				log.push({
-					kind: "d1",
-					db: label,
-					via,
-					sql,
-					args: argRecords(args),
-					outcome: recorded(outcome(value, known.count), known),
-				});
+				log.push(
+					{
+						kind: "d1",
+						db: label,
+						via,
+						sql,
+						args: argRecords(args),
+						outcome: recorded(outcome(value, known.count), known),
+					},
+					at,
+				);
 
 				return value;
 			} catch (error) {
-				log.push({
-					kind: "d1",
-					db: label,
-					via,
-					sql,
-					args: argRecords(args),
-					outcome: {
-						threw: error instanceof Error ? errorText(error) : "non-error",
+				log.push(
+					{
+						kind: "d1",
+						db: label,
+						via,
+						sql,
+						args: argRecords(args),
+						outcome: {
+							threw: error instanceof Error ? errorText(error) : "non-error",
+						},
 					},
-				});
+					at,
+				);
 
 				throw error;
 			}
@@ -547,6 +563,8 @@ export function recordingD1(
 		exec: () => loud("exec()"),
 		// SAFETY: batch() is generic over the row type, so a non-generic function cannot be typed as the member; it returns the results the real fake returns.
 		batch: (async (items: D1PreparedStatement[]) => {
+			const at = await log.start();
+
 			const parts = items.map((item) => {
 				const found = wrapped.get(item);
 
@@ -570,16 +588,20 @@ export function recordingD1(
 				parts.map((part) => part.sql),
 				sqlite,
 				log,
+				at,
 			);
 
 			if (failure !== null) {
-				log.push({
-					kind: "d1-batch",
-					db: label,
-					result: "injected-failure",
-					error: failure,
-					statements: records(parts.map(() => ({ threw: "not run" }))),
-				});
+				log.push(
+					{
+						kind: "d1-batch",
+						db: label,
+						result: "injected-failure",
+						error: failure,
+						statements: records(parts.map(() => ({ threw: "not run" }))),
+					},
+					at,
+				);
 
 				throw new Error(failure);
 			}
@@ -603,34 +625,40 @@ export function recordingD1(
 						`golden harness: ${ran.length} change counts were measured for a batch of ${parts.length} statements, so none can be recorded.`,
 					);
 
-				log.push({
-					kind: "d1-batch",
-					db: label,
-					result: "committed",
-					error: null,
-					statements: records(
-						results.map((result, index) => {
-							const known = measureOf(ran[index], parts[index]?.sql ?? "");
-							const sql = parts[index]?.sql ?? "";
+				log.push(
+					{
+						kind: "d1-batch",
+						db: label,
+						result: "committed",
+						error: null,
+						statements: records(
+							results.map((result, index) => {
+								const known = measureOf(ran[index], parts[index]?.sql ?? "");
+								const sql = parts[index]?.sql ?? "";
 
-							meter.check(sql, known.count, known);
+								meter.check(sql, known.count, known);
 
-							return { rows: result.results.length, changes: known.count };
-						}),
-					),
-				});
+								return { rows: result.results.length, changes: known.count };
+							}),
+						),
+					},
+					at,
+				);
 
 				return results;
 			} catch (error) {
-				log.push({
-					kind: "d1-batch",
-					db: label,
-					result: "rolled-back",
-					error: error instanceof Error ? errorText(error) : "non-error",
-					statements: records(
-						parts.map(() => ({ threw: "batch rolled back" })),
-					),
-				});
+				log.push(
+					{
+						kind: "d1-batch",
+						db: label,
+						result: "rolled-back",
+						error: error instanceof Error ? errorText(error) : "non-error",
+						statements: records(
+							parts.map(() => ({ threw: "batch rolled back" })),
+						),
+					},
+					at,
+				);
 
 				throw error;
 			}
