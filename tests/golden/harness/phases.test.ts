@@ -193,7 +193,7 @@ describe("the phase says whether the response waited for the effect", () => {
 		]);
 	});
 
-	it("a handler that rejects: what it awaited is request, what it deferred is background", async () => {
+	it("a handler that rejects: the deferred mail and the awaited write are both request, because the answer was still waiting", async () => {
 		const got = await record(async (context) => {
 			ctxOf(context).waitUntil(mail().then(() => {}));
 			await env(context).RATE_LIMIT.put("k", "1");
