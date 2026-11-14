@@ -50,11 +50,13 @@ function context(
 						first: async () => null,
 					}),
 			}),
-		batch: async (statements: D1PreparedStatement[]) => {
+		batch: async <T>(statements: D1PreparedStatement[]) => {
 			for (const statement of statements) await statement.run();
 
 			// A read in a batch answers no rows; a write answers nothing the code uses.
-			return statements.map(() => ({ success: true, results: [] }));
+			return statements.map(() =>
+				partial<D1Result<T>>({ success: true, results: [] }),
+			);
 		},
 	});
 
