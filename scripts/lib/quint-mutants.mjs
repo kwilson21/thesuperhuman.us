@@ -100,6 +100,9 @@ export const models = [
 		mutants: signinMutants,
 		equivalents: [],
 		exhaustive: [],
+		// Its rarest mutants take up to about 15,000 random runs to find, so each mutant check allows 20,000; the run that must
+		// pass makes 10,000, which costs about 6 s of one core.
 		samples: "20000",
+		passSamples: "10000",
 	},
 ];
