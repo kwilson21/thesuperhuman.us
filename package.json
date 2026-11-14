@@ -48,14 +48,14 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.10",
-    "@astrojs/cloudflare": "^12.5.0",
+    "@astrojs/cloudflare": "^14.4.7",
     "@astrojs/sitemap": "^3.7.4",
     "@cloudflare/workers-oauth-provider": "1.2.3",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@pdf-lib/fontkit": "^1.1.1",
     "@tailwindcss/vite": "^4.3.3",
     "@xstate/effect": "1.0.0-alpha.12",
-    "astro": "^5.1.0",
+    "astro": "^7.4.10",
     "effect": "4.1.4",
     "jose": "^6.2.12",
     "pdf-lib": "^1.17.1",
@@ -67,7 +67,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
-    "@astrojs/compiler": "2.13.1",
+    "@astrojs/compiler": "4.0.0",
     "@biomejs/biome": "2.5.14",
     "@cloudflare/workers-types": "^5.20261010.1",
     "@informalsystems/quint": "0.33.1",
