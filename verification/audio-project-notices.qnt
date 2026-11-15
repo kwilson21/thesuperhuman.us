@@ -29,6 +29,8 @@ module audioProjectNotices {
   //   "queue-any-status"  the rule lets a retry move a notice that was sent
   //   "uncertain-sent"    an uncertain outcome is written as sent
   //   "uncertain-failed"  an uncertain outcome is written as failed
+  //   "lookup-no-open"    the recipient read does not filter on the project's access, so a closed project has a recipient (the
+  //                       update notice's claim has no access condition, so this read is what keeps it from mailing)
   const MUTANT: str
   // "invitation" or "update": whose conditions the claim and the outcome write have (see the header).
   const KIND: str
@@ -102,7 +104,7 @@ module audioProjectNotices {
     val h = runs.get(r)
     all {
       status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
-      runs' = runs.set(r, if (open) { ...h, phase: "send" } else { ...h, phase: "finish", outcome: "refused" }),
+      runs' = runs.set(r, if (open or MUTANT == "lookup-no-open") { ...h, phase: "send" } else { ...h, phase: "finish", outcome: "refused" }),
     }
   }
 
@@ -178,6 +180,11 @@ module audioProjectNotices {
   // notice's claim has no access condition, so the property is about the invitation.)
   val claimOnlyWhileOpen = KIND == "update" or closedAt == 0 or attempt == 0 or attempt < closedAt
 
+  // 2b. The update notice is claimed after the close (its claim has no access condition), and no email goes out for it: its
+  // recipient read finds no recipient of a closed project, so the notice ends `failed` and never mails. (The property is about
+  // the update notice; for the invitation, property 2 is the claim's.)
+  val closedUpdateNeverMails = KIND == "invitation" or closedAt == 0 or attempt == 0 or attempt < closedAt or mailed.get(epoch) == 0
+
   // 3. A notice is marked sent only if an email went out.
   val sentMeansMailed = status != "sent" or mailed.get(epoch) >= 1
 
@@ -185,7 +192,7 @@ module audioProjectNotices {
   val failedMeansNotMailed = status != "failed" or mailed.get(epoch) == 0
 
   val allProperties = and {
-    oneEmailInTotal, claimOnlyWhileOpen, sentMeansMailed, failedMeansNotMailed,
+    oneEmailInTotal, claimOnlyWhileOpen, closedUpdateNeverMails, sentMeansMailed, failedMeansNotMailed,
   }
 
   // Reachability witness, for a hand with the negated invariant: a retry after a failure goes out (two epochs with an email
@@ -203,3 +210,4 @@ module projectNoticesClaimNoOpen { import audioProjectNotices(MUTANT = "claim-no
 module projectNoticesQueueAnyStatus { import audioProjectNotices(MUTANT = "queue-any-status", KIND = "invitation").* }
 module projectNoticesUncertainSent { import audioProjectNotices(MUTANT = "uncertain-sent", KIND = "invitation").* }
 module projectNoticesUncertainFailed { import audioProjectNotices(MUTANT = "uncertain-failed", KIND = "invitation").* }
+module projectNoticesUpdateLookupNoOpen { import audioProjectNotices(MUTANT = "lookup-no-open", KIND = "update").* }

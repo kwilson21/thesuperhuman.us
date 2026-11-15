@@ -161,6 +161,8 @@ export const audioProjectFilesMutants = {
 	projectFilesRevokeStaleReset: { property: "readyStagesHaveFiles" },
 	projectFilesCompleteNoStage: { property: "readyStagesHaveFiles" },
 	projectFilesCompleteNoPayment: { property: "completedOnlyWhenPaid" },
+	projectFilesPublishStaleSupersede: { property: "oneLiveReview" },
+	projectFilesResetNoLink: { property: "stageCoherent" },
 };
 
 // verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
@@ -172,6 +174,7 @@ export const audioProjectNoticesMutants = {
 	projectNoticesQueueAnyStatus: { property: "oneEmailInTotal" },
 	projectNoticesUncertainSent: { property: "sentMeansMailed" },
 	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
+	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
@@ -262,8 +265,8 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: [],
 		exhaustive: [],
-		// The rarest mutant (CompleteNoStage) takes a few thousand random runs to find with the fixed seed (up to 60,000 in
-		// the first versions of the model); the run that must pass makes 8,000.
+		// The rarest mutant (CompleteNoStage) takes tens of thousands of random runs to find with the fixed seed; the run that
+		// must pass makes 8,000.
 		samples: "60000",
 		passSamples: "8000",
 	},
