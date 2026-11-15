@@ -984,6 +984,12 @@ it("resumes on the choice screen when the draft was left there and the link name
 	expect(current()).toBe(0);
 });
 
+it("starts on the choice screen when a reload restored a radio without a path link and there is no draft", async () => {
+	await setup("workflow", grantedPass, null);
+	expect(current()).toBe(0);
+	expect(form.dataset.ready).toBe("");
+});
+
 it("resumes on the choice screen after a reload that restored the chosen radio without a path link", async () => {
 	choose("path", "workflow");
 	click("[data-back]");

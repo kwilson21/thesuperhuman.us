@@ -121,6 +121,7 @@ const lines = contactLines.map((line) => ({
   .plug-shadow { fill: var(--sb-cable-shade); }
   .plug-handle { display: none; position: absolute; left: 0; top: 0; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; z-index: 2; touch-action: none; cursor: grab; }
   .is-wired .plug-handle { display: block; }
+  .is-reaching .plug-handle { pointer-events: none; }
   .is-dragging .plug-handle, .is-dragging .line-link { cursor: grabbing; }
 
   /* Narrower screens: the board turns on its side. The ears run across the top and bottom, the

@@ -114,7 +114,7 @@ export function setupSoftwareInquiry(
 	const sentNotice =
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
 
-	let step = isSoftwarePath(requestedPath) ? 1 : 0,
+	let step = isSoftwarePath(linkedPath) ? 1 : 0,
 		submissionId = crypto.randomUUID();
 
 	const path = (): SoftwarePath => {
@@ -702,6 +702,8 @@ export function setupSoftwareInquiry(
 		attributeFilter: ["aria-invalid"],
 	});
 	showStep(step, false);
+	// The stylesheet keeps a linked brief's choice screen out of sight until now; Back can show it again.
+	form.dataset.ready = "";
 }
 
 const form = document.querySelector<HTMLFormElement>("#software-inquiry");

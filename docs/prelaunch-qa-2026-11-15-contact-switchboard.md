@@ -47,15 +47,15 @@ Why Home had no button: the November 12 closing panel decision made Home a quiet
 - PASS · Keyboard: Tab reaches each line, focus shows the 2px accent outline and the plug reaches toward it; Enter connects.
 - PASS · Widths: 320, 375, 414, 768, 1099, 1100 and 1440 px, with `scrollWidth` equal to the viewport at each.
 - PASS · Reduced motion: the plug moves without animating and the page changes at once (measured 389 ms to the next page, which is the load itself).
-- PASS · Without JavaScript: six links and no "You" jack; the message form says it needs JavaScript and the email address is shown.
+- PASS · Without scripting: six links and no "You" jack; the message line lands on a sentence under the board that says the site's forms need JavaScript and gives the address, shown once. The brief keeps its heading when a link names a path.
 - PASS, with a limit · 200% text (root font size doubled, standing in for text-only zoom): at 320, 390 and 768px the page does not scroll sideways and nothing leaves the board; the resting plug sits past the "You" label. At 1280px the board's columns hold their text, breaking a long word inside it when it cannot fit, because no query follows the text size (the November 13 decision). The page still scrolls sideways there, from the header's "Work with me" button, which does the same on `/work` and Home on `main`; not changed here.
 - UNVERIFIED · A second browser engine and a real phone. Touch was checked by emulating an iPhone 13 in Chromium, with real touch events for the drag.
 
 ### 4. Performance and resilience
 
 - PASS · No new dependency, image or font. The page script is the switchboard and the existing contact form scripts; Turnstile loads only when the message line opens the form.
-- PASS · A modifier click or middle click on a line opens it in a new tab as a normal link. A load the visitor stops leaves the board usable; leaving during the pause (Back, or another link) cancels the pending put-through. Back and forward restoring the page (bfcache) puts the plug at rest and the lamps out; UNVERIFIED in a browser, because the dev server's websocket blocks the bfcache.
-- PASS · No layout shift from the script: the board is laid out for the cable from the first paint (`@media (scripting: none)` removes the "You" jack and the cable's room). With the page script delayed by 1.2s, the cumulative layout shift was 0.014 at 390px and 0.030 at 1280px, down from 0.078 and 0.055 before this change.
+- PASS · A modifier click or middle click on a line, its jack included while the plug reaches toward it, opens it in a new tab as a normal link (the plug's handle lets clicks through while it reaches). A load the visitor stops leaves the board usable; leaving during the pause (Back, or a plain click on another link that leaves in this tab) cancels the pending put-through, while a link opened in a new tab or a mail link does not. Back and forward restoring the page (bfcache) puts the plug at rest and the lamps out; UNVERIFIED in a browser, because the dev server's websocket blocks the bfcache.
+- PASS · No layout shift from the script: the board is laid out for the cable from the first paint (`@media (scripting: none)` removes the "You" jack and the cable's room). With the page script delayed by 1.2s, the cumulative layout shift was 0.014 at 390px and 0.030 at 1280px, down from 0.078 and 0.055 before this change. Accepted cost: when scripting is on but the page script fails to load, the board shows the hint, the "You" jack and the cable's room with no plug, and the message line does nothing; the same shows to visitors without scripting on browsers that do not support the `scripting` media feature (Safari before 17, Chrome before 120, Firefox before 113).
 
 ### 5. Forms and sensitive flows
 
@@ -96,12 +96,14 @@ Defects, fixed in this pull request:
 
 - Enlarged text broke the narrow board (the hardware column, gaps and padding grew with the text, and long words ran past the border) and put the resting plug on the "You" label. The hardware column is 40px, the padding is capped by the viewport, words may break when they cannot fit, and the resting plug is placed from the label's measured edge.
 - The "Prefer email?" address did not wrap at enlarged text. It may break now.
-- Dragging the plug past an edge widened the page. The drag point stays inside the board.
-- Without JavaScript the message line led nowhere. It lands on a sentence right under the board that says the form needs JavaScript and gives the address.
+- Dragging the plug past an edge widened the page. The plug is drawn inside the board; which jack is in reach is measured from the pointer itself, so a drag off the edge cancels instead of snapping.
+- Without JavaScript the message line led nowhere. It lands on a sentence right under the board that says the site's forms need JavaScript and gives the address; the "Prefer email?" line hides then, so the address shows once.
 - "Prefer email?" showed twice while the form was open. The page's line hides while the form is open.
 - The Turnstile retry message said to reload, which would close the form and lose what was typed. It says to choose Send a message again, which retries.
 
-Also fixed, restoring the shared system: the lines take the site's standard focus ring (2px offset); the lede uses ink like every other page; the reach toward a line has no overshoot (the seat and the drop keep a slight one); and the board no longer moves when the script arrives (above). The brief no longer flashes its choice screen before moving to the first question when a link names the path (it starts hidden on the server); this was true of every path link before this change.
+Also fixed, restoring the shared system: the lines take the site's standard focus ring (2px offset); the lede uses ink like every other page; the reach toward a line has no overshoot (the seat and the drop keep a slight one); and the board no longer moves when the script arrives (above). The brief no longer flashes its choice screen before moving to the first question when a link names the path (the stylesheet keeps the choice screen out of sight until the script has moved past it, and without scripting it shows with the page's heading); this was true of every path link before this change. The brief's starting step also follows the path the link named, not a radio the browser restored.
+
+A further independent review of the fix commits found seven more issues, fixed here: a modifier click on a reached jack navigated this tab; clamping the drag point made a drag off the left edge snap to a jack; a new-tab or mail link clicked during the pause stranded the board; the brief had no heading without scripting when a link named a path; the no-script sentence repeated the address and said the other lines work without JavaScript, which they do not; and the brief's starting step still read a restored radio. The seventh, the board when its script fails, is the accepted cost above.
 
 Design choices for Kazon (not changed):
 

@@ -34,3 +34,5 @@
 
 .software-intake [data-copy-card]{overflow-wrap:anywhere}.software-intake [data-copy-status]{margin-top:.75rem}
 .software-intake [data-question-footnote]{max-width:calc(var(--measure-prose) * .9)}
+/* A link that names a path skips the choice screen, so it stays out of sight until the script has moved past it; without scripting it shows, with the page's heading. */
+@media (scripting:enabled){#software-inquiry[data-linked-path]:not([data-ready]) [data-step="0"]{display:none}}

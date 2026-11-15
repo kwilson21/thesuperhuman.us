@@ -247,8 +247,11 @@ export function setupSwitchboard(
 		frame = requestAnimationFrame(step);
 	}
 
+	// While the plug reaches toward a line it hangs over that line's jack. The handle lets clicks
+	// through then, so a press there is a press on the link itself, modifier keys and middle click included.
 	function setTarget(next: Target) {
 		target = next;
+		root.classList.toggle("is-reaching", next.kind === "reach");
 		move();
 	}
 
@@ -344,13 +347,21 @@ export function setupSwitchboard(
 	});
 
 	// Picking up the plug: it follows the pointer and snaps over the nearest jack in reach.
-	// Kept inside the board, so a plug dragged past an edge never widens the page.
 	function local(event: PointerEvent): Point {
 		boardBox = board!.getBoundingClientRect();
 
 		return {
-			x: clamp(event.clientX - boardBox.left, 18, boardBox.width - 18),
-			y: clamp(event.clientY - boardBox.top, 18, boardBox.height - 18),
+			x: event.clientX - boardBox.left,
+			y: event.clientY - boardBox.top,
+		};
+	}
+
+	// The plug is drawn inside the board, so one dragged past an edge never widens the page; which
+	// jack is in reach is measured from the pointer itself.
+	function inside(point: Point): Point {
+		return {
+			x: clamp(point.x, 18, boardBox.width - 18),
+			y: clamp(point.y, 18, boardBox.height - 18),
 		};
 	}
 
@@ -374,7 +385,15 @@ export function setupSwitchboard(
 	// The handle covers the jack the plug is over, so a press there that never moves still counts
 	// as a press on that jack: the drop seats the plug in it.
 	handle.addEventListener("pointerdown", (event) => {
-		if (connecting || event.button !== 0) return;
+		if (
+			connecting ||
+			event.button !== 0 ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
+			event.altKey
+		)
+			return;
 		event.preventDefault();
 		handle.setPointerCapture(event.pointerId);
 		root.classList.add("is-dragging");
@@ -383,7 +402,7 @@ export function setupSwitchboard(
 		const near = nearest(point);
 
 		for (const link of links) link.classList.toggle("is-near", link === near);
-		setTarget({ kind: "drag", point, near });
+		setTarget({ kind: "drag", point: inside(point), near });
 	});
 	handle.addEventListener("pointermove", (event) => {
 		if (target.kind !== "drag") return;
@@ -391,7 +410,7 @@ export function setupSwitchboard(
 		const near = nearest(point);
 
 		for (const link of links) link.classList.toggle("is-near", link === near);
-		setTarget({ kind: "drag", point, near });
+		setTarget({ kind: "drag", point: inside(point), near });
 	});
 
 	function drop() {
@@ -434,23 +453,29 @@ export function setupSwitchboard(
 	window.addEventListener("pageshow", (event) => {
 		if (event.persisted) reset();
 	});
-	document.addEventListener(
-		"click",
-		(event) => {
-			const other =
-				event.target instanceof Element
-					? event.target.closest("a[href]")
-					: null;
+	// Only a plain click that leaves this page in this tab replaces the pending put-through; a link
+	// opened in a new tab, a mail link or a download leaves the visitor here, still being put through.
+	document.addEventListener("click", (event) => {
+		const other =
+			event.target instanceof Element ? event.target.closest("a[href]") : null;
 
-			if (
-				putThrough &&
-				other instanceof HTMLAnchorElement &&
-				!links.includes(other)
-			)
-				standDown();
-		},
-		true,
-	);
+		if (
+			!putThrough ||
+			!(other instanceof HTMLAnchorElement) ||
+			links.includes(other) ||
+			event.defaultPrevented ||
+			event.button !== 0 ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
+			event.altKey ||
+			(other.target && other.target !== "_self") ||
+			other.hasAttribute("download") ||
+			!/^https?:$/.test(other.protocol)
+		)
+			return;
+		standDown();
+	});
 
 	return {
 		connect(id: string) {

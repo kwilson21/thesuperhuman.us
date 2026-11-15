@@ -16,12 +16,12 @@ import Switchboard from "~/components/Switchboard.astro";
     {/* Without scripting, the message line's #message lands here, right under the board. With it, this
         is never an element, so no element carries that id and the browser's own jump to a fragment
         cannot take focus from the form's heading, which the script opens and focuses. */}
-    <noscript><p id="message" class="contact-elsewhere">The message form needs JavaScript. You can email me at <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>; every other line works without it.</p></noscript>
+    <noscript><p id="message" class="contact-elsewhere">The forms on this site need JavaScript. You can email me at <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
     <section class="message-panel" aria-labelledby="message-title" data-message-panel hidden>
       <h2 id="message-title" data-message-heading tabindex="-1">Send a message</h2>
       <ContactForm />
     </section>
-    <p class="contact-elsewhere">Prefer email? <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a></p>
+    <p class="contact-elsewhere" data-prefer-email>Prefer email? <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a></p>
   </article>
   <Footer variant="quiet" slot="footer" />
 </BaseLayout>
@@ -41,4 +41,6 @@ import Switchboard from "~/components/Switchboard.astro";
   .contact-elsewhere a { color: var(--ink); }
   /* The open form carries its own email line. */
   .message-panel:not([hidden]) ~ .contact-elsewhere { display: none; }
+  /* Without scripting, the sentence under the board carries the address. */
+  @media (scripting: none) { [data-prefer-email] { display: none; } }
 </style>
