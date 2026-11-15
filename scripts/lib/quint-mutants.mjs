@@ -283,9 +283,9 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
-		// The rarest mutant (CompleteNoStage) takes tens of thousands of random runs to find with the fixed seed; the run that
-		// must pass makes 8,000.
-		samples: "60000",
+		// The rarest mutant (PublishNoStage) takes about 100,000 random runs to find with the fixed seed, since eight starting
+		// points share them; the run that must pass makes 8,000.
+		samples: "150000",
 		passSamples: "8000",
 	},
 	{
