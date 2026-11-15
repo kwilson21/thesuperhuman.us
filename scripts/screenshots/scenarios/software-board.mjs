@@ -80,8 +80,7 @@ export default {
 				await box.pressSequentially(text, { delay: 2 });
 				await page.waitForFunction(
 					() =>
-						document.querySelector("[data-board-status]")?.textContent ===
-						"Up to date with your answers.",
+						document.querySelector("[data-board-status]")?.textContent?.startsWith("Up to date"),
 					undefined,
 					{ timeout: 20000 },
 				);
@@ -269,8 +268,7 @@ export default {
 						await held[0].fulfill({ json: reply });
 						await page.waitForFunction(
 							() =>
-								document.querySelector("[data-board-status]")?.textContent ===
-								"Up to date with your answers.",
+								document.querySelector("[data-board-status]")?.textContent?.startsWith("Up to date"),
 						);
 
 						const texts = await page

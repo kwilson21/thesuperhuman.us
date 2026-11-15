@@ -60,6 +60,9 @@ const TIMEOUT = 12000;
 /** Failures in a row before the board stops asking for this page. */
 const FAILURES = 3;
 
+/** How long after the visitor last touched or scrolled the board a held reply waits before it applies. */
+const QUIET = 3000;
+
 /** The fewest words, across the answers, worth interpreting. */
 const MIN_WORDS = 6;
 
@@ -147,6 +150,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	)!;
 
 	const heading = root.querySelector<HTMLElement>("#brief-board-title")!;
+	const scroller = root.querySelector<HTMLElement>("[data-board-scroll]")!;
 
 	const showButtons = [
 		...form.querySelectorAll<HTMLButtonElement>("[data-board-show]"),
@@ -212,6 +216,11 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		plain = saved.plain,
 		visible = false,
 		hovering = false,
+		// When the visitor last touched or scrolled the board: a finger has no hover, and a phone's cards scroll in a box.
+		touchedAt = 0,
+		quietTimer: ReturnType<typeof setTimeout> | undefined,
+		// Cards the last applied reply added, for the status line: some may be out of view in the board's scrolling box.
+		lastAdded = 0,
 		stopped = "",
 		failures = 0,
 		// After a failure, no request before this time, however the visitor writes (the back-off).
@@ -253,7 +262,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		}
 	};
 
-	const interacting = () => hovering || root.contains(document.activeElement);
+	const touched = () => Date.now() - touchedAt < QUIET;
+
+	const interacting = () =>
+		hovering || root.contains(document.activeElement) || touched();
 
 	// ---- Status -------------------------------------------------------------------------------------------------------
 	const announce = (text: string, force = false) => {
@@ -286,9 +298,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (words < MIN_WORDS)
 			return "Write a few sentences and an outline starts here.";
 
-		return lastSent[options.path()] === answersKey()
-			? "Up to date with your answers."
-			: "Keep writing. The outline catches up when you pause.";
+		if (lastSent[options.path()] !== answersKey())
+			return "Keep writing. The outline catches up when you pause.";
+
+		return lastAdded > 0
+			? `Up to date. ${lastAdded} new ${lastAdded === 1 ? "card" : "cards"} in the board.`
+			: "Up to date with your answers.";
 	}
 
 	function updateStatus() {
@@ -559,6 +574,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	}
 
 	function news(added: number) {
+		lastAdded = added;
+		updateStatus();
+
 		if (added <= 0) return;
 		pendingNews += added;
 		announce(
@@ -920,9 +938,28 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	root.addEventListener("focusout", (event) => {
 		const to = event.relatedTarget;
 
-		if (held && !(to instanceof Node && root.contains(to)) && !hovering)
+		if (
+			held &&
+			!(to instanceof Node && root.contains(to)) &&
+			!hovering &&
+			!touched()
+		)
 			applyHeld(false);
 	});
+
+	// A finger on the board, or the board's cards scrolling, holds replies until the board has been still for a moment.
+	const noteTouch = () => {
+		touchedAt = Date.now();
+		clearTimeout(quietTimer);
+		quietTimer = setTimeout(() => {
+			if (held && !interacting()) applyHeld(false);
+		}, QUIET + 50);
+	};
+
+	root.addEventListener("pointerdown", (event) => {
+		if (event.pointerType === "touch") noteTouch();
+	});
+	scroller.addEventListener("scroll", noteTouch, { passive: true });
 	root.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")
 			hovering = true;
@@ -930,7 +967,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	root.addEventListener("pointerleave", () => {
 		hovering = false;
 
-		if (held && !root.contains(document.activeElement)) applyHeld(false);
+		if (held && !root.contains(document.activeElement) && !touched())
+			applyHeld(false);
 	});
 
 	const handle: BriefBoardHandle = {
