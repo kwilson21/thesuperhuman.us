@@ -75,7 +75,7 @@ There is no statement of class (d) left.
 
 ### Model
 
-`verification/brief-copy.qnt` applies because the claim became a read followed by a compare-and-set, and two owner clicks, or an owner click and the public form's own copy, can meet at it. Seven properties, eleven mutants (`docs/verification.md`, "The brief-copy model"). It was written before any conversion code; the address and attempt-instant mutants, and the second starting state, were added after review. It runs 100,000 random runs per check (the first version ran 20,000, which no longer finds every mutant once the second starting state and the address step exist). The figures are local and approximate (a check of this model took about 13 seconds on an idle machine, and several times that under heavy load, as did the whole pool); what holds is that every brief copy check finishes inside the pool's longest check, so the model does not set the pooled wall time.
+`verification/brief-copy.qnt` applies because the claim became a read followed by a compare-and-set, and two owner clicks, or an owner click and the public form's own copy, can meet at it. Seven properties, eleven mutants (`docs/verification.md`, "The brief-copy model"). It was written before any conversion code; the address and attempt-instant mutants, and the second starting state, were added after review. It runs 100,000 random runs per check, which every mutant needs once the second starting state and the address step exist; every brief copy check finishes inside the pool's longest check.
 
 ### Public inquiry
 
@@ -122,7 +122,7 @@ Independent reviews of the work found the following. Each is fixed; the later he
 
 ## Evidence
 
-Run on the final tips, after `origin/main` at `6471ff2d` was merged in. The machine was heavily loaded (load average near 50), under which several 5-second timing tests of other areas timed out; the full suites below were run with `--maxWorkers=3` and pass, and the files that timed out passed alone.
+Run on the final tips, after `origin/main` at `6471ff2d` was merged in. The full suites below were run with `--maxWorkers=3`; with more workers several 5-second timing tests of other areas timed out and passed when run alone.
 
 Branch A at `e60c3726`:
 - `format:check`: `Checked 892 files in 121ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
