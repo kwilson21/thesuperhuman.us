@@ -9,8 +9,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 - **No Zod in our code.** Owner, 2026-11-15: "Effect schema as our only validator no zod use from us". The frozen
   reference copies in `tests/fixtures/legacy-validators/` and the tests that compare against them
   (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts`) import Zod until the last
-  step, which deletes them, as the copies' headers say. Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in
-  `package.json` as the MCP SDK's required peer; see "Library boundaries".
+  step deletes them (the copies' headers say the final layer deletes the directory; the tests that read it go with
+  it). Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in `package.json` as the MCP SDK's
+  required peer; see "Library boundaries".
 - **Stacked branches.** Owner, 2026-11-15: conversion PRs may be stacked so one does not wait for another to merge.
 
 ## Proposed, not yet decided
@@ -24,15 +25,16 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 - Converted: contact and resume (3 routes), the public music routes (2 routes).
 - Not converted: 46 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
   components (all reads), 34 files under `src/` that import Zod (more under `tests/`, and `scripts/prepare-music.mjs`
-  parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and Stripe reconciliation are operator scripts.
+  parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
+  Stripe reconciliation are operator scripts.
 - Every route but the three media routes has a golden corpus (recorded in PRs 246, 248 and 249).
 
 ## Rules this order follows
 
 - A behaviour fix goes in its own PR before the conversion of its area (golden rule 1).
 - An area is converted completely and reaches `main` in one merge; no ratchets and no legacy lists. A large area may be
-  reviewed as a stack of PRs, but the lower PRs target the stack's top branch, not `main`, so `main` (and production,
-  since every merge deploys) never holds a partly converted area.
+  reviewed as a stack of PRs, but only the bottom PR targets `main`; the PRs above it are merged into it, in order,
+  before it merges, so `main` (and production, since every merge deploys) never holds a partly converted area.
 - An area's design comes before its code: its XState diagrams (the states and moves the area's machine will have), and
   its Quint model where the list below names one, are reviewed in the area's first PR, before any conversion code. For
   offers, the offer version and installment machines are already drawn (docs/plans/2026-11-discount-flow.md, section
@@ -62,9 +64,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    carries the signing statements these actions write (`retireRequestSigning`, the attachment delete) and the PDF
    preflight becomes a service.
 2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts` and `audio-client-access.ts`. Small, and signing
-   link issuance needs its allowance rule (`reserveStudioAllowance`) converted first. Open PR 268 (sign-in codes tied
-   to the browser) is a behaviour fix for this area and lands before it. Codes, attempts and sessions under parallel
-   requests get a Quint model.
+   link issuance needs its allowance rule (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to
+   the browser, a behaviour fix for this area) merged on 2026-11-15, before it. Codes, attempts and sessions under
+   parallel requests get a Quint model.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and
@@ -93,13 +95,13 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
     file.
 13. **Finish.** The content collections stop importing Zod (see "Library boundaries"); remove the Zod import from
     `src/server/failure.ts`; delete `tests/fixtures/legacy-validators/` and the differential test, as their headers
-    say, with `tests/server/validator-types.test.ts`; convert the test helpers and tests that still import Zod
-    (`tests/helpers/astro-content.ts`, `tests/security/failure.test.ts`, `tests/lib/software-agreements.test.ts` and
-    any others by then) and `scripts/prepare-music.mjs`, which parses with the music Zod schemas; then add the
-    architecture test that fails on any Zod import in `src/`, `scripts/` or `tests/` (added only once nothing imports
-    it, so it is not a ratchet). `zod` stays in `package.json` as the MCP SDK's required peer.
-    Then the five database triggers move into code, one PR each, as issue 242 sets out (after the last conversion
-    layer): `audio_project_after_service_request` (intake: the request and the project it creates must be written
+    say, with `tests/server/validator-types.test.ts` and `tests/architecture/legacy-validators.test.ts`; convert the
+    test helpers and tests that still import Zod (`tests/helpers/astro-content.ts`, `tests/security/failure.test.ts`,
+    `tests/lib/software-agreements.test.ts` and any others by then) and `scripts/prepare-music.mjs`, which parses with
+    the music Zod schemas; then add the architecture test that fails on any Zod import in `src/`, `scripts/` or
+    `tests/` (added only once nothing imports it, so it is not a ratchet). `zod` stays in `package.json` as the MCP SDK's required peer.
+    Then the five database triggers move into code, after the last conversion layer as issue 242 sets out, one PR
+    each: `audio_project_after_service_request` (intake: the request and the project it creates must be written
     together, so it gets a Quint model), `audio_project_close_declined_request` (owner status),
     `publication_outbox_withdraw` (publication), and the two fired only by retention scripts. Each needs a migration
     applied in the right order relative to the Worker deploy; the order is worked out in its PR before its code, so a
