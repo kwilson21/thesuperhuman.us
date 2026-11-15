@@ -16,10 +16,12 @@
 //   the record:     the final write (one step), only while the row still carries this run's own attempt instant.
 // The address is part of the row: the rule refuses a request with no address, and the claim re-checks it (as it re-checks the
 // status, the attempt instant and whether the request is open), so a claim never lands over a row whose address went away.
-// What is left out, on purpose: the unconfigured mail keys (a run that
-// never asks the provider records "failed" at once, which is the "refused" path here), the answers the route gives, and the two
-// writes that record a failure when the claim or the answer could not be written (the one over a copy with no status, and the
-// one over this run's own attempt): each is guarded as the claim and the final write are, and writes only "failed".
+// What is left out, on purpose: the unconfigured mail keys (a run that never asks the provider records "failed" at once, which
+// is the "refused" path here), the answers the route gives, and the three writes that record a failure when the claim or the
+// answer could not be written: one over a copy with no status, compared with the details as they were read; one over a
+// request that could not be read, which holds only while no status is recorded; and one over this run's own attempt. The
+// first two write only "failed" and only over a copy with no status, and the third only over this run's attempt, as the final
+// write does.
 //
 // The properties are invariants over the real state, set from what each step found in the row at that moment, never from
 // what the run believed: `claims` records the row each claim overwrote, `overwrites` each final write that changed a row
