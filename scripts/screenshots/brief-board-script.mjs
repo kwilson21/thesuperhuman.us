@@ -1,6 +1,6 @@
 // A scripted stand-in for the board's interpreting model (docs/plans/2026-11-living-brief.md): it reads a request to
 // POST /api/software/brief/board and answers as the route would, from keyword rules instead of Workers AI. Used by the
-// Playwright checks of the page (tests/e2e/brief-board.mjs) and the screenshot scenario, where the route is answered
+// browser checks of the page and the screenshot scenario (scripts/screenshots/scenarios/software-board.mjs), where the route is answered
 // locally. It is deliberately simple and deterministic; it is not the model, and its wording is not the model's.
 
 /** Words in the answers that name a page (website) or a thing people do (web app), and the card each gives. */

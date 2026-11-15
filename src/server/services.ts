@@ -12,6 +12,8 @@ import type { AudioPayment } from "../lib/audio-payments";
 import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
 import { sendMail } from "../lib/resend";
 import { verifyTurnstile } from "../lib/turnstile";
+import type { BoardRequest } from "../lib/brief-board";
+import type { RawValue } from "../lib/fields";
 
 /**
  * Each binding service is typed as REQUIRED, as kwilson21/tally types its `Database`: a program that reads one is never
@@ -275,6 +277,58 @@ export const liveTurnstile = (secret: string) =>
 					passed ? Effect.void : Effect.fail(new TurnstileFailed()),
 				),
 			),
+	});
+
+// The brief board's interpreting model (src/server/brief-board-model.ts) and the two Cloudflare rate limits the brief's AI
+// routes count against. Each failure is named, so the board's route answers it as "busy" (503) and the page tries later.
+
+/** Workers AI refused or failed: an error, or "JSON Mode couldn't be met". */
+export class BoardModelFailed extends Data.TaggedError("BoardModelFailed") {}
+
+/** Workers AI did not answer within the route's limit. */
+export class BoardModelTimedOut extends Data.TaggedError(
+	"BoardModelTimedOut",
+) {}
+
+export class BoardModel extends Context.Service<
+	BoardModel,
+	{
+		/** The model's JSON answer for one request, unread: the caller reads it as untrusted data. */
+		readonly interpret: (
+			request: BoardRequest,
+		) => Effect.Effect<RawValue, BoardModelFailed | BoardModelTimedOut>;
+	}
+>()("site/BoardModel") {}
+
+/** A rate limit binding refused to answer. */
+export class RateLimiterFailed extends Data.TaggedError("RateLimiterFailed") {}
+
+/** env.BRIEF_SUGGEST_RATE_LIMIT (per visitor) and env.BRIEF_SUGGEST_SITE_LIMIT (the whole site), counted by key. */
+export class BriefRateLimits extends Context.Service<
+	BriefRateLimits,
+	{
+		/** Whether one more request under `key` is within the visitor's limit, or the site's. */
+		readonly allow: (
+			limit: "visitor" | "site",
+			key: string,
+		) => Effect.Effect<boolean, RateLimiterFailed>;
+	}
+>()("site/BriefRateLimits") {}
+
+/** A Cloudflare rate limit binding (the global `RateLimit` type; this file's `RateLimit` is the KV counter service). */
+type CloudflareRateLimit = NonNullable<Env["BRIEF_SUGGEST_RATE_LIMIT"]>;
+
+/** The live rate limits, from the two bindings. */
+export const liveBriefRateLimits = (
+	visitor: CloudflareRateLimit,
+	site: CloudflareRateLimit,
+) =>
+	Context.make(BriefRateLimits, {
+		allow: (limit, key) =>
+			Effect.tryPromise({
+				try: () => (limit === "visitor" ? visitor : site).limit({ key }),
+				catch: () => new RateLimiterFailed(),
+			}).pipe(Effect.map((outcome) => outcome.success)),
 	});
 
 // The owner alert: an urgent email that a valid visitor request could not be stored (src/lib/owner-alerts.ts). It says nothing

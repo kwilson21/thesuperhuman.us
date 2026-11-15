@@ -522,7 +522,7 @@ export const PREVIEW_OVERRIDES = {
 	// Gated pages stay reviewable in PRs before launch.
 	AUDIO_CLIENT_PORTAL_ENABLED: "true",
 	// The brief board too. The preview has no AI binding, so its route answers that interpretation is off; scenarios that
-	// show cards answer the route locally with tests/fixtures/brief-board-script.mjs.
+	// show cards answer the route locally with scripts/screenshots/brief-board-script.mjs.
 	SOFTWARE_BOARD_ENABLED: "true",
 };
 

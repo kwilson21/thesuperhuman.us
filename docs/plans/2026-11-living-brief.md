@@ -164,4 +164,4 @@ owner's request page and notice, and in the visitor's copy. Without an outline, 
   overlap), visitor actions including Undo and Pause, and six properties, each with a mutant that breaks it.
 - Unit tests for the shared module, route tests on the golden harness's fakes (D1, rate limits, AI), the inquiry route
   with and without an outline, the existing brief-flow tests unchanged, and Playwright runs of the page with a scripted
-  model (`tests/fixtures/brief-board-script.mjs`) that answers late and out of order.
+  model (`scripts/screenshots/brief-board-script.mjs`) that answers late and out of order.
