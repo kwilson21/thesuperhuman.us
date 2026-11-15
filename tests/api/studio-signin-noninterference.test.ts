@@ -8,7 +8,7 @@ import type { TestRuntime } from "../helpers/runtime";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
-import { hashValue, keyedHash } from "~/lib/audio-client-access";
+import { hashValue, keyedHash } from "~/lib/client-portal";
 import { revokeProjectAccess } from "~/lib/audio-project-revocation";
 import {
 	applyStudioRetention,

@@ -11,8 +11,11 @@ import {
 } from "~/lib/agreement-fields";
 import { FieldsRefused } from "~/lib/fields";
 import { musicRequest } from "~/lib/music-request";
-import { softwareGuard } from "~/lib/software-projects";
-import { depositOfferBlock, depositOfferGuard } from "~/lib/software-invoices";
+import { softwareGuard } from "~/lib/software-guard";
+import {
+	depositOfferBlock,
+	depositOfferGuard,
+} from "~/lib/software-offer-deposit";
 import { z } from "astro/zod";
 import { getOwnerRequest } from "~/lib/owner-requests";
 import {

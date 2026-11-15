@@ -1,57 +1,12 @@
-import { z } from "zod";
 import {
 	decideComplete,
 	decideDiscard,
 	decideIssue,
 } from "./signin-code-rules";
+import { hashValue, keyedHash } from "./client-portal";
 
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));
 const codeLifetimeMs = 10 * 60 * 1000;
 const sessionLifetimeMs = 14 * 24 * 60 * 60 * 1000;
-
-/** `input` is the email field of a request body. Every caller passes a string; the schema still rejects anything that is not a valid address. */
-export function normalizeClientEmail(input: string): string | null {
-	const parsed = emailSchema.safeParse(input);
-
-	return parsed.success ? parsed.data : null;
-}
-
-export function clientPortalEnabled(env: Env | undefined): boolean {
-	return env?.AUDIO_CLIENT_PORTAL_ENABLED === "true";
-}
-
-export async function hashValue(value: string): Promise<string> {
-	const bytes = new Uint8Array(
-		await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)),
-	);
-
-	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-		"",
-	);
-}
-
-export async function keyedHash(
-	secret: string,
-	message: string,
-): Promise<string> {
-	if (secret.length < 32) throw new Error("Studio code key is not configured.");
-
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(secret),
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["sign"],
-	);
-
-	const bytes = new Uint8Array(
-		await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)),
-	);
-
-	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-		"",
-	);
-}
 
 // A code belongs to the browser that asked for it. The browser holds a random value (the pending sign-in cookie); the
 // stored row is keyed by its hash and the code's hash covers it, so a code only works with the cookie it was issued to.
