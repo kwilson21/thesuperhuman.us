@@ -133,6 +133,20 @@ export const agreementLinkMutants = {
 	agreementLinkRetryNewAt: { property: "lostGuardNeverStores" },
 };
 
+// verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
+// (src/server/flows/brief-copy.ts). Module name -> the property its change must break.
+export const briefCopyMutants = {
+	briefCopyNoCas: { property: "claimsEligible" },
+	briefCopyCasSkipsOpen: { property: "closedNeverClaimed" },
+	briefCopyNoHold: { property: "uncertainHeld" },
+	briefCopyNoConfirm: { property: "uncertainHeld" },
+	briefCopyResendSent: { property: "sentNeverResent" },
+	briefCopyPublicAgain: { property: "publicOnlyFirst" },
+	briefCopyIgnoreClosed: { property: "closedNeverClaimed" },
+	briefCopyNoClaim: { property: "everySendClaimed" },
+	briefCopyFinalUnguarded: { property: "finalOnlyOwn" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -204,6 +218,14 @@ export const models = [
 		mutants: agreementLinkMutants,
 		equivalents: [],
 		exhaustive: ["agreementLink"],
+		samples: "20000",
+	},
+	{
+		file: "verification/brief-copy.qnt",
+		current: ["briefCopy"],
+		mutants: briefCopyMutants,
+		equivalents: [],
+		exhaustive: [],
 		samples: "20000",
 	},
 ];
