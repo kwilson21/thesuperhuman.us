@@ -6,6 +6,7 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
 	type LaneConfig,
+	hasLink,
 	oneLine,
 	ownField,
 	pricesOrLinks,
@@ -331,10 +332,9 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			figure <= MARKET_USD_MAX
 				? figure
 				: null,
-		// The reason may name the figure, but never a link.
+		// The reason may name the figure, but never a link (a bare domain included, as in every other text).
 		figureReason:
-			Predicate.isString(figureReason) &&
-			!/https?:\/\/|www\./i.test(figureReason)
+			Predicate.isString(figureReason) && !hasLink(figureReason)
 				? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
 				: "",
 	};

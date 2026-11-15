@@ -78,7 +78,7 @@ const useLabels: Record<OfferLane, string> = {
       {/* Beside Undo, so a reply that waits never moves the cards or the prices. */}
       <button type="button" class="studio-quiet" data-offer-held hidden></button>
     </div>
-    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It is not given the client’s name, email, company or site link, and wherever one appears as the client entered it, the site replaces it with “the client” first. It never sees your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
+    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It is not given the client’s name, email, company or site link, and wherever one appears as the client entered it, this website replaces it first with “the client” (the site with “the client’s current site”). It never sees your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
     <p class="visually-hidden" data-offer-live role="status"></p>
   </div>
 
@@ -101,7 +101,7 @@ const useLabels: Record<OfferLane, string> = {
     <h3 id="offer-pricing-title" tabindex="-1">What to charge</h3>
     <dl class="offer-prices">
       <div><dt>From your day value</dt><dd data-price-day>{dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
-      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{dollars(pastSpread.low)} to {dollars(pastSpread.high)}, middle {dollars(pastSpread.middle)}, from your last {past.length} sent. <button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the whole-project range: your past offers">Use as the whole-project range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || `Offer sent ${offer.sentAt.slice(0, 10)}`}</a> · {dollars(offer.totalCents)} · <span class="offer-past-date">{offer.sentAt.slice(0, 10)}</span></li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
+      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{past.length === 1 ? `${dollars(pastSpread.low)}, from your one sent ${kindNames[kind]} offer. ` : `${dollars(pastSpread.low)} to ${dollars(pastSpread.high)}, middle ${dollars(pastSpread.middle)}, from your last ${past.length} sent. `}<button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the whole-project range: your past offers">Use as the whole-project range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Sent offer'}</a><span class="offer-past-figures">{dollars(offer.totalCents)} · sent {offer.sentAt.slice(0, 10)}</span></li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
       <div><dt>From the market</dt><dd data-price-market>{market && kindRanges.length > 0 ? 'Suggest an offer to see where this brief sits in your research.' : market ? <>Your research has no ranges for {kindNames[kind]} work. Add them on the <a href="/owner/pricing">pricing page</a>.</> : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
     </dl>
     <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && <>{` The research’s ${market.sources.length} ${market.sources.length === 1 ? 'source is' : 'sources are'} on the `}<a href="/owner/pricing">pricing page</a>.</>}</p>
@@ -140,13 +140,16 @@ const useLabels: Record<OfferLane, string> = {
   /* A price row's button sits on its own line under the figures it uses. */
   .offer-prices :global(.studio-quiet) { display: flex; width: fit-content; }
   .offer-past { margin: .35rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
-  .offer-past li { min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; column-gap: .3rem; }
-  .offer-past a { border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; padding-block: .6rem; }
-  .offer-past-date { white-space: nowrap; }
+  /* Each offer: its outcome as a link, then its total and date on a line of their own. */
+  .offer-past li { display: grid; justify-items: start; overflow-wrap: anywhere; margin-bottom: .35rem; }
+  /* 44px tall, the underline at the text. */
+  .offer-past a { display: inline-block; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; padding-block: .75rem .35rem; min-height: 44px; }
+  .offer-past-figures { color: var(--studio-muted); font-variant-numeric: tabular-nums; }
   .offer-caption { font-size: .85rem; color: var(--studio-muted); }
   /* The board scrolls inside its own box, so the page never grows with the cards. */
-  .offer-board-scroll { max-height: min(36rem, 70vh); max-height: min(36rem, 70dvh); overflow-y: auto; display: grid; gap: 1rem; padding-right: .25rem; }
+  .offer-board-scroll { max-height: min(36rem, 70vh); max-height: min(36rem, 70dvh); overflow-y: auto; display: grid; gap: 1rem; padding: 0 .35rem .35rem; }
   .offer-lane h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0 0 .4rem; padding-bottom: .3rem; border-bottom: 1px solid var(--rule); }
+  .offer-board [data-offer-undo]:disabled { cursor: not-allowed; }
   .offer-board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .offer-cards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
   .offer-card { border: 1px dashed var(--field-border); border-radius: 3px; padding: .5rem .75rem; min-width: 0; }

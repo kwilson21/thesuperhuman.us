@@ -212,6 +212,10 @@ export function setupOfferBoard() {
 		live.textContent = text;
 	};
 
+	/** The end of a sentence after a quoted text: nothing when the quote already ends one (“…are in.”, “…launch?”). */
+	const endAfter = (text: string) =>
+		/[.?!]["”’)]*$/.test(text.trim()) ? "" : ".";
+
 	/** A message the owner both sees in the status line and hears. */
 	const say = (text: string) => {
 		status.textContent = text;
@@ -543,7 +547,7 @@ export function setupOfferBoard() {
 			}
 
 			case "drivers":
-				said = `Kept “${card.text}”.`;
+				said = `Kept “${card.text}”${endAfter(card.text)}`;
 
 				break;
 		}
@@ -1092,14 +1096,14 @@ export function setupOfferBoard() {
 			render();
 			status.textContent =
 				held.changes === 1
-					? "An update is waiting. Show it with the button beside Undo."
-					: "Updates are waiting. Show them with the button beside Undo.";
+					? "An update is waiting. Press “Show 1 update” to see it."
+					: `${held.changes} updates are waiting. Press “Show ${held.changes} updates” to see them.`;
 
 			if (first)
 				announce(
 					held.changes === 1
-						? "An update is waiting. Show it with the button beside Undo."
-						: `${held.changes} updates are waiting. Show them with the button beside Undo.`,
+						? "An update is waiting. Press “Show 1 update” to see it."
+						: `${held.changes} updates are waiting. Press “Show ${held.changes} updates” to see them.`,
 				);
 
 			return;
@@ -1128,7 +1132,7 @@ export function setupOfferBoard() {
 		if (!canAsk()) {
 			if (requests >= REQUESTS_PER_PAGE)
 				say(
-					"The board reached its limit for this page. Reload the page to ask again.",
+					"The board reached its limit for this page. Save your draft, then reload the page to ask again; the board starts empty.",
 				);
 
 			return;
@@ -1246,7 +1250,7 @@ export function setupOfferBoard() {
 			(document.activeElement === undoButton && undoButton.disabled)
 		)
 			(undoButton.disabled ? heading : undoButton).focus();
-		say(`Undid: ${label}.`);
+		say(`Undid: ${label}${endAfter(label)}`);
 		schedule();
 	}
 
@@ -1286,7 +1290,7 @@ export function setupOfferBoard() {
 			(
 				nodes.get(id)?.querySelector<HTMLElement>("button") ?? asideSummary
 			).focus();
-			say(`Brought back “${back?.text ?? ""}”.`);
+			say(`Brought back “${back?.text ?? ""}”${endAfter(back?.text ?? "")}`);
 			schedule();
 
 			return;
@@ -1321,6 +1325,19 @@ export function setupOfferBoard() {
 
 				break;
 			case "aside": {
+				const editing = unsavedEdit(card);
+
+				if (editing) {
+					showEditError(
+						editing.node,
+						editing.input,
+						card.id,
+						"Save or Cancel your edit first, then set the card aside.",
+					);
+
+					break;
+				}
+
 				const near = node.nextElementSibling ?? node.previousElementSibling;
 				const wasUsed = used.has(card.id);
 				board = setAside(board, card.id);
@@ -1328,8 +1345,8 @@ export function setupOfferBoard() {
 				(near?.querySelector<HTMLElement>("button") ?? asideSummary).focus();
 				say(
 					wasUsed
-						? `Set aside “${card.text}”. It stays in the offer; remove it there if you don’t want it. Undo or Bring back restores the card.`
-						: `Set aside “${card.text}”. Undo or Bring back restores it.`,
+						? `Set aside “${card.text}”${endAfter(card.text)} It stays in the offer; remove it there if you don’t want it. Undo or Bring back restores the card.`
+						: `Set aside “${card.text}”${endAfter(card.text)} Undo or Bring back restores it.`,
 				);
 				schedule();
 
@@ -1342,8 +1359,12 @@ export function setupOfferBoard() {
 				const input =
 					node.querySelector<HTMLInputElement>("[data-card-input]")!;
 
-				editor.hidden = false;
-				input.value = card.text;
+				// Already open: what the owner typed there stays.
+				if (editor.hidden) {
+					editor.hidden = false;
+					input.value = card.text;
+				}
+
 				input.focus();
 
 				break;

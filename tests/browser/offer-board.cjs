@@ -796,6 +796,36 @@ function check(name, ok, detail = "") {
 				),
 		);
 
+		// The sixth review's bug: Edit pressed again, or Not this, never drops words typed in the card's open editor.
+		await fresh();
+
+		const editing = card("summary");
+
+		await editing.getByRole("button", { name: /^Edit/ }).click();
+		await editing
+			.locator("[data-card-input]")
+			.fill("Our own summary, not saved yet.");
+		await editing.getByRole("button", { name: /^Edit/ }).click();
+
+		const afterEdit = await editing.locator("[data-card-input]").inputValue();
+
+		await editing.getByRole("button", { name: /^Not this/ }).click();
+
+		const stillEditing = (await card("summary").count()) === 1;
+
+		check(
+			"Edit pressed again, or Not this, never drops words typed in the card's open editor",
+			afterEdit === "Our own summary, not saved yet." &&
+				stillEditing &&
+				(await card("summary").locator("[data-card-input]").inputValue()) ===
+					"Our own summary, not saved yet." &&
+				(await card("summary").locator("[data-card-error]").isVisible()),
+			afterEdit,
+		);
+
+		if (stillEditing)
+			await card("summary").getByRole("button", { name: "Cancel" }).click();
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

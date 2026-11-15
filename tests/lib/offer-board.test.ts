@@ -330,3 +330,60 @@ describe("found in the offer board's second review", () => {
 		expect(markStep(board, "c9", "nothing")).toBe(board);
 	});
 });
+
+describe("found in the offer board's sixth review", () => {
+	it.each([
+		"Estimated 6 weeks from the start date",
+		"Delivery estimate: 4 to 6 weeks after kickoff",
+		"Estimated 16 weeks",
+		"Each payment integration costs 2 to 3 extra days",
+		"Quote 3 shipping carriers at checkout",
+		"Estimated 5 pages",
+		"Estimated 1,500 pages of archive",
+		"Import up to 2,000 products",
+		"A catalog of a few hundred items",
+		"Choose a low-cost host",
+		"Connect the RS 232 scale to the till",
+	])("keeps %s: a duration or a count is not money", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+
+	it.each([
+		"Hosting at 20 € a month",
+		"A deposit of 1.500 € before the start",
+		"Domain renewal, 15 CHF a year",
+		"A 5k USD shop",
+		"Rs. 50,000 for the build",
+		"50 000 kr in all",
+		"A fee of 500",
+		"It costs 500 a month",
+		"Price: 1,500.",
+		"A fee of 500 per milestone",
+		"Fees 500 to 700",
+		"Hosting at $20 a month",
+		"USD 5,000 for the build",
+		"5,000 dollars",
+		"See clutch.co for more",
+	])("drops %s: money, wherever its currency stands, or a link", (text) => {
+		expect(pricesOrLinks(text)).toBe(true);
+	});
+
+	it("keeps a timing card in weeks, and drops a figure reason that names a bare domain", () => {
+		const reply = readOfferReply({
+			cards: [
+				{
+					lane: "timing",
+					text: "Estimated 6 weeks from the start date",
+					reason: "Two milestones",
+				},
+			],
+			figureUsd: 4000,
+			figureReason: "Clutch.co and goodfirms.co list similar sites near this",
+		});
+
+		expect(reply?.cards.map((card) => card.text)).toEqual([
+			"Estimated 6 weeks from the start date",
+		]);
+		expect(reply?.figureReason).toBe("");
+	});
+});

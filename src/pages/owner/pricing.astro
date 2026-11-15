@@ -84,6 +84,8 @@ const updated = pricing.updatedAt
 </OwnerLayout>
 <style>
   .pricing-settings { display: grid; gap: 1.5rem; }
+  .pricing-settings > * { min-width: 0; }
+  .pricing-settings h2 { overflow-wrap: break-word; hyphens: auto; }
   /* On a phone the table scrolls sideways in its own box, headers kept, rather than the page. */
   .pricing-table-scroll { overflow-x: auto; margin: .75rem 0 1rem; }
   .pricing-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
@@ -105,13 +107,13 @@ const updated = pricing.updatedAt
   .pricing-settings details { font: .9rem/1.5 var(--font-sans); }
   .pricing-last-saved { font-family: var(--font-sans); }
   .pricing-caveats { padding-left: 1.1rem; }
+  .pricing-caveats li, .pricing-sources li { overflow-wrap: anywhere; }
   .pricing-caveats li + li { margin-top: .5rem; }
   /* Numbered, because the caveats cite sources by number. */
   .pricing-sources { list-style: decimal; padding-left: 2rem; }
-  .pricing-sources li { min-height: 44px; padding-block: .55rem; }
-  .pricing-sources a { border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+  .pricing-sources a { display: inline-block; padding-block: .75rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
   .pricing-settings textarea[aria-invalid="true"] { border-color: var(--accent); }
-  .pricing-settings .studio-quiet { min-height: 44px; }
+  .pricing-settings .studio-quiet { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; }
   /* While a save is on its way: marked rather than disabled, so focus stays where it was. */
   .pricing-settings [aria-disabled="true"] { opacity: .5; cursor: wait; }
 </style>

@@ -485,8 +485,37 @@ const MONEY = new RegExp(
 	"iu",
 );
 
-/** An amount of money only: no quantities, which an offer's cards may need ("Import up to 2,000 products", "about 5k"). */
-const PRICE = new RegExp(PRICE_PARTS.join("|"), "iu");
+/**
+ * A money word with a number, read as money only when nothing but a range, punctuation, a scale or a word about paying
+ * follows: "a fee of 500", "costs 500 a month", "price: 1,500.", but not "Estimated 6 weeks", "costs 2 to 3 extra days"
+ * or "Quote 3 shipping carriers". The number is read whole first, so "estimated 16 weeks" never reads as "estimated 1".
+ */
+const MONEY_WORD_AMOUNT =
+	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*(?![\\d,.]*\\d)(?=\\s*(?:(?:to|-|–)\\s*\\d[\\d,.]*)?\\s*(?:$|[.,;:!?)\\]](?!\\d)|(?:k|m|thousand|million|dollars?|euros?|pounds?|bucks|per|a|an|each|flat|upfront|up front|total)\\b))";
+
+/**
+ * Money written after the amount, as many languages write it and the model writes in the brief's language: "20 €",
+ * "1.500 €", "15 CHF", "5k USD", "50 000 kr", and "Rs. 50,000" with its dot (without it, "RS 232" is a port).
+ */
+const AMOUNT_THEN_CURRENCY = [
+	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?[$€£¥₹₩]",
+	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|cad|aud|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr)\\b",
+	"\\brs\\.\\s?\\d",
+];
+
+/**
+ * An amount of money only, for the offer board: the currency forms above, a money word with an amount, and money written
+ * after the amount. No quantities or durations, which an offer's cards need ("Import up to 2,000 products", "about 5k",
+ * "Estimated 6 weeks"). MONEY above keeps its own alternatives for the living brief.
+ */
+const PRICE = new RegExp(
+	[
+		...PRICE_PARTS.slice(0, -1),
+		MONEY_WORD_AMOUNT,
+		...AMOUNT_THEN_CURRENCY,
+	].join("|"),
+	"iu",
+);
 
 const NUMBER_WORDS =
 	"a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|few|couple of|several";
@@ -569,6 +598,9 @@ const plainText = (text: string) =>
  */
 export const pricesOrLinks = (text: string) =>
 	[PRICE, LINK].some((pattern) => pattern.test(plainText(text)));
+
+/** Whether text names a link or an address (a domain, a path, an email): for text that may name money but not a link. */
+export const hasLink = (text: string) => LINK.test(plainText(text));
 
 /**
  * Whether text makes a commitment or points somewhere: a price, a time estimate, a date, a promise, a link or an
