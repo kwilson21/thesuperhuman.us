@@ -50,24 +50,22 @@ stream), `audio-project-invitations.ts`, `audio-project-messages.ts` (writes and
 
 Outside, and left in place because code outside the area calls them: `listProjectMessages`, `revisionRoundsLeft`,
 `latestReviewDecision` and `REVISION_ROUNDS` (the studio and owner pages), `clientProjectFiles` (the studio page),
-`listProjectUpdates` and `projectToday` (pages, `owner-reporting.ts`), `validProjectDate` (agreement fields, software
-projects, the software project route), `validateProjectMessage` (the owner request messages route and the software
+`listProjectUpdates` (pages, `owner-reporting.ts`), `validateProjectMessage` (the owner request messages route and the software
 studio messages route), `readBodyWithin` (agreement attachments, the update visual route), `defaultFirstUpdate`, and
 `audio-project-next-step.ts` (pure, used by the owner page). Of these `latestReviewDecision`, `revisionRoundsLeft` and
 `clientProjectFiles` keep a decision in SQL; they stay for the pages (28 reads in `.astro` files are not assigned a step by
-the plan) and the converted area does not call them. The pure ones (`validateProjectMessage`, `validProjectDate`,
-`projectToday`, `readBodyWithin`, `privateProjectObjectKey`) are read from where they are: they decide with no SQL and use
+the plan) and the converted area does not call them. The pure ones (`validateProjectMessage`, `readBodyWithin`,
+`privateProjectObjectKey`, and `validProjectDate` and `projectToday` in `project-dates.ts`) are read from where they are: they decide with no SQL and use
 no Zod. `src/lib/audio-client-access.ts` (sign-in) belongs to the studio sign-in area; this area stops importing it
-(`clientPortalEnabled` is a one-line check done in the route's binding step, `hashValue` is the existing `hashing` from
-`agreement-services.ts`, `deleteRetiredCodes` is one statement in this area's store, and the session is read in this area's
-store, below).
+(`clientPortalEnabled` comes from `client-portal.ts` in the route's binding step, `hashValue` is the existing `hashing` from
+`agreement-services.ts`, `deleteRetiredCodes` is one statement in this area's store, and the session is read with the
+existing `readStudioSession`, below).
 
-The plan's step 0 splits the shared helpers into modules of their own (the pure parts of `audio-client-access.ts` and the
-date helpers of `audio-project-updates.ts`). On `origin/main` at `14cce493` that split has not landed: `clientPortalEnabled`
-is still imported from `audio-client-access.ts` (for example by `src/pages/api/audio-intake.ts`), and `validProjectDate`
-and `projectToday` still live in `audio-project-updates.ts`, which the conversion deletes. The conversion therefore needs
-that prerequisite PR first (reported to the coordinator), or it must keep a one-line `clientPortalEnabled` check of its own
-and leave the two date helpers in a small module, which is the same split under another name.
+The plan's step 0 split the shared helpers into modules of their own, and it has landed on `main` (PR #305):
+`src/lib/client-portal.ts` holds `clientPortalEnabled`, `normalizeClientEmail`, `hashValue` and `keyedHash`, and
+`src/lib/project-dates.ts` holds `validProjectDate` and `projectToday`. The converted area imports those two modules and
+no longer imports `audio-client-access.ts` or the date helpers of `audio-project-updates.ts`, which the conversion
+deletes.
 
 `src/server/services.ts:544-570` already has a `ProjectInvitation` service whose `deliver` calls the unconverted
 `deliverProjectInvitation` for the public intake flow. The conversion replaces that call with the new invitation delivery
