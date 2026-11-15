@@ -1,5 +1,6 @@
 import {
 	DEFAULT_PREFETCH_ENABLED,
+	PREFETCH_LIMIT,
 	isPublicPrefetchSource,
 	prefetchTarget,
 	reservePrefetch,
@@ -8,7 +9,9 @@ import {
 type Connection = { saveData?: boolean; effectiveType?: string };
 
 export interface PredictionManager {
-	register(options: { element: HTMLAnchorElement; callback: () => void }): void;
+	register(options: { element: HTMLAnchorElement; callback: () => void }): {
+		unregister(): void;
+	};
 }
 
 async function loadPredictionManager(): Promise<PredictionManager> {
@@ -73,7 +76,7 @@ export async function setupPrefetchTrial(
 		if (
 			!isPublicPrefetchSource(location.href) ||
 			!anchor.isConnected ||
-			anchor.download ||
+			anchor.hasAttribute("download") ||
 			anchor.target ||
 			!reservePrefetch(target, seen, allowedNow())
 		)
@@ -81,61 +84,161 @@ export async function setupPrefetchTrial(
 		const hint = document.createElement("link");
 		hint.rel = "prefetch";
 		hint.as = "document";
+		hint.referrerPolicy = "no-referrer";
 		hint.href = target!;
 
 		if (hint.relList.supports("prefetch")) {
 			document.head.appendChild(hint);
 		} else {
 			// Safari may not support link prefetch. Never execute the fetched document.
-			void fetch(target!, { credentials: "omit", redirect: "error" }).catch(
-				() => undefined,
-			);
+			void fetch(target!, {
+				credentials: "omit",
+				redirect: "error",
+				referrerPolicy: "no-referrer",
+			}).catch(() => undefined);
 		}
 
 		anchor.dataset.prefetchRequested = "true";
 		report(
 			`${mode}: ${seen.size}/3 hints requested. Latest: ${new URL(target!).pathname}`,
 		);
+
+		if (seen.size >= PREFETCH_LIMIT) pause();
 	};
 
-	const anchors = [
-		...document.querySelectorAll<HTMLAnchorElement>("a[href]"),
-	].filter(
-		(a) =>
-			!a.closest("#prefetch-trial") &&
-			!a.download &&
-			!a.target &&
-			prefetchTarget(a.href, location.href),
-	);
+	const eligible = (anchor: HTMLAnchorElement) =>
+		anchor.isConnected &&
+		!anchor.closest("#prefetch-trial") &&
+		!anchor.hasAttribute("download") &&
+		!anchor.target &&
+		prefetchTarget(anchor.href, location.href);
+
+	let manager: PredictionManager | undefined;
 
 	if (mode === "foresight") {
 		try {
-			const manager = await loadManager();
-
-			for (const anchor of anchors)
-				manager.register({ element: anchor, callback: () => request(anchor) });
+			manager = await loadManager();
 		} catch {
 			report(
 				"Prediction could not start. Normal links still work; try Hover instead.",
 			);
-		}
-	} else {
-		for (const anchor of anchors) {
-			let timer: ReturnType<typeof setTimeout> | undefined;
-			const cancel = () => clearTimeout(timer);
 
-			const enter = () => {
-				cancel();
-				timer = setTimeout(() => request(anchor), 80);
-			};
-
-			anchor.addEventListener("mouseenter", enter);
-			anchor.addEventListener("focus", enter);
-			anchor.addEventListener("mouseleave", cancel);
-			anchor.addEventListener("blur", cancel);
-			anchor.addEventListener("touchstart", () => request(anchor), {
-				passive: true,
-			});
+			return;
 		}
 	}
+
+	const registrations = new Map<
+		HTMLAnchorElement,
+		{ href: string; cleanup: () => void }
+	>();
+
+	let active = true;
+
+	const observeRequest = (anchor: HTMLAnchorElement) => {
+		if (active) request(anchor);
+	};
+
+	const register = (anchor: HTMLAnchorElement) => {
+		if (manager) {
+			const registration = manager.register({
+				element: anchor,
+				callback: () => observeRequest(anchor),
+			});
+
+			return () => registration.unregister();
+		}
+
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const cancel = () => clearTimeout(timer);
+
+		const enter = () => {
+			cancel();
+			timer = setTimeout(() => observeRequest(anchor), 80);
+		};
+
+		const touch = () => observeRequest(anchor);
+		anchor.addEventListener("mouseenter", enter);
+		anchor.addEventListener("focus", enter);
+		anchor.addEventListener("mouseleave", cancel);
+		anchor.addEventListener("blur", cancel);
+		anchor.addEventListener("touchstart", touch, { passive: true });
+
+		return () => {
+			cancel();
+			anchor.removeEventListener("mouseenter", enter);
+			anchor.removeEventListener("focus", enter);
+			anchor.removeEventListener("mouseleave", cancel);
+			anchor.removeEventListener("blur", cancel);
+			anchor.removeEventListener("touchstart", touch);
+		};
+	};
+
+	const reconcile = () => {
+		if (!active) return;
+
+		for (const [anchor, registration] of registrations) {
+			if (!eligible(anchor) || anchor.href !== registration.href) {
+				registration.cleanup();
+				registrations.delete(anchor);
+			}
+		}
+
+		if (!isPublicPrefetchSource(location.href) || seen.size >= PREFETCH_LIMIT)
+			return;
+
+		for (const anchor of document.querySelectorAll<HTMLAnchorElement>(
+			"a[href]",
+		)) {
+			if (!registrations.has(anchor) && eligible(anchor)) {
+				const cleanup = register(anchor);
+
+				if (!active) {
+					cleanup();
+
+					return;
+				}
+
+				registrations.set(anchor, { href: anchor.href, cleanup });
+			}
+		}
+	};
+
+	const observer = new MutationObserver(reconcile);
+
+	const resume = () => {
+		if (seen.size >= PREFETCH_LIMIT) {
+			pause();
+
+			return;
+		}
+
+		active = true;
+		reconcile();
+
+		if (!active) return;
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ["href", "download", "target"],
+		});
+	};
+
+	const pause = () => {
+		active = false;
+		observer.disconnect();
+
+		for (const registration of registrations.values()) registration.cleanup();
+		registrations.clear();
+	};
+
+	window.addEventListener("pagehide", pause);
+	window.addEventListener("pageshow", resume);
+	resume();
+
+	return () => {
+		pause();
+		window.removeEventListener("pagehide", pause);
+		window.removeEventListener("pageshow", resume);
+	};
 }

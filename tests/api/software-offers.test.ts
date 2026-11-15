@@ -1054,6 +1054,60 @@ it.each(["confirmed", "rejected", "uncertain"])(
 	},
 );
 
+// F10 (docs/plans/2026-11-offers-conversion.md, section 5): the draft and send batches never write owner_requests, so a
+// draft saved, or saved and sent, in another tab while a decline's email is in flight used to pass the second batch and
+// be left on a resolved request.
+it.each([
+	["saved", false, "draft"],
+	["saved and sent", true, "sent"],
+])(
+	"a draft %s while the decline's email is in flight keeps the request open",
+	async (_name, sends, status) => {
+		await send(await draft());
+		sql.exec(
+			"UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'",
+		);
+		vi.mocked(fetch).mockImplementationOnce(async () => {
+			const saved = await draft();
+
+			if (sends) {
+				await send(saved);
+				// The email takes 20 seconds: the new link is no longer sending when the decline goes on.
+				sql.exec(
+					"UPDATE software_offer_links SET created_at='2020-01-01T00:00:00Z'",
+				);
+			}
+
+			return new Response("{}");
+		});
+
+		const response = await call({ action: "decline", text: "Thanks." });
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			ok: false,
+			message:
+				"The client email was sent, but the request changed before it could be recorded. Reload before taking another action.",
+		});
+		expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
+			status: "new",
+		});
+		expect(
+			sql
+				.prepare("SELECT version,status FROM software_offers ORDER BY version")
+				.all(),
+		).toEqual([
+			{ version: 1, status: "withdrawn" },
+			{ version: 2, status },
+		]);
+		expect(
+			sql
+				.prepare("SELECT * FROM owner_request_audit WHERE action='declined'")
+				.all(),
+		).toEqual([]);
+	},
+);
+
 it("rejects an actual send batch that read the draft before decline reserved it", async () => {
 	const saved = await draft();
 	const batch = db.batch.bind(db);

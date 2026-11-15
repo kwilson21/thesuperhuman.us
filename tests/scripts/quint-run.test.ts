@@ -177,18 +177,34 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
-	it("every mutant names a module in the model, and every module is listed", () => {
+	it("every mutant and equivalent names a module in the model, and every module is listed", () => {
 		const modules = [
 			...model.matchAll(/^module (\w+) \{ import discountOffers/gm),
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(discountMutants), "discount", "discountF10Fix"].sort(),
+			[
+				...Object.keys(discountMutants),
+				...models[1].equivalents,
+				"discount",
+			].sort(),
 		);
 	});
 
-	it("checks today's code and the F10 fix, each keeping every property", () => {
-		expect(models[1].current).toEqual(["discount", "discountF10Fix"]);
+	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
+		expect(models[1].current).toEqual(["discount"]);
+		expect(models[1].exhaustive).toEqual(["discount"]);
+		expect(models[1].equivalents).toEqual([
+			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
+		]);
+		expect(Object.keys(discountMutants)).not.toContain(
+			"discountSecondBatchNoSendingGuard",
+		);
+		// The second batch as it was before the fix stays a mutant, so CI reproduces F10 on every run.
+		expect(discountMutants.discountTodaySecondBatch).toEqual({
+			property: "declinedHasNoOffer",
+		});
 	});
 
 	it("every mutant property is one of allProperties", () => {

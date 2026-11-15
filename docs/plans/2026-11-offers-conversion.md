@@ -299,8 +299,10 @@ payment_failed or uncollectible, not refunded), AlreadyResolved, OfferStillSendi
 AgreementSigned and AudioProjectExists. Writes, first batch (288-324, G3 G1 G5 G4 G6 G2): draft and sent offers withdrawn,
 signing retired (four statements), live links revoked, the request's `updated_at`, the audit `offer-link-revoked` with the
 note "Offer withdrawn and link closed to decline the request". Second batch, after the client email (350-372, G1 at the
-write time, G2 G5 G6): status resolved with `resolved_at`, the audit `declined`. Emails: subject "About your project
-brief", text `<text>\n\nKazon`.
+write time, G2 G5 G6): status resolved with `resolved_at`, the audit `declined`. Since F10's fix (section 5), the flow
+reads after the email whether an offer of the request is draft or sent, a fact the second batch's rule refuses while it
+holds (answered by the reads after a refused second batch, below), and the batch re-checks it with a guard. Emails:
+subject "About your project brief", text `<text>\n\nKazon`.
 
 **revoke**, `revokeLink` in `rules/offer-revoke.ts`.
 Facts: the request and, new, the request's link row (its `created_at` and `revoked_at`), read before the batch. Move:
@@ -594,7 +596,7 @@ decided in review; for the others the owner accepted the recommendations on 2026
 | F7 | A decision that SQL makes today, moved into the rule, answers otherwise | revoke: "a link made 10 seconds ago and the lookups after the batch fail" (rejected today). offer-draft: "another writer takes the version before the batch inserts it" (409 today) | 2 |
 | F8 | With no mail configured, question and decline write first (decline withdraws the offers and closes the link) and only then answer 502 | question: "no Resend key", "an empty Resend key", "no sender address", "no owner address". decline: "no Resend key", "no sender address", "no owner address" | 7 |
 | F9 | A send whose client email failed answers 200 with the link even when the live-link check found the link closed | offer-send: "the link is revoked while an email that fails is sent" | 1 |
-| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft | none: found by reading and confirmed by the model (section 7; docs/verification.md, "F10, reproduced") | 0 |
+| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft. Fixed (#331) | decline: "a draft is saved while the email is sent", "a draft is saved and sent while the email is sent, its link made 20 seconds before", "a draft is saved just before the second batch" (found by reading and confirmed by the model, section 7; the fix's PR recorded these on the old code first) | 3 |
 
 **F2, a store failure that rejects (decided).** A converted route passes `{ route, answer }` to `runRoute`
 (src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the
@@ -685,6 +687,19 @@ it. The fix, as recommended and accepted: the second batch also requires that no
 sent, read after the email and refused by name (section 2), with the guard as its re-check; refused, it answers
 EmailSentButChanged as the second batch does today (376-405).
 
+Fixed on #331, as recommended. After the email, a decline reads
+`SELECT 1 FROM software_offers WHERE request_id=? AND status IN ('draft','sent')` and, when an offer is left, refuses
+before the second batch; the batch carries the same condition as a guard, for a draft saved after that read. Refused
+either way, the route answers through the lookups that already answer a refused second batch: ProjectStarted, then
+OfferStillSending, then EmailSentButChanged. So a draft, or a sent offer whose link is at least 20 seconds old, answers
+EmailSentButChanged, and a sent offer whose link is younger answers OfferStillSending, which is what that batch's G5
+answers for it today; answering EmailSentButChanged directly would have changed that existing answer, and would have put
+it ahead of ProjectStarted. A failed read answers `offersFailedAfterEmail` (500) and is logged once. The fix's PR
+recorded its golden cases on the old code in a commit of their own and re-recorded them with the fix: the three cases in
+the table change from 200 with the request resolved to 409 with nothing resolved, the control "a draft is saved and
+sent while the email is sent, its link made a moment ago" keeps its 409 OfferStillSending, and "the offers read after the
+email fails" is added. In the model, `discount` now has the fix (docs/verification.md, "F10, fixed").
+
 **Kept as they are.** LinkNotBuilt is a configuration error, not a store failure or a missing binding: 500 with its own
 sentence, nothing written (golden send "SITE_ORIGIN that is not a URL", "an empty SITE_ORIGIN"). A draft's removed
 attachment with no R2 binding keeps today's cleanup-pending 200 (golden draft "a removed attachment with no R2 binding");
@@ -730,22 +745,24 @@ recorded in docs/verification.md, "The discount-offers model". It covers (line n
 
 Properties, each with a mutant that breaks it (the driver fails a property without one):
 
-- `declinedHasNoOffer`: a request a decline resolved has no draft or sent offer and no live link. Today's code breaks it
-  (F10, confirmed by the model and accepted). The model carries the fix (`discountF10Fix`, and `discount` once the fix
-  lands), and today's second batch is the mutant, as `discountTodayDepositGuard` keeps the old deposit guard. Until the
-  fix lands, `discount` keeps the property in a form that allows what today's second batch lets through: a draft saved
-  during the decline's email, or a sent offer and its live link made during the email at least 20 seconds before the
-  second batch. The second is reachable in the model's coarse clock and practically not in code. G5 refuses only a link
-  whose `created_at` is later than the second batch's time less 20 seconds, compared strictly (`created_at>?`,
-  src/lib/software-offers.ts:466, 473), and the second batch is built after the email, at most about 20 seconds after
-  the first batch; but `created_at` is the send's `now` (software.ts:148), taken after a request read that the send
-  batch's G1 forces after the first batch (767), for a draft whose `updated_at` the send needs from the draft save's
-  answer (602). So the link would have to be made in the milliseconds before the email starts. The draft case is real.
-  Its mutant stays G5 left out of the second batch: a link made less than 20 seconds before the second batch then passes
-  too, which breaks the weakened property.
-- `acceptedSendLinkLive`: a send that answers 200 with its client email accepted had its link live at the check. Mutant:
-  the check left out. With F9 accepted, the fix PR drops "with its client email accepted" from the property, and today's
-  condition (838) becomes a second mutant.
+- `declinedHasNoOffer`: a request a decline resolved has no draft or sent offer and no live link. The code before F10's
+  fix broke it (F10, confirmed by the model and accepted). Since the fix (section 5) `discount` carries it, and the old
+  second batch is the mutant `discountTodaySecondBatch`, as `discountTodayDepositGuard` keeps the old deposit guard.
+  Until the fix landed, `discount` kept the property in a form that allowed what the old second batch let through: a
+  draft saved during the decline's email, or a sent offer and its live link made during the email at least 20 seconds
+  before the second batch. The second is reachable in the model's coarse clock and practically not in code. G5 refuses
+  only a link whose `created_at` is later than the second batch's time less 20 seconds, compared strictly
+  (`created_at>?`, src/lib/software-offers.ts:466, 473), and the second batch is built after the email, at most about 20
+  seconds after the first batch; but `created_at` is the send's `now` (software.ts:148), taken after a request read that
+  the send batch's G1 forces after the first batch (767), for a draft whose `updated_at` the send needs from the draft
+  save's answer (602). So the link would have to be made in the milliseconds before the email starts. The draft case is
+  real. Until the fix its mutant was G5 left out of the second batch, which broke the weakened property; with the fix
+  that mutant is equivalent (a live link always has a sent offer, which the fix refuses), and the fix's PR moved it to
+  the equivalents and removed the weakened form.
+- `sendLinkLive` (first `acceptedSendLinkLive`): a send that answers 200 had its link live at the check, whatever became
+  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so the
+  property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is equivalent in
+  the model, which never closes a link during a failed email (docs/verification.md).
 
 **The deposit decision, a LemmaScript contract (decided).** `depositOfferBlock`'s decision (software-invoices.ts:365-397)
 becomes a pure function with no imports, in its own module listed in `LemmaScript-files.txt`, in the style of
