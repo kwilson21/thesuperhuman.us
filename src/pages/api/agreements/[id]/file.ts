@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { agreementText } from "~/lib/agreement-access";
 import { agreementHeaders } from "~/lib/agreement-host";
-import { loggedAnswer } from "~/server/agreement-answers";
+import { loggedAnswer } from "~/server/answers";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";

@@ -18,12 +18,12 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 ## Where things stand
 
-- Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), and the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301).
-- Not converted: 35 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
+- Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301), and the media routes (3 routes: `music/file`, `audio/file` and `og/[name].mp4`; fixes and conversion in one stack, record `docs/prelaunch-qa-2026-11-15-media.md`).
+- Not converted: 32 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
   components (all reads), 28 files under `src/` that use Zod (27 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
   parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
   Stripe reconciliation are operator scripts.
-- Every route but the three media routes has a golden corpus (recorded in PRs 246, 248 and 249).
+- Every route has a golden corpus (recorded in PRs 246, 248 and 249, and for the three media routes at the bottom of their stack).
 
 ## Rules this order follows
 
@@ -86,7 +86,7 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    is named in its rule file until it moves (step 13).
 10. **Publication** (converted), with the work feed, `.well-known` and the MCP probe. The MCP tools stop importing Zod (see
     "Library boundaries"). The `publication_outbox_withdraw` trigger stays and is named in its rule file.
-11. **Media routes** (`music/file`, `audio/file`, `og/[name].mp4`), after recording a corpus for each.
+11. **Media routes** (`music/file`, `audio/file`, `og/[name].mp4`): converted, after recording a corpus for each. There is no database, no write and no state in these routes, so the area has no XState machine and no Quint model; the design note is in `docs/prelaunch-qa-2026-11-15-media.md`.
 12. **Owner request status**, last, because its rules read facts from every software area. Today it answers 409 for
     any error (note (e) in `src/server/guarded-save.ts`); the owner's 2026-11-14 decision already says an unexpected
     store failure answers 500, so this is a behaviour fix in its own PR before the conversion (confirm with the owner
