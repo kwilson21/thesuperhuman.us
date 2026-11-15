@@ -60,8 +60,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 1. **Software offers.** `owner/requests/[id]/software.ts`: fit, question, decline, revoke, draft, send. Its store
    carries the signing statements these actions write (`retireRequestSigning`, the attachment delete) and the PDF
    preflight becomes a service.
-2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts` and `audio-client-access.ts`. Small, and signing
-   link issuance needs its allowance rule (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to
+2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts`, `audio-client-access.ts` and `client-portal.ts`
+   (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule
+   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to
    the browser, a behaviour fix for this area) merged on 2026-11-15, before it. Codes, attempts and sessions under
    parallel requests get a Quint model.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the

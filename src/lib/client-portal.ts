@@ -1,6 +1,7 @@
 // The pure helpers of the client portal that other areas import: the portal flag, the address normalizer and the two
 // hashes. No D1, mail or sessions, so an area can use them without loading src/lib/audio-client-access.ts, which keeps
-// the sign-in codes, sessions and allowances.
+// the sign-in codes, sessions and allowances. The address normalizer still validates with Zod; it moves to Effect
+// Schema with the studio sign-in area (docs/plans/2026-11-effect-conversion.md, step 2).
 import { z } from "zod";
 
 const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));

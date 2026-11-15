@@ -328,6 +328,8 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/scripts/software-offers.ts": ["software-offer"],
 	"src/lib/audio-client-access.ts": ["studio-client", "software-project"],
+	"src/lib/client-portal.ts": ["studio-client", "software-project"],
+	"src/lib/software-invoice-terms.ts": ["software-project"],
 	"src/lib/client-emails.ts": ["studio-client", "software-project"],
 	"src/pages/studio/sign-in.astro": ["software-project"],
 	"src/pages/studio/index.astro": ["studio-client", "software-project"],
