@@ -228,9 +228,13 @@ function sources(now) {
 		limit: 25,
 	});
 
-	// 150 rows. The apply's DELETE lists each row as ('<64-char hash>','<address>'): 1 + 66 + 1 + 322 + 1, plus a comma,
-	// 392 bytes for the longest address the schema accepts (320). 150 rows are about 59,000 bytes, under the 90,000-byte
-	// statement limit with room to spare; 1,000 rows would be about 392,000. Rows beyond the batch wait for the next run.
+	// 150 rows. The largest statement is the codes guard (the snapshot comparison built by guard()), which embeds each row
+	// as ["<64-char hash>","<320-char address>","<24-char time>"], 419 bytes with its comma: about 63,000 bytes for 150
+	// rows, plus the query text, under the 90,000-byte statement limit. The DELETE lists each row as
+	// ('<64-char hash>','<address>'), 392 bytes, about 59,000. quote() doubles apostrophes, so a pathological address
+	// could be larger, but every intake path caps addresses at 120 characters (src/server/music-input.ts:146,
+	// src/lib/audio-intake.ts:249, src/lib/software-inquiry.ts:240). If the limit were ever exceeded, the size check
+	// throws before any write, so nothing is lost. Rows beyond the batch wait for the next run.
 	const codes = snapshot({
 		columns: "nonce_hash,email,created_at",
 		from: "audio_client_signin_codes",

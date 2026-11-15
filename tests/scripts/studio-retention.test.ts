@@ -1366,7 +1366,7 @@ it("keeps a batch of worst-case sign-in codes under the statement limit and drai
 	sql.close();
 });
 
-it("keeps a realistic backlog of 1,000 short-address sign-in codes under the statement limit", async () => {
+it("drains a backlog of 1,000 short-address sign-in codes 150 at a time, each statement under the statement limit", async () => {
 	const { sql, database } = fixture();
 	sql.exec("DELETE FROM audio_client_signin_codes");
 
@@ -1383,27 +1383,42 @@ it("keeps a realistic backlog of 1,000 short-address sign-in codes under the sta
 			"2027-10-01T00:00:00.000Z",
 		);
 	const measured = measuredDatabase(database);
+	const deleted: number[] = [];
+	let remaining = 1000;
 
-	const review = await previewStudioRetention(
-		measured.database,
-		"Local test data",
-		storage,
-		now,
-	);
+	// Each run previews and applies, as the owner's operator does; the loop ends when no row is left.
+	while (remaining > 0) {
+		const review = await previewStudioRetention(
+			measured.database,
+			"Local test data",
+			storage,
+			now,
+		);
 
-	expect(review.counts.codes).toBeLessThan(1000);
-	await applyStudioRetention(
-		measured.database,
-		review,
-		"Local test data",
-		storage,
-		async () => {},
-		now,
-	);
+		measured.sizes.length = 0;
+		await applyStudioRetention(
+			measured.database,
+			review,
+			"Local test data",
+			storage,
+			async () => {},
+			now,
+		);
+
+		deleted.push(review.counts.codes);
+		remaining -= review.counts.codes;
+		expect(
+			sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
+		).toEqual({ n: remaining });
+		expect(Math.max(...measured.sizes)).toBeLessThan(STATEMENT_LIMIT);
+		// A run that deletes nothing would loop forever; the backlog needs seven runs.
+		expect(deleted.length).toBeLessThanOrEqual(7);
+	}
+
+	expect(deleted).toEqual([150, 150, 150, 150, 150, 150, 100]);
 	expect(
 		sql.prepare("SELECT COUNT(*) AS n FROM audio_client_signin_codes").get(),
-	).toEqual({ n: 1000 - review.counts.codes });
-	expect(Math.max(...measured.sizes)).toBeLessThan(STATEMENT_LIMIT);
+	).toEqual({ n: 0 });
 	sql.close();
 });
 
