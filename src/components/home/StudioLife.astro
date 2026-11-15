@@ -17,6 +17,17 @@ const rows = [
 
 // The screen recedes to the right; its rows slope down by about this much per pixel.
 const slope = 0.105;
+
+interface Props {
+	/** A line the monitor types under its code when a visitor points at it (Hero passes Tally's newest headline). */
+	headline?: string;
+}
+
+const { headline } = Astro.props;
+
+// Where the typed line's baseline sits on the screen, level like the code above it, under the last row. It is
+// revealed by a stepped clip, so nothing moves outside the screen.
+const line = { x: 897, y: 463, size: 11 };
 ---
 <svg class="studio-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
   <g class="life-typing" transform={`matrix(1 ${slope} 0 1 0 ${-slope * 900})`}>
@@ -30,6 +41,9 @@ const slope = 0.105;
       );
     })}
   </g>
+  {headline && <g class="life-headline" style={`--steps:${headline.length}`}>
+    <text x={line.x} y={line.y} font-size={line.size}>{headline}</text>
+  </g>}
   <g class="life-sound" transform="translate(1230 735)">
     <ellipse rx="96" ry="84" style="--at:1s" />
     <ellipse rx="96" ry="84" style="--at:1.55s" />
@@ -44,7 +58,10 @@ const slope = 0.105;
   /* Sampled from studio-v1.webp: the monitor's screen and its code. Local to this drawing. */
   .studio-life { --studio-screen: #1d1f20; --studio-code: #d8d2c6; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   /* Resting frame: nothing covers the code, no rings, the sketch drawn. */
-  .type-row, .life-sound ellipse { display: none; }
+  .type-row, .life-sound ellipse, .life-headline { display: none; }
+  /* Pointing at the monitor shows the typed line; with reduced motion it simply appears. */
+  :global([data-play="monitor"]) .life-headline { display: inline; }
+  .life-headline text { fill: var(--studio-code); font-family: var(--font-mono); }
   .type-row rect { fill: var(--studio-screen); }
   .type-row .caret { fill: var(--studio-code); }
   .life-sound ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
@@ -58,11 +75,17 @@ const slope = 0.105;
     /* Each caret shows only while its own row types; the last one then blinks twice. */
     :global(.is-playing) .type-row .caret { opacity: 0; animation: caret-on calc(var(--steps) * 70ms) linear var(--at); }
     :global(.is-playing) .type-row:last-child .caret { animation: caret-on calc(var(--steps) * 70ms) linear var(--at), caret-blink 1.2s steps(1, end) calc(var(--at) + var(--steps) * 70ms); }
-    :global(.is-playing) .life-sound ellipse { display: inline; transform-box: fill-box; transform-origin: center; animation: sound-ring 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
-    :global(.is-playing) .sketch-path { animation: sketch-draw 1.8s cubic-bezier(.45, .05, .3, 1) 1.5s both; }
-    :global(.is-playing) .sketch-sun { transform-box: fill-box; transform-origin: center; animation: sketch-sun .7s cubic-bezier(.3, 1.5, .5, 1) 3.3s both; }
+    :global([data-play="monitor"]) .life-headline text { animation: headline-type calc(var(--steps) * 45ms) steps(var(--steps), end) .15s both; }
+    :global(.is-playing) .life-sound ellipse, :global([data-play="headphones"]) .life-sound ellipse { display: inline; transform-box: fill-box; transform-origin: center; animation: sound-ring 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
+    :global(.is-playing) .sketch-path, :global([data-play="notebook"]) .sketch-path { animation: sketch-draw 1.8s cubic-bezier(.45, .05, .3, 1) 1.5s both; }
+    :global(.is-playing) .sketch-sun, :global([data-play="notebook"]) .sketch-sun { transform-box: fill-box; transform-origin: center; animation: sketch-sun .7s cubic-bezier(.3, 1.5, .5, 1) 3.3s both; }
+    /* Pointed at, an object answers at once: its scene starts without the arrival's staggered delays. */
+    :global([data-play="headphones"]) .life-sound ellipse { animation-delay: calc(var(--at) - 1s); }
+    :global([data-play="notebook"]) .sketch-path { animation-delay: 0s; }
+    :global([data-play="notebook"]) .sketch-sun { animation-delay: 1.8s; }
   }
   @keyframes type-row { from { transform: translateX(0); } to { transform: translateX(var(--run)); } }
+  @keyframes headline-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
   @keyframes caret-on { from, to { opacity: 1; } }
   @keyframes caret-blink { 0%, 50% { opacity: 1; } 25%, 75%, 100% { opacity: 0; } }
   /* Starts invisible, so a ring waiting for its turn does not show as an outline. */
