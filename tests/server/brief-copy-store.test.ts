@@ -7,6 +7,7 @@ import {
 	recordCopyStatus,
 	recordOwnFailure,
 	recordUnclaimedFailure,
+	recordUnreadFailure,
 } from "../../src/server/intake-store";
 import type { ClaimWrite } from "../../src/server/rules/brief-copy";
 import { MusicDb } from "../../src/server/services";
@@ -83,15 +84,25 @@ describe("readCopyFacts", () => {
 		});
 	});
 
-	it.each(["not json", "[]", "null", '"text"', "7"])(
-		"fails to read details that are not a JSON object: %s",
+	it("fails to read details that are not JSON", async () => {
+		const world = musicWorld();
+
+		seed(world, "not json");
+
+		expect(await run(world, readCopyFacts("r1"))).toEqual({
+			failed: "IntakeReadFailed",
+		});
+	});
+
+	it.each(["[]", "null", '"text"', "7"])(
+		"reads details that are JSON but not an object as stored, and leaves the decision to the rules: %s",
 		async (details) => {
 			const world = musicWorld();
 
 			seed(world, details);
 
-			expect(await run(world, readCopyFacts("r1"))).toEqual({
-				failed: "IntakeReadFailed",
+			expect(await run(world, readCopyFacts("r1"))).toMatchObject({
+				done: { request: { id: "r1", kind: "software" }, detailsJson: details },
 			});
 		},
 	);
@@ -249,6 +260,20 @@ describe("recording what happened", () => {
 
 		await run(world, recordUnclaimedFailure({ id: "r1", expected: DETAILS }));
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
+	});
+
+	it("records a failure for a request that could not be read only while no status is recorded", async () => {
+		const world = musicWorld();
+
+		seed(world, JSON.stringify({ path: "webapp", clientCopyStatus: "sent" }));
+		await run(world, recordUnreadFailure("r1"));
+		expect(detailsOf(world).clientCopyStatus).toBe("sent");
+
+		const fresh = musicWorld();
+
+		seed(fresh);
+		await run(fresh, recordUnreadFailure("r1"));
+		expect(detailsOf(fresh).clientCopyStatus).toBe("failed");
 	});
 
 	it("fails with an IntakeStoreFailed when a write throws", async () => {
