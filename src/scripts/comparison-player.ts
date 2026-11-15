@@ -110,28 +110,64 @@ export function setupComparisonPlayers() {
 				frame = 0;
 
 			let position = 0;
+			// Until both versions are decoded, the chosen one plays from its own stream, so sound starts at once.
+			let streaming: HTMLAudioElement | undefined;
 
 			const format = (n: number) =>
 				`${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
 
-			function applyVolume() {
+			const offsetOf = (audio: HTMLAudioElement) =>
+				Number(audio.dataset.offset ?? 0);
+
+			/** The level a version plays at when it is the one selected: the volume, and the loudness match when it is on. */
+			function levelOf(audio: HTMLAudioElement) {
 				const quietest = Math.min(
-					...media.map((audio) => Number(audio.dataset.loudness ?? 0)),
+					...media.map((other) => Number(other.dataset.loudness ?? 0)),
 				);
 
+				return (
+					Number(volume?.value ?? 1) *
+					(match?.checked
+						? Math.pow(
+								10,
+								(quietest - Number(audio.dataset.loudness ?? 0)) / 20,
+							)
+						: 1)
+				);
+			}
+
+			function applyVolume() {
 				transport?.setLevels(
 					media.map((audio, index) =>
-						index !== selected
-							? 0
-							: Number(volume?.value ?? 1) *
-								(match?.checked
-									? Math.pow(
-											10,
-											(quietest - Number(audio.dataset.loudness ?? 0)) / 20,
-										)
-									: 1),
+						index !== selected ? 0 : levelOf(audio),
 					),
 				);
+
+				if (streaming) streaming.volume = Math.min(1, levelOf(streaming));
+			}
+
+			/** Where the stream has reached, in the song's time, or the stored position when nothing streams. */
+			const streamPosition = () =>
+				streaming
+					? Math.max(0, streaming.currentTime - offsetOf(streaming))
+					: position;
+
+			function streamFrom(seconds: number) {
+				const audio = media[selected];
+				audio.currentTime = seconds + offsetOf(audio);
+				audio.volume = Math.min(1, levelOf(audio));
+				streaming = audio;
+				void audio.play().catch(() => {
+					if (streaming === audio) streaming = undefined;
+					render();
+				});
+			}
+
+			function stopStream() {
+				if (!streaming) return;
+				position = streamPosition();
+				streaming.pause();
+				streaming = undefined;
 			}
 
 			function updateCompactWaveform() {
@@ -170,7 +206,12 @@ export function setupComparisonPlayers() {
 			function render() {
 				cancelAnimationFrame(frame);
 				const duration = transport?.duration ?? Number(root.dataset.duration);
-				const current = transport?.position ?? position;
+				const current = transport ? transport.position : streamPosition();
+
+				const sounding = Boolean(
+					transport?.playing || (streaming && !streaming.paused),
+				);
+
 				seek.max = String(duration);
 				seek.value = String(current);
 				seek.setAttribute("aria-valuetext", format(current));
@@ -180,10 +221,10 @@ export function setupComparisonPlayers() {
 				);
 				time.textContent = `${format(current)} / ${format(duration)}`;
 				root.style.setProperty("--position", `${(current / duration) * 100}%`);
-				play.dataset.playing = String(Boolean(transport?.playing));
+				play.dataset.playing = String(sounding);
 				play.setAttribute(
 					"aria-label",
-					`${transport?.playing || pending ? "Pause" : "Play"} ${root.dataset.title ?? "comparison"}: ${media[selected].dataset.label ?? "audio"}`,
+					`${sounding || pending ? "Pause" : "Play"} ${root.dataset.title ?? "comparison"}: ${media[selected].dataset.label ?? "audio"}`,
 				);
 				play.setAttribute("aria-busy", String(pending));
 				switches.forEach((button) =>
@@ -203,12 +244,13 @@ export function setupComparisonPlayers() {
 							)),
 					);
 
-				if (transport?.playing) frame = requestAnimationFrame(render);
+				if (sounding) frame = requestAnimationFrame(render);
 			}
 
 			function pause() {
 				operation++;
 				pending = false;
+				stopStream();
 				transport?.pause();
 				status.textContent = "";
 				render();
@@ -223,9 +265,14 @@ export function setupComparisonPlayers() {
 					audio.controls = false;
 					audio.hidden = true;
 				});
-				pending = true;
 				claimPlayback();
-				status.textContent = "Preparing synchronized audio…";
+
+				// Before both versions are decoded, the chosen one plays from its own stream while they load.
+				if (transport) {
+					pending = true;
+					status.textContent = "Preparing synchronized audio…";
+				} else streamFrom(position);
+
 				render();
 
 				try {
@@ -250,6 +297,8 @@ export function setupComparisonPlayers() {
 								Number(root.dataset.duration),
 								render,
 							);
+							// A stream paused before both versions loaded left its place in position; start the transport there.
+							transport.seek(position);
 						})
 						.catch((error) => {
 							loading = undefined;
@@ -258,12 +307,25 @@ export function setupComparisonPlayers() {
 					await Promise.all([resumed, loading]);
 
 					if (request !== operation) return;
+
+					// Hand over from the stream at the point it has reached. The transport starts 30 ms ahead, so it starts
+					// that much later in the song, and the stream stops as it takes over.
+					const handed = streaming;
+
+					if (handed) {
+						position = streamPosition() + 0.03;
+						streaming = undefined;
+						setTimeout(() => handed.pause(), 30);
+					}
+
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
 					status.textContent = "";
 				} catch {
 					if (request === operation) {
+						// A stream that is playing keeps playing, now in the native player the fallback shows.
+						streaming = undefined;
 						root.dataset.audioFallback = "true";
 						media.forEach((audio) => {
 							audio.controls = true;
@@ -281,7 +343,7 @@ export function setupComparisonPlayers() {
 			}
 
 			play.addEventListener("click", () => {
-				if (transport?.playing || pending) {
+				if (transport?.playing || pending || streaming) {
 					position = transport?.position ?? position;
 					pause();
 				} else {
@@ -294,6 +356,14 @@ export function setupComparisonPlayers() {
 					selected = media.findIndex(
 						(audio) => audio.dataset.version === button.dataset.selectVersion,
 					);
+
+					// Before the synced handover, switching restarts the other version's stream at the same point.
+					if (streaming) {
+						const at = streamPosition();
+						stopStream();
+						streamFrom(at);
+					}
+
 					applyVolume();
 					updateCompactWaveform();
 					render();
@@ -304,6 +374,8 @@ export function setupComparisonPlayers() {
 				const duration = transport?.duration ?? Number(root.dataset.duration);
 				position = Math.max(0, Math.min(seconds, duration));
 				transport?.seek(position);
+
+				if (streaming) streaming.currentTime = position + offsetOf(streaming);
 				render();
 			}
 
@@ -404,6 +476,14 @@ export function setupComparisonPlayers() {
 			showVolume();
 			match?.addEventListener("change", applyVolume);
 			root.addEventListener("music-pause", pause);
+			media.forEach((audio) =>
+				audio.addEventListener("ended", () => {
+					if (streaming !== audio) return;
+					streaming = undefined;
+					position = Number(root.dataset.duration);
+					render();
+				}),
+			);
 			window.addEventListener("pagehide", pause);
 
 			const standardControls = root.querySelector<HTMLElement>(

@@ -180,3 +180,34 @@ it("retries loading the YouTube API after a temporary script failure", async () 
 	window.onYouTubeIframeAPIReady!();
 	await expect(retry).resolves.toBe(api);
 });
+
+/** A stand-in for a registered player: a root that can hold an element, or the element itself. */
+type PlayerStandIn = {
+	contains?: (node: { nodeType: number }) => boolean;
+	nodeType?: number;
+};
+
+it("pauses other players when one starts, but not the player whose root holds the element that started", async () => {
+	const { registerMusicPlayer } = await import("~/scripts/music-playback");
+	const element = { nodeType: 1 };
+	const comparison = { contains: (node: typeof element) => node === element };
+	const other = { contains: () => false };
+	const pauses = { comparison: 0, other: 0, element: 0 };
+
+	// SAFETY: registerMusicPlayer only keys a map with its players and, when one starts, calls contains on the others and
+	// reads nodeType on the one that started; these stand-ins supply exactly those members.
+	const key = (player: PlayerStandIn) => player as never;
+
+	registerMusicPlayer(key(comparison), {
+		pause: () => pauses.comparison++,
+	});
+	registerMusicPlayer(key(other), { pause: () => pauses.other++ });
+
+	// The comparison's own audio element starts (its stream before both versions are decoded).
+	const start = registerMusicPlayer(key(element), {
+		pause: () => pauses.element++,
+	});
+
+	start();
+	expect(pauses).toEqual({ comparison: 0, other: 1, element: 0 });
+});

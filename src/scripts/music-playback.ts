@@ -158,9 +158,14 @@ const players = new Map<PlaybackKey, Playable>();
 let initialized = false;
 let youtubeReady: Promise<YoutubeAPI> | undefined;
 
+/** Whether a player's root holds the element that started, which makes it the same player: the A/B comparison plays a
+ * version from its own audio element until both are decoded, and must not be paused by that element starting. */
+const holds = (key: PlaybackKey, active: PlaybackKey) =>
+	"contains" in key && "nodeType" in active && key.contains(active);
+
 function pauseOthers(active: PlaybackKey) {
 	players.forEach((player, key) => {
-		if (key !== active) player.pause();
+		if (key !== active && !holds(key, active)) player.pause();
 	});
 }
 
