@@ -480,12 +480,12 @@ bias the random runs rarely reach the races.
   write; the others remove one condition of the write. `WriteNoRounds` and `RuleNoCount` drop one of two checks of the same
   fact and keep every property. Revision rounds are not capped, as in the code.
 - `audio-project-files.qnt` (module `projectFiles`): an upload that starts, completes or is aborted, and the owner's
-  publish, revoke and completion, with R2 as separate steps. 8 properties, 11 mutants. It found that the stage compare
+  publish, revoke and completion, with R2 as separate steps. 8 properties, 13 mutants. Any publish supersedes the live review by key under a guard with a retry, and the revoke's stage reset is linked to its own file update. It found that the stage compare
   already protects the published final, so the conversion's completion compares the stage and not the file. The revoke's
   stage reset is decided from the read and written under a guard with a retry (`RevokeStaleReset` removes both).
 - `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update notice,
-  which have different claim and outcome conditions): the four states and the three statements. 4 properties, 5 mutants
-  (of the invitation). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
+  which have different claim and outcome conditions): the four states and the three statements. 5 properties, 6 mutants
+  (five of the invitation, one of the update notice). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
   confirmation is the owner's judgment and not a property.
 
 Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a

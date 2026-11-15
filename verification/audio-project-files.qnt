@@ -33,7 +33,10 @@ module audioProjectFiles {
   //   "publish-no-payment"    a publish does not compare the payments
   //   "publish-no-stage"      a publish does not compare the stage
   //   "no-supersede"          a publish does not revoke the review it replaces
-  //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
+  //   "publish-stale-supersede" a publish revokes the live review files it read without the guard that they are still the ones
+//                           live (and without the retry), so a review published in between stays live
+//   "reset-no-link"         a revoke's stage reset is written when the file update was refused (the reset is not linked to it)
+//   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
 //                           are still the ones read (and without the retry)
   //   "complete-no-stage"     a completion does not compare the stage
   //   "complete-no-payment"   a completion does not compare the payments
@@ -44,7 +47,7 @@ module audioProjectFiles {
   // The facts one read saw.
   type Snap = {
     revoked: bool, withdrawn: bool, booking: bool, balance: bool, stage: str,
-    fileStatus: str, upload: str, object: bool, others: Set[int], finalLive: int,
+    fileStatus: str, upload: str, object: bool, others: Set[int], reviews: Set[int], finalLive: int,
   }
   // One request: kind "upload", "publish", "revoke" or "complete", on file `id`; its phase; and the reads a revoke made.
   type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int }
@@ -74,7 +77,7 @@ module audioProjectFiles {
 
   val noSnap = {
     revoked: false, withdrawn: false, booking: false, balance: false, stage: "in_progress",
-    fileStatus: "none", upload: "none", object: false, others: Set(), finalLive: 0,
+    fileStatus: "none", upload: "none", object: false, others: Set(), reviews: Set(), finalLive: 0,
   }
   val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0 }
   val noFile = { version: "review", status: "none", insAt: 0, pubAt: 0 }
@@ -103,13 +106,17 @@ module audioProjectFiles {
   def liveOtherIds(version: str, id: int): Set[int] =
     IDS.filter(i => i != id and w.files.get(i).status == "published" and w.files.get(i).version == version)
 
+  // The published review files other than file `id`: what any publish supersedes.
+  def liveReviewIds(id: int): Set[int] =
+    IDS.filter(i => i != id and w.files.get(i).status == "published" and w.files.get(i).version == "review")
+
   def liveOf(version: str): int =
     IDS.filter(i => w.files.get(i).status == "published" and w.files.get(i).version == version).size()
 
   def snapOf(id: int): Snap = {
     revoked: isRevoked, withdrawn: isWithdrawn, booking: bookingPaid, balance: balancePaid, stage: w.stage,
     fileStatus: w.files.get(id).status, upload: w.ups.get(id), object: w.obj.get(id),
-    others: liveOtherIds(w.files.get(id).version, id), finalLive: liveOf("final"),
+    others: liveOtherIds(w.files.get(id).version, id), reviews: liveReviewIds(id), finalLive: liveOf("final"),
   }
 
   // The guards of the writes, each the conditions the code checks today, now. A mutant leaves one out.
@@ -138,7 +145,7 @@ module audioProjectFiles {
 
   // ---- Start ------------------------------------------------------------------------------------------------------
   action init = {
-    nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth").oneOf()
+    nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth", "twoReviews").oneOf()
     val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth"
     all {
       w' = {
@@ -146,6 +153,7 @@ module audioProjectFiles {
           if (i == 1 and (scenario == "review" or scenario == "reviewPlus")) { ...noFile, version: "review", status: "published" }
           else if (i == 1 and (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth")) { ...noFile, version: "final", status: "published" }
           else if (i == 2 and scenario == "finalBoth") { ...noFile, version: "final", status: "published" }
+          else if (scenario == "twoReviews") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "reviewPlus") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "finalPlus") { ...noFile, version: "final", status: "uploaded" }
           else noFile),
@@ -153,7 +161,7 @@ module audioProjectFiles {
         upVersion: IDS.mapBy(i => "review"),
         upAt: IDS.mapBy(i => 0),
         mp: IDS.mapBy(i => false),
-        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth")),
+        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews")),
         seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
         stage: if (scenario == "review" or scenario == "reviewPlus") "review_ready"
                else if (paidBalance) "final_files_ready" else "in_progress",
@@ -214,7 +222,10 @@ module audioProjectFiles {
     // A revoke's stage reset is decided by the rule from the read: no other published file of the version was left, and the
     // stage was the one the version resets. Its batch guard: the others and the stage are still the ones read.
     val reset = s.others.size() == 0 and ((rev == "review" and s.stage == "review_ready") or (rev == "final" and (s.stage == "final_files_ready" or s.stage == "complete")))
-    val guardMoved = MUTANT != "revoke-stale-reset" and (liveOtherIds(rev, h.id) != s.others or w.stage != s.stage)
+    val guardMoved =
+      if (h.kind == "revoke") MUTANT != "revoke-stale-reset" and (liveOtherIds(rev, h.id) != s.others or w.stage != s.stage)
+      else if (h.kind == "publish") MUTANT != "publish-stale-supersede" and liveReviewIds(h.id) != s.reviews
+      else false
     val ok =
       if (h.kind == "publish") and { fresh, publishGuard(rev) }
       else if (h.kind == "revoke") and { fresh, not(isRevoked) }
@@ -224,16 +235,23 @@ module audioProjectFiles {
         MUTANT == "complete-no-payment" or (bookingPaid and balancePaid),
         not(isRevoked) and not(isWithdrawn),
       }
-    if (not(ok)) all { w' = w, runs' = runs.set(r, { ...h, phase: "conflict" }) }
-    else if (h.kind == "revoke" and guardMoved)
+    if (guardMoved)
       // The batch guard raised: nothing was written. The request reads and decides again, three tries in all.
       all { w' = w, runs' = runs.set(r, if (h.tries < 2) { ...h, tries: h.tries + 1, phase: "read" } else { ...h, phase: "conflict" }) }
+    else if (not(ok))
+      // The file's own guard refused (the status moved, or the project closed): nothing is written, and the request answers 409
+      // at once. The reset is linked to the file update landing; the mutant writes it when the file update did not.
+      all {
+        w' = if (MUTANT == "reset-no-link" and h.kind == "revoke" and reset)
+               { ...w, seq: at, stage: "in_progress", completedAt: 0 } else w,
+        runs' = runs.set(r, { ...h, phase: "conflict" }),
+      }
     else if (h.kind == "publish") all {
       w' = { ...w,
         seq: at,
         files: IDS.mapBy(i =>
           if (i == h.id) { ...f, status: "published", pubAt: at }
-          else if (rev == "review" and MUTANT != "no-supersede" and w.files.get(i).version == "review" and w.files.get(i).status == "published")
+          else if (MUTANT != "no-supersede" and s.reviews.contains(i))
             { ...w.files.get(i), status: "revoked" }
           else w.files.get(i)),
         stage: if (rev == "review") "review_ready" else "final_files_ready" },
@@ -440,3 +458,5 @@ module projectFilesNoSupersede { import audioProjectFiles(MUTANT = "no-supersede
 module projectFilesRevokeStaleReset { import audioProjectFiles(MUTANT = "revoke-stale-reset").* }
 module projectFilesCompleteNoStage { import audioProjectFiles(MUTANT = "complete-no-stage").* }
 module projectFilesCompleteNoPayment { import audioProjectFiles(MUTANT = "complete-no-payment").* }
+module projectFilesPublishStaleSupersede { import audioProjectFiles(MUTANT = "publish-stale-supersede").* }
+module projectFilesResetNoLink { import audioProjectFiles(MUTANT = "reset-no-link").* }
