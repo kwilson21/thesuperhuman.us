@@ -73,7 +73,8 @@ then works by hand.
    new version is dropped (a misquoted passage, a commitment) is not left out, so it stays, while it still stands (its
    words commit to nothing and, if read from the answers, its passage is there); the server passes those names on as
    `refs`, and the page adds the cards it drops itself. Cards never move between lanes: a reply card that names a card
-   in another lane leaves it where it is (while it still stands) and adds nothing. The reply's withdrawals happen before its new cards
+   in another lane leaves it where it is (while it still stands) and adds nothing; a card in the reply card's own lane
+   that says its idea is still named, and may be reworded. The reply's withdrawals happen before its new cards
    are added, so a reply that rewords a full lane's open cards replaces them rather than emptying the lane, and an Undo
    that brings a kept card back to a lane a reply has since filled withdraws the lane's newest open card (suggestions
    before cards read from the answers) and says so.

@@ -443,7 +443,7 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓)",
+		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
 		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
 		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
 		"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
@@ -465,9 +465,11 @@ const DURATION = new RegExp(
 		"(?<![\\p{N}])\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni)(?![\\p{L}])",
 		// Not "創業10周年" (an anniversary) or "Step 1 주문" (an order): 周 and 주 stand alone or before a particle.
 		"\\d+\\s*(?:週間|か月|ヶ月|カ月|ヵ月|ケ月|日間|天|個月|个月|星期|개월|일간|시간)",
-		"\\d+\\s*時間(?!目)",
+		// Not "1時間目" (a class period), but "3時間目安" (about three hours) is a duration.
+		"\\d+\\s*時間(?!目(?!安))",
 		"\\d+\\s*周(?!年)",
-		"\\d+\\s?(?:주일|주|일|년)(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|차|째|이|을|는|도)",
+		// Not an ordinal ("1일차", "3주차", "3년차") or parking ("주차장").
+		"\\d+\\s?(?:주일|주|일|년)(?:간)?(?!\\s?차)(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
 	].join("|"),
 	"iu",
 );
