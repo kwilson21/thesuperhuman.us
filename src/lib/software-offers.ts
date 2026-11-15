@@ -486,13 +486,15 @@ export const offersMailNotConfigured = () =>
 /** A send that needs R2 (attachments, or a reused MSA whose signed copy the packet imports) with no R2 binding: 503. */
 export const offersStorageNotConfigured = () =>
 	offersAnswer(
-		"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.",
+		"File storage isn’t configured. Check the AUDIO binding. Nothing was sent.",
 		503,
 	);
 
 /**
- * A store that failed unexpectedly: 500, because nothing is known to be unavailable. A defect never gets this answer in
- * that route: it rejects, and the runtime answers it.
+ * A store that failed unexpectedly: 500, because nothing is known to be unavailable. It is not meant for defects, but
+ * the route cannot always tell one apart: a defect in a helper the route wraps as a store read is answered with this
+ * and logged as a failed store, and one thrown inside the action's main try is answered by the lookups after a refused
+ * batch, as before. Defects get their own answer in the conversion.
  */
 export const offersFailed = () =>
 	offersAnswer("The change could not be saved. Please try again.", 500);
