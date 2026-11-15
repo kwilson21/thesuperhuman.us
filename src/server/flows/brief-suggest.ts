@@ -13,7 +13,12 @@ import {
 	suggestionVisitorHash,
 	validSuggestionPass,
 } from "../../lib/brief-suggestion-pass";
-import { clearOldDays, readSiteCount, reserve } from "../brief-suggest-store";
+import {
+	BudgetStoreFailed,
+	clearOldDays,
+	readSiteCount,
+	reserve,
+} from "../brief-suggest-store";
 import { logUnexpected } from "../failure";
 import {
 	askForSuggestion,
@@ -83,18 +88,19 @@ const replyText = <Reply>(reply: Reply) => {
 };
 
 /** The old days' cleanup as a background task: it runs after the response, and a failure is logged as the route always logged it. */
-const cleanup = (previousDay: string, db: D1Database) => () => {
-	try {
-		return clearOldDays(db, previousDay).then(
-			() => undefined,
-			(cause: Error) => logUnexpected(ROUTE, cause),
-		);
-	} catch (cause) {
-		logUnexpected(ROUTE, cause);
-
-		return Promise.resolve();
-	}
-};
+const cleanup = (previousDay: string, db: D1Database) => () =>
+	Effect.runPromise(
+		Effect.tryPromise({
+			// `async` turns a throw before the statement is sent into a rejection, as the log below expects.
+			try: async () => clearOldDays(db, previousDay),
+			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
+		}).pipe(
+			Effect.catchTag("BudgetStoreFailed", (failure) =>
+				Effect.sync(() => logUnexpected(ROUTE, failure.raised)),
+			),
+			Effect.asVoid,
+		),
+	);
 
 export const suggest = (submission: SuggestSubmission) =>
 	Effect.gen(function* () {

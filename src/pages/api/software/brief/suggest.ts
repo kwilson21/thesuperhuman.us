@@ -61,84 +61,73 @@ const passCookie = (request: Request) =>
 		?.slice(suggestionPassCookie.length + 1);
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	try {
-		const env = locals.runtime?.env;
+	const env = locals.runtime?.env;
 
-		// Local previews never call Workers AI, even when a proxy binding exists.
-		if (
-			!env?.AI ||
-			!env.MUSIC_DB ||
-			!env.BRIEF_SUGGEST_RATE_LIMIT ||
-			!env.BRIEF_SUGGEST_SITE_LIMIT ||
-			!env.TURNSTILE_SECRET_KEY ||
-			env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
-			["localhost", "127.0.0.1", "[::1]"].includes(
-				new URL(request.url).hostname,
-			)
-		)
-			return empty();
-		const read = readSuggestInput(await musicRequest(request, 16000));
+	// Local previews never call Workers AI, even when a proxy binding exists.
+	if (
+		!env?.AI ||
+		!env.MUSIC_DB ||
+		!env.BRIEF_SUGGEST_RATE_LIMIT ||
+		!env.BRIEF_SUGGEST_SITE_LIMIT ||
+		!env.TURNSTILE_SECRET_KEY ||
+		env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
+		["localhost", "127.0.0.1", "[::1]"].includes(new URL(request.url).hostname)
+	)
+		return empty();
+	const read = readSuggestInput(await musicRequest(request, 16000));
 
-		if (!read.ok) return empty();
-		const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
+	if (!read.ok) return empty();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
-		if (!bindings.ok) return empty();
+	if (!bindings.ok) return empty();
 
-		return runRoute(
+	return runRoute(
+		Context.merge(
 			Context.merge(
-				Context.merge(
-					bindings.services,
-					liveSuggestLimits({
-						visitor: env.BRIEF_SUGGEST_RATE_LIMIT,
-						site: env.BRIEF_SUGGEST_SITE_LIMIT,
-					}),
-				),
-				Context.merge(
-					liveAssistant(env.AI),
-					liveBackground(locals.runtime?.ctx),
-				),
-			),
-			suggest({
-				text: read.value.text,
-				content: JSON.stringify(read.value),
-				ip: request.headers.get("cf-connecting-ip"),
-				cookie: passCookie(request),
-				secret: env.TURNSTILE_SECRET_KEY,
-				now: () => Date.now(),
-			}).pipe(
-				Effect.map(answerResponse),
-				Effect.catchTags({
-					SuggestLimitFailed: (failure) =>
-						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.raised);
-
-							return failedAnswer();
-						}),
-					BudgetStoreFailed: (failure) =>
-						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.raised);
-
-							return failedAnswer();
-						}),
-					SuggestSigningFailed: (failure) =>
-						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.raised);
-
-							return failedAnswer();
-						}),
-					ReplyUnreadable: (failure) =>
-						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.raised);
-
-							return failedAnswer();
-						}),
+				bindings.services,
+				liveSuggestLimits({
+					visitor: env.BRIEF_SUGGEST_RATE_LIMIT,
+					site: env.BRIEF_SUGGEST_SITE_LIMIT,
 				}),
 			),
-			{ route: ROUTE, answer: failedAnswer },
-		);
-	} catch (error) {
-		logUnexpected(ROUTE, error);
+			Context.merge(liveAssistant(env.AI), liveBackground(locals.runtime?.ctx)),
+		),
+		suggest({
+			text: read.value.text,
+			content: JSON.stringify(read.value),
+			ip: request.headers.get("cf-connecting-ip"),
+			cookie: passCookie(request),
+			secret: env.TURNSTILE_SECRET_KEY,
+			now: () => Date.now(),
+		}).pipe(
+			Effect.map(answerResponse),
+			Effect.catchTags({
+				SuggestLimitFailed: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.raised);
 
-		return failedAnswer();
-	}
+						return failedAnswer();
+					}),
+				BudgetStoreFailed: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.raised);
+
+						return failedAnswer();
+					}),
+				SuggestSigningFailed: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.raised);
+
+						return failedAnswer();
+					}),
+				ReplyUnreadable: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.raised);
+
+						return failedAnswer();
+					}),
+			}),
+		),
+		{ route: ROUTE, answer: failedAnswer },
+	);
 };

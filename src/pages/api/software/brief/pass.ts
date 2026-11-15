@@ -21,55 +21,49 @@ const signingFailed = () =>
 	Response.json({ ok: false }, { status: 500, headers: headers() });
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	try {
-		const env = locals.runtime?.env;
-		const ip = request.headers.get("cf-connecting-ip");
+	const env = locals.runtime?.env;
+	const ip = request.headers.get("cf-connecting-ip");
 
-		if (
-			!env?.TURNSTILE_SECRET_KEY ||
-			env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
-			!ip
-		)
-			return notIssued();
-		const read = readPassInput(await musicRequest(request, 4096));
+	if (
+		!env?.TURNSTILE_SECRET_KEY ||
+		env.SOFTWARE_SUGGESTIONS_ENABLED !== "true" ||
+		!ip
+	)
+		return notIssued();
+	const read = readPassInput(await musicRequest(request, 4096));
 
-		if (!read.ok) return notIssued();
-		const secret = env.TURNSTILE_SECRET_KEY;
+	if (!read.ok) return notIssued();
+	const secret = env.TURNSTILE_SECRET_KEY;
 
-		return runRoute(
-			liveTurnstileCheck(secret),
-			issuePass({ token: read.value.token, ip, secret }).pipe(
-				Effect.map((answer) => {
-					if (answer.kind === "unavailable")
-						// The captcha service cannot answer: a known unavailable dependency.
-						return Response.json(
-							{ ok: false },
-							{ status: 503, headers: headers() },
-						);
-
-					if (answer.kind === "refused") return notIssued();
-					const issued = headers();
-
-					issued.set(
-						"set-cookie",
-						`${suggestionPassCookie}=${answer.cookie}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
+	return runRoute(
+		liveTurnstileCheck(secret),
+		issuePass({ token: read.value.token, ip, secret }).pipe(
+			Effect.map((answer) => {
+				if (answer.kind === "unavailable")
+					// The captcha service cannot answer: a known unavailable dependency.
+					return Response.json(
+						{ ok: false },
+						{ status: 503, headers: headers() },
 					);
 
-					return Response.json({ ok: true }, { headers: issued });
+				if (answer.kind === "refused") return notIssued();
+				const issued = headers();
+
+				issued.set(
+					"set-cookie",
+					`${suggestionPassCookie}=${answer.cookie}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
+				);
+
+				return Response.json({ ok: true }, { headers: issued });
+			}),
+			Effect.catchTag("PassSigningFailed", (failure: PassSigningFailed) =>
+				Effect.sync(() => {
+					logUnexpected(ROUTE, failure.raised);
+
+					return signingFailed();
 				}),
-				Effect.catchTag("PassSigningFailed", (failure: PassSigningFailed) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.raised);
-
-						return signingFailed();
-					}),
-				),
 			),
-			{ route: ROUTE, answer: signingFailed },
-		);
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return signingFailed();
-	}
+		),
+		{ route: ROUTE, answer: signingFailed },
+	);
 };
