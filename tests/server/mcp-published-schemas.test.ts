@@ -103,6 +103,7 @@ function valid(schema: Schema): JsonValue {
 			["^[a-z0-9][a-z0-9_-]{0,79}$", "a"],
 			["^\\d{4}-\\d{2}-\\d{2}$", "2026-11-15"],
 		]);
+
 		const example = examples.get(schema.pattern);
 
 		if (example === undefined)
