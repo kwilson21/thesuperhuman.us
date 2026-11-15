@@ -389,7 +389,7 @@ Not covered: refunds; the order of milestones and delivery gating (any slot of t
 starts); a third milestone; retention; Stripe event order (the invoice-events model covers it). The manual Apalache
 check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` module. For this design it was run only to
 3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds). For PR 2 it was
-run to 10 steps with no violation (11 minutes), and the old-guard mutant `discountTodayDepositGuard` was found at step
+run to 12 steps with no violation (36 minutes), and the old-guard mutant `discountTodayDepositGuard` was found at step
 11 of a 12-step run (19 minutes); see `docs/prelaunch-qa-2026-11-15-deposit-guard.md`. Run it again before PR 3 changes
 a modelled rule.
 

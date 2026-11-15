@@ -68,7 +68,7 @@ export function reconciliationStatements(args, now = new Date()) {
 	}
 
 	throw new Error(
-		"Use --resolve-event EVENT_ID NOTE or --clear-reservation REQUEST_ID booking|balance NOTE.",
+		"Use --resolve-event EVENT_ID NOTE, --clear-reservation REQUEST_ID booking|balance NOTE, --resolve-software-event EVENT_ID NOTE, --software-deposit-refunded LOCAL_INVOICE_ID NOTE or --software-no-invoice LOCAL_INVOICE_ID NOTE.",
 	);
 }
 
