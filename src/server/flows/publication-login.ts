@@ -175,6 +175,7 @@ export const finishSignIn = (
 				nonce: state.nonce,
 				code: url.searchParams.get("code"),
 				state: url.searchParams.get("state"),
+				error: url.searchParams.get("error"),
 			},
 			{},
 		);

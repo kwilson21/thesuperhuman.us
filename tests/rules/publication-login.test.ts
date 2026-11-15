@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import {
 	namesResource,
+	returnFromGithub,
 	resourceOf,
 	tokenGiven,
 } from "../../src/server/rules/publication-login";
@@ -20,19 +21,19 @@ describe("GitHub's answer to the code exchange", () => {
 		).toBeNull();
 	});
 
-	it.each([
-		"incorrect_client_credentials",
-		"redirect_uri_mismatch",
-		"application_suspended",
-	])("names %s the site's own fault", (error) => {
-		expect(
-			refused(tokenGiven.decide({ ok: true, error, token: undefined }, {}))
-				?._tag,
-		).toBe("GithubAppMisconfigured");
-	});
+	it.each(["incorrect_client_credentials", "redirect_uri_mismatch"])(
+		"names %s the site's own fault",
+		(error) => {
+			expect(
+				refused(tokenGiven.decide({ ok: true, error, token: undefined }, {}))
+					?._tag,
+			).toBe("GithubAppMisconfigured");
+		},
+	);
 
 	it.each([
 		"bad_verification_code",
+		"application_suspended",
 		"unverified_user_email",
 		"a_code_nobody_documented",
 	])("refuses %s as the visitor's", (error) => {
@@ -70,5 +71,50 @@ describe("the resource an authorization request names", () => {
 		expect(resourceOf(resource)).toBe(resource);
 		expect(resourceOf([resource])).toBe(resource);
 		expect(resourceOf(undefined)).toBeUndefined();
+	});
+});
+
+describe("GitHub's callback", () => {
+	const approved = { approved: true, nonce: "n", code: null, state: "n" };
+
+	it.each(["application_suspended", "redirect_uri_mismatch"])(
+		"names %s, for an approved sign-in, the site's own fault",
+		(error) => {
+			expect(
+				refused(returnFromGithub.decide({ ...approved, error }, {}))?._tag,
+			).toBe("GithubAppMisconfigured");
+		},
+	);
+
+	it.each(["access_denied", "a_code_nobody_documented"])(
+		"refuses %s as the visitor's",
+		(error) => {
+			expect(
+				refused(returnFromGithub.decide({ ...approved, error }, {}))?._tag,
+			).toBe("LoginRefused");
+		},
+	);
+
+	it("refuses a configuration error on a callback that is not this sign-in's as the visitor's", () => {
+		const error = "application_suspended";
+
+		expect(
+			refused(
+				returnFromGithub.decide({ ...approved, state: "other", error }, {}),
+			)?._tag,
+		).toBe("LoginRefused");
+		expect(
+			refused(
+				returnFromGithub.decide({ ...approved, approved: false, error }, {}),
+			)?._tag,
+		).toBe("LoginRefused");
+	});
+
+	it("takes a code of an approved sign-in with no error", () => {
+		expect(
+			refused(
+				returnFromGithub.decide({ ...approved, code: "c", error: null }, {}),
+			),
+		).toBeNull();
 	});
 });

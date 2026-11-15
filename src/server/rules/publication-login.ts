@@ -23,16 +23,24 @@ export class GithubAppMisconfigured extends Data.TaggedError(
 }
 
 /**
- * Token errors GitHub documents ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set up
- * wrong: incorrect_client_credentials (the client id or secret is wrong), redirect_uri_mismatch (the callback URL does not
- * match the app's) and application_suspended (the app is suspended). Not listed: bad_verification_code (the visitor's code
- * is bad or expired), unverified_user_email (about the visitor's account, not the app) and any code GitHub does not
- * document, which all stay the visitor's refusal.
+ * Errors of GitHub's token endpoint ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set
+ * up wrong: incorrect_client_credentials (the client id or secret is wrong) and redirect_uri_mismatch (the callback URL
+ * does not match the app's). Not listed: bad_verification_code (the visitor's code is bad or expired), unverified_user_email
+ * (about the visitor's account, not the app) and any code GitHub does not document, which all stay the visitor's refusal.
  */
-const APP_CONFIGURATION_ERRORS: readonly unknown[] = [
+const TOKEN_CONFIGURATION_ERRORS: readonly unknown[] = [
 	"incorrect_client_credentials",
 	"redirect_uri_mismatch",
+];
+
+/**
+ * Errors GitHub sends to the callback in place of a code ("Troubleshooting authorization request errors") that say the
+ * OAuth app is set up wrong: application_suspended (the app is suspended) and redirect_uri_mismatch (the callback URL does
+ * not match the app's). access_denied (the visitor declined) and any other code stay the visitor's refusal.
+ */
+const CALLBACK_CONFIGURATION_ERRORS: readonly unknown[] = [
 	"application_suspended",
+	"redirect_uri_mismatch",
 ];
 
 /** An authorization request as the OAuth library parsed it. */
@@ -179,6 +187,7 @@ type ReturnFromGithubRequest = {
 	readonly nonce: string;
 	readonly code: string | null;
 	readonly state: string | null;
+	readonly error: string | null;
 };
 
 export const returnFromGithub = alwaysWrites({
@@ -186,6 +195,18 @@ export const returnFromGithub = alwaysWrites({
 	given: (request: ReturnFromGithubRequest, _facts: Record<string, never>) =>
 		request,
 	refusals: [
+		unless(
+			term<ReturnFromGithubRequest>(
+				"the callback does not say, for this approved sign-in, that this site's OAuth app is set up wrong",
+				(g) =>
+					!(
+						g.approved &&
+						g.state === g.nonce &&
+						CALLBACK_CONFIGURATION_ERRORS.includes(g.error)
+					),
+			),
+			() => new GithubAppMisconfigured(),
+		),
 		unless(
 			term<ReturnFromGithubRequest>(
 				"the sign-in was approved, and the callback has a code of at most 512 characters and the sign-in's nonce",
@@ -215,7 +236,7 @@ export const tokenGiven = alwaysWrites({
 		unless(
 			term<TokenGivenRequest>(
 				"GitHub did not say this site's OAuth app is set up wrong",
-				(g) => !APP_CONFIGURATION_ERRORS.includes(g.error),
+				(g) => !TOKEN_CONFIGURATION_ERRORS.includes(g.error),
 			),
 			() => new GithubAppMisconfigured(),
 		),
