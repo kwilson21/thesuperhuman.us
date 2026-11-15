@@ -51,7 +51,6 @@ export const discountMutants = {
 	discountSendAfterSign: { property: "supersededInert" },
 	discountStartCopiesNewest: { property: "invoicedMatchesSigned" },
 	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
-	discountSecondBatchNoSendingGuard: { property: "declinedHasNoOffer" },
 	discountTodaySecondBatch: { property: "declinedHasNoOffer" },
 	discountNoLiveCheck: { property: "acceptedSendLinkLive" },
 	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
@@ -154,12 +153,13 @@ export const models = [
 	},
 	{
 		file: "verification/discount-offers.qnt",
-		// Today's code, and the F10 fix (accepted by the owner, 2026-11-15; its own PR), which keeps the strict form of
-		// declinedHasNoOffer.
-		current: ["discount", "discountF10Fix"],
+		// The code, with F10's fix (the decline's second batch refuses while an offer is draft or sent).
+		current: ["discount"],
 		mutants: discountMutants,
-		equivalents: [],
-		exhaustive: ["discount", "discountF10Fix"],
+		// The decline's second batch without its sending guard (G5): since F10's fix it refuses nothing more, because a live
+		// link always has a sent offer, which the fix refuses (docs/verification.md, "The discount-offers model").
+		equivalents: ["discountSecondBatchNoSendingGuard"],
+		exhaustive: ["discount"],
 		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant
 		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
 		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)

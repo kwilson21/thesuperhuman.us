@@ -9,8 +9,9 @@
 //                              offerSendingGuard, G8 the offer as read, G9 a reissue needs the link revoked; the link
 //                              upsert, retireRequestSigning), the client email then its copy, then the live-link check
 //   decline:                   the same route, three steps: the first batch (G2, G3, G4, G5; offers withdrawn, links
-//                              revoked, retireRequestSigning), the client email then its copy, then the second batch (G1
-//                              at the write time, G2, G5; the request resolved). G1 holds trivially here and G6 (an audio
+//                              revoked, retireRequestSigning), the client email then its copy, then the read of a draft or
+//                              sent offer of the request and the second batch (G1 at the write time, G2, G5, no draft or
+//                              sent offer: F10's fix; the request resolved). G1 holds trivially here and G6 (an audio
 //                              project) is not modelled; see declineSecond
 //   revoke:                    the same route (G5, G10 the link is still live; retireRequestSigning)
 //   the sending window:        offerSendingGuard and offerIsSending in src/lib/software-offers.ts (created_at > now - 20 s)
@@ -40,22 +41,17 @@ module discountOffers {
   //   "start-copies-newest"    the project copies the newest version's terms instead of the signed offer's
   //   "start-drops-discount"   the project copies the signed offer's terms without the discount fields
   //   "second-batch-no-sending-guard"
-  //                            the decline's second batch has no G5, so a link made less than 20 seconds before it
-  //                            survives the decline too
-  //   "today-second-batch"     with F10_FIX: the decline's second batch as it is today, which does not look at the offers
-  //                            (F10, found by reading and reproduced by this model)
+  //                            the decline's second batch has no G5. An equivalent mutant: a live link always has a sent
+  //                            offer, which the second batch refuses since F10's fix, so G5 there refuses nothing more
+  //   "today-second-batch"     the decline's second batch as it was before F10's fix, which did not look at the offers, so
+  //                            a draft saved, or saved and sent, during the decline's email was left on the resolved request
+  //                            (F10: found by reading, reproduced by this model, fixed in the code)
   //   "no-live-check"          the send answers 200 without the live-link check after the email
   //   "first-batch-keeps-link" the decline's first batch withdraws the offers but leaves a live link as it is
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
   // a new offer) and keep the random runs fast; the manual Apalache check uses the same module.
   const VERSIONS: int
-  // F10 (docs/plans/2026-11-offers-conversion.md, section 5), confirmed by this model and accepted by the owner
-  // (2026-11-15); the fix is a behaviour-fix PR of its own. false: the decline's second batch as it is today, and
-  // `declinedHasNoOffer` allows exactly what that batch lets through. true: the second batch with the fix (it also
-  // refuses while any offer of the request is draft or sent), and `declinedHasNoOffer` is the strict property the fix
-  // needs; today's second batch is then the mutant "today-second-batch".
-  const F10_FIX: bool
 
   // ---- Bounds for the checker -------------------------------------------------------------------------------------
   // Two milestones with odd usual fees, in units where 1 is the smallest fee a client may pay ($1 in code). A discount
@@ -97,10 +93,6 @@ module discountOffers {
     badInvoice: bool,      // an invoice was written for an offer that was neither sent nor the project's
     badAcceptedSend: bool, // a send answered 200 with its client email accepted while its link was not live at the check
     declined: bool,        // a decline's second batch resolved the request, and it was not reopened since
-    declinedAt: int,       // the tick of that second batch
-    inDecline: Set[int],   // the versions drafted or sent while the latest decline's email was in flight
-    sentAt: int -> int,    // the tick at which each version was sent (its draft's send batch)
-    linkInDecline: bool,   // the link row was written while a decline's email was in flight
   }
 
   // ---- State ------------------------------------------------------------------------------------------------------
@@ -169,8 +161,6 @@ module discountOffers {
   // G5, the sending window (offerSendingGuard in a batch, offerIsSending in a read): a live link made less than 20
   // seconds ago. Send, decline (both batches) and revoke refuse while it holds.
   val stillSending = link.live and clock - link.created < WINDOW
-  // A decline's email is in flight: after its first batch, before its second batch (or its failure).
-  val declineInFlight = declining.phase != "none"
 
   // ---- Actions ----------------------------------------------------------------------------------------------------
   action init = all {
@@ -190,10 +180,7 @@ module discountOffers {
     link' = { live: false, created: 0, token: 0 },
     sending' = { phase: "none", v: 0, token: 0, start: 0, accepted: false },
     declining' = { phase: "none", start: 0 },
-    ghost' = {
-      badSign: false, badInvoice: false, badAcceptedSend: false, declined: false, declinedAt: 0, inDecline: Set(),
-      sentAt: versionIds.mapBy(_ => 0), linkInDecline: false,
-    },
+    ghost' = { badSign: false, badInvoice: false, badAcceptedSend: false, declined: false },
   }
 
   // Everything else stays as it is.
@@ -215,8 +202,7 @@ module discountOffers {
       offers' = offers.set(v, { status: "draft", terms: { d0: d0, d1: d1, std: std } }),
       versions' = v,
       sentTerms' = sentTerms, wasSent' = wasSent, keepRequest,
-      keepClient, keepMoney, keepFlows,
-      ghost' = { ...ghost, inDecline: if (declineInFlight) ghost.inDecline.union(Set(v)) else ghost.inDecline },
+      keepClient, keepMoney, keepFlows, ghost' = ghost,
     }
   }
 
@@ -258,13 +244,7 @@ module discountOffers {
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       clock' = clock, declining' = declining,
-      keepRequest, signed' = signed, keepMoney,
-      ghost' = {
-        ...ghost,
-        inDecline: if (declineInFlight) ghost.inDecline.union(Set(v)) else ghost.inDecline,
-        sentAt: ghost.sentAt.set(v, clock),
-        linkInDecline: declineInFlight,
-      },
+      keepRequest, signed' = signed, keepMoney, ghost' = ghost,
     }
   }
 
@@ -283,8 +263,7 @@ module discountOffers {
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       review' = { ...review, revoked: true },
       keepOffers, clock' = clock, declining' = declining,
-      keepRequest, signed' = signed, keepMoney,
-      ghost' = { ...ghost, linkInDecline: declineInFlight },
+      keepRequest, signed' = signed, keepMoney, ghost' = ghost,
     }
   }
 
@@ -329,8 +308,7 @@ module discountOffers {
   // Decline, the first batch: sent and draft offers are withdrawn, live links revoked, signing retired; the request stays
   // new or reviewed. Refused once resolved, with a project (G2), after the client signed (G3), while a deposit is open (a
   // paid one does not block: depositOfferGuard with decline = true, G4) and within 20 seconds of a live link (G5). The
-  // model lets one decline be in flight at a time. It writes the request's updated_at, and starts the ghost record of what
-  // its email's window makes.
+  // model lets one decline be in flight at a time. It writes the request's updated_at.
   action declineFirst = all {
     declining.phase == "none",
     requestOpen, project == 0, signed.v == 0,
@@ -342,8 +320,7 @@ module discountOffers {
     declining' = { phase: "email", start: clock },
     review' = { ...review, revoked: true },
     requestOpen' = requestOpen, requestVersion' = requestVersion + 1, signed' = signed, keepMoney, clock' = clock,
-    sending' = sending,
-    ghost' = { ...ghost, inDecline: Set(), linkInDecline: false },
+    sending' = sending, ghost' = ghost,
   }
 
   // Decline, the email: the client email, then the copy, timed as for send. A failed client email ends the decline (502):
@@ -359,25 +336,26 @@ module discountOffers {
     }
   }
 
-  // Decline, the second batch: G1 at the write time, G2 and G5 (G6, the audio project, is not modelled). G1 holds here:
-  // between the batches only reopen could write updated_at, and it needs the request resolved. In code a project start
-  // from status new writes it too (project.ts), and G2 refuses the batch after a start anyway; question and fit write it
-  // and are not modelled. It resolves the request. Today
-  // it does not look at the offers or the link (F10); with the fix it also refuses while any offer is draft or sent. A
-  // refused batch answers 409 and writes nothing.
+  // Decline, the second batch: G1 at the write time, G2, G5 and, since F10's fix, no offer of the request draft or sent
+  // (G6, the audio project, is not modelled). The draft and send batches never write updated_at, so G1 does not see an
+  // offer saved during the email; the fix's own condition does (read after the email, then re-checked by a guard in the
+  // batch: one step here, since nothing in the model writes between the two). G1 holds here: between the batches only
+  // reopen could write updated_at, and it needs the request resolved. In code a project start from status new writes it
+  // too (project.ts), and G2 refuses the batch after a start anyway; question and fit write it and are not modelled. It
+  // resolves the request. A refused batch answers 409 and writes nothing.
   action declineSecond = {
     val noOffers = versionIds.forall(v => not(draftOrSent(offers.get(v))))
     val writes = and {
       project == 0,
       MUTANT == "second-batch-no-sending-guard" or not(stillSending),
-      not(F10_FIX) or MUTANT == "today-second-batch" or noOffers,
+      MUTANT == "today-second-batch" or noOffers,
     }
     all {
       declining.phase == "second",
       declining' = { ...declining, phase: "none" },
       requestOpen' = if (writes) false else requestOpen,
       requestVersion' = if (writes) requestVersion + 1 else requestVersion,
-      ghost' = if (writes) { ...ghost, declined: true, declinedAt: clock } else ghost,
+      ghost' = if (writes) { ...ghost, declined: true } else ghost,
       keepOffers, keepClient, keepMoney, clock' = clock, link' = link, sending' = sending,
     }
   }
@@ -530,20 +508,10 @@ module discountOffers {
     signed.v == 0 or offers.get(signed.v).status == "sent",
   }
 
-  // What a decline that resolved the request leaves behind. With the F10 fix: no draft or sent offer and no live link.
-  val nothingLeft = versionIds.forall(v => not(draftOrSent(offers.get(v)))) and not(link.live)
-  // Today (F10): the second batch lets through a draft saved during the decline's email, and a sent offer and its live
-  // link made during the email at least 20 seconds (WINDOW) before the second batch; nothing else.
-  val onlyF10Left = and {
-    versionIds.forall(v => offers.get(v).status == "draft" implies ghost.inDecline.contains(v)),
-    versionIds.forall(v => offers.get(v).status == "sent" implies
-      (ghost.inDecline.contains(v) and ghost.sentAt.get(v) <= ghost.declinedAt - WINDOW)),
-    link.live implies (ghost.linkInDecline and link.created <= ghost.declinedAt - WINDOW),
-  }
-
-  // 6. A request a decline resolved has no draft or sent offer and no live link (F10_FIX), or, for the code as it is
-  //    today, nothing but what F10 lets through (docs/plans/2026-11-offers-conversion.md, sections 5 and 7).
-  val declinedHasNoOffer = not(ghost.declined) or (if (F10_FIX) nothingLeft else onlyF10Left)
+  // 6. A request a decline resolved has no draft or sent offer and no live link (docs/plans/2026-11-offers-conversion.md,
+  //    sections 5 and 7: F10, fixed).
+  val declinedHasNoOffer =
+    not(ghost.declined) or (versionIds.forall(v => not(draftOrSent(offers.get(v)))) and not(link.live))
 
   // 7. A send that answers 200 with its client email accepted had its link live at the check.
   val acceptedSendLinkLive = not(ghost.badAcceptedSend)
@@ -568,29 +536,28 @@ module discountOffers {
   }
   val neverStandardPaidAfterSentRevision = not(standardPaidAfterSentRevision)
 
-  // F10 witnesses, for a hand run on `discount` (today's code) with the negated invariant (docs/verification.md): a
-  // request resolved by a decline with a draft left, and with a sent offer and its live link left.
+  // F10 witnesses, for a hand run with the negated invariant on `discountTodaySecondBatch` (the second batch before the
+  // fix), where they are violated, and on `discount`, where they hold (docs/verification.md): a request resolved by a
+  // decline with a draft left, and with a sent offer and its live link left.
   val neverDeclinedWithDraft = not(ghost.declined and versionIds.exists(v => offers.get(v).status == "draft"))
   val neverDeclinedWithLiveOffer = not(ghost.declined and versionIds.exists(v => offers.get(v).status == "sent") and link.live)
 }
 
-module discount { import discountOffers(MUTANT = "none", VERSIONS = 2, F10_FIX = false).* }
-// The F10 fix (accepted by the owner, 2026-11-15; its own PR): the same code with the decline's second batch refusing
-// while an offer is draft or sent.
-module discountF10Fix { import discountOffers(MUTANT = "none", VERSIONS = 2, F10_FIX = true).* }
+module discount { import discountOffers(MUTANT = "none", VERSIONS = 2).* }
 
-// Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs.
-module discountEditSent { import discountOffers(MUTANT = "edit-sent", VERSIONS = 2, F10_FIX = false).* }
-module discountLatestTerms { import discountOffers(MUTANT = "latest-terms", VERSIONS = 2, F10_FIX = false).* }
-module discountDepositFromUsual { import discountOffers(MUTANT = "deposit-from-usual", VERSIONS = 2, F10_FIX = false).* }
-module discountNoDepositGuard { import discountOffers(MUTANT = "no-deposit-guard", VERSIONS = 2, F10_FIX = false).* }
-module discountTodayDepositGuard { import discountOffers(MUTANT = "today-deposit-guard", VERSIONS = 2, F10_FIX = false).* }
-module discountNoWriteStatusGuard { import discountOffers(MUTANT = "no-write-status-guard", VERSIONS = 2, F10_FIX = false).* }
-module discountNoSignGuards { import discountOffers(MUTANT = "no-sign-guards", VERSIONS = 2, F10_FIX = false).* }
-module discountSendAfterSign { import discountOffers(MUTANT = "send-after-sign", VERSIONS = 2, F10_FIX = false).* }
-module discountStartCopiesNewest { import discountOffers(MUTANT = "start-copies-newest", VERSIONS = 2, F10_FIX = false).* }
-module discountStartDropsDiscount { import discountOffers(MUTANT = "start-drops-discount", VERSIONS = 2, F10_FIX = false).* }
-module discountSecondBatchNoSendingGuard { import discountOffers(MUTANT = "second-batch-no-sending-guard", VERSIONS = 2, F10_FIX = false).* }
-module discountTodaySecondBatch { import discountOffers(MUTANT = "today-second-batch", VERSIONS = 2, F10_FIX = true).* }
-module discountNoLiveCheck { import discountOffers(MUTANT = "no-live-check", VERSIONS = 2, F10_FIX = false).* }
-module discountFirstBatchKeepsLink { import discountOffers(MUTANT = "first-batch-keeps-link", VERSIONS = 2, F10_FIX = false).* }
+// Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs, except the
+// equivalent mutant there (discountSecondBatchNoSendingGuard), which must keep every property.
+module discountEditSent { import discountOffers(MUTANT = "edit-sent", VERSIONS = 2).* }
+module discountLatestTerms { import discountOffers(MUTANT = "latest-terms", VERSIONS = 2).* }
+module discountDepositFromUsual { import discountOffers(MUTANT = "deposit-from-usual", VERSIONS = 2).* }
+module discountNoDepositGuard { import discountOffers(MUTANT = "no-deposit-guard", VERSIONS = 2).* }
+module discountTodayDepositGuard { import discountOffers(MUTANT = "today-deposit-guard", VERSIONS = 2).* }
+module discountNoWriteStatusGuard { import discountOffers(MUTANT = "no-write-status-guard", VERSIONS = 2).* }
+module discountNoSignGuards { import discountOffers(MUTANT = "no-sign-guards", VERSIONS = 2).* }
+module discountSendAfterSign { import discountOffers(MUTANT = "send-after-sign", VERSIONS = 2).* }
+module discountStartCopiesNewest { import discountOffers(MUTANT = "start-copies-newest", VERSIONS = 2).* }
+module discountStartDropsDiscount { import discountOffers(MUTANT = "start-drops-discount", VERSIONS = 2).* }
+module discountSecondBatchNoSendingGuard { import discountOffers(MUTANT = "second-batch-no-sending-guard", VERSIONS = 2).* }
+module discountTodaySecondBatch { import discountOffers(MUTANT = "today-second-batch", VERSIONS = 2).* }
+module discountNoLiveCheck { import discountOffers(MUTANT = "no-live-check", VERSIONS = 2).* }
+module discountFirstBatchKeepsLink { import discountOffers(MUTANT = "first-batch-keeps-link", VERSIONS = 2).* }
