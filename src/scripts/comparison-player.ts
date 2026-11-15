@@ -208,6 +208,13 @@ export function setupComparisonPlayers() {
 				audio.currentTime = seconds + offsetOf(audio);
 				audio.volume = Math.min(1, levelOf(audio));
 				streaming = audio;
+
+				// A stream that takes over from a wait (iOS, back on a version that may stream) sounds again.
+				if (pending && !transport) {
+					pending = false;
+					status.textContent = "";
+				}
+
 				// A browser that refuses the stream leaves the comparison waiting for synced playback instead.
 				void audio.play().catch(() => {
 					if (id !== streamId || streaming !== audio) return;
@@ -452,8 +459,9 @@ export function setupComparisonPlayers() {
 					if (chosen === selected) return;
 					selected = chosen;
 
-					// Before the synced handover, switching restarts the other version's stream at the same point.
-					if (streaming) {
+					// Before the synced handover, switching restarts the other version's stream at the same point, or starts
+					// it after a wait for a version that could not stream (iOS).
+					if (streaming || (pending && !transport)) {
 						const at = streamPosition();
 						stopStream();
 						streamFrom(at);
@@ -508,14 +516,16 @@ export function setupComparisonPlayers() {
 						gesture.lastSeconds = seconds;
 
 						// A drag past the end parks the transport at its end without resuming, so play again once the pointer is back inside the track.
-						if (
-							gesture.resume &&
-							transport &&
-							!transport.playing &&
-							position < transport.duration
-						) {
-							transport.play();
-							render();
+						const duration =
+							transport?.duration ?? Number(root.dataset.duration);
+
+						if (gesture.resume && position < duration) {
+							if (transport && !transport.playing && !streaming && !pending) {
+								transport.play();
+								render();
+							}
+							// Before the handover, a stream held past the end has ended, which paused the comparison.
+							else if (!transport && !streaming && !pending) void start();
 						}
 					};
 
@@ -531,7 +541,9 @@ export function setupComparisonPlayers() {
 							startX: event.clientX,
 							startY: event.clientY,
 							scrubbing: isWaveformScrub(event.pointerType, 0, 0),
-							resume: Boolean(transport?.playing),
+							resume: Boolean(
+								transport?.playing || (streaming && !streaming.paused),
+							),
 						};
 
 						if (gesture.scrubbing) seekFromPointer(event);
@@ -604,8 +616,8 @@ export function setupComparisonPlayers() {
 
 					audio.pause();
 
-					if (transport?.playing || pending) {
-						position = transport?.position ?? position;
+					if (transport?.playing || pending || streaming) {
+						position = transport?.position ?? streamPosition();
 						pause();
 					} else void start();
 				});
