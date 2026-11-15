@@ -33,6 +33,8 @@ export type R2Setup = {
 	readonly seed?: R2Seed;
 	/** A listed operation rejects with an Error. Multipart calls are named createMultipartUpload and so on. */
 	readonly fails?: readonly string[];
+	/** A listed operation rejects with R2's error for a concurrent write to the same key (10058), as the losing completion of two can. */
+	readonly concurrentWrites?: readonly string[];
 	/**
 	 * Multipart uploads already started before the case: upload id to the key, or to the key and the parts already
 	 * uploaded (part number to its content) and the metadata the upload was created with.
@@ -179,6 +181,7 @@ export function recordingR2(
 ): RecordedR2 {
 	const store = new Map<string, Held>();
 	const fails = new Set(setup.fails ?? []);
+	const concurrentWrites = new Set(setup.concurrentWrites ?? []);
 
 	const uploads = new Map<
 		string,
@@ -229,7 +232,18 @@ export function recordingR2(
 
 	for (const op of fails) triggers.declare(`r2 ${label} fails ${op}`);
 
+	for (const op of concurrentWrites)
+		triggers.declare(`r2 ${label} concurrent write ${op}`);
+
 	const failIf = (op: string) => {
+		if (concurrentWrites.has(op)) {
+			triggers.see(`r2 ${label} concurrent write ${op}`);
+
+			throw new Error(
+				"There was a conflict with a concurrent write to the same key. (10058)",
+			);
+		}
+
 		if (!fails.has(op)) return;
 
 		triggers.see(`r2 ${label} fails ${op}`);
