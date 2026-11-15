@@ -57,9 +57,10 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            (or the sent offer's when no draft exists), an updated_at that is not the offer's
 //   400 {ok:false,errors}   the stored terms are not valid terms: {}, null, an array, a text, a missing field, a repeated
 //            deliverable (shown with the error text of each field)
-//   409 deposit block text  a draft is being sent over a sent offer whose first-milestone deposit invoice is creating, open,
-//            payment_failed or uncollectible ("Void the open deposit invoice in Stripe first...") or paid ("A deposit is
-//            already paid...")
+//   409 deposit block text  a draft is being sent while a first-milestone deposit invoice of any offer version (sent,
+//            superseded or withdrawn) is creating, open, payment_failed or uncollectible ("Void the open deposit invoice in
+//            Stripe first..."), paid on the sent offer ("A deposit is already paid...") or paid on an earlier offer, such as
+//            one a decline withdrew ("A deposit is paid on an earlier offer...")
 //   500 "The offer link couldn't be built. Check SITE_ORIGIN."  SITE_ORIGIN that is not a URL (nothing written)
 //   200 {ok:true,version,link,linkCreatedAt,sentAt,updatedAt,emailSent,uncertain,copySent}  a draft sent (the sent offer
 //            superseded), a sent offer reissued after its link was revoked (sentAt and updatedAt kept), each Resend outcome
@@ -329,13 +330,39 @@ const cases: Case[] = [
 		draft2,
 	),
 	sendCase(
-		"an open deposit of a superseded offer does not block",
+		"an open deposit of a superseded offer blocks",
 		withOffers([offer("superseded"), offer("sent", 2), offer("draft", 3)], {
 			software_offer_links: [liveLink()],
 			software_invoices: [deposit("open")],
 		}),
 		{},
 		sendBody(3),
+	),
+	sendCase(
+		"a paid deposit of a withdrawn offer blocks",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{
+				software_offer_links: [revokedLink()],
+				software_invoices: [deposit("paid")],
+			},
+			{ status: "new" },
+		),
+		{},
+		draft2,
+	),
+	sendCase(
+		"a refunded deposit of a withdrawn offer does not block",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{
+				software_offer_links: [revokedLink()],
+				software_invoices: [deposit("paid", { refunded_at: EARLIER })],
+			},
+			{ status: "new" },
+		),
+		{},
+		draft2,
 	),
 	sendCase(
 		"an open deposit does not stop a reissue",
@@ -739,7 +766,7 @@ const cases: Case[] = [
 		{
 			failures: [
 				{
-					on: /SELECT i\.status FROM software_invoices/,
+					on: /SELECT i\.status,o\.status AS offer_status FROM software_invoices/,
 					message: "D1 is down",
 				},
 			],

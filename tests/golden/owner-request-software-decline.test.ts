@@ -466,7 +466,10 @@ const cases: Case[] = [
 	}),
 	declineCase("the deposit read fails", sentSeed(), {
 		failures: [
-			{ on: /SELECT i\.status FROM software_invoices/, message: "D1 is down" },
+			{
+				on: /SELECT i\.status,o\.status AS offer_status FROM software_invoices/,
+				message: "D1 is down",
+			},
 		],
 	}),
 	declineCase("the sending read fails", sentSeed(), {
