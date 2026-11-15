@@ -33,8 +33,9 @@ executes the schema and records each filename together.
 The working agent prepares audience-safe prose after normal durable reconciliation.
 POST the version-1 publication envelope to `/api/work-feed` with Bearer authorization.
 Persist the receipt on 200. On 409, reconcile current project state; never blindly
-increment and overwrite. On 410, honor withdrawal. On 503, retain the exact envelope
-and retry at the next work or shutdown boundary. GET `/api/work-feed?project=ID`
+increment and overwrite. On 410, honor withdrawal. On 500 or 503, retain the exact envelope
+and retry the same event (same event ID, same content) at the next work or shutdown boundary; a retry is safe because an event
+that was stored answers duplicate with its receipt. GET `/api/work-feed?project=ID`
 returns the public current view and up to 100 recent historical entries.
 
 All responses disable caching. Public allowlisting governs both writes and reads;

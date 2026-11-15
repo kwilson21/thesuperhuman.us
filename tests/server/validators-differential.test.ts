@@ -1864,7 +1864,9 @@ function storedJson(value: RawValue): string | undefined {
 
 /**
  * How the routes and the failure log treat what reading stored terms threw: whether the review route refuses it (409) as
- * a validator's error, what `classifyFailure` makes of it, and the exact line `logUnexpected` writes for it.
+ * a validator's error, what `classifyFailure` makes of it, and the exact line `logUnexpected` writes for it. The one
+ * intended difference: the site's error is named "OfferTermsRefused" (renamed from "ZodError", owner 2026-11-15), so a
+ * Zod error's name is read as that name and every other part of the line must still match.
  */
 function treated<E>(error: E) {
 	const lines: RawValue[][] = [];
@@ -1884,7 +1886,14 @@ function treated<E>(error: E) {
 	return {
 		refused: error instanceof FieldsRefused || error instanceof ZodError,
 		failure: classifyFailure(error).kind,
-		logged: lines,
+		logged:
+			error instanceof ZodError
+				? lines.map((line) =>
+						line.map((part) =>
+							part === "ZodError" ? "OfferTermsRefused" : part,
+						),
+					)
+				: lines,
 	};
 }
 
