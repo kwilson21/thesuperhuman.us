@@ -119,10 +119,10 @@ Branch A tip `21bbc5a7`:
 - `golden:neutral --all claude/effect-14-media-corpus HEAD`: "compared 80 fixtures and 9329 cases; 3 of 80 fixtures differ" and "NOT NEUTRAL", as intended: audio file 10 changed and 2 added, music file 8 changed, link preview video 10 changed. These are the 28 changed cases of the Scope above (the allow list changed two of the audio cases) and two added.
 - `verify:quint:all`: exit 0. `publicist:gate`: passed, 84 entries. `lint`: no findings. `check`: "Result (894 files)", 0 errors, 16 hints.
 
-Branch B tip: the record's own commit follows `5c00a002`, the head the figures below were measured on (a merge of A):
+Branch B tip: the record's own commit follows `40959979`. The figures below were measured on it, except the build, the client bundle test, the full test run and `verify:quint:all`, which ran at `f5f10327` (the next commit only adds a return type to two functions; the affected tests, `lint`, `golden:neutral` and `check` were run again on `40959979`):
 
 - `format:check`: "Checked 880 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with the digest and count checks: 338 files passed; 13796 tests passed, 1 skipped (13797), tree clean afterwards.
+- Full `pnpm test` with the digest and count checks: 338 files passed; 13800 tests passed, 1 skipped (13801), tree clean afterwards.
 - `golden:neutral --all refs/heads/claude/effect-14-media-fixes HEAD`: "compared 80 fixtures and 9331 cases; 0 of 80 fixtures differ" and "golden:neutral: identical, 9331 cases". The conversion did not touch the fixtures, so the same test files pass against A's recordings.
 - `verify:quint:all`: exit 0 (no model changed). `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (906 files)", 0 errors, 16 hints.
 - SQL statements in the area: none.
