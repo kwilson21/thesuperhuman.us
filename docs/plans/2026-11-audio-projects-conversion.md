@@ -254,11 +254,11 @@ in rows), with `now` and ids passed in as thunks:
 |---|---|
 | `revokeProjectAccess` | read project (plain); rule; batch (R1 to R4, with the client's email read first); best-effort `deleteRetiredCodes` after the batch, as today (a failure logs one fixed line through `logUnexpected`) |
 | `queueInvitation`, `retryUpdateNotice` | read notice and open facts in one batch; `queueNotice`; guarded write; then `waitUntil` delivery |
-| `deliverNotice` (the invitation and an update notice share it) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today |
+| `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today |
 | `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); then one batch (project, request, latest review, decisions since it, rounds used); rule; guarded insert (section 6); on any refusal the count read (M6) and 429 when it is full, else the refusal; `markRead` ends in a guarded update and answers `{ok:true}` |
 | `saveProjectUpdate` | one read batch; the action's rule; guarded batch (U1 to U16); a lost guard answers 409, no retry |
 | `startUpload`, `putPart`, `finishUpload`, `abortUpload` | the section 6 protocol; R2 calls through `AudioBucket` with `Effect.tryPromise`, as `agreement-download` reads its bucket |
-| `publishFile`, `revokeFile` | read; rule; R2 `head` (publish); guarded batch; `waitUntil` notice delivery |
+| `publishFile`, `revokeFile` | read; rule; R2 `head` (publish); guarded batch; `waitUntil` notice delivery. `revokeFile` runs read, rule and batch through `decideAndSave` (the retry re-decides the stage reset, section 4, F3) and answers 409 at once when the file's own guard refuses |
 | `serveProjectFile` | session; project and file facts in one batch; rule; R2 head and get; the access upsert last (B3 below) |
 
 Services. Reused: `MusicDb`, `AudioBucket`, the existing `hashing` helper and `ProjectInvitation` (reimplemented as the
@@ -278,7 +278,7 @@ the conversion there is no (d): each (d) below becomes a plain read, a rule that
 offers design (`docs/plans/2026-11-offers-conversion.md`, section 2, "Conditions only a guard checks today" and "Guard
 failures and retries"), **the write keeps today's conditions as its compare-and-set guard** (the project is open, the
 stage is one of the allowed, the payment is paid, the count is under the cap), the rule reads the same facts first and
-refuses by name, and **a refused guard is not retried**: it answers what a refused write answers today. Equality with the
+refuses by name, and **a refused guard is not retried**, with one exception (the stage reset of a file revoke, F3 below): it answers what a refused write answers today. Equality with the
 snapshot would refuse races that succeed today (an upload completing while a publish moves the stage from `in_progress`
 to `review_ready`). Two facts a rule needs together are read in one `batch`. Every new read must match no golden hook
 pattern: the hooks run just before the matching statement (`tests/golden/README.md`), so the new read sees the old row and
@@ -379,27 +379,39 @@ is modelled as access closing (the models' `ownerRevokes` step). It is named in 
 A read followed by a write that depends on it, where another request can change the facts between, is real when no single
 statement holds the whole decision. After the conversion the rule reads first and the write re-checks today's conditions
 (section 4), so the old single-statement atomicity stays for each write, and what the models check is the set of
-conditions each write keeps: each is needed, and none is missing. A refused guard is not retried, so no model has a retry.
-The models are written before any code and run in the pooled driver (`verify:quint:all`). Measured on a 12-core laptop shared with other work, `verify:quint:all` exits 0 in about 46 to 60 seconds of wall time with
-the three models in the pool, and the per-check times of the three models add up to about 63 seconds (each check ran in
-parallel with others, so this overstates CPU time). The plan's budget is 2 minutes 30 seconds on a 4-core CI runner, which
-this has not been measured on (UNVERIFIED until CI reports it).
+conditions each write keeps: each is needed, and none is missing. A refused guard is not retried, with one exception: the
+stage reset after a file revoke (section 4, F3) is decided by a rule, its batch guard raises when the facts moved, and the
+files model has that retry (three tries in all).
+
+How the properties are written. Each property reads the stored rows, never a flag set from the guard that is being
+checked. Every write takes the next stamp of one counter (the order D1 serializes the statements in, as `created_at`,
+`published_at`, `revoked_at` and `completed_at` order them in the tables), and a property compares the stamps of the rows:
+no message is stamped after the close, no revision round began between the review a decision names and the decision, and
+so on. The one exception is the world in the notices model (the emails that went out), which is not a row.
+
+The models are written before any code and run in the pooled driver (`verify:quint:all`). Measured on a 12-core laptop
+shared with other work (load average about 40), the whole driver exits 0 in about 64 seconds of wall time and 398 seconds of
+CPU time with the three models in the pool, against 77 and 396 for the first version of the three models, so the change to
+stamped properties and the retry did not move the figure. The plan's budget is 2 minutes 30 seconds on a 4-core CI runner,
+which this has not been measured on (UNVERIFIED until CI reports it).
 
 **Messages and review decisions** (`verification/audio-project-messages.qnt`, module `projectMessages`). Three requests,
 a client session, the owner's publishing, beginning a revision and closing access between a request's read and its write,
-and a clock for the 5 minute window (scaled: 2 messages in 2 ticks, 2 revision rounds). The read is one batch (one step),
-the write one statement that checks today's conditions, the stop one batch. A write the guard refuses writes nothing and
-the request answers what a refused write answers today (409, or 429 when the count is full): the corpus cases "send when
-the session is revoked after the lookup" and the nine like it record exactly that.
+and a clock for the 5 minute window (scaled: 2 messages in 2 ticks, 2 revision rounds). The session is read first and the
+rest in one batch; the model takes both as one step (a session that ends between them is the same fact as one that ends
+after the batch, and the write re-checks it). The write is one statement that checks today's conditions and the rate count
+(the count is the write's own and not a rule input, section 2), the stop one batch. A write the guard refuses writes
+nothing and the request answers what a refused write answers today (409, or 429 when the count is full): the corpus cases
+"send when the session is revoked after the lookup" and the nine like it record exactly that.
 
 | Property | Mutant that breaks it |
 |---|---|
 | `clientRateBounded`: no window holds more messages than the cap | `NoCount`: the write does not check the count |
-| `oneDecisionPerReview` | `NoDecision`: no check of the decisions since the review |
-| `decisionNamesLatestReview`: an answer names the review that was latest when written | `NoReview`: no check of the latest review |
-| `changesWithinRounds`: changes only while a round is left, a stop only once they are used | `RuleNoRounds`: neither the rule nor the write checks the rounds |
-| `writtenForOpenAccess`: session and project open at the write | `NoAccess`: no check of session and access |
-| `answeredInReviewStage` | `NoStage`: no check of the stage |
+| `oneDecisionPerReview`: the decisions that name a review are at most one | `NoDecision`: no check of the decisions since the review |
+| `decisionNamesLatestReview`: no review was published between the one an answer names and the answer | `NoReview`: no check of the latest review |
+| `changesWithinRounds`: the rounds begun before a change request are fewer than two, before a stop are two | `RuleNoRounds`: neither the rule nor the write checks the rounds |
+| `writtenForOpenAccess`: no message is stamped after the close or the session's end | `NoAccess`: no check of session and access |
+| `answeredInReviewStage`: no revision round began between the review an answer names and the answer | `NoStage`: no check of the stage |
 | `stopClosesAccess`: no state holds the stopped decision with the access open | `StopSplit`: the close is a separate statement after the decision |
 
 **Files, uploads and completion** (`verification/audio-project-files.qnt`, module `projectFiles`). Five requests with
@@ -409,47 +421,60 @@ Starting points cover a fresh project, a published review, a published final, an
 and two published finals. R2 is separate steps (create, complete, delete, abort). This is the "upload completes while
 access is revoked" protocol: the file row is a guarded write after R2 completed the object, so the object can exist with
 no row (an orphan the owner's abort or the incomplete-upload lifecycle removes), and the model checks the reverse never
-happens. A lost guard writes nothing and answers 409.
+happens. A lost guard writes nothing and answers 409. The revoke reads the version's other published files and the stage;
+the rule decides the reset from them; the batch guard compares both with what is stored now; a moved guard rolls the batch
+back and the request reads again (a third failure answers 409), while a file whose own status moved answers 409 at once.
 
 | Property | Mutant that breaks it |
 |---|---|
-| `uploadsOnlyForOpenProject` | `StartNoAccess` |
-| `filesOnlyForOpenProject` | `InsertNoAccess` |
-| `noFileFromDiscarded`: no file row from an upload being discarded | `InsertNoState`: the insert does not require a pending upload row |
-| `fileHasObject`: an uploaded or published file has its R2 object | `AbortNoCas`: abort deletes the object without first marking the row discarding |
-| `publishedOnlyWhenAllowed` | `PublishNoAccess`, `PublishNoPayment`, `PublishNoStage` |
+| `uploadsOnlyForOpenProject`: an upload row's stamp precedes the close, the withdrawal and the booking's voiding | `StartNoAccess` |
+| `filesOnlyForOpenProject`: the same for a file row | `InsertNoAccess` |
+| `publishedOnlyWhenPaidAndOpen`: a published file's stamp precedes them, and for a final the balance's voiding | `PublishNoAccess`, `PublishNoPayment` |
+| `stageCoherent`: a published final means a final stage, and a completion is stamped exactly while the stage is complete | `PublishNoStage` |
 | `oneLiveReview` | `NoSupersede` |
-| `readyStagesHaveFiles`: review_ready has a published review, final_files_ready and complete a published final | `RevokeStaleReset`: the revoke decides the stage reset from the count of other published files it read; `CompleteNoStage`: complete does not check the stage |
-| `completedOnlyWhenPaid` | `CompleteNoPayment` |
+| `readyStagesHaveFiles`: review_ready has a published review, final_files_ready and complete a published final | `RevokeStaleReset`: the revoke writes the reset it decided from its read without the guard that the other files and the stage are still the ones read (and without the retry); `CompleteNoStage`: complete does not check the stage |
+| `completedOnlyWhenPaid`: the completion's stamp precedes the voiding of the booking and of the balance | `CompleteNoPayment` |
+| `fileHasObject`: an uploaded or published file has its R2 object | `AbortNoCas`: abort deletes the object without first marking the row discarding; `InsertNoState`: the insert does not require a pending upload row |
 
 Findings from writing it. The old completion statement also required a published final (updates.ts:243), but its stage
 condition already implies it, because revoking the last final resets the stage in the same batch; the model's completion
-therefore checks the stage and the payments, and a mutant that drops the stage breaks the property. The stage reset after
-a revoke must be decided where the write happens (section 4, F3): a reset decided from the count the read saw leaves a
+therefore checks the stage and the payments, and a mutant that drops the stage breaks the property. The same holds for the
+published-review condition of `begin_revision` (U8): `review_ready` implies a published review, so the design's rule names
+the fact and the write's guard does not repeat it (section 2). The stage reset after a revoke must be decided from facts
+the write still sees (section 4, F3): a reset decided from the count the read saw and written without the guard leaves a
 project at `final_files_ready` with no published final when two finals are revoked at once (`RevokeStaleReset`). The
-revoke also requires an open project (F2), which the model checks as part of its guard.
+revoke also requires an open project (F2), which the model checks as part of its guard. A separate property for "no file
+row comes from an upload being discarded" was dropped: such a file has no object (the abort deleted it), so `fileHasObject`
+covers it, and `InsertNoState` breaks that property.
 
-**Notices** (`verification/audio-project-notices.qnt`, module `projectNotices`). One notice (the invitation or an update
-notice), three deliveries, the owner's retry, and the project's access closing during a delivery. "An invitation claim
-racing a revoke" is this model: the claim checks the status and the access, and the outcome write does not mark a notice
-sent that was not.
+**Notices** (`verification/audio-project-notices.qnt`, module `projectNotices` for the invitation and `projectNoticesUpdate`
+for an update notice). One notice, three deliveries, the owner's retry, and the project's access closing during a delivery.
+The two kinds share the three statements but not their conditions (section 4, I1 to I5 and N1 to N5): the invitation's claim
+and outcome write need an open project, the update notice's do not, and the model takes the kind as a parameter so each
+kind's properties are true of today's behaviour. A closed project's update notice is claimed, finds no recipient and ends
+`failed`; a closed project's invitation stays `pending` (its claim refuses) or, when the project closes during the
+delivery, `sending`. "An invitation claim racing a revoke" is this model: the claim checks the status and the access, and
+the outcome write does not mark a notice sent that was not. The mutants are of the invitation.
 
 | Property | Mutant that breaks it |
 |---|---|
-| `oneEmailPerQueuing` | `ClaimNoStatus` |
-| `claimOnlyWhileOpen` | `ClaimNoOpen` |
-| `queueOnlyWhileOpen` | `QueueNoOpen` |
-| `sentNeverRequeued` | `QueueAnyStatus` |
-| `sentMeansMailed` | `UncertainSent` |
-| `failedMeansNotMailed` | `UncertainFailed`: an uncertain answer written as failed lets a retry send a second email |
+| `oneEmailInTotal`: however the owner queues the notice, at most one email goes out in all | `ClaimNoStatus` (two deliveries both claim), `QueueAnyStatus` (a notice that was sent is queued again) |
+| `claimOnlyWhileOpen`: no stored attempt is later than the invitation's close (the update notice's claim has no access condition, so the property is about the invitation) | `ClaimNoOpen` |
+| `sentMeansMailed`: a notice that is `sent` has an email that went out | `UncertainSent` |
+| `failedMeansNotMailed`: a notice that is `failed` has none: an uncertain answer leaves it `sending` for the owner to judge | `UncertainFailed`: an uncertain answer written as failed lets a retry send a second email |
+
+Dropped, with the reason: a property that the owner's retry moves a notice only while the project is open. The retry's open
+condition has no stored effect beyond its own answer (409): a delivery that follows a retry on a closed project sends
+nothing (the invitation's claim refuses it, the update notice's recipient read is empty), which `oneEmailInTotal` and
+`sentMeansMailed` already cover. The condition stays in the write as a guard (I5, N5).
 
 Not modelled, and why: revoking access is one batch of atomic statements (R1 to R4) and a sign-in racing it is the studio
 sign-in area's model (`signin-codes.qnt`, `noAuditForClosedProject`); the client's file read is a read with no write but
 the access upsert (B3, a key-guarded upsert); the update batches U2 to U16 already carry `updated_at` and the stage as
 conditions, which the files model covers for the same facts, and a lost guard answers 409 with no retry because the owner's
 page shows the stale state (the corpus cases named "race: accept loses on updated_at" and the others record this). Two
-things the models take as given, not proven: the session and the project's access are read in the same batch as the rest,
-and a message's timestamp is the request's `now`, passed in as a thunk.
+things the models take as given, not proven: the project's facts are read in one batch (the session is read just before it,
+see the messages model), and a message's timestamp is the request's `now`, passed in as a thunk.
 
 The notices model leaves one honest gap: an email may go out for a project closed between the recipient read and the send
 (the read, the call and the write are three steps and the call cannot be guarded). That is the same on branch A and is not

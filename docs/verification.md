@@ -479,10 +479,15 @@ bias the random runs rarely reach the races.
   `RuleNoRounds` drops the rounds condition from the rule and the write; the others remove one condition of the write.
 - `audio-project-files.qnt` (module `projectFiles`): an upload that starts, completes or is aborted, and the owner's
   publish, revoke and completion, with R2 as separate steps. 8 properties, 11 mutants. It found that the stage compare
-  already protects the published final, so the conversion's completion compares the stage and not the file.
-- `audio-project-notices.qnt` (module `projectNotices`): the invitation and an update notice, which share four states and
-  three statements. 6 properties, 6 mutants. Its model of the owner's confirmation is truthful on purpose (the email did not
-  go out); the confirmation is the owner's judgment and not a property.
+  already protects the published final, so the conversion's completion compares the stage and not the file. The revoke's
+  stage reset is decided from the read and written under a guard with a retry (`RevokeStaleReset` removes both).
+- `audio-project-notices.qnt` (modules `projectNotices` for the invitation and `projectNoticesUpdate` for an update notice,
+  which have different claim and outcome conditions): the four states and the three statements. 4 properties, 5 mutants
+  (of the invitation). Its model of the owner's confirmation is truthful on purpose (the email did not go out); the
+  confirmation is the owner's judgment and not a property.
+
+Every property reads stored rows and stamps (one counter standing for the order D1 serializes statements in), never a
+flag set at the write from the condition the guard checks.
 
 None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
 run as `projectMessages` or `projectFiles`.
