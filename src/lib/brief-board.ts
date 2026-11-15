@@ -460,6 +460,8 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
+		// The currency's code before the amount ("USD 5,000", "EUR 300").
+		"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?\\d",
 		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
 		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
 		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
