@@ -16,7 +16,7 @@ import {
 	liveAgreementAllowance,
 	liveAgreementMail,
 } from "~/server/agreement-services";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/agreement-answers";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import {
 	ARCHIVE_RECEIPT,
@@ -32,12 +32,7 @@ const ROUTE = "/api/agreements/link";
 
 const unavailable = () => agreementJson({ ok: false, error: UNAVAILABLE }, 500);
 
-const failed = (cause: unknown) =>
-	Effect.sync(() => {
-		logUnexpected(ROUTE, cause);
-
-		return unavailable();
-	});
+const failed = loggedAnswer(ROUTE, unavailable);
 
 const post: APIRoute = async ({ request, locals }) => {
 	const body = await agreementRequest(request, 4096);

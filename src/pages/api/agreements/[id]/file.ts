@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { agreementHeaders } from "~/lib/agreement-access";
-import { logUnexpected } from "~/server/failure";
+import { agreementText, loggedAnswer } from "~/server/agreement-answers";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";
@@ -10,17 +10,10 @@ export const prerender = false;
 
 const ROUTE = "/api/agreements/[id]/file";
 
-const text = (body: string, status: number) =>
-	new Response(body, { status, headers: agreementHeaders });
+const unavailable = () =>
+	agreementText("Signed copy unavailable. Contact Kazon.", 500);
 
-const unavailable = () => text("Signed copy unavailable. Contact Kazon.", 500);
-
-const failed = (cause: unknown) =>
-	Effect.sync(() => {
-		logUnexpected(ROUTE, cause);
-
-		return unavailable();
-	});
+const failed = loggedAnswer(ROUTE, unavailable);
 
 export const GET: APIRoute = async ({ locals, request, params }) => {
 	const bindings = bindingsOrUnavailable(locals.runtime.env, [
@@ -28,7 +21,7 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 		"AUDIO",
 	]);
 
-	if (!bindings.ok) return text("Unavailable", 503);
+	if (!bindings.ok) return agreementText("Unavailable", 503);
 
 	return runRoute(
 		bindings.services,
@@ -50,11 +43,15 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 					}),
 			),
 			Effect.catchTags({
-				SignInFirst: (refusal) => Effect.succeed(text(refusal.say, 401)),
-				AgreementNotFound: (refusal) => Effect.succeed(text(refusal.say, 404)),
-				CopyNotReady: (refusal) => Effect.succeed(text(refusal.say, 409)),
-				CopyMissing: () => Effect.succeed(text("Not found", 404)),
-				CopyIntegrity: (refusal) => Effect.succeed(text(refusal.say, 503)),
+				SignInFirst: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 401)),
+				AgreementNotFound: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 404)),
+				CopyNotReady: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 409)),
+				CopyMissing: () => Effect.succeed(agreementText("Not found", 404)),
+				CopyIntegrity: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 503)),
 				// The bucket read failing answers the fixed 500 without a log line, as the route has always done.
 				CopyReadFailed: () => Effect.succeed(unavailable()),
 				// Reading the bytes, the store and the digest failing are logged and answer the same fixed 500.

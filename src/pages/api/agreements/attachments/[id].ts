@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { agreementHeaders } from "~/lib/agreement-access";
-import { logUnexpected } from "~/server/failure";
+import { agreementText, loggedAnswer } from "~/server/agreement-answers";
 import { downloadAttachment } from "~/server/flows/agreement-attachment";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";
@@ -10,17 +10,9 @@ export const prerender = false;
 
 const ROUTE = "/api/agreements/attachments/[id]";
 
-const text = (body: string, status: number) =>
-	new Response(body, { status, headers: agreementHeaders });
+const unavailable = () => agreementText("Unavailable", 500);
 
-const unavailable = () => text("Unavailable", 500);
-
-const failed = (cause: unknown) =>
-	Effect.sync(() => {
-		logUnexpected(ROUTE, cause);
-
-		return unavailable();
-	});
+const failed = loggedAnswer(ROUTE, unavailable);
 
 export const GET: APIRoute = async ({ locals, request, params }) => {
 	const bindings = bindingsOrUnavailable(locals.runtime.env, [
@@ -28,7 +20,7 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 		"AUDIO",
 	]);
 
-	if (!bindings.ok) return text("Unavailable", 503);
+	if (!bindings.ok) return agreementText("Unavailable", 503);
 
 	return runRoute(
 		bindings.services,
@@ -50,10 +42,12 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 					}),
 			),
 			Effect.catchTags({
-				VerifyFirst: (refusal) => Effect.succeed(text(refusal.say, 401)),
-				AttachmentNotFound: (refusal) => Effect.succeed(text(refusal.say, 404)),
+				VerifyFirst: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 401)),
+				AttachmentNotFound: (refusal) =>
+					Effect.succeed(agreementText(refusal.say, 404)),
 				AttachmentIntegrity: (refusal) =>
-					Effect.succeed(text(refusal.say, 503)),
+					Effect.succeed(agreementText(refusal.say, 503)),
 				AttachmentReadFailed: (failure) => failed(failure.failure),
 				AttachmentDetailsUnreadable: () => failed(new Error("malformed JSON")),
 				AgreementStoreFailed: (failure) => failed(failure.failure),
