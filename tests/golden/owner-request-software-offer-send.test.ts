@@ -64,17 +64,26 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   500 "The offer link couldn't be built. Check SITE_ORIGIN."  SITE_ORIGIN that is not a URL (nothing written)
 //   200 {ok:true,version,link,linkCreatedAt,sentAt,updatedAt,emailSent,uncertain,copySent}  a draft sent (the sent offer
 //            superseded), a sent offer reissued after its link was revoked (sentAt and updatedAt kept), each Resend outcome
-//            (a refused or lost client email still answers 200 with emailSent false and the link: the offer is sent and the
-//            link is live)
+//            (a refused or lost client email, or mail not configured, still answers 200 with emailSent false and the
+//            link, since the offer is sent, as long as the check after the email finds the link live)
 //   409 "The email went out, but the link was closed while it was sending..."  the email was accepted and the link was
 //            revoked, the offer superseded or the request withdrawn before the check
+//   409 "The link was closed while the offer was being sent..."  the same check finds the link closed after a client
+//            email that was not accepted ("the link is revoked while an email that fails is sent")
 //   409 generic "...changed or could not be saved..."  a guard of the batch fails (updated_at, status or email moved; the
 //            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a first
-//            deposit of any offer version opened or was paid; the draft changed), the batch throws, stored terms that
-//            are not JSON, a read throws inside the try, the check after the email throws (the email has already gone
-//            out)
+//            deposit of any offer version opened or was paid; the draft changed), stored terms that are not JSON or are
+//            empty text
 //   409 project started     the project appears between the checks and the batch
-//   rejected                the first read or the project pre-check throws
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
+//            first read, the project pre-check, the offers, sending, deposit or signing setting read, the batch (an outage,
+//            not a guard), or a lookup after a refused batch. Nothing is emailed
+//   500 {ok:false,message:"The email was sent, but the link could not be checked. Reload before you try again."}  the
+//            check after an accepted email throws (the offer is already saved as sent; only the read failed)
+//   500 {ok:false,message:"The offer was saved, but the email may not have been sent and the link could not be
+//            checked. Reload before you try again."}  the check throws after a client email that was refused or lost
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
 //   the owner's copy, the live-link read. No R2.
 
@@ -817,6 +826,36 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_offer_links/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the sending lookup after it is never made",
+				},
+			],
+		},
+	),
+	sendCase(
+		"the send batch is refused by a race and the sending lookup after it fails",
+		draftSeed(),
+		{
+			interleave: [
+				{
+					on: onBatch,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},
