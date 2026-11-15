@@ -3,9 +3,11 @@
 // request's cards, so a card the owner used keeps its ref and an open card is repeated. No model is called.
 export function scriptedOfferReply(body) {
 	const request = JSON.parse(body || "{}");
+
 	const shown = new Map(
 		(request.cards ?? []).map((card) => [card.text, card.ref]),
 	);
+
 	const ref = (text) => shown.get(text) ?? "";
 
 	return {

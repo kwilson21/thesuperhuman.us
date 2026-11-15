@@ -232,6 +232,7 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 		const card = read.value;
 		const words = oneLine(card.text);
 		const reason = oneLine(card.reason);
+
 		// The model puts a milestone's detail on the card; the route's answer nests it under `detail`.
 		const detail =
 			card.lane === "milestones"
