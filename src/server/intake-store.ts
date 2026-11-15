@@ -73,8 +73,11 @@ const creationAuditStatement = (db: D1Database, row: OwnerRequest) =>
 
 /**
  * Stores one owner request and its creation audit in one batch, and answers the row as stored. A brief too large is
- * refused before anything is sent. A violation of the unique index on the submission id is a `SubmissionIdClash` (a `ChangedSinceRead`, as the music store maps its own
- * constraints); any other refusal is an `IntakeStoreFailed` carrying what the database raised.
+ * refused before anything is sent. Any duplicate-key refusal is a `SubmissionIdClash` (a `ChangedSinceRead`, as the music
+ * store maps its own constraints); any other refusal is an `IntakeStoreFailed` carrying what the database raised. The
+ * duplicate key can only be the unique index on the submission id in practice: the request id is a fresh random UUID, and for
+ * an audio request the trigger's `audio_projects.request_id` is that same fresh id, so neither realistically collides.
+ * (Audio requests carry no submission id, so for them nothing can clash.)
  */
 export const insertRequest = (request: NewOwnerRequest) =>
 	Effect.gen(function* () {
@@ -116,7 +119,7 @@ export const insertRequest = (request: NewOwnerRequest) =>
 					requestStatement(db, row, detailsJson, request.submissionId),
 					creationAuditStatement(db, row),
 				]),
-			// The unique index on the submission id refusing the batch means another request stored the same id first.
+			// A duplicate key means another request stored the same submission id first (see above for why no other key collides).
 			catch: (failure) =>
 				isUniqueViolation(failure) && failure instanceof Error
 					? new SubmissionIdClash(failure)

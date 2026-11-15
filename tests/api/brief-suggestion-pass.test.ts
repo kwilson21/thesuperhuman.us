@@ -171,7 +171,7 @@ it("logs a body that fails while it is read once, answers 500 with the fixed bod
 
 	const ctx = context();
 
-	ctx.request = new Request("https://example.com/api/software/brief/pass", {
+	const init: RequestInit & { duplex: "half" } = {
 		method: "POST",
 		headers: {
 			origin: "https://example.com",
@@ -183,9 +183,13 @@ it("logs a body that fails while it is read once, answers 500 with the fixed bod
 				controller.error(new Error("client went away"));
 			},
 		}),
-		// @ts-expect-error a streamed request body needs duplex, which the DOM type does not list
 		duplex: "half",
-	});
+	};
+
+	ctx.request = new Request(
+		"https://example.com/api/software/brief/pass",
+		init,
+	);
 
 	const response = await POST(ctx);
 
