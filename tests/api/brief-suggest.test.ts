@@ -591,3 +591,33 @@ it("uses the keyed visitor identity for both the limiter and persisted daily bud
 			.get("site")?.scope,
 	).toBe(key);
 });
+
+it("logs a body that fails while it is read once and answers 500 with the fixed body, asking nothing", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const ctx = context();
+
+	ctx.request = new Request("https://example.com/api/software/brief/suggest", {
+		method: "POST",
+		headers: {
+			origin: "https://example.com",
+			"content-type": "application/json",
+			"cf-connecting-ip": "test",
+			cookie,
+		},
+		body: new ReadableStream({
+			start(controller) {
+				controller.error(new Error("client went away"));
+			},
+		}),
+		// @ts-expect-error a streamed request body needs duplex, which the DOM type does not list
+		duplex: "half",
+	});
+
+	const response = await POST(ctx);
+
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ suggestion: "" });
+	expect(run).not.toHaveBeenCalled();
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
+});

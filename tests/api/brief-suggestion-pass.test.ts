@@ -164,3 +164,35 @@ it("keys visitor identities with a labelled HMAC over the IP and UTC day", async
 		expected,
 	);
 });
+
+it("logs a body that fails while it is read once, answers 500 with the fixed body and never asks the captcha", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	vi.stubGlobal("fetch", vi.fn());
+
+	const ctx = context();
+
+	ctx.request = new Request("https://example.com/api/software/brief/pass", {
+		method: "POST",
+		headers: {
+			origin: "https://example.com",
+			"content-type": "application/json",
+			"cf-connecting-ip": "test",
+		},
+		body: new ReadableStream({
+			start(controller) {
+				controller.error(new Error("client went away"));
+			},
+		}),
+		// @ts-expect-error a streamed request body needs duplex, which the DOM type does not list
+		duplex: "half",
+	});
+
+	const response = await POST(ctx);
+
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("cache-control")).toBe("no-store");
+	expect(fetch).not.toHaveBeenCalled();
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
+});

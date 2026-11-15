@@ -4,9 +4,12 @@
 // schemas): an unknown key refuses the whole body, a question is read with its straight apostrophes changed to curly ones
 // before it is checked against the six questions, and the value keeps the field order of the schema, because the model's
 // prompt is the JSON of that value. Any refusal makes the route answer as it did: nothing says why.
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as SchemaGetter from "effect/SchemaGetter";
+import { musicRequest } from "../lib/music-request";
 
 const QUESTIONS = [
 	"What happens today?",
@@ -70,3 +73,15 @@ function readStrict<S extends Schema.ConstraintDecoder<unknown>, Body>(
 		? { ok: true, value: read.success }
 		: { ok: false };
 }
+
+/** The request's body could not be read to the end (the client left, or the stream failed). */
+export class BodyReadFailed extends Data.TaggedError("BodyReadFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** Reads the body as `musicRequest` does (a refusal of the request itself is a Response in the value); a stream that fails is a BodyReadFailed. */
+export const readBody = (request: Request, maxBytes: number) =>
+	Effect.tryPromise({
+		try: () => musicRequest(request, maxBytes),
+		catch: (failure) => new BodyReadFailed({ failure }),
+	});

@@ -1,11 +1,10 @@
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { musicRequest } from "~/lib/music-request";
 import { suggestionPassCookie } from "~/lib/brief-suggestion-pass";
 import { suggest } from "~/server/flows/brief-suggest";
 import { logUnexpected } from "~/server/failure";
-import { readSuggestInput } from "~/server/brief-input";
+import { readBody, readSuggestInput } from "~/server/brief-input";
 import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
@@ -74,9 +73,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		["localhost", "127.0.0.1", "[::1]"].includes(new URL(request.url).hostname)
 	)
 		return empty();
-	const read = readSuggestInput(await musicRequest(request, 16000));
-
-	if (!read.ok) return empty();
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
 	if (!bindings.ok) return empty();
@@ -92,16 +88,27 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			),
 			Context.merge(liveAssistant(env.AI), liveBackground(locals.runtime?.ctx)),
 		),
-		suggest({
-			text: read.value.text,
-			content: JSON.stringify(read.value),
-			ip: request.headers.get("cf-connecting-ip"),
-			cookie: passCookie(request),
-			secret: env.TURNSTILE_SECRET_KEY,
-			now: () => Date.now(),
+		Effect.gen(function* () {
+			const read = readSuggestInput(yield* readBody(request, 16000));
+
+			if (!read.ok) return empty();
+
+			return yield* suggest({
+				text: read.value.text,
+				content: JSON.stringify(read.value),
+				ip: request.headers.get("cf-connecting-ip"),
+				cookie: passCookie(request),
+				secret: env.TURNSTILE_SECRET_KEY,
+				now: () => Date.now(),
+			}).pipe(Effect.map(answerResponse));
 		}).pipe(
-			Effect.map(answerResponse),
 			Effect.catchTags({
+				BodyReadFailed: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.failure);
+
+						return failedAnswer();
+					}),
 				SuggestLimitFailed: (failure) =>
 					Effect.sync(() => {
 						logUnexpected(ROUTE, failure.failure);
