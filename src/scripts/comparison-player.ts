@@ -138,9 +138,6 @@ export function setupComparisonPlayers() {
 				streamId = 0;
 
 			let loop: LoopRegion | undefined;
-			// The loop pass the selection last followed, and the wrap a flip is already scheduled for.
-			let lastPass = 0;
-			let flipScheduledFor: number | undefined;
 
 			const format = (n: number) =>
 				`${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
@@ -166,13 +163,17 @@ export function setupComparisonPlayers() {
 			}
 
 			function applyVolume() {
-				// Setting levels now cancels a flip scheduled for the next wrap; render schedules it again.
-				flipScheduledFor = undefined;
-				transport?.setLevels(
-					media.map((audio, index) =>
-						index !== selected ? 0 : levelOf(audio),
-					),
+				// The gains with each version selected.
+				const levels = media.map((_, version) =>
+					media.map((audio, index) => (index === version ? levelOf(audio) : 0)),
 				);
+
+				// With Loop and Flip on, the transport switches versions at each wrap, starting from the one selected now.
+				if (loop && loopFlip?.checked) transport?.setFlip({ levels, selected });
+				else {
+					transport?.setFlip(undefined);
+					transport?.setLevels(levels[selected]);
+				}
 
 				if (!streaming) return;
 
@@ -273,32 +274,42 @@ export function setupComparisonPlayers() {
 			}
 
 			/**
-			 * With Flip on, the version switches exactly at each wrap: the next wrap's levels are scheduled on the audio clock,
-			 * and the selection follows once the wrap has passed.
+			 * The stream has no loop of its own: at the loop's end it goes back to the loop's start, and with Flip on it
+			 * switches to the other version there. While synced, the transport loops and flips on the audio clock, and the
+			 * selection follows the version sounding.
 			 */
 			function followLoop() {
-				if (streaming && loop && streamPosition() >= loop.end)
-					streaming.currentTime = loop.start + offsetOf(streaming);
-
-				if (!transport?.playing || !loop || !loopFlip?.checked) return;
-
-				if (transport.pass !== lastPass) {
-					lastPass = transport.pass;
-					selected = 1 - selected;
-					flipScheduledFor = undefined;
-					updateCompactWaveform();
+				if (streaming && loop && streamPosition() >= loop.end) {
+					if (loopFlip?.checked) {
+						selected = 1 - selected;
+						stopStream();
+						streamFrom(loop.start);
+						updateCompactWaveform();
+					} else streaming.currentTime = loop.start + offsetOf(streaming);
 				}
 
-				const wrap = transport.nextWrap;
+				if (!transport?.playing) return;
+				transport.keepFlipping();
 
-				if (wrap === undefined || wrap === flipScheduledFor) return;
-				const next = 1 - selected;
-				transport.setLevelsAt(
-					media.map((audio, index) => (index === next ? levelOf(audio) : 0)),
-					wrap,
-				);
-				flipScheduledFor = wrap;
+				const sounding = transport.flipped;
+
+				if (sounding !== undefined && sounding !== selected) {
+					selected = sounding;
+					updateCompactWaveform();
+				}
 			}
+
+			// A hidden page draws no frames, so a slow timer keeps the stream inside its loop and the flips scheduled.
+			let hiddenTimer: number | undefined;
+
+			document.addEventListener("visibilitychange", () => {
+				clearInterval(hiddenTimer);
+				hiddenTimer = document.hidden
+					? window.setInterval(() => {
+							if (loop) render();
+						}, 1000)
+					: undefined;
+			});
 
 			function render() {
 				cancelAnimationFrame(frame);
@@ -352,7 +363,6 @@ export function setupComparisonPlayers() {
 			function pause() {
 				operation++;
 				pending = false;
-				lastPass = 0;
 				const streamed = Boolean(streaming);
 				stopStream();
 				transport?.pause();
@@ -404,9 +414,15 @@ export function setupComparisonPlayers() {
 								Number(root.dataset.duration),
 								render,
 							);
+
+							// The decoded versions can end a little before the catalog's duration: fit the loop to them.
+							if (loop) {
+								loop = loopFrom(loop.start);
+								drawLoop();
+							}
+
 							// A stream paused before both versions loaded left its place in position; start the transport there.
-							transport.setLoop(loop);
-							transport.seek(position);
+							transport.setLoop(loop, position);
 						})
 						.catch((error) => {
 							loading = undefined;
@@ -424,8 +440,9 @@ export function setupComparisonPlayers() {
 						const at = streamPosition() + 0.03;
 
 						// A stream that has stopped, or is about to end, is left to its pause and ended handlers, which park
-						// the comparison where it stopped; the transport would start the song again from the top.
-						if (handed.paused || at >= transport!.duration) return;
+						// the comparison where it stopped; the transport would start the song again from the top. A loop
+						// has no end: the transport starts inside it.
+						if (handed.paused || (!loop && at >= transport!.duration)) return;
 						position = at;
 						streaming = undefined;
 						setTimeout(() => handed.pause(), 30);
@@ -433,7 +450,6 @@ export function setupComparisonPlayers() {
 
 					transport!.seek(position);
 					applyVolume();
-					lastPass = 0;
 					transport!.play();
 					delete root.dataset.audioFallback;
 					status.textContent = "";
@@ -494,7 +510,7 @@ export function setupComparisonPlayers() {
 
 				// While looping, a seek moves the loop: it starts again from where the visitor chose.
 				if (loop) {
-					setLoop(position);
+					setLoop(position, true);
 
 					return;
 				}
@@ -505,26 +521,20 @@ export function setupComparisonPlayers() {
 				render();
 			}
 
-			/** Loops the chosen length from `from` (the playhead by default), or stops looping when Loop is off. */
-			function setLoop(from?: number) {
+			/** The passage Loop repeats: the chosen length from `from`, inside the song; undefined while Loop is off. */
+			function loopFrom(from: number): LoopRegion | undefined {
+				if (loopToggle?.getAttribute("aria-pressed") !== "true")
+					return undefined;
 				const duration = transport?.duration ?? Number(root.dataset.duration);
 				const length = Number(loopLength?.value ?? 8);
-				const at = from ?? (transport ? transport.position : streamPosition());
+				const start = Math.max(0, Math.min(from, duration - length));
 
-				if (loopToggle?.getAttribute("aria-pressed") === "true") {
-					const start = Math.max(0, Math.min(at, duration - length));
-					loop = { start, end: Math.min(duration, start + length) };
-				} else loop = undefined;
+				return { start, end: Math.min(duration, start + length) };
+			}
 
-				position = loop ? Math.min(Math.max(at, loop.start), loop.end) : at;
-				transport?.setLoop(loop);
-				// A flip already scheduled for the old loop's wrap is cancelled with the current levels.
-				applyVolume();
-
-				if (streaming && loop)
-					streaming.currentTime = position + offsetOf(streaming);
-				lastPass = 0;
-				flipScheduledFor = undefined;
+			/** Shades the loop on the waveforms, and offers Flip only while looping. */
+			function drawLoop() {
+				const duration = transport?.duration ?? Number(root.dataset.duration);
 
 				if (loopFlip) loopFlip.disabled = !loop;
 				root.style.setProperty(
@@ -538,9 +548,30 @@ export function setupComparisonPlayers() {
 				root
 					.querySelectorAll<HTMLElement>("[data-loop-region]")
 					.forEach((region) => (region.hidden = !loop));
-				status.textContent = loop
-					? `Looping ${format(loop.start)} to ${format(loop.end)}.`
-					: "Loop off.";
+			}
+
+			/**
+			 * Loops the chosen length from `from` (the playhead by default), or stops looping when Loop is off. Playback
+			 * stays where it is, moved to the loop's start if that is outside it; a seek (`seeking`) moves playback to `from`
+			 * and changes the loop without announcing it, since the slider already says where it is.
+			 */
+			function setLoop(from?: number, seeking = false) {
+				const now = transport ? transport.position : streamPosition();
+				const at = seeking ? (from ?? now) : now;
+				loop = loopFrom(from ?? now);
+				position =
+					loop && (at < loop.start || at >= loop.end) ? loop.start : at;
+				transport?.setLoop(loop, position);
+				applyVolume();
+
+				if (streaming && Math.abs(position - now) > 0.01)
+					streaming.currentTime = position + offsetOf(streaming);
+				drawLoop();
+
+				if (!seeking)
+					status.textContent = loop
+						? `Looping ${format(loop.start)} to ${format(loop.end)}.`
+						: "Loop off.";
 				render();
 			}
 
@@ -551,9 +582,11 @@ export function setupComparisonPlayers() {
 				);
 				setLoop();
 			});
-			loopLength?.addEventListener("change", () => setLoop(loop?.start));
+			// A new length applies to a loop that is on; with Loop off it waits, and playback is left alone.
+			loopLength?.addEventListener("change", () => {
+				if (loop) setLoop(loop.start);
+			});
 			loopFlip?.addEventListener("change", () => {
-				lastPass = transport?.pass ?? 0;
 				applyVolume();
 				render();
 			});
@@ -662,8 +695,24 @@ export function setupComparisonPlayers() {
 				audio.addEventListener("pause", () => {
 					if (streaming === audio && audio.paused && !audio.ended) pause();
 				});
+				// Media time events keep arriving in a hidden page, which draws no frames: they keep the stream in its loop.
+				audio.addEventListener("timeupdate", () => {
+					if (streaming === audio && loop) render();
+				});
 				audio.addEventListener("ended", () => {
 					if (streaming !== audio) return;
+
+					// A loop that reaches the end of the song goes round from its start.
+					if (loop) {
+						if (loopFlip?.checked) selected = 1 - selected;
+						stopStream();
+						streamFrom(loop.start);
+						updateCompactWaveform();
+						render();
+
+						return;
+					}
+
 					streaming = undefined;
 					position = Number(root.dataset.duration);
 					transport?.seek(position);

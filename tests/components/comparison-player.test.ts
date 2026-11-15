@@ -275,7 +275,7 @@ it("gives the full player a listening desk: Loop, its length and Flip A/B each p
 	for (const control of [
 		'<button type="button" data-loop aria-pressed="false">Loop</button>',
 		'<label class="comparison-loop-length">Length <select data-loop-length><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>',
-		'<label class="comparison-match"><input type="checkbox" data-loop-flip disabled /> Flip A/B each pass</label>',
+		'<label class="comparison-match comparison-loop-flip"><input type="checkbox" data-loop-flip disabled /> Flip A/B each pass</label>',
 	])
 		expect(full).toContain(control);
 

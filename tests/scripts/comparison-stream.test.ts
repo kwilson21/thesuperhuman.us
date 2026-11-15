@@ -109,14 +109,34 @@ class StandInControl extends EventTarget {
 	}
 }
 
+/** The loop desk's Length menu; the player checks it with instanceof HTMLSelectElement, which this stands in for. */
+class StandInSelect extends StandInControl {}
+
+/** The document as the player uses it: its comparisons, whether it is hidden, and its listeners. */
+class StandInDocument extends EventTarget {
+	hidden = false;
+
+	constructor(readonly querySelectorAll: (selector: string) => EventTarget[]) {
+		super();
+	}
+}
+
 /** The comparison root's data attributes the player reads and writes. */
 type RootData = { duration: string; title: string; audioFallback?: string };
 
-/** One played source of the synced transport, so a test can tell whether it is sounding. */
-type Source = { started: boolean; stopped: boolean };
+/** One played source of the synced transport, so a test can tell whether it is sounding and where it started. */
+type Source = { started: boolean; stopped: boolean; offset?: number };
 
-/** Mounts one comparison: the mix ("before", quieter) and the master ("after", 2.5 dB louder). */
-function mount({ decodes = true, fixedVolume = false } = {}) {
+/**
+ * Mounts one comparison: the mix ("before", quieter) and the master ("after", 2.5 dB louder). `desk` adds the full
+ * player's loop desk (Loop, Length at 8 s, Flip), and `decodedLength` is how long the decoded versions turn out to be.
+ */
+function mount({
+	decodes = true,
+	fixedVolume = false,
+	desk = false,
+	decodedLength = 160,
+} = {}) {
 	volumeSettable = !fixedVolume;
 
 	const mix = new StandInAudio({
@@ -151,6 +171,15 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 		return button;
 	});
 
+	const loop = {
+		toggle: new StandInControl(),
+		length: new StandInSelect(),
+		flip: new StandInControl(),
+	};
+
+	loop.toggle.setAttribute("aria-pressed", "false");
+	loop.length.value = "8";
+
 	const one = new Map<string, StandInControl>([
 		["[data-comparison-play]", controls.play],
 		["[data-comparison-seek]", controls.seek],
@@ -158,13 +187,23 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 		["[data-comparison-status]", controls.status],
 		["[data-match-level]", controls.match],
 		["[data-comparison-time]", controls.time],
+		...(desk
+			? ([
+					["[data-loop]", loop.toggle],
+					["[data-loop-length]", loop.length],
+					["[data-loop-flip]", loop.flip],
+				] as const)
+			: []),
 	]);
 
 	const dataset: RootData = { duration: "160", title: "Old News" };
+	const styles = new Map<string, string>();
 
 	const root = Object.assign(new EventTarget(), {
 		dataset,
-		style: { setProperty: () => {} },
+		style: {
+			setProperty: (name: string, value: string) => styles.set(name, value),
+		},
 		querySelector: (selector: string) => one.get(selector) ?? null,
 		querySelectorAll: (selector: string) =>
 			selector === "audio"
@@ -208,8 +247,9 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 				onended: null,
 				connect() {},
 				disconnect() {},
-				start: () => {
+				start: (_when: number, offset: number) => {
 					source.started = true;
+					source.offset = offset;
 				},
 				stop: () => {
 					source.stopped = true;
@@ -218,7 +258,7 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 		}
 
 		decodeAudioData() {
-			return Promise.resolve({ duration: 160 });
+			return Promise.resolve({ duration: decodedLength });
 		}
 	}
 
@@ -241,8 +281,7 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 		addEventListener() {},
 	});
 	vi.stubGlobal("navigator", {});
-	// The full player's loop Length menu is read with instanceof; this comparison has no loop desk.
-	vi.stubGlobal("HTMLSelectElement", class {});
+	vi.stubGlobal("HTMLSelectElement", StandInSelect);
 	vi.stubGlobal("requestAnimationFrame", () => 0);
 	vi.stubGlobal("cancelAnimationFrame", () => {});
 	vi.stubGlobal("fetch", () =>
@@ -251,10 +290,12 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 			arrayBuffer: async () => new ArrayBuffer(0),
 		})),
 	);
-	vi.stubGlobal("document", {
-		querySelectorAll: (selector: string) =>
+	vi.stubGlobal(
+		"document",
+		new StandInDocument((selector: string) =>
 			selector === "[data-comparison]" ? [root] : [],
-	});
+		),
+	);
 	setupComparisonPlayers();
 
 	return {
@@ -271,8 +312,14 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 			releaseDecode();
 			await settle();
 		},
+		loop,
+		styles,
 		/** Whether the synced transport is sounding. */
 		synced: () => sources.some((source) => source.started && !source.stopped),
+		/** How many synced sources have started, so a test can tell whether playback restarted. */
+		starts: () => sources.filter((source) => source.started).length,
+		/** Where the synced sources last started, in the song. */
+		startedAt: () => sources.at(-1)?.offset,
 		label: () => controls.play.getAttribute("aria-label") ?? "",
 	};
 }
@@ -407,5 +454,82 @@ it("streams the quieter version at full level where volume is fixed, and stops i
 	expect(ab.mix.paused).toBe(true);
 	expect(ab.play.getAttribute("aria-busy")).toBe("true");
 	await ab.decode();
+	expect(ab.synced()).toBe(true);
+});
+
+it("loops the stream at the loop's end before the handover, from media time events alone", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.play.click();
+	await tick();
+	ab.mix.currentTime = 8.2;
+	ab.mix.dispatchEvent(new Event("timeupdate"));
+	expect(ab.mix.currentTime).toBe(0);
+	expect(ab.mix.paused).toBe(false);
+});
+
+it("flips the stream to the other version at the loop's end before the handover", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.loop.flip.checked = true;
+	ab.loop.flip.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	ab.mix.currentTime = 8.2;
+	ab.mix.dispatchEvent(new Event("timeupdate"));
+	await tick();
+	expect(ab.mix.paused).toBe(true);
+	expect(ab.master.paused).toBe(false);
+	expect(ab.master.currentTime).toBe(0);
+	expect(ab.label()).toMatch(/Master$/);
+});
+
+it("leaves synced playback alone when the length changes with Loop off", async () => {
+	const ab = mount({ desk: true });
+
+	ab.play.click();
+	await tick();
+	await ab.decode();
+
+	const starts = ab.starts();
+
+	ab.loop.length.value = "4";
+	ab.loop.length.dispatchEvent(new Event("change"));
+	expect(ab.starts()).toBe(starts);
+});
+
+it("moves synced playback to a seek inside the loop, even one that lands inside the old loop", async () => {
+	const ab = mount({ desk: true });
+
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	ab.loop.toggle.click();
+	expect(ab.status.textContent).toBe("Looping 0:00 to 0:08.");
+	ab.seek.value = "46";
+	ab.seek.dispatchEvent(new Event("input"));
+	expect(ab.styles.get("--loop-start")).toBe(`${(46 / 160) * 100}%`);
+	// Back by less than the loop's length: 43 is inside the old loop, and playback still moves there.
+	ab.seek.value = "43";
+	ab.seek.dispatchEvent(new Event("input"));
+	expect(ab.startedAt()).toBe(43);
+	expect(ab.styles.get("--loop-start")).toBe(`${(43 / 160) * 100}%`);
+	// The slider says where it is; the loop's status line is left as it was, so a drag is not read out at every step.
+	expect(ab.status.textContent).toBe("Looping 0:00 to 0:08.");
+});
+
+it("fits the loop to the decoded versions when they end before the catalog's duration", async () => {
+	const ab = mount({ desk: true, decodedLength: 150 });
+
+	ab.seek.value = "156";
+	ab.seek.dispatchEvent(new Event("input"));
+	ab.loop.toggle.click();
+	expect(ab.styles.get("--loop-start")).toBe(`${(152 / 160) * 100}%`);
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.styles.get("--loop-start")).toBe(`${(142 / 150) * 100}%`);
 	expect(ab.synced()).toBe(true);
 });

@@ -1,6 +1,12 @@
 /** A passage of the song that repeats, in the song's time (seconds). */
 export type LoopRegion = { start: number; end: number };
 
+/** Flip A/B each pass: the gains with each version selected, and the version that sounds now. */
+export type FlipLevels = { levels: number[][]; selected: number };
+
+/** How many wraps ahead flips are scheduled on the audio clock, so they hold while the page cannot draw. */
+const FLIPS_AHEAD = 64;
+
 /** Both decoded exports run on one audio clock. Switching changes gain, never time. */
 export class ComparisonTransport {
 	private sources: AudioBufferSourceNode[] = [];
@@ -9,6 +15,10 @@ export class ComparisonTransport {
 	private startedAt = 0;
 	private generation = 0;
 	private loop: LoopRegion | undefined;
+	// While flipping: the gains per version, and the version that sounds on the first pass since playback last started.
+	private flip: { levels: number[][]; first: number } | undefined;
+	// The last pass whose flip is scheduled.
+	private flipsScheduledTo = 0;
 	readonly duration: number;
 	playing = false;
 
@@ -64,39 +74,112 @@ export class ComparisonTransport {
 		);
 	}
 
-	/** The audio clock time of the loop's next wrap while looping, so a level change can land exactly on it. */
-	get nextWrap() {
-		if (!this.playing || !this.loop) return undefined;
-		const length = this.loop.end - this.loop.start;
-		const wrapAt = this.loop.end + this.pass * length;
-
-		return this.startedAt + (wrapAt - this.storedPosition);
+	/** The version sounding now while flipping, which changes at each wrap; undefined when not flipping. */
+	get flipped() {
+		return this.flip && (this.flip.first + this.pass) % this.flip.levels.length;
 	}
 
-	/** Loops a passage, or stops looping with undefined. Playing carries on, moved into the passage if it was outside. */
-	setLoop(loop: LoopRegion | undefined) {
-		const resume = this.playing;
-		const at = this.position;
-		this.pause();
-		this.loop = loop && {
+	/**
+	 * Loops a passage, or stops looping with undefined. Playing carries on from `at` (the current position by default),
+	 * moved to the passage's start if that is outside it. While already looping and staying where it is, the playing
+	 * sources take the new passage as they play, with no gap; otherwise they restart, as a seek does.
+	 */
+	setLoop(loop: LoopRegion | undefined, at = this.position) {
+		const region = loop && {
 			start: Math.max(0, loop.start),
 			end: Math.min(this.duration, loop.end),
 		};
-		this.storedPosition =
-			this.loop && (at < this.loop.start || at >= this.loop.end)
-				? this.loop.start
-				: at;
+
+		const now = this.position;
+
+		const inPlace =
+			this.playing &&
+			this.loop &&
+			Math.abs(at - now) < 0.01 &&
+			(!region || (now >= region.start && now < region.end));
+
+		if (inPlace) {
+			// Count passes from here on the clock, as a restart would, without touching the sources.
+			if (this.flip) this.flip.first = this.flipped ?? this.flip.first;
+			// Within the first 30 ms the sources have not started yet, and keep their start time.
+			this.storedPosition = now;
+			this.startedAt = Math.max(this.startedAt, this.context.currentTime);
+			this.loop = region;
+			this.sources.forEach((source, index) => {
+				source.loop = Boolean(region);
+
+				if (!region) return;
+				source.loopStart = region.start + this.offsets[index];
+				source.loopEnd = region.end + this.offsets[index];
+			});
+			this.scheduleFlips();
+
+			return;
+		}
+
+		const resume = this.playing;
+		this.pause();
+		this.loop = region;
+		this.storedPosition = this.intoLoop(Math.min(at, this.duration));
 
 		if (resume) this.play();
 	}
 
-	/** Sets the levels at an audio clock time instead of now, for a switch that must land on a loop's wrap. */
-	setLevelsAt(levels: number[], time: number) {
-		this.gains.forEach((node, index) => {
-			node.gain.cancelScheduledValues(time);
-			node.gain.setTargetAtTime(levels[index], time, 0.003);
-		});
+	/**
+	 * Flips A/B at each wrap of the loop, starting from `selected` now, or stops flipping with undefined (the caller then
+	 * sets the levels). Each flip is scheduled on the audio clock, many wraps ahead, so it lands exactly on the wrap and
+	 * keeps going while the page cannot draw, as in a hidden tab.
+	 */
+	setFlip(flip: FlipLevels | undefined) {
+		this.flip = flip && {
+			levels: flip.levels,
+			first:
+				(((flip.selected - this.pass) % flip.levels.length) +
+					flip.levels.length) %
+				flip.levels.length,
+		};
+		this.scheduleFlips();
 	}
+
+	/** Schedules more flips once half of those scheduled have passed; call it now and then while playing. */
+	keepFlipping() {
+		if (this.flip && this.pass > this.flipsScheduledTo - FLIPS_AHEAD / 2)
+			this.scheduleFlips();
+	}
+
+	private scheduleFlips() {
+		if (!this.flip) return;
+		const { levels, first } = this.flip;
+		const pass = this.pass;
+		this.setLevels(levels[(first + pass) % levels.length]);
+
+		if (!this.playing || !this.loop) return;
+		const length = this.loop.end - this.loop.start;
+		// The first wrap comes when the stored position reaches the loop's end; the rest follow a loop's length apart.
+		const firstWrap = this.startedAt + (this.loop.end - this.storedPosition);
+
+		for (let next = pass + 1; next <= pass + FLIPS_AHEAD; next++) {
+			const time = firstWrap + (next - 1) * length;
+			const version = levels[(first + next) % levels.length];
+
+			this.gains.forEach((node, index) =>
+				node.gain.setTargetAtTime(version[index], time, 0.003),
+			);
+		}
+
+		this.flipsScheduledTo = pass + FLIPS_AHEAD;
+	}
+
+	/** A position moved inside the loop: one outside it goes to the loop's start. */
+	private intoLoop(at: number) {
+		const position = Math.max(0, at);
+
+		return this.loop &&
+			(position < this.loop.start || position >= this.loop.end)
+			? this.loop.start
+			: position;
+	}
+
 	setLevels(levels: number[]) {
 		this.gains.forEach((node, index) => {
 			node.gain.cancelScheduledValues(this.context.currentTime);
@@ -141,8 +224,12 @@ export class ComparisonTransport {
 
 			return source;
 		});
+
+		if (this.flip) this.scheduleFlips();
 	}
 	pause() {
+		// A resumed flip starts from the version sounding now; the next play schedules the flips again.
+		if (this.flip) this.flip.first = this.flipped ?? this.flip.first;
 		this.storedPosition = this.position;
 		this.playing = false;
 		this.generation++;
@@ -156,7 +243,7 @@ export class ComparisonTransport {
 	seek(position: number) {
 		const resume = this.playing;
 		this.pause();
-		this.storedPosition = Math.max(0, Math.min(position, this.duration));
+		this.storedPosition = this.intoLoop(Math.min(position, this.duration));
 
 		if (resume && this.storedPosition < this.duration) this.play();
 	}
