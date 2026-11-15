@@ -1098,7 +1098,8 @@ it.each(["claim", "construction", "config"] as const)(
 				),
 			});
 
-			expect(response.status).toBe(503);
+			// A missing mail address is an unavailable dependency (503); a failed claim or message is a fault of the site (500).
+			expect(response.status).toBe(failure === "config" ? 503 : 500);
 			expect(await response.json()).toMatchObject({ ok: false });
 			expect(
 				JSON.parse(
