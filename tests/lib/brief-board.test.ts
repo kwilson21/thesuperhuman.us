@@ -1485,3 +1485,45 @@ describe("found by the automated review", () => {
 		expect(commits(text)).toBe(false);
 	});
 });
+
+describe("found in the tenth review", () => {
+	it.each([
+		"3년 차여서 경험이 많음",
+		"입사 1년 차일 때 필요한 정보",
+		"3년 차라면",
+		"10년 차라는 경험",
+		"3년 차니까",
+		"1주 차나 2주 차에",
+		"1주 차든 2주 차든",
+		"3년 차죠",
+		"1주 차밖에",
+	])("accepts the ordinal %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+
+	it.each([
+		"2주면 충분",
+		"2주를 예상",
+		"1년은 걸려요",
+		"2주짜리 프로젝트",
+		"3일밖에 안 걸려요",
+		"2주로 단축",
+		"2주에 걸쳐 진행",
+		"3주미만",
+		"3일까지",
+		"1년 차입금",
+		"3일 차라리",
+	])("refuses the duration in %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each([
+		"10주년 기념",
+		"Step 1 주문 접수",
+		"1주차를",
+		"1일차부터",
+		"4년제로",
+	])("still accepts %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+});
