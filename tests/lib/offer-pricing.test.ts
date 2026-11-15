@@ -19,9 +19,10 @@ describe("the offer board's money rules", () => {
 
 	it("turns days into an estimate with the owner's day value and contingency", () => {
 		// 3 to 5 days at $800 a day, with 20% on the high end: $2,400 to $4,800.
-		expect(
-			dayValueEstimate([{ daysLow: 3, daysHigh: 5 }], 80000, 20),
-		).toEqual({ lowCents: 240000, highCents: 480000 });
+		expect(dayValueEstimate([{ daysLow: 3, daysHigh: 5 }], 80000, 20)).toEqual({
+			lowCents: 240000,
+			highCents: 480000,
+		});
 		// Two milestones add up; half days count: 2.5 + 1 = 3.5 days at $750 is $2,625, so $2,650.
 		expect(
 			dayValueEstimate(
@@ -64,7 +65,11 @@ describe("the offer board's money rules", () => {
 		expect(offerTotal([120000, 240000, 60000])).toBe(420000);
 		expect(offerTotal([])).toBe(0);
 		expect(spread([])).toBeNull();
-		expect(spread([500, 100, 300])).toEqual({ low: 100, middle: 300, high: 500 });
+		expect(spread([500, 100, 300])).toEqual({
+			low: 100,
+			middle: 300,
+			high: 500,
+		});
 		expect(spread([400, 100, 300, 200])).toEqual({
 			low: 100,
 			middle: 200,
