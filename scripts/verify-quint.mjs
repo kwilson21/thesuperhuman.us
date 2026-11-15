@@ -21,6 +21,8 @@ import {
 // so they go in parallel, up to the number of CPUs (or QUINT_JOBS), longest first. Each line ends with its run time.
 
 const SEED = "0x1";
+
+// Steps per random run, unless a model sets its own (`steps` in scripts/lib/quint-mutants.mjs).
 const STEPS = "20";
 
 /** Runs `quint` with these arguments to the end, and resolves to its exit status and output. */
@@ -43,6 +45,9 @@ function quint(args) {
 const samplesFor = (model, kind) =>
 	kind === "pass" ? (model.passSamples ?? model.samples) : model.samples;
 
+/** How many steps each random run of a model takes. */
+const stepsFor = (model) => model.steps ?? STEPS;
+
 const simulate = (model, main, invariant, kind) =>
 	quint([
 		"run",
@@ -56,7 +61,7 @@ const simulate = (model, main, invariant, kind) =>
 		"--invariant",
 		invariant,
 		"--max-steps",
-		STEPS,
+		stepsFor(model),
 		"--max-samples",
 		samplesFor(model, kind),
 		"--seed",

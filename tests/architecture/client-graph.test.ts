@@ -134,9 +134,10 @@ describe("what the browser entries reach", () => {
 		).toEqual([]);
 	});
 
-	it("loads no package but effect", () => {
-		// Effect Schema is the one package browser code loads (through src/lib/fields.ts and the validators on it).
-		expect([...reach().packages].sort()).toEqual(["effect"]);
+	it("loads only reviewed browser packages", () => {
+		// Core Foresight is dynamically imported only for the explicit trial. The source walker records
+		// this entry package; the real bundle gate also checks its position-observer/tabbable dependencies.
+		expect([...reach().packages].sort()).toEqual(["effect", "js.foresight"]);
 	});
 
 	it("imports exactly the effect modules on the allowlist, and no other", () => {

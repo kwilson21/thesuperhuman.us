@@ -211,6 +211,9 @@ importers:
       jose:
         specifier: ^6.2.12
         version: 6.2.12
+      js.foresight:
+        specifier: 4.2.1
+        version: 4.2.1
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -3346,6 +3349,9 @@ packages:
     resolution: {integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==}
     hasBin: true
 
+  js.foresight@4.2.1:
+    resolution: {integrity: sha512-0IMLIEhYmUobu3I6YNFeSpuK2OYOep3kRhue0DX7qqbUFzuX+Cb0ujkDK3RE97ahysnza7Q63ROWqP1dxAXVuw==}
+
   json-bigint@1.0.0:
     resolution: {integrity: sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ==}
 
@@ -3852,6 +3858,9 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
+  position-observer@1.0.3:
+    resolution: {integrity: sha512-iqzsYcYB7wo9kd3Juw4XaVPhlLCfKhZLv6TrH096reU6tIcXuftPkA41+nqQgnPGzVo5zTC4tJ7GnIRTxrnZbQ==}
+
   postcss@8.5.14:
     resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
     engines: {node: ^10 || ^12 || >=14}
@@ -4158,6 +4167,9 @@ packages:
     resolution: {integrity: sha512-XDpWUOPC6FEibaLzjfe0ucaV0YrOjYotGJO1WpF0Zd+n6ZGEQUsSugaoLq9QkEZtAfQIxT42UChcssDVPP3+/w==}
     engines: {node: '>=16'}
     hasBin: true
+
+  tabbable@6.5.1:
+    resolution: {integrity: sha512-dMCuwDUY6Noz3zVKLefBC4wq+aJV20yc7vWmM7uTNGwtQSFF5kX7OUIUsxuVajz/bdt5Xqdah3/0NLjth+cM5A==}
 
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
@@ -7676,6 +7688,11 @@ snapshots:
     dependencies:
       argparse: 2.0.1
 
+  js.foresight@4.2.1:
+    dependencies:
+      position-observer: 1.0.3
+      tabbable: 6.5.1
+
   json-bigint@1.0.0:
     dependencies:
       bignumber.js: 9.3.1
@@ -8336,6 +8353,10 @@ snapshots:
     dependencies:
       playwright-core: 1.63.0
 
+  position-observer@1.0.3:
+    optionalDependencies:
+      '@rollup/rollup-linux-x64-gnu': 4.60.4
+
   postcss@8.5.14:
     dependencies:
       nanoid: 3.3.12
@@ -8826,6 +8847,8 @@ snapshots:
       csso: 5.0.5
       picocolors: 1.1.1
       sax: 1.6.0
+
+  tabbable@6.5.1: {}
 
   tailwindcss@4.3.3: {}
 
