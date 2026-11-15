@@ -237,6 +237,36 @@ describe("publication consent and GitHub identity", () => {
 
 		expect(result.status).toBe(302);
 		expect(complete).toHaveBeenCalledOnce();
+		// The grant is given the one resource, the same as when the library gives the string.
+		expect(complete.mock.calls[0][0].request.resource).toBe(
+			publicationResource,
+		);
+	});
+	it("gives the grant the same resource whether the library gave a string or a one-element array", async () => {
+		const given: (string | undefined)[] = [];
+
+		for (const resource of [publicationResource, [publicationResource]]) {
+			const { env, complete } = fixture({ resource });
+			const { response, nonce } = await start(env);
+
+			vi.stubGlobal(
+				"fetch",
+				vi
+					.fn()
+					.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+					.mockResolvedValueOnce(Response.json({ id: 10987837 })),
+			);
+			await publicationLogin(
+				new Request(
+					origin + "/api/publication/callback?code=x&state=" + nonce,
+					{ headers: { cookie: cookie(response) } },
+				),
+				env,
+			);
+			given.push(complete.mock.calls[0][0].request.resource);
+		}
+
+		expect(given).toEqual([publicationResource, publicationResource]);
 	});
 	it("carries a request that came with no state through consent and the callback", async () => {
 		// The library gives an empty string when the client sent no state.
