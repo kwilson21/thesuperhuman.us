@@ -7,9 +7,9 @@ Repository: the personal website repository
 Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`.
 Tips: A is `dba9e556`. B's code is at `b17b077a`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: not opened when this was written.
-Decisions: Kazon Wilson. Implementation and independent review were done with Claude Code.
+Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
-Reviews: an independent review of the branches was not run when this was written: UNVERIFIED.
+Reviews: one independent review of A `dba9e556` and B `eaf18814` was run on 2026-11-15; its findings are under "Review findings". The heads that fix them were not reviewed again: UNVERIFIED.
 Rollback revision: for A, `14cce493`; for B, A's tip `dba9e556`. No deployed revision was observed.
 
 ## Scope
@@ -36,12 +36,13 @@ The sentence of every answer is unchanged; only the status and what the server d
 | Stored details that are JSON but not an object (`[]`) | the email was sent, and no claim was recorded | 500, nothing sent |
 | A request with no id (no param, an empty param) | 503 | 404, as an unknown id |
 | No mail key, sender or owner address | 503 | 503 (unchanged) |
+| The owner's page after a 500 from this route (`src/scripts/project-invitation.ts`) | the same button stayed on the page and was enabled again; a click answered 409 for 60 seconds, after which the "I checked Resend; retry" button, still on the page, could claim again and send a second copy while the owner had been told the copy was not sent | the page reloads, as after a success, so the owner sees the recorded status and only the buttons that status allows; the 500 is unchanged and no wording changed |
 
 Changed corpus cases, from `golden:neutral --all origin/main` against A: `owner-request-brief-copy` has 15 changed cases (the two no-id cases; the provider refusing with 422 and 429; the lookup, the claim and the status writes failing, six cases; stored details not JSON and an array; and three sequences whose first step changed from 503 to 500), 2 removed and 2 added (the two uncertain-provider cases, renamed because they said the route answers ok). Every other fixture of the 77 is identical.
 
 A fix tried and taken back: a guard that refused the claim when the address had changed since the lookup. Nothing changes a request's address except retention, which blanks it, and the claim already refused a blank address, so no state exists that the guard would catch; the two commits that added it and the two that took it back are in the history.
 
-Not changed, for the owner: after a 500 for an uncertain copy the sentence says "Please try again", but an immediate second click answers 409 ("This brief copy cannot be sent again here.") until the owner's page is reloaded, because the page reloads only after an answer that is ok, and the confirm button for an uncertain copy shows only on a loaded page after a minute (`src/pages/owner/requests/[id].astro`, `src/scripts/project-invitation.ts`, read, not run in a browser). The wording or the page needs a decision: UNVERIFIED in a browser.
+The reload after a 500 is limited to the brief copy buttons. The invitation buttons that share the script were checked and need no change: that route answers 503 when the invitation could not be queued (nothing was sent), 409 for a request it will not queue, and the delivery runs in the background, so no answer of it follows a mail the provider may hold. The plain "Retry brief copy" button shares the brief copy path and reloads too. A browser whose request never completes (the fetch itself fails) still shows the page's sentence without a reload; the server may have claimed the copy in that case, and the page is not changed for it: UNVERIFIED in a browser, covered by script tests with a stubbed fetch (`tests/scripts/project-invitation.test.ts`: a reload after 500 and after 200, none after 409, 503 and for the invitation's 500).
 
 ## Conversion on branch B
 
@@ -77,7 +78,7 @@ There is no statement of class (d) left.
 
 ### Public inquiry
 
-`golden:neutral --all dba9e556 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were not edited for the conversion: the injection patterns of both corpora still match the new statements.
+`golden:neutral --all dba9e556 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
 
 ### Differences outside the corpus
 
@@ -85,7 +86,19 @@ There is no statement of class (d) left.
 - A claim whose write committed but reported an error stays recorded as uncertain; before, the failure record matched that attempt's instant and wrote failed.
 - An attempt time that is not text holds an uncertain copy (the old comparison would have let a number through); only this site writes that key, as text.
 - A failed read for the public form's copy answers `failed` and writes nothing (before, no read happened).
+- A claim that was lost three times in a row to unrelated edits of the details now answers 409 to the owner ("cannot be sent again here"), or nothing sent (null) to the public form; the old single statement judged the current row at the same moment and would have claimed.
+- The public route's end-to-end "copy cannot be built" case was dropped; the flow tests (`tests/flows/brief-copy-stories.test.ts`, `tests/flows/software-inquiry-stories.test.ts`) cover it.
 - A brief whose copy cannot be built is a named failure after a failure is recorded over the attempt, as before; a test pins it on both branches.
+
+## Review findings
+
+An independent review of A `dba9e556` and B `eaf18814` on 2026-11-15 found:
+
+- After a 500 for an uncertain copy the page could send a second copy of an already delivered email. Fixed on A (see the last row of the fix table).
+- A request that is not a software request, with stored details that are JSON but not an object, answered 404 on A and 500 on B, because the store's object check ran before the rule's kind check. Fixed on B: the store checks the details of a software request only, and the test pins 404 on both.
+- The record said in one place that review was done and in two that it was not; it now says one review was run and the later heads are not reviewed.
+- The record said the corpus test files were not edited; two comment lines were changed (stated above).
+- The record said nothing else differs; a claim lost three times to unrelated edits and the dropped public end-to-end case were missing (stated above).
 
 ## Evidence
 
@@ -101,4 +114,4 @@ Branch B at `b17b077a`:
 - `golden:neutral --all dba9e556 HEAD`: `compared 77 fixtures and 9073 cases; 2 of 77 fixtures differ`, `golden:neutral: NEUTRAL`.
 - `verify:quint:all`: exit 0, 104 `ok` lines (the nine mutants of the new model break their properties). `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
 
-UNVERIFIED: the owner page in a browser (see the open item above); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none); an independent review of the heads.
+UNVERIFIED: the owner page in a browser (the reload after a 500 was driven only with a stubbed fetch); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none).
