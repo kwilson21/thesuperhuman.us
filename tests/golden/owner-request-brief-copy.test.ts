@@ -18,7 +18,7 @@ import { BASE, owner, resendOk, running } from "./areas/software-projects";
 // The golden corpus for POST /api/owner/requests/[id]/brief-copy: the owner sends (or re-sends) a software client a copy
 // of the brief they submitted, by email.
 //
-// Every response branch of the handler and of deliverSoftwareBriefCopy (src/lib/software-brief-copy.ts), and the cases:
+// Every response branch of the handler and of the brief copy flow (src/server/flows/brief-copy.ts), and the cases:
 //
 //   handler
 //   403 {ok:false}              a visitor, a signed-in client
@@ -35,7 +35,7 @@ import { BASE, owner, resendOk, running } from "./areas/software-projects";
 //   500 "could not be sent"     the provider refused (failed), the network or 5xx (uncertain), the claim throws, a status
 //                               write throws, the lookup throws, stored details that are not JSON or not an object
 //   200 {ok:true}               sent
-//   deliverSoftwareBriefCopy    claim states: absent, failed, uncertain at 60s, uncertain at 61s with confirmation;
+//   the brief copy flow         claim states: absent, failed, uncertain at 60s, uncertain at 61s with confirmation;
 //                               status write: normal, throws after the provider started (uncertain, no second write),
 //                               throws with no provider call (second write, failed), both writes throw (console.error),
 //                               another writer changed the attempt time (write finds no row, status still returned)
