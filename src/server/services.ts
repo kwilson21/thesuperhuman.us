@@ -686,27 +686,37 @@ export class MediaObjects extends Context.Service<
 export const liveMediaObjects = (bucketOf: () => R2Bucket | undefined) =>
 	Context.make(MediaObjects, {
 		head: (key) =>
-			Effect.suspend(() => {
-				const bucket = bucketOf();
+			Effect.suspend(
+				(): Effect.Effect<
+					R2Object | null,
+					MediaBucketNotBound | MediaObjectFailed
+				> => {
+					const bucket = bucketOf();
 
-				return bucket
-					? Effect.tryPromise({
-							try: () => bucket.head(key),
-							catch: (failure) => new MediaObjectFailed({ failure }),
-						})
-					: Effect.fail(new MediaBucketNotBound());
-			}),
+					return bucket
+						? Effect.tryPromise({
+								try: () => bucket.head(key),
+								catch: (failure) => new MediaObjectFailed({ failure }),
+							})
+						: Effect.fail(new MediaBucketNotBound());
+				},
+			),
 		get: (key, range) =>
-			Effect.suspend(() => {
-				const bucket = bucketOf();
+			Effect.suspend(
+				(): Effect.Effect<
+					R2ObjectBody | null,
+					MediaBucketNotBound | MediaObjectFailed
+				> => {
+					const bucket = bucketOf();
 
-				return bucket
-					? Effect.tryPromise({
-							try: () => bucket.get(key, range ? { range } : undefined),
-							catch: (failure) => new MediaObjectFailed({ failure }),
-						})
-					: Effect.fail(new MediaBucketNotBound());
-			}),
+					return bucket
+						? Effect.tryPromise({
+								try: () => bucket.get(key, range ? { range } : undefined),
+								catch: (failure) => new MediaObjectFailed({ failure }),
+							})
+						: Effect.fail(new MediaBucketNotBound());
+				},
+			),
 	});
 
 /** The static assets source is not available: production has no ASSETS binding. The route answers 503. */
