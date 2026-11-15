@@ -5,6 +5,7 @@
 // only with `advance(ms)`, and the move is recorded.
 import { vi } from "vitest";
 import type { EffectLog } from "./log";
+import type { Slot } from "./sequencer";
 import { isText } from "~/lib/type-guards";
 import { errorText, plain, type Passed, type Recorded } from "./plain";
 
@@ -95,13 +96,35 @@ function consoleArg(arg: Passed): Recorded {
 	}
 }
 
-// The real timer, kept before any case fakes the global one, for the short real waits of `untilSettled`.
+// The real timers, kept before any case replaces the global ones: a queued timer's handle is a real, already cleared Timeout.
 const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+const realSetImmediate = globalThis.setImmediate;
+
+const realClearImmediate = globalThis.clearImmediate;
+
+// Whether setImmediate was given a function. Anything else is passed to Node unchanged, so Node throws as it does.
+const isCallback = <Value>(
+	value: Value,
+): value is Extract<Value, (...args: never[]) => void> =>
+	typeof value === "function";
 
 export class Determinism {
 	/** Timers are virtual: setTimeout and clearTimeout run on the frozen clock and fire only when the runner advances it. */
 	virtualTimers = false;
 
+	private queued: {
+		handle: NodeJS.Timeout;
+		due: number;
+		order: number;
+		callback: () => void;
+	}[] = [];
+
+	/** Timers the runner has fired in the current step (both passes), so a timer loop is an error (settle.ts, TIMER_LIMIT). */
+	timersFired = 0;
+
+	private logical = 0;
+	private created = 0;
 	private ids = 0;
 	private uploads = 0;
 	private restores: (() => void)[] = [];
@@ -167,6 +190,7 @@ export class Determinism {
 		const warnings = spyOnConsole("warn");
 
 		this.restores = [
+			...this.trackAsyncWork(),
 			() => errors.mockRestore(),
 			() => warnings.mockRestore(),
 			() => generate.mockRestore(),
@@ -175,6 +199,174 @@ export class Determinism {
 			() => math.mockRestore(),
 			() => vi.useRealTimers(),
 		];
+	}
+
+	/**
+	 * Makes the asynchronous work that leaves the microtask queue visible to the runner: WebCrypto operations that run on a
+	 * thread (digest, sign, verify, encrypt, decrypt, deriveBits) and setImmediate. Each takes a place in the delivery order
+	 * when it starts (sequencer.ts) and is delivered at a driver turn, oldest first. On real timers a queued setTimeout is
+	 * fired by the driver (fireNextTimer), never by real time. Each macrotask a result comes back on is a boundary (EffectLog.boundary).
+	 * Returns what puts the originals back.
+	 */
+	private trackAsyncWork(): (() => void)[] {
+		const restores: (() => void)[] = [];
+
+		const replace = <Owner extends object, Name extends keyof Owner & string>(
+			target: Owner,
+			name: Name,
+			value: Owner[Name],
+		) => {
+			const original = Reflect.getOwnPropertyDescriptor(target, name);
+
+			Object.defineProperty(target, name, {
+				value,
+				configurable: true,
+				writable: true,
+			});
+
+			restores.push(() => {
+				if (original) Object.defineProperty(target, name, original);
+			});
+		};
+
+		// A threaded operation takes its place in the delivery order when it starts, and the route gets its result only
+		// when the driver delivers that place (sequencer.ts), so the order the machine finished things in never reaches
+		// the route. Outside a driven request nothing is held.
+		const tracked =
+			<Args extends unknown[], Result>(
+				work: (...args: Args) => Promise<Result>,
+			) =>
+			(...args: Args): Promise<Result> => {
+				const promise = work(...args);
+
+				if (!this.log.gating) {
+					promise.then(
+						() => this.log.boundary(),
+						() => this.log.boundary(),
+					);
+
+					return promise;
+				}
+
+				const slot = this.log.threads.start("threads");
+
+				return new Promise<Result>((resolve, reject) => {
+					promise.then(
+						(value) =>
+							this.log.threads.finish(slot, () => {
+								this.log.boundary();
+								resolve(value);
+							}),
+						(error: Error) =>
+							this.log.threads.finish(slot, () => {
+								this.log.boundary();
+								reject(error);
+							}),
+					);
+				});
+			};
+
+		const subtle = crypto.subtle;
+
+		replace(subtle, "digest", tracked(subtle.digest.bind(subtle)));
+		replace(subtle, "sign", tracked(subtle.sign.bind(subtle)));
+		replace(subtle, "verify", tracked(subtle.verify.bind(subtle)));
+		replace(subtle, "encrypt", tracked(subtle.encrypt.bind(subtle)));
+		replace(subtle, "decrypt", tracked(subtle.decrypt.bind(subtle)));
+		replace(subtle, "deriveBits", tracked(subtle.deriveBits.bind(subtle)));
+
+		// On real timers a route's setTimeout is queued, not scheduled: the runner fires it when nothing else can make
+		// progress (fireNextTimer), in the order of its due time. How long the machine takes never decides when it fires.
+		if (!this.virtualTimers) {
+			this.queued.length = 0;
+			this.logical = 0;
+
+			const queue = (
+				callback: (...args: unknown[]) => void,
+				ms?: number,
+				...args: unknown[]
+			) => {
+				const handle = realSetTimeout(() => {}, 0);
+
+				realClearTimeout(handle);
+
+				this.queued.push({
+					handle,
+					due: this.logical + Math.max(0, Number(ms) || 0),
+					order: this.created,
+					callback: () => callback(...args),
+				});
+
+				this.created += 1;
+				this.log.onChange?.();
+
+				return handle;
+			};
+
+			// SAFETY: queue answers the call signature of setTimeout; its `__promisify__` helper is not used by any route.
+			replace(globalThis, "setTimeout", queue as typeof setTimeout);
+
+			replace(
+				globalThis,
+				"clearTimeout",
+				(handle: number | string | NodeJS.Timeout | null | undefined) => {
+					const index = this.queued.findIndex((timer) =>
+						Object.is(timer.handle, handle),
+					);
+
+					if (index >= 0) this.queued.splice(index, 1);
+				},
+			);
+		}
+
+		// Effect's scheduler yields with setImmediate (Scheduler.js reads the global when it schedules). A yield is work the
+		// route waits on, so it takes a place in the delivery order like a threaded operation (sequencer.ts). A
+		// clearImmediate delivers an empty place. A non-function callback is passed on, so Node throws as it does.
+		const immediates = new Map<object, Slot>();
+
+		replace(
+			globalThis,
+			"setImmediate",
+			// SAFETY: setImmediate is overloaded by its arguments; the fake forwards them unchanged and returns the real handle.
+			((callback: (...args: unknown[]) => void, ...args: unknown[]) => {
+				if (!isCallback(callback) || !this.log.gating)
+					return realSetImmediate(callback, ...args);
+
+				const slot = this.log.threads.start("immediate");
+
+				const handle: object = realSetImmediate(() => {
+					immediates.delete(handle);
+					this.log.threads.finish(slot, () => {
+						this.log.boundary();
+						callback(...args);
+					});
+				});
+
+				immediates.set(handle, slot);
+
+				return handle;
+			}) as typeof setImmediate,
+		);
+
+		replace(
+			globalThis,
+			"clearImmediate",
+			// SAFETY: a handle is only ever one this fake returned (a NodeJS.Immediate), so the cast names the same object.
+			((handle: NodeJS.Immediate | undefined) => {
+				if (handle === undefined) return;
+
+				realClearImmediate(handle);
+
+				const slot = immediates.get(handle);
+
+				if (slot) {
+					immediates.delete(handle);
+					this.log.threads.finish(slot, () => {});
+				}
+			}) as typeof clearImmediate,
+		);
+
+		return restores;
 	}
 
 	/** Where the id sequence is, so setup that draws ids of its own (sign-in) can put it back. */
@@ -188,43 +380,51 @@ export class Determinism {
 	}
 
 	/**
-	 * Waits for `work`. On virtual timers, whenever it has made no progress for a few real milliseconds the clock
-	 * moves to the next timer (recorded as an advance), so a route's timeout fires without the test waiting for it.
+	 * Fires the next timer a route set, so a timeout comes without the test waiting for it. On virtual timers the clock
+	 * moves to it, recorded as an advance; otherwise it is the next queued setTimeout, in due order, and the clock does not
+	 * move. False when none is pending.
 	 */
-	async untilSettled<T>(work: Promise<T>): Promise<T> {
-		if (!this.virtualTimers) return work;
+	async fireNextTimer(): Promise<boolean> {
+		if (!this.virtualTimers) {
+			const [first] = [...this.queued].sort(
+				(a, b) => a.due - b.due || a.order - b.order,
+			);
 
-		let settled = false;
+			if (!first) return false;
 
-		const watched = work.finally(() => {
-			settled = true;
-		});
+			this.queued.splice(this.queued.indexOf(first), 1);
+			this.logical = first.due;
+			this.timersFired += 1;
+			this.log.boundary();
+			first.callback();
 
-		watched.catch(() => {});
-
-		for (let idle = 0; !settled; ) {
-			await new Promise<void>((resolve) => realSetTimeout(resolve, 5));
-
-			if (settled) break;
-
-			if (vi.getTimerCount() === 0) {
-				idle += 1;
-
-				if (idle > 200)
-					throw new Error(
-						"golden harness: the handler never settled and no timer is pending.",
-					);
-
-				continue;
-			}
-
-			idle = 0;
-			const before = Date.now();
-			await vi.advanceTimersToNextTimerAsync();
-			this.log.push({ kind: "advance", ms: Date.now() - before });
+			return true;
 		}
 
-		return work;
+		if (vi.getTimerCount() === 0) return false;
+
+		const before = Date.now();
+		this.timersFired += 1;
+		await vi.advanceTimersToNextTimerAsync();
+		this.log.push({ kind: "advance", ms: Date.now() - before });
+
+		return true;
+	}
+
+	/**
+	 * Drops every real-timer route timer still queued at the end of a step, so none fires in a later step (settle.ts).
+	 * Returns how many were dropped. Virtual timers are not dropped: on a virtual clock the test moves time on explicitly
+	 * (advance), and a timer set in one step is due in the step that moves the clock past it (gaps.test.ts). Whether an
+	 * automatic virtual fire may reach a timer of an earlier step is not decided here (see tests/golden/README.md).
+	 */
+	abandonTimers(): number {
+		if (this.virtualTimers) return 0;
+
+		const count = this.queued.length;
+
+		this.queued.length = 0;
+
+		return count;
 	}
 
 	advance(ms: number) {
