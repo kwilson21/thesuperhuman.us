@@ -7,7 +7,7 @@ Repository: the personal website repository
 Routes: `GET` and `HEAD /music/file/[id]/[version]` (the public player and the lyric video stream a recording's audio or video from the audio bucket), `GET /audio/file/[slug]` (a portfolio track's mp3, with its own byte range handling), `GET` and `HEAD /og/[name].mp4` (the looping silent video behind a link preview, sliced into byte ranges from the static assets).
 Branches: the corpus branch is `claude/effect-14-media-corpus`; A is `claude/effect-14-media-fixes`; B is `claude/effect-14-media`. Each is cut from the one before. Nothing is pushed.
 AI assistance: the code on all three branches was written with AI assistance (Claude Code), tests first. The owner reviews the pull request.
-Rollback revision: the corpus branch's parent on `origin/main` was `14cce493`.
+Rollback revision: the corpus branch's parent on `origin/main` was `14cce493`; after the review the branches took `origin/main` at `2f7add57`.
 
 ## Design note
 
@@ -103,28 +103,28 @@ Oxlint reports no findings on any of the three branches (`oxlint --deny-warnings
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in one worktree. Logs are not retained.
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in one worktree. Logs are not retained. After the review each branch took `origin/main` (at `2f7add57`, which moves shared helpers into modules of their own) with a merge commit, corpus first, then A, then B; no fixture needed re-recording for the merge. The figures are from the three tips below, each measured in the order of the shared brief.
 
-Corpus branch tip `8da76aa5` (the full test run was made at `c34650ab`, one commit earlier; the tip changes only the import of a test type in two corpus test files):
+Corpus branch tip `848d99b6`:
 
-- `format:check`: "Checked 860 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
+- `format:check`: "Checked 866 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
 - Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 335 files passed; 13708 tests passed, 1 skipped (13709), tree clean afterwards.
-- `golden:neutral --all origin/main HEAD`: "compared 80 fixtures and 9073 cases; 3 of 80 fixtures differ" (the three new corpora, all added cases) and "golden:neutral: NEUTRAL".
-- `verify:quint:all`: exit 0. `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (886 files)", 0 errors, 0 warnings, 16 hints.
+- `golden:neutral --all origin/main HEAD`: "compared 80 fixtures and 9073 cases; 3 of 80 fixtures differ" (audio file 85, music file 88 and link preview video 83 added cases, none compared) and "golden:neutral: NEUTRAL".
+- `verify:quint:all`: exit 0. `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (892 files)", 0 errors, 16 hints.
 
-Branch A tip `b67b8cdf`:
+Branch A tip `21bbc5a7`:
 
-- `format:check`: "Checked 862 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with the digest and count checks: 336 files passed; 13727 tests passed, 1 skipped (13728), tree clean afterwards.
-- `golden:neutral --all claude/effect-14-media-corpus HEAD`: the three fixtures differ in 8 (audio file), 8 (music file) and 10 (link preview video) cases, "NOT NEUTRAL", as expected: they are the 26 cases above.
-- `verify:quint:all`: exit 0. `publicist:gate`: passed, 84 entries. `lint`: no findings. `check`: "Result (888 files)", 0 errors, 0 warnings, 16 hints.
+- `format:check`: "Checked 868 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with the digest and count checks: 336 files passed; 13733 tests passed, 1 skipped (13734), tree clean afterwards.
+- `golden:neutral --all claude/effect-14-media-corpus HEAD`: "compared 80 fixtures and 9329 cases; 3 of 80 fixtures differ" and "NOT NEUTRAL", as intended: audio file 10 changed and 2 added, music file 8 changed, link preview video 10 changed. These are the 28 changed cases of the Scope above (the allow list changed two of the audio cases) and two added.
+- `verify:quint:all`: exit 0. `publicist:gate`: passed, 84 entries. `lint`: no findings. `check`: "Result (894 files)", 0 errors, 16 hints.
 
-Branch B tip `1c10d72e` (the figures below were measured on it; this record is the commit after it):
+Branch B tip: the record's own commit follows `5c00a002`, the head the figures below were measured on (a merge of A):
 
-- `format:check`: "Checked 874 files ... No fixes applied" (with this record). `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with the digest and count checks: 338 files passed; 13782 tests passed, 1 skipped (13783), tree clean afterwards.
-- `golden:neutral --all refs/heads/claude/effect-14-media-fixes HEAD`: "compared 80 fixtures and 9329 cases; 0 of 80 fixtures differ" and "golden:neutral: identical, 9329 cases". The fixtures were not touched by the conversion, so the same test files pass against A's recordings.
-- `verify:quint:all`: exit 0, 94 checks ok, none failed (no model changed). `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (900 files)", 0 errors, 0 warnings, 16 hints.
+- `format:check`: "Checked 880 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with the digest and count checks: 338 files passed; 13796 tests passed, 1 skipped (13797), tree clean afterwards.
+- `golden:neutral --all refs/heads/claude/effect-14-media-fixes HEAD`: "compared 80 fixtures and 9331 cases; 0 of 80 fixtures differ" and "golden:neutral: identical, 9331 cases". The conversion did not touch the fixtures, so the same test files pass against A's recordings.
+- `verify:quint:all`: exit 0 (no model changed). `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (906 files)", 0 errors, 16 hints.
 - SQL statements in the area: none.
 
 The unmeasured parts: none of the three routes was run against a real R2 bucket, the platform's static assets or the deployed worker. The corpus uses an in-memory bucket and a scripted fetch, so a difference in how the platform's `R2Object.body` streams, or in how `ASSETS.fetch` answers a URL, is UNVERIFIED. The media routes' streams are passed to `Response` as before.
