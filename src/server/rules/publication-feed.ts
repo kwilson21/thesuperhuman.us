@@ -5,11 +5,13 @@
 //               the entries that are not withdrawn.
 //   chooseFeed  from the small columns and those days, picks the CURRENT entry (the newest published entry of live work, if
 //               its newest live event is not a withdrawal) and the HISTORY (every entry that was not withdrawn, once, at
-//               its newest event, newest day first), the first 100 and a few spare. Backfilled entries are history only.
+//               its newest event, newest day first), in full: only the first few are read at once. Backfilled entries are
+//               history only.
+//   moreToRead  from the texts read so far, the next candidates to read when withdrawals that landed between the reads
+//               left fewer than 100 entries with text, so the history is the 100 a request just after them would show.
 //   showFeed    from the text of the picked events, reads each as a publication and builds the feed. A picked event whose
 //               text is gone by now (a withdrawal landed between the reads and erased it) is treated as withdrawn and
-//               left out, and the next spare entry takes its place, so the history has the 100 a request just after the
-//               withdrawal would show. A story that is shown and does not read as a publication makes the whole feed
+//               left out, and `moreToRead` has had the next candidate read in its place. A story that is shown and does not read as a publication makes the whole feed
 //               refuse, because the journal holds something this site did not write.
 // Neither reads a store or writes anything, so no write-time guard applies. Nothing is decided in SQL: the store returns
 // columns and text, and the choices above are made here.
@@ -67,10 +69,13 @@ export class StoredPublicationInvalid extends Data.TaggedError(
 const MOST_IN_HISTORY = 100;
 
 /**
- * Entries read beyond the 100 shown. A withdrawal that lands between the reads erases a picked entry, and the entry just
- * after the hundredth takes its place, as it would for a request made just after the withdrawal. The read stays bounded.
+ * Entries read beyond the 100 shown, in the first read of texts, so the usual race (a withdrawal or two landing between
+ * the reads) needs no second read. When more are erased, `moreToRead` asks for the next candidates in further rounds.
  */
 const SPARE_IN_HISTORY = 10;
+
+/** The most rounds of further reading after the first read; each asks for no more than the entries still missing. */
+export const MOST_REFILL_ROUNDS = 4;
 
 /** The newest event of each entry. */
 function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
@@ -148,7 +153,6 @@ function choose(index: FeedIndex, days: FeedDays): ChooseGiven {
 
 			return b.published.revision - a.published.revision;
 		})
-		.slice(0, MOST_IN_HISTORY + SPARE_IN_HISTORY)
 		.map(
 			({ event, published, day }): FeedPick => ({
 				revision: event.revision,
@@ -188,11 +192,13 @@ export const chooseFeed = alwaysWrites({
 	writesText: "the events whose text the feed shows",
 });
 
-/** The revisions whose text is to be read: the current entry's and the history's, each once. */
+/** The revisions whose text is to be read first: the current entry's and the first of the history (the 100 shown and a few spare), each once. */
 export const revisionsToRead = (choice: FeedChoice): number[] => [
 	...new Set([
 		...(choice.current ? [choice.current.revision] : []),
-		...choice.history.map((pick) => pick.revision),
+		...choice.history
+			.slice(0, MOST_IN_HISTORY + SPARE_IN_HISTORY)
+			.map((pick) => pick.revision),
 	]),
 ];
 
@@ -200,6 +206,46 @@ export const revisionsToRead = (choice: FeedChoice): number[] => [
 export type FeedTexts = ReadonlyMap<number, string | null>;
 
 const text = Schema.decodeUnknownResult(Schema.fromJsonString(Schema.Unknown));
+
+/** Whether a text read by revision is there: erased by a withdrawal, or never found, it is not. */
+const hasText = (texts: FeedTexts, revision: number) => {
+	const held = texts.get(revision);
+
+	return held !== null && held !== undefined;
+};
+
+/**
+ * The next candidates to read, in the history's order, when fewer than 100 of those asked for so far still have their
+ * text (a withdrawal landed between the reads and erased some): exactly as many as are missing, or what is left. Nothing
+ * when 100 have text or no candidate is left, so the answer is what a request just after the withdrawals would show.
+ */
+export const moreToRead = alwaysWrites({
+	name: "Read more of the history when withdrawals left it short",
+	given: (
+		request: {
+			readonly choice: FeedChoice;
+			readonly asked: ReadonlySet<number>;
+			readonly texts: FeedTexts;
+		},
+		_facts: Record<string, never>,
+	) => {
+		const read = request.choice.history.filter((pick) =>
+			request.asked.has(pick.revision),
+		);
+
+		const missing =
+			MOST_IN_HISTORY -
+			read.filter((pick) => hasText(request.texts, pick.revision)).length;
+
+		return request.choice.history
+			.filter((pick) => !request.asked.has(pick.revision))
+			.slice(0, Math.max(missing, 0))
+			.map((pick) => pick.revision);
+	},
+	refusals: [],
+	writes: (revisions) => revisions,
+	writesText: "the revisions of the next candidates to read",
+});
 
 type Shown =
 	| { readonly ok: true; readonly entry: PublicEntry | null }

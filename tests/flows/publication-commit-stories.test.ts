@@ -473,6 +473,51 @@ describe("the feed's two reads", () => {
 		expect(raced.current).toEqual(after.current);
 	});
 
+	/** Delivers `total` entries on one day, then withdraws the `count` newest between the index read and the text read. */
+	const racedWithdrawals = async (total: number, count: number) => {
+		const world = publicationWorld();
+
+		for (let i = 0; i < total; i += 1)
+			await deliver(world, {
+				...base,
+				eventId: `e${i}`,
+				entryId: `n${i}`,
+				expectedRevision: i,
+			});
+		// All on one day, so the later publish is shown first: n(total-1) is the newest.
+		world.before(/SELECT revision,payload/, async () => {
+			for (let k = 0; k < count; k += 1)
+				await deliver(
+					world,
+					withdrawal({
+						eventId: `remove${k}`,
+						entryId: `n${total - 1 - k}`,
+						expectedRevision: total + k,
+					}),
+				);
+		});
+		const raced = await feed(world);
+		const after = await feed(world);
+
+		return { raced, after };
+	};
+
+	it("shows the 100 entries a request after the withdrawals would, when 11 of 111 are withdrawn between the reads", async () => {
+		const { raced, after } = await racedWithdrawals(111, 11);
+
+		expect(raced.history).toHaveLength(100);
+		expect(raced.history).toEqual(after.history);
+		expect(raced.current).toEqual(after.current);
+	});
+
+	it("shows the 100 entries a request after the withdrawals would, when 150 of 250 are withdrawn between the reads", async () => {
+		const { raced, after } = await racedWithdrawals(250, 150);
+
+		expect(raced.history).toHaveLength(100);
+		expect(raced.history).toEqual(after.history);
+		expect(raced.current).toEqual(after.current);
+	});
+
 	it("reads a long history in statements of at most 50 revisions", async () => {
 		const world = publicationWorld();
 

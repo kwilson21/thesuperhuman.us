@@ -5,6 +5,7 @@ import { canonicalPublication } from "../../src/lib/publication/canonical";
 import {
 	chooseFeed,
 	daysToRead,
+	moreToRead,
 	revisionsToRead,
 	showFeed,
 	type FeedEvent,
@@ -206,6 +207,102 @@ describe("what the public sees of a journal", () => {
 		expect(Result.isFailure(answer) && answer.failure._tag).toBe(
 			"StoredPublicationInvalid",
 		);
+	});
+
+	describe("reading more when withdrawals erased some of what was read", () => {
+		const journal = (total: number) => {
+			const events = Array.from({ length: total }, (_, i) =>
+				event(i + 1, `e${i}`),
+			);
+
+			return index(events, {});
+		};
+
+		/** Asks round after round, as the flow does, until nothing more is asked for; returns the entries shown. */
+		const refilled = (total: number, erasedCount: number) => {
+			const i = journal(total);
+			const picked = choice(i);
+
+			// The newest entries (the first picks, all on one day) are the erased ones.
+			const erased = new Set(
+				picked.history.slice(0, erasedCount).map((pick) => pick.revision),
+			);
+
+			const textOf = (revision: number): string | null => {
+				const e = i.events.find((x) => x.revision === revision);
+
+				return erased.has(revision)
+					? null
+					: canonicalPublication(envelope(e?.entryId ?? "?", "2026-11-01"));
+			};
+
+			const asked = new Set(revisionsToRead(picked));
+			const texts = new Map<number, string | null>();
+
+			for (const revision of asked) texts.set(revision, textOf(revision));
+
+			for (let round = 0; round < 10; round += 1) {
+				const more = Effect.runSync(
+					moreToRead.decide({ choice: picked, asked, texts }, {}),
+				);
+
+				if (more.length === 0) break;
+
+				for (const revision of more) {
+					asked.add(revision);
+					texts.set(revision, textOf(revision));
+				}
+			}
+
+			const answer = Effect.runSync(
+				Effect.result(
+					showFeed.decide({ projectId: "p", choice: picked }, { texts }),
+				),
+			);
+
+			return { answer, asked, picked, erased };
+		};
+
+		it("asks for nothing more when 100 of what was read still have their text", () => {
+			const i = journal(150);
+			const picked = choice(i);
+			const asked = new Set(revisionsToRead(picked));
+			const texts = textsFor(i, [picked.history[3].revision]);
+
+			expect(
+				Effect.runSync(moreToRead.decide({ choice: picked, asked, texts }, {})),
+			).toEqual([]);
+		});
+
+		it("asks for the next entry when 11 of 111 read were erased, and the feed is full", () => {
+			const { answer, picked, erased } = refilled(111, 11);
+
+			expect(Result.isSuccess(answer) && answer.success.history).toHaveLength(
+				100,
+			);
+			expect(erased.size).toBe(11);
+			expect(picked.history).toHaveLength(111);
+		});
+
+		it("keeps asking in rounds when 150 of 250 were erased, and reads only as many as it must", () => {
+			const { answer, asked } = refilled(250, 150);
+
+			expect(Result.isSuccess(answer) && answer.success.history).toHaveLength(
+				100,
+			);
+			// The 150 erased, the 100 live: never the whole 250.
+			expect(asked.size).toBeLessThanOrEqual(251);
+			expect(asked.size).toBeGreaterThanOrEqual(250);
+		});
+
+		it("shows what is left when fewer than 100 live entries remain, and stops asking", () => {
+			const { answer, asked } = refilled(120, 60);
+
+			expect(Result.isSuccess(answer) && answer.success.history).toHaveLength(
+				60,
+			);
+			expect(asked.size).toBe(120);
+		});
 	});
 
 	it("asks for the day of the entries that are not withdrawn only", () => {
