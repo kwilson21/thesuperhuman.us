@@ -78,8 +78,8 @@ const SPARE_IN_HISTORY = 10;
 /** The most rounds of further reading after the first read. */
 export const MOST_REFILL_ROUNDS = 4;
 
-/** Candidates asked for beyond the number missing in each round, so a few that were withdrawn as well do not cost another round. */
-const REFILL_MARGIN = 10;
+/** Candidates asked for in each further round: the most that can be missing (100) and ten more, so one round looks past a long run of withdrawn candidates. */
+const REFILL_BATCH = MOST_IN_HISTORY + 10;
 
 /** The newest event of each entry. */
 function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
@@ -222,13 +222,18 @@ const hasText = (texts: FeedTexts, revision: number) => {
  * The next candidates to read, in the history's order, when fewer than 100 of the history read so far still have their
  * text (a withdrawal landed between the reads and erased some). The history read so far is the unbroken run of candidates
  * from the first that were asked for; the current entry's text is asked for with the first read, and counts only when
- * its own place in the history is reached. Each round asks for the number missing and ten more, or what is left, so a few
- * candidates withdrawn as well do not need another round. Nothing when 100 have text or no candidate is left.
+ * its own place in the history is reached. Each round asks for the next 110 candidates (or what is left), whatever the
+ * number missing: a round can then need at most as many texts as the largest number missing (100) and the margin (10)
+ * together, so the worst case is the same, and a run of withdrawn candidates is looked past in one round. Nothing when
+ * 100 have text or no candidate is left.
  *
- * What this guarantees: the history is the one a request made just after the withdrawals shows, unless more entries are
- * withdrawn while this one request is read than its rounds cover (the first read of 110 and at most four rounds, each
- * asking for the missing number and ten more, so at most 111 + 4 x 110 = 551 texts); then it shows what the reads found, which can be
- * fewer than 100. It does not guarantee anything about withdrawals that land after the last read.
+ * What this guarantees, exactly: when no entry is withdrawn while the request is reading, the history is the one a request
+ * made just after the earlier withdrawals shows, unless the first 550 candidates (the first read of 110 and four rounds of
+ * 110) hold fewer than 100 with text while later candidates exist: the rounds then end first (at most 111 + 4 x 110 = 551
+ * texts, a cost bound). It does NOT make the feed a view of one moment:
+ * the texts of one round are never read again, so an entry withdrawn while the request is reading can still be shown
+ * (its text was read before) or can leave the history short (a candidate was erased after the round that would have
+ * needed it). Only the owner's own agent withdraws entries, so this is accepted rather than closed with more reads.
  */
 export const moreToRead = alwaysWrites({
 	name: "Read more of the history when withdrawals left it short",
@@ -256,7 +261,7 @@ export const moreToRead = alwaysWrites({
 			? []
 			: history
 					.filter((pick) => !request.asked.has(pick.revision))
-					.slice(0, missing + REFILL_MARGIN)
+					.slice(0, REFILL_BATCH)
 					.map((pick) => pick.revision);
 	},
 	refusals: [],

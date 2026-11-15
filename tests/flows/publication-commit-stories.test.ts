@@ -569,6 +569,17 @@ describe("the feed's two reads", () => {
 		expect(raced.history).toEqual(after.history);
 	});
 
+	it("keeps the history full when 55 entries around the first read's edge are withdrawn between the reads", async () => {
+		// 11 of the first 110 and the 44 candidates after them: the first round has to look past all of those at once.
+		const { raced, after } = await racedWithdrawals(260, [
+			...range(0, 11),
+			...range(110, 154),
+		]);
+
+		expect(raced.history).toHaveLength(100);
+		expect(raced.history).toEqual(after.history);
+	});
+
 	it("reads a long history in statements of at most 50 revisions", async () => {
 		const world = publicationWorld();
 
