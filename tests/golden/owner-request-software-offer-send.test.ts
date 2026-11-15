@@ -78,10 +78,12 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
 //            first read, the project pre-check, the offers, sending, deposit or signing setting read, the batch (an outage,
 //            not a guard), or a lookup after a refused batch. Nothing is emailed
-//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the check after an
-//            accepted email throws (the offer is already saved as sent)
+//   500 {ok:false,message:"The email was sent, but the link could not be checked. Reload before you try again."}  the
+//            check after an accepted email throws (the offer is already saved as sent; only the read failed)
 //   500 {ok:false,message:"The offer was saved, but the email may not have been sent and the link could not be
 //            checked. Reload before you try again."}  the check throws after a client email that was refused or lost
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
 //   the owner's copy, the live-link read. No R2.
 
@@ -832,6 +834,28 @@ const cases: Case[] = [
 						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
 					reason:
 						"a control: the failure before it is a store failure, which answers 500 at once, so the sending lookup after it is never made",
+				},
+			],
+		},
+	),
+	sendCase(
+		"the send batch is refused by a race and the sending lookup after it fails",
+		draftSeed(),
+		{
+			interleave: [
+				{
+					on: onBatch,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},

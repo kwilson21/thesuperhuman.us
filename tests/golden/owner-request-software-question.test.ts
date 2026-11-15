@@ -57,6 +57,8 @@ import type { JsonValue } from "../helpers/json";
 //   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the recording batch
 //                               throws (an outage, not a guard) after the email went out, or a lookup after a refused
 //                               recording batch fails; no lookup follows a recording batch that throws
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reservation batch (request guard, no-project guard, update updated_at), then Resend POST for the client,
 //   Resend POST for the owner's copy, then the recording batch (request guard at the reserved time, no-project guard,
 //   audit "question-sent"). No R2, no background work.
@@ -326,6 +328,50 @@ const cases: Case[] = [
 					trigger: "d1 failure on /^SELECT 1 FROM software_projects/ (match 2)",
 					reason:
 						"a control: the failure before it is a store failure, which answers 500 at once, so the project lookup after it is never made",
+				},
+			],
+		},
+	),
+	askCase(
+		"the reservation batch is refused by a race and the project lookup after it fails",
+		ask(),
+		{
+			interleave: [
+				{
+					on: /UPDATE owner_requests SET updated_at/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	askCase(
+		"the recording batch is refused by a race and the project lookup after it fails",
+		ask(),
+		{
+			interleave: [
+				{
+					on: /INSERT INTO owner_request_audit/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T12:00:30.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},

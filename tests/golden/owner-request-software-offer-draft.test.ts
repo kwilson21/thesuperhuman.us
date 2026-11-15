@@ -69,6 +69,8 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            refused batch
 //   500 {ok:false,message:"The draft was saved, but an attachment could not be cleaned up. Reload before you try again."}
 //            an R2 delete fails and putting its metadata back fails too
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (offers, removed attachment metadata), one batch of guards, insert or update, details, MSA choice, audit and
 //   one DELETE ... RETURNING per removed attachment, R2 deletes, and a statement that puts the metadata back when an R2
 //   delete fails.
@@ -1031,6 +1033,29 @@ const raceCases: Case[] = [
 						"d1 failure on /^SELECT \\* FROM software_offers WHERE request_id/ (match 2)",
 					reason:
 						"a control: the failure before it is a store failure, which answers 500 at once, so the offers read after it is never made",
+				},
+			],
+		},
+	),
+	draftCase(
+		"the draft batch is refused by a race and the project lookup after it fails",
+		d(),
+		withOffers([]),
+		{
+			interleave: [
+				{
+					on: /INSERT INTO software_offers/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},

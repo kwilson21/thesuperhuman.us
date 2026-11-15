@@ -26,16 +26,21 @@ import {
 	offerSendingGuard,
 	offerIsSending,
 	offerSendingMessage,
+	offersCheckFailedAfterEmail,
 	offersCheckFailedAfterFailedEmail,
 	offersFailed,
 	offersFailedAfterDraft,
 	offersFailedAfterEmail,
+	offersStorageNotConfigured,
 	offersUnavailable,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
+import { logUnexpected } from "~/server/failure";
 import { isUniqueViolation, raisedByJsonGuard } from "~/server/guarded-save";
 
 export const prerender = false;
+
+const ROUTE = "/api/owner/requests/[id]/software";
 
 const schema = z.discriminatedUnion("action", [
 	z.object({
@@ -96,10 +101,10 @@ const json = <T>(body: T, status = 200) =>
 	Response.json(body, { status, headers });
 
 /**
- * A failure the route answers with one of its fixed answers wherever it happens: a read or a write that the database or
- * R2 failed for no reason a request explains (500), a dependency this deployment does not have (503), or a store that
- * failed after the client email went out or the draft was saved (500, with a sentence that says so). Never a refused
- * guard: that is another request's change, and the lookups after a refused batch answer it with a 409.
+ * A failure the route answers with one of its fixed answers wherever it happens: a dependency this deployment does not
+ * have (503), or, as StoreFailed, a read or a write that the database or R2 failed for no reason a request explains
+ * (500), or that failed after the client email went out or the draft was saved (500, with a sentence that says so).
+ * Never a refused guard: that is another request's change, and the lookups after a refused batch answer it with a 409.
  */
 class FixedAnswer extends Error {
 	readonly respond: () => Response;
@@ -110,10 +115,27 @@ class FixedAnswer extends Error {
 	}
 }
 
-/** The work's result; when it rejects, a FixedAnswer with `respond` (the store failed). */
+/** A store that failed: `failure` is what the database or R2 gave, logged once and never answered. */
+class StoreFailed<Failure> extends FixedAnswer {
+	readonly failure: Failure;
+
+	constructor(respond: () => Response, failure: Failure) {
+		super(respond);
+		this.failure = failure;
+	}
+}
+
+/** The fixed answer; for a failed store, its failure is logged first, through logUnexpected, once per request. */
+const fixedAnswer = (fixed: FixedAnswer) => {
+	if (fixed instanceof StoreFailed) logUnexpected(ROUTE, fixed.failure);
+
+	return fixed.respond();
+};
+
+/** The work's result; when it rejects, a StoreFailed with `respond` and the rejection. */
 const stored = <T>(work: Promise<T>, respond = offersFailed) =>
-	work.catch(() => {
-		throw new FixedAnswer(respond);
+	work.catch((failure) => {
+		throw new StoreFailed(respond, failure);
 	});
 
 /** Whether a failed batch was refused by one of its guards: something this request read has changed since. */
@@ -124,7 +146,7 @@ export const POST: APIRoute = async (context) => {
 	try {
 		return await answer(context);
 	} catch (error) {
-		if (error instanceof FixedAnswer) return error.respond();
+		if (error instanceof FixedAnswer) return fixedAnswer(error);
 		throw error;
 	}
 };
@@ -272,7 +294,9 @@ const answer = async ({
 	// is a failed store.
 	const save = <T>(statements: D1PreparedStatement[]) =>
 		db.batch<T>(statements).catch((error) => {
-			throw refusedByGuard(error) ? error : new FixedAnswer(offersFailed);
+			throw refusedByGuard(error)
+				? error
+				: new StoreFailed(offersFailed, error);
 		});
 
 	try {
@@ -442,7 +466,7 @@ const answer = async ({
 			} catch (error) {
 				// The email has gone out, so a failed store from here on says so.
 				if (!refusedByGuard(error))
-					throw new FixedAnswer(offersFailedAfterEmail);
+					throw new StoreFailed(offersFailedAfterEmail, error);
 
 				if (
 					await stored(
@@ -650,7 +674,7 @@ const answer = async ({
 					(await reusedMsaGone(error))
 				)
 					throw error;
-				throw new FixedAnswer(offersFailed);
+				throw new StoreFailed(offersFailed, error);
 			});
 
 			let attachmentCleanupPending = false;
@@ -808,7 +832,7 @@ const answer = async ({
 
 					// Without the bucket the attachments cannot be read: a dependency this deployment does not have, answered
 					// before anything is written.
-					if (!env.AUDIO) throw new FixedAnswer(offersUnavailable);
+					if (!env.AUDIO) throw new FixedAnswer(offersStorageNotConfigured);
 					const object = await stored(env.AUDIO.get(attachment.key));
 
 					if (
@@ -819,6 +843,10 @@ const answer = async ({
 					)
 						throw new Error("Attachment unavailable.");
 				}
+
+				// The packet imports the reused MSA's signed copy from R2, so without the bucket it cannot be rendered either.
+				if (offer.reused_msa_id && !env.AUDIO)
+					throw new FixedAnswer(offersStorageNotConfigured);
 
 				const pdf = await import("~/lib/agreement-pdf");
 
@@ -833,7 +861,7 @@ const answer = async ({
 					)
 					.catch((error) => {
 						throw error instanceof pdf.PreflightReadFailed
-							? new FixedAnswer(offersFailed)
+							? new StoreFailed(offersFailed, error.failure)
 							: error;
 					});
 				pin = {
@@ -964,7 +992,7 @@ const answer = async ({
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`)
 				.bind(record.id, tokenHash, offer.id, record.id)
 				.first(),
-			sent.ok ? offersFailedAfterEmail : offersCheckFailedAfterFailedEmail,
+			sent.ok ? offersCheckFailedAfterEmail : offersCheckFailedAfterFailedEmail,
 		);
 
 		// A closed link is refused whatever became of the email; only an accepted email is said to have gone out.
@@ -991,7 +1019,7 @@ const answer = async ({
 			copySent: sent.copySent,
 		});
 	} catch (error) {
-		if (error instanceof FixedAnswer) return error.respond();
+		if (error instanceof FixedAnswer) return fixedAnswer(error);
 
 		// A refused batch (or details that cannot be read): the lookups below choose the 409. One that fails is a failed
 		// store, and answers as one.
