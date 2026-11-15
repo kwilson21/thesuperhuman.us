@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { ZodError } from "astro/zod";
 import * as Predicate from "effect/Predicate";
 import { describe, expect, it, vi } from "vitest";
@@ -55,6 +56,7 @@ import {
 	legacyReadEvent,
 	legacyReadInterest,
 } from "../fixtures/legacy-validators/music-demand";
+import { legacyReadSoftwareCommand } from "../fixtures/legacy-validators/owner-software-command";
 import { legacyValidateSoftwareInquiry } from "../fixtures/legacy-validators/software-inquiry";
 import {
 	legacyOfferTermsSchema,
@@ -65,6 +67,7 @@ import {
 	readEventInput,
 	readInterestInput,
 } from "../../src/server/music-input";
+import { readSoftwareCommand } from "../../src/server/software-offer-input";
 import {
 	differential,
 	emails,
@@ -2468,4 +2471,264 @@ describe("the offer terms against the frozen Zod 3 validator", () => {
 			`parseOfferTerms differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
 	}, 120_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The owner's command on a software request (POST /api/owner/requests/[id]/software): fit, draft, send, revoke, question
+// and decline
+
+/** What a command reader answered: the value with a note of what it passed through untouched, or a refusal. */
+type CommandAnswer =
+	| { ok: true; value: RawValue; same: string }
+	| { ok: false };
+
+/**
+ * An answer in one line, exactly: the flag, whether the terms and the agreement details are the very values the body held
+ * (Zod passed them through untouched), then the value as `inspect` writes it, which shows the key order, a key set to
+ * `undefined`, -0, and values JSON cannot hold (a bigint, a function, a symbol).
+ */
+const commandSaid = (answer: CommandAnswer) =>
+	answer.ok
+		? `ok ${answer.same} ${inspect(answer.value, {
+				depth: Number.POSITIVE_INFINITY,
+				maxArrayLength: Number.POSITIVE_INFINITY,
+				maxStringLength: Number.POSITIVE_INFINITY,
+				breakLength: Number.POSITIVE_INFINITY,
+			})}`
+		: "refused";
+
+/** Whether each passed-through field of the value is the body's own, by identity. */
+const passedThrough = (input: RawValue, value: RawValue) =>
+	["terms", "agreementDetails"]
+		.map((name) =>
+			Predicate.isObject(input) && Predicate.isObject(value)
+				? `${name}:${Object.is(input[name], value[name])}`
+				: `${name}:-`,
+		)
+		.join(",");
+
+/** A command reader's answer, with what it passed through. */
+const commandAnswer = (
+	input: RawValue,
+	read: { ok: true; value: RawValue } | { ok: false },
+): CommandAnswer =>
+	read.ok
+		? { ok: true, value: read.value, same: passedThrough(input, read.value) }
+		: { ok: false };
+
+describe("the owner's software command against the frozen Zod 3 union", () => {
+	const at = "2026-11-15T10:00:00.000Z";
+	const key = "agreements/attachments/123e4567-e89b-42d3-a456-426614174000.pdf";
+	const msa = "123e4567-e89b-42d3-a456-426614174000";
+
+	const bases: Body[] = [
+		{
+			action: "fit",
+			label: "potential-fit",
+			note: "Looks right",
+			expectedRequestUpdatedAt: at,
+		},
+		{ action: "fit", label: "stated-mismatch", note: "" },
+		{
+			action: "draft",
+			terms: { outcome: "A tool", milestones: [] },
+			agreementDetails: { attachments: [] },
+			reusedMsaId: msa,
+			confirmMsaReuse: true,
+			removedAttachmentKeys: [key],
+			expectedUpdatedAt: at,
+		},
+		{ action: "draft", terms: {}, expectedUpdatedAt: null },
+		{ action: "send", version: 2, expectedUpdatedAt: at },
+		{ action: "revoke", expectedLinkCreatedAt: at },
+		{ action: "question", text: "What is the budget?" },
+		{ action: "decline", text: "Not a fit, thank you." },
+	];
+
+	const passThrough: RawValue[] = [
+		...notStrings,
+		"",
+		"text",
+		{ outcome: "x" },
+		[1, 2],
+		{ attachments: "x" },
+		{ attachments: [{ key }] },
+	];
+
+	const uuids: RawValue[] = [
+		msa,
+		"123E4567-E89B-42D3-A456-426614174000",
+		"22222222-2222-2222-2222-222222222222",
+		"00000000-0000-0000-0000-000000000000",
+		"123e4567e89b42d3a456426614174000",
+		"123e4567-e89b-42d3-a456-42661417400",
+		"123e4567-e89b-42d3-a456-4266141740000",
+		` ${msa}`,
+		`${msa}\n`,
+		"ZZZZZZZZ-2222-4222-8222-222222222222",
+		"",
+		null,
+		...notStrings,
+	];
+
+	const numbers: RawValue[] = [
+		0,
+		1,
+		2,
+		3,
+		-1,
+		-0,
+		1.5,
+		0.5,
+		1e21,
+		2 ** 53,
+		2 ** 53 + 2,
+		2 ** 60,
+		Number.MAX_SAFE_INTEGER,
+		Number.MAX_VALUE,
+		Number.MIN_VALUE,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+		"1",
+		"",
+		null,
+		undefined,
+		true,
+		[],
+		[1],
+		{},
+		10n,
+	];
+
+	const times: RawValue[] = [
+		at,
+		"",
+		" ",
+		"x",
+		` ${at} `,
+		...texts(30),
+		...notStrings,
+	];
+
+	const pools = {
+		action: [
+			"fit",
+			"draft",
+			"send",
+			"revoke",
+			"question",
+			"decline",
+			"FIT",
+			" fit",
+			"fit ",
+			"withdraw",
+			"",
+			"__proto__",
+			"toString",
+			"constructor",
+			...notStrings,
+		],
+		label: [
+			"potential-fit",
+			"needs-clarification",
+			"stated-mismatch",
+			"POTENTIAL-FIT",
+			" potential-fit",
+			"fit",
+			"",
+			"toString",
+			...notStrings,
+		],
+		note: [...texts(500), ...notStrings],
+		expectedRequestUpdatedAt: times,
+		terms: passThrough,
+		agreementDetails: [...passThrough, null],
+		reusedMsaId: uuids,
+		confirmMsaReuse: [
+			true,
+			false,
+			"true",
+			"false",
+			1,
+			0,
+			null,
+			undefined,
+			[],
+			{},
+		],
+		removedAttachmentKeys: [
+			[],
+			[key],
+			[key, key],
+			[key.toUpperCase()],
+			["agreements/attachments/abc.pdf"],
+			["agreements/attachments/.pdf"],
+			["agreements/attachments/abc.PDF"],
+			[` ${key}`],
+			[`${key}\n`],
+			["agreements/other/abc.pdf"],
+			[key, 3],
+			[null],
+			[[]],
+			Array.from({ length: 100 }, () => key),
+			Array.from({ length: 101 }, () => key),
+			Array.from({ length: 101 }, () => 3),
+			key,
+			"",
+			...notStrings,
+		],
+		expectedUpdatedAt: [...times, null],
+		version: numbers,
+		expectedLinkCreatedAt: times,
+		text: [...texts(2000), ...notStrings],
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod union did, with the same value", () => {
+		const found = differential(
+			(input: RawValue) =>
+				commandAnswer(input, legacyReadSoftwareCommand(input)),
+			(input: RawValue) => commandAnswer(input, readSoftwareCommand(input)),
+			commandSaid,
+		);
+
+		let accepted = 0;
+
+		for (const body of bodies(bases, pools, 20261116, 8000)) {
+			found.run(body);
+
+			if (legacyReadSoftwareCommand(body).ok) accepted += 1;
+		}
+
+		expect(found.count).toBeGreaterThan(14000);
+		// Both answers are exercised in bulk, not only refusals.
+		expect(accepted).toBeGreaterThan(3000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`software command differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("keeps a field the body set to undefined and leaves out one it lacks, as Zod did", () => {
+		const body = {
+			action: "draft",
+			terms: undefined,
+			expectedUpdatedAt: null,
+			confirmMsaReuse: undefined,
+		};
+
+		const keys = (read: { ok: true; value: RawValue } | { ok: false }) =>
+			read.ok && Predicate.isObject(read.value) ? Object.keys(read.value) : [];
+
+		expect(keys(readSoftwareCommand(body))).toEqual([
+			"action",
+			"terms",
+			"confirmMsaReuse",
+			"removedAttachmentKeys",
+			"expectedUpdatedAt",
+		]);
+		expect(keys(readSoftwareCommand(body))).toEqual(
+			keys(legacyReadSoftwareCommand(body)),
+		);
+	});
 });
