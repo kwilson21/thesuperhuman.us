@@ -24,8 +24,24 @@ const received = (raw: RawValue): string =>
 const notKind = (expected: string, raw: RawValue) =>
 	`Invalid input: expected ${expected}, received ${received(raw)}`;
 
-/** How many characters a text has, a pair of UTF-16 units that make one character counting once. */
-const characters = (text: string) => [...text].length;
+/**
+ * How many characters a text has, a pair of UTF-16 units that make one character counting once. It counts in place: the
+ * public probe is handed texts of several megabytes, and a list of their characters would be as large again.
+ */
+export function characters(text: string): number {
+	let count = text.length;
+
+	for (let at = 0; at < text.length - 1; at++)
+		if (
+			(text.charCodeAt(at) & 0xfc00) === 0xd800 &&
+			(text.charCodeAt(at + 1) & 0xfc00) === 0xdc00
+		) {
+			count--;
+			at++;
+		}
+
+	return count;
+}
 
 /** One check on a text, in the order Zod ran them. */
 export type TextCheck =
