@@ -678,6 +678,11 @@ const cases: Case[] = [
 	single("Turnstile answers an error status", workflow, {
 		fetches: outside(json(500, { success: true })),
 	}),
+	single("Turnstile reports a malformed request", workflow, {
+		fetches: outside(
+			json(200, { success: false, "error-codes": ["bad-request"] }),
+		),
+	}),
 	single("Turnstile answers unreadable text", workflow, {
 		fetches: outside(text(200, "<html>")),
 	}),

@@ -393,6 +393,11 @@ const cases: Case[] = [
 	single("Turnstile answers an error status", good, {
 		fetches: outside(json(500, { success: true })),
 	}),
+	single("Turnstile reports a malformed request", good, {
+		fetches: outside(
+			json(200, { success: false, "error-codes": ["bad-request"] }),
+		),
+	}),
 	single("Turnstile answers unreadable text", good, {
 		fetches: outside(text(200, "<html>")),
 	}),
