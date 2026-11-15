@@ -3,10 +3,10 @@
 Date: November 15, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/friendly-fermat-fk9ado`, from `origin/main` at `82e61315`
-Commits: `41913883` (reproduction, recorded from the old code), `4246c592` (fix and re-recorded fixtures), `a288ba73` (review round 1 and this record), `79461783` (review round 2), `61d3d795` (review round 3), then review round 4
+Commits: `41913883` (reproduction, recorded from the old code), `4246c592` (fix and re-recorded fixtures), `a288ba73` (review round 1 and this record), `79461783` (review round 2), `61d3d795` (review round 3), `c25ba5ce` (review round 4), `4147583e` (review round 5, the merged head)
 Pull request: [#285](https://github.com/kwilson21/thesuperhuman.us/pull/285)
 Target: production `https://thesuperhuman.us` after merge (the owner API and the owner runbook only)
-Decisions: Kazon Wilson (decision 9 of `docs/plans/2026-11-discount-flow.md`, 2026-11-13: reproduce against the real code and fix if real). Implementation and four independent review passes were done with Claude Code. Merge authorization: the owner, in conversation on 2026-11-15 ("Yes").
+Decisions: Kazon Wilson (decision 9 of `docs/plans/2026-11-discount-flow.md`, 2026-11-13: reproduce against the real code and fix if real). Implementation and five independent review passes were done with Claude Code. Merge authorization: the owner, in conversation on 2026-11-15 ("Yes").
 Rollback revision: `82e61315`, the revision of `main` this branch was cut from. After merge, revert the merge commit to undo only this change.
 
 ## Scope
@@ -35,9 +35,11 @@ Independent review, round 3 (Claude Code, head `79461783`): no finding in the gu
 
 Independent review, round 4 (Claude Code, head `61d3d795`): `reconciliationArgs` checked against every argument shape with a stub database (no flags, `--remote` before or after the action, `--remote --config path` before or after, `--config` without `--remote` or without a path, which the script refuses before opening the database); behaviour with `--config` is unchanged. Fixed: the audio reconciliation commands in `docs/stripe-invoicing-readiness.md` had no `--remote` (after the script fix they would have run against the local preview database); the usage error named only the two audio actions; this record's count of review passes.
 
-## Owner decision needed (addressed after merge)
+Independent review, round 5 (Claude Code, head `c25ba5ce`): no code finding. Fixed in `4147583e`: `docs/verification.md` still said the discount model had been run exhaustively only to 3 steps; this record stated the 12-step result twice. The two one-sentence corrections were checked against the run outputs rather than given a sixth pass.
 
-- Addressed by the follow-up #287 (open when this was written), as recommended to the owner on 2026-11-15: both refusals now name the step that records the refund (`owner:stripe:reconcile`), and the owner page is left as it is. The point as raised:
+## Owner decision needed (open after merge)
+
+- The follow-up #287 (open, waiting for the owner's answer) proposes the recommendation given to the owner on 2026-11-15: the refusals name the step that records the refund (`owner:stripe:reconcile --software-deposit-refunded`), and the owner page is left as it is. The point as raised:
 - After a decline and a reopen, the owner page lists no invoices of the withdrawn offer (the panel shows the project's or the sent offer's invoices only), so the paid deposit that now blocks a send is visible only in Stripe. The new sentence says "Refund it in Stripe" and does not mention the reconciliation command that records the refund (the existing "already paid" sentence has the same gap). The runbook now describes the command and where the id is. Options: show earlier offers' first deposits in the panel, name the reconciliation step in the sentence, or leave both since this path is rare.
 
 ## Remaining work
