@@ -265,7 +265,7 @@ describe("the mutants of verification/software-inquiry.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(5);
+		expect(properties.length).toBeGreaterThanOrEqual(6);
 		expect(propertiesWithoutMutant(properties, inquiryMutants)).toEqual([]);
 	});
 

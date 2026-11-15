@@ -92,6 +92,8 @@ export const inquiryMutants = {
 	inquiryNoIndex: { property: "oneBriefPerId" },
 	inquiryNoRetry: { property: "loserNeverFailed" },
 	inquiryKeepAllowance: { property: "allowanceReturned" },
+	inquiryRetryGivesBack: { property: "keptForStored" },
+	inquiryNeverCounts: { property: "keptForStored" },
 	inquiryAnyAddress: { property: "strangerNeverSeesBrief" },
 	inquiryCopyForAll: { property: "oneCopyPerId" },
 };

@@ -360,28 +360,33 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 ## The software-inquiry model
 
-File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, a step of its own, made once however many passes there are: an address that holds the key is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`, three tries in all), finds the other brief, deletes the key it set (the give-back) and answers with it.
+File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, made once however many passes there are, in two steps as the code makes them: the key is read, and a later step writes it; a delivery that read the key as set is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`): it finds the other brief, deletes the key it set (the give-back) and answers with it; when the look-up finds nothing, the try ends on the lost-brief path (no second insert, the key is given back, the visitor is told the brief was not stored).
 
-**State.** The stored briefs (submission id, email, the delivery that stored it), three deliveries (phase, id, email, address, tries, how it ended), the set of addresses whose key is set, and the client copies sent. Two ids, two emails, two addresses, three deliveries. The allowance is the set of keys, not a flag on a delivery: a refusal reads the set, and the property reads it too.
+**State.** The stored briefs (submission id, email, the delivery that stored it), three deliveries (phase, id, email, address, tries, whether it read the key as unset, how it ended), the set of addresses whose key is set, and the client copies sent. Two ids, two emails, two addresses, three deliveries. The allowance is the set of keys, not a flag on a delivery: a refusal reads the set, and the property reads it too.
 
 **Properties** (`allProperties`):
 1. `oneBriefPerId`: no two stored briefs share a submission id.
 2. `oneCopyPerId`: one client copy per id, sent by the delivery that stored the brief.
 3. `loserNeverFailed`: a delivery is never told its brief was lost while a brief for its id is stored.
 4. `allowanceReturned`: an address holds a key only while a delivery from it that counted is still working, or because a delivery from it stored a brief; a delivery that stored nothing leaves no key.
-5. `strangerNeverSeesBrief`: a stored brief is answered only to the email that sent it.
+5. `keptForStored`: a stored brief keeps its address's key, unless another delivery from the same address read the key as unset (see "A race the model shows").
+6. `strangerNeverSeesBrief`: a stored brief is answered only to the email that sent it.
 
 | Mutant | The change | Breaks |
 |---|---|---|
 | `NoIndex` | The submission id is not unique | `oneBriefPerId` |
 | `NoRetry` | A lost race answers a failure at once, without looking up again | `loserNeverFailed` |
 | `KeepAllowance` | A delivery that stored nothing (the loser, or a lost insert) leaves its address's key set | `allowanceReturned` |
+| `RetryGivesBack` | A plain retry (a brief already stored, nothing counted) deletes its address's key | `keptForStored` |
+| `NeverCounts` | The count never sets the key | `keptForStored` |
 | `AnyAddress` | A stored brief is answered to any email | `strangerNeverSeesBrief` |
 | `CopyForAll` | The client copy goes out for every delivery answered with a stored brief | `oneCopyPerId` |
 
-No property is a flag set by the guard it checks: each reads the stored rows and the deliveries' own fields. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored a brief and another, from another address, which had been counted, was answered with it and deleted its key. The model runs the pooled driver in about 8 seconds for the pass run (20,000 samples; each mutant is found in about a second).
+No property is a flag set by the guard it checks: each reads the stored rows and the deliveries' own fields. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored a brief and another, from another address, which had been counted, was answered with it and deleted its key. The run that must pass (20,000 samples) took 3.7 s alone and 11.1 s inside the pooled driver on a loaded machine (2026-11-15); each mutant is found in under 2 s.
 
-**What it does not cover.** The code counts an address with a read and then a write of its key (`checkRateLimit` in `src/lib/rate-limit.ts`, a KV get and a put), so two requests from one address can both pass the read; the model makes the count one step. That window is not in this area's change and is not modelled. The attempt limit and the captcha (they come before the look-up and decide nothing about the brief), the owner notice, the alert on a failed insert, and an insert that fails for a reason other than the index (a defect in this model's terms: the flow answers it with the fixed sentence and gives the count back, which `tests/flows/software-inquiry-stories.test.ts` checks). No Apalache run.
+**A race the model shows.** The code counts an address with a read and then a write of its key (`checkRateLimit` in `src/lib/rate-limit.ts`, a KV get and a put), and the model keeps them as two steps. Two simultaneous submissions from one address can both read the key as unset; if one then loses the insert to the other (the same id), its give-back deletes the key the other set, so the stored brief is never counted against the address. This exists before the conversion and is not changed here; `keptForStored` is stated with that exception and says exactly what holds (stated without it, the model finds the race at once). It is an owner item in the record.
+
+**What it does not cover.** The attempt limit and the captcha (they come before the look-up and decide nothing about the brief), the owner notice, the alert on a failed insert, and an insert that fails for a reason other than the index (a defect in this model's terms: the flow answers it with the fixed sentence and gives the count back, which `tests/flows/software-inquiry-stories.test.ts` checks). No Apalache run.
 
 ## The suggestion-budget model
 

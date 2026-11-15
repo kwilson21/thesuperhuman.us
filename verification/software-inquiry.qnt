@@ -12,6 +12,11 @@
 //                        already sent a brief in the window and the next one is refused; a request that stored nothing
 //                        deletes the key it set
 //   the client's copy:   src/lib/software-brief-copy.ts, sent once for the request this delivery stored
+// A race that exists in the code, on this area's routes and before the conversion, and is not changed here: the key is read and
+// then written (two KV calls), so two submissions from one address can both read it as unset. If one of them then loses the
+// insert to the other (the same id), it deletes the key the other one set, and the stored brief is never counted against
+// the address. `keptForStored` says exactly what holds: a stored brief keeps its address's key unless another delivery from
+// the same address read the key as unset. The model finds it as soon as the property is stated without that exception.
 // What is left out, on purpose: the attempt limit and the captcha (they come before the look-up and decide nothing about
 // the brief), the owner notice (best effort, sent once for a stored request), and the owner's alert on a lost insert (the
 // insert failing for another reason than the index is a defect this model does not have).
@@ -24,16 +29,18 @@ module softwareInquiry {
   //   "keep-allowance" a delivery that stored nothing (the loser of a race, or a lost insert) leaves its address's key in place
   //   "any-address"    a brief stored under the id is answered to any address, not only the one that sent it
   //   "copy-for-all"   the client's copy goes out for every delivery that is answered with a stored brief
+  //   "retry-gives-back" a plain retry (a brief already stored, nothing counted) deletes its address's key
+  //   "never-counts"   the count never sets the key, so a stored brief leaves nothing against its address
   const MUTANT: str
 
   // A stored brief: its submission id, the email that sent it, and the delivery that stored it.
   type Row = { sid: int, email: int, by: int }
   // One delivery: phase "none" (not started), "idle" (about to look up), "found" (the look-up said nothing is stored, about to
-  // count), "counted" (its address's key is set, about to insert), "stored" (inserted, the client's copy is next) or "done";
+  // read the key), "read" (the key was read, about to write it), "counted" (its address's key is set, about to insert), "stored" (inserted, the client's copy is next) or "done";
   // what it was looking for (sid), who sent it (email) and from which address (ip); how many inserts met the index; and how it
-  // ended: "stored" (it stored the brief), "duplicate" (answered with the stored brief), "clash" (another email's brief
+  // read the key as unset (passed: it may set the key) or set; ended: "stored" (it stored the brief), "duplicate" (answered with the stored brief), "clash" (another email's brief
   // holds the id), "limited" (its address already sent a brief in the window: 429), "failed" (told the brief was not stored).
-  type Run = { phase: str, sid: int, email: int, ip: int, tries: int, outcome: str }
+  type Run = { phase: str, sid: int, email: int, ip: int, tries: int, passed: bool, outcome: str }
 
   var rows: Set[Row]
   var runs: int -> Run
@@ -46,9 +53,8 @@ module softwareInquiry {
   val SIDS = 1.to(2)
   val EMAILS = 1.to(2)
   val IPS = 1.to(2)
-  val TRIES = 3
 
-  val idle = { phase: "none", sid: 0, email: 0, ip: 0, tries: 0, outcome: "none" }
+  val idle = { phase: "none", sid: 0, email: 0, ip: 0, tries: 0, passed: false, outcome: "none" }
 
   action init = all {
     rows' = Set(),
@@ -72,46 +78,60 @@ module softwareInquiry {
   }
 
   // The look-up: ONE statement, one step. A brief found is answered at once (nothing stored); a delivery that had been counted
-  // (it came back from a lost insert) deletes its address's key. Nothing found goes on to the count.
+  // (it came back from a lost insert) deletes its address's key. Nothing found goes on to the key, but on the pass after a
+  // lost insert it ends the try: the brief is lost (no second insert), the key is given back and the visitor is told so.
   action lookup = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
     val h = runs.get(r)
     val stored = rows.filter(x => x.sid == h.sid)
     val sent = stored.exists(x => x.email == h.email or MUTANT == "any-address")
     val counted = h.tries > 0
-    val gives = counted and MUTANT != "keep-allowance"
+    val gives = (counted or MUTANT == "retry-gives-back") and MUTANT != "keep-allowance"
+    val lostBrief = stored.size() == 0 and counted
     all {
       rows' = rows,
       runs' = runs.set(r,
-        if (stored.size() == 0) { ...h, phase: "found" }
+        if (lostBrief) { ...h, phase: "done", outcome: "failed" }
+        else if (stored.size() == 0) { ...h, phase: "found" }
         else { ...h, phase: "done", outcome: if (sent) "duplicate" else "clash" }),
-      held' = if (stored.size() > 0 and gives) held.exclude(Set(h.ip)) else held,
+      held' = if ((stored.size() > 0 and gives) or (lostBrief and MUTANT != "keep-allowance")) held.exclude(Set(h.ip)) else held,
       copies' = if (stored.size() > 0 and MUTANT == "copy-for-all") copies.union(Set({ sid: h.sid, by: r })) else copies,
     }
   }
 
-  // The count against the request limit, made once however many passes: a KV call, a step of its own. An address that already
-  // holds a key is refused (429); any other sets its key. (The code reads the key and then writes it, two calls; this model
-  // makes them one step, and docs/verification.md says so.)
-  action count = {
+  // The count against the request limit, made once however many passes, and in two calls as the code makes them (a KV get and
+  // then a put): the key is read in one step, and written in a later one, after another delivery may have written it.
+  action readKey = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "found").oneOf()
     val h = runs.get(r)
-    val refused = held.contains(h.ip)
     all {
       rows' = rows,
-      runs' = runs.set(r, if (refused) { ...h, phase: "done", outcome: "limited" } else { ...h, phase: "counted" }),
-      held' = if (refused) held else held.union(Set(h.ip)),
+      runs' = runs.set(r, { ...h, phase: "read", passed: not(held.contains(h.ip)) }),
+      held' = held,
+      copies' = copies,
+    }
+  }
+
+  // A delivery that read the key as set is refused (429); one that read it unset sets it (a key already set stays set).
+  action writeKey = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "read").oneOf()
+    val h = runs.get(r)
+    all {
+      rows' = rows,
+      runs' = runs.set(r, if (h.passed) { ...h, phase: "counted" } else { ...h, phase: "done", outcome: "limited" }),
+      held' = if (h.passed and MUTANT != "never-counts") held.union(Set(h.ip)) else held,
       copies' = copies,
     }
   }
 
   // The insert, guarded by the unique index on the submission id as the table is now. When the index refuses it, the delivery
-  // looks up again (the key stays set, never a second count), three tries in all; after the last it gives its key back.
+  // looks up again (the key stays set, never a second count); that look-up either finds the other brief or ends the try, so
+  // the insert is made at most once per delivery that meets the index.
   action insert = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "counted").oneOf()
     val h = runs.get(r)
     val taken = MUTANT != "no-index" and rows.exists(x => x.sid == h.sid)
-    val keepsTrying = taken and MUTANT != "no-retry" and h.tries + 1 < TRIES
+    val keepsTrying = taken and MUTANT != "no-retry"
     val lost = taken and not(keepsTrying)
     all {
       rows' = if (taken) rows else rows.union(Set({ sid: h.sid, email: h.email, by: r })),
@@ -136,7 +156,7 @@ module softwareInquiry {
     }
   }
 
-  action step = any { deliver, lookup, count, insert, sendCopy }
+  action step = any { deliver, lookup, readKey, writeKey, insert, sendCopy }
 
   // ---- Properties ---------------------------------------------------------------------------------------------------
   // 1. One stored brief per submission id.
@@ -154,12 +174,18 @@ module softwareInquiry {
   val allowanceReturned = held.forall(ip => runs.keys().exists(r =>
     runs.get(r).ip == ip and (runs.get(r).outcome == "stored" or runs.get(r).phase == "counted" or runs.get(r).phase == "stored" or (runs.get(r).phase == "idle" and runs.get(r).tries > 0))))
 
-  // 5. A stored brief is answered only to the email that sent it.
+  // 5. A stored brief keeps its address's counter key, unless another delivery from the same address read the key as unset at
+  //    the same time: two such deliveries can both set the key, and the one that loses deletes it (see the race below).
+  val keptForStored = rows.forall(x =>
+    held.contains(runs.get(x.by).ip) or
+    runs.keys().exists(r => r != x.by and runs.get(r).ip == runs.get(x.by).ip and runs.get(r).passed))
+
+  // 6. A stored brief is answered only to the email that sent it.
   val strangerNeverSeesBrief = runs.keys().forall(r =>
     runs.get(r).outcome != "duplicate" or rows.exists(x => x.sid == runs.get(r).sid and x.email == runs.get(r).email))
 
   val allProperties = and {
-    oneBriefPerId, oneCopyPerId, loserNeverFailed, allowanceReturned, strangerNeverSeesBrief,
+    oneBriefPerId, oneCopyPerId, loserNeverFailed, allowanceReturned, keptForStored, strangerNeverSeesBrief,
   }
 
   // Reachability witness, for a hand h with the negated invariant: two deliveries took the same id at once from different
@@ -175,4 +201,6 @@ module inquiryNoIndex { import softwareInquiry(MUTANT = "no-index").* }
 module inquiryNoRetry { import softwareInquiry(MUTANT = "no-retry").* }
 module inquiryKeepAllowance { import softwareInquiry(MUTANT = "keep-allowance").* }
 module inquiryAnyAddress { import softwareInquiry(MUTANT = "any-address").* }
+module inquiryRetryGivesBack { import softwareInquiry(MUTANT = "retry-gives-back").* }
+module inquiryNeverCounts { import softwareInquiry(MUTANT = "never-counts").* }
 module inquiryCopyForAll { import softwareInquiry(MUTANT = "copy-for-all").* }
