@@ -145,6 +145,39 @@ class StandInDocument extends EventTarget {
 	}
 }
 
+/** A pointer on a waveform, from a mouse, at `clientX` (Node has no PointerEvent). */
+class PointerAt extends Event {
+	readonly isPrimary = true;
+	readonly button = 0;
+	readonly pointerType = "mouse";
+	readonly pointerId = 1;
+	readonly clientY = 0;
+
+	constructor(
+		type: string,
+		readonly clientX: number,
+	) {
+		super(type);
+	}
+}
+
+/** A waveform 160 px wide, one pixel a second of the song, that takes the pointer a press starts on it. */
+class StandInStage extends EventTarget {
+	private captured = false;
+
+	getBoundingClientRect() {
+		return { left: 0, width: 160 };
+	}
+
+	setPointerCapture() {
+		this.captured = true;
+	}
+
+	hasPointerCapture() {
+		return this.captured;
+	}
+}
+
 /** The comparison root's data attributes the player reads and writes. */
 type RootData = { duration: string; title: string; audioFallback?: string };
 
@@ -222,6 +255,7 @@ function mount({
 
 	const dataset: RootData = { duration: "160", title: "Old News" };
 	const styles = new Map<string, string>();
+	const stage = new StandInStage();
 
 	const root = Object.assign(new EventTarget(), {
 		dataset,
@@ -234,7 +268,9 @@ function mount({
 				? [mix, master]
 				: selector === "[data-select-version]"
 					? switches
-					: [],
+					: selector.includes(".comparison-waveform-stage")
+						? [stage]
+						: [],
 		contains: () => false,
 	});
 
@@ -245,7 +281,6 @@ function mount({
 	});
 
 	const sources: Source[] = [];
-
 	const contexts: StandInContext[] = [];
 	const gains: [number, number][][] = [];
 
@@ -355,6 +390,10 @@ function mount({
 		},
 		loop,
 		styles,
+		stage,
+		/** Presses, moves or lets go of the pointer on the waveform at `x` seconds into the song. */
+		drag: (type: string, x: number) =>
+			stage.dispatchEvent(new PointerAt(type, x)),
 		/** Whether the synced transport is sounding. */
 		synced: () => sources.some((source) => source.started && !source.stopped),
 		/** How many synced sources have started, so a test can tell whether playback restarted. */
@@ -706,4 +745,22 @@ it("keeps the version a flip has just switched to when the volume changes before
 	ab.volume.value = "0.8";
 	ab.volume.dispatchEvent(new Event("input"));
 	expect(ab.levelsNow()).toEqual([0, 0.8]);
+});
+
+it("plays a transport decoded during a drag held past the end at its levels, once the pointer is back", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.drag("pointerdown", 50);
+	ab.drag("pointermove", 200);
+	// The stream held past the end ends, which pauses the comparison; both versions then finish decoding.
+	ab.mix.end();
+	await tick();
+	expect(ab.label()).toMatch(/^Play /);
+	await ab.decode();
+	ab.drag("pointermove", 80);
+	expect(ab.synced()).toBe(true);
+	expect(ab.levelsNow()).toEqual([1, 0]);
+	expect(ab.mix.getAttribute("src")).toBeNull();
 });

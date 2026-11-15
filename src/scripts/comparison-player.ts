@@ -258,6 +258,19 @@ export function setupComparisonPlayers() {
 				});
 			}
 
+			/**
+			 * Lets go of the versions' own players once synced playback has taken over, as they were before the stream: a
+			 * media key or the lock screen keeps the controls of the last element that played, and would otherwise start it
+			 * alongside synced playback. The fallback gives them their files back.
+			 */
+			function releaseElements() {
+				media.forEach((audio) => {
+					if (!audio.getAttribute("src")) return;
+					audio.removeAttribute("src");
+					audio.load();
+				});
+			}
+
 			function stopStream() {
 				if (!streaming) return;
 				streamId++;
@@ -481,16 +494,9 @@ export function setupComparisonPlayers() {
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
-					// The versions' own players are let go once synced playback has taken over, as they were before the
-					// stream: a media key or the lock screen keeps the controls of the last element that played, and would
-					// otherwise start it alongside synced playback. The fallback gives them their files back.
 					setTimeout(() => {
 						handed?.pause();
-						media.forEach((audio) => {
-							if (!audio.getAttribute("src")) return;
-							audio.removeAttribute("src");
-							audio.load();
-						});
+						releaseElements();
 					}, 30);
 					delete root.dataset.audioFallback;
 					status.textContent = "";
@@ -685,8 +691,12 @@ export function setupComparisonPlayers() {
 							transport?.duration ?? Number(root.dataset.duration);
 
 						if (gesture.resume && position < duration) {
+							// A transport decoded while a stream held past the end had ended was never handed over to: it
+							// gets its levels, and the versions' players are let go, before it plays.
 							if (transport && !transport.playing && !streaming && !pending) {
+								applyVolume();
 								transport.play();
+								releaseElements();
 								render();
 							}
 							// Before the handover, a stream held past the end has ended, which paused the comparison.
