@@ -39,6 +39,9 @@ module audioProjectFiles {
 //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
 //                           are still the ones read (and without the retry)
   //   "complete-no-stage"     a completion compares neither the stage nor the published final
+//   "revoke-no-first-status" a revoke that read a draft and retries does not carry the first read's status, so a publish that
+//                           landed in between lets it revoke the published file
+//   "only-final-plus"       no change to the rules: the run starts only from `finalPlus` (a pass run, not a mutant)
 //   "only-final-and-review" no change to the rules: the run starts only from the point `finalAndReview` (a pass run, not a mutant)
 //   "complete-no-file"      a completion does not compare the published final (an equivalent mutant: the stage implies it)
 //   "final-no-supersede"    a publish of a final does not revoke the live review (the write has no condition on the version only for a review)
@@ -53,7 +56,7 @@ module audioProjectFiles {
     fileStatus: str, upload: str, object: bool, others: Set[int], reviews: Set[int], finalLive: int,
   }
   // One request: kind "upload", "publish", "revoke" or "complete", on file `id`; its phase; and the reads a revoke made.
-  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int }
+  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int, first: str }
 
   // The project, its files, its uploads and R2, in one record so a step names only what it changes.
   type World = {
@@ -82,7 +85,7 @@ module audioProjectFiles {
     revoked: false, withdrawn: false, booking: false, balance: false, stage: "in_progress",
     fileStatus: "none", upload: "none", object: false, others: Set(), reviews: Set(), finalLive: 0,
   }
-  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0 }
+  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0, first: "none" }
   val noFile = { version: "review", status: "none", insAt: 0, pubAt: 0 }
 
   // The facts the rules and guards read, from the stamps.
@@ -154,6 +157,8 @@ module audioProjectFiles {
     if (MUTANT == "publish-no-stage") Set("finalAndReview")        // a review publish read at in_progress, a final publish lands first
     else if (MUTANT == "publish-stale-supersede") Set("twoReviews")  // two uploaded reviews published at once
     else if (MUTANT == "complete-no-stage") Set("final", "finalPlus") // the last final is revoked between the read and the write
+    else if (MUTANT == "revoke-no-first-status") Set("twoReviews") // a draft is revoked while its publish lands
+    else if (MUTANT == "only-final-plus") Set("finalPlus") // no mutation: the pass run for the final branch of the publish's stage guard
     else if (MUTANT == "only-final-and-review") Set("finalAndReview") // no mutation: the pass run that reaches a publish whose stage guard is false in a race
     else allStarts
 
@@ -163,13 +168,13 @@ module audioProjectFiles {
     all {
       w' = {
         files: IDS.mapBy(i =>
-          if (i == 1 and (scenario == "review" or scenario == "reviewPlus")) { ...noFile, version: "review", status: "published" }
-          else if (i == 1 and (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth")) { ...noFile, version: "final", status: "published" }
-          else if (i == 2 and scenario == "finalBoth") { ...noFile, version: "final", status: "published" }
+          if (i == 1 and (scenario == "review" or scenario == "reviewPlus")) { ...noFile, version: "review", status: "published", pubAt: -1 }
+          else if (i == 1 and (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth")) { ...noFile, version: "final", status: "published", pubAt: -1 }
+          else if (i == 2 and scenario == "finalBoth") { ...noFile, version: "final", status: "published", pubAt: -1 }
           else if (i == 1 and scenario == "finalAndReview") { ...noFile, version: "final", status: "uploaded" }
           else if (i == 2 and scenario == "finalAndReview") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "reviewFinal") { ...noFile, version: "final", status: "uploaded" }
-          else if (i == 1 and scenario == "reviewFinal") { ...noFile, version: "review", status: "published" }
+          else if (i == 1 and scenario == "reviewFinal") { ...noFile, version: "review", status: "published", pubAt: -1 }
           else if (scenario == "twoReviews") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "reviewPlus") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "finalPlus") { ...noFile, version: "final", status: "uploaded" }
@@ -220,11 +225,14 @@ module audioProjectFiles {
     val go =
       if (h.kind == "upload") canUpload(version, s.revoked, s.withdrawn, s.booking, s.stage)
       else if (h.kind == "publish") s.fileStatus == "uploaded" and s.object and canPublish(version, s.revoked, s.withdrawn, s.booking, s.balance, s.stage)
-      else if (h.kind == "revoke") (s.fileStatus == "uploaded" or s.fileStatus == "published")
+      else if (h.kind == "revoke")
+        // The status the first read saw is carried into every retry: a file whose status moved since (a draft that was
+        // published in between) is refused, as today's statement compares the status read earlier in the same request.
+        (s.fileStatus == "uploaded" or s.fileStatus == "published") and (h.tries == 0 or MUTANT == "revoke-no-first-status" or s.fileStatus == h.first)
       else s.stage == "final_files_ready" and s.finalLive > 0 and s.booking and s.balance and not(s.revoked) and not(s.withdrawn)
     all {
       w' = w,
-      runs' = runs.set(r, { ...h, snap: s, version: version, phase: if (go) (if (h.kind == "upload") "createMultipart" else "write") else "refused" }),
+      runs' = runs.set(r, { ...h, snap: s, version: version, first: if (h.tries == 0) s.fileStatus else h.first, phase: if (go) (if (h.kind == "upload") "createMultipart" else "write") else "refused" }),
     }
   }
 
@@ -458,8 +466,13 @@ module audioProjectFiles {
   // 9. A project at a final stage has no live review: publishing a final supersedes it, as today's statement does.
   val finalStageHasNoLiveReview = (w.stage != "final_files_ready" and w.stage != "complete") or liveOf("review") == 0
 
+  // 10. A revoke that read a draft never revokes a file that had been published: the file's `published_at` is set exactly when the
+  // first read saw it published (the request keeps the status of its first read).
+  val revokeKeepsFirstRead = RUNS.forall(r =>
+    runs.get(r).kind != "revoke" or runs.get(r).phase != "done" or (w.files.get(runs.get(r).id).pubAt != 0) == (runs.get(r).first == "published"))
+
   val allProperties = and {
-    finalStageHasNoLiveReview, filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
+    revokeKeepsFirstRead, finalStageHasNoLiveReview, filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
     readyStagesHaveFiles, completedOnlyWhenPaid, fileHasObject,
   }
 
@@ -487,3 +500,5 @@ module projectFilesResetNoLink { import audioProjectFiles(MUTANT = "reset-no-lin
 module projectFilesCompleteNoFile { import audioProjectFiles(MUTANT = "complete-no-file").* }
 module projectFilesFinalNoSupersede { import audioProjectFiles(MUTANT = "final-no-supersede").* }
 module projectFilesFinalAndReview { import audioProjectFiles(MUTANT = "only-final-and-review").* }
+module projectFilesFinalPlus { import audioProjectFiles(MUTANT = "only-final-plus").* }
+module projectFilesRevokeNoFirstStatus { import audioProjectFiles(MUTANT = "revoke-no-first-status").* }
