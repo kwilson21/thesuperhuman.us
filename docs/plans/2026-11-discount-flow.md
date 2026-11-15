@@ -388,8 +388,10 @@ then superseded. Command: `quint run verification/discount-offers.qnt --main dis
 Not covered: refunds; the order of milestones and delivery gating (any slot of the plan may be invoiced once the project
 starts); a third milestone; retention; Stripe event order (the invoice-events model covers it). The manual Apalache
 check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` module. For this design it was run only to
-3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds); run it deeper
-before PR 2 or PR 3 changes a modelled rule.
+3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds). For PR 2 it was
+run to 10 steps with no violation (11 minutes), and the old-guard mutant `discountTodayDepositGuard` was found at step
+11 of a 12-step run (19 minutes); see `docs/prelaunch-qa-2026-11-15-deposit-guard.md`. Run it again before PR 3 changes
+a modelled rule.
 
 Run counts and bounds: the pass run of `discount` and each mutant use 10,000 random executions of up to 20 steps, seed
 `0x1`; the pass run must finish all of them with no violation, and each mutant stops at its first violation. CI time
@@ -397,7 +399,8 @@ and how the two models share the runner's cores are in docs/verification.md ("CI
 
 ## 7. Build order (stacked PRs, tests first)
 
-Each PR stands alone and keeps every existing golden case and hash. "Effect" means the area named must have moved to
+Each PR stands alone and keeps every existing golden case and hash, except where a PR's behaviour fix changes a case on
+purpose and explains it (PR 2 changed one: an open deposit of a superseded offer now blocks a send). "Effect" means the area named must have moved to
 Effect (CLAUDE.md "Back-end rules") first, because the change touches its validator or route.
 
 1. **This PR: design and verification.** Plan, model, contract, tests. No dependency.

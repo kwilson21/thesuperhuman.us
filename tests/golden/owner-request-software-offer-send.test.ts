@@ -69,9 +69,10 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   409 "The email went out, but the link was closed while it was sending..."  the email was accepted and the link was
 //            revoked, the offer superseded or the request withdrawn before the check
 //   409 generic "...changed or could not be saved..."  a guard of the batch fails (updated_at, status or email moved; the
-//            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a deposit
-//            invoice opened; the draft changed), the batch throws, stored terms that are not JSON, a read throws inside the
-//            try, the check after the email throws (the email has already gone out)
+//            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a first
+//            deposit of any offer version opened or was paid; the draft changed), the batch throws, stored terms that
+//            are not JSON, a read throws inside the try, the check after the email throws (the email has already gone
+//            out)
 //   409 project started     the project appears between the checks and the batch
 //   rejected                the first read or the project pre-check throws
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
