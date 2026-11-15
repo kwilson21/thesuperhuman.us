@@ -29,8 +29,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
 
-	if (!env?.MUSIC_DB || !params.id)
-		return Response.json({ ok: false }, { status: 503 });
+	if (!env?.MUSIC_DB) return Response.json({ ok: false }, { status: 503 });
 	const body = await musicRequest(request, 1024);
 
 	if (body instanceof Response) return body;
@@ -39,7 +38,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
 
 	try {
-		const saved = await getOwnerRequest(env.MUSIC_DB, params.id);
+		// A request with no id is no such request. (Astro never routes one here: the segment is not empty.)
+		const saved = params.id
+			? await getOwnerRequest(env.MUSIC_DB, params.id)
+			: null;
 
 		if (!saved || saved.kind !== "software")
 			return Response.json({ ok: false }, { status: 404 });
