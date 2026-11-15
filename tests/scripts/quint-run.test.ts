@@ -423,7 +423,7 @@ describe("the models the driver runs", () => {
 			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
 		);
 
-		// The discount model's send and decline are three steps each, so its deepest mutant needs about 30.
-		expect(models[1].steps).toBe("30");
+		// The discount model's send and decline are three steps each, so its deepest witness needs about 50.
+		expect(models[1].steps).toBe("50");
 	});
 });

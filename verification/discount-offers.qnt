@@ -45,14 +45,16 @@ module discountOffers {
   //   "today-second-batch"     with F10_FIX: the decline's second batch as it is today, which does not look at the offers
   //                            (F10, found by reading and reproduced by this model)
   //   "no-live-check"          the send answers 200 without the live-link check after the email
+  //   "first-batch-keeps-link" the decline's first batch withdraws the offers but leaves a live link as it is
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
   // a new offer) and keep the random runs fast; the manual Apalache check uses the same module.
   const VERSIONS: int
-  // F10 (docs/plans/2026-11-offers-conversion.md, section 5), not yet decided by the owner. false: the decline's second
-  // batch as it is today, and `declinedHasNoOffer` allows exactly what that batch lets through. true: the second batch
-  // with the proposed fix (it also refuses while any offer of the request is draft or sent), and `declinedHasNoOffer` is
-  // the strict property the fix needs; today's second batch is then the mutant "today-second-batch".
+  // F10 (docs/plans/2026-11-offers-conversion.md, section 5), confirmed by this model and accepted by the owner
+  // (2026-11-15); the fix is a behaviour-fix PR of its own. false: the decline's second batch as it is today, and
+  // `declinedHasNoOffer` allows exactly what that batch lets through. true: the second batch with the fix (it also
+  // refuses while any offer of the request is draft or sent), and `declinedHasNoOffer` is the strict property the fix
+  // needs; today's second batch is then the mutant "today-second-batch".
   const F10_FIX: bool
 
   // ---- Bounds for the checker -------------------------------------------------------------------------------------
@@ -61,8 +63,10 @@ module discountOffers {
   val USUAL_0 = 5
   val USUAL_1 = 4
   // The clock ticks in 10-second steps. Each email (the client's, then the copy) ends within its 10-second timeout, so
-  // within one tick of its start; the two in a row end within two. The sending window G5 is 20 seconds, two ticks, and
-  // compares strictly (created_at > now - 20 s), so a link made two ticks ago no longer blocks.
+  // within one tick of its start; a client email accepted just under its timeout, then a copy that times out, end within
+  // two. The sending window G5 is 20 seconds, two ticks, and compares strictly (created_at > now - 20 s), so a link made
+  // two ticks ago no longer blocks. The coarse clock lets a step that follows another by milliseconds in code share its
+  // tick (docs/verification.md, "The clock").
   val EMAIL_TICKS = 1
   val WINDOW = 2
 
@@ -73,8 +77,8 @@ module discountOffers {
   // One invoice slot (version, milestone, kind), as software_invoices rows for it: status "none" (no row), "open",
   // "paid", "void". A void slot can be invoiced again (Replace invoice), so at most one row of a slot is live.
   type Bill = { status: str, amount: int }
-  // A pending invoice reservation: the read was made, the batch has not run.
-  type Pending = { active: bool, slot: int, amount: int }
+  // A pending invoice reservation: the read was made, the batch has not run. reqAt: the request's updated_at it read.
+  type Pending = { active: bool, slot: int, amount: int, reqAt: int }
   // The client's review: the agreement text is rendered from these terms. revoked: retireRequestSigning ran since.
   type Review = { v: int, terms: Terms, revoked: bool }
   type Signed = { v: int, terms: Terms }
@@ -105,6 +109,9 @@ module discountOffers {
   var sentTerms: int -> Terms  // the terms each version had when it was sent (ghost)
   var wasSent: Set[int]
   var requestOpen: bool        // false once declined (resolved); reopen makes it true again
+  // owner_requests.updated_at as a counter: the decline's two batches and reopen write it. Draft, send and revoke never
+  // do; the project start does only from status new (project.ts), which this model leaves out (see declineSecond).
+  var requestVersion: int
   var review: Review           // v 0: none
   var signed: Signed           // v 0: not signed
   var project: int             // the version the project started from, 0 none
@@ -172,12 +179,13 @@ module discountOffers {
     sentTerms' = versionIds.mapBy(_ => noTerms),
     wasSent' = Set(),
     requestOpen' = true,
+    requestVersion' = 0,
     review' = { v: 0, terms: noTerms, revoked: false },
     signed' = { v: 0, terms: noTerms },
     project' = 0,
     projectTerms' = noTerms,
     bills' = slots.mapBy(_ => { status: "none", amount: 0 }),
-    pending' = { active: false, slot: 0, amount: 0 },
+    pending' = { active: false, slot: 0, amount: 0, reqAt: 0 },
     clock' = 0,
     link' = { live: false, created: 0, token: 0 },
     sending' = { phase: "none", v: 0, token: 0, start: 0, accepted: false },
@@ -193,6 +201,7 @@ module discountOffers {
   action keepClient = all { review' = review, signed' = signed }
   action keepMoney = all { bills' = bills, pending' = pending, project' = project, projectTerms' = projectTerms }
   action keepFlows = all { clock' = clock, link' = link, sending' = sending, declining' = declining }
+  action keepRequest = all { requestOpen' = requestOpen, requestVersion' = requestVersion }
 
   // The owner saves a new draft (the next version), with any terms: any discount on each milestone, either mode. Allowed
   // while a decline's email is in flight: the request is still new or reviewed until the decline's second batch.
@@ -205,7 +214,7 @@ module discountOffers {
       requestOpen, project == 0, not(hasDraft), v <= VERSIONS,
       offers' = offers.set(v, { status: "draft", terms: { d0: d0, d1: d1, std: std } }),
       versions' = v,
-      sentTerms' = sentTerms, wasSent' = wasSent, requestOpen' = requestOpen,
+      sentTerms' = sentTerms, wasSent' = wasSent, keepRequest,
       keepClient, keepMoney, keepFlows,
       ghost' = { ...ghost, inDecline: if (declineInFlight) ghost.inDecline.union(Set(v)) else ghost.inDecline },
     }
@@ -221,7 +230,7 @@ module discountOffers {
       requestOpen, project == 0,
       offers.get(v).status == "draft" or (MUTANT == "edit-sent" and offers.get(v).status == "sent"),
       offers' = offers.set(v, { ...offers.get(v), terms: { d0: d0, d1: d1, std: std } }),
-      versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent, requestOpen' = requestOpen,
+      versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent, keepRequest,
       keepClient, keepMoney, keepFlows, ghost' = ghost,
     }
   }
@@ -249,7 +258,7 @@ module discountOffers {
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       clock' = clock, declining' = declining,
-      requestOpen' = requestOpen, signed' = signed, keepMoney,
+      keepRequest, signed' = signed, keepMoney,
       ghost' = {
         ...ghost,
         inDecline: if (declineInFlight) ghost.inDecline.union(Set(v)) else ghost.inDecline,
@@ -261,19 +270,20 @@ module discountOffers {
 
   // Send, the batch, for the sent version (a reissue): the link must be revoked (G9), so G5 holds; the offer keeps its
   // status and terms, the link row gets a new token created now, and signing is retired. G3 as for a draft; G4 is a
-  // draft's only.
+  // draft's only. The route sends the open draft when there is one (`draft ?? sent`), and a command for the sent version
+  // then answers NoOfferToSend, so a reissue needs no open draft.
   action reissue = {
     nondet v = versionIds.oneOf()
     all {
       sending.phase == "none",
-      requestOpen, project == 0, offers.get(v).status == "sent",
+      requestOpen, project == 0, offers.get(v).status == "sent", not(hasDraft),
       signed.v == 0 or MUTANT == "send-after-sign",
       link.token != 0, not(link.live),
       link' = { live: true, created: clock, token: link.token + 1 },
       sending' = { phase: "email", v: v, token: link.token + 1, start: clock, accepted: false },
       review' = { ...review, revoked: true },
       keepOffers, clock' = clock, declining' = declining,
-      requestOpen' = requestOpen, signed' = signed, keepMoney,
+      keepRequest, signed' = signed, keepMoney,
       ghost' = { ...ghost, linkInDecline: declineInFlight },
     }
   }
@@ -286,7 +296,7 @@ module discountOffers {
       sending.phase == "email",
       clock <= sending.start + (if (accepted) 2 * EMAIL_TICKS else EMAIL_TICKS),
       sending' = { ...sending, phase: "check", accepted: accepted },
-      keepOffers, keepClient, keepMoney, requestOpen' = requestOpen,
+      keepOffers, keepClient, keepMoney, keepRequest,
       clock' = clock, link' = link, declining' = declining, ghost' = ghost,
     }
   }
@@ -301,7 +311,7 @@ module discountOffers {
       sending.phase == "check",
       sending' = { ...sending, phase: "none" },
       ghost' = { ...ghost, badAcceptedSend: ghost.badAcceptedSend or (answers200 and sending.accepted and not(linkLive)) },
-      keepOffers, keepClient, keepMoney, requestOpen' = requestOpen,
+      keepOffers, keepClient, keepMoney, keepRequest,
       clock' = clock, link' = link, declining' = declining,
     }
   }
@@ -312,14 +322,15 @@ module discountOffers {
     link.live, not(stillSending),
     link' = { ...link, live: false },
     review' = { ...review, revoked: true },
-    keepOffers, signed' = signed, keepMoney, requestOpen' = requestOpen,
+    keepOffers, signed' = signed, keepMoney, keepRequest,
     clock' = clock, sending' = sending, declining' = declining, ghost' = ghost,
   }
 
   // Decline, the first batch: sent and draft offers are withdrawn, live links revoked, signing retired; the request stays
   // new or reviewed. Refused once resolved, with a project (G2), after the client signed (G3), while a deposit is open (a
   // paid one does not block: depositOfferGuard with decline = true, G4) and within 20 seconds of a live link (G5). The
-  // model lets one decline be in flight at a time.
+  // model lets one decline be in flight at a time. It writes the request's updated_at, and starts the ghost record of what
+  // its email's window makes.
   action declineFirst = all {
     declining.phase == "none",
     requestOpen, project == 0, signed.v == 0,
@@ -327,11 +338,12 @@ module discountOffers {
     not(stillSending),
     offers' = versionIds.mapBy(w => if (draftOrSent(offers.get(w))) { ...offers.get(w), status: "withdrawn" } else offers.get(w)),
     versions' = versions, sentTerms' = sentTerms, wasSent' = wasSent,
-    link' = { ...link, live: false },
+    link' = if (MUTANT == "first-batch-keeps-link") link else { ...link, live: false },
     declining' = { phase: "email", start: clock },
     review' = { ...review, revoked: true },
-    requestOpen' = requestOpen, signed' = signed, keepMoney, clock' = clock, sending' = sending,
-    ghost' = { ...ghost, inDecline: Set() },
+    requestOpen' = requestOpen, requestVersion' = requestVersion + 1, signed' = signed, keepMoney, clock' = clock,
+    sending' = sending,
+    ghost' = { ...ghost, inDecline: Set(), linkInDecline: false },
   }
 
   // Decline, the email: the client email, then the copy, timed as for send. A failed client email ends the decline (502):
@@ -342,13 +354,15 @@ module discountOffers {
       declining.phase == "email",
       clock <= declining.start + (if (accepted) 2 * EMAIL_TICKS else EMAIL_TICKS),
       declining' = { ...declining, phase: if (accepted) "second" else "none" },
-      keepOffers, keepClient, keepMoney, requestOpen' = requestOpen,
+      keepOffers, keepClient, keepMoney, keepRequest,
       clock' = clock, link' = link, sending' = sending, ghost' = ghost,
     }
   }
 
-  // Decline, the second batch: G1 at the write time (nothing in this model touches the request row between the batches;
-  // draft, send and revoke never do), G2 and G5 (G6, the audio project, is not modelled). It resolves the request. Today
+  // Decline, the second batch: G1 at the write time, G2 and G5 (G6, the audio project, is not modelled). G1 holds here:
+  // between the batches only reopen could write updated_at, and it needs the request resolved. In code a project start
+  // from status new writes it too (project.ts), and G2 refuses the batch after a start anyway; question and fit write it
+  // and are not modelled. It resolves the request. Today
   // it does not look at the offers or the link (F10); with the fix it also refuses while any offer is draft or sent. A
   // refused batch answers 409 and writes nothing.
   action declineSecond = {
@@ -362,6 +376,7 @@ module discountOffers {
       declining.phase == "second",
       declining' = { ...declining, phase: "none" },
       requestOpen' = if (writes) false else requestOpen,
+      requestVersion' = if (writes) requestVersion + 1 else requestVersion,
       ghost' = if (writes) { ...ghost, declined: true, declinedAt: clock } else ghost,
       keepOffers, keepClient, keepMoney, clock' = clock, link' = link, sending' = sending,
     }
@@ -371,6 +386,7 @@ module discountOffers {
   action reopen = all {
     not(requestOpen), project == 0,
     requestOpen' = true,
+    requestVersion' = requestVersion + 1,
     keepOffers, keepClient, keepMoney, keepFlows,
     ghost' = { ...ghost, declined: false },
   }
@@ -383,7 +399,7 @@ module discountOffers {
     declining.phase != "email" or clock + 1 <= declining.start + 2 * EMAIL_TICKS,
     clock' = clock + 1,
     link' = link, sending' = sending, declining' = declining,
-    keepOffers, keepClient, keepMoney, requestOpen' = requestOpen, ghost' = ghost,
+    keepOffers, keepClient, keepMoney, keepRequest, ghost' = ghost,
   }
 
   // The client opens review through the live link (getLinkedOffer: link live, offer sent, request open): the agreement
@@ -393,7 +409,7 @@ module discountOffers {
     all {
       requestOpen, project == 0, signed.v == 0, offers.get(v).status == "sent", link.live,
       review' = { v: v, terms: offers.get(v).terms, revoked: false },
-      keepOffers, requestOpen' = requestOpen, signed' = signed, keepMoney, keepFlows, ghost' = ghost,
+      keepOffers, keepRequest, signed' = signed, keepMoney, keepFlows, ghost' = ghost,
     }
   }
 
@@ -404,7 +420,7 @@ module discountOffers {
     MUTANT == "no-sign-guards" or (offers.get(review.v).status == "sent" and not(review.revoked) and link.live and requestOpen),
     signed' = { v: review.v, terms: review.terms },
     ghost' = { ...ghost, badSign: ghost.badSign or offers.get(review.v).status != "sent" },
-    review' = review, keepOffers, requestOpen' = requestOpen, keepMoney, keepFlows,
+    review' = review, keepOffers, keepRequest, keepMoney, keepFlows,
   }
 
   // The owner starts the project from the signed, sent offer; standard terms need the first deposit paid. The project
@@ -419,40 +435,43 @@ module discountOffers {
       else if (MUTANT == "start-drops-discount") { ...offers.get(signed.v).terms, d0: 0, d1: 0 }
       else offers.get(signed.v).terms,
     bills' = bills, pending' = pending,
-    keepOffers, keepClient, requestOpen' = requestOpen, keepFlows, ghost' = ghost,
+    keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
   }
 
-  // reserveSoftwareInvoice, the reads: the offer (sent, or the project's), the slot (before the project only the first
-  // deposit), no live invoice in the slot; the amount comes from the offer's terms_json as read now, also after the
-  // project started (the code reads software_offers, not the project's copy).
+  // reserveSoftwareInvoice, the reads: the request open (not resolved or withdrawn) with the updated_at it has now, the
+  // offer (sent, or the project's), the slot (before the project only the first deposit), no live invoice in the slot;
+  // the amount comes from the offer's terms_json as read now, also after the project started (the code reads
+  // software_offers, not the project's copy).
   action invoiceRead = {
     nondet k = slots.oneOf()
     val t = offers.get(vOf(k)).terms
     val amountTerms = if (MUTANT == "latest-terms" and versions > 0) offers.get(versions).terms else t
     all {
       not(pending.active),
+      requestOpen,
       if (project != 0) vOf(k) == project else offers.get(vOf(k)).status == "sent",
       inPlan(t, kindOf(k)),
       project != 0 or (mOf(k) == 0 and kindOf(k) == "deposit"),
       not(live(bills.get(k))),
-      pending' = { active: true, slot: k, amount: installment(amountTerms, mOf(k), kindOf(k)) },
+      pending' = { active: true, slot: k, amount: installment(amountTerms, mOf(k), kindOf(k)), reqAt: requestVersion },
       bills' = bills, project' = project, projectTerms' = projectTerms,
-      keepOffers, keepClient, requestOpen' = requestOpen, keepFlows, ghost' = ghost,
+      keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
     }
   }
 
-  // reserveSoftwareInvoice, the batch: the offer is still sent and there is no project (or the project is this offer's),
-  // and the slot is still free; then the invoice row is inserted with the amount computed at the read.
+  // reserveSoftwareInvoice, the batch: the request's updated_at is the one read, the offer is still sent and there is no
+  // project (or the project is this offer's), and the slot is still free; then the invoice row is inserted with the
+  // amount computed at the read.
   action invoiceWrite = {
     val k = pending.slot
     val offerOk = if (project != 0) vOf(k) == project else offers.get(vOf(k)).status == "sent"
-    val writes = (offerOk or MUTANT == "no-write-status-guard") and not(live(bills.get(k)))
+    val writes = (offerOk or MUTANT == "no-write-status-guard") and requestVersion == pending.reqAt and not(live(bills.get(k)))
     all {
       pending.active,
       pending' = { ...pending, active: false },
       bills' = if (writes) bills.set(k, { status: "open", amount: pending.amount }) else bills,
       ghost' = { ...ghost, badInvoice: ghost.badInvoice or (writes and not(offerOk)) },
-      project' = project, projectTerms' = projectTerms, keepOffers, keepClient, requestOpen' = requestOpen, keepFlows,
+      project' = project, projectTerms' = projectTerms, keepOffers, keepClient, keepRequest, keepFlows,
     }
   }
 
@@ -464,7 +483,7 @@ module discountOffers {
       bills.get(k).status == "open",
       bills' = bills.set(k, { ...bills.get(k), status: outcome }),
       pending' = pending, project' = project, projectTerms' = projectTerms,
-      keepOffers, keepClient, requestOpen' = requestOpen, keepFlows, ghost' = ghost,
+      keepOffers, keepClient, keepRequest, keepFlows, ghost' = ghost,
     }
   }
 
@@ -476,7 +495,7 @@ module discountOffers {
   // For the Apalache check only (`--step stepOrEnd`): a state where nothing else can happen stays as it is, so the end
   // of a run is not reported as a deadlock. The random runs use `step`.
   action finished = all {
-    keepOffers, keepClient, keepMoney, keepFlows, requestOpen' = requestOpen, ghost' = ghost,
+    keepOffers, keepClient, keepMoney, keepFlows, keepRequest, ghost' = ghost,
   }
 
   action stepOrEnd = any { step, finished }
@@ -556,7 +575,8 @@ module discountOffers {
 }
 
 module discount { import discountOffers(MUTANT = "none", VERSIONS = 2, F10_FIX = false).* }
-// The F10 fix (not yet decided): the same code with the decline's second batch refusing while an offer is draft or sent.
+// The F10 fix (accepted by the owner, 2026-11-15; its own PR): the same code with the decline's second batch refusing
+// while an offer is draft or sent.
 module discountF10Fix { import discountOffers(MUTANT = "none", VERSIONS = 2, F10_FIX = true).* }
 
 // Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs.
@@ -573,3 +593,4 @@ module discountStartDropsDiscount { import discountOffers(MUTANT = "start-drops-
 module discountSecondBatchNoSendingGuard { import discountOffers(MUTANT = "second-batch-no-sending-guard", VERSIONS = 2, F10_FIX = false).* }
 module discountTodaySecondBatch { import discountOffers(MUTANT = "today-second-batch", VERSIONS = 2, F10_FIX = true).* }
 module discountNoLiveCheck { import discountOffers(MUTANT = "no-live-check", VERSIONS = 2, F10_FIX = false).* }
+module discountFirstBatchKeepsLink { import discountOffers(MUTANT = "first-batch-keeps-link", VERSIONS = 2, F10_FIX = false).* }

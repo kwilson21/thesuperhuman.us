@@ -580,8 +580,8 @@ on F1, F3 and F4 below.
 
 The owner's decision of 2026-11-14: an unexpected store failure answers 500 with a fixed sentence, a lost race or a stale
 version 409, and 503 only for a missing binding or a known unavailable dependency. Each fix below is its own PR before the
-conversion, with no `conversion` label, re-recording its corpora and explaining every changed case. F2, F6 and F7 are
-decided; the others are candidates for the owner.
+conversion, with no `conversion` label, re-recording its corpora and explaining every changed case. F2, F6 and F7 were
+decided in review; for the others the owner accepted the recommendations on 2026-11-15 ("Do the fixes").
 
 | # | What happens today | Golden cases that pin it | Count |
 |---|---|---|---|
@@ -594,7 +594,7 @@ decided; the others are candidates for the owner.
 | F7 | A decision that SQL makes today, moved into the rule, answers otherwise | revoke: "a link made 10 seconds ago and the lookups after the batch fail" (rejected today). offer-draft: "another writer takes the version before the batch inserts it" (409 today) | 2 |
 | F8 | With no mail configured, question and decline write first (decline withdraws the offers and closes the link) and only then answer 502 | question: "no Resend key", "an empty Resend key", "no sender address", "no owner address". decline: "no Resend key", "no sender address", "no owner address" | 7 |
 | F9 | A send whose client email failed answers 200 with the link even when the live-link check found the link closed | offer-send: "the link is revoked while an email that fails is sent" | 1 |
-| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft | none: found by reading, to be reproduced by the model first (section 7) | 0 |
+| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft | none: found by reading and confirmed by the model (section 7; docs/verification.md, "F10, reproduced") | 0 |
 
 **F2, a store failure that rejects (decided).** A converted route passes `{ route, answer }` to `runRoute`
 (src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the route
@@ -674,12 +674,15 @@ says it did), proposed in the fix PR.
 **F10, a draft saved during a decline's email (confirmed by the model; decided).** The owner accepted the
 recommendation below on 2026-11-15 ("Do the fixes"), and the extended `verification/discount-offers.qnt` confirms the
 bug (docs/verification.md, "F10, reproduced"), so the fix is its own PR before the conversion. The draft and send
-batches never touch `owner_requests.updated_at` (software.ts:474-545, 763-821), so a draft saved while the decline's
-email is in flight passes its own G1, and the decline's second batch (G1 at the write time, 351-352) passes too: the
-request is resolved with a draft. A send of that draft is caught only by G5 in the second batch (359), and only within
-its 20 seconds. Recommended, if the model confirms it: the second batch also requires that no offer of the request is
-draft or sent, read after the email and refused by name (section 2), with the guard as its re-check; refused, it
-answers EmailSentButChanged as the second batch does today (373-402).
+batches never touch `owner_requests.updated_at` (software.ts:477-548, 766-824, at `2f7add57`), so a draft saved while
+the decline's email is in flight passes its own G1, and the decline's second batch (G1 at the write time, 354-355)
+passes too: the request is resolved with a draft. A send of that draft is caught by G5 in the second batch (362), which
+passes only a link at least 20 seconds old. The link's `created_at` is the send's `now`, which comes after the first
+batch by a draft save, a browser round trip and two reads, while the email lasts at most about 20 seconds, so the sent
+case is reachable in the model's coarse clock and practically not in code; the draft case is real, and the fix rests on
+it. The fix, as recommended and accepted: the second batch also requires that no offer of the request is draft or
+sent, read after the email and refused by name (section 2), with the guard as its re-check; refused, it answers
+EmailSentButChanged as the second batch does today (376-405).
 
 **Kept as they are.** LinkNotBuilt is a configuration error, not a store failure or a missing binding: 500 with its own
 sentence, nothing written (golden send "SITE_ORIGIN that is not a URL", "an empty SITE_ORIGIN"). A draft's removed
@@ -708,35 +711,40 @@ the send's missing binding is F4's case. Draft "an MSA that a draft reuses is de
 
 ## 7. Verification
 
-**The Quint model, a prerequisite (decided).** `verification/discount-offers.qnt` covers the offer version's rules as
-single steps: send (supersede, refused after signing and while any version has an open or paid first deposit) and decline
-(refused while a deposit is open), with reopen, review, sign, start and invoices around them
-(verification/discount-offers.qnt:165-195). It has no link, no 20-second window, no email, no live-link check, and decline
-is one step. Its extension lands in its own PR before the behaviour fixes and before any conversion code, with each new
-mutant failing in CI (`pnpm run verify:quint:all`) and the manual Apalache run (`pnpm run verify:quint:exhaustive`), its
-bound and its result recorded in that PR and in docs/verification.md, "The discount-offers model". It covers:
+**The Quint model, a prerequisite (decided; extended in #317).** Before the extension, `verification/discount-offers.qnt`
+covered the offer version's rules as single steps: send (supersede, refused after signing and while any version has an
+open or paid first deposit) and decline (refused while a deposit is open), with reopen, review, sign, start and invoices
+around them. It had no link, no 20-second window, no email, no live-link check, and decline was one step. The extension
+lands in its own PR (#317) before the behaviour fixes and before any conversion code, with each new mutant failing in CI
+(`pnpm run verify:quint:all`) and the manual Apalache run (`pnpm run verify:quint:exhaustive`), its bounds and results
+recorded in docs/verification.md, "The discount-offers model". It covers (line numbers at `2f7add57`):
 
-- send as three steps: the batch, the client email, the live-link check (software.ts:763-843);
-- decline as three: the first batch, the client email and its copy, the second batch (288-372);
+- send as three steps: the batch, the client email, the live-link check (software.ts:766-846);
+- decline as three: the first batch, the client email and its copy, the second batch (291-375);
 - drafts saved, and drafts saved and sent, while a decline's email is in flight (F10);
-- revoke and reissue, and a clock for the 20-second window and the email timeouts (10 seconds each, and the decline's
-  client email and copy can take both in a row, src/lib/audio-resend.ts:61).
+- revoke and reissue, and a clock for the 20-second window and the email timeouts (10 seconds each,
+  src/lib/audio-resend.ts:61). The decline's email takes about 20 seconds at most, when the client email is accepted
+  just under its timeout and the copy then times out; a client email that times out ends the decline
+  (software.ts:173-174, 336-351).
 
 Properties, each with a mutant that breaks it (the driver fails a property without one):
 
 - `declinedHasNoOffer`: a request a decline resolved has no draft or sent offer and no live link. Today's code breaks it
-  by reading (F10). If the owner accepts F10, the model carries the fix and today's second batch is the mutant, as
-  `discountTodayDepositGuard` keeps the old deposit guard. If not, the finding is recorded in docs/verification.md and the
-  property allows what today's second batch lets through: a draft saved during the decline's email, or a sent offer and
-  its live link made during the decline's email at least 20 seconds before the second batch. The second is reachable
-  today: G5 refuses only a link whose `created_at` is later than the second batch's time less 20 seconds, compared
-  strictly (`created_at>?`, src/lib/software-offers.ts:466, 473), and the email step can run its two 10-second timeouts in
-  a row (the client email, then the copy, src/lib/audio-resend.ts:61; software.ts:165-180), so a link made as the email
-  starts can be 20 seconds old when the second batch runs, and passes. Its mutant stays G5 left out of the second batch:
-  a link made less than 20 seconds before the second batch then passes too, which breaks the weakened property.
+  (F10, confirmed by the model and accepted). The model carries the fix (`discountF10Fix`, and `discount` once the fix
+  lands), and today's second batch is the mutant, as `discountTodayDepositGuard` keeps the old deposit guard. Until the
+  fix lands, `discount` keeps the property in a form that allows what today's second batch lets through: a draft saved
+  during the decline's email, or a sent offer and its live link made during the email at least 20 seconds before the
+  second batch. The second is reachable in the model's coarse clock and practically not in code. G5 refuses only a link
+  whose `created_at` is later than the second batch's time less 20 seconds, compared strictly (`created_at>?`,
+  src/lib/software-offers.ts:466, 473), and the second batch is built after the email, at most about 20 seconds after
+  the first batch; but `created_at` is the send's `now` (software.ts:148), taken after a request read that the send
+  batch's G1 forces after the first batch (767), for a draft whose `updated_at` the send needs from the draft save's
+  answer (602). So the link would have to be made in the milliseconds before the email starts. The draft case is real.
+  Its mutant stays G5 left out of the second batch: a link made less than 20 seconds before the second batch then passes
+  too, which breaks the weakened property.
 - `acceptedSendLinkLive`: a send that answers 200 with its client email accepted had its link live at the check. Mutant:
-  the check left out. If the owner accepts F9, the property drops "with its client email accepted", and today's condition
-  (835) is a second mutant.
+  the check left out. With F9 accepted, the fix PR drops "with its client email accepted" from the property, and today's
+  condition (838) becomes a second mutant.
 
 **The deposit decision, a LemmaScript contract (decided).** `depositOfferBlock`'s decision (software-invoices.ts:365-397)
 becomes a pure function with no imports, in its own module listed in `LemmaScript-files.txt`, in the style of

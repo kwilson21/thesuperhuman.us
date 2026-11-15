@@ -54,6 +54,7 @@ export const discountMutants = {
 	discountSecondBatchNoSendingGuard: { property: "declinedHasNoOffer" },
 	discountTodaySecondBatch: { property: "declinedHasNoOffer" },
 	discountNoLiveCheck: { property: "acceptedSendLinkLive" },
+	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
 };
 
 // verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can
@@ -153,16 +154,19 @@ export const models = [
 	},
 	{
 		file: "verification/discount-offers.qnt",
-		// Today's code, and the F10 fix (not yet decided), which keeps the strict form of declinedHasNoOffer.
+		// Today's code, and the F10 fix (accepted by the owner, 2026-11-15; its own PR), which keeps the strict form of
+		// declinedHasNoOffer.
 		current: ["discount", "discountF10Fix"],
 		mutants: discountMutants,
 		equivalents: [],
 		exhaustive: ["discount", "discountF10Fix"],
 		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant
 		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
-		// at least 17 steps. At 20 steps 100,000 runs did not find it; at 30 it is found in about 3,700 (seeds 0x1 to
-		// 0x3), so each mutant check allows 20,000 and each run that must pass makes 10,000.
-		steps: "30",
+		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
+		// about 25. At 50 steps, seed 0x1, the mutant is found in about 2,700 runs and the witness's state is reached in
+		// about 150 (at 40 in about 9,300, at 30 not in 100,000), so each mutant check allows 20,000 and each run that
+		// must pass makes 10,000.
+		steps: "50",
 		samples: "20000",
 		passSamples: "10000",
 	},
