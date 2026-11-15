@@ -1527,3 +1527,38 @@ describe("found in the tenth review", () => {
 		expect(commits(text)).toBe(false);
 	});
 });
+
+describe("found in the eleventh review", () => {
+	it.each([
+		"CAD 3D modeling services",
+		"Upload CAD 3D files",
+		"CAD 2D drafting and 3D renders",
+		"Windows 11 주로 사용",
+		"React 18 주로 사용, 일부 Vue 3",
+		"아이폰 15 주로 사용",
+		"기기: 갤럭시 S24 주로, 일부 아이폰",
+		"STEP 2 주로 모바일에서",
+		"별점 5 주면 쿠폰 지급",
+		"포인트 100 주나요",
+		"1876년부터 이어온 전통",
+		"1800년으로 거슬러",
+	])("accepts %s again", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+
+	it.each([
+		"USD 5,000",
+		"EUR 300 a month",
+		"about GBP 2k",
+		"cad 900",
+		"2주면 충분",
+		"2주를 예상",
+		"2주짜리 프로젝트",
+		"2주에 걸쳐 진행",
+		"3주미만",
+		"3일까지",
+		"3주 안에 완료",
+	])("still refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+});
