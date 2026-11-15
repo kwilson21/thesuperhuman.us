@@ -2,12 +2,12 @@
 
 Date: November 15, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Branch: `claude/studio-menu`, merged with `origin/main` at `59573d70` (a merge commit, never a rebase)
+Branch: `claude/studio-menu`, merged with `origin/main` at `59573d70` and again at `351ce67f` (merge commits, never a rebase)
 Pull request: [#291](https://github.com/kwilson21/thesuperhuman.us/pull/291)
-Revision: the branch head that carries this record (the commit after `d1f2f2c2`).
+Revision: the branch head that carries this record.
 Target: production `https://thesuperhuman.us` after merge. Only Home (`/`) changes; `/writing` reads the shared latest-essay constant.
 Decisions and merge authorization: Kazon Wilson, in conversation on November 15, 2026 ("looks good to me", then "yes" to merging). Implementation and independent review passes were done with Claude Code.
-Rollback revision: `59573d70`, `origin/main`'s tip when it was merged into the branch. Re-check `origin/main` at merge time. The PR adds no migration, binding, secret or dependency, and writes no stored data.
+Rollback revision: `351ce67f`, `origin/main`'s tip when it was last merged into the branch. Re-check `origin/main` at merge time. The PR adds no migration, binding, secret or dependency, and writes no stored data.
 
 ## Scope
 
@@ -67,9 +67,9 @@ Open, not blocking: the label arrow keeps the accent colour on the glass (about 
 
 ### 7. Release and final QA
 - Type, test, asset and build checks: PASS. See Evidence below.
-- Diff review: PASS. Reviewed by independent passes on `557edb81`, `5d54f8ab`, `3ed29108` and `17273b97`; the merge of `origin/main` brought no conflict.
+- Diff review: PASS. Reviewed by independent passes on `557edb81`, `5d54f8ab`, `3ed29108` and `17273b97`; neither merge of `origin/main` brought a conflict. #330's navigation inventory is built from page files and excludes other sites, so the desk links need no entry and the game link is never prefetched.
 - Production bindings, headers, cache: N/A. No binding, header or route change.
-- Rollback: PASS. `59573d70` recorded above.
+- Rollback: PASS. `351ce67f` recorded above.
 - Live verification after deploy: UNVERIFIED until the deploy; recorded in the pull request once checked.
 - Receipt: this record.
 
@@ -82,4 +82,6 @@ Open, not blocking: the label arrow keeps the accent colour on the glass (about 
 - CI on `3ed29108` and `17273b97` (before the merge of `origin/main`): `validate`, `capture` and `neutrality` succeeded, and the Cloudflare preview built.
 - CI screenshots at `3ed29108`: the controller label at 1280px and the phone pins at 390px, checked by eye.
 - Independent reviews: one on the glass and the Combo (contrast, tap targets, the hover bridge strip, the translate and the Combo's rest state measured in Chromium against a local preview; 0 critical and 0 major Hallmark findings), one on the tidy-up, and one on the controller link (no internal-link handling, prefetch or navigation policy affected).
+- After the second merge of `origin/main` (`351ce67f`): lint, check, format, design and copy checks, `pnpm run build`, and the architecture, script, component, library and page tests with `REQUIRE_CLIENT_BUNDLE=1` pass (147 files, 2,431 tests).
+- CI on `89756521`: `validate` failed in `tests/api/studio-signin-noninterference.test.ts` ("a request racing the passing of time"). The test is intermittent on `main` as well (1 failure in 13 local runs at `351ce67f`; 3 in 9 on this branch), it touches only studio sign-in, which this PR does not change, and its failing examples show the order of the sign-in code's clock reads around the test's clock step varying from run to run. A fix is proposed separately; the PR carries no workaround.
 - Limits: Chromium only; no real device; no field data.
