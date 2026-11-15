@@ -55,11 +55,12 @@ const failing = (...patterns: RegExp[]) =>
 const call = (
 	db: D1Database,
 	env: Partial<TestRuntime["env"]> = {},
+	params: APIContext["params"] = { id: "r1" },
 ): Promise<Response> =>
 	Promise.resolve(
 		POST(
 			partial<APIContext>({
-				params: { id: "r1" },
+				params,
 				request: new Request(
 					"https://thesuperhuman.us/api/owner/requests/r1/brief-copy",
 					{
@@ -227,6 +228,20 @@ describe("a request that changes between the lookup and the claim", () => {
 		expect(sent()).toHaveLength(0);
 		expect(stored().clientCopyStatus).toBeUndefined();
 	});
+});
+
+describe("a request with no id", () => {
+	it.each([{}, { id: "" }])(
+		"is no such request, as an unknown id is: %j",
+		async (params) => {
+			seed();
+			const response = await call(world.db, {}, params);
+
+			expect(response.status).toBe(404);
+			expect(await readJson(response)).toEqual({ ok: false });
+			expect(sent()).toHaveLength(0);
+		},
+	);
 });
 
 describe("answers that stay as they were", () => {
