@@ -50,6 +50,7 @@ const NOTE = "Fans hear new songs first.";
  */
 async function quotesEndOnce(page) {
 	const live = page.locator("[data-board-live]");
+	const aside = page.locator("[data-board-aside]");
 
 	const said = async (expected) => {
 		const text = await live.textContent();
@@ -70,24 +71,39 @@ async function quotesEndOnce(page) {
 		await said(expected);
 	};
 
-	await press("Keep: Shows", "Kept “Shows”.");
-	await undo("Undid: kept “Shows”.");
-	await press(`Keep: ${QUESTION}`, `Kept “${QUESTION}”`);
-	await undo(`Undid: kept “${QUESTION}”`);
-	await press(
-		`Not this: ${QUESTION}`,
-		`Set aside “${QUESTION}” Undo or Bring back restores it.`,
-	);
-	await page.locator("[data-board-aside-summary]").click();
-	await press(`Bring back: ${QUESTION}`, `Brought back “${QUESTION}”`);
-	await undo(`Undid: brought back “${QUESTION}”`);
-	await undo(`Undid: set aside “${QUESTION}”`);
-	await page.getByRole("button", { name: /^Add what it/ }).click();
-	await page.keyboard.type(NOTE);
-	await page.keyboard.press("Enter");
-	await press(`Remove: ${NOTE}`, `Removed “${NOTE}” Undo brings it back.`);
-	await undo(`Undid: removed “${NOTE}”`);
-	await undo(`Undid: added “${NOTE}”`);
+	// A suggested card: Keep, Not this and Bring back, each undone. `end` is what must follow its quote.
+	const card = async (text, end) => {
+		await press(`Keep: ${text}`, `Kept “${text}”${end}`);
+		await undo(`Undid: kept “${text}”${end}`);
+		await press(
+			`Not this: ${text}`,
+			`Set aside “${text}”${end} Undo or Bring back restores it.`,
+		);
+
+		if (!(await aside.evaluate((list) => list.open)))
+			await page.locator("[data-board-aside-summary]").click();
+		await press(`Bring back: ${text}`, `Brought back “${text}”${end}`);
+		await undo(`Undid: brought back “${text}”${end}`);
+		await undo(`Undid: set aside “${text}”${end}`);
+	};
+
+	// The visitor's own note: added with the lane's Add, removed, and both undone.
+	const note = async (add, text, end) => {
+		await page.getByRole("button", { name: add }).click();
+		await page.keyboard.type(text);
+		await page.keyboard.press("Enter");
+		await press(
+			`Remove: ${text}`,
+			`Removed “${text}”${end} Undo brings it back.`,
+		);
+		await undo(`Undid: removed “${text}”${end}`);
+		await undo(`Undid: added “${text}”${end}`);
+	};
+
+	await card("Shows", ".");
+	await card(QUESTION, "");
+	await note("Add a page", "Press kit", ".");
+	await note(/^Add what it/, NOTE, "");
 }
 
 export default {
@@ -257,9 +273,9 @@ export default {
 					await open(page);
 					await write(page, PURPOSE);
 
-					// The check runs in this step because the plain form hides the board before the capture: its undone choices
-					// still leave the Set aside list open and start the wait for a new request, so no picture changes. Desktop
-					// only: the messages are the same at every width.
+					// The check runs in this step because the plain form hides the board before the capture: it leaves focus in
+					// the board and redraws the cards it brought back with the new-card edge, which a visible board would show.
+					// Desktop only: the messages are the same at every width.
 					if (viewport === "desktop") await quotesEndOnce(page);
 					await page
 						.getByRole("button", { name: "Use the plain form" })
