@@ -332,7 +332,9 @@ export function setupComparisonPlayers() {
 				pending = true;
 				claimPlayback();
 				status.textContent = "Preparing synchronized audio…";
-				// Another try after a load failure offers the desk again.
+				// Another try after a load failure hides the native players again, so the fallback goes with them (a failure
+				// brings it back), and the desk is offered again.
+				delete root.dataset.audioFallback;
 				offerDesk(true);
 				render();
 
@@ -374,8 +376,6 @@ export function setupComparisonPlayers() {
 					await Promise.all([resumed, loading]);
 
 					if (request !== operation) return;
-					// A try that works after a load failure leaves the fallback behind.
-					delete root.dataset.audioFallback;
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
@@ -487,9 +487,11 @@ export function setupComparisonPlayers() {
 				applyVolume();
 				drawLoop();
 
-				const note = loop
-					? `Looping ${format(loop.start)} to ${format(loop.end)}.`
-					: "Loop off.";
+				// Written from the loop as it is when the line is shown: the decoded length can refit it before then.
+				const note = () =>
+					loop
+						? `Looping ${format(loop.start)} to ${format(loop.end)}.`
+						: "Loop off.";
 
 				// After a seek the line waits until the seeking settles, so a drag is not read out at every step.
 				clearTimeout(loopNote);
@@ -498,10 +500,10 @@ export function setupComparisonPlayers() {
 				if (seeking)
 					loopNote = setTimeout(() => {
 						if (!pending && root.dataset.audioFallback !== "true")
-							status.textContent = note;
+							status.textContent = note();
 					}, 700);
 				// Loop pressed while the audio loads leaves the wait's note; the button says whether it is on.
-				else if (!pending) status.textContent = note;
+				else if (!pending) status.textContent = note();
 				render();
 			}
 
@@ -510,6 +512,18 @@ export function setupComparisonPlayers() {
 			 * try offers it again.
 			 */
 			function offerDesk(offered: boolean) {
+				if (!offered) {
+					// A loop line still waiting would describe a loop that is gone.
+					clearTimeout(loopNote);
+
+					// Focus on a control about to be disabled moves to the first native player rather than to the page.
+					const focused = document.activeElement;
+
+					// The length menu is compared as the node it was found as, which the DOM typing in use accepts.
+					if (focused && (focused === loopToggle || focused === loopLengthNode))
+						media[0].focus();
+				}
+
 				if (!offered && loop) {
 					loopToggle?.setAttribute("aria-pressed", "false");
 					loop = undefined;

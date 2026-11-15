@@ -28,6 +28,13 @@ class StandInAudio {
 	}
 
 	pause() {}
+
+	/** Whether the player moved keyboard focus here. */
+	focused = false;
+
+	focus() {
+		this.focused = true;
+	}
 }
 
 /** A control the player reads and writes: attributes, data, a value and its listeners. */
@@ -73,6 +80,8 @@ class StandInSelect extends StandInControl {}
 /** The document as the player uses it: its comparisons, whether it is hidden, and its listeners. */
 class StandInDocument extends EventTarget {
 	hidden = false;
+	/** The control keyboard focus is on, if a test put it on one. */
+	activeElement: StandInControl | null = null;
 
 	constructor(readonly querySelectorAll: (selector: string) => EventTarget[]) {
 		super();
@@ -261,16 +270,21 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 			arrayBuffer: async () => new ArrayBuffer(0),
 		})),
 	);
-	vi.stubGlobal(
-		"document",
-		new StandInDocument((selector: string) =>
-			selector === "[data-comparison]" ? [root] : [],
-		),
+
+	const page = new StandInDocument((selector: string) =>
+		selector === "[data-comparison]" ? [root] : [],
 	);
+
+	vi.stubGlobal("document", page);
 	setupComparisonPlayers();
 
 	return {
 		root,
+		mix,
+		/** Puts keyboard focus on a control, as Tab does. */
+		focusOn: (control: StandInControl) => {
+			page.activeElement = control;
+		},
 		...controls,
 		choose: (version: string) =>
 			switches
@@ -573,4 +587,64 @@ it("turns the desk off where the comparison could not load, keeps that note, and
 	ab.seekTo(40);
 	await new Promise((resolve) => setTimeout(resolve, 750));
 	expect(ab.status.textContent).toBe("Looping 0:40 to 0:48.");
+});
+
+it("leaves the fallback behind when another try starts, even one paused before it loads", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	// Another try, paused while it loads: the native players are hidden again, and the fallback goes with them.
+	ab.play.click();
+	ab.play.click();
+	await settle();
+	expect(ab.root.dataset.audioFallback).toBeUndefined();
+	ab.loop.toggle.click();
+	ab.seekTo(40);
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toBe("Looping 0:40 to 0:48.");
+});
+
+it("describes the loop as it is when the line is shown, after the decoded length refits it", async () => {
+	const ab = mount({ decodedLength: 158 });
+
+	ab.loop.toggle.click();
+	ab.play.click();
+	await tick();
+	ab.seekTo(155);
+	await ab.decode();
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toBe("Looping 2:30 to 2:38.");
+});
+
+it("drops a loop line still waiting, and moves focus to the first native player, when a load failure turns the desk off", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	ab.seekTo(40);
+	ab.focusOn(ab.loop.toggle);
+	await ab.decode();
+	expect(ab.mix.focused).toBe(true);
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toContain("couldn’t load");
+});
+
+it("shows no loop line after a quick retry that works, once the failure turned Loop off", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	ab.seekTo(40);
+	await ab.decode();
+	ab.loadNextTime();
+	ab.play.click();
+	await settle();
+	expect(ab.synced()).toBe(true);
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toBe("");
 });
