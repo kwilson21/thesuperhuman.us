@@ -91,7 +91,7 @@ export const musicMutants = {
 export const inquiryMutants = {
 	inquiryNoIndex: { property: "oneBriefPerId" },
 	inquiryNoRetry: { property: "loserNeverFailed" },
-	inquiryKeepAllowance: { property: "allowanceReturned" },
+	inquiryLoserGivesBack: { property: "loserKeepsAllowance" },
 	inquiryRetryGivesBack: { property: "keptForStored" },
 	inquiryNeverCounts: { property: "keptForStored" },
 	inquiryAnyAddress: { property: "strangerNeverSeesBrief" },

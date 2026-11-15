@@ -9,26 +9,24 @@
 //                        counted; it is answered to the address that sent it, and refused to any other)
 //   the guard:           the unique index on owner_requests.submission_id (db/music.sql)
 //   the allowance:       the counter in KV, one key per address (src/server/flows/rate-limit.ts): present means the address
-//                        already sent a brief in the window and the next one is refused; a request that stored nothing
-//                        deletes the key it set
+//                        already sent a brief in the window and the next one is refused; the loser of a race for the same
+//                        submission id answers with the stored brief and keeps the allowance it spent, so the key is
+//                        never deleted by a delivery that finds a brief stored
 //   the client's copy:   src/lib/software-brief-copy.ts, sent once for the request this delivery stored
-// A race that exists in the code, on this area's routes and before the conversion, and is not changed here: the key is read and
-// then written (two KV calls), so two simultaneous submissions from one address, with the same submission id or with different
-// ones, can both read it as unset. If one of them stores its brief and the other then loses its insert (to the first, or to
-// a third request from another address), the loser deletes the key the other one set, and the stored brief is never counted
-// against the address. `keptForStored` says exactly what holds: a stored brief keeps its address's key unless another
-// delivery from the same address read the key as unset and lost an insert (it gave the key back). The model finds the race
-// as soon as the property is stated without that exception.
+// Because a delivery that finds its submission already stored never deletes the key, a stored brief keeps its address's key
+// whatever the deliveries from one address do: `keptForStored` holds without an exception. The mutant "loser-gives-back" is the
+// earlier behaviour (the loser deleted the key), and breaks `loserKeepsAllowance`.
 // What is left out, on purpose: the attempt limit and the captcha (they come before the look-up and decide nothing about
-// the brief), the owner notice (best effort, sent once for a stored request), and the owner's alert on a lost insert (the
-// insert failing for another reason than the index is a defect this model does not have).
+// the brief), the owner notice (best effort, sent once for a stored request), and the owner's alert on a lost insert, and the key
+// that a failed insert (the database failing, not the index) gives back: the insert failing for another reason than the index is
+// a defect this model does not have.
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module softwareInquiry {
   // "none" is the design. Every other value removes one protection so a property must fail (the mutants):
   //   "no-index"       the submission id is not unique (the unique index is gone)
   //   "no-retry"       an insert that meets the index answers a failure at once, without looking up again
-  //   "keep-allowance" a delivery that stored nothing (the loser of a race, or a lost insert) leaves its address's key in place
+  //   "loser-gives-back" the loser of a race, answered with the stored brief, deletes its address's key (the earlier behaviour)
   //   "any-address"    a brief stored under the id is answered to any address, not only the one that sent it
   //   "copy-for-all"   the client's copy goes out for every delivery that is answered with a stored brief
   //   "retry-gives-back" a plain retry (a brief already stored, nothing counted) deletes its address's key
@@ -88,7 +86,7 @@ module softwareInquiry {
     val stored = rows.filter(x => x.sid == h.sid)
     val sent = stored.exists(x => x.email == h.email or MUTANT == "any-address")
     val counted = h.tries > 0
-    val gives = (counted or MUTANT == "retry-gives-back") and MUTANT != "keep-allowance"
+    val gives = (counted and MUTANT == "loser-gives-back") or MUTANT == "retry-gives-back"
     val lostBrief = stored.size() == 0 and counted
     all {
       rows' = rows,
@@ -96,7 +94,7 @@ module softwareInquiry {
         if (lostBrief) { ...h, phase: "done", outcome: "failed" }
         else if (stored.size() == 0) { ...h, phase: "found" }
         else { ...h, phase: "done", outcome: if (sent) "duplicate" else "clash" }),
-      held' = if ((stored.size() > 0 and gives) or (lostBrief and MUTANT != "keep-allowance")) held.exclude(Set(h.ip)) else held,
+      held' = if ((stored.size() > 0 and gives) or lostBrief) held.exclude(Set(h.ip)) else held,
       copies' = if (stored.size() > 0 and MUTANT == "copy-for-all") copies.union(Set({ sid: h.sid, by: r })) else copies,
     }
   }
@@ -141,7 +139,7 @@ module softwareInquiry {
         if (not(taken)) { ...h, phase: "stored", outcome: "stored" }
         else if (keepsTrying) { ...h, phase: "idle", tries: h.tries + 1 }
         else { ...h, phase: "done", tries: h.tries + 1, outcome: "failed" }),
-      held' = if (lost and MUTANT != "keep-allowance") held.exclude(Set(h.ip)) else held,
+      held' = if (lost) held.exclude(Set(h.ip)) else held,
       copies' = copies,
     }
   }
@@ -171,28 +169,24 @@ module softwareInquiry {
   // 3. The loser of a race is answered with the other brief, never told its brief was lost, while a brief for its id is stored.
   val loserNeverFailed = runs.keys().forall(r => runs.get(r).outcome != "failed" or not(rows.exists(x => x.sid == runs.get(r).sid)))
 
-  // 4. An address holds a counter key only while a delivery from it that counted is still working (inserting, or looking up
-  //    again after a lost insert), or because a delivery from it stored a brief. A delivery that stored nothing leaves no key.
-  val allowanceReturned = held.forall(ip => runs.keys().exists(r =>
-    runs.get(r).ip == ip and (runs.get(r).outcome == "stored" or runs.get(r).phase == "counted" or runs.get(r).phase == "stored" or (runs.get(r).phase == "idle" and runs.get(r).tries > 0))))
+  // 4. A delivery that counted and was then answered with the stored brief keeps the allowance it spent: its address's key is
+  //    still set. (The address-wide key is shared with every delivery from that address.)
+  val loserKeepsAllowance = runs.keys().forall(r =>
+    not(runs.get(r).outcome == "duplicate" and runs.get(r).tries > 0) or held.contains(runs.get(r).ip))
 
-  // 5. A stored brief keeps its address's counter key, unless another delivery from the same address read the key as unset at
-  //    the same time and lost an insert: two such deliveries can both set the key, and the one that loses deletes it (see the
-  //    race at the top).
-  val keptForStored = rows.forall(x =>
-    held.contains(runs.get(x.by).ip) or
-    runs.keys().exists(r => r != x.by and runs.get(r).ip == runs.get(x.by).ip and runs.get(r).passed and runs.get(r).tries > 0))
+  // 5. A stored brief keeps its address's counter key.
+  val keptForStored = rows.forall(x => held.contains(runs.get(x.by).ip))
 
   // 6. A stored brief is answered only to the email that sent it.
   val strangerNeverSeesBrief = runs.keys().forall(r =>
     runs.get(r).outcome != "duplicate" or rows.exists(x => x.sid == runs.get(r).sid and x.email == runs.get(r).email))
 
   val allProperties = and {
-    oneBriefPerId, oneCopyPerId, loserNeverFailed, allowanceReturned, keptForStored, strangerNeverSeesBrief,
+    oneBriefPerId, oneCopyPerId, loserNeverFailed, loserKeepsAllowance, keptForStored, strangerNeverSeesBrief,
   }
 
   // Reachability witness, for a hand h with the negated invariant: two deliveries took the same id at once from different
-  // addresses, one stored it and the other, which had been counted, was answered with the stored brief and gave its key back.
+  // addresses, one stored it and the other, which had been counted, was answered with the stored brief.
   val raced = runs.keys().exists(a => runs.keys().exists(b => a != b and runs.get(a).outcome == "stored" and runs.get(b).outcome == "duplicate" and runs.get(b).tries > 0 and runs.get(a).sid == runs.get(b).sid))
   val neverRaced = not(raced)
 }
@@ -202,7 +196,7 @@ module inquiry { import softwareInquiry(MUTANT = "none").* }
 // Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs.
 module inquiryNoIndex { import softwareInquiry(MUTANT = "no-index").* }
 module inquiryNoRetry { import softwareInquiry(MUTANT = "no-retry").* }
-module inquiryKeepAllowance { import softwareInquiry(MUTANT = "keep-allowance").* }
+module inquiryLoserGivesBack { import softwareInquiry(MUTANT = "loser-gives-back").* }
 module inquiryAnyAddress { import softwareInquiry(MUTANT = "any-address").* }
 module inquiryRetryGivesBack { import softwareInquiry(MUTANT = "retry-gives-back").* }
 module inquiryNeverCounts { import softwareInquiry(MUTANT = "never-counts").* }

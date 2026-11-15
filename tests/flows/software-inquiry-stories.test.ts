@@ -257,7 +257,7 @@ describe("a brief sent twice", () => {
 });
 
 describe("two requests with the same submission id", () => {
-	it("answers the loser with the other request's brief, stores nothing of its own and gives its allowance back", async () => {
+	it("answers the loser with the other request's brief, stores nothing of its own and keeps the allowance it spent", async () => {
 		const world = racing("alex@example.com");
 		const { answer, told } = await send(world);
 
@@ -265,18 +265,18 @@ describe("two requests with the same submission id", () => {
 		expect(requests(world)).toEqual([
 			{ id: "raced", email: "alex@example.com", submission_id: ID },
 		]);
-		expect(world.counts.has(REQUESTS)).toBe(false);
+		expect(world.counts.has(REQUESTS)).toBe(true);
 		expect(told.copies).toEqual([]);
 		expect(told.notices).toEqual([]);
 		expect(told.alerts).toEqual([]);
 	});
 
-	it("answers a clash when the other request's brief is from another address, and still gives the allowance back", async () => {
+	it("answers a clash when the other request's brief is from another address, and keeps the allowance spent", async () => {
 		const world = racing("someone@else.test");
 		const { answer } = await send(world);
 
 		expect(answer).toEqual({ kind: "idTaken" });
-		expect(world.counts.has(REQUESTS)).toBe(false);
+		expect(world.counts.has(REQUESTS)).toBe(true);
 	});
 });
 
@@ -392,7 +392,7 @@ describe("a storage failure", () => {
 
 		expect(answer).toMatchObject({ kind: "alreadyStored" });
 		expect(requests(world)).toHaveLength(1);
-		expect(world.counts.has(REQUESTS)).toBe(false);
+		expect(world.counts.has(REQUESTS)).toBe(true);
 		expect(told.alerts).toEqual([]);
 	});
 
