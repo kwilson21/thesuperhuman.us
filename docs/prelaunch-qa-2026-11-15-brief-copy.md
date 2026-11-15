@@ -4,13 +4,13 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 
 Date: November 15, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, at `fbfc3e05` (the media conversion, PRs 309 to 311), at `7beca022`, at `f23d6d01` and at `59573d70` (the last merge; it brought the offers fixes (PRs 313, 314 and 316) and the navigation prediction trial (PR 303) with its `js.foresight` dependency; none touch this area's files).
-Tips: A is `ce96f1d2` (the review fixes, merged with `origin/main` at `59573d70`). B's code is at `f1599382` (A merged in, then the conversion, the record and note fixes of the review items, and the agreement link's cooldown save); the merge conflicts with the media conversion are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
+Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, at `fbfc3e05` (the media conversion, PRs 309 to 311), at `7beca022`, at `f23d6d01` and at `59573d70` (it brought the offers fixes (PRs 313, 314 and 316) and the navigation prediction trial (PR 303) with its `js.foresight` dependency; none touch this area's files) and at `6471ff2d` (the last merge; the offers fix PR 331 and others, which also changed `docs/verification.md`, `scripts/lib/quint-mutants.mjs` and `tests/scripts/quint-run.test.ts`; both merges were clean and kept every model and mutant of both sides).
+Tips: A is `e60c3726` (the review fixes, merged with `origin/main` at `6471ff2d`). B's code is at `eac447f7` (A merged in, then the conversion, the record and note fixes of the review items, and the agreement link's cooldown save); the merge conflicts with the media conversion are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
 Pull requests: #321 (A) and #322 (B).
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
 Reviews: what independent reviews found, and what was fixed, is under "Review findings".
-Rollback revision: for A, `59573d70` (`origin/main` when it was last merged). Re-check `origin/main` with `git fetch` before merge; for B, A's tip `ce96f1d2`. No deployed revision was observed.
+Rollback revision: for A, `6471ff2d` (`origin/main` when it was last merged). Re-check `origin/main` with `git fetch` before merge; for B, A's tip `e60c3726`. No deployed revision was observed.
 
 ## Scope
 
@@ -79,7 +79,7 @@ There is no statement of class (d) left.
 
 ### Public inquiry
 
-`golden:neutral --all ce96f1d2 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
+`golden:neutral --all e60c3726 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
 
 The re-record of these two fixtures (a commit of fixture files only) changed the D1 statements of exactly these cases and nothing else; `golden:neutral` against A's tip reported each as neutral with D1 changes.
 
@@ -122,18 +122,18 @@ Independent reviews of the work found the following. Each is fixed; the later he
 
 ## Evidence
 
-Run on the final tips, after `origin/main` at `59573d70` was merged in.
+Run on the final tips, after `origin/main` at `6471ff2d` was merged in. The machine was heavily loaded (load average near 50), under which several 5-second timing tests of other areas timed out; the full suites below were run with `--maxWorkers=3` and pass, and the files that timed out passed alone.
 
-Branch A at `ce96f1d2`:
-- `format:check`: `Checked 889 files in 101ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  343 passed (343)`, `Tests  13929 passed | 1 skipped (13930)`; `git status` clean.
-- `golden:neutral --all origin/main`: `compared 80 fixtures and 9340 cases; 1 of 80 fixtures differ`, `golden:neutral: NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
-- `verify:quint:all`: exit 0, 99 `ok` lines. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
+Branch A at `e60c3726`:
+- `format:check`: `Checked 892 files in 121ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  344 passed (344)`, `Tests  13951 passed | 1 skipped (13952)`; `git status` clean.
+- `golden:neutral --all origin/main`: `compared 80 fixtures and 9345 cases; 1 of 80 fixtures differ`, `golden:neutral: NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
+- `verify:quint:all`: exit 0, 99 `ok` lines; `tests/scripts/quint-run.test.ts`: `Tests  36 passed (36)`. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
 
-Branch B at `f1599382`:
-- `format:check`: `Checked 896 files in 124ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  347 passed (347)`, `Tests  14071 passed | 1 skipped (14072)`; `git status` clean.
-- `golden:neutral --all ce96f1d2 HEAD`: `compared 80 fixtures and 9342 cases; 2 of 80 fixtures differ`, `golden:neutral: NEUTRAL` (`owner-request-brief-copy` 24 identical and 41 neutral with D1 changes; `software-inquiry` 138 identical and 69 neutral with D1 changes; `agreements-link` is not among the differing fixtures: it is identical).
-- `verify:quint:all`: exit 0, 111 `ok` lines (the eleven mutants of the brief copy model break their properties). `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
+Branch B at `eac447f7`:
+- `format:check`: `Checked 899 files in 120ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  348 passed (348)`, `Tests  14093 passed | 1 skipped (14094)`; `git status` clean.
+- `golden:neutral --all e60c3726 HEAD`: `compared 80 fixtures and 9347 cases; 2 of 80 fixtures differ`, `golden:neutral: NEUTRAL` (`owner-request-brief-copy` 24 identical and 41 neutral with D1 changes; `software-inquiry` 138 identical and 69 neutral with D1 changes; `agreements-link` identical).
+- `verify:quint:all`: exit 0, 111 `ok` lines (the eleven mutants of the brief copy model break their properties); `tests/scripts/quint-run.test.ts`: `Tests  39 passed (39)`. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
 
 UNVERIFIED: the owner page in a browser (the reload after a 500 was driven only with a stubbed fetch); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none).
