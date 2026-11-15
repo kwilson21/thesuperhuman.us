@@ -97,3 +97,29 @@ it("keeps the invitation button unchanged: a 500 does not reload", async () => {
 	expect(result.reload).not.toHaveBeenCalled();
 	expect(result.status).toBe("z");
 });
+
+it("reloads the page when a brief copy request never answers, so the recorded status and its buttons show", async () => {
+	const result = await click(BRIEF_COPY, "network-failure");
+
+	expect(result.sent).toBe(1);
+	expect(result.reload).toHaveBeenCalledTimes(1);
+});
+
+it("reloads the page when a brief copy answer cannot be read (an edge 502 page)", async () => {
+	const result = await click(
+		BRIEF_COPY,
+		new Response("Bad gateway", { status: 502 }),
+	);
+
+	expect(result.reload).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the invitation button unchanged: a request that never answers does not reload", async () => {
+	const result = await click(INVITATION, "network-failure");
+
+	expect(result.reload).not.toHaveBeenCalled();
+	expect(result.status).toBe(
+		"Could not queue the invitation. Please try again.",
+	);
+	expect(result.disabled).toBe(false);
+});

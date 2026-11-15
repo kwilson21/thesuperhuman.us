@@ -222,6 +222,9 @@ const claimRace = (sql: string, on: RegExp, label: string) => ({
 });
 
 const CLAIM = /'\$\.clientCopyStatus','uncertain'/;
+// The claim, or the read before it: whichever statement the copy send starts with.
+const FIRST_COPY_STATEMENT =
+	/'\$\.clientCopyStatus','uncertain'|FROM owner_requests WHERE id=\?/;
 const COPY_STATUS = /clientCopyStatus',\?\)/;
 const COPY_FAILED = /clientCopyStatus','failed'/;
 const LOOKUP = /WHERE submission_id=\?/;
@@ -837,6 +840,12 @@ const cases: Case[] = [
 		),
 	),
 	single("the copy claim throws", workflow, fails(CLAIM)),
+	// The first statement of the copy send (the claim, or the read the claim is judged from) throws; the failure record then succeeds over a copy with no status.
+	single(
+		"the first statement of the copy send throws and the failure record is written",
+		workflow,
+		fails(FIRST_COPY_STATEMENT),
+	),
 	single(
 		"the copy status write throws after the provider answered",
 		workflow,
