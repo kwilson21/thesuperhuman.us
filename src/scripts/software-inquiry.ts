@@ -517,13 +517,15 @@ export function setupSoftwareInquiry(
 
 			dt.textContent = "Brief outline";
 			items.className = "review-outline";
+			items.setAttribute("role", "list");
 
 			for (const item of outline) {
 				const entry = document.createElement("li"),
 					origin = document.createElement("span");
 
 				origin.className = "review-outline-origin";
-				origin.textContent = ` · ${originLabels[item.origin]}`;
+				// An answered question reads as it did on the board.
+				origin.textContent = ` · ${item.answer && item.origin === "kept" ? "You answered" : originLabels[item.origin]}`;
 				// Each item with its lane, as the outline is grouped on the board ("Pages: Shows").
 				entry.appendChild(
 					document.createTextNode(

@@ -199,27 +199,133 @@ export const comparable = (text: string) =>
 		.replace(/^["'.,;:!?()-]+|["'.,;:!?()-]+$/g, "")
 		.trim();
 
-/** Text as a run of words: comparable, with every other character a single space. */
-const wordRun = (text: string) =>
-	comparable(text)
-		.replace(/[^\p{L}\p{N}']+/gu, " ")
-		.trim();
-
 /** The fewest words a passage needs: a word or two of the answers ("and", "shop") would ground anything. */
 export const PASSAGE_MIN_WORDS = 3;
 
-/**
- * Whether `quote` is a passage of the answers: at least PASSAGE_MIN_WORDS whole words, found in them in order as written
- * (case, spacing, punctuation and quote marks aside), starting and ending on word boundaries.
- */
-export function quotedFrom(quote: string, answers: string): boolean {
-	const passage = wordRun(quote);
+// A word is letters, combining marks (Devanagari's vowel signs, Thai's tone marks), digits and apostrophes. Scripts
+// written without spaces between words count each character as a word of its own, weighted so that a passage needs
+// about as much text as three words: four Chinese or Japanese characters, eight Thai, Lao, Khmer or Myanmar letters.
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}'‘’`´′]/u;
+const MARK = /\p{M}/u;
+const IDEOGRAPHIC = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
-	return (
-		passage.split(" ").filter(Boolean).length >= PASSAGE_MIN_WORDS &&
-		` ${wordRun(answers)} `.includes(` ${passage} `)
-	);
+const UNSPACED_LETTERS =
+	/[\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+type Token = {
+	readonly word: string;
+	readonly start: number;
+	readonly end: number;
+	readonly weight: number;
+};
+
+function wordWeight(character: string) {
+	if (IDEOGRAPHIC.test(character)) return 0.75;
+
+	if (UNSPACED_LETTERS.test(character)) return 0.375;
+
+	return 1;
 }
+
+/** The words of `text` with where each starts and ends in it, compared case, width and apostrophe style aside. */
+function tokensOf(text: string): Token[] {
+	const tokens: Token[] = [];
+
+	let start = -1,
+		end = -1,
+		weight = 1,
+		at = 0;
+
+	const close = () => {
+		const word = text
+			.slice(start, end)
+			.normalize("NFKC")
+			.toLowerCase()
+			.replace(/[‘’`´′]/g, "'")
+			.replace(/^'+|'+$/g, "");
+
+		if (start >= 0 && word) tokens.push({ word, start, end, weight });
+		start = -1;
+	};
+
+	for (const character of text) {
+		const next = at + character.length;
+
+		if (!WORD_CHARACTER.test(character)) close();
+		else if (MARK.test(character) && start >= 0) end = next;
+		else {
+			const own = wordWeight(character);
+
+			// A character of an unspaced script is a word of its own, and so ends the word before it.
+			if (start >= 0 && (own < 1 || weight < 1)) close();
+
+			if (start < 0) {
+				start = at;
+				weight = own;
+			}
+
+			end = next;
+		}
+
+		at = next;
+	}
+
+	close();
+
+	return tokens;
+}
+
+// A passage right after one of these says the opposite of what it seems to ("we do not want online payments").
+const NEGATIONS = new Set([
+	"not",
+	"no",
+	"never",
+	"without",
+	"nor",
+	"neither",
+	"don't",
+	"dont",
+	"doesn't",
+	"doesnt",
+	"didn't",
+	"won't",
+	"wont",
+	"can't",
+	"cant",
+	"cannot",
+	"isn't",
+	"aren't",
+	"wasn't",
+	"shouldn't",
+]);
+
+/**
+ * The passage of the answers that `quote` repeats, exactly as the answers have it, or null when there is none: at least
+ * PASSAGE_MIN_WORDS words, found in the answers in order (case, spacing, punctuation and quote marks aside), starting
+ * and ending on word boundaries, and not right after a negation.
+ */
+export function groundedPassage(quote: string, answers: string): string | null {
+	const wanted = tokensOf(quote);
+
+	if (wanted.reduce((sum, token) => sum + token.weight, 0) < PASSAGE_MIN_WORDS)
+		return null;
+	const have = tokensOf(answers);
+
+	for (let at = 0; at + wanted.length <= have.length; at++) {
+		if (!wanted.every((token, offset) => have[at + offset].word === token.word))
+			continue;
+
+		if (at > 0 && NEGATIONS.has(have[at - 1].word)) continue;
+
+		return answers.slice(have[at].start, have[at + wanted.length - 1].end);
+	}
+
+	return null;
+}
+
+/** Whether `quote` is a passage of the answers (see groundedPassage). */
+export const quotedFrom = (quote: string, answers: string) =>
+	groundedPassage(quote, answers) !== null;
 
 const STOP_WORDS = new Set([
 	"a",
@@ -288,11 +394,36 @@ export function sameIdea(a: string, b: string): boolean {
 	);
 }
 
-// Rule 7 of the plan: a card never carries a price, a time estimate, a promise or a link.
-const MONEY = /[$€£¥₹]\s?\d|\d\s?(?:usd|eur|gbp|dollars?|euros?|pounds?|k\b)/i;
+// Rule 7 of the plan: a card never carries a price, a time estimate, a promise or a link. Text is compared after NFKC,
+// so full-width forms (＄, ５) read as their plain ones. These are a net under the model's instructions, not a proof: the
+// common forms in English and the most common duration and currency forms in a few other languages.
+const MONEY_WORDS =
+	"budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|around|about|roughly|approximately|under|over|below|above|up to|less than|more than";
 
-const DURATION =
-	/\b\d+(?:\.\d+)?\s*(?:-|to)?\s*\d*\s*(?:hours?|hrs?|days?|weeks?|wks?|months?|years?)\b|\b(?:a|one|two|three|four|five|six|few|couple of)\s+(?:hours?|days?|weeks?|months?)\b/i;
+const MONEY = new RegExp(
+	[
+		"[$€£¥₹₩]\\s?\\d",
+		"\\d\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
+		"\\d\\s?(?:円|元|万円|万元|万|千円)(?![\\p{L}])",
+		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
+		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d",
+		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
+	].join("|"),
+	"iu",
+);
+
+const NUMBER_WORDS =
+	"a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|few|couple of|several";
+
+const DURATION = new RegExp(
+	[
+		"\\b\\d+(?:\\.\\d+)?\\s*(?:-|to)?\\s*\\d*\\s*(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?)\\b",
+		`\\b(?:${NUMBER_WORDS})[- ](?:hours?|days?|weeks?|months?|years?)\\b`,
+		"\\b(?:fortnights?|overnight|same[- ]day|asap)\\b",
+		"\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni|週間|か月|ヶ月|日間|天|周|個月|个月|星期|주|개월)",
+	].join("|"),
+	"iu",
+);
 
 const PROMISE =
 	/\b(?:i will|i'll|we will|we'll|kazon will|guarantee[sd]?|promise[sd]?|deadline|delivered by|ready by|done by)\b/i;
@@ -308,31 +439,53 @@ const DATE = new RegExp(
 		`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?:${MONTHS})\\b`,
 		`\\b(?:by|before|until|in time for)\\s+(?:the\\s+)?(?:${MONTHS}|christmas|holidays|spring|summer|fall|autumn|winter|launch|next|end of|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b`,
 		"\\b(?:next|this|end of the)\\s+(?:week|month|quarter|year|season)\\b",
+		"\\b(?:today|tonight|tomorrow)\\b",
+		"\\bq[1-4]\\b",
+		"\\b(?:19|20)\\d{2}\\b",
 	].join("|"),
-	"i",
+	"iu",
 );
 
 // What the project costs is the owner's to say, after reading the brief. A page named "Pricing" or "Request a quote"
 // is about the visitor's own business and is allowed.
 const COST =
-	/\b(?:costs?|costing)\s+(?:about|around|roughly|under|less|no more|at most|only|just|\$)|\b(?:affordable|cheap|inexpensive|low[- ]cost|fixed[- ]price)\b|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|few|several)\s+(?:hundred|thousand)\b/i;
+	/\b(?:costs?|costing)\s+(?:about|around|roughly|under|less|no more|at most|only|just|\$|\d)|\b(?:affordable|cheap|inexpensive|low[- ]cost|fixed[- ]price)\b|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|few|several)\s+(?:hundred|thousand)\b/i;
 
 // Cards are about the visitor's project; a card never speaks for the owner or says what will be delivered when.
 const ON_BEHALF =
 	/\bkazon\b|\b(?:can|could|will|would)\s+(?:deliver|build|launch|ship|finish|have it)\b|\bdeliver(?:ed|s)?\s+(?:it|by|in|within|on)\b/i;
 
+// Any domain name, except the file extensions people write after a framework's name ("Next.js").
 const LINK =
-	/https?:\/\/|www\.|\b[\w-]+\.(?:com|net|org|io|dev|app|co|us|uk|ai)\b|[\w.+-]+@[\w-]+\./i;
+	/https?:\/\/|www\.|\b[\w-]+\.(?!(?:js|ts|jsx|tsx|py|rb|md|txt|css)\b)[a-z]{2,24}\b|[\w.+-]+@[\w-]+\./i;
 
-/** Whether text makes a commitment or points somewhere: a price, a time estimate, a promise, a link or an address. */
-export const commits = (text: string) =>
-	MONEY.test(text) ||
-	DURATION.test(text) ||
-	DATE.test(text) ||
-	COST.test(text) ||
-	ON_BEHALF.test(text) ||
-	PROMISE.test(text.replace(/[‘’]/g, "'")) ||
-	LINK.test(text);
+const COMMITMENTS = [MONEY, DURATION, DATE, COST, ON_BEHALF, PROMISE, LINK];
+
+/** Text as commitments are looked for in it and compared: NFKC, lower case, one apostrophe style, single spaces. */
+const plainText = (text: string) =>
+	text
+		.normalize("NFKC")
+		.toLowerCase()
+		.replace(/[‘’`´′]/g, "'")
+		.replace(/\s+/g, " ");
+
+/**
+ * Whether text makes a commitment or points somewhere: a price, a time estimate, a date, a promise, a link or an
+ * address, that the visitor did not write themselves. A phrase that is in `answers` is the visitor's own ("classes run
+ * for 4 weeks", "24 hours support") and is allowed; anything else is refused.
+ */
+export function commits(text: string, answers = ""): boolean {
+	const plain = plainText(text);
+	const said = plainText(answers);
+
+	return COMMITMENTS.some((pattern) => {
+		const everywhere = new RegExp(pattern.source, `${pattern.flags}g`);
+
+		return [...plain.matchAll(everywhere)].some(
+			(found) => !said.includes(found[0]),
+		);
+	});
+}
 
 // ---- Lists --------------------------------------------------------------------------------------------------------
 
@@ -412,17 +565,21 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 		if (!read.ok) continue;
 		const card = read.value;
 		const words = oneLine(card.text);
-		const quote = oneLine(card.quote);
 		const reason = oneLine(card.reason);
+
+		// The passage as the visitor wrote it, so a quote never shows words or symbols the model added.
+		const quote =
+			card.basis === "said"
+				? oneLine(groundedPassage(oneLine(card.quote), answers) ?? "")
+				: "";
 
 		if (
 			!words ||
 			words.length > textLimits[card.lane] ||
-			commits(words) ||
-			(card.basis === "said" &&
-				(quote.length > QUOTE_MAX || !quotedFrom(quote, answers))) ||
+			commits(words, answers) ||
+			(card.basis === "said" && (!quote || quote.length > QUOTE_MAX)) ||
 			reason.length > REASON_MAX ||
-			commits(reason)
+			commits(reason, answers)
 		)
 			continue;
 
@@ -431,7 +588,7 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 			lane: card.lane,
 			text: words,
 			basis: card.basis,
-			quote: card.basis === "said" ? quote : "",
+			quote,
 			reason: card.basis === "suggested" ? reason : "",
 		});
 
@@ -441,6 +598,21 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 	return cards;
 }
 
+/**
+ * Every card a reply names by its ref, whether or not the card it gave is fit to show. A card the reply named but whose
+ * new version was left out (a passage that is not there, a commitment, a card past REPLY_MAX) stays as it is: leaving a
+ * card out of a reply withdraws it, and naming it badly is not leaving it out.
+ */
+export function replyRefs(raw: RawValue): string[] {
+	const items = listOf(ownField(raw, "cards"), 40) ?? [];
+
+	return items
+		.map((item) => ownField(item, "ref"))
+		.filter(
+			(ref): ref is string => Predicate.isString(ref) && /^c\d{1,6}$/.test(ref),
+		);
+}
+
 /** Why the route did not interpret: "pass" (renew the pass), "limit", "off", "busy" or "" when it did not say. */
 export type BoardRefusal = "pass" | "limit" | "off" | "busy" | "";
 
@@ -448,6 +620,8 @@ export type BoardRefusal = "pass" | "limit" | "off" | "busy" | "";
 export type BoardAnswer = {
 	/** The reply's cards, still to be read with `readReply`, when the route sent some. */
 	readonly cards: RawValue | undefined;
+	/** The cards the reply named (see replyRefs), which it does not withdraw. */
+	readonly refs: readonly string[];
 	readonly reason: BoardRefusal;
 };
 
@@ -459,6 +633,9 @@ export function readBoardAnswer(raw: RawValue): BoardAnswer {
 
 	return {
 		cards: has(raw, "cards") ? { cards: ownField(raw, "cards") } : undefined,
+		refs: replyRefs({
+			cards: (listOf(ownField(raw, "refs"), 40) ?? []).map((ref) => ({ ref })),
+		}),
 		reason: reason ?? "",
 	};
 }
@@ -478,8 +655,9 @@ export type Applied = {
  * Applies reply number `n` to the board as it is now. Nothing changes when the reply is older than one already applied
  * or the board is paused. Otherwise each reply card that names an unowned card (by its id, or by saying the same idea)
  * updates it, if the reply's request was sent after the card last became unowned; one that names an owned card, or a
- * set-aside idea, is left out; a new idea is added at the end of its lane, within the lane's limit. An unowned card the
- * reply leaves out is withdrawn, again only if the request was sent after it last became unowned. A card read from the
+ * set-aside idea, is left out. An unowned card the reply leaves out is withdrawn, again only if the request was sent
+ * after it last became unowned; a card the reply names in `refs` (or by a card left out below) is not left out. Then each
+ * new idea is added at the end of its lane, within the lane's limit as it is after the withdrawals. A card read from the
  * answers is checked against the answers as they are now (`answers`), not as they were sent.
  */
 export function applyReply(
@@ -488,25 +666,40 @@ export function applyReply(
 	n: number,
 	answers: string,
 	paused: boolean,
+	refs: readonly string[] = [],
 ): Applied {
 	if (paused || n <= board.applied)
 		return { board, added: 0, updated: 0, withdrawn: 0 };
 
 	const cards = [...board.cards];
-	const named = new Set<string>();
 
-	let nextId = board.nextId,
-		added = 0,
-		updated = 0;
+	// A card named by a reply card that was left out stays, while what it says is still supported: a suggestion, or a
+	// card read from the answers whose passage is still in them. One whose passage the visitor deleted is withdrawn.
+	const supported = (card: BoardCard) =>
+		card.basis !== "said" || quotedFrom(card.quote, answers);
+
+	const named = new Set<string>(
+		cards.flatMap((card) =>
+			refs.includes(card.id) && supported(card) ? [card.id] : [],
+		),
+	);
+
+	const fresh: ReplyCard[] = [];
+
+	let updated = 0;
 
 	for (const item of reply) {
-		if (item.basis === "said" && !quotedFrom(item.quote, answers)) continue;
-
 		// The card the item names: by its ref first, then by saying the same idea.
 		const byRef = cards.findIndex(
 			(card) =>
 				card.lane === item.lane && item.ref !== "" && card.id === item.ref,
 		);
+
+		if (item.basis === "said" && !quotedFrom(item.quote, answers)) {
+			if (byRef >= 0 && supported(cards[byRef])) named.add(cards[byRef].id);
+
+			continue;
+		}
 
 		const index =
 			byRef >= 0
@@ -515,55 +708,70 @@ export function applyReply(
 						(card) => card.lane === item.lane && sameIdea(card.text, item.text),
 					);
 
-		if (index >= 0) {
-			const card = cards[index];
-			named.add(card.id);
-
-			if (!mayChange(card, n)) continue;
-
-			// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, or a duplicate.
+		if (index < 0) {
 			if (
-				cards.some(
-					(other, at) =>
-						at !== index &&
-						other.lane === item.lane &&
-						sameIdea(other.text, item.text),
+				!fresh.some(
+					(other) =>
+						other.lane === item.lane && sameIdea(other.text, item.text),
 				)
 			)
-				continue;
-
-			const next: BoardCard = {
-				...card,
-				text: item.text,
-				basis: item.basis,
-				quote: item.quote,
-				reason: item.reason,
-			};
-
-			if (
-				next.text !== card.text ||
-				next.basis !== card.basis ||
-				next.quote !== card.quote ||
-				next.reason !== card.reason
-			) {
-				cards[index] = next;
-				updated++;
-			}
+				fresh.push(item);
 
 			continue;
 		}
 
+		const card = cards[index];
+		named.add(card.id);
+
+		if (!mayChange(card, n)) continue;
+
+		// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, or a duplicate.
 		if (
-			cards.filter(
+			cards.some(
+				(other, at) =>
+					at !== index &&
+					other.lane === item.lane &&
+					sameIdea(other.text, item.text),
+			)
+		)
+			continue;
+
+		const next: BoardCard = {
+			...card,
+			text: item.text,
+			basis: item.basis,
+			quote: item.quote,
+			reason: item.reason,
+		};
+
+		if (
+			next.text !== card.text ||
+			next.basis !== card.basis ||
+			next.quote !== card.quote ||
+			next.reason !== card.reason
+		) {
+			cards[index] = next;
+			updated++;
+		}
+	}
+
+	const kept = cards.filter(
+		(card) => named.has(card.id) || !mayChange(card, n),
+	);
+
+	let nextId = board.nextId,
+		added = 0;
+
+	for (const item of fresh) {
+		if (
+			kept.filter(
 				(card) => card.lane === item.lane && card.status !== "dismissed",
 			).length >= laneLimits[item.lane]
 		)
 			continue;
 
-		const id = `c${nextId++}`;
-		named.add(id);
-		cards.push({
-			id,
+		kept.push({
+			id: `c${nextId++}`,
 			lane: item.lane,
 			text: item.text,
 			status: "proposed",
@@ -577,15 +785,11 @@ export function applyReply(
 		added++;
 	}
 
-	const kept = cards.filter(
-		(card) => named.has(card.id) || !mayChange(card, n),
-	);
-
 	return {
 		board: { ...board, cards: kept, nextId, applied: n },
 		added,
 		updated,
-		withdrawn: cards.length - kept.length,
+		withdrawn: cards.length - (kept.length - added),
 	};
 }
 
@@ -695,7 +899,14 @@ export function setAside(board: Board, id: string): Board {
 	);
 }
 
-/** Bring back: a set-aside card returns as kept, or as edited when the visitor had reworded it. */
+/** What a set-aside card returns as: the visitor's note, edited when the visitor had reworded it, or kept. */
+function broughtBack(card: BoardCard): CardStatus {
+	if (card.basis === "none") return "wrote";
+
+	return card.edited ? "edited" : "kept";
+}
+
+/** Bring back: a set-aside card returns as the visitor's again (see broughtBack). */
 export function bringBack(board: Board, id: string): Board {
 	const card = find(board, id);
 
@@ -710,18 +921,24 @@ export function bringBack(board: Board, id: string): Board {
 		board,
 		`brought back “${card.text}”`,
 		[id],
-		replace(id, (c) => ({ ...c, status: c.edited ? "edited" : "kept" })),
+		replace(id, (c) => ({ ...c, status: broughtBack(c) })),
 	);
 }
 
-/** Remove: the visitor's own note is deleted (Undo brings it back). */
+/**
+ * Remove: the visitor's own note goes to the set-aside list, so the model does not offer the idea back (Bring back and
+ * Undo restore it as the visitor's note).
+ */
 export function removeNote(board: Board, id: string): Board {
 	const card = find(board, id);
 
 	if (!card || card.status !== "wrote") return board;
 
-	return act(board, `removed “${card.text}”`, [id], (cards) =>
-		cards.filter((c) => c.id !== id),
+	return act(
+		board,
+		`removed “${card.text}”`,
+		[id],
+		replace(id, (c) => ({ ...c, status: "dismissed" })),
 	);
 }
 
@@ -791,7 +1008,33 @@ export function undo(board: Board): Board {
 			];
 	}
 
-	return { ...board, cards, history: board.history.slice(0, -1) };
+	return {
+		...board,
+		cards: withinLimits(cards),
+		history: board.history.slice(0, -1),
+	};
+}
+
+/**
+ * The cards with every lane within its limit. Only Undo can bring a lane past it (a kept card back where a reply has
+ * since added one), and the visitor's cards win: the lane's newest open suggestions are withdrawn until it fits.
+ */
+function withinLimits(cards: readonly BoardCard[]): BoardCard[] {
+	const fitted = [...cards];
+
+	for (const lane of LANES) {
+		let over =
+			fitted.filter((card) => card.lane === lane && card.status !== "dismissed")
+				.length - laneLimits[lane];
+
+		for (let at = fitted.length - 1; over > 0 && at >= 0; at--)
+			if (fitted[at].lane === lane && fitted[at].status === "proposed") {
+				fitted.splice(at, 1);
+				over--;
+			}
+	}
+
+	return fitted;
 }
 
 /** The board after a request is sent: its number is the new count. */
@@ -973,7 +1216,7 @@ function readOutlineItems(raw: RawValue): OutlineItem[] | null {
 
 /** The sentence a visitor sees when the outline sent does not match the brief. */
 export const OUTLINE_CHANGED =
-	"Your brief outline no longer matches your answers. Go back to your first answer, check the outline beside it and send again.";
+	"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.";
 
 /**
  * The outline sent with a brief, read on the server: undefined when none was sent; the items when each is within its
@@ -1009,7 +1252,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 			item.text.length > textLimits[item.lane] ||
 			(item.origin !== "wrote" &&
 				item.origin !== "edited" &&
-				commits(item.text)) ||
+				commits(item.text, answers)) ||
 			(item.answer !== undefined &&
 				(item.lane !== "questions" ||
 					item.answer !== oneLine(item.answer) ||
@@ -1104,12 +1347,27 @@ export type SavedBoards = {
 	readonly plain: boolean;
 };
 
+/** The most set-aside cards a saved board keeps (the newest); older ones may be offered again after a reload. */
+export const ASIDE_SAVED_MAX = 200;
+
+/** The most cards a saved board can hold: every lane full, and the set-aside cards. More is not a board this page saved. */
+const SAVED_MAX = OUTLINE_MAX + ASIDE_SAVED_MAX;
+
+/** The cards a board saves: all but the oldest set-aside cards past ASIDE_SAVED_MAX. */
+function savedCards(board: Board) {
+	let aside = board.cards.filter((card) => card.status === "dismissed").length;
+
+	return board.cards.filter(
+		(card) => card.status !== "dismissed" || aside-- <= ASIDE_SAVED_MAX,
+	);
+}
+
 /** What a page saves: each path's cards, and whether the board is paused or set aside for the plain form. */
 export const savedBoards = (saved: SavedBoards) => ({
 	boards: Object.fromEntries(
 		Object.entries(saved.boards).map(([path, board]) => [
 			path,
-			{ cards: board.cards.map(({ since: _since, ...card }) => card) },
+			{ cards: savedCards(board).map(({ since: _since, ...card }) => card) },
 		]),
 	),
 	paused: saved.paused,
@@ -1126,7 +1384,7 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 	for (const path of ["website", "webapp", "workflow"] as const) {
 		const items = listOf(
 			ownField(ownField(ownField(raw, "boards"), path), "cards"),
-			60,
+			SAVED_MAX,
 		);
 
 		if (!items) continue;
@@ -1143,6 +1401,9 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 				!words ||
 				words.length > textLimits[value.lane] ||
 				cards.some((c) => c.id === value.id) ||
+				(value.status === "dismissed" &&
+					cards.filter((c) => c.status === "dismissed").length >=
+						ASIDE_SAVED_MAX) ||
 				(value.status !== "dismissed" &&
 					cards.filter((c) => c.lane === value.lane && c.status !== "dismissed")
 						.length >= laneLimits[value.lane])

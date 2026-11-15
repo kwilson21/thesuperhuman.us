@@ -1,7 +1,7 @@
 // POST /api/software/brief/board: one interpretation of a brief for the living brief's board
 // (docs/plans/2026-11-living-brief.md). The flow is src/server/flows/brief-board.ts; this maps each of its refusals to an
 // answer the page acts on by its `reason`:
-//   200 { ok, cards }                 the reply, read as untrusted data
+//   200 { ok, cards, refs }           the reply, read as untrusted data, and the shown cards it named
 //   400 { ok: false }                 a request the page never sends
 //   403 { reason: "pass" }            no valid suggestion pass: the page renews it once and asks again
 //   409 { reason: "busy" }            the day's count kept changing under three tries
@@ -47,7 +47,8 @@ export const boardFailed = () =>
 const LOCAL = ["localhost", "127.0.0.1", "[::1]"];
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	const body = await musicRequest(request, 16384);
+	// 7,000 characters of answers and cards (CONTENT_MAX) in a script of three bytes a character, and the JSON around them.
+	const body = await musicRequest(request, 32768);
 
 	if (body instanceof Response) return body;
 	const env = locals.runtime?.env;
@@ -100,8 +101,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			secret: env.TURNSTILE_SECRET_KEY,
 			now: new Date(),
 		}).pipe(
-			Effect.map((cards) =>
-				Response.json({ ok: true, cards }, { headers: noStore }),
+			Effect.map(({ cards, refs }) =>
+				Response.json({ ok: true, cards, refs }, { headers: noStore }),
 			),
 			Effect.catchTags({
 				PassRequired: () =>

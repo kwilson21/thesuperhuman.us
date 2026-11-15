@@ -13,22 +13,24 @@ const { privacyHref } = Astro.props;
 <section class="brief-board" data-brief-board data-live="true" hidden aria-labelledby="brief-board-title">
   <div class="board-head">
     <h2 id="brief-board-title" tabindex="-1">Your brief so far</h2>
-    <p class="board-status" data-board-status></p>
-    <p class="sr-only" data-board-live role="status"></p>
+    {/* The controls come before the status line, so a status that wraps further never moves them. */}
     <div class="board-controls">
       <button type="button" data-board-pause aria-pressed="false">Pause the outline</button>
       <button type="button" data-board-undo disabled>Undo</button>
       <button type="button" data-board-plain>Use the plain form</button>
     </div>
+    <p class="board-status" data-board-status></p>
+    <p class="sr-only" data-board-live role="status"></p>
   </div>
   {/* The head stays put; the cards scroll inside this region, so the board is never taller than its space on screen. */}
   <div class="board-scroll" data-board-scroll>
-  <p class="board-explain">As you write, Cloudflare’s AI sketches an outline of your project here. Cards marked From your answers quote you. Cards marked Suggestion are ideas until you keep them. Keep writing while it works.</p>
+  <p class="board-explain" data-board-explainer>As you write, Cloudflare’s AI sketches an outline of your project here. Cards marked “From your answers” quote you. Cards marked “Suggestion” or “Suggested question” are ideas until you keep them. Keep writing while it works.</p>
   {LANES.map((lane) => (
     <section class="board-lane" data-lane={lane}>
       <h3 id={`board-lane-${lane}`} data-lane-title>{laneLabels.website[lane]}</h3>
-      <ul class="board-cards" data-lane-cards></ul>
+      <ul class="board-cards" role="list" data-lane-cards></ul>
       <p class="board-empty" data-lane-empty>Nothing here yet.</p>
+      <p class="board-empty" data-lane-full hidden>This list is full. Set a card aside to add another.</p>
       <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
       <div class="board-editor" data-lane-editor hidden>
         <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
@@ -38,7 +40,7 @@ const { privacyHref } = Astro.props;
   ))}
   <details class="board-aside" data-board-aside hidden>
     <summary data-board-aside-summary>Set aside</summary>
-    <ul data-board-aside-list></ul>
+    <ul role="list" data-board-aside-list></ul>
   </details>
   <button type="button" class="board-held site-button site-button-outline" data-board-held hidden></button>
   <p class="board-foot">Only cards from your answers and cards you keep, edit or add go with your brief, and only after you review it. I read every brief myself; the outline only organizes it. <a href={privacyHref}>Privacy</a></p>

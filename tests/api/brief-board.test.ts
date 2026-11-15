@@ -242,6 +242,27 @@ describe("a request the page never sends", () => {
 		expect(counts()).toEqual({});
 	});
 
+	it("reads 7,000 characters in a script of three bytes a character, over 16 KB as JSON", async () => {
+		run.mockResolvedValueOnce({ response: { cards: [] } });
+		const hindi = (length: number) => "किताबें बेचने ".repeat(300).slice(0, length);
+
+		const long: JsonObject = {
+			path: "webapp",
+			answers: { appGoal: hindi(1990), firstVersion: hindi(1990) },
+			cards: Array.from({ length: 10 }, (_, i) => ({
+				ref: `c${i + 1}`,
+				lane: "questions",
+				text: hindi(250),
+				state: "yours",
+			})),
+		};
+
+		expect(
+			new TextEncoder().encode(JSON.stringify(long)).length,
+		).toBeGreaterThan(16384);
+		expect((await POST(context(long))).status).toBe(200);
+	});
+
 	it("refuses another origin and text that is not JSON as the other public routes do", async () => {
 		expect(
 			(await POST(context(body, {}, { origin: "https://elsewhere.example" })))
@@ -515,6 +536,8 @@ describe("the model", () => {
 					reason: "x",
 				},
 			],
+			// The shown cards the reply named; c9 was never shown, so it names nothing.
+			refs: ["c1"],
 		});
 	});
 
@@ -549,6 +572,7 @@ describe("the model", () => {
 					reason: "Dates change",
 				},
 			],
+			refs: ["c1"],
 		});
 	});
 

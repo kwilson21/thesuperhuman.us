@@ -7,6 +7,7 @@ import {
 	type Board,
 	type BoardCard,
 	type ReplyCard,
+	LANES,
 	addNote,
 	answerCard,
 	applyReply,
@@ -16,6 +17,7 @@ import {
 	emptyBoard,
 	isOwned,
 	keepCard,
+	laneLimits,
 	quotedFrom,
 	sameIdea,
 	sendRequest,
@@ -267,6 +269,18 @@ function walk(seed: number, steps: number) {
 			if (card?.status !== "dismissed")
 				fail(step, `card ${id}, set aside, is now ${card?.status ?? "gone"}`);
 		}
+
+		// 8. withinLimits: no lane holds more cards than its limit, after a reply or after Undo (the Quint model leaves
+		// lane limits out; the second review found a reply and an Undo that broke this).
+		for (const lane of LANES)
+			if (
+				board.cards.filter((c) => c.lane === lane && c.status !== "dismissed")
+					.length > laneLimits[lane]
+			)
+				fail(
+					step,
+					`the ${lane} lane holds more than ${laneLimits[lane]} cards`,
+				);
 
 		// 5. outlineGrounded
 		for (const item of briefOutline(board, answers()))

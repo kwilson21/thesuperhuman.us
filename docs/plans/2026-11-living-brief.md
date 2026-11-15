@@ -48,30 +48,45 @@ then works by hand.
 
 1. **The model never puts words in the visitor's mouth.** A card marked as read from the answers must quote a passage
    of at least three whole words that appears in the visitor's current answers, starting and ending on word boundaries
-   (ignoring case, spacing, punctuation and quote style). Ordinary code checks it on the server and again in the
-   browser when the reply is applied. A card whose passage is not there is dropped.
+   (ignoring case, spacing, punctuation and quote style), and not right after a negation ("we do not want online
+   payments" grounds nothing about online payments). A word keeps its combining marks (Devanagari, Thai); in scripts
+   written without spaces each character counts, so a passage needs four Chinese or Japanese characters or eight Thai,
+   Lao, Khmer or Myanmar letters. The card shows and stores the passage exactly as the visitor wrote it, never the
+   model's copy of it. Ordinary code checks it on the server and again in the browser when the reply is applied. A card
+   whose passage is not there is dropped.
 2. **Owned cards are the visitor's.** A card is owned once the visitor added, kept, edited, answered or set it aside.
    Replies never change, move or remove an owned card. Only the visitor (or the visitor's Undo) does.
 3. **A rejected idea stays rejected.** A reply's new card is dropped when it matches any card already on the board in
    that lane, set-aside cards included (normalised words, plural endings and stop words ignored, or one inside the
    other), and a reply never rewords an open card into the idea of another card (set aside, owned or a duplicate). The
-   set-aside list is also sent so the model can avoid paraphrases.
+   set-aside list is also sent so the model can avoid paraphrases. Removing one of the visitor's own notes sets it aside
+   too (Bring back returns it as their note), so the model does not offer it back. A saved board keeps the newest 200
+   set-aside cards.
 4. **A reply only changes what it could have seen.** Each card records how many requests had been sent when it last
    became unowned (`since`). A reply may update an unowned card, or withdraw it by leaving it out, only if its request
    was sent after that. A card that became unowned after the request was sent (an Undo) is left alone until a later
    reply. (The first design compared against the ids each request showed; the Quint model found it let an Undo made
-   while a request was in flight be reverted, and keeps it as the `SeenOnly` mutant.)
+   while a request was in flight be reverted, and keeps it as the `SeenOnly` mutant.) A card the reply names but whose
+   new version is dropped (a misquoted passage, a commitment) is not left out, so it stays, while its own passage is
+   still in the answers; the server passes the names on as `refs`. The reply's withdrawals happen before its new cards
+   are added, so a reply that rewords a full lane's open cards replaces them rather than emptying the lane, and an Undo
+   that brings a kept card back to a lane a reply has since filled withdraws the lane's newest open suggestion.
 5. **Old replies never apply.** Requests are numbered. A reply applies only when its number is higher than the last one
    applied, the board is not paused or off, and the path has not changed since it was sent.
 6. **Nothing moves under the visitor.** While focus is inside the board, a fine pointer is over it, or a finger has
-   touched or scrolled it in the last three seconds, replies are held and a "Show 2 updates" button appears at the end
-   of the board; they apply when the visitor leaves the board, the board has been still, or the visitor asks. New cards
-   are added at the end of their lane. The board is never above the answer box, so the box never moves.
+   touched or scrolled it in the last three seconds, or one of its editors is open, replies are held and a "Show 2
+   updates" button appears at the end of the board; they apply when the visitor leaves the board, the board has been
+   still, or the visitor asks, and their arrival is announced. A scroll the page makes itself (moving focus) does not
+   count. New cards are added at the end of their lane. The board is never above the answer box, so the box never
+   moves; a hidden board (another step, the review) asks nothing and applies nothing.
 7. **No commitments.** The model is told, and the server and the browser check, that cards carry no prices, dates,
    durations, promises or links, and never speak for the owner. A card with a currency amount, a spelled-out sum, cost
    words ("costs about", "affordable", "fixed price"), a date or deadline ("by March", "next month", "2027-01-15"), a time
-   estimate, a promise, Kazon's name, or a link is dropped. A page named "Pricing" or "Request a quote" is the visitor's
-   own business and stays.
+   estimate, a promise, Kazon's name, or a link is dropped; so is an amount after a money word ("budget around 5000"),
+   a quarter or a year, "tomorrow", and the common duration and currency forms in Spanish, German, French, Italian,
+   Chinese, Japanese and Korean. A phrase the visitor wrote themselves ("classes run for 4 weeks", "24 hours support")
+   stays. A page named "Pricing" or "Request a quote" is the visitor's own business and stays. These checks are a net
+   under the model's instructions, not a proof.
 
 ## 3. Card states
 
@@ -101,7 +116,7 @@ Undo restores the card (or cards) exactly as they were before the visitor's last
 ```mermaid
 stateDiagram-v2
     [*] --> idle
-    idle --> waiting: the visitor writes or changes the board (dirty)
+    idle --> waiting: the visitor writes, or keeps, edits, answers, sets aside or adds a card (dirty)
     waiting --> waiting: more writing resets the 1.5 s pause
     waiting --> sending: 1.5 s without writing, at least 4 s since the last send, six words or more
     sending --> held: reply n arrives, newer than the last applied, the visitor in the board
@@ -114,10 +129,12 @@ stateDiagram-v2
     paused --> waiting: Resume
 ```
 
-One request is in flight at a time, and a page makes at most 24. A request that Pause, the plain form or a path change
-aborts is asked again later. The page fits each request to the route's 7,000-character limit by leaving out set-aside
-cards, then the visitor's own, never the open ones. The reconciliation does not rely on any of that: the Quint model lets
-any number of requests overlap and arrive in any order.
+One request is in flight at a time, and a page makes at most 24; after the last, the status says the page's limit was
+reached. A reply changes only open cards, so applying one never makes the board dirty, and spacing alone does not
+either. A request that Pause, the plain form, a path change or leaving the step aborts is asked again later. The page
+fits each request to the route's 7,000-character limit (a body of up to 32 KB, so a script of three bytes a character
+fits) by leaving out set-aside cards, then the visitor's own, never the open ones. The reconciliation does not rely on
+any of that: the Quint model lets any number of requests overlap and arrive in any order.
 
 ## 5. Interpretation on the server
 

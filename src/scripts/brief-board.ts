@@ -74,6 +74,9 @@ const LIMIT =
 const UNREADABLE =
 	"The outline couldn’t read this brief. You can still add your own notes.";
 
+const PAGE_LIMIT =
+	"The outline reached its limit for this page. You can still add your own notes.";
+
 /** How long after the visitor last touched or scrolled the board a held reply waits before it applies. */
 const QUIET = 3000;
 
@@ -117,6 +120,18 @@ export type BriefBoardHandle = {
 	sent(): void;
 };
 
+/** A signal that aborts with `signal` or after `ms`, without AbortSignal.any (Safari before 17.4 has none). */
+function withTimeout(signal: AbortSignal, ms: number): AbortSignal {
+	const controller = new AbortController();
+	const abort = () => controller.abort();
+
+	if (signal.aborted) abort();
+	else signal.addEventListener("abort", abort, { once: true });
+	setTimeout(abort, ms);
+
+	return controller.signal;
+}
+
 const fetchInterpretation = async (
 	body: string,
 	signal: AbortSignal,
@@ -125,7 +140,7 @@ const fetchInterpretation = async (
 		method: "POST",
 		headers: { "content-type": "application/json" },
 		body,
-		signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT)]),
+		signal: withTimeout(signal, TIMEOUT),
 	});
 
 	return {
@@ -166,6 +181,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	const heading = root.querySelector<HTMLElement>("#brief-board-title")!;
 	const scroller = root.querySelector<HTMLElement>("[data-board-scroll]")!;
 
+	const explainer = root.querySelector<HTMLElement>("[data-board-explainer]")!;
+
 	const showButtons = [
 		...form.querySelectorAll<HTMLButtonElement>("[data-board-show]"),
 	];
@@ -179,6 +196,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		title: HTMLElement;
 		list: HTMLElement;
 		empty: HTMLElement;
+		full: HTMLElement;
 		add: HTMLButtonElement;
 		editor: HTMLElement;
 		editorLabel: HTMLElement;
@@ -196,6 +214,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			title: section.querySelector<HTMLElement>("[data-lane-title]")!,
 			list: section.querySelector<HTMLElement>("[data-lane-cards]")!,
 			empty: section.querySelector<HTMLElement>("[data-lane-empty]")!,
+			full: section.querySelector<HTMLElement>("[data-lane-full]")!,
 			add: section.querySelector<HTMLButtonElement>("[data-lane-add]")!,
 			editor: section.querySelector<HTMLElement>("[data-lane-editor]")!,
 			editorLabel: section.querySelector<HTMLElement>(
@@ -251,10 +270,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			n: number;
 			path: SoftwarePath;
 			cards: ReplyCard[];
+			refs: readonly string[];
 			changes: number;
 		} | null = null,
 		lastAnnounced = 0,
 		pendingNews = 0,
+		newsTimer: ReturnType<typeof setTimeout> | undefined,
 		phase: "idle" | "reading" = "idle";
 
 	const lastSent: Partial<Record<SoftwarePath, string>> = {};
@@ -278,16 +299,27 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	const touched = () => Date.now() - touchedAt < QUIET;
 
+	// An editor left open (the visitor clicked into the answer box mid-edit) holds replies, so its card cannot go away.
+	const editing = () =>
+		[
+			...root.querySelectorAll<HTMLElement>(
+				"[data-card-editor], [data-lane-editor]",
+			),
+		].some((editor) => !editor.hidden);
+
 	const interacting = () =>
-		hovering || root.contains(document.activeElement) || touched();
+		hovering || root.contains(document.activeElement) || touched() || editing();
 
 	// ---- Status -------------------------------------------------------------------------------------------------------
+	/** Says `text` to screen readers, at most once in four seconds unless `force`; whether it was said. */
 	const announce = (text: string, force = false) => {
 		const now = Date.now();
 
-		if (!force && now - lastAnnounced < 4000) return;
+		if (!force && now - lastAnnounced < 4000) return false;
 		lastAnnounced = now;
 		live.textContent = text;
+
+		return true;
 	};
 
 	/** What the board is doing, in one line: why it is not asking, or whether it has read the answers as they are now. */
@@ -306,16 +338,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (failures > 0)
 			return "The outline couldn’t update just now. Trying again shortly.";
 
-		if (held) return "Updates are waiting at the end of the board.";
+		if (held) return "Updates are waiting below the cards.";
 
 		if (words < MIN_WORDS)
 			return "Write a few sentences and an outline starts here.";
 
 		if (lastSent[options.path()] !== answersKey())
-			return "Keep writing. The outline catches up when you pause.";
+			return "The outline catches up when you pause.";
 
 		return lastAdded > 0
-			? `Up to date. ${lastAdded} new ${lastAdded === 1 ? "card" : "cards"} in the board.`
+			? `Up to date. ${lastAdded} new ${lastAdded === 1 ? "card" : "cards"} in your brief so far.`
 			: "Up to date with your answers.";
 	}
 
@@ -323,6 +355,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const words = currentAnswers().split(/\s+/).filter(Boolean).length;
 
 		status.textContent = statusText(words);
+		// The explanation of what the AI does is shown only while it does it.
+		explainer.hidden =
+			!options.live || !options.aiEnabled() || Boolean(stopped);
 		pauseButton.hidden = !options.live || !options.aiEnabled();
 		// The label stays the same and aria-pressed says whether it is on, so the row of controls never reflows under a click.
 		pauseButton.setAttribute("aria-pressed", String(paused));
@@ -454,15 +489,30 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const current = board();
 		const path = options.path();
 		const answers = currentAnswers();
-		const alive = new Set<string>();
+
+		// The nodes of cards that left go first, so a node still in use is never moved in front of a stale one.
+		const alive = new Set(
+			current.cards
+				.filter((card) => card.status !== "dismissed")
+				.map((card) => card.id),
+		);
+
+		for (const [id, node] of nodes)
+			if (!alive.has(id)) {
+				node.remove();
+				nodes.delete(id);
+			}
 
 		for (const lane of LANES) {
 			const parts = lanes[lane];
+			const full = laneCount(current, lane) >= laneLimits[lane];
 			parts.title.textContent = laneLabels[path][lane];
 			parts.add.textContent = addLabels[path][lane];
 			parts.editorLabel.textContent = addLabels[path][lane];
 			parts.input.maxLength = textLimits[lane];
-			parts.add.disabled = laneCount(current, lane) >= laneLimits[lane];
+			parts.add.disabled = full;
+			// Says why Add (and Bring back for this list) is unavailable.
+			parts.full.hidden = !full;
 
 			const cards = current.cards.filter(
 				(card) => card.lane === lane && card.status !== "dismissed",
@@ -471,7 +521,6 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			let previous: Element | null = null;
 
 			for (const card of cards) {
-				alive.add(card.id);
 				let node = nodes.get(card.id);
 
 				if (!node) {
@@ -505,12 +554,6 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			parts.empty.hidden = cards.length > 0;
 		}
-
-		for (const [id, node] of nodes)
-			if (!alive.has(id)) {
-				node.remove();
-				nodes.delete(id);
-			}
 
 		const dismissed = current.cards.filter(
 			(card) => card.status === "dismissed",
@@ -550,6 +593,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		persist();
 		focusAfter?.()?.focus();
 		options.onChange?.();
+		// The visitor's choices go with the next request (plan, section 4), after the same pause as writing.
+		schedule();
 	}
 
 	function applyHeld(moveFocus: boolean) {
@@ -570,13 +615,15 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			reply.n,
 			currentAnswers(),
 			paused || !options.aiEnabled() || plain,
+			reply.refs,
 		);
 
 		boards[reply.path] = result.board;
 		render();
 		persist();
 		options.onChange?.();
-		news(result.added);
+		// The visitor was told updates were waiting, so they hear that they arrived, even when no card was new.
+		news(result.added, result.updated + result.withdrawn);
 
 		if (moveFocus) {
 			const first = result.board.cards.find((card) => !before.has(card.id));
@@ -589,32 +636,58 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		}
 	}
 
-	function news(added: number) {
+	/** Says what a reply changed. A message the four-second throttle holds back is said once the throttle allows. */
+	function news(added: number, changed = 0) {
 		lastAdded = added;
 		updateStatus();
-
-		if (added <= 0) return;
 		pendingNews += added;
-		announce(
-			`${pendingNews} new ${pendingNews === 1 ? "card" : "cards"} in your brief so far.`,
-		);
-		pendingNews = 0;
+
+		if (pendingNews <= 0 && changed <= 0) return;
+
+		const say = () => {
+			const text =
+				pendingNews > 0
+					? `${pendingNews} new ${pendingNews === 1 ? "card" : "cards"} in your brief so far.`
+					: "Your brief so far was updated.";
+
+			if (announce(text)) pendingNews = 0;
+			else {
+				clearTimeout(newsTimer);
+				newsTimer = setTimeout(say, lastAnnounced + 4050 - Date.now());
+			}
+		};
+
+		say();
 	}
 
-	function deliver(path: SoftwarePath, n: number, cards: ReplyCard[]) {
+	function deliver(
+		path: SoftwarePath,
+		n: number,
+		cards: ReplyCard[],
+		refs: readonly string[],
+	) {
 		if (path !== options.path() || paused || plain || !options.aiEnabled())
 			return;
-		const preview = applyReply(board(), cards, n, currentAnswers(), false);
+
+		const preview = applyReply(
+			board(),
+			cards,
+			n,
+			currentAnswers(),
+			false,
+			refs,
+		);
+
 		const changes = preview.added + preview.updated + preview.withdrawn;
 
 		if (changes > 0 && interacting()) {
 			if (!held)
 				announce(
-					`${changes} ${changes === 1 ? "update is" : "updates are"} waiting at the end of the board.`,
+					`${changes} ${changes === 1 ? "update is" : "updates are"} waiting below the cards.`,
 					true,
 				);
 
-			if (!held || n > held.n) held = { n, path, cards, changes };
+			if (!held || n > held.n) held = { n, path, cards, refs, changes };
 			updateStatus();
 
 			return;
@@ -630,7 +703,19 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	}
 
 	// ---- Requests -----------------------------------------------------------------------------------------------------
-	const answersKey = () => JSON.stringify([options.path(), options.answers()]);
+	// What a request is for: the answers as words (a trailing space asks nothing new) and the visitor's own choices on the
+	// board. A reply changes only open cards, so applying one never asks again by itself.
+	const answersKey = () =>
+		JSON.stringify([
+			options.path(),
+			Object.entries(options.answers()).map(([name, value]) => [
+				name,
+				value.replace(/\s+/g, " ").trim(),
+			]),
+			board()
+				.cards.filter((card) => card.status !== "proposed")
+				.map((card) => [card.id, card.status, card.text, card.answer]),
+		]);
 
 	const canAsk = () =>
 		options.live &&
@@ -717,6 +802,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				read = readBoardAnswer(answer.json);
 			}
 
+			// Aborted while the answer was still arriving: it was never answered, as below.
+			if (controller.signal.aborted) throw new Error("aborted");
+
 			const cards =
 				answer.status === 200 && read.cards !== undefined
 					? readReply(read.cards, answerText(options.answers(), path))
@@ -724,7 +812,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			if (cards) {
 				failures = 0;
-				deliver(path, n, cards);
+				deliver(path, n, cards, read.refs);
 			} else if (read.reason === "limit") {
 				stop(LIMIT);
 			} else if (answer.status === 403 || read.reason === "off") {
@@ -748,6 +836,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			phase = "idle";
 
 			if (failures >= FAILURES && !stopped) stop(NOT_NOW);
+
+			if (requests >= REQUESTS_PER_PAGE && !stopped) stop(PAGE_LIMIT);
 			updateStatus();
 			retryAt = failures > 0 ? Date.now() + retry : 0;
 			schedule();
@@ -843,6 +933,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			switch (target.dataset.act) {
 				case "keep":
 					change(keepCard(board(), id));
+					announce(`Kept “${card.text}”.`, true);
 
 					break;
 				case "edit":
@@ -871,9 +962,13 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		else if (target.matches("[data-card-cancel]") && id) closeEditor(id, false);
 		else if (target.dataset.bringBack) {
 			const backId = target.dataset.bringBack;
+			const back = board().cards.find((c) => c.id === backId);
+
 			change(bringBack(board(), backId), () =>
 				cardNode(backId)?.querySelector<HTMLElement>("button"),
 			);
+
+			if (back) announce(`Brought back “${back.text}”.`, true);
 		}
 	});
 
@@ -910,15 +1005,22 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const label = lastAction(board());
 
 		if (!label) return;
-		change(undo(board()), () =>
-			// Undo can remove the card that held focus; focus then goes to Undo, or to the heading when nothing is left to undo.
-			document.activeElement === document.body ||
-			!document.activeElement?.isConnected
-				? undoButton.disabled
-					? heading
-					: undoButton
-				: null,
-		);
+		const fromUndo = document.activeElement === undoButton;
+
+		change(undo(board()), () => {
+			// Undo can remove the card that held focus, or disable itself when nothing is left to undo; focus then goes to
+			// Undo, or to the heading.
+			const active = document.activeElement;
+
+			const lost =
+				active === document.body ||
+				!active?.isConnected ||
+				(fromUndo && undoButton.disabled);
+
+			if (!lost) return null;
+
+			return undoButton.disabled ? heading : undoButton;
+		});
 		announce(`Undid: ${label}.`, true);
 	}
 
@@ -926,11 +1028,32 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const parts = lanes[lane];
 
 		const close = (save: boolean) => {
-			if (save) change(addNote(board(), lane, parts.input.value));
+			if (save && parts.input.value.trim()) {
+				const next = addNote(board(), lane, parts.input.value);
+
+				// The list filled while the visitor typed: keep their words, and say what to do.
+				if (next === board()) {
+					announce(
+						"This list is full. Set a card aside, then add yours.",
+						true,
+					);
+					parts.input.focus();
+
+					return;
+				}
+
+				change(next);
+			}
+
 			parts.input.value = "";
 			parts.editor.hidden = true;
 			parts.add.hidden = false;
-			parts.add.focus();
+
+			// Add is disabled when the note filled the list: focus goes to the note itself.
+			(parts.add.disabled
+				? parts.list.lastElementChild?.querySelector<HTMLElement>("button")
+				: parts.add
+			)?.focus();
 		};
 
 		parts.add.addEventListener("click", () => {
@@ -984,7 +1107,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			held &&
 			!(to instanceof Node && root.contains(to)) &&
 			!hovering &&
-			!touched()
+			!touched() &&
+			!editing()
 		)
 			applyHeld(false);
 	});
@@ -1001,7 +1125,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	root.addEventListener("pointerdown", (event) => {
 		if (event.pointerType === "touch") noteTouch();
 	});
-	scroller.addEventListener("scroll", noteTouch, { passive: true });
+	// The visitor scrolling the cards, by wheel or finger. A scroll the page makes itself (moving focus) does not count.
+	scroller.addEventListener("wheel", noteTouch, { passive: true });
+	scroller.addEventListener("touchmove", noteTouch, { passive: true });
 	root.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")
 			hovering = true;
@@ -1009,8 +1135,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	root.addEventListener("pointerleave", () => {
 		hovering = false;
 
-		if (held && !root.contains(document.activeElement) && !touched())
-			applyHeld(false);
+		if (held && !interacting()) applyHeld(false);
 	});
 
 	const handle: BriefBoardHandle = {
@@ -1022,6 +1147,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			if (!next) {
 				hovering = false;
 				clearTimeout(timer);
+				stopAsking();
 			} else {
 				render();
 				schedule();

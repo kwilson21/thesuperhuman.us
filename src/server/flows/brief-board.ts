@@ -13,6 +13,7 @@ import {
 	type ReplyCard,
 	answerText,
 	readReply,
+	replyRefs,
 } from "../../lib/brief-board";
 import {
 	suggestionVisitorHash,
@@ -103,9 +104,14 @@ export const interpretBrief = (asked: Interpretation) =>
 		if (cards === null) return yield* Effect.fail(new BoardReplyUnreadable());
 
 		// A reply may name only cards the request showed it; a ref it made up is dropped, and the card counts as new.
-		const refs = new Set(request.cards.map((card) => card.ref));
+		const shown = new Set(request.cards.map((card) => card.ref));
 
-		return cards.map(
-			(card): ReplyCard => (refs.has(card.ref) ? card : { ...card, ref: "" }),
-		);
+		return {
+			cards: cards.map(
+				(card): ReplyCard =>
+					shown.has(card.ref) ? card : { ...card, ref: "" },
+			),
+			// Every shown card the reply named, so one whose new version was left out above is not withdrawn.
+			refs: [...new Set(replyRefs(raw))].filter((ref) => shown.has(ref)),
+		};
 	});

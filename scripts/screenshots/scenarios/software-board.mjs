@@ -80,7 +80,9 @@ export default {
 				await box.pressSequentially(text, { delay: 2 });
 				await page.waitForFunction(
 					() =>
-						document.querySelector("[data-board-status]")?.textContent?.startsWith("Up to date"),
+						document
+							.querySelector("[data-board-status]")
+							?.textContent?.startsWith("Up to date"),
 					undefined,
 					{ timeout: 20000 },
 				);
@@ -265,10 +267,18 @@ export default {
 								reason: "You sell merch at shows",
 							},
 						);
+						// The choices above ask again (the board sends the visitor's choices too); the model answers alike.
+						await page.unroute("**/api/software/brief/board");
+						await page.route("**/api/software/brief/board", (route) =>
+							route.fulfill({ json: reply }),
+						);
+
+						// Only one request is ever in flight, so held[0] is the reply made before the choices.
 						await held[0].fulfill({ json: reply });
-						await page.waitForFunction(
-							() =>
-								document.querySelector("[data-board-status]")?.textContent?.startsWith("Up to date"),
+						await page.waitForFunction(() =>
+							document
+								.querySelector("[data-board-status]")
+								?.textContent?.startsWith("Up to date"),
 						);
 
 						const texts = await page

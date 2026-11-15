@@ -211,14 +211,22 @@ describe("reading a reply", () => {
 	it("reads the route's answer", () => {
 		expect(readBoardAnswer({ ok: false, reason: "pass" })).toEqual({
 			cards: undefined,
+			refs: [],
 			reason: "pass",
 		});
-		expect(readBoardAnswer({ ok: true, cards: [] })).toEqual({
+		expect(
+			readBoardAnswer({ ok: true, cards: [], refs: ["c2", "x", 3, "c9"] }),
+		).toEqual({
 			cards: { cards: [] },
+			refs: ["c2", "c9"],
 			reason: "",
 		});
 		expect(readBoardAnswer({ reason: "whatever" }).reason).toBe("");
-		expect(readBoardAnswer("nope")).toEqual({ cards: undefined, reason: "" });
+		expect(readBoardAnswer("nope")).toEqual({
+			cards: undefined,
+			refs: [],
+			reason: "",
+		});
 	});
 });
 
@@ -385,7 +393,7 @@ describe("the visitor's actions", () => {
 		expect(undo(board)).toBe(board);
 	});
 
-	it("adds and removes the visitor's notes, and Undo puts a removed note back where it was", () => {
+	it("adds and removes the visitor's notes; a removed note is set aside, and Undo or Bring back restores it as a note", () => {
 		let board = addNote(emptyBoard(), "parts", "Press kit");
 		board = addNote(board, "parts", "Lyrics");
 		expect(board.cards.map((c) => [c.id, c.status])).toEqual([
@@ -396,9 +404,23 @@ describe("the visitor's actions", () => {
 		board = editCard(board, "c1", "EPK");
 		expect(board.cards[0]).toMatchObject({ text: "EPK", status: "wrote" });
 		board = removeNote(board, "c1");
-		expect(board.cards.map((c) => c.text)).toEqual(["Lyrics"]);
+		expect(board.cards.map((c) => [c.text, c.status])).toEqual([
+			["EPK", "dismissed"],
+			["Lyrics", "wrote"],
+		]);
+		// The model is not offered a removed note's idea back.
+		expect(
+			applyReply(board, [suggested("parts", "EPK")], 1, ANSWERS, false).added,
+		).toBe(0);
+		expect(bringBack(board, "c1").cards[0]).toMatchObject({
+			text: "EPK",
+			status: "wrote",
+		});
 		board = undo(board);
-		expect(board.cards.map((c) => c.text)).toEqual(["EPK", "Lyrics"]);
+		expect(board.cards.map((c) => [c.text, c.status])).toEqual([
+			["EPK", "wrote"],
+			["Lyrics", "wrote"],
+		]);
 		board = undo(board);
 		board = undo(board);
 		expect(board.cards.map((c) => c.text)).toEqual(["Press kit"]);
@@ -720,7 +742,7 @@ describe("found in review", () => {
 		});
 	});
 
-	it("keeps each lane of the outline within its limit when Undo has filled it past, leaving out what the visitor does not own", () => {
+	it("keeps each lane within its limit when Undo brings an owned card back to a lane a reply has since filled, withdrawing the reply's newest open card", () => {
 		let board = emptyBoard();
 
 		for (const note of ["Fans", "Venues", "Press"])
@@ -735,9 +757,22 @@ describe("found in review", () => {
 			ANSWERS,
 			false,
 		).board;
+		expect(
+			board.cards.filter(
+				(c) => c.lane === "audience" && c.status !== "dismissed",
+			),
+		).toHaveLength(3);
 		board = undo(board);
 
-		expect(board.cards.filter((c) => c.lane === "audience")).toHaveLength(4);
+		expect(
+			board.cards
+				.filter((c) => c.lane === "audience")
+				.map((c) => [c.text, c.status]),
+		).toEqual([
+			["Fans", "wrote"],
+			["Venues", "wrote"],
+			["Press", "wrote"],
+		]);
 		const outline = briefOutline(board, ANSWERS);
 
 		expect(outline.map((item) => item.text)).toEqual([
@@ -797,5 +832,165 @@ describe("found in review", () => {
 		expect(fitContext(cards, 5500).map((c) => c.ref)).toEqual(["c1"]);
 		expect(fitContext(cards, 6900).map((c) => c.ref)).toEqual(["c1"]);
 		expect(fitContext(cards, 100)).toEqual(cards);
+	});
+});
+
+describe("found in the second review", () => {
+	it("withdraws before it adds, so a reply that rewords a full lane's open cards does not empty it", () => {
+		let board = started(
+			suggested("audience", "Fans"),
+			suggested("audience", "Venues"),
+			suggested("audience", "Press"),
+		);
+
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		const after = applyReply(
+			board,
+			[suggested("audience", "Listeners"), suggested("audience", "Promoters")],
+			n,
+			ANSWERS,
+			false,
+		);
+
+		expect(after.withdrawn).toBe(3);
+		expect(after.added).toBe(2);
+		expect(after.board.cards.map((c) => c.text)).toEqual([
+			"Listeners",
+			"Promoters",
+		]);
+	});
+
+	it("leaves a card as it is when the reply names it but its new version is left out, while its passage is still there", () => {
+		let board = started(said("parts", "Shows", "upcoming shows near them"));
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		// The model misquotes the card it names: that version is dropped, and the card stays.
+		const misquoted = applyReply(
+			board,
+			[said("parts", "Shows", "upcoming gigs near them", "c1")],
+			n,
+			ANSWERS,
+			false,
+		);
+
+		expect(misquoted.board.cards.map((c) => c.text)).toEqual(["Shows"]);
+
+		// The server dropped the version (a commitment, say) and passed on only that it named c1.
+		const dropped = applyReply(board, [], n, ANSWERS, false, ["c1"]);
+
+		expect(dropped.board.cards.map((c) => c.text)).toEqual(["Shows"]);
+		// A ref names nothing once the card's own passage has gone from the answers.
+		expect(
+			applyReply(board, [], n, "A home for my band.", false, ["c1"]).withdrawn,
+		).toBe(1);
+	});
+
+	it("reads words with combining marks as whole words, and scripts without spaces by their characters", () => {
+		const hindi = "हमें किताबें बेचने के लिए एक वेबसाइट चाहिए";
+
+		expect(quotedFrom("किताबें", hindi)).toBe(false);
+		expect(quotedFrom("किताबें बेचने के", hindi)).toBe(true);
+		const chinese = "我们每周为成人和儿童开课，希望大家可以在网上报名。";
+
+		expect(quotedFrom("每周为成人和儿童开课", chinese)).toBe(true);
+		expect(quotedFrom("开课", chinese)).toBe(false);
+		expect(quotedFrom("在网上报名", chinese)).toBe(true);
+		expect(
+			quotedFrom("ในการจองคลาสออนไลน์", "เราต้องการระบบในการจองคลาสออนไลน์"),
+		).toBe(true);
+	});
+
+	it("quotes the visitor's own words, never characters the model added, and refuses a passage after a negation", () => {
+		const answers =
+			"We charge 50 for a class. We do not want online payments yet.";
+
+		const [card] =
+			readReply(
+				{
+					cards: [
+						{
+							lane: "parts",
+							text: "Class fees",
+							basis: "said",
+							quote: "we charge $50 for",
+						},
+					],
+				},
+				answers,
+			) ?? [];
+
+		expect(card?.quote).toBe("We charge 50 for");
+		expect(quotedFrom("want online payments", answers)).toBe(false);
+		expect(quotedFrom("online payments yet", answers)).toBe(true);
+	});
+
+	it.each([
+		"Budget around 5000",
+		"Estimate: 3,000",
+		"Under 1,000",
+		"Costs 500",
+		"＄500 build",
+		"Around 5k",
+		"Launch tomorrow",
+		"Launch in Q3 2027",
+		"Two-week sprint",
+		"Done within a fortnight",
+		"Listo en 3 semanas",
+		"Lieferung in 2 Wochen",
+		"費用は5万円",
+		"See shop.de",
+		"Visit band.shop",
+	])("refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it("accepts a phrase the visitor wrote themselves, and things that only look like commitments", () => {
+		const answers =
+			"We offer 24 hours support. Classes run for 4 weeks. Our videos are in 4K.";
+
+		expect(commits("24 hours support", answers)).toBe(false);
+		expect(commits("Classes for 4 weeks", answers)).toBe(false);
+		expect(commits("Classes for 6 weeks", answers)).toBe(true);
+		expect(commits("4K video")).toBe(false);
+		expect(commits("Built with Next.js")).toBe(false);
+	});
+
+	it("keeps the newest set-aside cards when it saves, so a long session's board survives a reload", () => {
+		let board = addNote(emptyBoard(), "parts", "Press kit");
+
+		for (let i = 0; i < 230; i++) {
+			let n: number;
+			[board, n] = sendRequest(board);
+			board = applyReply(
+				board,
+				[suggested("parts", `Idea ${i} ${"x".repeat(i % 7)}`)],
+				n,
+				ANSWERS,
+				false,
+			).board;
+			const open = board.cards.find((c) => c.status === "proposed");
+
+			if (open) board = setAside(board, open.id);
+		}
+
+		const read = readSavedBoards(
+			JSON.parse(
+				JSON.stringify(
+					savedBoards({
+						boards: { website: board },
+						paused: false,
+						plain: false,
+					}),
+				),
+			),
+		);
+
+		const cards = read.boards.website?.cards ?? [];
+
+		expect(cards.find((c) => c.text === "Press kit")?.status).toBe("wrote");
+		expect(cards.filter((c) => c.status === "dismissed")).toHaveLength(200);
 	});
 });
