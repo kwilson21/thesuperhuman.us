@@ -24,7 +24,7 @@ type Seen = {
 const FAR = "9999-12-31T00:00:00.000Z";
 
 /** Serves one request against a world: the rows a statement finds, and the bucket. Records every call in order. */
-function serve(input: {
+async function serve(input: {
 	readonly path: "file" | "attachment";
 	readonly id: string;
 	readonly cookie: string;
@@ -162,16 +162,16 @@ function serve(input: {
 		params: { id: input.id },
 	});
 
-	const run = Promise.resolve(
-		input.path === "file" ? fileGET(context) : attachmentGET(context),
-	);
+	const response = await (input.path === "file"
+		? fileGET(context)
+		: attachmentGET(context));
 
-	return run.then(async (response) => ({
+	return {
 		status: response.status,
 		headers: [...response.headers.entries()],
 		body: await response.text(),
 		seen,
-	}));
+	};
 }
 
 const theirs = {

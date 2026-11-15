@@ -21,10 +21,7 @@ import type {
 	StoredAttachment,
 	StoredOffer,
 } from "./rules/agreement-attachment";
-import type {
-	StoredArchiveLink,
-	StoredSignature,
-} from "./rules/agreement-link";
+import type { StoredSignature } from "./rules/agreement-link";
 import type {
 	SigningOfferRow,
 	StoredAgreementSession,
