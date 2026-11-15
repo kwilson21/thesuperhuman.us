@@ -17,6 +17,7 @@ import {
 	readFields,
 	refuseEveryKind,
 } from "./fields";
+import { ownLabel } from "./type-guards";
 
 // The client-side draft of the signing form: its choices, validator and messages. Pure, with no server imports, because
 // the browser runs resolveClientDetails before it posts.
@@ -115,7 +116,7 @@ const emptyDraft = Object.fromEntries(
 /** What a visitor sees for a field whose control characters or lone surrogates the reader refused. */
 const unusualCharacters = "Remove unusual characters from this field.";
 
-export const fieldMessages: Record<string, string> = {
+export const fieldMessages = {
 	legal_name: "Add your legal business name",
 	entity_type: "Choose a business type",
 	state: "Choose a state",
@@ -129,7 +130,7 @@ export const fieldMessages: Record<string, string> = {
 	approver_name: "Add the approver name",
 	approver_email: "Add a valid approver email",
 	notice_email: "Add a valid notice email",
-};
+} satisfies Record<string, string>;
 
 /**
  * Reads the draft the signing form posts: every field is text (or one of the portfolio choices), a missing field is
@@ -214,7 +215,7 @@ export function resolveClientDetails(input: RawValue, email: string) {
 				message === controlMessage
 					? unusualCharacters
 					: message === requiredMessage || message === emailMessage
-						? (fieldMessages[field] ?? checkMessage)
+						? (ownLabel(fieldMessages, field) ?? checkMessage)
 						: checkMessage;
 		}
 

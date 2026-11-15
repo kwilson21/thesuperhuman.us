@@ -46,6 +46,13 @@ import {
 	type SoftwareOffer,
 } from "~/lib/software-offers";
 import { projectToday } from "~/lib/audio-project-updates";
+import { FieldsRefused, type RawValue } from "~/lib/fields";
+import {
+	prefillAgreementDraft,
+	saveAgreementDraft,
+	type PreviousClientDetails,
+} from "~/lib/agreement-draft";
+import type { OwnerRequest } from "~/lib/owner-model";
 import type { APIContext } from "astro";
 import { double, partial, fakeD1 } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
@@ -5834,3 +5841,67 @@ it("gives a different client with no executed MSA the current MSA, and leaves th
 	});
 	expect(firstRows()).toEqual(before);
 });
+
+const refusedInputs: [RawValue][] = [
+	[null],
+	["text"],
+	[42],
+	[[]],
+	[{ ...client, portfolio: "deny", naming: true }],
+	[{ ...client, extra: "x" }],
+];
+
+it.each(refusedInputs)(
+	"refuses a review input its schema rejects and writes nothing (case %#)",
+	async (input) => {
+		const session = (await agreementSession(db, request(), "agreement", "o"))!;
+
+		await expect(
+			reviewAgreements(db, (await offer())!, session, input),
+		).rejects.toBeInstanceOf(FieldsRefused);
+		expect(
+			sql.prepare("SELECT count(*) n FROM software_agreements").get().n,
+		).toBe(0);
+	},
+);
+
+it("prefills from odd stored client details without a field it cannot read", () => {
+	const request = partial<OwnerRequest>({ name: "Alex", details: {} });
+	// SAFETY: a stored value can be any JSON shape; prefillAgreementDraft must read each of these without throwing.
+	const odd = (value: RawValue) => value as PreviousClientDetails;
+
+	for (const previous of [null, "text", 42, []])
+		expect(prefillAgreementDraft(request, odd(previous))).toMatchObject({
+			legal_name: "",
+			state: "",
+			country: "",
+		});
+
+	expect(
+		prefillAgreementDraft(request, odd({ jurisdiction: 42 })),
+	).toMatchObject({ state: "Outside the US", country: "42" });
+});
+
+it("refuses to prefill from a stored legal name that is not text", () => {
+	const request = partial<OwnerRequest>({ name: "Alex", details: {} });
+	// SAFETY: a stored value can be any JSON shape; prefillAgreementDraft must refuse this one with FieldsRefused.
+	const odd = (value: RawValue) => value as PreviousClientDetails;
+
+	expect(() => prefillAgreementDraft(request, odd({ legal_name: {} }))).toThrow(
+		FieldsRefused,
+	);
+});
+
+it.each([[null], ["text"], [42], [[]]])(
+	"refuses a draft input that is not an object and saves no draft row (case %#)",
+	async (input) => {
+		const session = (await agreementSession(db, request(), "agreement", "o"))!;
+
+		await expect(
+			saveAgreementDraft(db, (await offer())!, session, input),
+		).rejects.toBeInstanceOf(FieldsRefused);
+		expect(
+			sql.prepare("SELECT count(*) n FROM software_agreement_drafts").get().n,
+		).toBe(0);
+	},
+);

@@ -17,6 +17,9 @@ import {
 import {
 	allowanceRow,
 	audioClient,
+	BROWSER,
+	browser,
+	browserAt,
 	codeRow,
 	GRACE,
 	mergeSeeds,
@@ -61,14 +64,19 @@ import {
 //                                         an object with no success; the ip allowance is already spent, the email one is not
 //   issueClientCode
 //   200 generic, no mail                  unknown email, request with no project (purchase kind), withdrawn request, revoked
-//                                         audio project, revoked software project, software content deleted, code under 30
-//                                         seconds old, a lost race (another request inserted the code first), project revoked
-//                                         between the allowance and the issue
+//                                         audio project, revoked software project, software content deleted, the address
+//                                         already has six live codes, project revoked between the allowance and the issue
 //   200 generic, mail                     audio project, software project, resolved request (a request resolved before
 //                                         acceptance has its project revoked by a trigger: no code), two projects (two audit rows), a
 //                                         withdrawn request next to an active one (audit row for both: no withdrawn filter in
-//                                         the audit insert), a code replaced after 30 seconds, a used code replaced at once, an
-//                                         expired code replaced
+//                                         the audit insert), the same browser's earlier code replaced (at once or later), a used
+//                                         code and an expired code left or swept, another browser's code kept (a lost race
+//                                         with another request, a live code seeded for another browser), five live codes (the
+//                                         sixth is issued)
+//   cookie                                every answer that reaches the issue sets __Host-studio_pending to the value the browser
+//                                         sent, or to a fresh random one when it sent none, whether or not a code was issued; a
+//                                         code is bound to that value and the address (it is read back by the sign-in steps
+//                                         through the cookie jar, which a successful sign-in no longer clears)
 //   mail outcomes (background)            200 sent; 4xx and 429 discard the code (audit "code-delivery-failed", row deleted);
 //                                         5xx, network down keep it; the discard batch failing is swallowed (console.error,
 //                                         which a corpus does not capture); SITE_ORIGIN unset and custom
@@ -80,10 +88,12 @@ import {
 const URL_PATH = "/api/studio/code";
 const IP = "203.0.113.9";
 const FIRST = "84835301";
-const SECOND = "41233920";
+
+// The second code the harness hands out (the pending value drawn before it moves the random sequence on from the old 41233920).
+const SECOND = "07085773";
 
 const tables = [
-	"audio_client_codes",
+	"audio_client_signin_codes",
 	"audio_client_sessions",
 	"audio_client_access_audit",
 	"audio_client_allowances",
@@ -93,7 +103,7 @@ const ask = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step => ({
 	as: asVisitor({ ip: IP }),
 	path: URL_PATH,
 	json: body,
-	headers: SAME_ORIGIN,
+	headers: browser,
 	dump: { music: tables },
 	...extra,
 });
@@ -127,7 +137,7 @@ const signIn = (code: string, extra: Partial<Step> = {}): Step => ({
 	handler: session,
 	path: "/api/studio/session",
 	json: { email: GRACE, code },
-	headers: SAME_ORIGIN,
+	headers: browser,
 	dump: { music: tables },
 	...extra,
 });
@@ -460,10 +470,10 @@ const cases: Case[] = [
 		music: { seed: audioClient("r1", OTHER) },
 	}),
 	// an existing code
-	open("a code issued 10 seconds ago is not replaced", {
+	open("a code issued 10 seconds ago to this browser is replaced", {
 		music: {
 			seed: mergeSeeds(client, {
-				audio_client_codes: [
+				audio_client_signin_codes: [
 					await codeRow(GRACE, "11111111", {
 						created_at: "2026-11-13T11:59:50.000Z",
 						expires_at: "2026-11-13T12:09:50.000Z",
@@ -471,24 +481,29 @@ const cases: Case[] = [
 				],
 			}),
 		},
+		steps: [form({ headers: BROWSER })],
 	}),
-	open("a code issued exactly 30 seconds ago is replaced", {
-		music: {
-			seed: mergeSeeds(client, {
-				audio_client_codes: [
-					await codeRow(GRACE, "11111111", {
-						created_at: "2026-11-13T11:59:30.000Z",
-						expires_at: "2026-11-13T12:09:30.000Z",
-						attempts: 4,
-					}),
-				],
-			}),
+	open(
+		"a code issued 30 seconds ago is replaced like any other (there is no pause)",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await codeRow(GRACE, "11111111", {
+							created_at: "2026-11-13T11:59:30.000Z",
+							expires_at: "2026-11-13T12:09:30.000Z",
+							attempts: 4,
+						}),
+					],
+				}),
+			},
+			steps: [form({ headers: BROWSER })],
 		},
-	}),
+	),
 	open("a used code issued 5 seconds ago is replaced at once", {
 		music: {
 			seed: mergeSeeds(client, {
-				audio_client_codes: [
+				audio_client_signin_codes: [
 					await codeRow(GRACE, "11111111", {
 						created_at: "2026-11-13T11:59:55.000Z",
 						expires_at: "2026-11-13T12:09:55.000Z",
@@ -498,11 +513,12 @@ const cases: Case[] = [
 				],
 			}),
 		},
+		steps: [form({ headers: BROWSER })],
 	}),
 	open("an expired code issued 5 seconds ago is replaced", {
 		music: {
 			seed: mergeSeeds(client, {
-				audio_client_codes: [
+				audio_client_signin_codes: [
 					await codeRow(GRACE, "11111111", {
 						created_at: "2026-11-13T11:59:55.000Z",
 						expires_at: "2026-11-13T12:00:00.000Z",
@@ -510,8 +526,117 @@ const cases: Case[] = [
 				],
 			}),
 		},
+		steps: [form({ headers: BROWSER })],
 	}),
-	open("two requests 10 seconds apart: the second is not replaced", {
+	open("another browser asks while a code issued 10 seconds ago is live", {
+		music: {
+			seed: mergeSeeds(client, {
+				audio_client_signin_codes: [
+					await codeRow(GRACE, "11111111", {
+						created_at: "2026-11-13T11:59:50.000Z",
+						expires_at: "2026-11-13T12:09:50.000Z",
+					}),
+				],
+			}),
+		},
+	}),
+	open("another browser asks and the first browser's code still works", {
+		steps: [
+			form(),
+			form({ headers: SAME_ORIGIN, advanceMs: 1000 }),
+			signIn(FIRST, { headers: browserAt(0) }),
+		],
+	}),
+	open("another browser asks and its own code works in its own browser", {
+		steps: [
+			form(),
+			form({ headers: SAME_ORIGIN, advanceMs: 1000 }),
+			signIn(SECOND, { headers: browserAt(1) }),
+		],
+	}),
+	open("a stranger's guesses cannot use up the client's code", {
+		steps: [
+			form(),
+			...Array.from({ length: 12 }, () =>
+				signIn("00000000", { headers: SAME_ORIGIN }),
+			),
+			signIn(FIRST),
+		],
+	}),
+	open("the right code typed in a browser that did not ask for it", {
+		steps: [form(), signIn(FIRST, { headers: SAME_ORIGIN })],
+	}),
+	open(
+		"the address already has six live codes: the seventh is refused with the usual answer",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: await Promise.all(
+						Array.from({ length: 6 }, (_, index) =>
+							codeRow(
+								GRACE,
+								`1111111${index}`,
+								{
+									created_at: "2026-11-13T11:59:00.000Z",
+									expires_at: "2026-11-13T12:09:00.000Z",
+								},
+								`${index}`.repeat(64),
+							),
+						),
+					),
+				}),
+			},
+		},
+	),
+	open("five live codes for the address: the sixth is issued", {
+		music: {
+			seed: mergeSeeds(client, {
+				audio_client_signin_codes: await Promise.all(
+					Array.from({ length: 5 }, (_, index) =>
+						codeRow(
+							GRACE,
+							`1111111${index}`,
+							{
+								created_at: "2026-11-13T11:59:00.000Z",
+								expires_at: "2026-11-13T12:09:00.000Z",
+							},
+							`${index}`.repeat(64),
+						),
+					),
+				),
+			}),
+		},
+	}),
+	open(
+		"expired codes of the address are swept by its next request, and those of another address stay for retention",
+		{
+			music: {
+				seed: mergeSeeds(client, {
+					audio_client_signin_codes: [
+						await codeRow(
+							OTHER,
+							"11111111",
+							{
+								created_at: "2026-11-13T11:40:00.000Z",
+								expires_at: "2026-11-13T11:50:00.000Z",
+							},
+							"7".repeat(64),
+						),
+						await codeRow(
+							GRACE,
+							"22222222",
+							{
+								created_at: "2026-11-13T11:40:00.000Z",
+								expires_at: "2026-11-13T11:50:00.000Z",
+							},
+							"8".repeat(64),
+						),
+					],
+				}),
+			},
+		},
+	),
+	open("two requests 10 seconds apart: the second replaces the first", {
 		steps: [form(), form({ advanceMs: 10_000 })],
 	}),
 	open("two requests 31 seconds apart: the second replaces the first", {
@@ -546,7 +671,7 @@ const cases: Case[] = [
 		fetches: withResend(json(422, { message: "invalid" })),
 		failures: [
 			{
-				on: /DELETE FROM audio_client_codes WHERE email=\?/,
+				on: /DELETE FROM audio_client_signin_codes WHERE email=\? AND nonce_hash=\? AND code_hash=\?/,
 				message: "d1 down",
 			},
 		],
@@ -562,14 +687,14 @@ const cases: Case[] = [
 		steps: [ask({ email: " GRACE@example.test ", turnstileToken: "a+b&c=d" })],
 	}),
 	// races
-	open("another request inserts a code first", {
+	open("another browser asks at the same moment: both codes stay", {
 		interleave: [
 			{
-				on: /INSERT INTO audio_client_codes/,
-				label: "another request inserted a code a second ago",
+				on: /INSERT INTO audio_client_signin_codes/,
+				label: "another browser asked for a code a second ago",
 				run: (sqlite) =>
 					sqlite.exec(
-						`INSERT INTO audio_client_codes(email,code_hash,attempts,created_at,expires_at) VALUES('${GRACE}','other','0','2026-11-13T11:59:59.000Z','2026-11-13T12:09:59.000Z')`,
+						`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,attempts,created_at,expires_at) VALUES('other-browser','${GRACE}','other','0','2026-11-13T11:59:59.000Z','2026-11-13T12:09:59.000Z')`,
 					),
 			},
 		],
@@ -577,7 +702,7 @@ const cases: Case[] = [
 	open("the project is revoked between the allowances and the issue", {
 		interleave: [
 			{
-				on: /INSERT INTO audio_client_codes/,
+				on: /INSERT INTO audio_client_signin_codes/,
 				label: "the owner revoked the project",
 				run: (sqlite) =>
 					sqlite.exec(
@@ -602,7 +727,9 @@ const cases: Case[] = [
 		],
 	}),
 	open("the issue batch fails", {
-		failures: [{ on: /INSERT INTO audio_client_codes/, message: "d1 down" }],
+		failures: [
+			{ on: /INSERT INTO audio_client_signin_codes/, message: "d1 down" },
+		],
 	}),
 	// who is asking
 	open("the owner asks", { steps: [form({ as: asOwner() })] }),

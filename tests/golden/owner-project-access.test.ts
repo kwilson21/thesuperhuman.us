@@ -54,7 +54,7 @@ const TABLES = [
 	"audio_projects",
 	"audio_project_audit",
 	"audio_client_sessions",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 ];
 
 const revoke = (extra: Partial<Step> = {}): Step =>
@@ -63,6 +63,7 @@ const revoke = (extra: Partial<Step> = {}): Step =>
 const ada = { email: "ada@example.test" };
 
 const code = (over: { [column: string]: string | number | null } = {}) => ({
+	nonce_hash: `nonce-${over.email ?? "grace@example.test"}`,
 	email: "grace@example.test",
 	code_hash: "code-1",
 	attempts: 1,

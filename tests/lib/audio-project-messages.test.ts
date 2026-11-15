@@ -79,7 +79,8 @@ describe("audio project messages", () => {
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			code.code,
+			code.nonce,
 			secret,
 			now,
 		))!;
@@ -160,7 +161,8 @@ describe("audio project messages", () => {
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			code.code,
+			code.nonce,
 			secret,
 			now,
 		))!;
@@ -292,7 +294,8 @@ describe("audio project messages", () => {
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			code.code,
+			code.nonce,
 			secret,
 			now,
 		))!;
@@ -426,7 +429,8 @@ describe("audio project messages", () => {
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			code.code,
+			code.nonce,
 			secret,
 			now,
 		))!;
@@ -476,7 +480,8 @@ describe("audio project messages", () => {
 		const token = (await completeClientCode(
 			db,
 			"artist@example.com",
-			code,
+			code.code,
+			code.nonce,
 			secret,
 			now,
 		))!;
@@ -506,7 +511,8 @@ describe("audio project messages", () => {
 		const secondToken = (await completeClientCode(
 			db,
 			"artist@example.com",
-			secondCode,
+			secondCode.code,
+			secondCode.nonce,
 			secret,
 			new Date(now.getTime() + 31_000),
 		))!;
@@ -539,3 +545,10 @@ describe("audio project messages", () => {
 		sql.close();
 	});
 });
+
+it.each([null, undefined, 42, ["Make the hook feel more open."]])(
+	"returns null for a message that is not text (%j)",
+	(value) => {
+		expect(validateProjectMessage(value)).toBeNull();
+	},
+);

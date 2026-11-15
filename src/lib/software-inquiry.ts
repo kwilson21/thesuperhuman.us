@@ -14,6 +14,7 @@ import {
 } from "./fields";
 import type { NewOwnerRequest } from "./owner-requests";
 import type { OwnerRequest } from "./owner-model";
+import type { JsonValue } from "./json-value";
 import { isText } from "./type-guards";
 
 export const softwarePaths = {
@@ -105,10 +106,10 @@ export const softwareLabels = {
 } as const;
 
 // The client reads their own answers, so "they" becomes "you".
-export const clientSoftwareLabels: Record<string, string> = {
+export const clientSoftwareLabels = {
 	...softwareLabels,
 	existing: "What you already have",
-};
+} satisfies Record<string, string>;
 
 export const softwareQuestions = {
 	website: ["purpose", "currentUrl", "existing", "updates"],
@@ -157,7 +158,7 @@ export const updateLabels = {
 	unsure: "Not sure yet",
 } as const;
 
-export function currentSiteHref(value: unknown): string | null {
+export function currentSiteHref(value: RawValue): string | null {
 	if (!isText(value) || !/^https?:\/\//i.test(value) || /\s/.test(value))
 		return null;
 
@@ -405,7 +406,7 @@ export function validateSoftwareInquiry(
 }
 
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-	const fields = new Map<string, unknown>(Object.entries(input));
+	const fields = new Map<string, JsonValue | undefined>(Object.entries(input));
 
 	const firstLine = String(fields.get(softwareQuestions[input.path][0]))
 		.trim()
