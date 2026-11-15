@@ -12,10 +12,7 @@ import {
 	signalFrame,
 	waveformPeaks,
 } from "~/lib/home-motion";
-import {
-	COMPARISON_SIGNAL,
-	ComparisonSignal,
-} from "~/scripts/comparison-signal";
+import { followComparison } from "~/scripts/home-signal";
 import { runMotion, scenePlayer } from "~/scripts/scroll-scenes";
 
 runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
@@ -121,9 +118,8 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 
 		const horizon = document.querySelector<HTMLElement>(".horizon");
 
-		// The last scroll progress, the music's level smoothed, and whether music is driving the edge now.
+		// The last scroll progress, and whether music is driving the edge now.
 		let progress = 0.5,
-			level = 0,
 			playing = false,
 			onScreen = false;
 
@@ -140,29 +136,24 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 			if (!playing) draw(signalFrame(peaks, progress));
 		});
 
-		document.addEventListener(
-			COMPARISON_SIGNAL,
-			(event) => {
-				if (!(event instanceof ComparisonSignal)) return;
+		followComparison(
+			document,
+			{
+				playing(level) {
+					playing = true;
+					horizon?.style.setProperty("--glow", level.toFixed(3));
 
-				// Stopped: the edge goes back to its scroll frame and the sun to its own light.
-				if (!event.playing) {
+					if (onScreen)
+						draw(musicFrame(peaks, level, performance.now() / 1000));
+				},
+				// Stopped: the edge goes back to its scroll frame, and the sun's glow fades.
+				stopped() {
 					playing = false;
-					level = 0;
 					draw(signalFrame(peaks, progress));
 					horizon?.style.removeProperty("--glow");
-
-					return;
-				}
-
-				playing = true;
-				// Quick to rise and slower to fall, as a meter's needle.
-				level += (event.level - level) * (event.level > level ? 0.5 : 0.12);
-				horizon?.style.setProperty("--glow", level.toFixed(3));
-
-				if (onScreen) draw(musicFrame(peaks, level, performance.now() / 1000));
+				},
 			},
-			{ signal },
+			signal,
 		);
 		cleanup(() => {
 			edgeWatch.disconnect();
