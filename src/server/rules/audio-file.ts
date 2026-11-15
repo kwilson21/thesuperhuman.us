@@ -29,10 +29,13 @@ const PUBLIC_FOLDER = "tracks/";
 export const decideAudioFile = alwaysWrites({
 	name: "choose the portfolio track file a visitor asked for",
 	given: (
-		request: { readonly slug: string },
+		request: { readonly slug: string | null },
 		tracks: readonly AudioTrack[],
 	): Given => {
-		const track = tracks.find((entry) => entry.id === request.slug);
+		// A slug that is not well formed (`null`, see readSlug) names no track.
+		const track = tracks.find(
+			(entry) => request.slug !== null && entry.id === request.slug,
+		);
 
 		return { found: track !== undefined, key: track?.file ?? "" };
 	},
@@ -42,9 +45,8 @@ export const decideAudioFile = alwaysWrites({
 			() => new AudioFileNotFound(),
 		),
 		unless(
-			term(
-				"the file's key starts with tracks/",
-				(given: Given) => given.key.startsWith(PUBLIC_FOLDER),
+			term("the file's key starts with tracks/", (given: Given) =>
+				given.key.startsWith(PUBLIC_FOLDER),
 			),
 			() => new AudioFileNotFound(),
 		),

@@ -9,7 +9,7 @@ import {
 	intakeTemporarilyUnavailable,
 	musicRequest,
 } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
 import { submitIntake } from "~/server/flows/audio-intake";
 import { runRoute } from "~/server/run";
 import {
@@ -24,6 +24,8 @@ import {
 export const prerender = false;
 
 const ROUTE = "/api/audio-intake";
+
+const failed = loggedAnswer(ROUTE, () => intakeTemporarilyUnavailable(500));
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
@@ -90,12 +92,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							{ status: 500 },
 						),
 					),
-				RateLimitStoreFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return intakeTemporarilyUnavailable(500);
-					}),
+				RateLimitStoreFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's temporary sentence, logged once.

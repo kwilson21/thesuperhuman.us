@@ -31,7 +31,8 @@ export type AudioFileRead = {
 };
 
 export const readAudioFile = (input: {
-	readonly slug: string;
+	/** The slug as `readSlug` read it: `null` when it is not well formed. */
+	readonly slug: string | null;
 	readonly range: string | null;
 }) =>
 	Effect.gen(function* () {

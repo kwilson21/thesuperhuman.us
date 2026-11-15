@@ -16,6 +16,8 @@ export class OgVideoMissing extends Data.TaggedError("OgVideoMissing") {
 }
 
 /** The static assets answered with a status that is neither a success nor a 404. */
+// `say` is the rule's wording of the refusal, which `Refusal` requires; the flow turns it into `AssetsAnswered`, which names
+// the status the route logs.
 export class AssetsNotOk extends Data.TaggedError("AssetsNotOk") {
 	readonly say = "The static assets did not answer with a success.";
 }

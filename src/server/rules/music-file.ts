@@ -61,9 +61,8 @@ export const decideMusicFile = alwaysWrites({
 			() => new MusicFileNotFound(),
 		),
 		unless(
-			term(
-				"the file's key starts with music/",
-				(given: Given) => given.key.startsWith(PUBLIC_FOLDER),
+			term("the file's key starts with music/", (given: Given) =>
+				given.key.startsWith(PUBLIC_FOLDER),
 			),
 			() => new MusicFileWithheld(),
 		),

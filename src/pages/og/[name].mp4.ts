@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { mediaFailed, mediaUnavailable } from "~/lib/media-answers";
 import { renderedVideos } from "~/lib/og-media";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
 import { readOgVideo } from "~/server/flows/og-video";
 import { runRoute } from "~/server/run";
 import { liveOgAssets } from "~/server/services";
@@ -12,6 +12,8 @@ export const prerender = false;
 const ROUTE = "/og/[name].mp4";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
+
+const failed = loggedAnswer(ROUTE, mediaFailed);
 
 const notFound = (say: string) => new Response(say, { status: 404 });
 
@@ -62,20 +64,8 @@ const serve: APIRoute = ({ params, request, locals }) =>
 					),
 				AssetsNotBound: () => Effect.succeed(mediaUnavailable()),
 				AssetsAnswered: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(
-							ROUTE,
-							new Error(`The static assets answered ${failure.status}`),
-						);
-
-						return mediaFailed();
-					}),
-				AssetsFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return mediaFailed();
-					}),
+					failed(new Error(`The static assets answered ${failure.status}`)),
+				AssetsFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		{ route: ROUTE, answer: mediaFailed },

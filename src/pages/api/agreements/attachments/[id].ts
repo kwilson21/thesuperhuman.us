@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { agreementHeaders, agreementText } from "~/lib/agreement-access";
-import { loggedAnswer } from "~/server/agreement-answers";
+import { loggedAnswer } from "~/server/answers";
 import { downloadAttachment } from "~/server/flows/agreement-attachment";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";
