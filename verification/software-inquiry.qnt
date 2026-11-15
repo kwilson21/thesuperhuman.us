@@ -13,10 +13,12 @@
 //                        deletes the key it set
 //   the client's copy:   src/lib/software-brief-copy.ts, sent once for the request this delivery stored
 // A race that exists in the code, on this area's routes and before the conversion, and is not changed here: the key is read and
-// then written (two KV calls), so two submissions from one address can both read it as unset. If one of them then loses the
-// insert to the other (the same id), it deletes the key the other one set, and the stored brief is never counted against
-// the address. `keptForStored` says exactly what holds: a stored brief keeps its address's key unless another delivery from
-// the same address read the key as unset. The model finds it as soon as the property is stated without that exception.
+// then written (two KV calls), so two simultaneous submissions from one address, with the same submission id or with different
+// ones, can both read it as unset. If one of them stores its brief and the other then loses its insert (to the first, or to
+// a third request from another address), the loser deletes the key the other one set, and the stored brief is never counted
+// against the address. `keptForStored` says exactly what holds: a stored brief keeps its address's key unless another
+// delivery from the same address read the key as unset and lost an insert (it gave the key back). The model finds the race
+// as soon as the property is stated without that exception.
 // What is left out, on purpose: the attempt limit and the captcha (they come before the look-up and decide nothing about
 // the brief), the owner notice (best effort, sent once for a stored request), and the owner's alert on a lost insert (the
 // insert failing for another reason than the index is a defect this model does not have).
@@ -175,10 +177,11 @@ module softwareInquiry {
     runs.get(r).ip == ip and (runs.get(r).outcome == "stored" or runs.get(r).phase == "counted" or runs.get(r).phase == "stored" or (runs.get(r).phase == "idle" and runs.get(r).tries > 0))))
 
   // 5. A stored brief keeps its address's counter key, unless another delivery from the same address read the key as unset at
-  //    the same time: two such deliveries can both set the key, and the one that loses deletes it (see the race below).
+  //    the same time and lost an insert: two such deliveries can both set the key, and the one that loses deletes it (see the
+  //    race at the top).
   val keptForStored = rows.forall(x =>
     held.contains(runs.get(x.by).ip) or
-    runs.keys().exists(r => r != x.by and runs.get(r).ip == runs.get(x.by).ip and runs.get(r).passed))
+    runs.keys().exists(r => r != x.by and runs.get(r).ip == runs.get(x.by).ip and runs.get(r).passed and runs.get(r).tries > 0))
 
   // 6. A stored brief is answered only to the email that sent it.
   val strangerNeverSeesBrief = runs.keys().forall(r =>

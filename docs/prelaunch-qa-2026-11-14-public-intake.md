@@ -6,9 +6,10 @@ Date: November 15, 2026
 Repository: the personal website repository
 Branches: A is `claude/effect-11-intake-fixes`, B is `claude/effect-11-intake`, cut from A. Both were merged with `origin/main` at `8b5b4efd` (the merge of #283), the revision this record was written against. Re-check `origin/main` with `git fetch` before merge.
 Tips: A is `c2049762` (`5905c1e4` plus the array reply corpus case and its fixture). B's code is at `efd353e4`; this record is committed after it, in a commit that changes documentation only.
-Pull requests: none are opened by this record.
+Pull requests: A is #300 and B is #301.
+Decisions: Kazon Wilson. Implementation and independent review were done with Claude Code.
 Target: production
-Reviews: independent reviews of branch A, before its head `5905c1e4`, are listed below. An independent review of B at `ad2cdfd9` (2026-11-15) found no email sent twice, no duplicate request and no leak, and made the findings fixed in the commits after it (see "Review of branch B"). The heads after those fixes have not been reviewed again: UNVERIFIED.
+Reviews: independent reviews of branch A, before its head `5905c1e4`, are listed below. An independent review of B at `ad2cdfd9` (2026-11-15) found no email sent twice, no duplicate request and no leak, and made the findings fixed in the commits after it (see "Review of branch B"). A second review of B at `63ef8802` (2026-11-15) found no duplicate email, no duplicate request and no leak, and confirmed that the moved inserts match A byte for byte; its findings are fixed below. The heads after those fixes have not been reviewed again: UNVERIFIED.
 Rollback revision: for A, `8b5b4efd`; for B, A's tip `c2049762`. No deployed revision was observed.
 
 ## Scope
@@ -87,9 +88,18 @@ Two commits on B do not build on their own, and history is not rewritten: `d5639
 
 Fixed after the review of `ad2cdfd9`, each with a test or corpus case first where it changes behavior: an array model reply answers an empty 200 with no log, as on A (a corpus case on A, and `isObjectOrArray`); an insert refused by the unique index with no other brief found is made once and takes the lost-brief path (it was retried up to three times); the inquiry model keeps the key's read and write as separate steps, states `keptForStored` and adds two mutants; the suggest and pass routes have no route-level catch and the cleanup task has no try and catch; a failure that is logged carries one field named `failure`; the comments on the live services say why they cannot reject and why `Background` has two forms; the two intake store functions are one (`insertRequest`), the two inserts moved into the store as one function per statement, and `saveOwnerRequest` and its error class are deleted (the owner tests create requests through a helper built on the store).
 
+Second review, of `63ef8802`, one line each, all fixed:
+
+- No test asserted the too-large answer or that its log names no personal data: tested at the flow (the answer, the allowance given back, no alert, and a log free of the visitor's name, address and words); the largest brief the form allows is also shown to store, so the answer is not reachable from a valid body.
+- The body of the pass and suggest requests was read before the program, so a failing stream was answered by the platform instead of the route's fixed body: the read is inside the program, logged once and answered as before (tests with a stream that errors).
+- The inquiry model's race was wider than written: it also occurs with different submission ids; the exception of `keptForStored` is tightened to a delivery that lost an insert, and the comment, `docs/verification.md` and STOP item 5 say so.
+- The record said five properties and five mutants and that the read-then-write window was not modelled: corrected.
+- The unique-violation mapping sat in the flow and read the raw database error: it is in the intake store, which answers a `SubmissionIdClash` or an `IntakeStoreFailed`.
+- A too large brief was logged without a message on the audio route: the line is the old route's.
+
 ## Models
 
-- `verification/software-inquiry.qnt` (module `inquiry`): one stored brief and one client copy per submission id, a lost race answered with the other brief and its key given back, a stored brief shown only to the email that sent it. The allowance is the set of addresses whose counter key is set. Five properties, five mutants.
+- `verification/software-inquiry.qnt` (module `inquiry`): one stored brief and one client copy per submission id, a lost race answered with the other brief and its key given back, a stored brief shown only to the email that sent it. The allowance is the set of addresses whose counter key is set. Six properties, seven mutants. The key is read and written in two steps, as the code does, and the model shows a race that exists before the conversion (STOP item 5).
 - `verification/suggestion-budget.qnt` (module `budget`): a count never passes its cap under concurrent reservations; each count is exactly the reservations made; the model is called only for a request that holds both reservations. Four properties, four mutants. Writing it showed that the early read of the site's count does not protect the cap; the guard on the write does.
 - Both are checked by random simulation in the pooled driver, not by Apalache.
 
@@ -137,7 +147,7 @@ Branch B at `efd353e4` (A's tip `c2049762` merged in, then the conversion and th
 
 The `pass` signing-failure path has a unit test but no corpus case: `tests/api/brief-suggestion-pass.test.ts` ("answers 500 without a pass when the pass cannot be signed") makes the signature fail, and the golden harness cannot make signing fail.
 
-Limits: no browser run of any form; no real email was sent, so the client copy, the owner notice, the studio invitation and the owner alert are UNVERIFIED in the intended environment. The rate limit store has a read-then-write window (`src/lib/rate-limit.ts`) that this area does not change and the inquiry model does not model.
+Limits: no browser run of any form; no real email was sent, so the client copy, the owner notice, the studio invitation and the owner alert are UNVERIFIED in the intended environment. The rate limit store has a read-then-write window (`src/lib/rate-limit.ts`) that this area does not change; the inquiry model keeps the read and the write as two steps and shows the race that follows (STOP item 5).
 
 ## STOP items for the owner (not changed; each needs a decision, or a migration)
 
@@ -145,7 +155,7 @@ Limits: no browser run of any form; no real email was sent, so the client copy, 
 2. Project creation for an audio request depends on the database trigger `audio_project_after_service_request` (it inserts the project and its audit row when a `service` request is inserted). The converted code relies on it, as the old code did. Moving that to code needs a migration and is not done.
 3. The `pass` route has no bound on captcha attempts: an address may ask for a pass as often as it likes (the audio and software routes count attempts; this one never has). A bound is a product decision.
 4. Whether the attempt counter is given back when the captcha service is down. Now it is not: the attempt is counted before the captcha is asked and stays counted, so ten outage answers lock an address out for the window. Giving it back is a choice for the owner.
-5. Two simultaneous identical submissions from one address can leave that address's allowance unused: the counter is read and then written, both submissions read it as unset, and the one that loses the insert deletes the key the other set. This exists before the conversion and is not changed; `verification/software-inquiry.qnt` shows it (see `docs/verification.md`).
+5. Two simultaneous submissions from one address can leave that address's allowance unused: the counter is read and then written, both submissions read it as unset (they may carry the same submission id or different ones), and one that then loses its insert deletes the key the other set. This exists before the conversion and is not changed; `verification/software-inquiry.qnt` shows it (see `docs/verification.md`).
 
 Also: the cleanup of old suggestion budget rows binds its cutoff from TypeScript and decides no answer (see the statement table).
 
