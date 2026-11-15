@@ -1,5 +1,5 @@
 // FROZEN REFERENCE COPY. The hand-written publication envelope validator that src/lib/publication/contract.ts held before
-// it became an Effect Schema reader. It is a reference for tests/server/validators-differential.test.ts only and is not
+// it became an Effect Schema reader. It is a reference for tests/server/publication-differential.test.ts only and is not
 // product code: nothing under src/ or scripts/ imports it.
 import type { RawValue } from "../../../src/lib/fields";
 
