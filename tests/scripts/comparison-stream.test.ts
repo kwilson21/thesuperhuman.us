@@ -370,8 +370,9 @@ it("pauses when a hidden version is started from outside the page after the hand
 	await tick();
 	await ab.decode();
 	expect(ab.synced()).toBe(true);
-	// A media key or the lock screen plays the element whose controls it kept from the stream.
-	void ab.mix.play();
+	// A media key or the lock screen plays the element whose controls it kept from the stream. The player pauses it at
+	// once, which can reject that play() with an AbortError, as a browser does.
+	void ab.mix.play().catch(() => {});
 	await settle();
 	expect(ab.mix.paused).toBe(true);
 	expect(ab.synced()).toBe(false);
