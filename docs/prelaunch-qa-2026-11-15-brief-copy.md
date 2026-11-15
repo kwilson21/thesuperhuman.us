@@ -4,13 +4,13 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 
 Date: November 15, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`.
-Tips: A is `dba9e556`. B's code is at `b17b077a`; this record is committed after it, in a commit that changes documentation only.
+Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`.
+Tips: A is `693e6f84`. B's code is at `50dfc58c`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: not opened when this was written.
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
 Reviews: one independent review of A `dba9e556` and B `eaf18814` was run on 2026-11-15; its findings are under "Review findings". The heads that fix them were not reviewed again: UNVERIFIED.
-Rollback revision: for A, `14cce493`; for B, A's tip `dba9e556`. No deployed revision was observed.
+Rollback revision: for A, `2f7add57`; for B, A's tip `693e6f84`. No deployed revision was observed.
 
 ## Scope
 
@@ -102,16 +102,16 @@ An independent review of A `dba9e556` and B `eaf18814` on 2026-11-15 found:
 
 ## Evidence
 
-Branch A at `dba9e556`:
-- `format:check`: `Checked 857 files in 125ms. No fixes applied.`; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  333 passed (333)`, `Tests  13464 passed | 1 skipped (13465)`; `git status` clean apart from `.jolli/`.
-- `golden:neutral --all origin/main HEAD`: `compared 77 fixtures and 9071 cases; 1 of 77 fixtures differ`, `NOT NEUTRAL` (the cases above, expected).
+Branch A at `693e6f84`:
+- `format:check`: `Checked 864 files in 98ms. No fixes applied.`; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  334 passed (334)`, `Tests  13469 passed | 1 skipped (13470)`; `git status` clean apart from `.jolli/`.
+- `golden:neutral --all origin/main HEAD`: `compared 77 fixtures and 9071 cases; 1 of 77 fixtures differ`, `NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
 - `verify:quint:all`: exit 0, 94 `ok` lines. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
 
-Branch B at `b17b077a`:
-- `format:check`: `Checked 864 files in 127ms. No fixes applied.`; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  337 passed (337)`, `Tests  13592 passed | 1 skipped (13593)`; `git status` clean apart from `.jolli/`.
-- `golden:neutral --all dba9e556 HEAD`: `compared 77 fixtures and 9073 cases; 2 of 77 fixtures differ`, `golden:neutral: NEUTRAL`.
+Branch B at `50dfc58c`:
+- `format:check`: `Checked 871 files in 200ms. No fixes applied.`; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  338 passed (338)`, `Tests  13599 passed | 1 skipped (13600)`; `git status` clean apart from `.jolli/`.
+- `golden:neutral --all 693e6f84 HEAD`: `compared 77 fixtures and 9073 cases; 2 of 77 fixtures differ`, `golden:neutral: NEUTRAL`.
 - `verify:quint:all`: exit 0, 104 `ok` lines (the nine mutants of the new model break their properties). `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
 
 UNVERIFIED: the owner page in a browser (the reload after a 500 was driven only with a stubbed fetch); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none).
