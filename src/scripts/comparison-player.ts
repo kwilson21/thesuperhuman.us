@@ -1,6 +1,6 @@
 import { ComparisonTransport, type LoopRegion } from "./comparison-transport";
 import { ComparisonSignal } from "./comparison-signal";
-import { meterLine, meterShare } from "./loudness-meter";
+import { meterLine, meterShare } from "~/lib/loudness-meter";
 import { registerMusicPlayer } from "./music-playback";
 import {
 	isWaveformScrub,
@@ -184,7 +184,10 @@ export function setupComparisonPlayers() {
 				...root.querySelectorAll<HTMLElement>("[data-lane-meter]"),
 			];
 
-			/** Shows the loudness each version plays at: with Match loudness on, the louder one comes down to the quieter. */
+			/**
+			 * Shows the loudness each version plays at: with Match loudness on, the louder one comes down to the quieter. The
+			 * native players of the fallback play every export at its own level, so there the meters show those levels.
+			 */
 			function drawMeters() {
 				if (meters.length !== media.length) return;
 
@@ -195,7 +198,10 @@ export function setupComparisonPlayers() {
 				const quietest = Math.min(...loudness);
 
 				meters.forEach((meter, index) => {
-					const played = match?.checked ? quietest : loudness[index];
+					const matched =
+						match?.checked && root.dataset.audioFallback !== "true";
+
+					const played = matched ? quietest : loudness[index];
 					const value = meter.querySelector("[data-lane-meter-value]");
 
 					meter.style.setProperty("--meter", String(meterShare(played)));
@@ -336,6 +342,7 @@ export function setupComparisonPlayers() {
 				// brings it back), and the desk is offered again.
 				delete root.dataset.audioFallback;
 				offerDesk(true);
+				drawMeters();
 				render();
 
 				try {
@@ -388,6 +395,7 @@ export function setupComparisonPlayers() {
 							audio.hidden = false;
 						});
 						offerDesk(false);
+						drawMeters();
 						status.textContent =
 							"The comparison couldn’t load. Use either audio player below.";
 					}
@@ -516,12 +524,18 @@ export function setupComparisonPlayers() {
 					// A loop line still waiting would describe a loop that is gone.
 					clearTimeout(loopNote);
 
-					// Focus on a control about to be disabled moves to the first native player rather than to the page.
+					// Focus on a control about to be disabled (Flip goes with the loop) moves to the native player of the version
+					// chosen, rather than to the page.
 					const focused = document.activeElement;
 
 					// The length menu is compared as the node it was found as, which the DOM typing in use accepts.
-					if (focused && (focused === loopToggle || focused === loopLengthNode))
-						media[0].focus();
+					if (
+						focused &&
+						(focused === loopToggle ||
+							focused === loopLengthNode ||
+							focused === loopFlip)
+					)
+						media[selected].focus();
 				}
 
 				if (!offered && loop) {

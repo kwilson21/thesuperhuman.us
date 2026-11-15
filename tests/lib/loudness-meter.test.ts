@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { meterLine, meterShare } from "~/scripts/loudness-meter";
+import { meterLine, meterShare } from "~/lib/loudness-meter";
 
 it("places loudness on one scale from -20 to -6 LUFS, clamped at both ends", () => {
 	expect(meterShare(-20)).toBe(0);

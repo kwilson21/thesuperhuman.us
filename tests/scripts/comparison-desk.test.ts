@@ -281,6 +281,7 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 	return {
 		root,
 		mix,
+		master,
 		/** Puts keyboard focus on a control, as Tab does. */
 		focusOn: (control: StandInControl) => {
 			page.activeElement = control;
@@ -647,4 +648,42 @@ it("shows no loop line after a quick retry that works, once the failure turned L
 	expect(ab.synced()).toBe(true);
 	await new Promise((resolve) => setTimeout(resolve, 750));
 	expect(ab.status.textContent).toBe("");
+});
+
+it("moves focus off Flip too, to the chosen version's native player, when a load failure turns the desk off", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.choose("after");
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	ab.flipOn();
+	ab.focusOn(ab.loop.flip);
+	await ab.decode();
+	expect(ab.loop.flip.disabled).toBe(true);
+	expect(ab.master.focused).toBe(true);
+	expect(ab.mix.focused).toBe(false);
+});
+
+it("shows each export's own loudness in the fallback, where the native players do not match loudness", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()[1][1]).toBe("\u221214.0 LUFS, turned down 2.5 dB");
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	expect(ab.meters()[1]).toEqual([String(8.5 / 14), "\u221211.5 LUFS"]);
+	// Ticking Match there changes nothing the meters say.
+	ab.match.checked = false;
+	ab.match.dispatchEvent(new Event("change"));
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()[1][1]).toBe("\u221211.5 LUFS");
+	// Another try matches again.
+	ab.loadNextTime();
+	ab.play.click();
+	expect(ab.meters()[1][1]).toBe("\u221214.0 LUFS, turned down 2.5 dB");
 });
