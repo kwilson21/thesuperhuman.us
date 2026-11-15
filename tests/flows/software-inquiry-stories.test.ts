@@ -345,6 +345,33 @@ describe("a storage failure", () => {
 		expect(told.copies).toEqual([]);
 	});
 
+	it("stops after one insert when the index refuses it but no other brief is found, and takes the lost-brief path", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		let inserts = 0;
+
+		const world = musicWorld({
+			beforeStatement: [
+				/INSERT INTO owner_requests/,
+				() => {
+					inserts += 1;
+					throw new Error(
+						"UNIQUE constraint failed: owner_requests.submission_id",
+					);
+				},
+			],
+		});
+
+		const { answer, told } = await send(world);
+
+		expect(answer).toEqual({ kind: "unstored" });
+		expect(inserts).toBe(1);
+		expect(requests(world)).toEqual([]);
+		expect(world.counts.has(REQUESTS)).toBe(false);
+		expect(told.alerts).toHaveLength(1);
+		expect(told.alerts[0]).toMatchObject({ code: "d1-write-failed" });
+		expect(logged).toHaveBeenCalledTimes(1);
+	});
+
 	it("is answered as stored when the insert's answer was lost but the brief was stored", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 

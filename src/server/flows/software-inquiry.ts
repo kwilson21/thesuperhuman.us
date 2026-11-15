@@ -7,6 +7,7 @@
 // brief was not stored, unless a look-up then finds it stored. A stored brief is answered after the client's copy is sent;
 // the owner notice is handed to the background (ctx.waitUntil, with no context it is waited for) at the point the route always
 // did, and never changes the answer.
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
@@ -42,6 +43,9 @@ import {
 import { countRequest, giveBack } from "./rate-limit";
 
 const ROUTE = "/api/software-inquiry";
+
+/** The index refused the insert, and the look-up that followed found no other brief: the brief is lost, and is not inserted again. */
+class LostWithoutRival extends Data.TaggedError("LostWithoutRival") {}
 
 /** The attempts an address may make in the window, counted before the captcha is checked. */
 const ATTEMPTS = 10;
@@ -186,9 +190,26 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				return { kind: "unstored" } as const;
 			});
 
+		/** The brief was refused by the index and no other brief is stored: log what the database said, give the allowance back, alert the owner. */
+		const lostBrief = Effect.gen(function* () {
+			const clashed = yield* Ref.get(clash);
+
+			if (clashed)
+				yield* Effect.sync(() => logUnexpected(ROUTE, clashed.raised));
+
+			yield* release;
+			yield* alertLost("d1-write-failed");
+
+			return { kind: "answer", answer: { kind: "unstored" } } as const;
+		});
+
 		const stored = yield* decideAndSave({
 			facts: Effect.gen(function* () {
 				const found = yield* findStoredBrief(input.submissionId);
+
+				// After the index refused the insert, a look-up that finds nothing ends the try: the insert is not made again.
+				if (!found && (yield* Ref.get(clash)) !== null)
+					return yield* Effect.fail(new LostWithoutRival());
 
 				// A brief already stored is neither counted nor stored again.
 				return {
@@ -255,15 +276,8 @@ export const submitInquiry = (submission: InquirySubmission) =>
 						afterFailedSave(failure),
 						(answer) => ({ kind: "answer", answer }) as const,
 					),
-				SaveKeptChanging: () =>
-					Effect.map(
-						Effect.flatMap(Ref.get(clash), (clashed) =>
-							afterFailedSave(
-								clashed ? new IntakeStoreFailed(clashed) : undefined,
-							),
-						),
-						(answer) => ({ kind: "answer", answer }) as const,
-					),
+				LostWithoutRival: () => lostBrief,
+				SaveKeptChanging: () => lostBrief,
 			}),
 		);
 
