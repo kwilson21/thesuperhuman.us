@@ -12,6 +12,7 @@ import {
 	type Mock,
 } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/offer-board";
+import { withheldFrom } from "~/server/offer-board-model";
 import { pastOffers } from "~/server/offer-board-store";
 import { PRICING_KEY } from "~/server/pricing-store";
 import { fakeKv, partial } from "../helpers/doubles";
@@ -254,6 +255,58 @@ describe("the offer board's route", () => {
 		);
 	});
 
+	it("replaces the client's details wherever they appear in what the model reads, the owner's draft and cards included", async () => {
+		await POST(
+			context({
+				...body,
+				cards: [
+					{
+						ref: "c1",
+						lane: "outcome",
+						text: "A studio site for CLAY STUDIO CO",
+						state: "open",
+					},
+				],
+				draft: {
+					outcome:
+						"A five-page site for Clay Studio Co, replacing www.example.org",
+					summary: "Sam Example asked by email (sam@example.com).",
+					milestones: [],
+					clientInputs: "Logins for https://example.org/old",
+					exclusions: "",
+					timing: "",
+				},
+			}),
+		);
+		const [, inputs] = run.mock.calls[0];
+		const sent: string = inputs.messages[1].content;
+
+		expect(sent).not.toMatch(
+			/sam example|sam@example\.com|clay studio co|example\.org/i,
+		);
+		expect(sent).toContain(
+			"A five-page site for the client, replacing the client’s current site",
+		);
+		expect(sent).toContain("the client asked by email (the client).");
+		expect(sent).toContain("A studio site for the client");
+		expect(sent).toContain("Logins for the client’s current site");
+	});
+
+	it("keeps the shown cards the reply lists in keep without repeating them, and no other ref", async () => {
+		run.mockResolvedValueOnce({
+			response: {
+				...reply,
+				cards: reply.cards.slice(1),
+				keep: ["c1", "c9", "nope", 7],
+			},
+		});
+
+		expect(await readJson(await POST(context()))).toMatchObject({
+			ok: true,
+			refs: ["c1"],
+		});
+	});
+
 	it.each([
 		["a resolved request", "resolved"],
 		["a withdrawn request", "withdrawn"],
@@ -305,6 +358,37 @@ describe("the offer board's route", () => {
 	it("answers 400 for a request the page never sends", async () => {
 		expect((await POST(context({ cards: "no", draft: {} }))).status).toBe(400);
 		expect(run).not.toHaveBeenCalled();
+	});
+});
+
+describe("withheldFrom", () => {
+	const withheld = [
+		{ text: "Sam Example", as: "the client" },
+		{ text: "sam@example.com", as: "the client" },
+		{ text: "A+B (Studio)", as: "the client" },
+	];
+
+	it("replaces whole words in any case, the longest first, in every string however deep", () => {
+		expect(
+			withheldFrom(
+				{
+					a: "Write to SAM@EXAMPLE.COM or Sam Example.",
+					b: ["Hello sam example", { c: "From a+b (studio) today" }],
+					n: 3,
+				},
+				withheld,
+			),
+		).toEqual({
+			a: "Write to the client or the client.",
+			b: ["Hello the client", { c: "From the client today" }],
+			n: 3,
+		});
+	});
+
+	it("leaves a word that only contains a detail", () => {
+		expect(withheldFrom("Sam Examples and xsam@example.com", withheld)).toBe(
+			"Sam Examples and xsam@example.com",
+		);
 	});
 });
 

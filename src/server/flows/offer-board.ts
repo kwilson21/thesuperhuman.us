@@ -6,6 +6,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import {
+	keptRefs,
 	type OfferBoardRequest,
 	type OfferReply,
 	readOfferReply,
@@ -35,7 +36,7 @@ export type OfferSuggestion = {
 };
 
 export type OfferAnswer = OfferReply & {
-	/** The shown cards the reply named in a card left out, so the page does not withdraw them. */
+	/** The shown cards the reply kept (its keep list) or named in a card left out, so the page does not withdraw them. */
 	readonly refs: readonly string[];
 };
 
@@ -96,7 +97,7 @@ export const suggestOffer = (asked: OfferSuggestion) =>
 		const answer: OfferAnswer = {
 			...reply,
 			cards,
-			refs: [...new Set(replyRefs(raw))].filter(
+			refs: [...new Set([...replyRefs(raw), ...keptRefs(raw)])].filter(
 				(ref) => shown.has(ref) && !cards.some((card) => card.ref === ref),
 			),
 		};

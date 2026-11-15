@@ -74,11 +74,11 @@ const useLabels: Record<OfferLane, string> = {
       {/* Beside Undo, so a reply that waits never moves the cards or the prices. */}
       <button type="button" class="studio-quiet" data-offer-held hidden></button>
     </div>
-    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It never sees the client’s name, email or company, your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
+    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It is not given the client’s name, email, company or site link, and wherever one appears as the client entered it, the site replaces it with “the client” first. It never sees your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
     <p class="visually-hidden" data-offer-live role="status"></p>
   </div>
 
-  <div class="offer-board-scroll" data-offer-scroll>
+  <div class="offer-board-scroll" data-offer-scroll role="region" aria-label="Suggestions" tabindex="0">
     {OFFER_LANES.map(lane => (
       <section class="offer-lane" data-offer-lane={lane} aria-labelledby={`offer-lane-${lane}`}>
         <h3 id={`offer-lane-${lane}`}>{offerLaneLabels[lane]}</h3>
@@ -126,12 +126,12 @@ const useLabels: Record<OfferLane, string> = {
   .offer-board-controls { align-items: center; }
   .offer-board-status { min-height: 3em; color: var(--studio-muted); }
   /* Every quiet control in the board, the script's included, is one underlined style with a 44px target. */
-  .offer-board :global(.studio-quiet) { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 .1rem; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; text-align: start; }
+  .offer-board :global(.studio-quiet) { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 .1rem; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; text-align: center; }
   .offer-pricing { border: 1px solid var(--field-border); border-radius: 3px; padding: .75rem 1rem; }
-  .offer-pricing h3 { font: 500 1rem/1.3 var(--font-sans); margin: 0; }
+  .offer-pricing h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0; }
   .offer-prices { display: grid; gap: .6rem; margin: .5rem 0; }
   .offer-prices dt { font: 500 .85rem/1.4 var(--font-sans); color: var(--studio-muted); }
-  .offer-prices dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+  .offer-prices dd { margin: .15rem 0 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
   /* A price row's button sits on its own line under the figures it uses. */
   .offer-prices :global(.studio-quiet) { display: flex; width: fit-content; }
   .offer-past { margin: .35rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
@@ -139,7 +139,8 @@ const useLabels: Record<OfferLane, string> = {
   .offer-caption { font-size: .85rem; color: var(--studio-muted); }
   /* The board scrolls inside its own box, so the page never grows with the cards. */
   .offer-board-scroll { max-height: min(36rem, 70vh); max-height: min(36rem, 70dvh); overflow-y: auto; display: grid; gap: 1rem; padding-right: .25rem; }
-  .offer-lane h3 { font: 500 1rem/1.3 var(--font-sans); margin: 0 0 .4rem; padding-bottom: .3rem; border-bottom: 1px solid var(--rule); }
+  .offer-lane h3 { font: 400 1rem/1.3 var(--font-sans); margin: 0 0 .4rem; padding-bottom: .3rem; border-bottom: 1px solid var(--rule); }
+  .offer-board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .offer-cards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
   .offer-card { border: 1px dashed var(--field-border); border-radius: 3px; padding: .5rem .75rem; min-width: 0; }
   .offer-card[data-status="kept"], .offer-card[data-status="edited"] { border-style: solid; }
@@ -153,7 +154,10 @@ const useLabels: Record<OfferLane, string> = {
   .offer-card-editor label { display: grid; gap: .3rem; font: 500 .82rem/1.4 var(--font-sans); }
   .offer-card-editor input { width: min(100%, 40rem); min-width: 0; font-size: 1rem; min-height: 44px; }
   .offer-card-error { margin: .25rem 0 0; font-size: .875rem; color: var(--studio-danger); }
-  .offer-aside summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font: 500 .85rem/1.3 var(--font-sans); }
+  .offer-aside summary { display: flex; align-items: center; gap: .5rem; min-height: 44px; cursor: pointer; font: 500 .85rem/1.3 var(--font-sans); list-style: none; }
+  .offer-aside summary::-webkit-details-marker { display: none; }
+  .offer-aside summary::before { content: '+'; color: var(--accent); }
+  .offer-aside[open] summary::before { transform: rotate(45deg); }
   .offer-board :global(.offer-aside li) { margin: .25rem 0; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: no-preference) {
     .offer-card.is-new { animation: offer-in .18s var(--ease-site); }

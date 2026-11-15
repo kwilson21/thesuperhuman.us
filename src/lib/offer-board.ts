@@ -4,7 +4,13 @@
 // code (./offer-pricing) turns those into ranges with the owner's own numbers.
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
-import { type LaneConfig, oneLine, pricesOrLinks } from "./brief-board";
+import {
+	type LaneConfig,
+	listOf,
+	oneLine,
+	ownField,
+	pricesOrLinks,
+} from "./brief-board";
 import {
 	type RawValue,
 	choiceField,
@@ -93,6 +99,13 @@ export const OFFER_CONTEXT_MAX = 60;
 
 /** The most cards one reply may carry. */
 export const OFFER_REPLY_MAX = 24;
+
+/** The refs a reply keeps as they are without repeating them (its `keep` list), as card refs the board gives. */
+export function keptRefs(raw: RawValue): string[] {
+	return (listOf(ownField(raw, "keep"), 40) ?? []).filter(
+		(ref): ref is string => Predicate.isString(ref) && /^c\d{1,6}$/.test(ref),
+	);
+}
 
 /** A milestone's detail: what it delivers, how the client checks it, and the model's days for it (low and high). */
 export type MilestoneDetail = {

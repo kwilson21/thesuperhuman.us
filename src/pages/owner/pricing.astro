@@ -90,13 +90,16 @@ const updated = pricing.updatedAt
   .pricing-table { width: 100%; min-width: 40rem; border-collapse: collapse; font: .9rem/1.45 var(--font-sans); }
   .pricing-table th, .pricing-table td { text-align: left; vertical-align: top; padding: .45rem .6rem .45rem 0; border-bottom: 1px solid var(--rule); }
   .pricing-table thead th { color: var(--studio-muted); font-weight: 500; }
-  .pricing-table td:nth-child(3) { white-space: nowrap; }
+  .pricing-table td:nth-child(3) { white-space: nowrap; font-variant-numeric: tabular-nums; }
   /* Wide enough that a definition wraps to a few lines, not a column of single words. */
   .pricing-table td:last-child { min-width: 18rem; }
   .pricing-json { font-family: var(--font-mono); font-size: 1rem; }
   .pricing-settings input[type="number"] { width: min(100%, 14rem); min-width: 0; }
   .pricing-settings textarea { width: 100%; min-width: 0; }
-  .pricing-settings summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
+  .pricing-settings summary { display: flex; align-items: center; gap: .5rem; min-height: 44px; cursor: pointer; list-style: none; }
+  .pricing-settings summary::-webkit-details-marker { display: none; }
+  .pricing-settings summary::before { content: '+'; color: var(--accent); }
+  .pricing-settings details[open] > summary::before { transform: rotate(45deg); }
   .pricing-settings li a { display: inline-flex; align-items: center; min-height: 44px; }
   .pricing-settings .studio-quiet { min-height: 44px; }
   /* While a save is on its way: marked rather than disabled, so focus stays where it was. */

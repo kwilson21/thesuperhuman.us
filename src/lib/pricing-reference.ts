@@ -153,6 +153,12 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	if (!rangeItems)
 		return { ok: false, error: "ranges must be a list of at most 9." };
 
+	if (rangeItems.length === 0)
+		return {
+			ok: false,
+			error: "The research has no ranges. Use Clear research to remove it.",
+		};
+
 	const ranges: MarketRange[] = [];
 
 	for (const [index, item] of rangeItems.entries()) {

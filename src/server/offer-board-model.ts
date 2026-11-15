@@ -6,6 +6,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
 import type { RawValue } from "../lib/fields";
+import type { JsonValue } from "../lib/json-value";
 import {
 	OFFER_LANES,
 	OFFER_REPLY_MAX,
@@ -43,7 +44,7 @@ Return JSON that matches the schema.
 
 Rules:
 - Never put a price, cost, budget or link in any card. Money belongs only in figureUsd.
-- Cards marked "open" are your earlier suggestions. Repeat a card's ref to keep or reword it; leave a card out to withdraw it.
+- Cards marked "open" are your earlier suggestions. To keep one as it is, put its ref in keep and leave it out of cards. To reword one, repeat it in cards with its ref. A card in neither is withdrawn.
 - Never repeat or rephrase a card marked "yours" or "avoid".
 - Build on what the draft already says rather than replacing it.
 - Write in the language of the brief.`;
@@ -69,6 +70,7 @@ export const OFFER_REPLY_SCHEMA = {
 				required: ["lane", "text"],
 			},
 		},
+		keep: { type: "array", maxItems: 40, items: { type: "string" } },
 		size: { type: "string", enum: ["small", "medium", "large"] },
 		sizeReason: { type: "string" },
 		figureUsd: { type: "integer" },
@@ -85,9 +87,48 @@ const projectNames = {
 } as const;
 
 /**
+ * Every string in a value with the client's details replaced wherever they appear as entered: whole words, any case,
+ * the longest first (so an email goes before a name inside it). A detail that is an ordinary word is replaced there
+ * too; the client's privacy comes first.
+ */
+export function withheldFrom(
+	value: JsonValue,
+	withheld: OfferBrief["withheld"],
+): JsonValue {
+	const rules = [...withheld]
+		.sort((one, two) => two.text.length - one.text.length)
+		.map(({ text, as }) => ({
+			pattern: new RegExp(
+				`(?<![\\p{L}\\p{N}])${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`,
+				"giu",
+			),
+			as,
+		}));
+
+	const walk = (item: JsonValue): JsonValue => {
+		if (Predicate.isString(item))
+			return rules.reduce(
+				(text, { pattern, as }) => text.replace(pattern, as),
+				item,
+			);
+
+		if (Array.isArray(item)) return item.map(walk);
+
+		if (Predicate.isObject(item))
+			return Object.fromEntries(
+				Object.entries(item).map(([key, inner]) => [key, walk(inner)]),
+			);
+
+		return item;
+	};
+
+	return walk(value);
+}
+
+/**
  * The messages for one request: the instructions, then the brief, the draft (without fees), the board and the market
- * ranges for this kind of work as JSON data. Never the client's name, email, company or current site, nor the owner's
- * day value, contingency or other clients' offers.
+ * ranges for this kind of work as JSON data. Never the client's name, email, company or current site (replaced wherever
+ * they appear in that text), nor the owner's day value, contingency or other clients' offers.
  */
 export function offerMessages(
 	brief: OfferBrief,
@@ -119,7 +160,13 @@ export function offerMessages(
 
 	return [
 		{ role: "system", content: OFFER_INSTRUCTIONS },
-		{ role: "user", content: JSON.stringify(data) },
+		{
+			role: "user",
+			// Read back as plain JSON, so every string in it, however deep, is checked.
+			content: JSON.stringify(
+				withheldFrom(JSON.parse(JSON.stringify(data)), brief.withheld),
+			),
+		},
 	];
 }
 

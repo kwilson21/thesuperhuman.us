@@ -48,6 +48,11 @@ export type OfferBrief = {
 	readonly budgetNote: string;
 	readonly fitLabel: string;
 	readonly fitNote: string;
+	/**
+	 * The client's name, email, company and current site as entered (the site also by its host). Never sent: wherever
+	 * one appears in what the model reads, it is replaced first (`withheldFrom` in ./offer-board-model).
+	 */
+	readonly withheld: readonly { readonly text: string; readonly as: string }[];
 };
 
 const textOf = (details: Readonly<Record<string, JsonValue>>, key: string) => {
@@ -57,6 +62,8 @@ const textOf = (details: Readonly<Record<string, JsonValue>>, key: string) => {
 };
 
 type RequestRow = {
+	readonly name: string;
+	readonly email: string;
 	readonly kind: string;
 	readonly status: string;
 	readonly details_json: string;
@@ -71,7 +78,7 @@ export const readOfferRequest = (id: string, day: string) =>
 	asked((db) =>
 		db
 			.prepare(
-				`SELECT r.kind, r.status, r.details_json,
+				`SELECT r.name, r.email, r.kind, r.status, r.details_json,
           EXISTS (SELECT 1 FROM software_projects WHERE request_id = r.id) AS started,
           COALESCE((SELECT count FROM brief_suggestion_budget WHERE day = ?2 AND scope = ?3), 0) AS count,
           f.label AS fit_label, f.note AS fit_note
@@ -127,12 +134,47 @@ export const readOfferRequest = (id: string, day: string) =>
 						budgetNote: textOf(details, "budgetNote"),
 						fitLabel: row.fit_label ?? "",
 						fitNote: row.fit_note ?? "",
+						withheld: withheldOf(row, details),
 					}
 				: null;
 
 			return { facts, brief };
 		}),
 	);
+
+/** What stands in for the client's details where they appear in text the model reads. */
+const CLIENT = "the client";
+const CLIENT_SITE = "the client’s current site";
+
+/** The client's name, email, company and current site (and its host, with and without "www."), each with what replaces it. */
+function withheldOf(
+	row: RequestRow,
+	details: Readonly<Record<string, JsonValue>>,
+): OfferBrief["withheld"] {
+	const site = textOf(details, "currentUrl").trim();
+	let host = "";
+
+	try {
+		host = new URL(
+			/^[a-z][a-z\d+.-]*:\/\//i.test(site) ? site : `https://${site}`,
+		).hostname.replace(/^www\./i, "");
+	} catch {
+		// Not a link: the text itself is withheld.
+	}
+
+	return [
+		{ text: row.name, as: CLIENT },
+		{ text: row.email, as: CLIENT },
+		{ text: textOf(details, "company"), as: CLIENT },
+		{ text: site, as: CLIENT_SITE },
+		{ text: host && `www.${host}`, as: CLIENT_SITE },
+		{ text: host, as: CLIENT_SITE },
+	].flatMap(({ text, as }) => {
+		const trimmed = String(text ?? "").trim();
+
+		return trimmed.length >= 2 ? [{ text: trimmed, as }] : [];
+	});
+}
 
 /** The stored outline as lines of "lane: text", for the model; empty when there is none. */
 function outlineText(raw: JsonValue | undefined): string {

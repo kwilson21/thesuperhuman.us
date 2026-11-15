@@ -580,6 +580,148 @@ function check(name, ok, detail = "") {
 			`${await rows.count()} rows`,
 		);
 
+		// The fourth review's bugs.
+		// A reply that changes only a milestone's days waits while the owner is among the cards.
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const daysOnly = await next();
+
+		await card("milestones", 0).hover();
+
+		const longer = scriptedOfferReply(daysOnly.request().postData());
+
+		longer.cards = longer.cards.map((each) =>
+			each.text === "Design direction"
+				? { ...each, detail: { ...each.detail, daysLow: 6, daysHigh: 9 } }
+				: each,
+		);
+		await release(daysOnly, longer);
+		await page.waitForTimeout(500);
+		check(
+			"a reply that changes only a milestone's days waits while the owner is among the cards",
+			(await page.locator("[data-offer-held]").isVisible()) &&
+				/2 to 3 working days/.test(
+					await card("milestones", 0)
+						.locator("[data-card-detail]")
+						.textContent(),
+				),
+		);
+		await page.mouse.move(2, 2);
+
+		// Set its fee is offered only while the row's fee differs from it.
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add with a fee/ })
+			.click();
+
+		const setDesignFee = page.getByRole("button", {
+			name: /^Set its fee to .*: Design direction$/,
+		});
+
+		const offeredAtOnce = await setDesignFee.count();
+
+		await rows.first().locator('[name="fee"]').fill("999");
+		check(
+			"Set its fee is offered only while the row's fee differs from it",
+			offeredAtOnce === 0 && (await setDesignFee.count()) === 1,
+			`${offeredAtOnce} then ${await setDesignFee.count()}`,
+		);
+
+		// Show updates never drops words typed in an open card editor.
+		await fresh();
+
+		const summaryCard = card("summary");
+
+		await summaryCard.getByRole("button", { name: /^Edit/ }).click();
+		await summaryCard
+			.locator("[data-card-input]")
+			.fill("My own summary, typed and not yet saved.");
+		await page.getByRole("button", { name: "Suggest again" }).click();
+		await page.mouse.move(2, 2);
+
+		const replacing = await next();
+		const replaced = scriptedOfferReply(replacing.request().postData());
+
+		replaced.cards = replaced.cards.map((each) =>
+			each.lane === "summary"
+				? {
+						...each,
+						text: "Fans and venues find what they need in a few steps.",
+					}
+				: each,
+		);
+		await release(replacing, replaced);
+		await page.waitForTimeout(500);
+		await page.locator("[data-offer-held]").click();
+		check(
+			"Show updates never drops words typed in an open card editor",
+			(await summaryCard.locator("[data-card-input]").inputValue()) ===
+				"My own summary, typed and not yet saved." &&
+				(await summaryCard.locator("[data-card-error]").isVisible()) &&
+				(await page.locator("[data-offer-held]").isVisible()),
+		);
+
+		if (await summaryCard.locator("[data-card-editor]").isVisible())
+			await summaryCard.getByRole("button", { name: "Cancel" }).click();
+
+		// Undo never withdraws a card whose editor holds unsaved words (the Timing lane holds two).
+		await fresh();
+
+		const timingCard = (text) =>
+			page.locator('[data-offer-lane="timing"] .offer-card', { hasText: text });
+
+		const withTiming = (pending, texts) => {
+			const sent = JSON.parse(pending.request().postData());
+			const answer = scriptedOfferReply(pending.request().postData());
+
+			for (const text of texts)
+				answer.cards.push({
+					ref: sent.cards.find((each) => each.text === text)?.ref ?? "",
+					lane: "timing",
+					text,
+					reason: "",
+					detail: null,
+				});
+
+			return answer;
+		};
+
+		const second = "About 5 weeks, with one round of changes.";
+		const third = "About 6 weeks if the photos come late.";
+
+		await page.getByRole("button", { name: "Suggest again" }).click();
+		await page.mouse.move(2, 2);
+		let pending = await next();
+
+		await release(pending, withTiming(pending, [second]));
+		await timingCard(second).waitFor();
+		await timingCard("About 4 weeks")
+			.getByRole("button", { name: /^Not this/ })
+			.click();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+		await page.mouse.move(2, 2);
+		pending = await next();
+		await release(pending, withTiming(pending, [second, third]));
+		await timingCard(third).waitFor();
+		await timingCard(third).getByRole("button", { name: /^Edit/ }).click();
+		await timingCard(third)
+			.locator("[data-card-input]")
+			.fill("About six weeks, photos permitting.");
+		await undo();
+		const stillThere = (await timingCard(third).count()) === 1;
+
+		check(
+			"Undo never withdraws a card whose editor holds unsaved words",
+			stillThere &&
+				(await timingCard(third).locator("[data-card-input]").inputValue()) ===
+					"About six weeks, photos permitting." &&
+				(await timingCard(third).locator("[data-card-error]").isVisible()),
+		);
+
+		if (stillThere)
+			await timingCard(third).getByRole("button", { name: "Cancel" }).click();
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

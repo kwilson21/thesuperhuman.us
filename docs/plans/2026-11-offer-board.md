@@ -163,7 +163,14 @@ back-end rules' Effect form, like the living brief's route:
 The model sees: the path; the written answers; the brief's outline; the existing-content note and who updates the site;
 the timing and its date; the budget note; the owner's fit label and private fit note; the draft without fees; the
 board's cards; the researched ranges for this path. Never the name, email, company, the current site's address, the
-day value, the contingency or any past offer.
+day value, the contingency or any past offer. The owner's draft and card texts are the owner's own words, and the
+client's answers may name the client too, so before the request is sent every string in it has the client's name,
+email, company and current site (as entered, and the site's host) replaced with "the client" or "the client's current
+site": whole words, any case, the longest first (`withheldFrom`). A first name alone, or a misspelling, is not caught.
+
+A card the model keeps unchanged is listed by its ref in `keep` rather than repeated, so a full board does not use up
+the reply's 1,200 tokens repeating itself; the route treats a kept ref as it treats a ref named in a card the reader
+dropped.
 
 ## 6. Cost
 
@@ -174,8 +181,9 @@ feature, and this is far below the living brief's envelope; the living brief's o
 ## 7. Privacy
 
 The privacy page's software brief section gains: when the owner prepares an offer, Cloudflare's AI may help draft it
-from the brief (the written answers, the outline, the timing and the budget note, never the name, email or company),
-and nothing it suggests reaches the client unless the owner puts it in an offer.
+from the brief (the written answers, the outline, the timing and the budget note, the existing-content notes, the
+owner's own notes and draft; never given the name, email, company or current site, and those are replaced wherever they
+appear as entered), and nothing it suggests reaches the client unless the owner puts it in an offer.
 
 ## 8. Verification
 

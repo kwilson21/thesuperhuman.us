@@ -49,7 +49,10 @@ let saving = false;
 let needsReload = false;
 
 const RELOAD_FIRST =
-	"The last save's answer did not arrive, so it may have been saved. Reload the page before saving again.";
+	"The last save’s answer did not arrive, so it may have been saved. Reload the page before saving again.";
+
+/** How long a save waits for its answer before the page treats it as lost. */
+const SAVE_TIMEOUT_MS = 30000;
 
 /**
  * One save at a time for the whole page: a second save sent before the first answers would carry the version the first
@@ -106,6 +109,7 @@ async function save(
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
 		});
 
 		const answer: RawValue = await response.json().catch(() => null);
@@ -167,7 +171,7 @@ async function save(
 			if (status)
 				status.textContent =
 					body.action === "market"
-						? "Saved. Save or clear your other changes, then reload the page to see the new ranges."
+						? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
 						: "Saved.";
 
 			return;

@@ -564,7 +564,7 @@ export function setupOfferBoard() {
 				for (const undoField of restore.reverse()) undoField();
 			});
 		render();
-		announce(said);
+		say(said);
 		schedule();
 	}
 
@@ -780,7 +780,9 @@ export function setupOfferBoard() {
 			used.has(card.id) ||
 			(card.lane === "drivers" && card.status === "kept")
 		) {
-			if (fee !== null && rowOf(card))
+			const row = rowOf(card);
+
+			if (fee !== null && row && named(row, "fee")?.value !== String(fee / 100))
 				list.push(["fee", `Set its fee to ${dollars(fee)}`]);
 			list.push(["aside", "Not this"]);
 
@@ -928,8 +930,14 @@ export function setupOfferBoard() {
 				previous = node;
 			}
 
-			section.querySelector<HTMLElement>("[data-offer-empty]")!.hidden =
-				cards.length > 0;
+			const empty = section.querySelector<HTMLElement>("[data-offer-empty]")!;
+
+			empty.hidden = cards.length > 0;
+			empty.textContent = board.cards.some(
+				(card) => card.lane === lane && card.status === "dismissed",
+			)
+				? "Nothing here now. The ones you set aside are under Set aside."
+				: "No suggestions yet.";
 		}
 
 		const dismissed = board.cards.filter((card) => card.status === "dismissed");
@@ -976,9 +984,37 @@ export function setupOfferBoard() {
 	}
 
 	// ---- Replies ------------------------------------------------------------------------------------------------------
-	function apply(reply: Held) {
+	/**
+	 * The milestone details a reply sets once applied (`after` is the board it leaves): a new card's, or an open one's its
+	 * request was sent after (applyReplyIn changes no other).
+	 */
+	function detailsSet(reply: Held, after: OfferBoard) {
 		const before = new Set(board.cards.map((card) => card.id));
 
+		const changeable = new Set(
+			board.cards
+				.filter((card) => card.status === "proposed" && reply.n > card.since)
+				.map((card) => card.id),
+		);
+
+		return reply.details.flatMap(({ lane, text, detail }) => {
+			const card = after.cards.find(
+				(item) =>
+					item.lane === lane &&
+					item.text === text &&
+					item.status === "proposed",
+			);
+
+			return card && (!before.has(card.id) || changeable.has(card.id))
+				? [{ id: card.id, detail }]
+				: [];
+		});
+	}
+
+	const sameDetail = (one: MilestoneDetail | undefined, two: MilestoneDetail) =>
+		JSON.stringify(one) === JSON.stringify(two);
+
+	function apply(reply: Held) {
 		const result = applyReplyIn(
 			OFFER_LANE_CONFIG,
 			board,
@@ -989,27 +1025,11 @@ export function setupOfferBoard() {
 			reply.refs,
 		);
 
-		// A card's detail follows the reply only where the reply could change the card: a new card, or an open one its
-		// request was sent after (applyReplyIn changes no other).
-		const changeable = new Set(
-			board.cards
-				.filter((card) => card.status === "proposed" && reply.n > card.since)
-				.map((card) => card.id),
-		);
+		const set = detailsSet(reply, result.board);
 
 		board = result.board;
 
-		for (const { lane, text, detail } of reply.details) {
-			const card = board.cards.find(
-				(item) =>
-					item.lane === lane &&
-					item.text === text &&
-					item.status === "proposed",
-			);
-
-			if (card && (!before.has(card.id) || changeable.has(card.id)))
-				details.set(card.id, detail);
-		}
+		for (const { id, detail } of set) details.set(id, detail);
 
 		sizing = reply.sizing.size ? reply.sizing : sizing;
 		held = null;
@@ -1032,7 +1052,14 @@ export function setupOfferBoard() {
 			reply.refs,
 		);
 
-		const changes = preview.added + preview.updated + preview.withdrawn;
+		// New days or deliverables on a card it keeps count too: they move the cards and change a fee button's amount.
+		const changes =
+			preview.added +
+			preview.updated +
+			preview.withdrawn +
+			detailsSet(reply, preview.board).filter(
+				({ id, detail }) => !sameDetail(details.get(id), detail),
+			).length;
 
 		if (changes > 0 && interacting()) {
 			const first = !held;
@@ -1069,7 +1096,7 @@ export function setupOfferBoard() {
 		say(own ? `${text} Press Suggest again to try again.` : text);
 	}
 
-	async function ask() {
+	async function ask(pressed = false) {
 		if (!canAsk()) {
 			if (requests >= REQUESTS_PER_PAGE)
 				say(
@@ -1088,7 +1115,9 @@ export function setupOfferBoard() {
 		lastSent = key;
 		lastSendAt = Date.now();
 		requests++;
-		status.textContent = "Reading the brief and your draft…";
+
+		if (pressed) say("Reading the brief and your draft…");
+		else status.textContent = "Reading the brief and your draft…";
 		render();
 		const shown = draft();
 
@@ -1172,8 +1201,19 @@ export function setupOfferBoard() {
 		const step = board.history.at(-1);
 
 		if (!label || !step) return;
+		const next = undoIn(OFFER_LANE_CONFIG, board);
+
+		// Undo can bring a card back into a full lane, which withdraws the lane's newest open card: never one being edited.
+		if (
+			stopForEdit(
+				next,
+				"Undo would change this card. Save or Cancel your edit first, then undo.",
+			)
+		)
+			return;
+
 		fieldUndo.get(step)?.();
-		board = undoIn(OFFER_LANE_CONFIG, board);
+		board = next;
 		render();
 
 		if (
@@ -1222,7 +1262,7 @@ export function setupOfferBoard() {
 			(
 				nodes.get(id)?.querySelector<HTMLElement>("button") ?? asideSummary
 			).focus();
-			announce(`Brought back “${back?.text ?? ""}”.`);
+			say(`Brought back “${back?.text ?? ""}”.`);
 			schedule();
 
 			return;
@@ -1234,15 +1274,12 @@ export function setupOfferBoard() {
 			case "use":
 			case "use-fee": {
 				// Words typed in the card's open editor are the owner's: they are saved or cancelled first, never lost.
-				const editor = node.querySelector<HTMLElement>("[data-card-editor]")!;
+				const editing = unsavedEdit(card);
 
-				const input =
-					node.querySelector<HTMLInputElement>("[data-card-input]")!;
-
-				if (!editor.hidden && oneLine(input.value) !== card.text) {
+				if (editing) {
 					showEditError(
-						node,
-						input,
+						editing.node,
+						editing.input,
 						card.id,
 						"Save or Cancel your edit first, then use the card.",
 					);
@@ -1264,7 +1301,7 @@ export function setupOfferBoard() {
 				board = setAside(board, card.id);
 				render();
 				(near?.querySelector<HTMLElement>("button") ?? asideSummary).focus();
-				announce(`Set aside “${card.text}”. Undo or Bring back restores it.`);
+				say(`Set aside “${card.text}”. Undo or Bring back restores it.`);
 				schedule();
 
 				break;
@@ -1305,6 +1342,7 @@ export function setupOfferBoard() {
 			if (target.matches("[data-card-save]")) {
 				board = editCardIn(OFFER_LANE_CONFIG, board, card.id, input.value);
 				render();
+				say("Saved your words on the card. Undo puts the old ones back.");
 				schedule();
 			}
 
@@ -1317,6 +1355,42 @@ export function setupOfferBoard() {
 			).focus();
 		}
 	});
+
+	/** The card's open editor and field when they hold words other than the card's: the owner's, not to be lost. */
+	function unsavedEdit(card: OfferCard) {
+		const node = nodes.get(card.id);
+		const editor = node?.querySelector<HTMLElement>("[data-card-editor]");
+		const input = node?.querySelector<HTMLInputElement>("[data-card-input]");
+
+		return node &&
+			editor &&
+			input &&
+			!editor.hidden &&
+			oneLine(input.value) !== card.text
+			? { node, input }
+			: null;
+	}
+
+	/**
+	 * Whether a change to `next` must wait for an open editor: it would remove or reword a card whose editor holds the
+	 * owner's unsaved words. If so, says so by that field and moves focus to it.
+	 */
+	function stopForEdit(next: OfferBoard, message: string) {
+		for (const card of board.cards) {
+			const after = next.cards.find((each) => each.id === card.id);
+
+			if (after && after.text === card.text) continue;
+			const editing = unsavedEdit(card);
+
+			if (editing) {
+				showEditError(editing.node, editing.input, card.id, message);
+
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	/** Says what is wrong next to the card's field, marks the field and moves focus to it. */
 	function showEditError(
@@ -1396,11 +1470,31 @@ export function setupOfferBoard() {
 		clearTimeout(timer);
 		autoAsk = true;
 		lastSent = "";
-		void ask();
+		void ask(true);
 	});
 	undoButton.addEventListener("click", undoLast);
 	heldButton.addEventListener("click", () => {
-		if (held) apply(held);
+		if (!held) return;
+
+		const preview = applyReplyIn(
+			OFFER_LANE_CONFIG,
+			board,
+			held.cards,
+			held.n,
+			"",
+			false,
+			held.refs,
+		);
+
+		if (
+			stopForEdit(
+				preview.board,
+				"The updates would change this card. Save or Cancel your edit first, then show them.",
+			)
+		)
+			return;
+
+		apply(held);
 		heading.focus();
 	});
 	cardsBox.addEventListener("pointerenter", (event) => {
@@ -1424,7 +1518,7 @@ export function setupOfferBoard() {
 		// Set its fee is offered only while the milestone's row holds its name.
 		if (
 			event.target instanceof HTMLInputElement &&
-			event.target.name === "milestoneName"
+			(event.target.name === "milestoneName" || event.target.name === "fee")
 		)
 			render();
 
