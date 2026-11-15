@@ -60,7 +60,7 @@ export const projectIncompleteMessage = "Mark the project complete first.";
 export const projectStartedMessage =
 	"This project has started. Use the project controls.";
 
-const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
+export const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
 function validActor(actor: string) {
@@ -78,21 +78,6 @@ export async function getOwnerRequest(
 	const row = await db
 		.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`)
 		.bind(id)
-		.first<OwnerRequestRow>();
-
-	return row ? ownerRequestFromRow(row) : null;
-}
-
-/** The request stored under a submission id, or null (one read; the id is unique). */
-export async function getOwnerRequestBySubmission(
-	db: D1Database,
-	submissionId: string,
-): Promise<OwnerRequest | null> {
-	const row = await db
-		.prepare(
-			`SELECT ${requestColumns} FROM owner_requests WHERE submission_id=?`,
-		)
-		.bind(submissionId)
 		.first<OwnerRequestRow>();
 
 	return row ? ownerRequestFromRow(row) : null;

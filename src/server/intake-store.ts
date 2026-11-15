@@ -6,11 +6,12 @@
 // facts.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import type { OwnerRequest } from "../lib/owner-model";
 import {
-	getOwnerRequestBySubmission,
-	type NewOwnerRequest,
-} from "../lib/owner-requests";
+	type OwnerRequest,
+	type OwnerRequestRow,
+	ownerRequestFromRow,
+} from "../lib/owner-model";
+import { type NewOwnerRequest, requestColumns } from "../lib/owner-requests";
 import { ChangedSinceRead, isUniqueViolation } from "./guarded-save";
 import { MusicDb } from "./services";
 
@@ -135,8 +136,16 @@ export const findStoredBrief = (submissionId: string) =>
 		const db = yield* MusicDb;
 
 		return yield* Effect.tryPromise({
-			try: (): Promise<OwnerRequest | null> =>
-				getOwnerRequestBySubmission(db, submissionId),
+			try: async (): Promise<OwnerRequest | null> => {
+				const row = await db
+					.prepare(
+						`SELECT ${requestColumns} FROM owner_requests WHERE submission_id=?`,
+					)
+					.bind(submissionId)
+					.first<OwnerRequestRow>();
+
+				return row ? ownerRequestFromRow(row) : null;
+			},
 			catch: (failure) => new IntakeReadFailed({ failure }),
 		});
 	});
