@@ -264,7 +264,7 @@ describe("the brief board model's mutant registry", () => {
 // The three models added with the offer board: each property in allProperties has a mutant that breaks it, and every
 // mutant names a module of the model.
 describe.each([
-	["offer-board", "offerBoardModel", "offerBoard", offerBoardMutants, 9],
+	["offer-board", "offerBoardModel", "offerBoard", offerBoardMutants, 10],
 	["daily-allowance", "dailyAllowanceModel", "allowance", allowanceMutants, 4],
 	["pricing-save", "pricingSaveModel", "pricing", pricingMutants, 3],
 ])(

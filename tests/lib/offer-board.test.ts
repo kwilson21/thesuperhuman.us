@@ -8,6 +8,7 @@ import {
 	emptyBoard,
 	keepCard,
 	lastAction,
+	markStep,
 	pricesOrLinks,
 	sendRequest,
 	setAside,
@@ -297,4 +298,35 @@ describe("found by the automated review", () => {
 			).toEqual([]);
 		},
 	);
+});
+
+describe("found in the offer board's second review", () => {
+	it("records a step that changes no card, for an action beside the board, which Undo then takes back", () => {
+		let [board, n] = sendRequest(emptyBoard<OfferLane>());
+		board = applyReplyIn(
+			OFFER_LANE_CONFIG,
+			board,
+			[
+				{
+					ref: "",
+					lane: "milestones",
+					text: "Design direction",
+					basis: "suggested",
+					quote: "",
+					reason: "",
+				},
+			],
+			n,
+			"",
+			false,
+		).board;
+		board = useCard(board, "c1");
+
+		const marked = markStep(board, "c1", "set the fee of “Design direction”");
+
+		expect(marked.cards).toEqual(board.cards);
+		expect(lastAction(marked)).toBe("set the fee of “Design direction”");
+		expect(undoIn(OFFER_LANE_CONFIG, marked).cards).toEqual(board.cards);
+		expect(markStep(board, "c9", "nothing")).toBe(board);
+	});
 });

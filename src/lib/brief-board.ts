@@ -1005,6 +1005,20 @@ export function useCard<L extends string>(
 	);
 }
 
+/**
+ * A step on the board's history that changes no card, for an action beside the board that Undo must reach (the offer
+ * board's Set its fee). Undo of it puts the card back as it already is; the page puts back what the action changed.
+ */
+export function markStep<L extends string>(
+	board: Board<L>,
+	id: string,
+	label: string,
+): Board<L> {
+	if (!find(board, id)) return board;
+
+	return act(board, label, [id], (cards) => cards);
+}
+
 /** Edit: the visitor's words replace the card's. A note stays a note. */
 export const editCard = (board: Board, id: string, text: string): Board =>
 	editCardIn(BRIEF_LANES, board, id, text);

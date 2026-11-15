@@ -335,6 +335,102 @@ function check(name, ok, detail = "") {
 			(await value("outcome")) === outcome,
 		);
 
+		// The second review's bugs, each on a fresh page so one case's rows never stand in another's way.
+		const fresh = async () => {
+			await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
+			await page
+				.getByRole("button", { name: "Suggest an offer with AI" })
+				.click();
+			await release(await next());
+			await page.waitForFunction(() =>
+				document
+					.querySelector("[data-offer-status]")
+					?.textContent?.startsWith("Up to date"),
+			);
+			await page.mouse.move(2, 2);
+		};
+
+		// The day-value estimate counts milestones in the offer, not one only edited.
+		await fresh();
+		const build = card("milestones", 1);
+
+		await build.getByRole("button", { name: /^Edit/ }).click();
+		await build.locator("[data-card-input]").fill("Build and launch the site");
+		await build.locator("[data-card-input]").press("Enter");
+
+		const dayRow = await page.locator("[data-price-day]").textContent();
+
+		check(
+			"an edited milestone is not counted as used in the day-value estimate",
+			/2 suggested milestones/.test(dayRow),
+			dayRow.slice(0, 80),
+		);
+
+		// four-fields-only: Undo keeps a row Use added when the owner typed in its checkpoint.
+		await fresh();
+		await rows.first().locator('[name="deliverables"]').fill("Our own deliverable");
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+
+		const added = rows.nth(1);
+
+		await added.locator('[name="hasCheckpoint"]').check();
+		await added
+			.locator('[name="checkpointLabel"]')
+			.fill("Direction approved");
+		await undo();
+		check(
+			"four-fields-only: Undo keeps a row whose checkpoint the owner filled in",
+			(await rows.count()) === 2 &&
+				(await value("checkpointLabel", rows.nth(1))) === "Direction approved",
+		);
+
+		// fee-no-step: Undo after Set its fee puts the fee back, and the next Undo empties the row.
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await page
+			.getByRole("button", { name: /^Set its fee to .*: Design direction$/ })
+			.click();
+
+		const feeSet = await value("fee", rows.first());
+
+		await undo();
+
+		const feeAfter = await value("fee", rows.first());
+
+		await undo();
+		check(
+			"fee-no-step: Undo puts the fee back, then the milestone",
+			Number(feeSet) > 0 &&
+				feeAfter === "" &&
+				(await value("milestoneName", rows.first())) === "" &&
+				(await rows.count()) === 1,
+			`${feeSet} -> ${feeAfter}`,
+		);
+
+		// fee-any-row: once another milestone takes the row, Set its fee is not offered for the first.
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+
+		for (const name of ["milestoneName", "deliverables", "acceptance"])
+			await rows.first().locator(`[name="${name}"]`).fill("");
+
+		await card("milestones", 1)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		check(
+			"fee-any-row: a milestone whose row now holds another offers no fee",
+			(await page
+				.getByRole("button", { name: /^Set its fee to .*: Design direction$/ })
+				.count()) === 0 &&
+				(await value("milestoneName", rows.first())) === "Build and launch",
+		);
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

@@ -261,7 +261,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 
 File: `verification/offer-board.qnt` (module `offerBoard`), written after the first review of the offer board (PR #308) found five bugs by reading where Use couples the board to the offer editor: one press changes the board and the offer's own fields, and Undo must put back both. The owner asked (2026-11-15) for these risky areas to be checked by search. The code modelled is `use`, `setField`, `milestoneFor`, `setFee`, `undoLast`, `apply`, `ask` and `failed` in `src/scripts/offer-board.ts`, over `useCard`, `undoIn` and `applyReplyIn` in `src/lib/brief-board.ts`.
 
-**State.** Four ideas: two fill the same field (the outcome), two are milestones that each fill a row. The offer: the field, one or two milestone rows (name, deliverables, fee) and a count of the owner's own edits. A value is empty, a card's number (what Use put there), or the owner's own words. The board: each card's status, `since` and milestone detail; which cards Use put in the offer and in which row; the Undo history, capped at two steps (the page keeps 40); requests, the newest reply applied, and whether the board asks on its own. Ghosts record what the code must never do.
+**State.** Four ideas: two fill the same field (the outcome), two are milestones that each fill a row. The offer: the field, one or two milestone rows (name, deliverables, fee, and the parts Use never fills: the checkpoint and the agreement details) and a count of the owner's own edits. A value is empty, a card's number (what Use put there), or the owner's own words. The board: each card's status, `since` and milestone detail; which cards Use put in the offer and in which row; the Undo history, capped at two steps (the page keeps 40); requests, the newest reply applied, and whether the board asks on its own. Ghosts record what the code must never do.
 
 **Properties** (`allProperties`):
 1. `ownerWordsKept`: nothing the board does writes over words the owner typed. Use into the one field the owner chose to replace is the exception; Undo, a milestone's Use and Set its fee (beyond the fee) are not.
@@ -272,7 +272,8 @@ File: `verification/offer-board.qnt` (module `offerBoard`), written after the fi
 6. `undoRespected`: a reply never changes a card (or its detail) that Undo reopened after that reply's request was sent.
 7. `noAutoAfterFailure`: after a failed request the board asks again only when the owner presses Suggest.
 8. `undoComplete`: when the owner has not touched the offer since a step, its Undo gives back the offer exactly as it was before it.
-9. `rowsBounded`: the offer keeps one to two rows.
+9. `feeOnItsOwnRow`: Set its fee writes only into the row that holds its milestone.
+10. `rowsBounded`: the offer keeps one to two rows.
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -287,10 +288,15 @@ File: `verification/offer-board.qnt` (module `offerBoard`), written after the fi
 | `NameOnlyEmpty` | A row counts as empty when its name is empty: the code before this model | `ownerWordsKept` |
 | `NoRowRemoval` | Undo empties a row Use added but leaves it | `undoComplete` |
 | `RemoveLastRow` | Undo removes a row Use added even when it is the only row left | `rowsBounded` |
+| `FourFieldsOnly` | Undo removes a row Use added once the fields Use fills are empty, though the owner filled in its checkpoint or agreement details (second review) | `ownerWordsKept` |
+| `FeeAnyRow` | Set its fee writes into the row the milestone last filled, even when another milestone now holds it (second review) | `feeOnItsOwnRow` |
+| `FeeNoStep` | Set its fee is no step on the history, so Undo leaves the fee behind (second review) | `undoComplete` |
 
 **Found by writing it.** `NameOnlyEmpty` was the code: a milestone's Use filled the first row whose name was empty, so deliverables or a fee the owner had typed in a row without a name were written over. The code now treats a row as empty only when every field Use fills is empty, and `RemoveLastRow` was the first counterexample the design run found (an Undo emptying the only row left), which the editor already prevents by refusing to remove its last row; the model now says so.
 
-**Tied to the code.** The coupling lives in the page, so it is tied by a browser check against the real page: `tests/browser/offer-board.cjs`, which the Screenshots workflow runs on the local preview, tries `RestoreAlways`, `NameOnlyEmpty`, `NoRowRemoval`, `StaleUsedIn`, `FeeIsUse`, `KeepOnlyProposed`, `DetailIgnoresSince`, `KeyByLength` (42 board steps, past the history's limit) and `RetryOnFail` on the owner's request page, and none may happen. Planting `NameOnlyEmpty` in the real code makes its check fail (checked by hand). `tests/lib/offer-board.test.ts` holds `useCard`'s rules.
+**Found by the second review, and what the model lacked.** Three bugs got past the first version of the model because it could not express them: its row had no part that Use leaves alone (so Undo removing a row with the owner's checkpoint in it looked harmless), its Set its fee had no check of which row it wrote into, and it counted Set its fee as the owner typing, so `undoComplete` never asked whether Undo puts the fee back. The row now has that part, Set its fee is offered only while its row holds its milestone and is its own step on the history (`markStep` in `src/lib/brief-board.ts`), and each bug is a mutant above.
+
+**Tied to the code.** The coupling lives in the page, so it is tied by a browser check against the real page: `tests/browser/offer-board.cjs`, which the Screenshots workflow runs on the local preview, tries `RestoreAlways`, `NameOnlyEmpty`, `NoRowRemoval`, `StaleUsedIn`, `FeeIsUse`, `KeepOnlyProposed`, `DetailIgnoresSince`, `KeyByLength` (42 board steps, past the history's limit), `FourFieldsOnly`, `FeeNoStep`, `FeeAnyRow` and `RetryOnFail` on the owner's request page, and none may happen. Planting `NameOnlyEmpty` in the real code makes its check fail (checked by hand). `tests/lib/offer-board.test.ts` holds `useCard`'s rules.
 
 **Exhaustive.** Run by hand (`quint verify verification/offer-board.qnt --main offerBoard --init init --step stepOrEnd --invariant allProperties --max-steps N`, 2026-11-15, the Apalache that `quint` 0.33.1 downloads, a cloud container): no violation at 3 steps (14 seconds) or 5 steps (50 seconds).
 
@@ -326,7 +332,9 @@ File: `verification/pricing-save.qnt` (module `pricing`). The owner's pricing pa
 
 **This model describes the intended code, not today's.** The module that must keep every property checks the version and writes the record in one step against the latest record: a compare-and-set, which D1 gives and KV does not. Today the record is in KV, whose reads may be cached for up to about a minute and whose read and write are separate steps. That is the `TodayKv` mutant, and it breaks all three properties. Its shortest counterexample: two tabs are open; one saves the market research; seconds later the other saves the day value, its read returns the record from before the research was saved, the versions match, and the write puts the old research back. With one tab, a stale read can refuse a second save that should succeed. Cloudflare says a change is usually visible at once in the location where it was made, so the owner should rarely meet either; moving the record to D1 removes both, and is the owner's decision (a new table changes the digest of every golden case).
 
-**Properties** (`allProperties`): `noBlindOverwrite` (a save never replaces a save its page had not seen), `otherPartKept` (saving one form never puts the other form's part back to an older value) and `noFalseConflict` (a save is refused only when another save really came in since its page last saw the record).
+Each save carries the version its page had when Save was pressed, and a page sends one save at a time (`src/scripts/owner-pricing.ts`: every Save button waits while one is on its way).
+
+**Properties** (`allProperties`): `noBlindOverwrite` (a save never replaces a save its page had not seen), `otherPartKept` (saving one form never puts the other form's part back to an older value) and `noFalseConflict` (a save is refused only when another page's save came in since the version it was sent with).
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -334,6 +342,7 @@ File: `verification/pricing-save.qnt` (module `pricing`). The owner's pricing pa
 | `SplitReadWrite` | The record is read, then written in a later step | `otherPartKept` |
 | `StaleRead` | The version is compared against a record that may be a few saves old | `noFalseConflict` |
 | `TodayKv` | Both: the code as it is today, on KV | `otherPartKept` (and the other two) |
+| `ParallelSaves` | A page sends a second save before the first answers, carrying the version the first replaces (second review: the values, then the research, from one tab) | `noFalseConflict` |
 
 **Exhaustive.** Run by hand as above with `--main pricing`: no violation at 3 steps (7 seconds) or 6 steps (9 seconds).
 

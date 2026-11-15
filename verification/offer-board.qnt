@@ -38,9 +38,16 @@ module offerBoardModel {
   //   "no-row-removal"      Undo empties a row Use added but leaves it in the offer
   //   "remove-last-row"     Undo removes a row Use added even when the owner has since removed every other row
   //   "detail-on-owned"     a reply's milestone detail is matched by idea alone, so it lands on a card the owner used
+  //   "four-fields-only"    Undo removes a row Use added once the fields Use fills are empty, though the owner typed in
+  //                         its checkpoint or agreement details (the second review)
+  //   "fee-any-row"         Set its fee writes into the row the milestone last filled, even when it now holds another
+  //                         milestone (the second review)
+  //   "fee-no-step"         Set its fee is no step on the history, so Undo leaves the fee behind (the second review)
   const MUTANT: str
 
-  type Row = { name: int, deliv: int, fee: int }
+  // A milestone row: the parts Use fills (name, deliverables and acceptance as one, fee) and `extra`, the parts it never
+  // fills (the checkpoint, the agreement details), which only the owner types in.
+  type Row = { name: int, deliv: int, fee: int, extra: int }
   type Card = { status: str, since: int, detail: int }
   // What a Use changed, for its Undo: the field before and after, or the row (and whether Use added it), and where the card
   // was used before. kind "none": a step that changed only the board.
@@ -58,7 +65,7 @@ module offerBoardModel {
   type Net = { live: Set[int], sent: int, applied: int, autoAsk: bool, failedSinceSuggest: bool }
   type Ghost = {
     clobbered: bool, wrongRestore: bool, useWithoutStep: bool, overwroteOther: bool, ownedTouched: bool,
-    undoReverted: bool, autoAfterFail: bool, undoIncomplete: bool
+    undoReverted: bool, autoAfterFail: bool, undoIncomplete: bool, feeElsewhere: bool
   }
 
   // Ideas 1 and 2 fill the same field (the outcome); ideas 3 and 4 are milestones, each filling a row.
@@ -72,13 +79,15 @@ module offerBoardModel {
   val OWNER_FEE = 7
 
   pure def feeOf(i: int): int = i + 2
-  pure val emptyRow: Row = { name: 0, deliv: 0, fee: 0 }
+  pure val emptyRow: Row = { name: 0, deliv: 0, fee: 0, extra: 0 }
   pure val noRestore: Restore = {
     kind: "none", stepId: 0, idea: 0, fieldWas: 0, fieldSet: 0, row: 0, rowWas: emptyRow, rowSet: emptyRow,
     added: false, usedWas: false, usedInWas: 0
   }
   pure def ownerValue(v: int): bool = v == OWNER or v == OWNER_FEE
+  // Empty for Use: the parts Use fills are empty. As drawn: all of it is.
   pure def blank(r: Row): bool = r.name == 0 and r.deliv == 0 and r.fee == 0
+  pure def asDrawn(r: Row): bool = blank(r) and r.extra == 0
   pure def owned(c: Card): bool = Set("kept", "edited", "dismissed").contains(c.status)
   pure def without(m: int -> Row, k: int): int -> Row = m.keys().exclude(Set(k)).mapBy(x => m.get(x))
   pure def withoutRestore(m: int -> Restore, k: int): int -> Restore = m.keys().exclude(Set(k)).mapBy(x => m.get(x))
@@ -91,7 +100,9 @@ module offerBoardModel {
     (ownerValue(before.name) and after.name != before.name)
       or (ownerValue(before.deliv) and after.deliv != before.deliv)
       or (ownerValue(before.fee) and after.fee != before.fee)
-  pure def holdsOwner(r: Row): bool = ownerValue(r.name) or ownerValue(r.deliv) or ownerValue(r.fee)
+      or (ownerValue(before.extra) and after.extra != before.extra)
+  pure def holdsOwner(r: Row): bool =
+    ownerValue(r.name) or ownerValue(r.deliv) or ownerValue(r.fee) or ownerValue(r.extra)
 
   var offer: Offer
   var board: BoardState
@@ -114,7 +125,7 @@ module offerBoardModel {
     net' = { live: Set(), sent: 0, applied: 0, autoAsk: false, failedSinceSuggest: false },
     ghost' = {
       clobbered: false, wrongRestore: false, useWithoutStep: false, overwroteOther: false, ownedTouched: false,
-      undoReverted: false, autoAfterFail: false, undoIncomplete: false,
+      undoReverted: false, autoAfterFail: false, undoIncomplete: false, feeElsewhere: false,
     },
   }
 
@@ -130,12 +141,13 @@ module offerBoardModel {
 
   action typeRow = {
     nondet r = offer.rows.keys().oneOf()
-    nondet part = Set("name", "deliv", "fee").oneOf()
+    nondet part = Set("name", "deliv", "fee", "extra").oneOf()
     nondet typed = Set(false, true).oneOf()
     val row = offer.rows.get(r)
     val typedRow =
       if (part == "name") { ...row, name: if (typed) OWNER else 0 }
       else if (part == "deliv") { ...row, deliv: if (typed) OWNER else 0 }
+      else if (part == "extra") { ...row, extra: if (typed) OWNER else 0 }
       else { ...row, fee: if (typed) OWNER_FEE else 0 }
     ownerChanges({ ...offer, rows: offer.rows.set(r, typedRow) })
   }
@@ -176,7 +188,7 @@ module offerBoardModel {
     val t = if (isRow) targetRow(i) else 0
     val added = isRow and t != 0 and not(offer.rows.keys().contains(t))
     val rowBefore = if (isRow and t != 0 and not(added)) offer.rows.get(t) else emptyRow
-    val rowAfter = { name: i, deliv: i, fee: if (withFee) feeOf(i) else rowBefore.fee }
+    val rowAfter = { ...rowBefore, name: i, deliv: i, fee: if (withFee) feeOf(i) else rowBefore.fee }
     val offerAfter =
       if (isRow) { ...offer, rows: offer.rows.put(t, rowAfter), nextRow: if (added) offer.nextRow + 1 else offer.nextRow }
       else { ...offer, field: i }
@@ -221,18 +233,42 @@ module offerBoardModel {
     use(i, withFee and ROW_IDEAS.contains(i))
   }
 
-  // "Set its fee": the owner's press on a used milestone. The fee is theirs to replace; nothing else in the row changes.
+  // "Set its fee": the owner's press on a used milestone, offered while its row still holds its name. The fee is theirs
+  // to replace; nothing else in the row changes. It is a step on the history (src/lib/brief-board.ts markStep), so Undo
+  // puts the fee back while it still holds what this put there.
   action setFee(i: int): bool = {
     val t = board.usedIn.get(i)
     val row = if (offer.rows.keys().contains(t)) offer.rows.get(t) else emptyRow
-    val after = if (MUTANT == "fee-is-use") { name: i, deliv: i, fee: feeOf(i) } else { ...row, fee: feeOf(i) }
+    val after = if (MUTANT == "fee-is-use") { ...row, name: i, deliv: i, fee: feeOf(i) } else { ...row, fee: feeOf(i) }
+    val records = MUTANT != "fee-no-step"
+    val restore = {
+      ...noRestore, kind: "fee", stepId: board.nextStep, idea: i, row: t, rowWas: row, rowSet: after, usedWas: true,
+      usedInWas: t,
+    }
+    val step = {
+      id: board.nextStep, idea: i, prev: board.cards.get(i), restore: restore, snapField: offer.field,
+      snapRows: offer.rows, edits: offer.edits,
+    }
+    val history = capped(board.history.append(step))
     all {
       t != 0,
       offer.rows.keys().contains(t),
-      offer' = { ...offer, rows: offer.rows.set(t, after), edits: offer.edits + 1 },
-      board' = board,
+      MUTANT == "fee-any-row" or row.name == i,
+      row.fee != feeOf(i),
+      offer' = { ...offer, rows: offer.rows.set(t, after) },
+      board' = {
+        ...board,
+        history: if (records) history else board.history,
+        nextStep: board.nextStep + 1,
+        restoreAt:
+          if (records and MUTANT == "key-by-length") board.restoreAt.put(history.length(), restore) else board.restoreAt,
+      },
       net' = net,
-      ghost' = { ...ghost, clobbered: ghost.clobbered or clobbers(row, { ...after, fee: row.fee }) },
+      ghost' = {
+        ...ghost,
+        clobbered: ghost.clobbered or clobbers(row, { ...after, fee: row.fee }),
+        feeElsewhere: ghost.feeElsewhere or row.name != i,
+      },
     }
   }
 
@@ -284,16 +320,18 @@ module offerBoardModel {
       else last.restore
     val oldRule = MUTANT == "restore-always"
     val fieldNext = if (r.kind == "field") back(offer.field, r.fieldWas, r.fieldSet, oldRule) else offer.field
-    val hasRow = r.kind == "row" and offer.rows.keys().contains(r.row)
+    val hasRow = Set("row", "fee").contains(r.kind) and offer.rows.keys().contains(r.row)
     val rowNow = if (hasRow) offer.rows.get(r.row) else emptyRow
     val rowBack = {
       name: back(rowNow.name, r.rowWas.name, r.rowSet.name, oldRule),
       deliv: back(rowNow.deliv, r.rowWas.deliv, r.rowSet.deliv, oldRule),
       fee: back(rowNow.fee, r.rowWas.fee, r.rowSet.fee, oldRule),
+      extra: rowNow.extra,
     }
     // The editor's Remove milestone refuses the last row, so a row Use added stays when it is the only one.
     val remove =
-      hasRow and r.added and MUTANT != "no-row-removal" and (oldRule or blank(rowBack))
+      hasRow and r.added and MUTANT != "no-row-removal"
+        and (oldRule or (if (MUTANT == "four-fields-only") blank(rowBack) else asDrawn(rowBack)))
         and (MUTANT == "remove-last-row" or offer.rows.keys().size() > 1)
     val rowsNext = if (not(hasRow)) offer.rows else if (remove) without(offer.rows, r.row) else offer.rows.set(r.row, rowBack)
     val offerNext = { ...offer, field: fieldNext, rows: rowsNext }
@@ -429,12 +467,15 @@ module offerBoardModel {
   // 8. When the owner has not touched the offer since a step, its Undo gives back the offer exactly as it was before it.
   val undoComplete = not(ghost.undoIncomplete)
 
+  // 9. Set its fee writes only into the row that holds its milestone.
+  val feeOnItsOwnRow = not(ghost.feeElsewhere)
+
   // The offer keeps one to MAXROWS rows.
   val rowsBounded = offer.rows.keys().size() >= 1 and offer.rows.keys().size() <= MAXROWS
 
   val allProperties = and {
     ownerWordsKept, undoMatchesStep, everyUseUndoable, useNeverOverwritesOther, ownedUntouched, undoRespected,
-    noAutoAfterFailure, undoComplete, rowsBounded,
+    noAutoAfterFailure, undoComplete, feeOnItsOwnRow, rowsBounded,
   }
 
   // Reachability witness, for a hand check with the negated invariant: both milestones in the offer, one in a row Use added.
@@ -456,3 +497,6 @@ module offerNameOnlyEmpty { import offerBoardModel(MUTANT = "name-only-empty").*
 module offerNoRowRemoval { import offerBoardModel(MUTANT = "no-row-removal").* }
 module offerRemoveLastRow { import offerBoardModel(MUTANT = "remove-last-row").* }
 module offerDetailOnOwned { import offerBoardModel(MUTANT = "detail-on-owned").* }
+module offerFourFieldsOnly { import offerBoardModel(MUTANT = "four-fields-only").* }
+module offerFeeAnyRow { import offerBoardModel(MUTANT = "fee-any-row").* }
+module offerFeeNoStep { import offerBoardModel(MUTANT = "fee-no-step").* }

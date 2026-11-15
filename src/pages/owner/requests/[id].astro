@@ -282,7 +282,7 @@ const offerPricing =
 
 const offerPast =
 	offerBoardOpen && offerKind
-		? await pastOffers(db, offerKind, request.id)
+		? await pastOffers(db, offerKind, request.id).catch(() => [])
 		: [];
 
 // Each software path's row on the services page. Earlier web app briefs keep the idea path name.

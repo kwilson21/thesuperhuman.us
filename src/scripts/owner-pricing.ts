@@ -39,25 +39,36 @@ const unsaved = (form: HTMLFormElement) =>
 /** Where the page notes, across the reload new research triggers, that it was saved. */
 const SAVED_KEY = "owner-pricing-saved";
 
+/** Whether a save from this page is on its way. */
+let saving = false;
+
+/**
+ * One save at a time for the whole page: a second save sent before the first answers would carry the version the first
+ * replaces, and be refused as if another page had saved (verification/pricing-save.qnt, mutant parallel-saves). Every
+ * Save button waits while one is on its way, and the next save reads the version the last one answered.
+ */
 async function send(
 	body: PricingRequest,
 	form: HTMLFormElement,
 	status: Status,
 ) {
-	// One save at a time: a second press would carry the same version and be refused as stale.
-	if (form.dataset.saving === "true") return;
-	form.dataset.saving = "true";
+	if (saving) return;
+	saving = true;
 
-	for (const button of form.querySelectorAll<HTMLButtonElement>("button"))
-		button.disabled = true;
+	const buttons = [
+		...document.querySelectorAll<HTMLButtonElement>(
+			"[data-pricing-form] button",
+		),
+	];
+
+	for (const button of buttons) button.disabled = true;
 
 	try {
 		await save(body, form, status);
 	} finally {
-		delete form.dataset.saving;
+		saving = false;
 
-		for (const button of form.querySelectorAll<HTMLButtonElement>("button"))
-			button.disabled = false;
+		for (const button of buttons) button.disabled = false;
 	}
 }
 

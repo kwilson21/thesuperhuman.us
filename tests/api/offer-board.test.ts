@@ -353,6 +353,20 @@ describe("the owner's past offers, for the pricing panel", () => {
 		]);
 	});
 
+	it("skips a request whose details are not readable, rather than failing for every page", async () => {
+		seed("r2");
+		offer("o1", "r2", 1, "sent", 123456, "2026-01-01T00:00:00.000Z");
+		db.prepare(
+			`INSERT INTO owner_requests (id,kind,name,email,summary,details_json,status,created_at,updated_at)
+       VALUES ('bad', 'software', 'X', 'x@example.com', 'X', 'not json', 'new', ?, ?)`,
+		).run(NOW.toISOString(), NOW.toISOString());
+		offer("o2", "bad", 1, "sent", 999900, "2026-11-10T00:00:00.000Z");
+
+		const past = await pastOffers(sqliteD1(db), "website", "r1");
+
+		expect(past.map((each) => each.requestId)).toEqual(["r2"]);
+	});
+
 	it("filters by kind before its limit, so many newer offers of another kind never hide this kind's", async () => {
 		seed("r2");
 		offer("o1", "r2", 1, "sent", 123456, "2026-01-01T00:00:00.000Z");

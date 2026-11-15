@@ -21,11 +21,15 @@ module pricingSaveModel {
   //   "split-read-write"  the record is read, then written in a later step (a save in between is overwritten)
   //   "stale-read"        the version is compared against a record that may be up to a few saves old
   //   "today-kv"          both: the code as it is today, on KV
+  //   "parallel-saves"    a page sends a second save before the first answers, carrying the version the first replaces
+  //                       (the second review: Save the values, then the research, from one tab)
   const MUTANT: str
 
-  type Record = { version: int, values: int, market: int }
+  // The stored record, and which page wrote this version (0: none yet).
+  type Record = { version: int, values: int, market: int, by: int }
   type Page = { version: int, values: int, market: int }
-  type Req = { page: int, part: str, value: int, phase: str, base: Record }
+  // A save as sent: its page, form, value and the version its page had when Save was pressed.
+  type Req = { page: int, part: str, value: int, version: int, phase: str, base: Record }
 
   val PAGES = Set(1, 2)
   val MAXSAVES = 4
@@ -43,7 +47,7 @@ module pricingSaveModel {
   var otherPartLost: bool
   var falseConflict: bool
 
-  pure val empty: Record = { version: 0, values: 0, market: 0 }
+  pure val empty: Record = { version: 0, values: 0, market: 0, by: 0 }
 
   action init = all {
     stored' = empty,
@@ -77,13 +81,18 @@ module pricingSaveModel {
     }
   }
 
-  // The owner presses Save on one form; the save's value is its number.
+  // The owner presses Save on one form; the save's value is its number. A page sends one save at a time
+  // (src/scripts/owner-pricing.ts: every Save button waits while one is on its way).
+  def busy(p: int): bool = reqs.keys().exists(k => reqs.get(k).page == p and Set("read", "write").contains(reqs.get(k).phase))
   action press = {
     nondet p = PAGES.oneOf()
     nondet part = Set("values", "market").oneOf()
     all {
       saves < MAXSAVES,
-      reqs' = reqs.put(saves + 1, { page: p, part: part, value: saves + 1, phase: "read", base: empty }),
+      MUTANT == "parallel-saves" or not(busy(p)),
+      reqs' = reqs.put(saves + 1, {
+        page: p, part: part, value: saves + 1, version: pages.get(p).version, phase: "read", base: empty,
+      }),
       saves' = saves + 1,
       stored' = stored, written' = written, pages' = pages, unchangedGhosts,
     }
@@ -95,7 +104,7 @@ module pricingSaveModel {
   // The write: the record read, with this save's part, at the next version. The page takes the new version and part.
   action write(id: int, base: Record): bool = {
     val q = reqs.get(id)
-    val saved = withPart(base, q.part, q.value)
+    val saved = { ...withPart(base, q.part, q.value), by: q.page }
     val page = pages.get(q.page)
     all {
       stored' = saved,
@@ -104,8 +113,8 @@ module pricingSaveModel {
         else { ...page, version: saved.version, market: q.value }),
       reqs' = reqs.set(id, { ...q, phase: "saved" }),
       saves' = saves,
-      // The page had not seen the latest save, yet its save replaced it.
-      blindOverwrite' = (blindOverwrite or page.version != stored.version),
+      // The save was sent from a view older than the latest save, yet it replaced it.
+      blindOverwrite' = (blindOverwrite or q.version != stored.version),
       // The other form's part went back to an older value.
       otherPartLost' = (otherPartLost
         or (q.part == "values" and saved.market != stored.market)
@@ -120,8 +129,9 @@ module pricingSaveModel {
       reqs' = reqs.set(id, { ...q, phase: "refused" }),
       stored' = stored, written' = written, pages' = pages, saves' = saves,
       blindOverwrite' = blindOverwrite, otherPartLost' = otherPartLost,
-      // Refused, though nothing was saved since the page last saw the record.
-      falseConflict' = (falseConflict or pages.get(q.page).version == stored.version),
+      // Refused, though every save since the version it was sent with came from its own page.
+      falseConflict' = (falseConflict
+        or written.foldl(true, (only, w) => only and (w.version <= q.version or w.by == q.page))),
     }
   }
 
@@ -130,7 +140,7 @@ module pricingSaveModel {
     nondet id = reqs.keys().filter(k => reqs.get(k).phase == "read").oneOf()
     nondet r = readable.oneOf()
     val q = reqs.get(id)
-    val same = MUTANT == "no-version-check" or r.version == pages.get(q.page).version
+    val same = MUTANT == "no-version-check" or r.version == q.version
     val split = MUTANT == "split-read-write" or MUTANT == "today-kv"
     if (not(same)) refuse(id)
     else if (split) all {
@@ -178,3 +188,4 @@ module pricingNoVersionCheck { import pricingSaveModel(MUTANT = "no-version-chec
 module pricingSplitReadWrite { import pricingSaveModel(MUTANT = "split-read-write").* }
 module pricingStaleRead { import pricingSaveModel(MUTANT = "stale-read").* }
 module pricingTodayKv { import pricingSaveModel(MUTANT = "today-kv").* }
+module pricingParallelSaves { import pricingSaveModel(MUTANT = "parallel-saves").* }

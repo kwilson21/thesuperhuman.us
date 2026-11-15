@@ -208,7 +208,7 @@ export async function pastOffers(
 			`SELECT o.terms_json, o.sent_at, o.request_id, r.details_json
         FROM software_offers o JOIN owner_requests r ON r.id = o.request_id
         WHERE o.status = 'sent' AND o.sent_at IS NOT NULL AND o.request_id != ?
-          AND json_extract(r.details_json, '$.path') = ?
+          AND CASE WHEN json_valid(r.details_json) THEN json_extract(r.details_json, '$.path') END = ?
         ORDER BY o.sent_at DESC LIMIT 100`,
 		)
 		.bind(exceptRequest, kind)

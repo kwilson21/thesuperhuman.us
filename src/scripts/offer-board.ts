@@ -18,6 +18,7 @@ import {
 	emptyBoard,
 	lastAction,
 	listOf,
+	markStep,
 	ownField,
 	replyRefs,
 	sendRequest,
@@ -289,7 +290,7 @@ export function setupOfferBoard() {
 			known?.isConnected &&
 			named(known, "milestoneName")?.value.trim() === card.text
 		)
-			return { fieldset: known, added: false };
+			return { fieldset: known, added: false, drawn: [] };
 
 		// Empty means every field Use fills is empty: a row with no name may still hold deliverables or a fee the owner
 		// typed (verification/offer-board.qnt, ownerWordsKept, mutant name-only-empty).
@@ -297,7 +298,7 @@ export function setupOfferBoard() {
 			MILESTONE_FIELDS.every((name) => !named(fieldset, name)?.value.trim()),
 		);
 
-		if (empty) return { fieldset: empty, added: false };
+		if (empty) return { fieldset: empty, added: false, drawn: [] };
 		const add = form!.querySelector<HTMLButtonElement>("[data-add-milestone]");
 
 		if (!add || add.disabled) return null;
@@ -309,13 +310,42 @@ export function setupOfferBoard() {
 				? document.activeElement
 				: null;
 
+		const agreements = form!.querySelector<HTMLElement>(
+			"[data-agreement-milestones]",
+		);
+
 		add.click();
 		focused?.focus();
 		const fieldset = milestones().at(-1);
 
-		return fieldset && milestones().length > count
-			? { fieldset, added: true }
-			: null;
+		if (!fieldset || milestones().length <= count) return null;
+
+		// The row and its agreement row as the editor drew them: Undo removes the row only while all of it still reads so.
+		const parts = [fieldset, agreements?.lastElementChild].filter(
+			(part): part is HTMLElement => part instanceof HTMLElement,
+		);
+
+		return { fieldset, added: true, drawn: snapshot(parts) };
+	}
+
+	/** What a control holds, a checkbox by whether it is ticked. */
+	const valueOf = (
+		control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+	) =>
+		control instanceof HTMLInputElement &&
+		(control.type === "checkbox" || control.type === "radio")
+			? String(control.checked)
+			: control.value;
+
+	/** Every control in these parts and what it holds. */
+	function snapshot(parts: readonly HTMLElement[]) {
+		return parts.flatMap((part) =>
+			[
+				...part.querySelectorAll<
+					HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+				>("input, textarea, select"),
+			].map((control) => ({ control, value: valueOf(control) })),
+		);
 	}
 
 	/** The fee a milestone card's days give with the owner's day value: the high end, which carries the contingency. */
@@ -336,20 +366,52 @@ export function setupOfferBoard() {
 	/** Sets only the fee of a milestone already in the offer: the rest of it is the owner's now. */
 	function setFee(card: OfferCard) {
 		const fee = feeFor(card.id);
-		const fieldset = usedIn.get(card.id);
-		const input = fieldset?.isConnected ? named(fieldset, "fee") : null;
+		const fieldset = rowOf(card);
+		const input = fieldset ? named(fieldset, "fee") : null;
 
 		if (fee === null || !input) {
 			say(
-				"This milestone is no longer in the offer. Undo, or add it again from a new suggestion.",
+				"This milestone is no longer in the offer under its name. Set its fee in the offer itself.",
 			);
 
 			return;
 		}
 
-		input.value = String(fee / 100);
+		const value = String(fee / 100);
+		const was = input.value;
+
+		if (was === value) {
+			say(`The fee is already ${dollars(fee)}.`);
+
+			return;
+		}
+
+		input.value = value;
 		changed(input);
+
+		// Its own step: Undo puts the fee back while it still holds what this put there (mutant fee-no-step).
+		board = markStep(board, card.id, `set the fee of “${card.text}”`);
+		const step = board.history.at(-1);
+
+		if (step)
+			fieldUndo.set(step, () => {
+				if (input.value !== value) return;
+				input.value = was;
+				changed(input);
+			});
+
+		render();
 		say(`Set the fee to ${dollars(fee)}. Change it in the offer if you like.`);
+	}
+
+	/** The row a used milestone went to, while it still holds that milestone's name (mutant fee-any-row). */
+	function rowOf(card: OfferCard) {
+		const fieldset = usedIn.get(card.id);
+
+		return fieldset?.isConnected &&
+			named(fieldset, "milestoneName")?.value.trim() === card.text
+			? fieldset
+			: null;
 	}
 
 	/** Use: puts the card into the offer and makes it the owner's; Undo of that step puts back what it changed. */
@@ -413,7 +475,7 @@ export function setupOfferBoard() {
 					return;
 				}
 
-				const { fieldset, added } = target;
+				const { fieldset, added, drawn } = target;
 				const before = usedIn.get(card.id);
 				usedIn.set(card.id, fieldset);
 				setField(named(fieldset, "milestoneName"), card.text, restore);
@@ -433,7 +495,8 @@ export function setupOfferBoard() {
 					setField(named(fieldset, "fee"), String(fee / 100), restore);
 
 				// Runs last on Undo (the list is undone from the end), once the fields are back: a row this Use added goes
-				// when nothing is left in it.
+				// only while all of it, its checkpoint and agreement row included, reads as the editor drew it
+				// (verification/offer-board.qnt, mutant four-fields-only).
 				restore.unshift(() => {
 					if (before) usedIn.set(card.id, before);
 					else usedIn.delete(card.id);
@@ -441,8 +504,9 @@ export function setupOfferBoard() {
 					if (
 						added &&
 						fieldset.isConnected &&
-						MILESTONE_FIELDS.every(
-							(name) => !named(fieldset, name)?.value.trim(),
+						drawn.every(
+							({ control, value }) =>
+								control.isConnected && valueOf(control) === value,
 						)
 					) {
 						const focused =
@@ -590,8 +654,8 @@ export function setupOfferBoard() {
 				details.has(card.id),
 		);
 
-		const used = onBoard.filter((card) => card.status !== "proposed");
-		const counted = (used.length ? used : onBoard).slice(0, 3);
+		const inOffer = onBoard.filter((card) => used.has(card.id));
+		const counted = (inOffer.length ? inOffer : onBoard).slice(0, 3);
 		const days = counted.flatMap((card) => details.get(card.id) ?? []);
 
 		const estimate = days.length
@@ -607,7 +671,7 @@ export function setupOfferBoard() {
 			const high = days.reduce((sum, item) => sum + item.daysHigh, 0);
 
 			dayParts.push(
-				`${dollars(estimate.lowCents)} to ${dollars(estimate.highCents)}: ${low} to ${high} days for ${counted.length} ${used.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
+				`${dollars(estimate.lowCents)} to ${dollars(estimate.highCents)}: ${low} to ${high} days for ${counted.length} ${inOffer.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
 				rangeButton(
 					estimate.lowCents,
 					estimate.highCents,
@@ -707,7 +771,7 @@ export function setupOfferBoard() {
 			used.has(card.id) ||
 			(card.lane === "drivers" && card.status === "kept")
 		) {
-			if (fee !== null && usedIn.has(card.id))
+			if (fee !== null && rowOf(card))
 				list.push(["fee", `Set its fee to ${dollars(fee)}`]);
 			list.push(["aside", "Not this"]);
 

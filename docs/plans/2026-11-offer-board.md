@@ -63,7 +63,7 @@ nothing is sent until you send the offer."
 
 Card actions: Use (Keep, for cost drivers), Edit, Not this (to a closed "Set aside" list with Bring back), Undo for the
 board. An edited card and a card brought back can be used too. A used milestone offers only its fee ("Set its fee to
-$N", which fills the fee and nothing else) and Not this; any used card can be set aside. The owner writes their own
+$N", which fills the fee and nothing else, while its row still holds its name, as its own Undo step) and Not this; any used card can be set aside. The owner writes their own
 words in the offer editor itself, so the lanes have no Add. Every card says where it came from ("Suggestion", "You used
 this", "You kept this", "Edited by you"). The lanes hold 30 cards in all, within the 60 a request may show the model,
 and the page fits a request to the route's 24,000-character limit by leaving out set-aside cards, then the owner's,
@@ -149,7 +149,7 @@ back-end rules' Effect form, like the living brief's route:
    milestone names, deliverables and acceptance, client inputs, exclusions, timing; never fees) and the request number.
 2. Read the request from the database (so the page cannot change what the model sees): it must be a software request
    with a brief on the website, web app or workflow path.
-3. Reserve one call in the owner's daily count (`offer-board:owner` in `brief_suggestion_budget`, 40 a day), with the
+3. Reserve one call in the owner's daily count (`offer:owner` in `brief_suggestion_budget`, 40 a day), with the
    same guarded batch as the living brief.
 4. Ask `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON Mode with a JSON schema, 1,200 output tokens, 30 seconds.
 5. Read the reply card by card as untrusted data: lanes, limits, text limits, no prices or links in text, days between
@@ -182,8 +182,8 @@ and nothing it suggests reaches the client unless the owner puts it in an offer.
   same kind of walk with the offer board's lanes and limits (small, so full lanes are reached often) and the page's own
   reply reader.
 - Added after the owner asked (2026-11-15) for the risky areas to be checked by search: `verification/offer-board.qnt`
-  (Use and Undo with the offer editor's fields, Set its fee, late replies, failures; eleven mutants, eight of them
-  bugs the first review or the model found in the code; `tests/browser/offer-board.cjs` tries each on the real page in the
+  (Use and Undo with the offer editor's fields, Set its fee, late replies, failures; fourteen mutants, eleven of
+  them bugs the reviews or the model found in the code; `tests/browser/offer-board.cjs` tries each on the real page in the
   Screenshots workflow), `verification/daily-allowance.qnt` (both boards' daily reservation under concurrent requests)
   and `verification/pricing-save.qnt` (the pricing page's saves; its intended design is a compare-and-set, and today's
   KV code is the `TodayKv` mutant, which shows a lost save between two tabs: the owner's decision is whether to move the

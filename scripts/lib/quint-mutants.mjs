@@ -89,6 +89,9 @@ export const offerBoardMutants = {
 	offerNameOnlyEmpty: { property: "ownerWordsKept" },
 	offerNoRowRemoval: { property: "undoComplete" },
 	offerRemoveLastRow: { property: "rowsBounded" },
+	offerFourFieldsOnly: { property: "ownerWordsKept" },
+	offerFeeAnyRow: { property: "feeOnItsOwnRow" },
+	offerFeeNoStep: { property: "undoComplete" },
 };
 
 // verification/daily-allowance.qnt: the daily AI allowance both boards reserve against, under concurrent requests
@@ -111,6 +114,7 @@ export const pricingMutants = {
 	pricingSplitReadWrite: { property: "otherPartKept" },
 	pricingStaleRead: { property: "noFalseConflict" },
 	pricingTodayKv: { property: "otherPartKept" },
+	pricingParallelSaves: { property: "noFalseConflict" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
