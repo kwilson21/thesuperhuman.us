@@ -223,6 +223,32 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The agreement-link model
+
+File: `verification/agreement-link.qnt`, written for the conversion of the agreement access routes (module `agreementLink`). A client asks for a link to the signed agreements kept for their address (`POST /api/agreements/link`), and later redeems the link it was mailed (`completeAgreementLink`); the Worker serves several requests at once. The issue is: the cooldown (read the address's row, then a compare-and-set that re-checks it; a lost set reads again, three tries), the lookup (the address's agreements and links in ONE batch, one snapshot), then the link batch (its first statement is the guard "no link issued in the window before `at`"; a lost guard reads again, three tries). The redeem is two steps: a read of the link as unused and unexpired at the instant `at`, then a guarded batch that consumes it while it is still unused.
+
+**State.** The stored links, the cooldown rows, how many times each link was redeemed, three issue requests (phase, instant, what the lookup read, tries, outcome), two redeems (phase, link, instant, whether the link was already expired at the read), whether each address still has an executed agreement, and five ghost flags. Two addresses, three requests and two redeemers cover every race the properties need; the pooled run adds about five seconds.
+
+**Properties** (`allProperties`):
+1. `oneIssuePerWindow`: two links for one address are never issued inside the window (set from the real links at the store).
+2. `issuedOnlyWithAgreement`: a link is issued only when the lookup read an executed agreement (set from what the read found, not from the mutant).
+3. `redeemedOnce`: a link is consumed at most once.
+4. `redeemedUnexpired`: a link is consumed only if it was unexpired at the redeem's read (set from the read's own instant).
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoGuard` | The link batch's guard is not checked | `oneIssuePerWindow` |
+| `SplitGuard` | The guard is read in one step and the insert done in a later one (the code before the batch) | `oneIssuePerWindow` |
+| `NoLookup` | A link is issued without reading whether the address has an executed agreement | `issuedOnlyWithAgreement` |
+| `RedeemNoGuard` | The redeem's batch does not check the link is still unused: two redeems that both read it unused both consume it | `redeemedOnce` |
+| `RedeemNoExpiry` | Neither the redeem's read nor its batch checks the expiry | `redeemedUnexpired` |
+
+**Finding.** `issuedStillExecuted` (not in `allProperties`; run it by hand with `quint run verification/agreement-link.qnt --main agreementLink --invariant issuedStillExecuted`) says a link is issued only while the agreement is still executed at the batch. It fails: the lookup reads the status, and the batch's guard checks only the 30-second window, so a link can be issued for an agreement that stopped being executed after the lookup. The code never moves an agreement out of `executed` today (it only moves forward; retention closes the archive without changing the status), so this cannot happen yet. If a transition out of `executed` is ever added, the batch needs a guard on the status as well.
+
+**Found by writing it.** The redeem judges the expiry once, at the read's instant, and the batch repeats the same clause with the same instant. An expiry never moves, so the batch's expiry clause can never fail where the read passed; the model therefore has one expiry mutant (both removed) and no mutant for the repeated clause alone. A redeem that began before the expiry completes after it, and its session starts at the read's instant; this is intended.
+
+**What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
+
 ## Verified modules
 
 Tally's four questions decide whether a function carries a contract: is it pure, does its rule involve a sum, count, partition or conservation law, would a break lose or miscount money, and can the rule be said in one plain sentence. The decision function is pure and a break loses money. Question two is met loosely (the rule is "money received is never lost"), and the owner asked for it (2026-11-13), so it is in. `guardTime` is not: it is one conditional, a test says it as clearly, and the model checks that its value is never stored.

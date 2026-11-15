@@ -69,8 +69,8 @@ export const agreementLinkMutants = {
 	agreementLinkNoGuard: { property: "oneIssuePerWindow" },
 	agreementLinkSplitGuard: { property: "oneIssuePerWindow" },
 	agreementLinkNoLookup: { property: "issuedOnlyWithAgreement" },
-	agreementLinkRedeemTwice: { property: "redeemedOnce" },
-	agreementLinkRedeemLate: { property: "redeemedUnexpired" },
+	agreementLinkRedeemNoGuard: { property: "redeemedOnce" },
+	agreementLinkRedeemNoExpiry: { property: "redeemedUnexpired" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
