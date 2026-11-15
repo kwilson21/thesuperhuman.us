@@ -412,7 +412,7 @@ it("logs the rival lookup failure once without the visitor's details", async () 
 
 	const failing = fakeD1({
 		prepare: (query: string) => {
-			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
+			if (query.includes("FROM owner_requests WHERE submission_id"))
 				lookups += 1;
 
 			if (lookups === 2)
@@ -475,7 +475,7 @@ it("answers 500 and still alerts when the lookup after a failed save also throws
 
 	const failing = fakeD1({
 		prepare: (query: string) => {
-			if (query.startsWith("SELECT id FROM owner_requests WHERE submission_id"))
+			if (query.includes("FROM owner_requests WHERE submission_id"))
 				lookups += 1;
 
 			// Only the second lookup, the one after the failed save, throws.

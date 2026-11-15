@@ -1,6 +1,6 @@
-// The decisions on an audio request: the attempt limit, the captcha check and the request limit, each a refusal the route
-// answers as it always has. The counters are read by the flow (src/server/flows/rate-limit.ts), so each rule is given the
-// answer of its count, and the order of the rules is the order the route checks them in.
+// The decisions the public forms share before anything is stored: the attempt limit, the captcha check and the request limit,
+// each a refusal the route answers as it always has. The counters are read by the flow (src/server/flows/rate-limit.ts), so
+// each rule is given the answer of its count, and the order of the rules is the order the flows check them in.
 import { alwaysWrites, term, unless } from "../terms";
 import { CaptchaRefused, CaptchaUnavailable } from "./captcha";
 

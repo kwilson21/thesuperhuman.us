@@ -4,23 +4,31 @@ import {
 	admitForPassedCheck,
 	attemptWithinLimit,
 	requestWithinLimit,
-} from "../../src/server/rules/audio-intake";
-import { answerOf, refuse } from "../helpers/rule-answers";
+} from "../../src/server/rules/intake-limits";
+import type { Refusal } from "../../src/server/terms";
+import { refuse } from "../helpers/rule-answers";
 
-// The three decisions on an audio request, each as the answer a visitor gets.
+// The three decisions the public forms share, each as the answer a visitor gets. These rules always have something to do,
+// so a rule that refuses nothing answers "stores".
+
+const answered = <E extends Refusal>(decided: Effect.Effect<unknown, E>) =>
+	Effect.runSync(
+		Effect.match(decided, {
+			onFailure: (refusal) => refuse(refusal._tag, refusal.say),
+			onSuccess: () => "stores" as const,
+		}),
+	);
 
 describe("the attempt limit", () => {
 	it("counts an attempt while the address is within its limit", () => {
 		expect(
-			Effect.runSync(
-				Effect.result(attemptWithinLimit.decide({ attemptsAllowed: true }, {})),
-			)._tag,
-		).toBe("Success");
+			answered(attemptWithinLimit.decide({ attemptsAllowed: true }, {})),
+		).toBe("stores");
 	});
 
 	it("refuses an address that has used its attempts up", () => {
 		expect(
-			answerOf(attemptWithinLimit.decide({ attemptsAllowed: false }, {})),
+			answered(attemptWithinLimit.decide({ attemptsAllowed: false }, {})),
 		).toEqual(refuse("TooManyAttempts", ""));
 	});
 });
@@ -28,21 +36,19 @@ describe("the attempt limit", () => {
 describe("the captcha check", () => {
 	it("admits a token the check passed", () => {
 		expect(
-			Effect.runSync(
-				Effect.result(admitForPassedCheck.decide({ outcome: "passed" }, {})),
-			)._tag,
-		).toBe("Success");
+			answered(admitForPassedCheck.decide({ outcome: "passed" }, {})),
+		).toBe("stores");
 	});
 
 	it("refuses a token the check refused", () => {
 		expect(
-			answerOf(admitForPassedCheck.decide({ outcome: "refused" }, {})),
+			answered(admitForPassedCheck.decide({ outcome: "refused" }, {})),
 		).toEqual(refuse("CaptchaRefused", ""));
 	});
 
 	it("says the check is unavailable, not refused, when it could not answer", () => {
 		expect(
-			answerOf(admitForPassedCheck.decide({ outcome: "unavailable" }, {})),
+			answered(admitForPassedCheck.decide({ outcome: "unavailable" }, {})),
 		).toEqual(refuse("CaptchaUnavailable", ""));
 	});
 });
@@ -50,15 +56,13 @@ describe("the captcha check", () => {
 describe("the request limit", () => {
 	it("stores a request while the address is within its limit", () => {
 		expect(
-			Effect.runSync(
-				Effect.result(requestWithinLimit.decide({ requestAllowed: true }, {})),
-			)._tag,
-		).toBe("Success");
+			answered(requestWithinLimit.decide({ requestAllowed: true }, {})),
+		).toBe("stores");
 	});
 
 	it("refuses a second request from the same address in the window", () => {
 		expect(
-			answerOf(requestWithinLimit.decide({ requestAllowed: false }, {})),
+			answered(requestWithinLimit.decide({ requestAllowed: false }, {})),
 		).toEqual(refuse("TooManyRequests", ""));
 	});
 });

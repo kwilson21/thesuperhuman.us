@@ -1,21 +1,22 @@
-import { deliverSoftwareBriefCopy } from "~/lib/software-brief-copy";
 import type { APIRoute } from "astro";
-import { sendSoftwareRequestNotice } from "~/lib/audio-resend";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import { musicRequest } from "~/lib/music-request";
-import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
-import {
-	getOwnerRequest,
-	RequestDetailsTooLargeError,
-	saveOwnerRequest,
-} from "~/lib/owner-requests";
-import { checkRateLimit } from "~/lib/rate-limit";
-import {
-	softwareBrief,
-	softwareRequest,
-	validateSoftwareInquiry,
-} from "~/lib/software-inquiry";
-import { checkTurnstile } from "~/lib/turnstile";
+import { softwareBrief, validateSoftwareInquiry } from "~/lib/software-inquiry";
 import { logUnexpected } from "~/server/failure";
+import {
+	type InquiryAnswer,
+	submitInquiry,
+} from "~/server/flows/software-inquiry";
+import { runRoute } from "~/server/run";
+import {
+	bindingsOrUnavailable,
+	liveBackground,
+	liveBriefCopy,
+	liveOwnerAlert,
+	liveSoftwareNotice,
+	liveTurnstileCheck,
+} from "~/server/services";
 
 export const prerender = false;
 
@@ -27,23 +28,75 @@ const preserved =
 const unavailable =
 	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
 
-async function existing(db: D1Database, submissionId: string) {
-	const row = await db
-		.prepare("SELECT id FROM owner_requests WHERE submission_id=?")
-		.bind(submissionId)
-		.first<{ id: string }>();
+const notAvailable = () =>
+	Response.json(
+		{
+			ok: false,
+			error:
+				"Sending is unavailable right now. Your details are still here. Please email kazon.wilson@thesuperhuman.us.",
+		},
+		{ status: 503 },
+	);
 
-	return row ? getOwnerRequest(db, row.id) : null;
-}
+const temporarilyUnavailable = (status: number) =>
+	Response.json({ ok: false, error: unavailable }, { status });
 
-/** Gives back one count; a failure is logged, and the caller still answers what it would have answered. */
-async function giveBack(kv: KVNamespace, key: string) {
-	try {
-		await kv.delete(key);
-	} catch (error) {
-		logUnexpected(ROUTE, error);
+/** Each answer of the inquiry flow, as the form shows it. */
+const answerResponse = (answer: InquiryAnswer) => {
+	switch (answer.kind) {
+		case "tooManyAttempts":
+			return Response.json(
+				{ ok: false, error: "Please wait a few minutes before sending again." },
+				{ status: 429 },
+			);
+		case "tooManyRequests":
+			return Response.json(
+				{
+					ok: false,
+					error:
+						"Please wait a few minutes before sending again. Your details are still here.",
+				},
+				{ status: 429 },
+			);
+		case "captchaUnavailable":
+			return temporarilyUnavailable(503);
+		case "captchaRefused":
+			return Response.json(
+				{
+					ok: false,
+					errors: {
+						turnstileToken: "Please complete the security check again.",
+					},
+				},
+				{ status: 403 },
+			);
+		case "readFailed":
+		case "unstored":
+			return Response.json({ ok: false, error: preserved }, { status: 500 });
+		case "idTaken":
+			return Response.json({ ok: false, error: preserved }, { status: 409 });
+		case "tooLarge":
+			return Response.json(
+				{
+					ok: false,
+					errors: { _form: "Keep the brief shorter and try again." },
+				},
+				{ status: 400 },
+			);
+		case "alreadyStored":
+			return Response.json({
+				ok: true,
+				brief: softwareBrief(answer.request),
+				clientCopyStatus: answer.request.details.clientCopyStatus ?? "failed",
+			});
+		case "sent":
+			return Response.json({
+				ok: true,
+				brief: softwareBrief(answer.request),
+				clientCopyStatus: answer.clientCopyStatus,
+			});
 	}
-}
+};
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
@@ -55,171 +108,47 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
 	const env = locals.runtime?.env;
 
-	if (!env?.MUSIC_DB || !env.TURNSTILE_SECRET_KEY || !env.RATE_LIMIT)
-		return Response.json(
-			{
-				ok: false,
-				error:
-					"Sending is unavailable right now. Your details are still here. Please email kazon.wilson@thesuperhuman.us.",
-			},
-			{ status: 503 },
-		);
-	const input = result.value;
-	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+	if (!env?.TURNSTILE_SECRET_KEY) return notAvailable();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
+	const db = env.MUSIC_DB;
 
-	try {
-		const attempts = await checkRateLimit(
-			env.RATE_LIMIT,
-			ip,
-			"rl:software-attempt:",
-			10,
-		);
+	if (!bindings.ok || !db) return notAvailable();
 
-		if (!attempts.allowed)
-			return Response.json(
-				{ ok: false, error: "Please wait a few minutes before sending again." },
-				{ status: 429 },
-			);
+	/** A failure the form answers with the temporary sentence, logged as it always was. */
+	const failed = (failure: { readonly cause: unknown }) =>
+		Effect.sync(() => {
+			logUnexpected(ROUTE, failure.cause);
 
-		const check = await checkTurnstile(
-			input.turnstileToken,
-			env.TURNSTILE_SECRET_KEY,
-			ip,
-		);
-
-		// A captcha service that cannot answer is an outage, not a refused challenge: the visitor keeps the form.
-		if (check === "unavailable")
-			return Response.json({ ok: false, error: unavailable }, { status: 503 });
-
-		if (check === "refused")
-			return Response.json(
-				{
-					ok: false,
-					errors: {
-						turnstileToken: "Please complete the security check again.",
-					},
-				},
-				{ status: 403 },
-			);
-		let prior;
-
-		try {
-			prior = await existing(env.MUSIC_DB, input.submissionId);
-		} catch (error) {
-			logUnexpected(ROUTE, error);
-			await sendUrgentOwnerAlert(env, {
-				category: "request-storage",
-				route: "/api/software-inquiry",
-				requestId: crypto.randomUUID(),
-				code: "d1-read-failed",
-				occurredAt: new Date().toISOString(),
-			});
-
-			return Response.json({ ok: false, error: preserved }, { status: 500 });
-		}
-
-		if (prior)
-			return prior.email.toLowerCase() === input.email.toLowerCase()
-				? Response.json({
-						ok: true,
-						brief: softwareBrief(prior),
-						clientCopyStatus: prior.details.clientCopyStatus ?? "failed",
-					})
-				: Response.json({ ok: false, error: preserved }, { status: 409 });
-		const limit = await checkRateLimit(env.RATE_LIMIT, ip, "rl:software:");
-
-		if (!limit.allowed)
-			return Response.json(
-				{
-					ok: false,
-					error:
-						"Please wait a few minutes before sending again. Your details are still here.",
-				},
-				{ status: 429 },
-			);
-		let saved;
-
-		try {
-			saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
-		} catch (error) {
-			// A rival that stored the same submission first is answered with its own brief, as a retry would be.
-			let raced: Awaited<ReturnType<typeof existing>> = null;
-
-			try {
-				raced = await existing(env.MUSIC_DB, input.submissionId);
-			} catch (lookupError) {
-				logUnexpected(ROUTE, lookupError);
-			}
-
-			if (raced) {
-				// This request stored nothing and sent nothing, so its allowance is given back.
-				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
-
-				return raced.email.toLowerCase() === input.email.toLowerCase()
-					? Response.json({
-							ok: true,
-							brief: softwareBrief(raced),
-							clientCopyStatus: raced.details.clientCopyStatus ?? "failed",
-						})
-					: Response.json({ ok: false, error: preserved }, { status: 409 });
-			}
-
-			if (error instanceof RequestDetailsTooLargeError) {
-				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
-
-				return Response.json(
-					{
-						ok: false,
-						errors: { _form: "Keep the brief shorter and try again." },
-					},
-					{ status: 400 },
-				);
-			}
-
-			logUnexpected(ROUTE, error);
-			await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
-			await sendUrgentOwnerAlert(env, {
-				category: "request-storage",
-				route: "/api/software-inquiry",
-				requestId: crypto.randomUUID(),
-				code: "d1-write-failed",
-				occurredAt: new Date().toISOString(),
-			});
-
-			return Response.json({ ok: false, error: preserved }, { status: 500 });
-		}
-
-		const clientCopyStatus = await deliverSoftwareBriefCopy(
-			env.MUSIC_DB,
-			saved,
-			env,
-		);
-
-		const notice = sendSoftwareRequestNotice({
-			requestId: saved.id,
-			path: input.path,
-			name: input.name,
-			email: input.email,
-			brief: softwareBrief(saved),
-			origin: env.SITE_ORIGIN,
-			apiKey: env.RESEND_API_KEY,
-			from: env.CONTACT_FROM_EMAIL,
-			to: env.CONTACT_TO_EMAIL,
-		}).catch(() =>
-			console.error("Owner notification email state is uncertain."),
-		);
-
-		if (locals.runtime?.ctx) locals.runtime.ctx.waitUntil(notice);
-		else await notice;
-
-		return Response.json({
-			ok: true,
-			brief: softwareBrief(saved),
-			clientCopyStatus,
+			return temporarilyUnavailable(500);
 		});
-	} catch (error) {
-		logUnexpected(ROUTE, error);
 
-		return Response.json({ ok: false, error: unavailable }, { status: 500 });
-	}
+	return runRoute(
+		Context.merge(
+			Context.merge(
+				bindings.services,
+				liveTurnstileCheck(env.TURNSTILE_SECRET_KEY),
+			),
+			Context.merge(
+				Context.merge(liveOwnerAlert(env), liveBriefCopy(db, env)),
+				Context.merge(
+					liveSoftwareNotice(env),
+					liveBackground(locals.runtime?.ctx),
+				),
+			),
+		),
+		submitInquiry({
+			input: result.value,
+			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			now: () => new Date(),
+			newId: () => crypto.randomUUID(),
+		}).pipe(
+			Effect.map(answerResponse),
+			Effect.catchTags({
+				RateLimitStoreFailed: failed,
+				BriefCopyFailed: failed,
+			}),
+		),
+		// A defect is the route's temporary sentence, logged once.
+		{ route: ROUTE, answer: () => temporarilyUnavailable(500) },
+	);
 };

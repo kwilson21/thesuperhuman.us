@@ -10,7 +10,13 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { IntakeInput } from "../lib/audio-intake";
 import { deliverProjectInvitation } from "../lib/audio-project-invitations";
-import { sendOwnerRequestNotice } from "../lib/audio-resend";
+import {
+	sendOwnerRequestNotice,
+	sendSoftwareRequestNotice,
+} from "../lib/audio-resend";
+import type { OwnerRequest } from "../lib/owner-model";
+import { deliverSoftwareBriefCopy } from "../lib/software-brief-copy";
+import type { StoredSoftwarePath } from "../lib/software-inquiry";
 import type { AudioPayment } from "../lib/audio-payments";
 import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
 import { sendMail } from "../lib/resend";
@@ -553,5 +559,78 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 			Effect.tryPromise({
 				try: () => deliverProjectInvitation(db, requestId, env),
 				catch: () => new ProjectInvitationFailed(),
+			}),
+	});
+
+/** The client's copy of their software brief could not be delivered at all (a database or provider failure the copy does not record). */
+export class BriefCopyFailed extends Data.TaggedError("BriefCopyFailed")<{
+	readonly cause: unknown;
+}> {}
+
+/**
+ * The client's copy of a stored software brief (src/lib/software-brief-copy.ts `deliverSoftwareBriefCopy`, which the owner
+ * routes share). It records what happened on the request itself and answers that status, or null when another request
+ * already claimed the copy.
+ */
+export class BriefCopy extends Context.Service<
+	BriefCopy,
+	{
+		readonly deliver: (
+			request: OwnerRequest,
+		) => Effect.Effect<string | null, BriefCopyFailed>;
+	}
+>()("site/BriefCopy") {}
+
+/** The brief copy through the project store in `db` and Resend, with the env the request gives. */
+export const liveBriefCopy = (db: D1Database, env: Env) =>
+	Context.make(BriefCopy, {
+		deliver: (request) =>
+			Effect.tryPromise({
+				try: () => deliverSoftwareBriefCopy(db, request, env),
+				catch: (cause) => new BriefCopyFailed({ cause }),
+			}),
+	});
+
+/** The software request notice could not be sent or its state is uncertain. */
+export class SoftwareNoticeFailed extends Data.TaggedError(
+	"SoftwareNoticeFailed",
+) {}
+
+/** What the owner's notice says: the visitor as they wrote themselves, and the brief as it was stored. */
+export type SoftwareNoticeContent = {
+	readonly requestId: string;
+	readonly path: StoredSoftwarePath;
+	readonly name: string;
+	readonly email: string;
+	readonly brief: Record<string, string>;
+};
+
+/**
+ * The owner's notice that a visitor sent a software brief (src/lib/audio-resend.ts `sendSoftwareRequestNotice`). The flow
+ * treats it as best effort: a failure cannot undo the stored request.
+ */
+export class SoftwareNotice extends Context.Service<
+	SoftwareNotice,
+	{
+		readonly send: (
+			notice: SoftwareNoticeContent,
+		) => Effect.Effect<void, SoftwareNoticeFailed>;
+	}
+>()("site/SoftwareNotice") {}
+
+/** The software notice through Resend, with the keys and addresses the request's env gives. */
+export const liveSoftwareNotice = (env: Env) =>
+	Context.make(SoftwareNotice, {
+		send: (notice) =>
+			Effect.tryPromise({
+				try: () =>
+					sendSoftwareRequestNotice({
+						...notice,
+						origin: env.SITE_ORIGIN,
+						apiKey: env.RESEND_API_KEY,
+						from: env.CONTACT_FROM_EMAIL,
+						to: env.CONTACT_TO_EMAIL,
+					}),
+				catch: () => new SoftwareNoticeFailed(),
 			}),
 	});

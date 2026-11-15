@@ -14,7 +14,7 @@ import {
 	admitForPassedCheck,
 	attemptWithinLimit,
 	requestWithinLimit,
-} from "../rules/audio-intake";
+} from "../rules/intake-limits";
 import { CaptchaUnavailable } from "../rules/captcha";
 import {
 	Background,

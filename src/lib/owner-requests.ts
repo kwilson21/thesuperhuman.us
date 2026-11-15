@@ -150,6 +150,21 @@ export async function getOwnerRequest(
 	return row ? ownerRequestFromRow(row) : null;
 }
 
+/** The request stored under a submission id, or null (one read; the id is unique). */
+export async function getOwnerRequestBySubmission(
+	db: D1Database,
+	submissionId: string,
+): Promise<OwnerRequest | null> {
+	const row = await db
+		.prepare(
+			`SELECT ${requestColumns} FROM owner_requests WHERE submission_id=?`,
+		)
+		.bind(submissionId)
+		.first<OwnerRequestRow>();
+
+	return row ? ownerRequestFromRow(row) : null;
+}
+
 export async function listOwnerRequestAudit(
 	db: D1Database,
 	id: string,
