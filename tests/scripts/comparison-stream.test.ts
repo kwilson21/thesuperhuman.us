@@ -32,10 +32,30 @@ class StandInAudio extends EventTarget {
 	src: string;
 	private level = 1;
 	private pending: PendingPlay[] = [];
+	private attributes = new Map<string, string>();
 
 	constructor(readonly dataset: Record<string, string>) {
 		super();
 		this.src = this.currentSrc = `/music/file/${dataset.version}`;
+		this.attributes.set("src", this.src);
+	}
+
+	getAttribute(name: string) {
+		return this.attributes.get(name) ?? null;
+	}
+
+	setAttribute(name: string, value: string) {
+		this.attributes.set(name, value);
+	}
+
+	removeAttribute(name: string) {
+		this.attributes.delete(name);
+	}
+
+	/** Resets the element, as load() does after its file is taken away. */
+	load() {
+		this.paused = true;
+		this.currentTime = 0;
 	}
 
 	get volume() {
@@ -406,4 +426,73 @@ it("streams the quieter version at full level where volume is fixed, and stops i
 	expect(ab.play.getAttribute("aria-busy")).toBe("true");
 	await ab.decode();
 	expect(ab.synced()).toBe(true);
+});
+
+it("plays from the top when Play is pressed at the end before both versions decode", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.mix.end();
+	await tick();
+	ab.play.click();
+	await tick();
+	expect(ab.mix.paused).toBe(false);
+	expect(ab.mix.currentTime).toBe(0);
+	expect(ab.label()).toMatch(/^Pause /);
+});
+
+it("lets go of the versions' own players once synced playback has taken over", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.mix.getAttribute("src")).toBeNull();
+	expect(ab.master.getAttribute("src")).toBeNull();
+	expect(ab.synced()).toBe(true);
+});
+
+it("plays again when a paused stream is played from outside the page", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.mix.pause();
+	await tick();
+	expect(ab.label()).toMatch(/^Play /);
+	// A media key or the lock screen plays the element whose controls it kept from the stream.
+	void ab.mix.play().catch(() => {});
+	await settle();
+	expect(ab.label()).toMatch(/^Pause /);
+	expect(ab.mix.paused).toBe(false);
+});
+
+it("hides the fallback and its note while another try loads", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	ab.play.click();
+	ab.play.click();
+	expect(ab.root.dataset.audioFallback).toBeUndefined();
+	expect(ab.status.textContent).toBe("");
+});
+
+it("plays both native players at the same volume in the fallback", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.volume.value = "0.3";
+	ab.volume.dispatchEvent(new Event("input"));
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	ab.choose("after");
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	expect(ab.mix.volume).toBeCloseTo(0.3);
+	expect(ab.master.volume).toBeCloseTo(0.3);
 });
