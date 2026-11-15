@@ -197,6 +197,28 @@ describe("a database failure answers 500 with the route's sentence", () => {
 	});
 });
 
+describe("a request that changes between the lookup and the claim", () => {
+	it("is not sent to the address that was read when the address has changed since", async () => {
+		seed();
+		// Another request changes the address just before the claim is written.
+		const beforeClaim = double<D1Database>({
+			prepare: (query: string) => {
+				if (/clientCopyStatus','uncertain'/.test(query))
+					world.sql.exec("UPDATE owner_requests SET email='new@example.com'");
+
+				return world.db.prepare(query);
+			},
+			batch: async <T>(items: D1PreparedStatement[]) => world.db.batch<T>(items),
+		});
+
+		const response = await call(beforeClaim);
+
+		expect(response.status).toBe(409);
+		expect(sent()).toHaveLength(0);
+		expect(stored().clientCopyStatus).toBeUndefined();
+	});
+});
+
 describe("answers that stay as they were", () => {
 	it("answers 503 when no mail key is set", async () => {
 		seed();
