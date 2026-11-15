@@ -38,7 +38,9 @@ module audioProjectFiles {
 //   "reset-no-link"         a revoke's stage reset is written when the file update was refused (the reset is not linked to it)
 //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
 //                           are still the ones read (and without the retry)
-  //   "complete-no-stage"     a completion does not compare the stage
+  //   "complete-no-stage"     a completion compares neither the stage nor the published final
+//   "complete-no-file"      a completion does not compare the published final (an equivalent mutant: the stage implies it)
+//   "final-no-supersede"    a publish of a final does not revoke the live review (the write has no condition on the version only for a review)
   //   "complete-no-payment"   a completion does not compare the payments
   const MUTANT: str
 
@@ -145,14 +147,16 @@ module audioProjectFiles {
 
   // ---- Start ------------------------------------------------------------------------------------------------------
   action init = {
-    nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth", "twoReviews").oneOf()
-    val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth"
+    nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth", "twoReviews", "reviewFinal").oneOf()
+    val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "reviewFinal"
     all {
       w' = {
         files: IDS.mapBy(i =>
           if (i == 1 and (scenario == "review" or scenario == "reviewPlus")) { ...noFile, version: "review", status: "published" }
           else if (i == 1 and (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth")) { ...noFile, version: "final", status: "published" }
           else if (i == 2 and scenario == "finalBoth") { ...noFile, version: "final", status: "published" }
+          else if (i == 2 and scenario == "reviewFinal") { ...noFile, version: "final", status: "uploaded" }
+          else if (i == 1 and scenario == "reviewFinal") { ...noFile, version: "review", status: "published" }
           else if (scenario == "twoReviews") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "reviewPlus") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "finalPlus") { ...noFile, version: "final", status: "uploaded" }
@@ -161,9 +165,9 @@ module audioProjectFiles {
         upVersion: IDS.mapBy(i => "review"),
         upAt: IDS.mapBy(i => 0),
         mp: IDS.mapBy(i => false),
-        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews")),
+        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews" or scenario == "reviewFinal")),
         seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
-        stage: if (scenario == "review" or scenario == "reviewPlus") "review_ready"
+        stage: if (scenario == "review" or scenario == "reviewPlus" or scenario == "reviewFinal") "review_ready"
                else if (paidBalance) "final_files_ready" else "in_progress",
         completedAt: 0,
       },
@@ -232,6 +236,9 @@ module audioProjectFiles {
       else and {
         // The stage guard is also what protects the published final: a revoke of the last final resets the stage in its own batch.
         MUTANT == "complete-no-stage" or w.stage == "final_files_ready",
+        // Today's statement also requires a published final (the corpus races revoke the file row alone); in this model the
+        // stage implies it, because a revoke of the last final resets the stage in its own batch.
+        MUTANT == "complete-no-stage" or MUTANT == "complete-no-file" or liveOf("final") > 0,
         MUTANT == "complete-no-payment" or (bookingPaid and balancePaid),
         not(isRevoked) and not(isWithdrawn),
       }
@@ -251,7 +258,7 @@ module audioProjectFiles {
         seq: at,
         files: IDS.mapBy(i =>
           if (i == h.id) { ...f, status: "published", pubAt: at }
-          else if (MUTANT != "no-supersede" and s.reviews.contains(i))
+          else if (MUTANT != "no-supersede" and not(MUTANT == "final-no-supersede" and rev == "final") and s.reviews.contains(i))
             { ...w.files.get(i), status: "revoked" }
           else w.files.get(i)),
         stage: if (rev == "review") "review_ready" else "final_files_ready" },
@@ -434,8 +441,11 @@ module audioProjectFiles {
   // abort deletes the object).
   val fileHasObject = IDS.forall(i => (w.files.get(i).status != "uploaded" and w.files.get(i).status != "published") or w.obj.get(i))
 
+  // 9. A project at a final stage has no live review: publishing a final supersedes it, as today's statement does.
+  val finalStageHasNoLiveReview = (w.stage != "final_files_ready" and w.stage != "complete") or liveOf("review") == 0
+
   val allProperties = and {
-    filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
+    finalStageHasNoLiveReview, filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
     readyStagesHaveFiles, completedOnlyWhenPaid, fileHasObject,
   }
 
@@ -460,3 +470,5 @@ module projectFilesCompleteNoStage { import audioProjectFiles(MUTANT = "complete
 module projectFilesCompleteNoPayment { import audioProjectFiles(MUTANT = "complete-no-payment").* }
 module projectFilesPublishStaleSupersede { import audioProjectFiles(MUTANT = "publish-stale-supersede").* }
 module projectFilesResetNoLink { import audioProjectFiles(MUTANT = "reset-no-link").* }
+module projectFilesCompleteNoFile { import audioProjectFiles(MUTANT = "complete-no-file").* }
+module projectFilesFinalNoSupersede { import audioProjectFiles(MUTANT = "final-no-supersede").* }
