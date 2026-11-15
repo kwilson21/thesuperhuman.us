@@ -36,7 +36,7 @@ import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 const FAILED = "The change could not be saved. Please try again.";
 
 const NO_STORAGE =
-	"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
+	"File storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
 
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
