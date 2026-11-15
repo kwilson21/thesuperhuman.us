@@ -86,9 +86,11 @@ export function setupContactMessage(panel: HTMLElement) {
 		});
 
 		if (!wasHidden && document.activeElement === heading) return;
+
 		const smooth = window.matchMedia(
 			"(prefers-reduced-motion: no-preference)",
 		).matches;
+
 		panel.scrollIntoView({
 			block: "start",
 			behavior: smooth ? "smooth" : "auto",

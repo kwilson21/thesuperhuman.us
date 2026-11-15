@@ -4,6 +4,7 @@
  */
 export function setupPinnedContact(): void {
 	const pinned = document.querySelector<HTMLElement>("[data-pinned-contact]");
+
 	const ends = [
 		...document.querySelectorAll<HTMLElement>(
 			".closing-panel, [data-pinned-end]",
@@ -14,6 +15,7 @@ export function setupPinnedContact(): void {
 		return;
 	pinned.removeAttribute("hidden");
 	const showing = new Set<Element>();
+
 	const observer = new IntersectionObserver((entries) => {
 		for (const entry of entries)
 			if (entry.isIntersecting) showing.add(entry.target);

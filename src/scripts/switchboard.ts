@@ -9,6 +9,9 @@
 
 type Point = { x: number; y: number };
 
+// Where the plug is heading and how far it is lifted toward the viewer (1 is flat on the board).
+type Goal = { point: Point; scale: number };
+
 type Target =
 	| { kind: "rest" }
 	| { kind: "reach"; link: HTMLAnchorElement }
@@ -26,8 +29,10 @@ export type Switchboard = { connect: (id: string) => void };
 const STIFFNESS = 320;
 const DAMPING = 26;
 const LIFTED = 1.14;
+
 // Long enough to see the lamp strike, short enough not to feel like a wait.
 const PUT_THROUGH_MS = 560;
+
 // How close a dragged plug must come to a jack to seat in it.
 const SNAP = 44;
 
@@ -67,6 +72,7 @@ export function setupSwitchboard(
 
 	const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 	const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+
 	const restingHint = () =>
 		finePointer.matches
 			? "Click a line, or drag your plug onto one."
@@ -109,7 +115,7 @@ export function setupSwitchboard(
 			: { x: you.x + 92, y: you.y + 2 };
 	}
 
-	function goal(): { point: Point; scale: number } {
+	function goal(): Goal {
 		switch (target.kind) {
 			case "rest":
 				return { point: restPoint(), scale: 1 };
@@ -118,6 +124,7 @@ export function setupSwitchboard(
 
 				return { point: { x: jack.x - 4, y: jack.y - 7 }, scale: LIFTED };
 			}
+
 			case "seated":
 				return { point: centre(jackOf(target.link)), scale: 1 };
 			case "drag":
@@ -193,6 +200,7 @@ export function setupSwitchboard(
 		position.y += velocity.y * dt;
 		scale += scaleVelocity * dt;
 		draw();
+
 		const resting =
 			Math.hypot(point.x - position.x, point.y - position.y) < 0.3 &&
 			Math.hypot(velocity.x, velocity.y) < 2 &&
