@@ -13,14 +13,15 @@ import Switchboard from "~/components/Switchboard.astro";
       <p class="page-lede">Pick a line and I’ll put you through to the right form.</p>
     </header>
     <Switchboard />
-    {/* The script opens this for the #message address; no element carries that id, so the browser's own
-        jump to a fragment cannot take focus away from the heading. */}
+    {/* Without scripting, the message line's #message lands here, right under the board. With it, this
+        is never an element, so no element carries that id and the browser's own jump to a fragment
+        cannot take focus from the form's heading, which the script opens and focuses. */}
+    <noscript><p id="message" class="contact-elsewhere">The message form needs JavaScript. You can email me at <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>; every other line works without it.</p></noscript>
     <section class="message-panel" aria-labelledby="message-title" data-message-panel hidden>
       <h2 id="message-title" data-message-heading tabindex="-1">Send a message</h2>
       <ContactForm />
     </section>
     <p class="contact-elsewhere">Prefer email? <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a></p>
-    <noscript><p class="contact-elsewhere">The message form needs JavaScript; every other line works without it.</p></noscript>
   </article>
   <Footer variant="quiet" slot="footer" />
 </BaseLayout>
@@ -32,11 +33,12 @@ import Switchboard from "~/components/Switchboard.astro";
 <style>
   .contact-head { margin-bottom: clamp(1.5rem, 3vw, 2.25rem); }
   .contact-head .page-title { margin: 0; }
-  .contact-head .page-lede { color: var(--muted); }
   .message-panel { max-width: var(--container-content); margin-top: var(--site-section-space); scroll-margin-top: 1.5rem; }
   .message-panel h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0 0 1.5rem; }
   .message-panel h2:focus { outline: none; }
   .message-panel h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .contact-elsewhere { margin-top: 2rem; color: var(--muted); font-size: .95rem; }
+  .contact-elsewhere { margin-top: 2rem; color: var(--muted); font-size: .95rem; overflow-wrap: anywhere; }
   .contact-elsewhere a { color: var(--ink); }
+  /* The open form carries its own email line. */
+  .message-panel:not([hidden]) ~ .contact-elsewhere { display: none; }
 </style>

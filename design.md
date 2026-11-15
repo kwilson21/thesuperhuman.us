@@ -109,11 +109,12 @@ files; a test checks those literals against `global.css`.
   motion, and never shows above 600px, in print or without JavaScript.
 - The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
   hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
-  jack. Each line is a plain link to the form that fits, with any choice the form would
-  ask already made. From 1100px wide the lines are six columns, title and line over
+  jack. Each line is a plain link to the form that fits; the three project lines open the
+  brief with its path already chosen. From 1100px wide the lines are six columns, title and line over
   lamp and jack, and the cable hangs below them; narrower, the board turns on its side
-  and the jacks run down the left. Without JavaScript it is the six links, with no "You"
-  jack. It takes the 3px corner of fields and pictures, not the panel radius.
+  and the jacks run down the left. It is laid out for the cable from the first paint, so
+  nothing moves when the script arrives; without scripting it is the six links, with no
+  "You" jack. It takes the 3px corner of fields and pictures, not the panel radius.
 - At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
   that it stays on one line. The publishing consent page's button is the exception: its
   label wraps at any width, because that page cannot use a width query that follows text
@@ -169,8 +170,9 @@ files; a test checks those literals against `global.css`.
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
 - Anything that plays on its own rests within five seconds. Page cross-fade 180ms.
-- The switchboard's plug moves on one spring and settles in under a second; its lamp
-  strikes twice in 420ms. A chosen line navigates 560ms after the click so the lamp can
+- The switchboard's plug settles in under a second: reaching toward a line on hover or
+  focus has no overshoot, and seating or dropping it overshoots a touch, like a plug
+  clicking home. Its lamp strikes twice in 420ms. A chosen line navigates 560ms after the click so the lamp can
   be seen; with reduced motion the plug moves without animating and the page changes at
   once.
 

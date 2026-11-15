@@ -47,7 +47,8 @@ const href = (path: string) =>
     <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i === 7 && selected !== 'website'}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
     <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} data-linked-path={selected ?? undefined} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
-      <section data-step="0">
+      {/* A link that names a path skips this screen, so it starts hidden rather than flashing before the script moves on. */}
+      <section data-step="0" hidden={selected !== null}>
         <h1 tabindex="-1">What are you working on?</h1>
         <fieldset class="offer-list"><legend class="sr-only">Choose a starting point</legend>
           {(Object.entries(softwarePaths) as [SoftwarePath, string][]).map(([key, label]) => <label class="intake-offer"><input type="radio" name="path" value={key} checked={selected === key} /><span><strong>{label}</strong><small>{softwarePathDescriptions[key]}</small></span></label>)}

@@ -25,9 +25,11 @@ export type SwitchboardOptions = {
 
 export type Switchboard = { connect: (id: string) => void };
 
-// A slightly under-damped spring: the plug overshoots a touch and settles in well under a second.
+// A slightly under-damped spring: the plug overshoots a touch as it seats or drops and settles in
+// well under a second. Reaching toward a line on hover or focus is critically damped, with no overshoot.
 const STIFFNESS = 320;
 const DAMPING = 26;
+const REACH_DAMPING = 36;
 const LIFTED = 1.14;
 
 // Long enough to see the lamp strike, short enough not to feel like a wait.
@@ -52,6 +54,7 @@ export function setupSwitchboard(
 	const plugShadow = root.querySelector<SVGCircleElement>("[data-plug-shadow]");
 	const fixed = root.querySelector<SVGGElement>("[data-plug-fixed]");
 	const youJack = root.querySelector<HTMLElement>("[data-you-jack]");
+	const youLabel = root.querySelector<HTMLElement>(".you-label");
 	const handle = root.querySelector<HTMLElement>("[data-plug-handle]");
 	const hint = root.querySelector<HTMLElement>("[data-switchboard-hint]");
 	const links = [...root.querySelectorAll<HTMLAnchorElement>("a[data-line]")];
@@ -73,10 +76,14 @@ export function setupSwitchboard(
 	const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 	const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
 
-	const restingHint = () =>
-		finePointer.matches
-			? "Click a line, or drag your plug onto one."
-			: "Tap a line, or drag your plug onto one.";
+	// The page renders both wordings of the hint and CSS shows the one for the pointer; a put-through
+	// replaces them with its own sentence, and a reset puts them back.
+	const restingHint = hint
+		? [...hint.childNodes].map((node) => node.cloneNode(true))
+		: [];
+
+	const showRestingHint = () =>
+		hint?.replaceChildren(...restingHint.map((node) => node.cloneNode(true)));
 
 	let target: Target = { kind: "rest" };
 	let connecting = false;
@@ -107,13 +114,20 @@ export function setupSwitchboard(
 			? "column"
 			: "row";
 
-	// Where the free plug lies when nothing is chosen: under your jack on a wide board, beside it on a narrow one.
+	// Where the free plug lies when nothing is chosen: under your jack on a wide board, beside it on a
+	// narrow one, past the "You" label at whatever size the text is.
 	function restPoint(): Point {
 		const you = centre(youJack!);
 
-		return layout() === "row"
-			? { x: you.x + 20, y: you.y + 62 }
-			: { x: you.x + 92, y: you.y + 2 };
+		if (layout() === "row") return { x: you.x + 20, y: you.y + 62 };
+
+		const label = youLabel?.getBoundingClientRect();
+		const after = label ? label.right - boardBox.left + 32 : you.x + 92;
+
+		return {
+			x: Math.min(Math.max(you.x + 92, after), boardBox.width - 24),
+			y: you.y + 2,
+		};
 	}
 
 	function goal(): Goal {
@@ -191,12 +205,13 @@ export function setupSwitchboard(
 		last = time;
 		boardBox = board!.getBoundingClientRect();
 		const { point, scale: goalScale } = goal();
+		const damping = target.kind === "reach" ? REACH_DAMPING : DAMPING;
 		velocity.x +=
-			(STIFFNESS * (point.x - position.x) - DAMPING * velocity.x) * dt;
+			(STIFFNESS * (point.x - position.x) - damping * velocity.x) * dt;
 		velocity.y +=
-			(STIFFNESS * (point.y - position.y) - DAMPING * velocity.y) * dt;
+			(STIFFNESS * (point.y - position.y) - damping * velocity.y) * dt;
 		scaleVelocity +=
-			(STIFFNESS * (goalScale - scale) - DAMPING * scaleVelocity) * dt;
+			(STIFFNESS * (goalScale - scale) - damping * scaleVelocity) * dt;
 		position.x += velocity.x * dt;
 		position.y += velocity.y * dt;
 		scale += scaleVelocity * dt;
@@ -285,7 +300,7 @@ export function setupSwitchboard(
 		lightOnly(null);
 		target = { kind: "rest" };
 
-		if (hint) hint.textContent = restingHint();
+		showRestingHint();
 		settle();
 	}
 
@@ -329,12 +344,13 @@ export function setupSwitchboard(
 	});
 
 	// Picking up the plug: it follows the pointer and snaps over the nearest jack in reach.
+	// Kept inside the board, so a plug dragged past an edge never widens the page.
 	function local(event: PointerEvent): Point {
 		boardBox = board!.getBoundingClientRect();
 
 		return {
-			x: event.clientX - boardBox.left,
-			y: event.clientY - boardBox.top,
+			x: clamp(event.clientX - boardBox.left, 18, boardBox.width - 18),
+			y: clamp(event.clientY - boardBox.top, 18, boardBox.height - 18),
 		};
 	}
 
@@ -409,18 +425,9 @@ export function setupSwitchboard(
 	}
 
 	root.classList.add("is-wired");
-
-	if (hint) {
-		hint.textContent = restingHint();
-		hint.hidden = false;
-	}
-
 	measured = true;
 	measure();
 	new ResizeObserver(measure).observe(board);
-	finePointer.addEventListener("change", () => {
-		if (!connecting && hint && !seatedLink()) hint.textContent = restingHint();
-	});
 	// Back and forward restore the page as it was left; put the plug back and the lamps out. Leaving
 	// first (Back during the pause, or another link) cancels the pending put-through.
 	window.addEventListener("pagehide", standDown);

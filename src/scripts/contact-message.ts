@@ -80,7 +80,7 @@ export function setupContactMessage(panel: HTMLElement) {
 
 			if (error) {
 				error.textContent =
-					"The verification check did not load. Reload this page to try again.";
+					"The verification check did not load. Choose Send a message above to try again.";
 				error.hidden = false;
 			}
 		});

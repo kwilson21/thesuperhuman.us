@@ -13,7 +13,7 @@ const lines = contactLines.map((line) => ({
     motion and in print. src/scripts/switchboard.ts adds the cable: the visitor's own plug, which
     reaches toward a line on hover or focus, seats on a click or tap, and can be dragged to a jack. */}
 <div class="switchboard" data-switchboard>
-  <p class="switchboard-hint" data-switchboard-hint hidden></p>
+  <p class="switchboard-hint" data-switchboard-hint><span class="hint-fine">Click a line, or drag your plug onto one.</span><span class="hint-touch">Tap a line, or drag your plug onto one.</span></p>
   <div class="board" data-board>
     <div class="board-face">
       <div class="board-ear" aria-hidden="true"><i></i><i></i></div>
@@ -51,17 +51,21 @@ const lines = contactLines.map((line) => ({
     --sb-lamp-glow: color-mix(in srgb, var(--accent) 50%, transparent);
     --sb-cable: var(--accent);
     --sb-cable-shade: color-mix(in srgb, var(--ink) 12%, transparent);
-    /* Room under the jacks for the cable to hang in; the board draws nothing there without JavaScript. */
-    --sb-well: 0rem;
+    /* Room under the jacks for the cable to hang in. */
+    --sb-well: 7rem;
     /* The script reads which way the board runs: a row of columns, or a column of rows. */
     --sb-layout: row;
     position: relative;
   }
-  .switchboard.is-wired { --sb-well: 7rem; }
-  .switchboard-hint { margin: 0 0 .9rem; color: var(--muted); font-size: 1rem; line-height: 1.5; min-height: 1.5em; }
+  .switchboard-hint { margin: 0 0 .9rem; color: var(--muted); font-size: 1rem; line-height: 1.5; overflow-wrap: break-word; }
+  .hint-touch { display: none; }
+  @media not ((hover: hover) and (pointer: fine)) {
+    .hint-fine { display: none; }
+    .hint-touch { display: inline; }
+  }
 
   .board { position: relative; padding-bottom: var(--sb-well); }
-  .board-face { position: relative; display: grid; grid-template-columns: 2.25rem 5rem minmax(0, 1fr) 2.25rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--sb-face); }
+  .board-face { position: relative; display: grid; grid-template-columns: 36px 80px minmax(0, 1fr) 36px; border: 1px solid var(--rule); border-radius: 3px; background: var(--sb-face); }
 
   /* Rack ears: a screw at each end, slot turned a little. */
   .board-ear { display: grid; align-content: space-between; justify-items: center; padding-block: 1.1rem; }
@@ -74,18 +78,16 @@ const lines = contactLines.map((line) => ({
   .jack { display: block; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: radial-gradient(circle closest-side, var(--sb-hole) 0 32%, var(--sb-ring) 33% 44%, var(--sb-nut) 45% 100%); box-shadow: inset 0 0 0 1px var(--sb-edge); }
 
   .board-you { display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 1.35rem .5rem 1.35rem; border-right: 1px solid var(--rule); }
-  /* Your jack holds the cable, so without the script the board is just its six lines. */
-  .switchboard:not(.is-wired) .board-face { grid-template-columns: 2.25rem minmax(0, 1fr) 2.25rem; }
-  .switchboard:not(.is-wired) .board-you { display: none; }
   .you-label { font-family: var(--font-sans); font-weight: 500; font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--muted); }
 
   .board-lines { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
-  .board-line { display: grid; min-width: 0; }
+  /* Enlarged text keeps the six columns (no query follows the text size), so a column may break a
+     word that cannot fit its line, and the hardware columns and side padding stay in pixels. */
+  .board-line { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
   .board-line + .board-line { border-left: 1px solid var(--rule); }
-  .line-link { display: grid; grid-template-rows: auto 1fr auto; gap: .45rem; padding: 1.35rem 1rem 1.35rem; border: 0; color: var(--ink); -webkit-tap-highlight-color: transparent; }
-  .line-link:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .line-title { font-size: 1.2rem; line-height: 1.25; letter-spacing: -.015em; text-wrap: balance; }
-  .line-copy { color: var(--muted); font-size: .9375rem; line-height: 1.45; text-wrap: pretty; }
+  .line-link { display: grid; grid-template-rows: auto 1fr auto; gap: .45rem; min-width: 0; padding: 1.35rem 16px; border: 0; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .line-title { font-size: 1.2rem; line-height: 1.25; letter-spacing: -.015em; text-wrap: balance; overflow-wrap: anywhere; }
+  .line-copy { color: var(--muted); font-size: .9375rem; line-height: 1.45; text-wrap: pretty; overflow-wrap: anywhere; }
   .line-hardware { display: grid; justify-items: center; gap: .7rem; margin-top: .75rem; }
   .lamp { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--sb-lamp-off); box-shadow: inset 0 0 0 1px var(--sb-edge); }
   .line-link:active { opacity: .78; }
@@ -125,21 +127,30 @@ const lines = contactLines.map((line) => ({
      jacks run down the left, and the cable hangs from your jack at the top. */
   @media (max-width: 1099px) {
     .switchboard { --sb-layout: column; }
-    .switchboard.is-wired { --sb-well: 0rem; }
+    .switchboard { --sb-well: 0rem; --sb-lane: min(1.75rem, 7vw); }
     .board-face { grid-template-columns: minmax(0, 1fr); }
-    .board-ear { display: flex; justify-content: space-between; padding: .7rem 1rem; }
+    .board-ear { display: flex; justify-content: space-between; padding: .7rem min(1rem, 4vw); }
     .board-ear:first-child { border-right: 0; border-bottom: 1px solid var(--rule); }
     .board-ear:last-child { border-left: 0; border-top: 1px solid var(--rule); }
-    .switchboard:not(.is-wired) .board-face { grid-template-columns: minmax(0, 1fr); }
-    .board-you { display: flex; align-items: center; gap: 1rem; padding: 1rem 1rem 1rem 1.75rem; border-right: 0; border-bottom: 1px solid var(--rule); }
+    .board-you { display: flex; align-items: center; gap: min(1rem, 4vw); padding: 1rem min(1rem, 4vw) 1rem var(--sb-lane); border-right: 0; border-bottom: 1px solid var(--rule); }
     .board-you .jack { order: -1; }
     .board-lines { grid-template-columns: minmax(0, 1fr); }
     .board-line + .board-line { border-left: 0; border-top: 1px solid var(--rule); }
-    .line-link { grid-template-columns: 2.5rem minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "hardware title" "hardware copy"; column-gap: 1.1rem; row-gap: .25rem; align-items: center; padding: 1.1rem 1rem 1.1rem 1.75rem; }
+    .line-link { grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "hardware title" "hardware copy"; column-gap: min(1.1rem, 4.5vw); row-gap: .25rem; align-items: center; padding: 1.1rem min(1rem, 4vw) 1.1rem var(--sb-lane); }
     .line-title { grid-area: title; align-self: end; }
     .line-copy { grid-area: copy; align-self: start; max-width: 34rem; }
     .line-hardware { grid-area: hardware; grid-template-columns: auto; gap: .45rem; margin-top: 0; }
     .lamp { width: 8px; height: 8px; }
+  }
+  /* The board is laid out for the cable from the first paint, so nothing moves when the script
+     arrives. Your jack holds the cable, so without scripting the board is just its six lines. */
+  @media (scripting: none) {
+    .switchboard { --sb-well: 0rem; }
+    .switchboard-hint, .board-you { display: none; }
+    .board-face { grid-template-columns: 36px minmax(0, 1fr) 36px; }
+  }
+  @media (scripting: none) and (max-width: 1099px) {
+    .board-face { grid-template-columns: minmax(0, 1fr); }
   }
   @media print {
     .switchboard-hint, .cable-layer, .plug-handle { display: none !important; }
