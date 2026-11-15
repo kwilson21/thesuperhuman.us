@@ -1,6 +1,7 @@
 # The offer board: design
 
-Status: design, written before the code. Owner request (2026-11-15): "The owner page could benefit from this AI workflow
+Status: built for review, as its own pull request stacked on the living brief (PR #290). Written before the code; the
+sections below say where the build differs from the first draft. Owner request (2026-11-15): "The owner page could benefit from this AI workflow
 as well. I hardly know how much to charge or what the outcome should be." Owner decisions the same day: show all three
 ways to price (the AI's day estimates times the owner's own day value, the owner's past offers, and a market range
 grounded in cited research); the AI may read the written answers, outline, timing, budget note and existing-site notes,
@@ -21,8 +22,11 @@ withdrawn or started), a section titled "Shape the offer" sits above the offer e
 after the owner pauses editing the offer for three seconds, it asks again with the current draft, one request at a
 time, at least ten seconds apart, at most 12 a page. "Suggest again" asks at once.
 
-The board's height is bounded (the page never grows with it): the heading, the pricing panel, the status line and the
-controls stay put, and the lanes scroll inside a box no taller than about two thirds of the screen.
+The board's height is bounded (the page never grows with it): the heading, the status line and the controls stay put,
+and the lanes scroll inside a box no taller than about two thirds of the screen. The pricing panel sits below that box,
+so prices that fill in never move a card under the pointer. A reply waits ("Show N updates") only while the owner's
+pointer or focus is among the cards, where it would move something; a press of Suggest is not that. The board is not
+saved across a reload: the offer editor's own draft is, and Suggest asks again.
 
 ### What to charge
 
@@ -114,8 +118,10 @@ A new owner page, `/owner/pricing`, reached from the board and the owner home:
   whole dollars and what the size means; the sources (title, link, date); the date researched. "Import research" reads
   the file the research workflow produces; every field can also be edited by hand.
 
-Stored in one row of a new `owner_pricing` table in MUSIC_DB (migration `0027`), saved with the version the owner last
-read (a stale save is refused with 409 and the page says to reload). The research itself is produced outside the site
+Stored as one record (`owner:pricing`) in the RESUME_STORE KV namespace, which already holds the owner's private records,
+saved with the version the owner last read (a stale save is refused with 409 and the page says to reload; KV has no
+compare-and-set, and one owner writes this record). A MUSIC_DB table was the first plan: it would have changed the
+database digest every golden case records, so the corpus would have needed a re-record its rules do not allow. The research itself is produced outside the site
 by a workflow that searches, reads and cross-checks sources and is rerun when the owner wants it refreshed; a live
 search on every request would need a new paid service, which the owner has not approved.
 
@@ -159,10 +165,11 @@ and nothing it suggests reaches the client unless the owner puts it in an offer.
 - The reconciliation is the living brief's `applyReply`, generalised over its lanes with no change in behaviour: the
   `brief-board.qnt` model, its mutants and the seeded walks cover it, and the walks also run with the offer board's
   lanes and limits.
-- `src/lib/offer-pricing.ts` is a pure money rule, so it carries LemmaScript contracts checked by Dafny in CI: the day
-  value range is whole $50 amounts, low at most high, at least the exact amount and less than $50 above it; the market
-  figure always lies in the researched range and equals the AI's figure when that is inside; an offer's total is
-  exactly the sum of its milestone fees.
+- `src/lib/offer-pricing.ts` is a pure money rule, so it carries LemmaScript contracts checked by Dafny in CI: each end
+  of the day value range is a whole $50 amount, at least the exact amount and less than $50 above it (the high end with
+  the contingency, a half cent rounded up); the market figure always lies in the researched range, equals the AI's
+  figure when that is inside, and is the nearer end otherwise. Planted bugs (rounding down, the wrong end) fail. An
+  offer's total and the spread of past totals are unit tested.
 - Route tests against real SQL: owner only, a missing or closed request, the daily cap, a malformed or hostile reply,
   that the model never receives the fields it must not see.
 - Browser checks and a screenshot scenario: start, Use on each lane, Undo of a Use, a stale reply after a Use, the three
