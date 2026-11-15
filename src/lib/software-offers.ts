@@ -156,7 +156,7 @@ function list<T>(
 		for (let index = 0; index < raw.length; index += 1) {
 			const read = element(raw[index], [...path, index]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else values.push(read.value);
@@ -197,7 +197,7 @@ function fields<T>(
 		for (const name of Object.keys(readers) as (keyof T & string)[]) {
 			const read = readers[name](raw[name], [...path, name]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else if (read.value !== undefined || name in raw)
@@ -275,6 +275,8 @@ const termsReader = refined(
 			}),
 		),
 	}),
+	// These two issues carry their path as one dotted step ("projectRange.highCents") where Zod had two; every reader of
+	// issue paths joins the steps with ".", so the error keys are the same.
 	(value, issue) => {
 		if (
 			value.projectRange &&
@@ -300,7 +302,8 @@ export function readOfferTerms(input: RawValue) {
 
 /**
  * What `parseOfferTerms` throws: a `FieldsRefused`, so the review route refuses it as a validator's error and the failure
- * log leaves out its message, which can quote the terms. Its name stays "ZodError", the name `logUnexpected` has always
+ * log leaves out its message (which holds only the readers' paths and fixed sentences, though Zod's could quote a
+ * received value). Its name stays "ZodError", the name `logUnexpected` has always
  * logged for stored terms that do not read (the golden corpus records that line for an invoice reserved against an offer
  * whose terms are an empty object); renaming it changes the log line.
  */
