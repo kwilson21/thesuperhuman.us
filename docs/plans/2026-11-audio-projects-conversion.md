@@ -461,8 +461,8 @@ back and the request reads again (a third failure answers 409), while a file who
 | `uploadsOnlyForOpenProject`: an upload row's stamp precedes the close, the withdrawal and the booking's voiding | `StartNoAccess` |
 | `filesOnlyForOpenProject`: the same for a file row | `InsertNoAccess` |
 | `publishedOnlyWhenPaidAndOpen`: a published file's stamp precedes them, and for a final the balance's voiding | `PublishNoAccess`, `PublishNoPayment` |
-| `stageCoherent`: a published final means a final stage, and a completion is stamped exactly while the stage is complete | `PublishNoStage` |
-| `oneLiveReview` | `NoSupersede` |
+| `stageCoherent`: a published final means a final stage, and a completion is stamped exactly while the stage is complete | `PublishNoStage`; `ResetNoLink`: the revoke's stage reset is written although its own file update was refused (the reset is not linked to the file update, FR3) |
+| `oneLiveReview`: any publish, a review or a final, revokes the live review (P3) | `NoSupersede`; `PublishStaleSupersede`: the publish revokes the review ids it read without the guard that they are still the live ones (and without the retry), so two publishes at once leave two live reviews |
 | `readyStagesHaveFiles`: review_ready has a published review, final_files_ready and complete a published final | `RevokeStaleReset`: the revoke writes the reset it decided from its read without the guard that the other files and the stage are still the ones read (and without the retry); `CompleteNoStage`: complete does not check the stage |
 | `completedOnlyWhenPaid`: the completion's stamp precedes the voiding of the booking and of the balance | `CompleteNoPayment` |
 | `fileHasObject`: an uploaded or published file has its R2 object | `AbortNoCas`: abort deletes the object without first marking the row discarding; `InsertNoState`: the insert does not require a pending upload row |
@@ -492,6 +492,7 @@ the outcome write does not mark a notice sent that was not. The mutants are of t
 | `oneEmailInTotal`: however the owner queues the notice, at most one email goes out in all | `ClaimNoStatus` (two deliveries both claim), `QueueAnyStatus` (a notice that was sent is queued again) |
 | `claimOnlyWhileOpen`: no stored attempt is later than the invitation's close (the update notice's claim has no access condition, so the property is about the invitation) | `ClaimNoOpen` |
 | `sentMeansMailed`: a notice that is `sent` has an email that went out | `UncertainSent` |
+| `closedUpdateNeverMails`: an update notice claimed after the close (its claim has no access condition) has no email, because its recipient read finds no recipient of a closed project; the invitation's property is `claimOnlyWhileOpen`, and each is vacuous for the other kind by construction | `UpdateLookupNoOpen`: the recipient read does not filter on access, so the closed project has a recipient |
 | `failedMeansNotMailed`: a notice that is `failed` has none: an uncertain answer leaves it `sending` for the owner to judge | `UncertainFailed`: an uncertain answer written as failed lets a retry send a second email |
 
 Dropped, with the reason: a property that the owner's retry moves a notice only while the project is open. The retry's open
