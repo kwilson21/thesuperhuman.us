@@ -1,6 +1,6 @@
 import { ZodError } from "astro/zod";
 import * as Predicate from "effect/Predicate";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validateIntake } from "../../src/lib/audio-intake";
 import {
 	parseClientAgreement,
@@ -17,7 +17,17 @@ import {
 	readAttachmentQuery,
 	readOwnerAgreementAction,
 } from "../../src/lib/agreement-owner-input";
-import type { OfferTerms } from "../../src/lib/software-offers";
+import type { OwnerRequest } from "../../src/lib/owner-model";
+import {
+	clientOffer,
+	type OfferTerms,
+	parseOfferTerms,
+	readOfferTerms,
+	type SoftwareOffer,
+	validateOfferTerms,
+} from "../../src/lib/software-offers";
+import { projectTerms } from "../../src/lib/software-projects";
+import { classifyFailure, logUnexpected } from "../../src/server/failure";
 import {
 	businessTypes,
 	parseDraft,
@@ -46,6 +56,11 @@ import {
 	legacyReadInterest,
 } from "../fixtures/legacy-validators/music-demand";
 import { legacyValidateSoftwareInquiry } from "../fixtures/legacy-validators/software-inquiry";
+import {
+	legacyOfferTermsSchema,
+	legacyValidateOfferTerms,
+} from "../fixtures/legacy-validators/software-offers";
+import { partial } from "../helpers/doubles";
 import {
 	readEventInput,
 	readInterestInput,
@@ -1823,4 +1838,625 @@ describe("the music event body against the frozen Zod 3 schema", () => {
 			`music event differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
 	}, 60_000);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The software offer terms (src/lib/software-offers.ts): the owner's draft and send (validateOfferTerms), the client's
+// view of a sent offer (clientOffer), and stored terms read back by the project, invoice and agreement code (projectTerms,
+// which throws on terms that do not read, as the review and sign code does)
+
+/** A value as JSON, keeping what `JSON.stringify` drops or folds: a key whose value is `undefined`, and -0. */
+const exactly = (value: RawValue) =>
+	JSON.stringify(value, (_key, inner: RawValue) => {
+		if (inner === undefined) return "<undefined>";
+
+		return Object.is(inner, -0) ? "<-0>" : inner;
+	});
+
+/** The terms as `JSON.stringify` stores them, or undefined for a value it cannot write (a bigint, a function, a symbol). */
+function storedJson(value: RawValue): string | undefined {
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * How the routes and the failure log treat what reading stored terms threw: whether the review route refuses it (409) as
+ * a validator's error, what `classifyFailure` makes of it, and the exact line `logUnexpected` writes for it.
+ */
+function treated<E>(error: E) {
+	const lines: RawValue[][] = [];
+
+	const spy = vi
+		.spyOn(console, "error")
+		.mockImplementation((...args: RawValue[]) => {
+			lines.push(args);
+		});
+
+	try {
+		logUnexpected("Software invoice", error);
+	} finally {
+		spy.mockRestore();
+	}
+
+	return {
+		refused: error instanceof FieldsRefused || error instanceof ZodError,
+		failure: classifyFailure(error).kind,
+		logged: lines,
+	};
+}
+
+/** What reading stored terms gave. The key is `failed`, not `threw`: `differential` reads `threw` as its own mark of a throw. */
+type Stored =
+	| { ok: true; value: RawValue }
+	| { ok: false; failed: ReturnType<typeof treated> };
+
+/** Stored terms read with `read`: the value, or how what it threw is treated. */
+function storedRead(read: () => RawValue): Stored {
+	try {
+		return { ok: true, value: read() };
+	} catch (error) {
+		return { ok: false, failed: treated(error) };
+	}
+}
+
+describe("the offer terms against the frozen Zod 3 validator", () => {
+	const milestone = {
+		name: "Tracker",
+		deliverables: ["Status view", "Import script"],
+		acceptance: ["Add a client and identify their next action."],
+		feeCents: 240_000,
+	};
+
+	const checkpoint = { label: "Halfway review", cancellationPercent: 60 };
+
+	const base = {
+		outcome: "Onboarding",
+		summary: "A shared view of every client and their next action.",
+		milestones: [milestone],
+		clientInputs: "",
+		exclusions: "",
+		timing: "",
+		paymentMode: "standard",
+	};
+
+	// The total is 100,240,100 cents, which the low estimate equals.
+	const full = {
+		...base,
+		milestones: [
+			{ ...milestone, checkpoint },
+			{ ...milestone, name: "Reports", feeCents: 100 },
+			{ ...milestone, name: "Handoff", feeCents: 100_000_000 },
+		],
+		clientInputs: "Access to the staging account",
+		exclusions: "Hosting\nSupport after handoff",
+		timing: "Six weeks from the deposit",
+		paymentMode: "invoice",
+		projectRange: { lowCents: 100_240_100, highCents: 150_000_000 },
+	};
+
+	const amounts: RawValue[] = [
+		0,
+		-0,
+		1,
+		99,
+		100,
+		101,
+		1.5,
+		100.5,
+		240_000,
+		99_999_999,
+		100_000_000,
+		100_000_001,
+		1e9,
+		Number.MAX_SAFE_INTEGER,
+		Number.MAX_SAFE_INTEGER + 2,
+		-1,
+		-100,
+		-1.5,
+		1e21,
+		5e-324,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+		"100",
+		"",
+		" 240000 ",
+		"1e5",
+		null,
+		true,
+		false,
+		[],
+		[100],
+		{},
+		undefined,
+		100n,
+		new Number(240_000),
+		new Date(0),
+	];
+
+	const percents: RawValue[] = [
+		50,
+		51,
+		52,
+		60,
+		94,
+		95,
+		96,
+		0,
+		-0,
+		51.5,
+		94.9,
+		100,
+		-60,
+		1e21,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+		"60",
+		"",
+		null,
+		true,
+		[],
+		[60],
+		{},
+		undefined,
+	];
+
+	/** A list `length` long holding `values` at the positions given, every other position a hole. */
+	const sparse = (length: number, values: Record<number, RawValue>) =>
+		Object.assign(new Array<RawValue>(length), values);
+
+	/** Lists of lines: empty, at the count and over it, blank and repeated lines, every awkward text, and not lists. */
+	const lineLists = (max: number, count: number): RawValue[] => [
+		[],
+		["a"],
+		["a", "b"],
+		Array.from({ length: count }, (_, i) => `Line ${i}`),
+		Array.from({ length: count + 1 }, (_, i) => `Line ${i}`),
+		Array.from({ length: count + 3 }, () => ""),
+		Array.from({ length: count + 1 }, () => "x".repeat(max + 1)),
+		["Status view", "status view"],
+		["Status view", " STATUS   VIEW "],
+		["Status\tview", "status view"],
+		["é", "é"],
+		["ﬁle", "file"],
+		["A", "a", "B", "b"],
+		[""],
+		[" "],
+		["a", ""],
+		["", "a"],
+		["a\nb", "a b"],
+		[null],
+		["a", 5],
+		[5, "a"],
+		[[]],
+		[{}],
+		[undefined],
+		["a", undefined],
+		sparse(2, { 1: "a" }),
+		sparse(3, {}),
+		...texts(max).map((line) => [line]),
+		...texts(max).map((line) => ["Status view", line]),
+		...notStrings.map((line) => ["Status view", line]),
+		"a",
+		"",
+		{ 0: "a", length: 1 },
+		new Set(["a"]),
+		...notStrings,
+	];
+
+	const checkpoints: RawValue[] = [
+		undefined,
+		null,
+		{},
+		checkpoint,
+		{ ...checkpoint, extra: 1 },
+		{ label: "Halfway review" },
+		{ cancellationPercent: 60 },
+		[],
+		[checkpoint],
+		"x",
+		5,
+		true,
+		new Date(0),
+		...percents.map((cancellationPercent) => ({
+			...checkpoint,
+			cancellationPercent,
+		})),
+		...texts(120).map((label) => ({ ...checkpoint, label })),
+		...notStrings.map((label) => ({ ...checkpoint, label })),
+	];
+
+	const milestonePools = {
+		name: [...texts(80), ...notStrings],
+		deliverables: lineLists(200, 8),
+		acceptance: lineLists(300, 5),
+		feeCents: amounts,
+		checkpoint: checkpoints,
+	} satisfies Pools;
+
+	const random = seeded(20261126);
+
+	/** One milestone with one to three fields changed or removed, sometimes with a key the terms do not name. */
+	const oneMilestone = (): RawValue => {
+		const start = random.chance(0.5) ? milestone : { ...milestone, checkpoint };
+		const set: [string, RawValue][] = [];
+		const remove: string[] = [];
+
+		for (let n = 1 + random.below(3); n > 0; n -= 1) {
+			const [name, values] = random.pick(Object.entries(milestonePools));
+
+			if (random.chance(0.08)) remove.push(name);
+			else set.push([name, random.pick(values)]);
+		}
+
+		const changedMilestone = changed(start, set, remove);
+
+		return random.chance(0.05)
+			? { ...changedMilestone, extra: "x" }
+			: changedMilestone;
+	};
+
+	const milestoneLists: RawValue[] = [
+		[],
+		[milestone, milestone],
+		[milestone, milestone, milestone],
+		[milestone, milestone, milestone, milestone],
+		[{ ...milestone, checkpoint }],
+		[{ ...milestone, checkpoint: undefined }],
+		[{ ...milestone, extra: 1 }],
+		null,
+		"x",
+		5,
+		{},
+		{ 0: milestone, length: 1 },
+		[null],
+		[5],
+		["x"],
+		[[]],
+		[{}],
+		[new Date(0)],
+		[milestone, null],
+		sparse(2, { 1: milestone }),
+		sparse(1, {}),
+		...Object.entries(milestonePools).flatMap(([name, values]) =>
+			values.map((value) => [{ ...milestone, [name]: value }]),
+		),
+		...Array.from({ length: 1500 }, () =>
+			Array.from({ length: 1 + random.below(4) }, oneMilestone),
+		),
+	];
+
+	const ranges: RawValue[] = [
+		undefined,
+		null,
+		{},
+		[],
+		"x",
+		5,
+		true,
+		new Date(0),
+		{ lowCents: 0, highCents: 0 },
+		{ lowCents: 240_000, highCents: 240_000 },
+		{ lowCents: 239_999, highCents: 500_000 },
+		{ lowCents: 500_000, highCents: 400_000 },
+		{ lowCents: 100, highCents: 50 },
+		{ lowCents: 240_000 },
+		{ highCents: 240_000 },
+		{ lowCents: 240_000, highCents: 300_000, extra: 1 },
+		Object.assign(new Number(5), { lowCents: 240_000, highCents: 300_000 }),
+		...amounts.map((lowCents) => ({ lowCents, highCents: 500_000_000 })),
+		...amounts.map((highCents) => ({ lowCents: 240_000, highCents })),
+	];
+
+	const pools = {
+		outcome: [...texts(120), ...notStrings],
+		summary: [...texts(300), ...notStrings],
+		milestones: milestoneLists,
+		clientInputs: [...texts(1000), ...notStrings],
+		exclusions: [...texts(1000), ...notStrings],
+		timing: [...texts(500), ...notStrings],
+		paymentMode: [
+			"standard",
+			"invoice",
+			"Standard",
+			"INVOICE",
+			" standard",
+			"invoice ",
+			"",
+			"x",
+			"toString",
+			"__proto__",
+			"constructor",
+			...notStrings,
+		],
+		projectRange: ranges,
+	} satisfies Pools;
+
+	// Fees and estimates that vary together, some fees out of range and some lists too long, so the checks across fields
+	// run on values that failed their own checks too (Zod ran them on any object that was not stopped).
+	const fees = [
+		0,
+		-0,
+		99,
+		100,
+		1.5,
+		240_000,
+		50_000_000,
+		100_000_000,
+		100_000_001,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+	];
+
+	const bounds = [
+		0,
+		-0,
+		-1,
+		1.5,
+		99,
+		100,
+		240_000,
+		480_000,
+		100_000_100,
+		300_000_000,
+		Number.MAX_SAFE_INTEGER,
+		Number.MAX_SAFE_INTEGER + 2,
+		Number.POSITIVE_INFINITY,
+		Number.NEGATIVE_INFINITY,
+	];
+
+	const acrossFields: RawValue[] = Array.from({ length: 2500 }, () => {
+		const terms = {
+			...random.pick([base, full]),
+			milestones: Array.from({ length: 1 + random.below(4) }, () => ({
+				...milestone,
+				feeCents: random.pick(fees),
+			})),
+			projectRange: random.chance(0.9)
+				? { lowCents: random.pick(bounds), highCents: random.pick(bounds) }
+				: undefined,
+		};
+
+		return random.chance(0.2)
+			? { ...terms, outcome: random.pick(["", "x".repeat(121), "a\nb"]) }
+			: terms;
+	});
+
+	// Bodies no generator above builds: fields inherited from a prototype (Zod read `data[key]`, which finds them), no
+	// prototype at all, an optional key given as undefined (Zod kept the key), boxed values, a list with an extra
+	// property, and an object that looks like a promise (Zod refused it as one).
+	const odd: RawValue[] = [
+		Object.create(base),
+		Object.create(full),
+		Object.assign(Object.create(null), full),
+		{ ...base, projectRange: undefined },
+		{ ...full, milestones: [{ ...milestone, checkpoint: undefined }] },
+		{ ...base, outcome: new String("Onboarding") },
+		{ ...base, milestones: [{ ...milestone, feeCents: new Number(240_000) }] },
+		{ ...base, milestones: Object.assign([milestone], { extra: 1 }) },
+		{ ...base, then: () => undefined, catch: () => undefined },
+		{ ...base, then: 5 },
+	];
+
+	const inputs: RawValue[] = [
+		...bodies([base, full], pools, 20261127, 10000),
+		...acrossFields,
+		...odd,
+	];
+
+	/** Every sentence the terms can give, so the inputs are shown to reach each check. */
+	const sentences = [
+		"This answer is required.",
+		"Keep this under 80 characters.",
+		"Keep this under 120 characters.",
+		"Keep this under 200 characters.",
+		"Keep this under 300 characters.",
+		"Keep this under 500 characters.",
+		"Keep this under 1000 characters.",
+		"Remove control characters.",
+		"Use one line.",
+		"Use whole cents.",
+		"The fee must be at least $1.",
+		"The amount must be $1,000,000 or less.",
+		"Use a non-negative amount.",
+		"Use a safe whole-cent amount.",
+		"Add at least one line.",
+		"Add no more than 8 lines.",
+		"Add no more than 5 lines.",
+		"Add at least one milestone.",
+		"Add no more than 3 milestones.",
+		"Use a whole percentage.",
+		"Use a percentage from 51 to 95.",
+		"Choose a payment mode.",
+		"The high estimate must be at least the low estimate.",
+		"The estimate must be at least the offer total.",
+		"Each deliverable needs to be different.",
+	];
+
+	/** An answer in one line: the value exactly (an undefined key and -0 kept, keys in order), or every error in order. */
+	const said = (answer: Answer) =>
+		answer.ok
+			? `ok ${exactly(answer.value)}`
+			: JSON.stringify(["errors", Object.entries(answer.errors)]);
+
+	it("answers validateOfferTerms as the Zod version did: the decision, the value exactly, and every error in order", () => {
+		const outcomes = {
+			accepted: 0,
+			kinds: new Set<string>(),
+			sentences: new Set<string>(),
+		};
+
+		const found = differential(
+			(input: RawValue): Answer => legacyValidateOfferTerms(input),
+			(input: RawValue): Answer => validateOfferTerms(input),
+			said,
+			(answer) => {
+				if (answer.ok) outcomes.accepted += 1;
+				else {
+					outcomes.kinds.add(JSON.stringify(Object.entries(answer.errors)));
+
+					for (const sentence of Object.values(answer.errors))
+						outcomes.sentences.add(sentence);
+				}
+			},
+		);
+
+		for (const input of inputs) found.run(input);
+
+		expect(outcomes.accepted).toBeGreaterThan(500);
+		expect(outcomes.kinds.size).toBeGreaterThan(1000);
+		expect([...outcomes.sentences].sort()).toEqual([...sentences].sort());
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`validateOfferTerms differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("reads stored terms as Zod's parse did: the same value, or a throw the routes and the failure log treat the same", () => {
+		const outcomes = { read: 0, failed: 0 };
+
+		const found = differential(
+			(json: string) =>
+				storedRead(() => legacyOfferTermsSchema.parse(JSON.parse(json))),
+			(json: string) => storedRead(() => projectTerms({ terms_json: json })),
+			(answer) =>
+				answer.ok
+					? `ok ${exactly(answer.value)}`
+					: `threw ${JSON.stringify(answer.failed)}`,
+			(answer) => {
+				if (answer.ok) outcomes.read += 1;
+				else outcomes.failed += 1;
+			},
+		);
+
+		for (const input of inputs) {
+			const json = storedJson(input);
+
+			if (json !== undefined) found.run(json);
+		}
+
+		expect(outcomes.read).toBeGreaterThan(500);
+		expect(outcomes.failed).toBeGreaterThan(10000);
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`stored offer terms differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("shows a client the same terms of a sent offer, or none, as the Zod schema did", () => {
+		const request = partial<OwnerRequest>({
+			name: "Alex",
+			details: {},
+			serviceId: "workflow",
+		});
+
+		const found = differential(
+			(json: string): Answer => {
+				const read = legacyOfferTermsSchema.safeParse(JSON.parse(json));
+
+				return read.success
+					? { ok: true, value: read.data }
+					: { ok: false, errors: {} };
+			},
+			(json: string): Answer => {
+				const offer = clientOffer(
+					request,
+					partial<SoftwareOffer>({
+						version: 1,
+						status: "sent",
+						terms_json: json,
+					}),
+				);
+
+				return offer
+					? { ok: true, value: offer.terms }
+					: { ok: false, errors: {} };
+			},
+			said,
+		);
+
+		for (const input of inputs) {
+			const json = storedJson(input);
+
+			if (json !== undefined) found.run(json);
+		}
+
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`clientOffer differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("finds every issue the Zod schema found under validateOfferTerms' error map, path and sentence, in order", () => {
+		// Each issue is its own entry, so two issues on one path (which validateOfferTerms folds into the last) both show.
+		// A path is compared joined with ".", as every reader of it joins it: the check across fields names
+		// "projectRange.highCents" as one step where Zod named two.
+		const listed = (issues: Issues) =>
+			Object.fromEntries(
+				issues.map((issue, index) => [
+					String(index),
+					JSON.stringify([issue.path.join("."), issue.message]),
+				]),
+			);
+
+		const found = differential(
+			(input: RawValue): Answer => {
+				const read = legacyOfferTermsSchema.safeParse(input, {
+					errorMap: (issue) => ({
+						message:
+							issue.path[0] === "paymentMode"
+								? "Choose a payment mode."
+								: "This answer is required.",
+					}),
+				});
+
+				return read.success
+					? { ok: true, value: read.data }
+					: { ok: false, errors: listed(read.error.issues) };
+			},
+			(input: RawValue): Answer => {
+				const read = readOfferTerms(input);
+
+				return read.ok
+					? { ok: true, value: read.value }
+					: { ok: false, errors: listed(read.issues) };
+			},
+			said,
+		);
+
+		for (const input of inputs) found.run(input);
+
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`offer terms issues differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("parses any value, not only stored JSON, as Zod's parse did: the same value, or a throw treated the same", () => {
+		const found = differential(
+			(input: RawValue) =>
+				storedRead(() => legacyOfferTermsSchema.parse(input)),
+			(input: RawValue) => storedRead(() => parseOfferTerms(input)),
+			(answer) =>
+				answer.ok
+					? `ok ${exactly(answer.value)}`
+					: `threw ${JSON.stringify(answer.failed)}`,
+		);
+
+		for (const input of inputs) found.run(input);
+
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`parseOfferTerms differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
 });

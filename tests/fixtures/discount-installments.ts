@@ -13,10 +13,10 @@
 /** The installment kinds of the two payment modes: standard is deposit then balance, invoice terms is one invoice. */
 export type InstallmentKind = "deposit" | "balance" | "milestone";
 
-/** Today's minimum milestone fee, in cents (offerTermsSchema: "The fee must be at least $1."). */
+/** Today's minimum milestone fee, in cents (the offer terms reader, `cents` in src/lib/software-offers.ts: "The fee must be at least $1."). */
 export const MINIMUM_FEE_CENTS = 100;
 
-/** Today's maximum milestone fee, in cents (offerTermsSchema: "The amount must be $1,000,000 or less."). */
+/** Today's maximum milestone fee, in cents (the offer terms reader, `cents` in src/lib/software-offers.ts: "The amount must be $1,000,000 or less."). */
 export const MAXIMUM_FEE_CENTS = 100_000_000;
 
 /** One installment of a milestone whose fee (what the client pays for it) is `fee`, as softwareInvoiceTerms has it. */

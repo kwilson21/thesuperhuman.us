@@ -1,6 +1,6 @@
 import { z } from "astro/zod";
 import { safeHttpsUrl } from "./link-check";
-import { offerTermsSchema } from "./software-offers";
+import { parseOfferTerms } from "./software-offers";
 import { validProjectDate } from "./audio-project-updates";
 import { sendAudioMessage } from "./audio-resend";
 import {
@@ -133,7 +133,7 @@ export type SoftwareUpdate = Omit<
 };
 
 export const projectTerms = (project: { terms_json: string }) =>
-	offerTermsSchema.parse(JSON.parse(project.terms_json));
+	parseOfferTerms(JSON.parse(project.terms_json));
 
 function isNumber<T>(value: T): value is T & number {
 	return typeof value === "number";

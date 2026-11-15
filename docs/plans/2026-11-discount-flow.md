@@ -40,7 +40,9 @@ mock-ups; $2,400 is the public placeholder of the fee field.
    model (the mutant `discountTodayDepositGuard` is the old guard, and it fails). Reproduced against the real handlers
    and fixed in PR 2: the golden case "a deposit paid, then the request declined, reopened, redrafted and sent"
    answered 200 with a new link before the fix and answers 409 after it, with the refusal "A deposit is paid on an
-   earlier offer. Refund it in Stripe before sending new terms."
+   earlier offer. Refund it in Stripe before sending new terms." #287 revised it to name the step that records the refund
+   (a Stripe refund alone does not release the block): "A deposit is paid on an earlier offer. Refund it in Stripe and
+   record the refund with owner:stripe:reconcile --software-deposit-refunded before sending new terms."
 
 Two smaller rules follow from these: a checkpoint's cancellation amount is a share of the discounted price (what the
 client agreed to pay), and the non-binding project estimate must be at least the discounted total.
