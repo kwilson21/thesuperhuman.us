@@ -5,12 +5,12 @@ Two branches are gated: branch A (behavior fixes to the four public form routes)
 Date: November 15, 2026
 Repository: the personal website repository
 Branches: A is `claude/effect-11-intake-fixes`, B is `claude/effect-11-intake`, cut from A. Both were merged with `origin/main` at `8b5b4efd` (the merge of #283), the revision this record was written against. Re-check `origin/main` with `git fetch` before merge.
-Tips: A is `7f335426` (`c2049762`, then the merge with `origin/main` at `e23b7357`, then the two fixes listed under "Findings of the review bot" and their corpus case and fixtures). B's code is at `199f90ce`; this record is committed after it, in a commit that changes documentation only.
+Tips: A is `8c4a9037` (`c2049762`, then the merge with `origin/main` at `e23b7357`, the fixes listed under "Findings of the review bot" with their corpus cases and fixtures, and the merge with `origin/main` at `f8e0a3e7`). B's code is at `bff46d94`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: A is #300 and B is #301.
 Decisions: Kazon Wilson. Implementation and independent review were done with Claude Code.
 Target: production
 Reviews: independent reviews of branch A, before its head `5905c1e4`, are listed below. An independent review of B at `ad2cdfd9` (2026-11-15) found no email sent twice, no duplicate request and no leak, and made the findings fixed in the commits after it (see "Review of branch B"). A second review of B at `63ef8802` (2026-11-15) found no duplicate email, no duplicate request and no leak, and confirmed that the moved inserts match A byte for byte; its findings are fixed below. A review bot then left findings on both pull requests (see "Findings of the review bot"); the heads after those fixes have not been reviewed again: UNVERIFIED.
-Rollback revision: for A, `8b5b4efd`; for B, A's tip `7f335426`. No deployed revision was observed.
+Rollback revision: for A, `8b5b4efd`; for B, A's tip `8c4a9037`. No deployed revision was observed.
 
 ## Scope
 
@@ -142,24 +142,24 @@ The counters of the audio and software routes are in KV, not SQL; the pass route
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in one worktree. No logs retained.
 
-Branch A at `7f335426`:
+Branch A at `8c4a9037`:
 
 - `pnpm run format:check`: `Checked 786 files in 149ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run once: `Test Files  310 passed (310)`, `Tests  13187 passed | 1 skipped (13188)`; `git status` clean apart from untracked local files.
-- `pnpm run golden:neutral --all e23b7357 HEAD` (the merge base with `origin/main`): NOT NEUTRAL, on purpose, in four fixtures only: `audio-intake` 72 identical, 43 neutral with D1 changes, 13 NOT neutral, 2 added, 2 removed; `software-brief-pass` 39 identical, 4 NOT neutral; `software-brief-suggest` 117 identical, 7 NOT neutral, 1 added; `software-inquiry` 121 identical, 67 neutral with D1 changes, 17 NOT neutral, 2 added, 1 removed; `compared 77 fixtures and 9066 cases; 4 of 77 fixtures differ`. Against A's earlier head `064f0ab9`, only the added captcha case and the two duplicate-race cases (the kept allowance changes their KV digest) differ.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run once: `Test Files  317 passed (317)`, `Tests  13307 passed | 1 skipped (13308)`; `git status` clean apart from untracked local files.
+- `pnpm run golden:neutral --all origin/main HEAD` (`origin/main` at `f8e0a3e7`): NOT NEUTRAL, on purpose, in four fixtures only: `audio-intake` 72 identical, 43 neutral with D1 changes, 13 NOT neutral, 2 added, 2 removed; `software-brief-pass` 39 identical, 4 NOT neutral, 2 added (the captcha malformed-request case, 503, and a visitor code, which stays 200); `software-brief-suggest` 117 identical, 7 NOT neutral, 1 added; `software-inquiry` 121 identical, 67 neutral with D1 changes, 17 NOT neutral, 2 added, 1 removed; `compared 77 fixtures and 9066 cases; 4 of 77 fixtures differ`.
 - `pnpm run verify:quint:all`: not run on A (its models are on B).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm run lint`: no findings (exit 0).
-- `pnpm run check`: `0 errors`, `0 warnings`, `17 hints`.
+- `pnpm run check`: `0 errors`, `0 warnings`, `16 hints`.
 
-Branch B at `199f90ce` (A's tip `7f335426` merged in, then the conversion and the fixes after review; the checks that read documentation are repeated on the commit that holds this record):
+Branch B at `bff46d94` (A's tip `8c4a9037` merged in, then the conversion and the fixes after review; the checks that read documentation are repeated on the commit that holds this record):
 
 - `pnpm run format:check`: `Checked 808 files in 98ms. No fixes applied.`; `pnpm run build`: completed; the client bundle test: 27 passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  317 passed (317)`, `Tests  13241 passed | 1 skipped (13242)`; `git status` clean. (An earlier head, `dc8ca827`, had one failing architecture test, the tagged-error field name, fixed there.)
-- `pnpm run golden:neutral --all refs/heads/claude/effect-11-intake-fixes HEAD` (exit 0): `audio-intake: 78 identical, 52 neutral with D1 changes, 0 NOT neutral`; `software-inquiry: 114 identical, 93 neutral with D1 changes, 0 NOT neutral`; `compared 77 fixtures and 9071 cases; 2 of 77 fixtures differ`; `golden:neutral: NEUTRAL`. `software-brief-pass` and `software-brief-suggest` are byte-identical to A's. The two fixtures are re-recorded in commits that hold only fixtures (`dc8d1119`, `29dd6530` for the intake store's statements, and `199f90ce` after the last merge of A).
-- `pnpm run verify:quint:all`: 77 lines, every one `ok`, including every mutant of the inquiry model (the one for the earlier loser give-back is `LoserGivesBack`).
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  324 passed (324)`, `Tests  13361 passed | 1 skipped (13362)`; `git status` clean. (An earlier head, `dc8ca827`, had one failing architecture test, the tagged-error field name, fixed there.)
+- `pnpm run golden:neutral --all refs/heads/claude/effect-11-intake-fixes HEAD` (exit 0): `audio-intake: 78 identical, 52 neutral with D1 changes, 0 NOT neutral`; `software-inquiry: 114 identical, 93 neutral with D1 changes, 0 NOT neutral`; `compared 77 fixtures and 9073 cases; 2 of 77 fixtures differ`; `golden:neutral: NEUTRAL`. `software-brief-pass` and `software-brief-suggest` are byte-identical to A's. The two fixtures are re-recorded in commits that hold only fixtures (`dc8d1119`, `29dd6530` for the intake store's statements, and `199f90ce` after the last merge of A).
+- `pnpm run verify:quint:all`: exit 0, 86 `ok` lines (the agreement-link model from main is in the driver), including every mutant of the inquiry model (the one for the earlier loser give-back is `LoserGivesBack`).
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - Lint and `check` are re-run on the commit that holds this record: see "Final lines".
 
@@ -217,7 +217,7 @@ Also: the cleanup of old suggestion budget rows binds its cutoff from TypeScript
 - PASS, 7.1 Required checks: the local gates above for each branch.
 - UNVERIFIED, 7.2 Review of each pull request head: no pull request exists yet.
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The conversion relies on the trigger in STOP item 2, as before.
-- PASS, 7.4 Rollback is the previous revision (A: `8b5b4efd`; B: A's tip `7f335426`).
+- PASS, 7.4 Rollback is the previous revision (A: `8b5b4efd`; B: A's tip `8c4a9037`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed.
 - PASS, 7.6 Receipt and QA evidence for the local gates, with the four states reported separately (below).
 
