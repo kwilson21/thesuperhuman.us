@@ -33,6 +33,7 @@ function serve(input: {
 	readonly attachmentOffer?: Row | null;
 	readonly artifact?: Row | null;
 	readonly projects?: Row[];
+	readonly studioEmail?: string;
 }): Promise<{
 	readonly status: number;
 	readonly headers: [string, string][];
@@ -68,7 +69,13 @@ function serve(input: {
 			];
 
 		if (/FROM audio_client_sessions/.test(query))
-			return [{ email: "me@example.test", expires_at: FAR, revoked_at: null }];
+			return [
+				{
+					email: input.studioEmail ?? "me@example.test",
+					expires_at: FAR,
+					revoked_at: null,
+				},
+			];
 
 		if (/FROM software_agreement_attachments/.test(query))
 			return input.pinned ? [input.pinned] : [];
@@ -301,6 +308,20 @@ describe("the file route for a verified visitor", () => {
 		});
 
 		expect(own.seen.buckets).toEqual(["k"]);
+	});
+
+	it("treats a studio session with an empty email as a verified visitor who is shown nothing", async () => {
+		const empty = await serve({
+			path: "file",
+			id: "a1",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: theirs,
+			studioEmail: "",
+		});
+
+		// Not the 401 a visitor with no session gets: the session exists, and the agreement is not theirs.
+		expect(empty.status).toBe(404);
+		expect(empty.body).toBe("Not found");
 	});
 
 	it("reads no bucket object for anything it refuses", async () => {
