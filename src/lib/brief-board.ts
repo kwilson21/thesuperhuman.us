@@ -485,8 +485,9 @@ const DURATION = new RegExp(
 		// Not "1時間目" (a class period), but "3時間目安" (about three hours) is a duration.
 		"\\d+\\s*時間(?!目(?!安))",
 		"\\d+\\s*周(?!年)",
-		// Not an ordinal ("1일차", "3주차", "3년차") or parking ("주차장").
-		"\\d+\\s?(?:주일|주|일|년)(?:간)?(?!\\s?차)(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
+		// Not an ordinal ("1일차", "3주차", "1주 차에", "3년차") or parking ("주차장"). Unspaced, 차 fails the lookahead
+		// at the end; spaced, 차 is an ordinal only alone or before a particle, so "2주 차이" (a difference) still counts.
+		"\\d+\\s?(?:주일|주|일|년)(?:간)?(?!\\s차(?:$|[^가-힣]|에|의|인|부터|까지|로|를|가|는|도|째|이상|이하))(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
 	].join("|"),
 	"iu",
 );

@@ -252,6 +252,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		plain = saved.plain,
 		visible = false,
 		hovering = false,
+		// The pointer that last pressed in the board ("mouse", "touch" or "pen"), to tell a mouse press from a tap.
+		lastPointer = "",
 		// When the visitor last touched or scrolled the board: a finger has no hover, and a phone's cards scroll in a box.
 		touchedAt = 0,
 		quietTimer: ReturnType<typeof setTimeout> | undefined,
@@ -1148,16 +1150,22 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		);
 	}
 
-	/** Brings an element into view on a touch screen only, where nothing sits under a pointer to be moved. */
-	const revealOnTouch = (element: HTMLElement) => {
-		if (matchMedia("(pointer: coarse)").matches)
-			element.scrollIntoView({ block: "nearest" });
+	/**
+	 * Brings an element into view unless a mouse pressed the button just now: a mouse would have the button it pressed
+	 * moved from under it, while a finger or the keyboard has nothing under a pointer to move. Decided by the press, not
+	 * the device, so a keyboard on a laptop and a finger on a touch laptop both see the reason.
+	 */
+	const revealUnlessMouse = (element: HTMLElement, event?: Event) => {
+		const byMouse =
+			event instanceof MouseEvent && event.detail > 0 && lastPointer === "mouse";
+
+		if (!byMouse) element.scrollIntoView({ block: "nearest" });
 	};
 
 	for (const lane of LANES) {
 		const parts = lanes[lane];
 
-		const close = (save: boolean) => {
+		const close = (save: boolean, event?: Event) => {
 			if (save && parts.input.value.trim()) {
 				const next = addNote(board(), lane, parts.input.value);
 
@@ -1167,8 +1175,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					render();
 					announce(laneFull(laneLabels[options.path()][lane]), true);
 					parts.input.focus();
-					// On a touch screen the reason below the editor can be out of sight in the scrolling box.
-					revealOnTouch(parts.full);
+					// The reason below the editor can be out of sight in the scrolling box.
+					revealUnlessMouse(parts.full, event);
 
 					return;
 				}
@@ -1182,14 +1190,14 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.add.focus();
 		};
 
-		parts.add.addEventListener("click", () => {
+		parts.add.addEventListener("click", (event) => {
 			// A full list says why instead of opening the box; focus stays on Add.
 			if (laneCount(board(), lane) >= laneLimits[lane]) {
 				fullTried.add(tried(lane));
 				render();
 				announce(laneFull(laneLabels[options.path()][lane]), true);
-				// On a touch screen the reason below Add can be out of sight in the scrolling box. A mouse keeps Add still.
-				revealOnTouch(parts.full);
+				// The reason below Add can be out of sight in the scrolling box. A mouse keeps Add still.
+				revealUnlessMouse(parts.full, event);
 
 				return;
 			}
@@ -1198,7 +1206,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.editor.hidden = false;
 			parts.input.focus();
 		});
-		parts.save.addEventListener("click", () => close(true));
+		parts.save.addEventListener("click", (event) => close(true, event));
 		parts.cancel.addEventListener("click", () => close(false));
 		parts.input.addEventListener("keydown", (event) => {
 			if (event.key === "Enter") {
@@ -1260,6 +1268,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	};
 
 	root.addEventListener("pointerdown", (event) => {
+		lastPointer = event.pointerType;
+
 		if (event.pointerType === "touch") noteTouch();
 	});
 	// The visitor scrolling the cards, by wheel or finger. A scroll the page makes itself (moving focus) does not count.
