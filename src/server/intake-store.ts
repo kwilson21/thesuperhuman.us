@@ -2,8 +2,8 @@
 // one batch, one function per statement, and answers the row as it stored it (nothing is read back: a read that failed
 // after the insert would make a stored request look unsaved, and a retry would store it twice). A read asks for what is
 // stored and decides nothing. A failure carries what the database raised in a field named `failure`, which the route logs
-// as it always has; the flow that stores a brief maps a unique violation on the submission id to a `SubmissionIdClash`, so
-// the flow asks the rule again on fresh facts.
+// as it always has; a unique violation on the submission id is a `SubmissionIdClash`, so the flow asks the rule again on fresh
+// facts.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { OwnerRequest } from "../lib/owner-model";
@@ -11,7 +11,7 @@ import {
 	getOwnerRequestBySubmission,
 	type NewOwnerRequest,
 } from "../lib/owner-requests";
-import { ChangedSinceRead } from "./guarded-save";
+import { ChangedSinceRead, isUniqueViolation } from "./guarded-save";
 import { MusicDb } from "./services";
 
 /** The database refused the write. */
@@ -73,8 +73,8 @@ const creationAuditStatement = (db: D1Database, row: OwnerRequest) =>
 
 /**
  * Stores one owner request and its creation audit in one batch, and answers the row as stored. A brief too large is
- * refused before anything is sent. Any other refusal carries what the database raised; a caller that guards the write with
- * a unique index recognises its own violation there.
+ * refused before anything is sent. A violation of the unique index on the submission id is a `SubmissionIdClash` (a `ChangedSinceRead`, as the music store maps its own
+ * constraints); any other refusal is an `IntakeStoreFailed` carrying what the database raised.
  */
 export const insertRequest = (request: NewOwnerRequest) =>
 	Effect.gen(function* () {
@@ -116,7 +116,11 @@ export const insertRequest = (request: NewOwnerRequest) =>
 					requestStatement(db, row, detailsJson, request.submissionId),
 					creationAuditStatement(db, row),
 				]),
-			catch: (failure) => new IntakeStoreFailed({ failure }),
+			// The unique index on the submission id refusing the batch means another request stored the same id first.
+			catch: (failure) =>
+				isUniqueViolation(failure) && failure instanceof Error
+					? new SubmissionIdClash(failure)
+					: new IntakeStoreFailed({ failure }),
 		});
 
 		return row;

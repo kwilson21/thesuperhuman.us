@@ -18,7 +18,7 @@ import {
 	softwareRequest,
 } from "../../lib/software-inquiry";
 import { logUnexpected } from "../failure";
-import { decideAndSave, isUniqueViolation } from "../guarded-save";
+import { decideAndSave } from "../guarded-save";
 import {
 	BriefTooLarge,
 	findStoredBrief,
@@ -224,14 +224,6 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				),
 			save: () =>
 				insertRequest(softwareRequest(input)).pipe(
-					// The unique index on the submission id refusing the insert means another request stored the same id first.
-					Effect.mapError((failure) =>
-						failure instanceof IntakeStoreFailed &&
-						isUniqueViolation(failure.failure) &&
-						failure.failure instanceof Error
-							? new SubmissionIdClash(failure.failure)
-							: failure,
-					),
 					Effect.tapError((failure) =>
 						failure instanceof SubmissionIdClash
 							? Ref.set(clash, { failure: failure.clash })

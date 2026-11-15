@@ -10,7 +10,11 @@ import {
 	ownerRequestForIntake,
 } from "../../lib/audio-intake";
 import { logUnexpected } from "../failure";
-import { IntakeStoreFailed, insertRequest } from "../intake-store";
+import {
+	BriefTooLarge,
+	IntakeStoreFailed,
+	insertRequest,
+} from "../intake-store";
 import {
 	admitForPassedCheck,
 	attemptWithinLimit,
@@ -108,9 +112,11 @@ export const submitIntake = (submission: IntakeSubmission) =>
 			yield* Effect.sync(() =>
 				logUnexpected(
 					ROUTE,
-					stored.failure instanceof IntakeStoreFailed
-						? stored.failure.failure
-						: stored.failure,
+					stored.failure instanceof BriefTooLarge
+						? new Error("Request details are too large.")
+						: stored.failure instanceof IntakeStoreFailed
+							? stored.failure.failure
+							: stored.failure.clash,
 				),
 			);
 
