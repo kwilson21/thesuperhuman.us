@@ -958,6 +958,27 @@ it("opens an explicit path at its first question with no draft", async () => {
 	expect(current()).toBe(1);
 });
 
+it.each(["website", "webapp", "workflow"])(
+	"opens an explicit %s link at its first question when the draft was left on the choice screen",
+	async (requested) => {
+		choose("path", requested);
+		click("[data-back]");
+		expect(JSON.parse(store.get("software-brief-draft")!).step).toBe(0);
+		await setup(requested);
+		expect(current()).toBe(1);
+		expect(
+			controls.find((node) => node.name === "path" && node.checked)!.value,
+		).toBe(requested);
+	},
+);
+
+it("resumes on the choice screen when the draft was left there and the link names no path", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup();
+	expect(current()).toBe(0);
+});
+
 it("clears remapped question errors and invalid markers when switching paths", () => {
 	choose("path", "webapp");
 	click("[data-next]");

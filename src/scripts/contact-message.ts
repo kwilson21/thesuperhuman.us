@@ -1,13 +1,13 @@
-export function setupHomeContact() {
-	const contact = document.getElementById("contact")!;
-
-	const message = contact.querySelector<HTMLDetailsElement>(
-		".contact-disclosure",
-	)!;
-
-	const turnstileContainer = contact.querySelector<HTMLElement>(
+/**
+ * The message form on /contact. It stays closed until the visitor connects the message line, and
+ * the Turnstile check loads only then, so visitors who choose another line never load it.
+ */
+export function setupContactMessage(panel: HTMLElement) {
+	const turnstileContainer = panel.querySelector<HTMLElement>(
 		"[data-contact-turnstile]",
 	);
+
+	const heading = panel.querySelector<HTMLElement>("[data-message-heading]");
 
 	let turnstileLoad: Promise<void> | undefined;
 	let turnstileWidget: string | undefined;
@@ -20,7 +20,7 @@ export function setupHomeContact() {
 			sitekey: turnstileContainer.dataset.sitekey!,
 		});
 
-		const error = contact.querySelector<HTMLElement>(
+		const error = panel.querySelector<HTMLElement>(
 			'[data-form-error="turnstileToken"]',
 		);
 
@@ -70,41 +70,31 @@ export function setupHomeContact() {
 		return turnstileLoad;
 	}
 
-	function openContactForm() {
+	function open() {
+		const wasHidden = panel.hidden;
+		panel.hidden = false;
 		void loadContactTurnstile().catch(() => {
-			const error = contact.querySelector<HTMLElement>(
+			const error = panel.querySelector<HTMLElement>(
 				'[data-form-error="turnstileToken"]',
 			);
 
 			if (error) {
 				error.textContent =
-					"The verification check did not load. Close and reopen this form to try again.";
+					"The verification check did not load. Reload this page to try again.";
 				error.hidden = false;
 			}
 		});
-	}
 
-	message.addEventListener("toggle", () => {
-		if (message.open) openContactForm();
-	});
-
-	function revealContact() {
-		if (location.hash !== "#contact") return;
-		message.open = true;
-		openContactForm();
-		contact.scrollIntoView({ block: "start" });
-	}
-
-	revealContact();
-	window.addEventListener("hashchange", revealContact);
-	// Clicking the same fragment again does not fire hashchange.
-	document
-		.querySelectorAll<HTMLAnchorElement>(
-			'a[href="/#contact"], a[href="#contact"]',
-		)
-		.forEach((link) => {
-			link.addEventListener("click", () => {
-				message.open = true;
-			});
+		if (!wasHidden && document.activeElement === heading) return;
+		const smooth = window.matchMedia(
+			"(prefers-reduced-motion: no-preference)",
+		).matches;
+		panel.scrollIntoView({
+			block: "start",
+			behavior: smooth ? "smooth" : "auto",
 		});
+		heading?.focus({ preventScroll: true });
+	}
+
+	return { open };
 }

@@ -56,7 +56,8 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
 }
 ```
 New colours are named tokens. Illustrations may keep local colour tokens in their own
-component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
+component (`--ill-*`, `--code-*`, the switchboard's `--sb-*`); declarations reference tokens,
+never raw hex.
 The publishing consent page (`src/lib/publication/oauth-login.ts`) is a standalone page with its own
 Content-Security-Policy, so it inlines the tokens as literals and loads Libron from the site's own font
 files; a test checks those literals against `global.css`.
@@ -98,11 +99,21 @@ files; a test checks those literals against `global.css`.
   takes a large radius without an owner decision.
   On invitation pages the panel holds one "Get in touch" button, the footer links and the
   LLC line. On quiet pages it holds the name mark, the footer links and the LLC line.
+- Every Get in touch button and link goes to the switchboard at `/contact` (November 15
+  decision, below). Home's contact section keeps its horizon and ends on its own Get in
+  touch button, so Home's closing panel stays quiet.
 - Pinned contact button: the only element fixed over page content. On invitation pages
-  at 600px wide and below, a full-width Get in touch pill stays at the bottom of the
-  screen until the closing panel comes into view. It hides while the phone menu is open
-  or a form field has focus, appears and goes without motion, and never shows above
-  600px, in print or without JavaScript.
+  and on Home, at 600px wide and below, a full-width Get in touch pill stays at the bottom
+  of the screen until the closing panel, or Home's contact section, comes into view. It
+  hides while the phone menu is open or a form field has focus, appears and goes without
+  motion, and never shows above 600px, in print or without JavaScript.
+- The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
+  hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
+  jack. Each line is a plain link to the form that fits, with any choice the form would
+  ask already made. From 1100px wide the lines are six columns, title and line over
+  lamp and jack, and the cable hangs below them; narrower, the board turns on its side
+  and the jacks run down the left. Without JavaScript it is the six links, with no "You"
+  jack. It takes the 3px corner of fields and pictures, not the panel radius.
 - At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
   that it stays on one line. The publishing consent page's button is the exception: its
   label wraps at any width, because that page cannot use a width query that follows text
@@ -135,6 +146,8 @@ files; a test checks those literals against `global.css`.
   shown at once, never animated.
 - Hover · only inside `(hover: hover) and (pointer: fine)`; one signal per element
   (D2.2-B: project cards keep their lean and resting glow; the glow does not grow).
+  On the switchboard the signal is the plug reaching toward the line, or the lamp
+  warming when the script has not drawn the cable.
 - Active · opacity .78 on links, buttons, summaries and sliders.
 - Fields · 1px `--field-border`, paper fill, 3px radius, 16px text; invalid shows
   the accent edge with an error message in text; disabled is opacity .5 with a
@@ -156,6 +169,10 @@ files; a test checks those literals against `global.css`.
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
 - Anything that plays on its own rests within five seconds. Page cross-fade 180ms.
+- The switchboard's plug moves on one spring and settles in under a second; its lamp
+  strikes twice in 420ms. A chosen line navigates 560ms after the click so the lamp can
+  be seen; with reduced motion the plug moves without animating and the page changes at
+  once.
 
 ## Page families
 From `docs/website-system-plan.md` (Templates and explanations): Home, Work,
@@ -238,6 +255,17 @@ record). A width where it needs three lines is not yet approved and is an owner 
 At enlarged text on phone widths the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
+
+## Owner decisions (November 15, 2026)
+Kazon asked why Home had no Get in touch button ("Why is the get in touch button missing on
+the home page?") and for the button to open a chooser: "modify the button so we can instead
+bring the user to a screen to let them quickly choose whether they want to send me an
+inquiry, request my resume, start a song or plan their website/discuss their project", with
+the project choices making the selection for the visitor "if that makes sense", and "Please
+be very very creative in re-envisioning this, let's make it fun for the user to make their
+selection". The switchboard, its patch bay look, and the split of "Discuss your project" into
+its two briefs (web app, workflow) are the builder's answer to that request, recorded above
+and waiting for Kazon's review on the pull request.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

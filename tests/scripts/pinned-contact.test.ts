@@ -5,7 +5,9 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-type ObserverCallback = (entries: { isIntersecting: boolean }[]) => void;
+type ObserverCallback = (
+	entries: { isIntersecting: boolean; target: FakeElement }[],
+) => void;
 
 // A plain element with attributes, enough for the script's hidden and data-at-end handling.
 const element = (initial: Record<string, string> = {}) => {
@@ -25,9 +27,17 @@ const element = (initial: Record<string, string> = {}) => {
 
 type FakeElement = ReturnType<typeof element>;
 
-const stubPage = (elements: Record<string, FakeElement>) => {
+// The ends: the closing panel and any page invitation marked data-pinned-end, in page order.
+const stubPage = (
+	elements: Record<string, FakeElement>,
+	ends: FakeElement[] = elements[".closing-panel"]
+		? [elements[".closing-panel"]]
+		: [],
+) => {
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) => elements[selector] ?? null,
+		querySelectorAll: (selector: string) =>
+			selector === ".closing-panel, [data-pinned-end]" ? ends : [],
 	});
 };
 
@@ -36,13 +46,13 @@ const stubObserver = () => {
 
 	class FakeObserver {
 		callback: ObserverCallback;
-		observed: FakeElement | null = null;
+		observed: FakeElement[] = [];
 		constructor(callback: ObserverCallback) {
 			this.callback = callback;
 			observers.push(this);
 		}
 		observe(target: FakeElement) {
-			this.observed = target;
+			this.observed.push(target);
 		}
 	}
 
@@ -59,14 +69,34 @@ it("shows the pinned button and marks it at the end while the closing panel is o
 	setupPinnedContact();
 	expect(pinned.hasAttribute("hidden")).toBe(false);
 	expect(observers).toHaveLength(1);
-	expect(observers[0].observed).toBe(panel);
-	observers[0].callback([{ isIntersecting: true }]);
+	expect(observers[0].observed).toEqual([panel]);
+	observers[0].callback([{ isIntersecting: true, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
-	observers[0].callback([{ isIntersecting: false }]);
+	observers[0].callback([{ isIntersecting: false, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 });
 
-it("stays hidden when there is no closing panel", () => {
+it("also steps aside for a page’s own invitation, until neither end is on screen", () => {
+	const pinned = element({ hidden: "" });
+	const invitation = element();
+	const panel = element();
+	stubPage({ "[data-pinned-contact]": pinned, ".closing-panel": panel }, [
+		invitation,
+		panel,
+	]);
+	const observers = stubObserver();
+	setupPinnedContact();
+	expect(observers[0].observed).toEqual([invitation, panel]);
+	observers[0].callback([{ isIntersecting: true, target: invitation }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	observers[0].callback([{ isIntersecting: true, target: panel }]);
+	observers[0].callback([{ isIntersecting: false, target: invitation }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	observers[0].callback([{ isIntersecting: false, target: panel }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(false);
+});
+
+it("stays hidden when there is no closing panel or page invitation", () => {
 	const pinned = element({ hidden: "" });
 	stubPage({ "[data-pinned-contact]": pinned });
 	const observers = stubObserver();

@@ -329,11 +329,12 @@ export function setupSoftwareInquiry(
 					);
 			}
 
+			// A link that names a path has already made the choice, so a draft saved on the choice screen resumes at the first question instead.
 			if (
 				validPath &&
 				(!requestedPath || requestedPath === stored.path) &&
 				Number.isInteger(saved.step) &&
-				saved.step >= 0 &&
+				saved.step >= (requestedPath ? 1 : 0) &&
 				saved.step <= last()
 			)
 				step = saved.step;

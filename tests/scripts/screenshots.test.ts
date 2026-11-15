@@ -1684,6 +1684,7 @@ describe("moved client modules", () => {
 	const manifest = {
 		pages: PAGES.map(({ name, path }) => ({ name, path })),
 		scenarios: [
+			"contact-switchboard",
 			"journal-pagination",
 			"owner-details",
 			"services-print",
@@ -1731,13 +1732,15 @@ describe("moved client modules", () => {
 		["audio-portfolio-filter", ["audio-portfolio"], []],
 		["audio-releases-filter", ["audio-releases"], []],
 		["audio-services-links", ["audio-services"], []],
-		["contact-form", ["home"], []],
+		["contact-form", ["contact"], []],
+		["contact-message", ["contact"], ["contact-switchboard"]],
+		["contact-page", ["contact"], ["contact-switchboard"]],
 		["countersign-name", [], OWNER_REQUEST_WITH_SIGNING],
-		["home-contact", ["home"], []],
 		["music-detail-links", ["music-old-news"], []],
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
 		["payload-review-illustration", TIMELINE_PAGES, []],
+		["pinned-contact", ["home", "work"], []],
 		["project-timeline", TIMELINE_PAGES, ["journal-pagination"]],
 		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],
@@ -1748,6 +1751,7 @@ describe("moved client modules", () => {
 		["software-offer-print", [], ["software-offer"]],
 		["studio-sign-in", ["studio-sign-in"], ["software-project"]],
 		["studio-sign-out", [], ["studio-client", "software-project"]],
+		["switchboard", ["contact"], ["contact-switchboard"]],
 		["work-experience", ["work"], []],
 	];
 

@@ -487,6 +487,29 @@ each has its own personal project to show; each then opens as its own named path
 with its own questions. Workflow automation predates this rule and stays open with
 its client-work example by the owner's decision.
 
+### Get in touch switchboard, November 15
+
+Requested by the owner on November 15, 2026 (quoted in `design.md`). Every "Get in
+touch" button and link (the closing panel, the pinned phone button, the phone menu,
+the service sheet, the project brief and project pages, and Home's contact section)
+opens `/contact`, a switchboard where the visitor picks one of six lines, each a plain
+link to the form that fits:
+
+- Send a message: the contact form, opened on the same page (it moved there from
+  Home, whose contact section now ends on its own Get in touch button).
+- Request my resume: About's resume request (`/about#resumes`).
+- Start your song: the song intake (`/audio/start`).
+- Plan your website, Plan your web app, Automate a workflow: the project brief at
+  `/software/start?path=website`, `?path=webapp` and `?path=workflow`. The brief
+  opens at its first question, so the visitor never answers "What are you working
+  on?" after choosing on the board. "Discuss your project" covers two briefs with
+  different questions, so the board offers both instead of guessing one.
+
+A link that names a brief path opens at its first question even when a saved draft
+was left on the brief's choice screen. The hub's "Discuss your project" door and
+Home's "Start a project" button still open the brief's first screen, where the
+visitor names the path.
+
 ## Copy: explain the action when visitors need to understand the work
 
 Current rule, September 30, 2026: when explaining an offer, capability or project,

@@ -1,0 +1,40 @@
+---
+export const prerender = false;
+
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
+import ContactForm from "~/components/ContactForm.astro";
+import Switchboard from "~/components/Switchboard.astro";
+---
+<BaseLayout title="Get in touch · Kazon Wilson" description="Send Kazon Wilson a message, request his resume, start a song, or plan a website, web app or workflow tool. Each choice opens the form that fits.">
+  <article class="site-shell primary-page contact-page">
+    <header class="contact-head">
+      <h1 class="page-title">Get in touch</h1>
+      <p class="page-lede">Pick a line and I’ll put you through to the right form.</p>
+    </header>
+    <Switchboard />
+    <section id="message" class="message-panel" aria-labelledby="message-title" data-message-panel hidden>
+      <h2 id="message-title" data-message-heading tabindex="-1">Send a message</h2>
+      <ContactForm />
+    </section>
+    <p class="contact-elsewhere">Prefer email? <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a></p>
+    <noscript><p class="contact-elsewhere">The message form needs JavaScript; every other line works without it.</p></noscript>
+  </article>
+  <Footer variant="quiet" slot="footer" />
+</BaseLayout>
+<script>
+  import { setupContactPage } from '~/scripts/contact-page';
+
+  setupContactPage();
+</script>
+<style>
+  .contact-head { margin-bottom: clamp(1.5rem, 3vw, 2.25rem); }
+  .contact-head .page-title { margin: 0; }
+  .contact-head .page-lede { color: var(--muted); }
+  .message-panel { max-width: var(--container-content); margin-top: var(--site-section-space); scroll-margin-top: 1.5rem; }
+  .message-panel h2 { font-size: clamp(1.75rem, 3vw, 2.25rem); line-height: 1.2; letter-spacing: -.035em; margin: 0 0 1.5rem; }
+  .message-panel h2:focus { outline: none; }
+  .message-panel h2:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .contact-elsewhere { margin-top: 2rem; color: var(--muted); font-size: .95rem; }
+  .contact-elsewhere a { color: var(--ink); }
+</style>
