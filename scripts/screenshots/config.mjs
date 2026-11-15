@@ -266,6 +266,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/audio-portfolio-filter.ts": ["audio-portfolio"],
 	"src/scripts/audio-releases-filter.ts": ["audio-releases"],
 	"src/scripts/audio-services-links.ts": ["audio-services"],
+	"src/components/ContactForm.astro": ["home"],
 	"src/scripts/contact-form.ts": ["home"],
 	"src/scripts/home-contact.ts": ["home"],
 	"src/scripts/music-detail-links.ts": ["music-old-news"],
@@ -282,6 +283,9 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/components/ContactForm.astro": ["home-contact"],
+	"src/scripts/contact-form.ts": ["home-contact"],
+	"src/scripts/home-contact.ts": ["home-contact"],
 	"src/data/work-with-me.ts": ["services-print"],
 	"src/data/project-stories/tally.ts": ["services-print"],
 	"src/data/project-stories/kaillera-next.ts": ["services-print"],

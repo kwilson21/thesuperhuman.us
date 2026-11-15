@@ -20,7 +20,12 @@ const turnstileSiteKey =
   <p class="form-hint">Looking for my resume? <a href="/about#resumes">Request a copy.</a></p>
 <p class="form-hint">Read how your information is handled in the <a href="https://thesuperhuman.us/privacy">privacy notice</a>.</p>
 </form>
-<div id="contact-success" class="form-success" role="status" tabindex="-1" hidden><h3>Message received.</h3><p>Thanks for getting in touch.</p></div>
+<div id="contact-success" class="form-success" role="status" tabindex="-1" hidden>
+  <h3>Message received.</h3>
+  <p class="max-w-measure wrap-anywhere" data-contact-reply>Thanks for getting in touch. I’ll read it myself and reply by email.</p>
+  <p class="text-sm text-muted mt-3 max-w-measure">A short confirmation email should arrive soon. If it doesn’t, check your spam folder. Your message reached me either way.</p>
+  <p class="text-sm text-muted mt-3 max-w-measure wrap-anywhere">Typo in your address? Email me at <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a> so I can reach you.</p>
+</div>
 <script>
   import { setupContactForm } from '~/scripts/contact-form';
 
