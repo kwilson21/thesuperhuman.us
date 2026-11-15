@@ -45,8 +45,9 @@ const NOTE = "Fans hear new songs first.";
 
 /**
  * Each message that quotes a card (Kept, Set aside, Brought back, Removed, Undid) ends its sentence once: no period
- * after a quote that already ends in "?" or ".", and one after a quote that does not. Every action is undone, so the
- * board keeps the same cards. The Undid message that also names the cards Undo withdrew is not reached here.
+ * after a quote that already ends a sentence (checked here with "?" and "."), and one after a quote that does not
+ * (checked with "Shows" and "Press kit"). Every action is undone, so the board keeps the same cards. The Undid message
+ * that also names the cards Undo withdrew is not reached here.
  */
 async function quotesEndOnce(page) {
 	const live = page.locator("[data-board-live]");
@@ -71,7 +72,8 @@ async function quotesEndOnce(page) {
 		await said(expected);
 	};
 
-	// A suggested card: Keep, Not this and Bring back, each undone. `end` is what must follow its quote.
+	// A card from the reply (read from the answers or suggested): Keep, Not this and Bring back, each undone. `end` is
+	// what must follow its quote.
 	const card = async (text, end) => {
 		await press(`Keep: ${text}`, `Kept “${text}”${end}`);
 		await undo(`Undid: kept “${text}”${end}`);
