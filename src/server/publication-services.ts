@@ -97,14 +97,21 @@ export class GithubSignIn extends Context.Service<
 	}
 >()("site/GithubSignIn") {}
 
-/** Calls GitHub. A call that cannot be made, a 5xx or 429 answer, and a success whose body is not JSON are all GitHub being unavailable; any other 4xx is a refusal. */
+/** Calls GitHub. A call that cannot be made, a 5xx, 429 or rate-limited 403 answer, and a success whose body is not JSON are all GitHub being unavailable; any other 4xx is a refusal. */
 const github = (url: string, init: RequestInit) =>
 	Effect.tryPromise({
 		try: async (): Promise<GithubAnswer | null> => {
 			const response = await fetch(url, init);
 
-			// Unavailable: 5xx and 429 (rate limiting) are GitHub's state, not a refusal of our request.
-			if (response.status >= 500 || response.status === 429) return null;
+			// Unavailable: 5xx and 429 (rate limiting) are GitHub's state, not a refusal of our request. So is a 403 that carries a
+			// rate-limit header (x-ratelimit-remaining of 0, or retry-after); any other 403 is a refusal.
+			const rateLimited =
+				response.status === 429 ||
+				(response.status === 403 &&
+					(response.headers.get("x-ratelimit-remaining") === "0" ||
+						response.headers.has("retry-after")));
+
+			if (response.status >= 500 || rateLimited) return null;
 
 			const json = await response.json().then(
 				(body): { readonly body: unknown } | null => ({ body }),

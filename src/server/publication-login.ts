@@ -129,6 +129,7 @@ export async function publicationLogin(
 					OAuthStoreFailed: () => Effect.succeed(unavailable(500)),
 					CookieKeyInvalid: () => Effect.succeed(unavailable(500)),
 					GithubUnavailable: () => Effect.succeed(unavailable(503)),
+					GithubAppMisconfigured: () => Effect.succeed(unavailable(500)),
 				}),
 			),
 			route,

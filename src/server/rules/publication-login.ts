@@ -15,6 +15,26 @@ export class LoginRefused extends Data.TaggedError("LoginRefused") {
 
 const refuse = () => new LoginRefused();
 
+/** GitHub says this site's own OAuth app is set up wrong. The site's fault, not the visitor's. */
+export class GithubAppMisconfigured extends Data.TaggedError(
+	"GithubAppMisconfigured",
+) {
+	readonly say = "Publication connection unavailable.";
+}
+
+/**
+ * Token errors GitHub documents ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set up
+ * wrong: incorrect_client_credentials (the client id or secret is wrong), redirect_uri_mismatch (the callback URL does not
+ * match the app's) and application_suspended (the app is suspended). Not listed: bad_verification_code (the visitor's code
+ * is bad or expired), unverified_user_email (about the visitor's account, not the app) and any code GitHub does not
+ * document, which all stay the visitor's refusal.
+ */
+const APP_CONFIGURATION_ERRORS: readonly unknown[] = [
+	"incorrect_client_credentials",
+	"redirect_uri_mismatch",
+	"application_suspended",
+];
+
 /** An authorization request as the OAuth library parsed it. */
 export type AuthorizationAsked = {
 	readonly responseType: string;
@@ -179,6 +199,13 @@ export const tokenGiven = alwaysWrites({
 	name: "Take GitHub's answer to the code exchange",
 	given: (request: TokenGivenRequest, _facts: Record<string, never>) => request,
 	refusals: [
+		unless(
+			term<TokenGivenRequest>(
+				"GitHub did not say this site's OAuth app is set up wrong",
+				(g) => !APP_CONFIGURATION_ERRORS.includes(g.error),
+			),
+			() => new GithubAppMisconfigured(),
+		),
 		unless(
 			term<TokenGivenRequest>(
 				"GitHub answered with success, no error and an access token",
