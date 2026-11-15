@@ -478,11 +478,11 @@ const cases: Case[] = [
 	...outage("the link batch fails", /INSERT INTO software_agreement_links/),
 	...outage(
 		"the name lookup fails after the link is stored",
-		/sig\.typed_name AS name/,
+		/FROM software_agreement_signatures sig/,
 	),
 	...outage(
 		"the used_at update after a sent email fails",
-		/UPDATE software_agreement_links SET used_at=\? WHERE purpose/,
+		/UPDATE software_agreement_links SET used_at=\? WHERE id IN/,
 	),
 	...outage(
 		"the used_at update after a refused email fails",
@@ -511,7 +511,7 @@ const cases: Case[] = [
 	...standard("the signature is removed just before the name lookup", {
 		interleave: [
 			{
-				on: /sig\.typed_name AS name/,
+				on: /FROM software_agreement_signatures sig/,
 				label: "the signature row is removed",
 				run: (sqlite) =>
 					sqlite.exec("DELETE FROM software_agreement_signatures"),

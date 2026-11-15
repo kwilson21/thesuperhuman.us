@@ -274,7 +274,7 @@ const cases: Case[] = [
 	scene("the attachment query fails", signing, [], {
 		failures: [
 			{
-				on: /FROM software_agreement_attachments a JOIN software_offers o/,
+				on: /FROM software_agreement_attachments WHERE id=\?/,
 				message: "d1 down",
 			},
 		],
