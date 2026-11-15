@@ -7,14 +7,17 @@
 //                decisions since it and the revision rounds begun (the model takes both as one step: a session that ends
 //                between the two reads is the same fact as one that ends after the batch, and the write re-checks it); the
 //                rule decides from those plain columns (src/server/rules/audio-project-messages.ts, to be written). The
-//                rule does not read the rate count: the write's guard keeps it, and a refusal is followed by the count read
-//                (M6), which answers 429 before any other refusal
+//                rule reads the client's message count with the batch and refuses a full window (ClientRateLimited), and the
+//                write keeps `count < cap` as its guard, so a request that read room and lost it is refused by the write; a
+//                refused write is followed by the count read (M6), which answers 429 before the other refusals
 //   the write:   ONE statement that inserts the message only while the conditions the rule used still hold now (the guard
 //                keeps today's conditions, as the offers design does); a stop writes the decision and closes the project's
 //                access in ONE batch
 //   a lost guard: is not retried: the request answers what a refused write answers today (409, or 429 when the count is full)
 // What is left out, on purpose: the owner's notes and messages (they do not read the client's counts), the session's
 // creation, what a refused rule answers (400, 409 or 429; the model only needs "no write"), and the text's checks.
+// The owner may begin any number of revision rounds, as the code allows (the model reaches at most LAST_REVIEW of them, a bound
+// on the search, not a rule: a round needs a review published after the one before it).
 // The properties read the stored rows and never a flag set from a guard. Every row carries a stamp from one counter, `seq`
 // (the order D1 serializes the statements in, as `created_at`, `published_at` and `revoked_at` order them in the tables):
 // a message, a review's publication, a revision round begun, the project's close and the session's end each take the next
@@ -30,6 +33,10 @@ module audioProjectMessages {
   //   "no-stage"       the write does not compare the stage, so an answer is written after the owner began a revision
   //   "no-access"      the write does not compare the session and the project's access, so a message is written after either closed
   //   "rule-no-rounds" the rule and the write do not compare the rounds, so a change request passes when no revision round is left
+  //   "write-no-rounds" only the write does not compare the rounds (the rule still does): an equivalent mutant, because a round
+  //                    is begun only by leaving review_ready and the way back is a newer review, which the write's checks of the
+  //                    stage and of the latest review already refuse
+  //   "rule-no-count"  only the rule does not read the count (the write's guard still does): an equivalent mutant, the guard refuses
   //   "stop-split"     a stop writes the decision in one step and closes the project's access in a later one
   const MUTANT: str
 
@@ -37,7 +44,7 @@ module audioProjectMessages {
   // "approved", "changes" or "stopped") and the review the client named.
   type Msg = { ts: int, seq: int, kind: str, named: int }
   // What one read saw (the rule decides from these; the write re-checks them, except that the rate count is the write's alone).
-  type Snap = { at: int, session: bool, revoked: bool, stage: str, latest: int, decisions: int, rounds: int }
+  type Snap = { at: int, session: bool, revoked: bool, stage: str, latest: int, decisions: int, rounds: int, count: int }
   // One request: phase "none", "read" (about to read), "write" (about to write), "closing" (the stop-split mutant: the
   // decision is stored, the close is to come), "done", "refused" or "conflict".
   type Run = { phase: str, kind: str, named: int, snap: Snap }
@@ -66,7 +73,7 @@ module audioProjectMessages {
   val REVIEWS = 1.to(LAST_REVIEW)
   val KINDS = Set("send", "approved", "changes", "stopped")
 
-  val noSnap = { at: 0, session: false, revoked: false, stage: "other", latest: 0, decisions: 0, rounds: 0 }
+  val noSnap = { at: 0, session: false, revoked: false, stage: "other", latest: 0, decisions: 0, rounds: 0, count: 0 }
   val idle = { phase: "none", kind: "send", named: 0, snap: noSnap }
 
   def isDecision(m: Msg): bool = m.kind != "send"
@@ -98,10 +105,11 @@ module audioProjectMessages {
     }
   }
 
-  // The rule, from the plain columns one read saw. true means "write". The rate count is not an input.
+  // The rule, from the plain columns one read saw. true means "write". The rate count is an input.
   def allowed(kind: str, named: int, s: Snap): bool = and {
     s.session,
     not(s.revoked),
+    MUTANT == "rule-no-count" or s.count < CAP,
     or {
       kind == "send",
       and {
@@ -127,7 +135,7 @@ module audioProjectMessages {
       MUTANT == "no-stage" or w.stage == "review_ready",
       MUTANT == "no-review" or w.latest == named,
       MUTANT == "no-decision" or decisionsFor(w.latest) == 0,
-      kind == "approved" or MUTANT == "rule-no-rounds" or (roundsNow < ROUNDS) == (kind == "changes"),
+      kind == "approved" or MUTANT == "rule-no-rounds" or MUTANT == "write-no-rounds" or (roundsNow < ROUNDS) == (kind == "changes"),
     },
   }
 
@@ -149,7 +157,7 @@ module audioProjectMessages {
     val h = runs.get(r)
     val snap = {
       at: w.clock, session: w.endedAt == 0, revoked: w.closedAt > 0, stage: w.stage, latest: w.latest,
-      decisions: decisionsFor(w.latest), rounds: roundsNow,
+      decisions: decisionsFor(w.latest), rounds: roundsNow, count: countAfter(w.clock),
     }
     all {
       w' = w,
@@ -201,7 +209,6 @@ module audioProjectMessages {
     writing,
     w.closedAt == 0,
     w.stage == "review_ready",
-    roundsNow < ROUNDS,
     w' = { ...w, seq: w.seq + 1, stage: "other", begins: w.begins.append(w.seq + 1) },
     runs' = runs,
   }
@@ -278,3 +285,5 @@ module projectMessagesNoStage { import audioProjectMessages(MUTANT = "no-stage")
 module projectMessagesNoAccess { import audioProjectMessages(MUTANT = "no-access").* }
 module projectMessagesRuleNoRounds { import audioProjectMessages(MUTANT = "rule-no-rounds").* }
 module projectMessagesStopSplit { import audioProjectMessages(MUTANT = "stop-split").* }
+module projectMessagesWriteNoRounds { import audioProjectMessages(MUTANT = "write-no-rounds").* }
+module projectMessagesRuleNoCount { import audioProjectMessages(MUTANT = "rule-no-count").* }
