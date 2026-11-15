@@ -63,6 +63,14 @@ export function setupStudioObjects() {
 			scene.dataset.labelsDismissed = "true";
 	});
 
+	// A click that leaves the page sends no pointerleave: a page restored from the back-forward cache starts at rest.
+	window.addEventListener("pageshow", (event) => {
+		if (!event.persisted) return;
+		hovered = undefined;
+		focused = undefined;
+		update();
+	});
+
 	const headphones = scene.querySelector<HTMLAnchorElement>(
 		'[data-studio-object="headphones"]',
 	);

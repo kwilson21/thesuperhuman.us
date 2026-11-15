@@ -31,6 +31,15 @@ class Key extends Event {
 	}
 }
 
+/** A pageshow event for a page restored from the back-forward cache (Node has no PageTransitionEvent). */
+class Restored extends Event {
+	readonly persisted = true;
+
+	constructor() {
+		super("pageshow");
+	}
+}
+
 /** The document as the script uses it: listeners, the focused element and two lookups. */
 class StandInDocument extends EventTarget {
 	activeElement: StudioLink | null = null;
@@ -135,7 +144,10 @@ function mount({
 				: null,
 	);
 
+	const view = new EventTarget();
+
 	vi.stubGlobal("document", page);
+	vi.stubGlobal("window", view);
 	setupStudioObjects();
 
 	const link = (id: string) => links.get(id)!;
@@ -150,6 +162,8 @@ function mount({
 		leave: (id: string, pointerType = "mouse") =>
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
+		/** The page comes back from the back-forward cache. */
+		restore: () => view.dispatchEvent(new Restored()),
 		/** Focus by keyboard (`keyboard`), which matches :focus-visible, or by a mouse press, which does not. */
 		focus: (id: string, keyboard = true) => {
 			page.activeElement = link(id);
@@ -247,6 +261,17 @@ it("hides a showing label on Escape until an object is pointed at or focused aga
 	expect(studio.scene.dataset.play).toBe("notebook");
 	studio.point("controller");
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+});
+
+it("rests the scene when the page comes back from the back-forward cache", () => {
+	const studio = mount();
+
+	// A click followed the monitor's link, so the pointer never left it.
+	studio.point("monitor");
+	studio.restore();
+	expect(studio.scene.dataset.play).toBeUndefined();
+	studio.focus("notebook");
+	expect(studio.scene.dataset.play).toBe("notebook");
 });
 
 it("plays Old News on Home from the headphones, without leaving the page", () => {

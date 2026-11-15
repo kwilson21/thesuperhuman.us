@@ -103,6 +103,8 @@ const percent = (value: number, of: number) =>
   .studio-object { position: absolute; display: block; pointer-events: auto; border-radius: 6px; border-bottom: 0; padding: 0; color: var(--ink); text-decoration: none; }
   .studio-object:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .studio-object[data-studio-object="headphones"] { z-index: 1; }
+  /* The object whose label shows rises above the others, so no other link covers its label. */
+  .studio-object:focus-visible { z-index: 2; }
   .studio-object[data-studio-object="notebook"] { --pin-y: 65%; }
   /* A label takes clicks only while it shows. The strip under it bridges the gap to its object, so the pointer can
      move onto the label without it disappearing (WCAG 1.4.13). */
@@ -112,6 +114,7 @@ const percent = (value: number, of: number) =>
   .studio-object-label span { color: var(--accent); }
   .studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }
   @media (hover: hover) and (pointer: fine) {
+    .studio-object:hover { z-index: 3; }
     .studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }
   }
   /* Escape hides a showing label until the visitor points at or focuses an object again (studio-objects.ts). */
