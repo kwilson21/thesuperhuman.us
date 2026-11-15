@@ -7,14 +7,12 @@ import {
 	newOfferToken,
 } from "./software-offers";
 import {
-	keyedHash,
 	normalizeClientEmail,
 	reserveStudioAllowance,
 } from "./audio-client-access";
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
-import { raisedByJsonGuard } from "./guard-error";
 
 export const maskedAgreementEmail = (email: string) =>
 	`${[...email][0]}•••@${email.split("@")[1]}`;
@@ -128,24 +126,21 @@ export async function agreementSession(
 	return session;
 }
 
+/** The signing link of an offer: a link to review and sign the agreement is mailed to the offer's recipient. */
 export async function issueAgreementLink(
 	env: Env,
 	request: Request,
-	input: { turnstileToken: string; email?: string },
-	token?: string,
+	input: { turnstileToken: string },
+	token: string,
 ) {
 	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
 
-	const db = env.MUSIC_DB,
-		purpose = token ? "agreement" : "archive";
+	const db = env.MUSIC_DB;
 
 	if (
 		!db ||
 		!env.AUDIO_CLIENT_CODE_KEY ||
-		// A key too short to hash with is the same unavailable sign-in as a missing one. Checked here for the archive path
-		// only: the signing path's corpus fixes its order of reads, and it keeps its own answer (see the record).
-		(!token && env.AUDIO_CLIENT_CODE_KEY.length < 32) ||
 		!env.RESEND_API_KEY ||
 		!env.CONTACT_FROM_EMAIL ||
 		!env.TURNSTILE_SECRET_KEY
@@ -155,19 +150,17 @@ export async function issueAgreementLink(
 			503,
 		);
 
-	if (token && !(await signingEnabled(db)))
+	if (!(await signingEnabled(db)))
 		return agreementJson({ ok: false, error: "Website signing is off." }, 404);
-	const offer = token ? await getLinkedOffer(db, token) : null;
+	const offer = await getLinkedOffer(db, token);
 
-	if (token && (!offer?.recipient_email_snapshot || !offer.msa_template_id))
+	if (!offer?.recipient_email_snapshot || !offer.msa_template_id)
 		return agreementJson(
 			{ ok: false, error: "This offer is unavailable for signing." },
 			404,
 		);
 
-	const email = normalizeClientEmail(
-		offer?.recipient_email_snapshot ?? input.email ?? "",
-	);
+	const email = normalizeClientEmail(offer.recipient_email_snapshot);
 
 	if (!email)
 		return agreementJson(
@@ -202,7 +195,7 @@ export async function issueAgreementLink(
 				);
 	};
 
-	const crowded = await charge(`${purpose}-link-ip`, ip, 20);
+	const crowded = await charge("agreement-link-ip", ip, 20);
 
 	if (crowded) return crowded;
 
@@ -214,62 +207,20 @@ export async function issueAgreementLink(
 			403,
 		);
 
-	const busy = await charge(`${purpose}-link-email`, email, 3);
+	const busy = await charge("agreement-link-email", email, 3);
 
 	if (busy) return busy;
 
 	const receipt = {
 		ok: true,
-		message: token
-			? `I sent a link to ${(await agreementSession(db, request, "agreement", offer!.id)) ? email : maskedAgreementEmail(email)}. Tap it on any device to open your agreement.`
-			: "If an agreement is available, a link is on its way.",
+		message: `I sent a link to ${(await agreementSession(db, request, "agreement", offer.id)) ? email : maskedAgreementEmail(email)}. Tap it on any device to open your agreement.`,
 	};
-
-	if (!token) {
-		const at = new Date();
-
-		const cooldownKey = await keyedHash(
-			env.AUDIO_CLIENT_CODE_KEY,
-			`archive-link-cooldown:${email}`,
-		);
-
-		const reserved = await db
-			.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
-      ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,uses=1
-      WHERE window_start<=? RETURNING key`)
-			.bind(
-				cooldownKey,
-				at.toISOString(),
-				new Date(at.getTime() - 30000).toISOString(),
-			)
-			.first();
-
-		if (!reserved)
-			return agreementJson(
-				{
-					ok: false,
-					error: "Wait at least 30 seconds before requesting another link.",
-				},
-				429,
-			);
-	}
-
-	if (
-		!offer &&
-		!(await db
-			.prepare(
-				"SELECT 1 FROM software_agreement_clients c JOIN software_agreements a ON a.client_id=c.id WHERE c.recipient_email=? AND a.status='executed'",
-			)
-			.bind(email)
-			.first())
-	)
-		return agreementJson(receipt);
 
 	const at = new Date(),
 		id = crypto.randomUUID(),
 		key = newOfferToken(),
 		hash = await hashOfferToken(key),
-		linkHash = token ? await hashOfferToken(token) : null;
+		linkHash = await hashOfferToken(token);
 
 	try {
 		await db.batch([
@@ -278,19 +229,19 @@ export async function issueAgreementLink(
 					`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
 				)
 				.bind(
-					purpose,
+					"agreement",
 					email,
-					offer?.id ?? null,
+					offer.id,
 					new Date(at.getTime() - 30000).toISOString(),
 				),
-			...(offer ? [liveSigningGuard(db, offer.id, linkHash!, email)] : []),
+			liveSigningGuard(db, offer.id, linkHash, email),
 			agreementEvent(
 				db,
 				"link-issued",
 				await hashOfferToken(id),
 				at.toISOString(),
 				null,
-				offer?.id ?? null,
+				offer.id,
 			),
 			db
 				.prepare(
@@ -298,8 +249,8 @@ export async function issueAgreementLink(
 				)
 				.bind(
 					id,
-					purpose,
-					offer?.id ?? null,
+					"agreement",
+					offer.id,
 					linkHash,
 					email,
 					hash,
@@ -307,12 +258,7 @@ export async function issueAgreementLink(
 					new Date(at.getTime() + 3600000).toISOString(),
 				),
 		]);
-	} catch (error) {
-		// On the archive path only a lost guard is the 429; any other failure of the batch is unexpected, and goes to the
-		// route, which answers 500. The signing path keeps its answer for every failure.
-		if (!token && !(error instanceof Error && raisedByJsonGuard(error)))
-			throw error;
-
+	} catch {
 		return agreementJson(
 			{
 				ok: false,
@@ -322,36 +268,19 @@ export async function issueAgreementLink(
 		);
 	}
 
-	const url = new URL(
-		token ? `/offer/${token}/verify` : "/agreements/verify",
-		siteOrigin(env.SITE_ORIGIN),
-	);
+	const url = new URL(`/offer/${token}/verify`, siteOrigin(env.SITE_ORIGIN));
 
 	url.searchParams.set("key", key);
 
-	const brief = offer
-		? await db
-				.prepare("SELECT name FROM owner_requests WHERE id=?")
-				.bind(offer.request_id)
-				.first<{ name: string }>()
-		: await db
-				.prepare(
-					"SELECT sig.typed_name AS name FROM software_agreement_signatures sig JOIN software_agreements a ON a.id=sig.agreement_id JOIN software_agreement_clients c ON c.id=a.client_id WHERE c.recipient_email=? AND sig.party='client' AND a.status='executed' ORDER BY sig.signed_at DESC LIMIT 1",
-				)
-				.bind(email)
-				.first<{ name: string }>();
+	const brief = await db
+		.prepare("SELECT name FROM owner_requests WHERE id=?")
+		.bind(offer.request_id)
+		.first<{ name: string }>();
 
-	const project = offer
-		? JSON.parse(offer.terms_json).outcome
-		: "your retained agreements";
-
+	const project = JSON.parse(offer.terms_json).outcome;
 	const greeting = `Hi ${brief?.name?.trim().split(/\s+/)[0] || "there"},`;
-
-	const intro = token
-		? `Tap below to review and sign the agreement for ${project}.`
-		: "Tap below to open your signed agreement documents.";
-
-	const action = token ? "Review and sign" : "Open your documents";
+	const intro = `Tap below to review and sign the agreement for ${project}.`;
+	const action = "Review and sign";
 
 	const expiry =
 		"This link works once and expires in an hour. If you didn’t ask for it, you can ignore this email.";
@@ -361,59 +290,44 @@ export async function issueAgreementLink(
 		payload: {
 			from: env.CONTACT_FROM_EMAIL,
 			to: [email],
-			subject: token ? "Open your agreement" : "Your signed documents",
+			subject: "Open your agreement",
 			text: `${greeting}\n\n${intro}\n\n${action}: ${url.href}\n\n${expiry}\n\nKazon`,
 			html: `<p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p><p><a href="${escapeHtml(url.href)}">${action}</a></p><p>${escapeHtml(expiry)}</p><p>Kazon</p>`,
 		},
 	});
 
 	if (!sent.ok && !sent.uncertain) {
-		if (token) {
-			await db.batch([
+		await db.batch([
+			db
+				.prepare("DELETE FROM software_agreement_sessions WHERE link_id=?")
+				.bind(id),
+			db.prepare("DELETE FROM software_agreement_links WHERE id=?").bind(id),
+			...allowances.flatMap((allowance) => [
 				db
-					.prepare("DELETE FROM software_agreement_sessions WHERE link_id=?")
-					.bind(id),
-				db.prepare("DELETE FROM software_agreement_links WHERE id=?").bind(id),
-				...allowances.flatMap((allowance) => [
-					db
-						.prepare(
-							"DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1",
-						)
-						.bind(allowance.key, allowance.windowStart),
-					db
-						.prepare(
-							"UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1",
-						)
-						.bind(allowance.key, allowance.windowStart),
-				]),
-			]);
+					.prepare(
+						"DELETE FROM audio_client_allowances WHERE key=? AND window_start=? AND uses=1",
+					)
+					.bind(allowance.key, allowance.windowStart),
+				db
+					.prepare(
+						"UPDATE audio_client_allowances SET uses=uses-1 WHERE key=? AND window_start=? AND uses>1",
+					)
+					.bind(allowance.key, allowance.windowStart),
+			]),
+		]);
 
-			return agreementJson(
-				{ ok: false, error: "That email didn’t go through. Please try again." },
-				502,
-			);
-		}
-
-		await db
-			.prepare("UPDATE software_agreement_links SET used_at=? WHERE id=?")
-			.bind(at.toISOString(), id)
-			.run();
+		return agreementJson(
+			{ ok: false, error: "That email didn’t go through. Please try again." },
+			502,
+		);
 	}
 
-	if (sent.ok || sent.uncertain)
-		await db
-			.prepare(
-				"UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?",
-			)
-			.bind(
-				at.toISOString(),
-				purpose,
-				email,
-				offer?.id ?? null,
-				id,
-				at.toISOString(),
-			)
-			.run();
+	await db
+		.prepare(
+			"UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?",
+		)
+		.bind(at.toISOString(), "agreement", email, offer.id, id, at.toISOString())
+		.run();
 
 	return agreementJson(receipt);
 }

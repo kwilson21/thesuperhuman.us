@@ -23,6 +23,14 @@ const post: APIRoute = async ({ request, locals, params }) => {
 			400,
 		);
 
+	// Astro always supplies the token of this route. The corpus records the answer for a request without one (there is no
+	// recipient to send to), so it is answered here and is not a path into the link issuer.
+	if (params.token === undefined)
+		return agreementJson(
+			{ ok: false, error: "Enter a valid email address." },
+			400,
+		);
+
 	try {
 		const response = await issueAgreementLink(
 			locals.runtime.env,

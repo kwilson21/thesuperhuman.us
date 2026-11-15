@@ -59,7 +59,7 @@ import { allowanceRow } from "./areas/studio-access";
 //   403 security check again            Turnstile success false, HTTP 500, network down, answer not JSON (after the address allowance, before the email's)
 //   429 "wait a few minutes"            archive-link-ip at 20 uses (before the security check), archive-link-email at 3 uses (after it); 19 and 2 pass; windows five minutes old are pruned
 //   429 "wait at least 30 seconds"      the cooldown row is under 30 seconds old; a repeat; the guard SELECT in the link batch
-//                                       fails (a link issued under 30 seconds ago; the guard raises, as the recogniser in src/lib/guard-error.ts names it)
+//                                       fails (a link issued under 30 seconds ago; the guard raises, as the recogniser in src/server/guarded-save.ts names it)
 //   200 receipt, no mail                no executed agreement for the email (the cooldown is still taken and the allowances spent)
 //   200 receipt, mail                   an executed agreement: link row, event row, email with the greeting from the signature
 //   mail outcomes                       200 consumes the older unused links; 4xx (the link is marked used, the answer is still the
