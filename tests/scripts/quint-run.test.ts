@@ -450,7 +450,7 @@ describe("the audio project files model", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties).toHaveLength(8);
+		expect(properties).toHaveLength(9);
 		expect(
 			propertiesWithoutMutant(properties, audioProjectFilesMutants),
 		).toEqual([]);
@@ -462,7 +462,11 @@ describe("the audio project files model", () => {
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(audioProjectFilesMutants), "projectFiles"].sort(),
+			[
+				...Object.keys(audioProjectFilesMutants),
+				"projectFiles",
+				"projectFilesCompleteNoFile",
+			].sort(),
 		);
 	});
 

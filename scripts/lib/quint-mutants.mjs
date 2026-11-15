@@ -169,6 +169,7 @@ export const audioProjectFilesMutants = {
 	projectFilesCompleteNoPayment: { property: "completedOnlyWhenPaid" },
 	projectFilesPublishStaleSupersede: { property: "oneLiveReview" },
 	projectFilesResetNoLink: { property: "stageCoherent" },
+	projectFilesFinalNoSupersede: { property: "finalStageHasNoLiveReview" },
 };
 
 // verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
@@ -280,7 +281,7 @@ export const models = [
 		file: "verification/audio-project-files.qnt",
 		current: ["projectFiles"],
 		mutants: audioProjectFilesMutants,
-		equivalents: [],
+		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
 		// The rarest mutant (CompleteNoStage) takes tens of thousands of random runs to find with the fixed seed; the run that
 		// must pass makes 8,000.
