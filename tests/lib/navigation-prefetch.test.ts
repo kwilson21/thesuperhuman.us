@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	isPublicPrefetchSource,
 	prefetchTarget,
 	reservePrefetch,
 } from "../../src/lib/navigation-prefetch";
@@ -7,6 +8,26 @@ import {
 const current = "https://thesuperhuman.us/?prefetch=foresight";
 
 describe("public navigation trial", () => {
+	it("enables only reviewed public source pages by default", () => {
+		for (const path of ["/", "/work", "/building/tally", "/services"]) {
+			expect(isPublicPrefetchSource(`https://thesuperhuman.us${path}`)).toBe(
+				true,
+			);
+		}
+
+		for (const path of [
+			"/owner",
+			"/studio",
+			"/software/start",
+			"/api/contact",
+			"/work/private",
+			"/offer/token",
+		]) {
+			expect(isPublicPrefetchSource(`https://thesuperhuman.us${path}`)).toBe(
+				false,
+			);
+		}
+	});
 	it("accepts only reviewed same-origin static URLs", () => {
 		expect(prefetchTarget("/work", current)).toBe(
 			"https://thesuperhuman.us/work",

@@ -11,6 +11,20 @@ export const PREFETCH_PATHS = new Set([
 
 export const PREFETCH_LIMIT = 3;
 
+/** Set false and redeploy to stop default prediction without changing diagnostics. */
+export const DEFAULT_PREFETCH_ENABLED = true;
+
+/** No prediction package is loaded on private, intake, API, or unreviewed pages. */
+export function isPublicPrefetchSource(href: string): boolean {
+	try {
+		const path = new URL(href).pathname;
+
+		return path === "/" || PREFETCH_PATHS.has(path);
+	} catch {
+		return false;
+	}
+}
+
 export function prefetchTarget(href: string, current: string): string | null {
 	try {
 		const base = new URL(current);

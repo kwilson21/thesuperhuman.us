@@ -29,7 +29,11 @@ function node(href = "") {
 	};
 }
 
-function fixture(mode = "foresight", supportsPrefetch = true) {
+function fixture(
+	mode: string | null = "foresight",
+	supportsPrefetch = true,
+	path = "/",
+) {
 	const panel = node();
 	const status = node();
 	const close = node();
@@ -69,7 +73,7 @@ function fixture(mode = "foresight", supportsPrefetch = true) {
 	};
 
 	vi.stubGlobal("location", {
-		href: `https://thesuperhuman.us/?prefetch=${mode}&keep=yes`,
+		href: `https://thesuperhuman.us${path}${mode === null ? "" : `?prefetch=${mode}&keep=yes`}`,
 		replace,
 	});
 	vi.stubGlobal("navigator", navigator);
@@ -101,6 +105,46 @@ afterEach(() => {
 });
 
 describe("prefetch trial runtime boundaries", () => {
+	it("keeps default prediction off when the rollback switch is disabled", async () => {
+		const f = fixture(null);
+		await setupPrefetchTrial(loadManager, false);
+		expect(loadManager).not.toHaveBeenCalled();
+		expect(f.panel.hidden).toBe(true);
+		expect(f.appendChild).not.toHaveBeenCalled();
+	});
+	it("runs default public prediction without showing diagnostics", async () => {
+		const f = fixture(null);
+		await setupPrefetchTrial(loadManager, true);
+		expect(loadManager).toHaveBeenCalledOnce();
+		expect(f.panel.hidden).toBe(true);
+		expect(f.status.textContent).toBe("");
+		callbacks[0]();
+		expect(f.appendChild).toHaveBeenCalledOnce();
+		expect(f.status.textContent).toBe("");
+	});
+	it.each([
+		"/owner",
+		"/studio",
+		"/software/start",
+		"/api/contact",
+		"/offer/token",
+	])(
+		"never loads prediction on unreviewed source %s even in diagnostics",
+		async (path) => {
+			const f = fixture("foresight", true, path);
+			await setupPrefetchTrial(loadManager);
+			expect(loadManager).not.toHaveBeenCalled();
+			expect(f.panel.hidden).toBe(true);
+			expect(f.appendChild).not.toHaveBeenCalled();
+		},
+	);
+	it("stops a reserved callback after navigation to a private source", async () => {
+		const f = fixture(null);
+		await setupPrefetchTrial(loadManager, true);
+		vi.stubGlobal("location", { href: "https://thesuperhuman.us/owner" });
+		callbacks[0]();
+		expect(f.appendChild).not.toHaveBeenCalled();
+	});
 	it.each(["", "unexpected"])(
 		"does nothing for inactive mode %s",
 		async (mode) => {

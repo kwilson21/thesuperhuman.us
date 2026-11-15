@@ -1,4 +1,9 @@
-import { prefetchTarget, reservePrefetch } from "~/lib/navigation-prefetch";
+import {
+	DEFAULT_PREFETCH_ENABLED,
+	isPublicPrefetchSource,
+	prefetchTarget,
+	reservePrefetch,
+} from "~/lib/navigation-prefetch";
 
 type Connection = { saveData?: boolean; effectiveType?: string };
 
@@ -17,21 +22,33 @@ async function loadPredictionManager(): Promise<PredictionManager> {
 
 export async function setupPrefetchTrial(
 	loadManager: () => Promise<PredictionManager> = loadPredictionManager,
+	defaultEnabled = DEFAULT_PREFETCH_ENABLED,
 ) {
-	const mode = new URL(location.href).searchParams.get("prefetch");
+	if (!isPublicPrefetchSource(location.href)) return;
+	const requestedMode = new URL(location.href).searchParams.get("prefetch");
 
-	if (!["foresight", "hover", "off"].includes(mode ?? "")) return;
+	const mode = requestedMode ?? (defaultEnabled ? "foresight" : "off");
+
+	if (!["foresight", "hover", "off"].includes(mode)) return;
+	const diagnostics = requestedMode !== null;
 	const panel = document.querySelector<HTMLElement>("#prefetch-trial");
 	const status = document.querySelector<HTMLElement>("#prefetch-status");
 
-	if (!panel || !status) return;
-	panel.hidden = false;
-	status.textContent = `${mode === "foresight" ? "Prediction" : mode === "hover" ? "Hover" : "Off"}: no hints requested.`;
-	document.querySelector("#prefetch-close")?.addEventListener("click", () => {
-		const url = new URL(location.href);
-		url.searchParams.delete("prefetch");
-		location.replace(url.href);
-	});
+	const report = (message: string) => {
+		if (diagnostics && status) status.textContent = message;
+	};
+
+	if (diagnostics && panel) {
+		panel.hidden = false;
+		report(
+			`${mode === "foresight" ? "Prediction" : mode === "hover" ? "Hover" : "Off"}: no hints requested.`,
+		);
+		document.querySelector("#prefetch-close")?.addEventListener("click", () => {
+			const url = new URL(location.href);
+			url.searchParams.delete("prefetch");
+			location.replace(url.href);
+		});
+	}
 
 	if (mode === "off") return;
 	const seen = new Set<string>();
@@ -54,6 +71,7 @@ export async function setupPrefetchTrial(
 		const target = prefetchTarget(anchor.href, location.href);
 
 		if (
+			!isPublicPrefetchSource(location.href) ||
 			!anchor.isConnected ||
 			anchor.download ||
 			anchor.target ||
@@ -75,7 +93,9 @@ export async function setupPrefetchTrial(
 		}
 
 		anchor.dataset.prefetchRequested = "true";
-		status.textContent = `${mode}: ${seen.size}/3 hints requested. Latest: ${new URL(target!).pathname}`;
+		report(
+			`${mode}: ${seen.size}/3 hints requested. Latest: ${new URL(target!).pathname}`,
+		);
 	};
 
 	const anchors = [
@@ -95,8 +115,9 @@ export async function setupPrefetchTrial(
 			for (const anchor of anchors)
 				manager.register({ element: anchor, callback: () => request(anchor) });
 		} catch {
-			status.textContent =
-				"Prediction could not start. Normal links still work; try Hover instead.";
+			report(
+				"Prediction could not start. Normal links still work; try Hover instead.",
+			);
 		}
 	} else {
 		for (const anchor of anchors) {
