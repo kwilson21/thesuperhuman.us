@@ -149,6 +149,9 @@ export type HistoryStep = {
 	}[];
 };
 
+/** A note the visitor removed: its lane and words, so a reply does not offer the idea back in that lane. */
+export type RemovedNote = { readonly lane: Lane; readonly text: string };
+
 export type Board = {
 	readonly cards: readonly BoardCard[];
 	readonly nextId: number;
@@ -161,7 +164,7 @@ export type Board = {
 	 * The words of notes the visitor removed, so a reply does not offer them back. Kept in memory only: never saved with
 	 * the board and never sent to the model, because a removed note is gone as far as the visitor is concerned.
 	 */
-	readonly removed?: readonly string[];
+	readonly removed?: readonly RemovedNote[];
 };
 
 export const emptyBoard = (): Board => ({
@@ -440,7 +443,7 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		"\\d[\\d,.]*\\s?(?:円|元|万円|万元|万|千円)(?![\\p{L}])",
+		"\\d[\\d,.]*\\s?(?:円|元|万円|万元|千円|원|만원)",
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
 		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
@@ -456,7 +459,8 @@ const DURATION = new RegExp(
 		"\\b\\d+(?:\\.\\d+)?\\s*(?:-|to)?\\s*\\d*\\s*(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?)\\b",
 		`\\b(?:${NUMBER_WORDS})[- ](?:hours?|days?|weeks?|months?|years?)\\b`,
 		"\\b(?:fortnights?|overnight|same[- ]day|asap)\\b",
-		"(?<![\\p{N}])\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni|週間|か月|ヶ月|日間|天|周|個月|个月|星期|주|개월)(?![\\p{L}])",
+		"(?<![\\p{N}])\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni)(?![\\p{L}])",
+		"\\d+\\s*(?:週間|か月|ヶ月|カ月|日間|天|周|個月|个月|星期|주|개월|일간)",
 	].join("|"),
 	"iu",
 );
@@ -513,52 +517,28 @@ const plainText = (text: string) =>
 export const pricesOrLinks = (text: string) =>
 	[MONEY, COST, LINK].some((pattern) => pattern.test(plainText(text)));
 
-const WORDLIKE = /[\p{L}\p{N}]/u;
-
-/** Whether `phrase` is in `said` as a whole: not inside a longer number or word ("2 weeks" is not in "12 weeks"). */
-function wholeIn(phrase: string, said: string): boolean {
-	for (
-		let at = said.indexOf(phrase);
-		at >= 0;
-		at = said.indexOf(phrase, at + 1)
-	)
-		if (
-			!WORDLIKE.test(said[at - 1] ?? " ") &&
-			!WORDLIKE.test(said[at + phrase.length] ?? " ")
-		)
-			return true;
-
-	return false;
-}
-
 /**
  * Whether text makes a commitment or points somewhere: a price, a time estimate, a date, a promise, a link or an
- * address, that the visitor did not write themselves. A phrase that is in `answers` as a whole is the visitor's own
- * ("classes run for 4 weeks", "24 hours support") and is allowed; anything else is refused.
+ * address. Fixed, whatever the answers say: a card that repeats the visitor's "classes run for 4 weeks" is left out too,
+ * and the visitor's words stay in their answers. (Allowing a phrase the visitor wrote was tried and reviewed twice: every
+ * way of matching "their phrase" let a different amount or duration through, and an allowance that lapsed when the
+ * visitor edited their answers left cards on the board that the server then refused.)
  */
-export function commits(text: string, answers = ""): boolean {
+export function commits(text: string): boolean {
 	const plain = plainText(text);
-	const said = plainText(answers);
 
-	return COMMITMENTS.some((pattern) => {
-		const everywhere = new RegExp(pattern.source, `${pattern.flags}g`);
-
-		return [...plain.matchAll(everywhere)].some(
-			(found) => !wholeIn(found[0], said),
-		);
-	});
+	return COMMITMENTS.some((pattern) => pattern.test(plain));
 }
 
 /**
- * Whether a card still stands on the answers as they are now: its words commit to nothing the visitor has not written,
- * and, for a card read from the answers, its passage is still in them. A card that no longer does is not sent as read
- * from the answers, and a reply that names it does not keep it.
+ * Whether a card stands: its words commit to nothing, and, for a card read from the answers, its passage is still in
+ * them. A card that does not is not sent as read from the answers, and a reply that names it does not keep it.
  */
 export const standsOn = (
 	card: Pick<BoardCard, "basis" | "quote" | "text">,
 	answers: string,
 ) =>
-	!commits(card.text, answers) &&
+	!commits(card.text) &&
 	(card.basis !== "said" || quotedFrom(card.quote, answers));
 
 // ---- Lists --------------------------------------------------------------------------------------------------------
@@ -650,10 +630,10 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 		if (
 			!words ||
 			words.length > textLimits[card.lane] ||
-			commits(words, answers) ||
+			commits(words) ||
 			(card.basis === "said" && (!quote || quote.length > QUOTE_MAX)) ||
 			reason.length > REASON_MAX ||
-			commits(reason, answers)
+			commits(reason)
 		)
 			continue;
 
@@ -715,6 +695,12 @@ export function readBoardAnswer(raw: RawValue): BoardAnswer {
 }
 
 /** Whether reply number `n` may change `card`: only an unowned card that was unowned when request `n` was sent. */
+/** Whether a reply card says the idea of a note the visitor removed from that lane. */
+const removedIdea = (board: Board, item: ReplyCard) =>
+	(board.removed ?? []).some(
+		(note) => note.lane === item.lane && sameIdea(note.text, item.text),
+	);
+
 const mayChange = (card: BoardCard, n: number) =>
 	card.status === "proposed" && n > card.since;
 
@@ -787,7 +773,7 @@ export function applyReply(
 					(other) =>
 						other.lane === item.lane && sameIdea(other.text, item.text),
 				) &&
-				!(board.removed ?? []).some((text) => sameIdea(text, item.text))
+				!removedIdea(board, item)
 			)
 				fresh.push(item);
 
@@ -810,7 +796,8 @@ export function applyReply(
 			) ||
 			fresh.some(
 				(other) => other.lane === item.lane && sameIdea(other.text, item.text),
-			)
+			) ||
+			removedIdea(board, item)
 		)
 			continue;
 
@@ -833,9 +820,29 @@ export function applyReply(
 		}
 	}
 
+	// A new idea that names, by its ref, an open card in another lane moves that card. The card stays where it is until
+	// the new idea is placed, so a move into a full lane leaves it where it was.
+	const movedFrom = (item: ReplyCard) =>
+		item.ref === ""
+			? undefined
+			: cards.find(
+					(card) =>
+						card.id === item.ref &&
+						card.lane !== item.lane &&
+						mayChange(card, n),
+				);
+
+	for (const item of fresh) {
+		const from = movedFrom(item);
+
+		if (from) named.add(from.id);
+	}
+
 	const kept = cards.filter(
 		(card) => named.has(card.id) || !mayChange(card, n),
 	);
+
+	const moved = new Set<string>();
 
 	let nextId = board.nextId,
 		added = 0;
@@ -865,13 +872,18 @@ export function applyReply(
 			edited: false,
 		});
 		added++;
+		const from = movedFrom(item);
+
+		if (from) moved.add(from.id);
 	}
 
+	const result = kept.filter((card) => !moved.has(card.id));
+
 	return {
-		board: { ...board, cards: kept, nextId, applied: n },
+		board: { ...board, cards: result, nextId, applied: n },
 		added,
 		updated,
-		withdrawn: cards.length - (kept.length - added),
+		withdrawn: cards.length - (result.length - added),
 	};
 }
 
@@ -1020,7 +1032,10 @@ export function removeNote(board: Board, id: string): Board {
 		...act(board, `removed “${card.text}”`, [id], (cards) =>
 			cards.filter((c) => c.id !== id),
 		),
-		removed: [...(board.removed ?? []), card.text].slice(-HISTORY_MAX),
+		removed: [
+			...(board.removed ?? []),
+			{ lane: card.lane, text: card.text },
+		].slice(-HISTORY_MAX),
 	};
 }
 
@@ -1055,8 +1070,8 @@ export function addNote(board: Board, lane: Lane, text: string): Board {
 }
 
 /** What the page says when a list is full and the visitor tries to add to it or bring a card back to it. */
-export const LANE_FULL =
-	"This list is full. Set a card aside or remove a note, then try again.";
+export const laneFull = (label: string) =>
+	`“${label}” is full. Use Not this on one of its cards, or remove a note, then try again.`;
 
 /** What Undo would undo, for its label; null when there is nothing. */
 export const lastAction = (board: Board) =>
@@ -1094,10 +1109,21 @@ export function undo(board: Board): Board {
 			];
 	}
 
+	// A removed note Undo brings back is no longer removed.
+	const restored = step.before.flatMap(({ card }) =>
+		card?.status === "wrote" ? [card] : [],
+	);
+
 	return {
 		...board,
 		cards: withinLimits(cards),
 		history: board.history.slice(0, -1),
+		removed: (board.removed ?? []).filter(
+			(note) =>
+				!restored.some(
+					(card) => card.lane === note.lane && card.text === note.text,
+				),
+		),
 	};
 }
 
@@ -1343,7 +1369,9 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 			item.text !== oneLine(item.text) ||
 			!item.text ||
 			item.text.length > textLimits[item.lane] ||
-			(item.origin === "answers" && commits(item.text, answers)) ||
+			(item.origin !== "wrote" &&
+				item.origin !== "edited" &&
+				commits(item.text)) ||
 			(item.answer !== undefined &&
 				(item.lane !== "questions" ||
 					item.answer !== oneLine(item.answer) ||

@@ -533,7 +533,7 @@ describe("the outline sent with the brief", () => {
 				},
 			],
 			[{ lane: "parts", text: "Shows", origin: "kept", answer: "Yes" }],
-			// Only text sent as read from the answers is the model's; kept, edited and written cards are the visitor's.
+			// The model's words, read from the answers or kept, carry no commitment; edited and written cards are the visitor's.
 			[
 				{
 					lane: "parts",
@@ -542,6 +542,7 @@ describe("the outline sent with the brief", () => {
 					quote: "upcoming shows near them",
 				},
 			],
+			[{ lane: "parts", text: "Costs $500", origin: "kept" }],
 			[{ lane: "parts", text: "Two\nlines", origin: "wrote" }],
 			[{ lane: "parts", text: "", origin: "wrote" }],
 			[{ lane: "nowhere", text: "X", origin: "wrote" }],
@@ -955,13 +956,10 @@ describe("found in the second review", () => {
 		expect(commits(text)).toBe(true);
 	});
 
-	it("accepts a phrase the visitor wrote themselves, and things that only look like commitments", () => {
-		const answers =
-			"We offer 24 hours support. Classes run for 4 weeks. Our videos are in 4K.";
-
-		expect(commits("24 hours support", answers)).toBe(false);
-		expect(commits("Classes for 4 weeks", answers)).toBe(false);
-		expect(commits("Classes for 6 weeks", answers)).toBe(true);
+	it("refuses a commitment whatever the answers say, and accepts things that only look like one", () => {
+		// The filter is fixed (see commits): a card repeating "4 weeks" is left out, and the words stay in the answers.
+		expect(commits("24 hours support")).toBe(true);
+		expect(commits("Classes for 4 weeks")).toBe(true);
 		expect(commits("4K video")).toBe(false);
 		expect(commits("Built with Next.js")).toBe(false);
 	});
@@ -1031,26 +1029,28 @@ describe("found in the third review", () => {
 		["Price: $9,999", "Our plan is $99/month."],
 		["Built in 2 weeks", "Classes run for 12 weeks."],
 		["Launch in 3 months", "We opened 13 months ago."],
-	])(
-		"refuses %s, which the visitor did not write as a whole",
-		(text, answers) => {
-			expect(commits(text, answers)).toBe(true);
-		},
-	);
+	])("refuses %s, whatever the answers say", (text) => {
+		expect(commits(text)).toBe(true);
+	});
 
-	it("still allows a whole phrase the visitor wrote", () => {
-		expect(commits("Classes for 4 weeks", "Classes run for 4 weeks.")).toBe(
-			false,
-		);
-		expect(commits("Plans from $99", "Our plan is $99/month.")).toBe(false);
+	it.each([
+		"3週間で完成",
+		"3ヶ月で公開",
+		"3个月内完成",
+		"3天内上线",
+		"3개월이 걸립니다",
+		"5万円で",
+		"Replace the tool that costs $300 a month",
+		"Move off www.oldsite.com",
+	])("refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
 	});
 
 	it("stops sending a card as read from the answers once the visitor changes the words it repeated, and still sends one they kept", () => {
 		const before =
-			"Our classes run 4 weeks each. We want online booking for classes.";
+			"Our classes run weekly. We want online booking for classes.";
 
-		const after =
-			"Our classes run 6 weeks each. We want online booking for classes.";
+		const after = "Our classes run weekly. Customers call us to book.";
 
 		let board = started();
 		let n: number;
@@ -1058,12 +1058,8 @@ describe("found in the third review", () => {
 		board = applyReply(
 			board,
 			[
-				said(
-					"parts",
-					"Online booking for 4 weeks classes",
-					"We want online booking for classes",
-				),
-				said("audience", "Students", "Our classes run"),
+				said("parts", "Online booking", "We want online booking for classes"),
+				said("audience", "Students", "Our classes run weekly"),
 			],
 			n,
 			before,
@@ -1079,7 +1075,7 @@ describe("found in the third review", () => {
 
 		expect(outline.map((item) => [item.text, item.origin])).toEqual([
 			["Students", "answers"],
-			["Online booking for 4 weeks classes", "kept"],
+			["Online booking", "kept"],
 		]);
 		expect(readBriefOutline(outline, after).ok).toBe(true);
 	});
@@ -1161,4 +1157,91 @@ describe("found in the third review", () => {
 			expect(commits(text)).toBe(true);
 		},
 	);
+});
+
+describe("found in the fourth review", () => {
+	it("keeps a removed note's idea out of its own lane only, rewordings included, until Undo brings the note back", () => {
+		let board = addNote(emptyBoard(), "parts", "Booking");
+		board = removeNote(board, "c1");
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(
+			board,
+			[
+				suggested("parts", "Gift cards"),
+				suggested("questions", "Who handles booking changes today?"),
+				suggested("parts", "Booking"),
+			],
+			n,
+			ANSWERS,
+			false,
+		).board;
+		expect(board.cards.map((c) => c.text)).toEqual([
+			"Gift cards",
+			"Who handles booking changes today?",
+		]);
+
+		// A reply may not reword another open card into the removed idea.
+		[board, n] = sendRequest(board);
+
+		const reworded = applyReply(
+			board,
+			[
+				{ ...suggested("parts", "Booking"), ref: "c2" },
+				{
+					...suggested("questions", "Who handles booking changes today?"),
+					ref: "c3",
+				},
+			],
+			n,
+			ANSWERS,
+			false,
+		).board;
+
+		expect(reworded.cards.map((c) => c.text)).toEqual([
+			"Gift cards",
+			"Who handles booking changes today?",
+		]);
+
+		const back = undo(addNote(emptyBoard(), "parts", "Online booking"));
+
+		expect(back.removed ?? []).toEqual([]);
+
+		const restored = undo(
+			removeNote(addNote(emptyBoard(), "parts", "Online booking"), "c1"),
+		);
+
+		expect(restored.removed).toEqual([]);
+		expect(restored.cards.map((c) => c.text)).toEqual(["Online booking"]);
+	});
+
+	it("leaves a card where it was when the reply moves it to a full lane", () => {
+		let board = addNote(emptyBoard(), "purpose", "One");
+		board = addNote(board, "purpose", "Two");
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(
+			board,
+			[suggested("parts", "Track attendance")],
+			n,
+			ANSWERS,
+			false,
+		).board;
+		[board, n] = sendRequest(board);
+
+		const after = applyReply(
+			board,
+			[{ ...suggested("purpose", "Track attendance"), ref: "c3" }],
+			n,
+			ANSWERS,
+			false,
+		);
+
+		expect(after.board.cards.map((c) => [c.lane, c.text])).toEqual([
+			["purpose", "One"],
+			["purpose", "Two"],
+			["parts", "Track attendance"],
+		]);
+		expect(after.withdrawn).toBe(0);
+	});
 });
