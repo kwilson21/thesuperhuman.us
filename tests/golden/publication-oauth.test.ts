@@ -765,6 +765,39 @@ const callbackCases: Case[] = [
 		]),
 	),
 	oc(
+		"callback: GitHub reports application_suspended and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=application_suspended&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
+		"callback: GitHub reports redirect_uri_mismatch and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=redirect_uri_mismatch&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
+		"callback: GitHub reports an error nobody documented and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=some_code_nobody_documented&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
 		"callback: GitHub answers the code exchange with an error body",
 		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{
