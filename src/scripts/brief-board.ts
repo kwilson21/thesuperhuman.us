@@ -13,6 +13,7 @@ import {
 	LANES,
 	type Lane,
 	type OutlineItem,
+	LANE_FULL,
 	REQUESTS_PER_PAGE,
 	type ReplyCard,
 	addLabels,
@@ -32,7 +33,6 @@ import {
 	laneLabels,
 	laneLimits,
 	lastAction,
-	quotedFrom,
 	readBoardAnswer,
 	readReply,
 	readSavedBoards,
@@ -40,6 +40,7 @@ import {
 	savedBoards,
 	sendRequest,
 	setAside,
+	standsOn,
 	textLimits,
 	undo,
 } from "../lib/brief-board";
@@ -48,6 +49,9 @@ import type { SoftwarePath } from "../lib/software-inquiry";
 
 /** How long the visitor stops writing before the board asks. */
 const IDLE = 1500;
+
+/** How long the board waits after the visitor's last choice on it (Keep, Not this) before it asks: they may make more. */
+const BOARD_IDLE = 8000;
 
 /** The least time between two requests. */
 const GAP = 4000;
@@ -75,7 +79,7 @@ const UNREADABLE =
 	"The outline couldn’t read this brief. You can still add your own notes.";
 
 const PAGE_LIMIT =
-	"The outline reached its limit for this page. You can still add your own notes.";
+	"The outline reached its limit for now. You can still add your own notes.";
 
 /** How long after the visitor last touched or scrolled the board a held reply waits before it applies. */
 const QUIET = 3000;
@@ -181,8 +185,6 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	const heading = root.querySelector<HTMLElement>("#brief-board-title")!;
 	const scroller = root.querySelector<HTMLElement>("[data-board-scroll]")!;
 
-	const explainer = root.querySelector<HTMLElement>("[data-board-explainer]")!;
-
 	const showButtons = [
 		...form.querySelectorAll<HTMLButtonElement>("[data-board-show]"),
 	];
@@ -279,6 +281,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		phase: "idle" | "reading" = "idle";
 
 	const lastSent: Partial<Record<SoftwarePath, string>> = {};
+	// Lists the visitor tried to add to, and set-aside cards they tried to bring back, while the list was full: each says
+	// why (LANE_FULL) until there is room. Add and Bring back are never disabled, so the reason comes with the press.
+	const fullTried = new Set<string>();
 	const nodes = new Map<string, HTMLLIElement>();
 
 	const board = (): Board => (boards[options.path()] ??= emptyBoard());
@@ -344,7 +349,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			return "Write a few sentences and an outline starts here.";
 
 		if (lastSent[options.path()] !== answersKey())
-			return "The outline catches up when you pause.";
+			return "The outline catches up in a moment.";
 
 		return lastAdded > 0
 			? `Up to date. ${lastAdded} new ${lastAdded === 1 ? "card" : "cards"} in your brief so far.`
@@ -355,9 +360,6 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const words = currentAnswers().split(/\s+/).filter(Boolean).length;
 
 		status.textContent = statusText(words);
-		// The explanation of what the AI does is shown only while it does it.
-		explainer.hidden =
-			!options.live || !options.aiEnabled() || Boolean(stopped);
 		pauseButton.hidden = !options.live || !options.aiEnabled();
 		// The label stays the same and aria-pressed says whether it is on, so the row of controls never reflows under a click.
 		pauseButton.setAttribute("aria-pressed", String(paused));
@@ -377,10 +379,17 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		for (const pulse of pulses) {
 			pulse.hidden = plain || board().cards.length === 0;
+			// Short enough for two lines at 200% text on a narrow phone; the name says where it goes.
 			pulse.textContent =
 				fresh > 0
-					? `Your brief so far: ${fresh} ${fresh === 1 ? "suggestion" : "suggestions"} to review`
+					? `Review ${fresh} ${fresh === 1 ? "suggestion" : "suggestions"}`
 					: "See your brief so far";
+			pulse.setAttribute(
+				"aria-label",
+				fresh > 0
+					? `Review ${fresh} ${fresh === 1 ? "suggestion" : "suggestions"} in your brief so far`
+					: "See your brief so far",
+			);
 		}
 	}
 
@@ -418,7 +427,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	};
 
 	function drawCard(node: HTMLLIElement, card: BoardCard, answers: string) {
-		const grounded = card.basis === "said" && quotedFrom(card.quote, answers);
+		const grounded = card.basis === "said" && standsOn(card, answers);
 		node.dataset.status = card.status;
 		node.dataset.basis = card.basis;
 		node.dataset.grounded = String(grounded);
@@ -510,9 +519,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.add.textContent = addLabels[path][lane];
 			parts.editorLabel.textContent = addLabels[path][lane];
 			parts.input.maxLength = textLimits[lane];
-			parts.add.disabled = full;
-			// Says why Add (and Bring back for this list) is unavailable.
-			parts.full.hidden = !full;
+
+			if (!full) fullTried.delete(lane);
+			// Says why a note cannot be added, once the visitor has tried.
+			parts.full.hidden = !fullTried.has(lane);
 
 			const cards = current.cards.filter(
 				(card) => card.lane === lane && card.status !== "dismissed",
@@ -571,10 +581,18 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				back.dataset.bringBack = card.id;
 				back.textContent = "Bring back";
 				back.setAttribute("aria-label", `Bring back: ${card.text}`);
-				back.disabled = laneCount(current, card.lane) >= laneLimits[card.lane];
 				item.appendChild(text);
 				item.appendChild(document.createTextNode(" "));
 				item.appendChild(back);
+
+				if (laneCount(current, card.lane) < laneLimits[card.lane])
+					fullTried.delete(card.id);
+				else if (fullTried.has(card.id)) {
+					const why = document.createElement("span");
+					why.className = "board-why";
+					why.textContent = ` ${LANE_FULL}`;
+					item.appendChild(why);
+				}
 
 				return item;
 			}),
@@ -593,11 +611,13 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		persist();
 		focusAfter?.()?.focus();
 		options.onChange?.();
-		// The visitor's choices go with the next request (plan, section 4), after the same pause as writing.
-		schedule();
+		// The visitor's choices go with the next request (plan, section 4), after a longer pause than writing.
+		schedule(BOARD_IDLE);
 	}
 
 	function applyHeld(moveFocus: boolean) {
+		// A hidden board (another step, the review) applies nothing; the reply waits until it is shown again.
+		if (!visible) return;
 		const reply = held;
 		held = null;
 
@@ -680,8 +700,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		const changes = preview.added + preview.updated + preview.withdrawn;
 
-		if (changes > 0 && interacting()) {
-			if (!held)
+		if (changes > 0 && (interacting() || !visible)) {
+			// Nothing is said for a hidden board: the visitor is on another step.
+			if (!held && visible)
 				announce(
 					`${changes} ${changes === 1 ? "update is" : "updates are"} waiting below the cards.`,
 					true,
@@ -837,17 +858,28 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			if (failures >= FAILURES && !stopped) stop(NOT_NOW);
 
-			if (requests >= REQUESTS_PER_PAGE && !stopped) stop(PAGE_LIMIT);
+			if (requests >= REQUESTS_PER_PAGE && !stopped) stop(PAGE_LIMIT, true);
 			updateStatus();
 			retryAt = failures > 0 ? Date.now() + retry : 0;
 			schedule();
 		}
 	}
 
-	/** Stops asking for this page, and says why to everyone, screen reader users included. */
-	function stop(why: string) {
+	/**
+	 * Stops asking for this page, and says why to everyone, screen reader users included. `later` waits for what the last
+	 * reply's arrival said to be heard first.
+	 */
+	function stop(why: string, later = false) {
 		stopped = why;
-		announce(why, true);
+
+		if (later) setTimeout(() => announce(why, true), 4100);
+		else announce(why, true);
+	}
+
+	/** Drops an arrival message still waiting for the throttle: the board it was about is paused, hidden or plain. */
+	function quietNews() {
+		clearTimeout(newsTimer);
+		pendingNews = 0;
 	}
 
 	function stopAsking() {
@@ -855,6 +887,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		inFlight?.controller.abort();
 		inFlight = null;
 		phase = "idle";
+		quietNews();
+
+		// The answers it was for were never shown to the visitor, so they are asked about again once asking resumes.
+		if (held) delete lastSent[held.path];
 		held = null;
 	}
 
@@ -951,6 +987,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					break;
 				case "remove":
 					change(removeNote(board(), id), focusNear(id, card.lane));
+					announce(`Removed “${card.text}”. Undo brings it back.`, true);
 
 					break;
 			}
@@ -963,8 +1000,21 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		else if (target.dataset.bringBack) {
 			const backId = target.dataset.bringBack;
 			const back = board().cards.find((c) => c.id === backId);
+			const next = bringBack(board(), backId);
 
-			change(bringBack(board(), backId), () =>
+			// The card's list is full: say so beside the button and to screen readers; focus stays on the button.
+			if (next === board()) {
+				fullTried.add(backId);
+				render();
+				asideList
+					.querySelector<HTMLElement>(`[data-bring-back="${backId}"]`)
+					?.focus();
+				announce(LANE_FULL, true);
+
+				return;
+			}
+
+			change(next, () =>
 				cardNode(backId)?.querySelector<HTMLElement>("button"),
 			);
 
@@ -1006,8 +1056,17 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		if (!label) return;
 		const fromUndo = document.activeElement === undoButton;
+		const before = board();
+		const after = undo(before);
 
-		change(undo(board()), () => {
+		// Open cards Undo had to withdraw to keep a list within its limit (see undo in src/lib/brief-board.ts).
+		const withdrawn = before.cards.filter(
+			(card) =>
+				card.status === "proposed" &&
+				!after.cards.some((other) => other.id === card.id),
+		);
+
+		change(after, () => {
 			// Undo can remove the card that held focus, or disable itself when nothing is left to undo; focus then goes to
 			// Undo, or to the heading.
 			const active = document.activeElement;
@@ -1021,7 +1080,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			return undoButton.disabled ? heading : undoButton;
 		});
-		announce(`Undid: ${label}.`, true);
+		announce(
+			withdrawn.length
+				? `Undid: ${label}. ${withdrawn.map((card) => `“${card.text}”`).join(", ")} left the list to keep it within its limit.`
+				: `Undid: ${label}.`,
+			true,
+		);
 	}
 
 	for (const lane of LANES) {
@@ -1033,10 +1097,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 				// The list filled while the visitor typed: keep their words, and say what to do.
 				if (next === board()) {
-					announce(
-						"This list is full. Set a card aside, then add yours.",
-						true,
-					);
+					fullTried.add(lane);
+					render();
+					announce(LANE_FULL, true);
 					parts.input.focus();
 
 					return;
@@ -1048,15 +1111,19 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.input.value = "";
 			parts.editor.hidden = true;
 			parts.add.hidden = false;
-
-			// Add is disabled when the note filled the list: focus goes to the note itself.
-			(parts.add.disabled
-				? parts.list.lastElementChild?.querySelector<HTMLElement>("button")
-				: parts.add
-			)?.focus();
+			parts.add.focus();
 		};
 
 		parts.add.addEventListener("click", () => {
+			// A full list says why instead of opening the box; focus stays on Add.
+			if (laneCount(board(), lane) >= laneLimits[lane]) {
+				fullTried.add(lane);
+				render();
+				announce(LANE_FULL, true);
+
+				return;
+			}
+
 			parts.add.hidden = true;
 			parts.editor.hidden = false;
 			parts.input.focus();
@@ -1147,9 +1214,15 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			if (!next) {
 				hovering = false;
 				clearTimeout(timer);
-				stopAsking();
+				quietNews();
+				// A request in flight is aborted and asked again later; a reply already waiting is kept for when it shows.
+				inFlight?.controller.abort();
+				inFlight = null;
+				phase = "idle";
 			} else {
 				render();
+
+				if (held && !interacting()) applyHeld(false);
 				schedule();
 			}
 		},
@@ -1177,6 +1250,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		plain: () => plain,
 		setPlain(next) {
 			plain = next;
+			quietNews();
 
 			if (plain) stopAsking();
 			persist();

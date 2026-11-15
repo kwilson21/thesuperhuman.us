@@ -393,7 +393,7 @@ describe("the visitor's actions", () => {
 		expect(undo(board)).toBe(board);
 	});
 
-	it("adds and removes the visitor's notes; a removed note is set aside, and Undo or Bring back restores it as a note", () => {
+	it("adds and removes the visitor's notes; Undo restores a removed note, and a reply does not offer it back", () => {
 		let board = addNote(emptyBoard(), "parts", "Press kit");
 		board = addNote(board, "parts", "Lyrics");
 		expect(board.cards.map((c) => [c.id, c.status])).toEqual([
@@ -404,23 +404,23 @@ describe("the visitor's actions", () => {
 		board = editCard(board, "c1", "EPK");
 		expect(board.cards[0]).toMatchObject({ text: "EPK", status: "wrote" });
 		board = removeNote(board, "c1");
-		expect(board.cards.map((c) => [c.text, c.status])).toEqual([
-			["EPK", "dismissed"],
-			["Lyrics", "wrote"],
-		]);
-		// The model is not offered a removed note's idea back.
+		expect(board.cards.map((c) => c.text)).toEqual(["Lyrics"]);
+		// Gone as far as the visitor is concerned: not saved, not sent, and not offered back.
+		expect(boardContext(board).map((c) => c.text)).toEqual(["Lyrics"]);
+		expect(
+			JSON.stringify(
+				savedBoards({
+					boards: { website: board },
+					paused: false,
+					plain: false,
+				}),
+			),
+		).not.toContain("EPK");
 		expect(
 			applyReply(board, [suggested("parts", "EPK")], 1, ANSWERS, false).added,
 		).toBe(0);
-		expect(bringBack(board, "c1").cards[0]).toMatchObject({
-			text: "EPK",
-			status: "wrote",
-		});
 		board = undo(board);
-		expect(board.cards.map((c) => [c.text, c.status])).toEqual([
-			["EPK", "wrote"],
-			["Lyrics", "wrote"],
-		]);
+		expect(board.cards.map((c) => c.text)).toEqual(["EPK", "Lyrics"]);
 		board = undo(board);
 		board = undo(board);
 		expect(board.cards.map((c) => c.text)).toEqual(["Press kit"]);
@@ -533,7 +533,15 @@ describe("the outline sent with the brief", () => {
 				},
 			],
 			[{ lane: "parts", text: "Shows", origin: "kept", answer: "Yes" }],
-			[{ lane: "parts", text: "Costs $500", origin: "kept" }],
+			// Only text sent as read from the answers is the model's; kept, edited and written cards are the visitor's.
+			[
+				{
+					lane: "parts",
+					text: "Costs $500",
+					origin: "answers",
+					quote: "upcoming shows near them",
+				},
+			],
 			[{ lane: "parts", text: "Two\nlines", origin: "wrote" }],
 			[{ lane: "parts", text: "", origin: "wrote" }],
 			[{ lane: "nowhere", text: "X", origin: "wrote" }],
@@ -993,4 +1001,164 @@ describe("found in the second review", () => {
 		expect(cards.find((c) => c.text === "Press kit")?.status).toBe("wrote");
 		expect(cards.filter((c) => c.status === "dismissed")).toHaveLength(200);
 	});
+});
+
+describe("found in the third review", () => {
+	it("never adds a new idea that a card reworded in the same reply now says", () => {
+		const board = started(suggested("parts", "Gallery"));
+		const [sent, n] = sendRequest(board);
+
+		const after = applyReply(
+			sent,
+			[
+				suggested("parts", "Class booking"),
+				suggested("parts", "Class bookings", "c1"),
+			],
+			n,
+			ANSWERS,
+			false,
+		).board;
+
+		const texts = after.cards.map((c) => c.text);
+
+		expect(
+			texts.filter((text) => sameIdea(text, "Class booking")),
+		).toHaveLength(1);
+	});
+
+	it.each([
+		["Budget around $50k", "A $5 coffee for every visitor."],
+		["Price: $9,999", "Our plan is $99/month."],
+		["Built in 2 weeks", "Classes run for 12 weeks."],
+		["Launch in 3 months", "We opened 13 months ago."],
+	])(
+		"refuses %s, which the visitor did not write as a whole",
+		(text, answers) => {
+			expect(commits(text, answers)).toBe(true);
+		},
+	);
+
+	it("still allows a whole phrase the visitor wrote", () => {
+		expect(commits("Classes for 4 weeks", "Classes run for 4 weeks.")).toBe(
+			false,
+		);
+		expect(commits("Plans from $99", "Our plan is $99/month.")).toBe(false);
+	});
+
+	it("stops sending a card as read from the answers once the visitor changes the words it repeated, and still sends one they kept", () => {
+		const before =
+			"Our classes run 4 weeks each. We want online booking for classes.";
+
+		const after =
+			"Our classes run 6 weeks each. We want online booking for classes.";
+
+		let board = started();
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(
+			board,
+			[
+				said(
+					"parts",
+					"Online booking for 4 weeks classes",
+					"We want online booking for classes",
+				),
+				said("audience", "Students", "Our classes run"),
+			],
+			n,
+			before,
+			false,
+		).board;
+		expect(briefOutline(board, before)).toHaveLength(2);
+		expect(briefOutline(board, after).map((item) => item.text)).toEqual([
+			"Students",
+		]);
+
+		const kept = keepCard(board, "c1");
+		const outline = briefOutline(kept, after);
+
+		expect(outline.map((item) => [item.text, item.origin])).toEqual([
+			["Students", "answers"],
+			["Online booking for 4 weeks classes", "kept"],
+		]);
+		expect(readBriefOutline(outline, after).ok).toBe(true);
+	});
+
+	it("reads a negation only within its sentence, and through a softening word", () => {
+		const answers = "Do we have a website now? No. Customers call us to book.";
+
+		expect(quotedFrom("Customers call us to book", answers)).toBe(true);
+		expect(
+			quotedFrom(
+				"want online payments",
+				"We don't really want online payments.",
+			),
+		).toBe(false);
+	});
+
+	it.each([
+		"Send 3 messages",
+		"Show 2 diagrams",
+		"Track 10 journeys",
+		"A B.Sc in design",
+		"Export orders.csv",
+	])("accepts %s, which only looks like a duration or a link", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+
+	it("moves a card the model puts in another lane, rather than copying it", () => {
+		let board = started(suggested("parts", "Booking"));
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		const after = applyReply(
+			board,
+			[suggested("audience", "Booking", "c1")],
+			n,
+			ANSWERS,
+			false,
+		).board;
+
+		expect(after.cards.map((c) => [c.lane, c.text])).toEqual([
+			["audience", "Booking"],
+		]);
+	});
+
+	it("withdraws open suggestions before cards read from the answers when Undo fills a lane", () => {
+		let board = addNote(emptyBoard(), "audience", "Fans");
+		board = addNote(board, "audience", "Venues");
+		board = removeNote(board, "c2");
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(
+			board,
+			[
+				said("audience", "Listeners", "Fans should hear new music"),
+				suggested("audience", "Promoters"),
+			],
+			n,
+			ANSWERS,
+			false,
+		).board;
+		expect(board.cards.map((c) => c.text)).toEqual([
+			"Fans",
+			"Listeners",
+			"Promoters",
+		]);
+
+		board = undo(board);
+
+		expect(board.cards.map((c) => c.text)).toEqual([
+			"Fans",
+			"Venues",
+			"Listeners",
+		]);
+	});
+
+	it.each(["See shop.de", "example.com", "band.xyz/tour"])(
+		"still refuses the link %s",
+		(text) => {
+			expect(commits(text)).toBe(true);
+		},
+	);
 });

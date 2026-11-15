@@ -2,7 +2,7 @@
 // The living brief's board (docs/plans/2026-11-living-brief.md): the static frame of the outline beside the brief's
 // written answers. src/scripts/brief-board.ts fills it, from src/scripts/software-inquiry.ts. Lane headings are set by the
 // script for the chosen path; the defaults here are the website's.
-import { LANES, addLabels, laneLabels } from "~/lib/brief-board";
+import { LANES, LANE_FULL, addLabels, laneLabels } from "~/lib/brief-board";
 
 interface Props {
 	privacyHref: string;
@@ -24,13 +24,14 @@ const { privacyHref } = Astro.props;
   </div>
   {/* The head stays put; the cards scroll inside this region, so the board is never taller than its space on screen. */}
   <div class="board-scroll" data-board-scroll>
-  <p class="board-explain" data-board-explainer>As you write, Cloudflare’s AI sketches an outline of your project here. Cards marked “From your answers” quote you. Cards marked “Suggestion” or “Suggested question” are ideas until you keep them. Keep writing while it works.</p>
+  {/* True whether the outline is on, paused or stopped, so it never changes and never moves the cards below it. */}
+  <p class="board-explain">While the outline is on, Cloudflare’s AI sketches your project here as you write. Cards marked “From your answers” quote you. Cards marked “Suggestion” or “Suggested question” are ideas until you keep them.</p>
   {LANES.map((lane) => (
     <section class="board-lane" data-lane={lane}>
       <h3 id={`board-lane-${lane}`} data-lane-title>{laneLabels.website[lane]}</h3>
       <ul class="board-cards" role="list" data-lane-cards></ul>
       <p class="board-empty" data-lane-empty>Nothing here yet.</p>
-      <p class="board-empty" data-lane-full hidden>This list is full. Set a card aside to add another.</p>
+      <p class="board-empty" data-lane-full hidden>{LANE_FULL}</p>
       <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
       <div class="board-editor" data-lane-editor hidden>
         <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
