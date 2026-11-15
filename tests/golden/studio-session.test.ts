@@ -1,5 +1,5 @@
 import type { JsonValue } from "../helpers/json";
-import { hashValue } from "~/lib/audio-client-access";
+import { hashValue } from "~/lib/client-portal";
 import { POST } from "~/pages/api/studio/session";
 import {
 	asClientCookie,

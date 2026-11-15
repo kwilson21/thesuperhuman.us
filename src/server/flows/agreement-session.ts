@@ -3,10 +3,8 @@
 // the offer it names) are plain; no statement decides. Shared by the download and attachment routes. The shared function
 // in src/lib/agreement-access.ts (`agreementSession`) stays in place for the offer routes, which are a later area.
 import * as Effect from "effect/Effect";
-import {
-	hashValue,
-	studioSessionFromRequest,
-} from "../../lib/audio-client-access";
+import { studioSessionFromRequest } from "../../lib/audio-client-access";
+import { hashValue } from "../../lib/client-portal";
 import { hashOfferToken } from "../../lib/software-offers";
 import { sessionTokenOf } from "../agreement-input";
 import { hashing } from "../agreement-services";
