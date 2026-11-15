@@ -29,6 +29,7 @@ import {
 	offerSendingGuard,
 	offerIsSending,
 	offerSendingMessage,
+	offerSendingSince,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { isUniqueViolation, raisedByJsonGuard } from "~/server/guarded-save";
@@ -150,12 +151,40 @@ const answer = async ({
 			400,
 		);
 	const command = parsed.data;
+	const actor = locals.owner.email;
 
+	// A draft whose version or open-draft slot another writer took after it read the offers is read and decided again from
+	// the start, three tries in all; the lookups after a refused batch answer the third.
+	for (let attempt = 1; ; attempt += 1)
+		try {
+			return await act(env, db, actor, params.id, command, attempt);
+		} catch (error) {
+			if (!(error instanceof DraftTaken)) throw error;
+		}
+};
+
+type Command = z.infer<typeof schema>;
+
+/** How many times a draft is read, decided and saved before a taken version is answered as a changed draft. */
+const DRAFT_TRIES = 3;
+
+/** The draft batch lost its version or the open-draft slot to another writer, with tries left: read and decide again. */
+class DraftTaken extends Error {}
+
+const LINK_CHANGED =
+	"The client link changed since this page loaded. Reload to see the current link.";
+
+const act = async (
+	env: Env,
+	db: D1Database,
+	actor: string,
+	id: string | undefined,
+	command: Command,
+	attempt: number,
+): Promise<Response> => {
 	// A missing or empty id matches no request, as an unknown one does. A request whose stored details are not JSON makes
 	// the read reject; it answers as a failed store.
-	const record = params.id
-		? await stored(getOwnerRequest(db, params.id))
-		: null;
+	const record = id ? await stored(getOwnerRequest(db, id)) : null;
 
 	if (!record || record.kind !== "software") return json({ ok: false }, 404);
 
@@ -193,7 +222,6 @@ const answer = async ({
 			},
 			409,
 		);
-	const actor = locals.owner.email;
 	let now = new Date().toISOString();
 
 	const audit = (action: string, note = "") =>
@@ -479,6 +507,28 @@ const answer = async ({
 		}
 
 		if (command.action === "revoke") {
+			// The request's link (one per request), read before the batch: a link that changed or is closed, then one still
+			// sending, is refused here, in the order the lookups after a refused batch give them. The batch's guards stay
+			// as the re-check.
+			const link = await stored(
+				db
+					.prepare(
+						"SELECT created_at,revoked_at FROM software_offer_links WHERE request_id=?",
+					)
+					.bind(record.id)
+					.first<{ created_at: string; revoked_at: string | null }>(),
+			);
+
+			if (
+				!link ||
+				link.revoked_at !== null ||
+				link.created_at !== command.expectedLinkCreatedAt
+			)
+				return json({ ok: false, message: LINK_CHANGED }, 409);
+
+			if (link.created_at > offerSendingSince())
+				return json({ ok: false, message: offerSendingMessage }, 409);
+
 			await save([
 				requestGuard(),
 				...retireRequestSigning(db, record.id, now),
@@ -639,9 +689,13 @@ const answer = async ({
 			];
 
 			// Besides a guard, two failures of this batch are another request's change: a unique index (another tab saved a
-			// draft, or took the version, first) and the reused MSA's foreign key once that MSA is gone. Anything else is a
-			// failed store.
+			// draft, or took the version, first) and the reused MSA's foreign key once that MSA is gone. A unique index backs
+			// what was decided from the offers read (the version's number, and that no draft is open), so while tries are left
+			// the draft is read and decided again. Anything else is a failed store.
 			const saved = await db.batch(statements).catch(async (error) => {
+				if (isUniqueViolation(error) && attempt < DRAFT_TRIES)
+					throw new DraftTaken();
+
 				if (
 					refusedByGuard(error) ||
 					isUniqueViolation(error) ||
@@ -991,6 +1045,8 @@ const answer = async ({
 	} catch (error) {
 		if (error instanceof FixedAnswer) return error.respond();
 
+		if (error instanceof DraftTaken) throw error;
+
 		// A refused batch (or details that cannot be read): the lookups below choose the 409. One that fails is a failed
 		// store, and answers as one.
 		if (
@@ -1004,14 +1060,7 @@ const answer = async ({
 					.first(),
 			))
 		)
-			return json(
-				{
-					ok: false,
-					message:
-						"The client link changed since this page loaded. Reload to see the current link.",
-				},
-				409,
-			);
+			return json({ ok: false, message: LINK_CHANGED }, 409);
 
 		if (
 			["send", "revoke", "decline"].includes(command.action) &&

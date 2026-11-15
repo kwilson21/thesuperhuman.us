@@ -17,6 +17,7 @@ import {
 	PDF_BYTES,
 	readyArtifact,
 	request,
+	revokedLink,
 	signingBase,
 	terms,
 } from "../golden/areas/software-offers";
@@ -50,8 +51,15 @@ const SECRET = "D1_ERROR: private details for r1";
 /** A statement or batch whose SQL matches `on` fails on its `nth` match (the first by default). */
 type Fault = { readonly on: RegExp; readonly nth?: number };
 
-/** SQL run on the database just before the first statement or batch whose SQL matches `on`: another writer. */
-type Race = { readonly on: RegExp; readonly sql: string };
+/**
+ * SQL run on the database just before the first statement or batch whose SQL matches `on` (before every one with
+ * `every`): another writer.
+ */
+type Race = {
+	readonly on: RegExp;
+	readonly sql: string;
+	readonly every?: true;
+};
 
 type Bucket = {
 	readonly objects?: Readonly<Record<string, Uint8Array>>;
@@ -104,7 +112,7 @@ function faultyDb(sql: SqliteDatabase, world: World): D1Database {
 	const before = (queries: readonly string[]) => {
 		if (
 			world.race &&
-			!raced &&
+			(world.race.every || !raced) &&
 			queries.some((query) => world.race?.on.test(query))
 		) {
 			raced = true;
@@ -713,5 +721,115 @@ describe("a send whose link closes while its email is sent", () => {
 				"The email went out, but the link was closed while it was sending. Send the offer again for a working link.",
 			),
 		);
+	});
+});
+
+describe("revoke reads its link before the batch", () => {
+	const LINK_CHANGED =
+		"The client link changed since this page loaded. Reload to see the current link.";
+
+	/** Every lookup of the link, and the batch, would fail: a refusal before the batch reaches none of them. */
+	const unreachable: readonly Fault[] = [
+		{ on: /^SELECT 1 FROM software_offer_links/ },
+		{ on: /UPDATE software_offer_links SET revoked_at/ },
+	];
+
+	it("a link still sending is refused before the batch", async () => {
+		const { sql, call } = setUp({
+			seed: {
+				owner_requests: [request()],
+				software_offers: [offer("sent")],
+				software_offer_links: [linkAgo(10)],
+			},
+			faults: unreachable,
+		});
+
+		expect(
+			await read(
+				await call({
+					...revoke,
+					expectedLinkCreatedAt: new Date(
+						Date.parse(START) - 10_000,
+					).toISOString(),
+				}),
+			),
+		).toEqual(
+			answer(409, "An offer is still being sent. Try again in a moment."),
+		);
+		expect(
+			sql.prepare("SELECT revoked_at FROM software_offer_links").get(),
+		).toEqual({ revoked_at: null });
+	});
+
+	it.each<[string, Seed, string]>([
+		["a link made at another time", withSent, START],
+		[
+			"a revoked link",
+			{
+				owner_requests: [request()],
+				software_offers: [offer("sent")],
+				software_offer_links: [revokedLink()],
+			},
+			EARLIER,
+		],
+		[
+			"no link",
+			{ owner_requests: [request()], software_offers: [offer("sent")] },
+			EARLIER,
+		],
+	])("%s is refused before the batch", async (_name, rows, at) => {
+		const { call } = setUp({ seed: rows, faults: unreachable });
+
+		expect(
+			await read(await call({ ...revoke, expectedLinkCreatedAt: at })),
+		).toEqual(answer(409, LINK_CHANGED));
+	});
+});
+
+describe("a draft whose version another writer takes is read and decided again", () => {
+	const takeNextVersion = `INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at)
+		SELECT 'other-'||count(*),'r1',count(*)+1,'withdrawn','{}','${EARLIER}','${EARLIER}' FROM software_offers`;
+
+	it("the second try saves the next version", async () => {
+		const { sql, call } = setUp({
+			seed: plain,
+			race: { on: /INSERT INTO software_offers/, sql: takeNextVersion },
+		});
+
+		const { status, body } = await read(await call(draft));
+
+		expect(status).toBe(200);
+		expect(body).toMatchObject({ ok: true, version: 2 });
+		expect(
+			sql
+				.prepare("SELECT version,status FROM software_offers ORDER BY version")
+				.all(),
+		).toEqual([
+			{ version: 1, status: "withdrawn" },
+			{ version: 2, status: "draft" },
+		]);
+	});
+
+	it("taken on all three tries, it answers that the draft changed", async () => {
+		const { sql, call } = setUp({
+			seed: plain,
+			race: {
+				on: /INSERT INTO software_offers/,
+				sql: takeNextVersion,
+				every: true,
+			},
+		});
+
+		const { status, body } = await read(await call(draft));
+
+		expect(status).toBe(409);
+		expect(body).toMatchObject({ ok: false, updatedAt: null });
+		expect(
+			sql
+				.prepare(
+					"SELECT count(*) AS taken FROM software_offers WHERE status='withdrawn'",
+				)
+				.get(),
+		).toEqual({ taken: 3 });
 	});
 });

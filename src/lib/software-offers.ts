@@ -462,6 +462,10 @@ export async function getLinkedOffer(db: D1Database, token: string) {
 export const offerSendingMessage =
 	"An offer is still being sent. Try again in a moment.";
 
+/** The start of the sending window: a live link made after it (compared as text) means an offer is still being sent. */
+export const offerSendingSince = () =>
+	new Date(Date.now() - 20_000).toISOString();
+
 const recentLiveLink =
 	"SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?";
 
@@ -470,14 +474,14 @@ export function offerSendingGuard(db: D1Database, requestId: string) {
 		.prepare(
 			`SELECT CASE WHEN NOT EXISTS(${recentLiveLink}) THEN 1 ELSE json_extract('Offer still sending','$') END`,
 		)
-		.bind(requestId, new Date(Date.now() - 20_000).toISOString());
+		.bind(requestId, offerSendingSince());
 }
 
 export async function offerIsSending(db: D1Database, requestId: string) {
 	return Boolean(
 		await db
 			.prepare(recentLiveLink)
-			.bind(requestId, new Date(Date.now() - 20_000).toISOString())
+			.bind(requestId, offerSendingSince())
 			.first(),
 	);
 }

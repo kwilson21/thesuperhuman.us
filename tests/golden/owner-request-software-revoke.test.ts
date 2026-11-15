@@ -31,7 +31,8 @@ import {
 import type { JsonValue } from "../helpers/json";
 
 // The golden corpus for the revoke action of POST /api/owner/requests/[id]/software: the owner closes the client's offer
-// link. One batch checks the request, retires everything the client could still use to sign (unsigned reviews abandoned,
+// link. It first reads the request's link and refuses a link that is not the one the page showed (by its created_at), is
+// revoked or is missing, then one that is still sending. One batch then checks the request, retires everything the client could still use to sign (unsigned reviews abandoned,
 // saved drafts deleted, sessions revoked, sign-in links used), checks the offer is not still sending, checks the link is the
 // one the page showed (by its created_at), revokes it and writes "offer-link-revoked". No email, no R2. The guards shared by
 // every action are recorded in owner-request-software-fit. Revoke is the one action a withdrawn request and a request with a
@@ -45,12 +46,13 @@ import type { JsonValue } from "../helpers/json";
 //                    project, with each offer status, with a signed agreement and an open deposit (neither blocks it), with
 //                    a link 20 seconds old or older, retiring review agreements, drafts, sessions and sign-in links
 //   409 "The client link changed since this page loaded..."  the link's created_at differs, the link is already revoked, there
-//                    is no link, or another writer replaced or revoked it during the batch
-//   409 "An offer is still being sent..."  the matching link is under 20 seconds old
+//                    is no link (all three read before the batch), or another writer replaced or revoked it during the batch
+//   409 "An offer is still being sent..."  the matching link is under 20 seconds old (read before the batch, so no batch runs)
 //   409 generic "...changed or could not be saved..."  updated_at, status or email moved during the batch
-//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read, the
-//                    batch (an outage, not a guard), or a lookup after a refused batch
-//   effects: one batch (request guard, four signing-retirement statements, sending guard, link guard, revoke, audit), then,
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read, the link
+//                    read, the batch (an outage, not a guard), or a lookup after a refused batch
+//   effects: the link read, then one batch (request guard, four signing-retirement statements, sending guard, link guard,
+//   revoke, audit), then,
 //   when a guard refuses it, one or two lookups to decide which 409 to answer (none when the batch throws for another
 //   reason).
 
@@ -385,6 +387,14 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_offer_links/,
 					nth: 2,
 					message: "D1 is down",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
+					reason:
+						"a control: the link is read before the batch and is still sending, so the revoke is refused there, with no batch and no lookup after it",
 				},
 			],
 		},
