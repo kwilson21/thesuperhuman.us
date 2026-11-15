@@ -172,7 +172,7 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(5);
+		expect(properties.length).toBeGreaterThanOrEqual(7);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
@@ -182,8 +182,12 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(discountMutants), "discount"].sort(),
+			[...Object.keys(discountMutants), "discount", "discountF10Fix"].sort(),
 		);
+	});
+
+	it("checks today's code and the F10 fix, each keeping every property", () => {
+		expect(models[1].current).toEqual(["discount", "discountF10Fix"]);
 	});
 
 	it("every mutant property is one of allProperties", () => {
@@ -412,5 +416,14 @@ describe("the models the driver runs", () => {
 		expect(models[5].mutants).toBe(budgetMutants);
 		expect(models[6].mutants).toBe(publicationMutants);
 		expect(models[7].mutants).toBe(agreementLinkMutants);
+	});
+
+	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
+		models.forEach((model: { steps?: string }) =>
+			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
+		);
+
+		// The discount model's send and decline are three steps each, so its deepest mutant needs about 30.
+		expect(models[1].steps).toBe("30");
 	});
 });
