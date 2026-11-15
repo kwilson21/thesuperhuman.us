@@ -1,6 +1,7 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
+	type CallToolResult,
 	CallToolRequestSchema,
 	ErrorCode,
 	ListToolsRequestSchema,
@@ -11,7 +12,8 @@ import type { JsonValue } from "./json-value";
 import { mcpRefusal } from "./mcp-readers";
 import { type Reader, readWith } from "./readers";
 
-// The MCP tools of the site, on the SDK's lower-level server. The high-level server (`McpServer.registerTool`) takes only a
+// The MCP tools of the site, on the SDK's lower-level server (`McpServer.server`; no tool is registered with the
+// high-level API, so its tool handlers are never installed). The high-level server (`registerTool`) takes only a
 // Zod schema for a tool's input, and our code gives no library a Zod schema (docs/plans/2026-11-effect-conversion.md,
 // "Library boundaries"). Here a tool publishes its input as JSON Schema written out as plain data, and checks its
 // arguments with the Effect Schema reader it was given. Everything else the high-level server did for a tool is done as it
@@ -20,10 +22,7 @@ import { type Reader, readWith } from "./readers";
 // (`MCP error -32602: ...`), not a JSON-RPC error.
 
 /** What a tool answers: text, and whether it is an error result. */
-export interface ToolResult {
-	content: { type: "text"; text: string }[];
-	isError?: boolean;
-}
+export type ToolResult = CallToolResult;
 
 /** A tool's input as JSON Schema, written out as plain data: the keys in the order a client has always seen them. */
 export interface PublishedInput {
@@ -121,7 +120,7 @@ export async function serveTools(
 ): Promise<Response> {
 	const capabilities = { tools: { listChanged: true } };
 
-	const server = new Server(
+	const mcp = new McpServer(
 		{ name: about.name, version: about.version },
 		about.instructions
 			? { capabilities, instructions: about.instructions }
@@ -130,10 +129,10 @@ export async function serveTools(
 
 	const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
-	server.setRequestHandler(ListToolsRequestSchema, () => ({
+	mcp.server.setRequestHandler(ListToolsRequestSchema, () => ({
 		tools: tools.map((tool) => tool.listing),
 	}));
-	server.setRequestHandler(CallToolRequestSchema, async (call) => {
+	mcp.server.setRequestHandler(CallToolRequestSchema, async (call) => {
 		const tool = byName.get(call.params.name);
 
 		if (tool) return tool.run(call.params.arguments);
@@ -153,12 +152,12 @@ export async function serveTools(
 	});
 
 	try {
-		await server.connect(transport);
+		await mcp.connect(transport);
 		const response = await transport.handleRequest(request);
 		response.headers.set("Cache-Control", "no-store");
 
 		return response;
 	} finally {
-		await server.close();
+		await mcp.close();
 	}
 }

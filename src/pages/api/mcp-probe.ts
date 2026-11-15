@@ -41,13 +41,13 @@ const probe = (request: Request) =>
 					{ challenge: mcpText([{ least: 1 }, { most: 80 }]) },
 					{ strict: true, says: mcpObjectSentences },
 				),
-				call: async (args) => ({
+				call: async ({ challenge }) => ({
 					content: [
 						{
 							type: "text",
 							text: JSON.stringify({
 								service: "thesuperhuman.us",
-								challenge: args.challenge,
+								challenge,
 								publishingEnabled: false,
 							}),
 						},
