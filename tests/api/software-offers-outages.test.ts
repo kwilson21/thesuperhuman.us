@@ -44,6 +44,7 @@ const AFTER_EMAIL =
 
 const AFTER_FAILED_EMAIL =
 	"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.";
+
 const AFTER_DRAFT =
 	"The draft was saved, but an attachment could not be cleaned up. Reload before you try again.";
 
