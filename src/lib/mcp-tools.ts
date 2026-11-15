@@ -137,8 +137,8 @@ export async function serveTools(
 
 		if (tool) return tool.run(call.params.arguments);
 
-		// The SDK's server kept its tools in a plain object, so a name that object has of its own (`constructor`,
-		// `toString`, `__proto__`) found something that was not a tool and answered that it was disabled.
+		// The SDK's server kept its tools in a plain object, so a name it inherits from `Object.prototype`
+		// (`constructor`, `toString`, `__proto__`) found something that was not a tool and answered that it was disabled.
 		return refused(
 			call.params.name in Object.prototype
 				? `Tool ${call.params.name} disabled`

@@ -23,8 +23,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 ## Where things stand
 
 - Converted: contact and resume (3 routes), the public music routes (2 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod).
-- Not converted: 46 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
-  components (all reads), 34 files under `src/` that import Zod (more under `tests/`, and `scripts/prepare-music.mjs`
+- Not converted: 42 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
+  components (all reads), 31 files under `src/` that use Zod (30 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
   parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
   Stripe reconciliation are operator scripts.
 - Every route but the three media routes has a golden corpus (recorded in PRs 246, 248 and 249).

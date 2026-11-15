@@ -222,14 +222,14 @@ export const mcpObjectSentences: RecordSentences = {
 		`Unrecognized key${keys.length > 1 ? "s" : ""}: ${keys.map((key) => `"${key}"`).join(", ")}`,
 };
 
-/** Where an issue was found, as the MCP SDK wrote it: names joined with dots, a position in brackets. */
+/** Where an issue was found, as the MCP SDK wrote it: the first step as it is, then names joined with dots and a position in brackets. */
 const where = (path: Issue["path"]) =>
 	path.reduce<string>(
 		(soFar, step, index) =>
-			Predicate.isNumber(step)
-				? `${soFar}[${step}]`
-				: index === 0
-					? step
+			index === 0
+				? String(step)
+				: Predicate.isNumber(step)
+					? `${soFar}[${step}]`
 					: `${soFar}.${step}`,
 		"",
 	);
