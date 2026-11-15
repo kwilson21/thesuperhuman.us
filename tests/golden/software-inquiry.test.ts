@@ -222,9 +222,11 @@ const claimRace = (sql: string, on: RegExp, label: string) => ({
 });
 
 const CLAIM = /'\$\.clientCopyStatus','uncertain'/;
+
 // The claim, or the read before it: whichever statement the copy send starts with.
 const FIRST_COPY_STATEMENT =
 	/'\$\.clientCopyStatus','uncertain'|FROM owner_requests WHERE id=\?/;
+
 const COPY_STATUS = /clientCopyStatus',\?\)/;
 const COPY_FAILED = /clientCopyStatus','failed'/;
 const LOOKUP = /WHERE submission_id=\?/;
