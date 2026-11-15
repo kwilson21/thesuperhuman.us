@@ -9,7 +9,7 @@ export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
 export const maxPartEtagLength = 256;
 
-/** A part was put for an upload that an abort has already marked discarding: a lost race, not an outage. */
+/** A part was put for an upload that an abort has already marked discarding, or that R2 no longer has: a lost race, not an outage. */
 export class UploadBeingDiscarded extends Error {
 	constructor() {
 		super("This upload is being discarded.");
@@ -174,9 +174,14 @@ export async function putProjectUploadPart(
 ): Promise<R2UploadedPart> {
 	if (upload.state !== "pending") throw new UploadBeingDiscarded();
 
-	return bucket
-		.resumeMultipartUpload(upload.object_key, upload.upload_id)
-		.uploadPart(partNumber, body);
+	try {
+		return await bucket
+			.resumeMultipartUpload(upload.object_key, upload.upload_id)
+			.uploadPart(partNumber, body);
+	} catch (error) {
+		if (multipartUploadGone(error)) throw new UploadBeingDiscarded();
+		throw error;
+	}
 }
 
 export async function finishProjectUpload(
@@ -207,9 +212,22 @@ export async function finishProjectUpload(
 			)
 		)
 			return "blocked";
-		object = await bucket
-			.resumeMultipartUpload(upload.object_key, upload.upload_id)
-			.complete(parts);
+
+		try {
+			object = await bucket
+				.resumeMultipartUpload(upload.object_key, upload.upload_id)
+				.complete(parts);
+		} catch (error) {
+			// R2 refused a part it lists as missing or with another entity tag: the route's own check of the parts answers the same.
+			if (multipartPartInvalid(error)) return "blocked";
+
+			// Another completion, an abort or the incomplete-upload lifecycle got there first. The object may now exist, so look
+			// again, as the abort does: a later completion finds it and finishes.
+			if (!multipartUploadGone(error)) throw error;
+			object = await bucket.head(upload.object_key);
+
+			if (!object) return "blocked";
+		}
 	}
 
 	if (object.size !== upload.byte_size) return "size-mismatch";
@@ -249,6 +267,14 @@ export function multipartUploadGone(error: RawValue): boolean {
 	return (
 		error instanceof Error &&
 		/\b10024\b|multipart upload does not exist/i.test(error.message)
+	);
+}
+
+/** R2 reports a completion with a missing part, or a part whose entity tag does not match, as error 10025 (invalid part). */
+export function multipartPartInvalid(error: RawValue): boolean {
+	return (
+		error instanceof Error &&
+		/\b10025\b|specified parts could not be found/i.test(error.message)
 	);
 }
 

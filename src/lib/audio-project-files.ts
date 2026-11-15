@@ -1,4 +1,5 @@
 import { hashValue } from "./client-portal";
+import { logUnexpected } from "~/server/failure";
 import { mediaRange } from "./music-media";
 
 export type ProjectFile = {
@@ -128,11 +129,17 @@ export async function streamClientProjectFile(
 			headers: { "cache-control": "private, no-store" },
 		});
 
-	if (head.size !== file.byte_size)
+	if (head.size !== file.byte_size) {
+		logUnexpected(
+			"studio/projects/file",
+			new Error("The stored object has another size than the file row."),
+		);
+
 		return new Response("File unavailable", {
 			status: 500,
 			headers: { "cache-control": "private, no-store" },
 		});
+	}
 
 	const range =
 		request.method === "HEAD"
