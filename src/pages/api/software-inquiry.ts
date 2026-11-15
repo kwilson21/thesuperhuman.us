@@ -152,8 +152,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			}
 
 			if (raced)
-				// The rival is the same visitor's same submission, already stored: the allowance stays spent, and the
-				// address-wide count (which the rival may share) is left alone.
+				// Another request stored this submission id first. This one keeps the allowance it spent, whatever its address,
+				// and the address-wide count (which the rival may share) is left alone. That fails closed: an address that
+				// sent one id twice waits the usual few minutes, and it takes a race on one submission id to get here.
 				return raced.email.toLowerCase() === input.email.toLowerCase()
 					? Response.json({
 							ok: true,
