@@ -4,12 +4,12 @@
 // Code modelled, step for step as the code reads and writes:
 //   the cooldown:   src/server/flows/agreement-link.ts: read the address's cooldown row (one step), the rule judges it at
 //                   the request's instant `at`, then a compare-and-set on the row (a second step) that re-checks the same
-//                   condition against the row as it is then. A lost set reads and judges again, three tries in all.
+//                   condition against the row as it is then. A lost set reads and judges again, three tries in all, and the retry keeps the request's first instant (`cooling`).
 //   the lookup:     readLinkFacts: the address's agreements and its links, read in ONE batch (one step, one snapshot). The
 //                   rule has nothing to do for an address with no executed agreement, and refuses with the cooldown's
 //                   sentence when a link was issued inside the window.
 //   the link batch: storeArchiveLink: one batch (one step) whose first statement is the guard "no link for this address
-//                   issued in the window before `at`", then the insert. A lost guard reads again, three tries in all. The
+//                   issued in the window before `at`", then the insert. A lost guard reads again, three tries in all (a counter of its own), and the retry keeps the first attempt's `at`. The
 //                   batch does NOT re-check the agreement's status: see `issuedStillExecuted`.
 //   the redeem:     src/lib/agreement-access.ts completeAgreementLink: a READ of the link as unused and unexpired at the
 //                   instant `at` (one step), then a guarded batch (a second step) that consumes it while it is still
@@ -20,9 +20,9 @@
 // (its outcome only decides whether older links are consumed, which does not change a property below), and the answer
 // text, which is one receipt for every address.
 //
-// Ghost flags are set from what was true at the step that reads (the lookup's read, the redeem's read) or from the real
-// state at the write, never from the mutant. `issuedStillExecuted` is NOT in `allProperties`: it is a finding, kept as a
-// named value so it can be run by hand (docs/verification.md, "The agreement-link model").
+// The properties are invariants over the real state (the stored links, how often and when each was redeemed), not flags set
+// by a step. `issuedStillExecuted` is NOT in `allProperties`: it is a finding, kept as a named value so it can be run by
+// hand (docs/verification.md, "The agreement-link model").
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module agreementLinkProtocol {
@@ -46,51 +46,47 @@ module agreementLinkProtocol {
   // Address 1 starts with an executed agreement; address 2 has none. `executed` changes for address 1 (the finding).
   pure def startsExecuted(e: int): bool = e == 1
 
-  // A stored link: the request that stored it (its id), the address, when it was issued, and when it expires.
-  type Link = { id: int, email: int, issued: int, expires: int }
+  // A stored link: the request that stored it (its id), the address, when it was issued, when it expires, and what was
+  // true when it was stored: whether the lookup had read an executed agreement, and whether the agreement was executed at the store.
+  type Link = { id: int, email: int, issued: int, expires: int, executedAtRead: bool, executedAtStore: bool }
 
-  // A request: its phase ("none", "asked", "coolChecked", "cooled", "found", "checked", "done"), its address, the instant
-  // `at` it judges at, whether the lookup found an executed agreement (as read), whether the split guard passed, how many
-  // tries it has used, and how it ended.
-  type Run = { phase: str, email: int, at: int, found: bool, guardOk: bool, tries: int, outcome: str }
+  // A request: its phase ("none", "asked", "coolChecked", "cooled", "found", "checked", "done"), its address, `cool` (the
+  // instant of its first cooldown read, -1 before it), `at` (the instant of its first lookup, -1 before it; both are kept
+  // across retries), whether the lookup found an executed agreement (as read), whether the split guard passed, the tries
+  // of the cooldown loop and of the link loop (three each), and how it ended.
+  type Run = { phase: str, email: int, cool: int, at: int, found: bool, guardOk: bool, coolTries: int, tries: int, outcome: str }
 
-  // A redeem: its phase ("none", "read", "done"), the link it read, the instant `at` of the read, and whether the link was
-  // already past its expiry at that instant (what was true at the read).
-  type Redeem = { phase: str, link: int, at: int, expiredAtRead: bool }
+  // A redeem: its phase ("none", "read", "done"), the link it read, and the instant `at` of the read.
+  type Redeem = { phase: str, link: int, at: int }
 
   var now: int
   var links: Set[Link]
   var coolAt: int -> int
+  // How many times each link was consumed, and the instant of the read of the redeem that last consumed it (-1 for none).
   var redeems: int -> int
+  var redeemedAt: int -> int
   var runs: int -> Run
   var rd: int -> Redeem
   var executed: int -> bool
-  var doubleIssue: bool
-  var issuedWithoutAgreement: bool
-  var issuedAfterEnd: bool
-  var doubleRedeem: bool
-  var redeemedLate: bool
 
-  val idle = { phase: "none", email: 0, at: 0, found: false, guardOk: false, tries: 0, outcome: "none" }
-  val idleRedeem = { phase: "none", link: 0, at: 0, expiredAtRead: false }
+  val idle = { phase: "none", email: 0, cool: -1, at: -1, found: false, guardOk: false, coolTries: 0, tries: 0, outcome: "none" }
+  val idleRedeem = { phase: "none", link: 0, at: 0 }
 
   // The guard the batch checks: no link for this address was issued within the window before `t`.
   pure def windowFree(ls: Set[Link], e: int, t: int): bool =
     not(ls.exists(l => l.email == e and l.issued > t - WINDOW))
+
+  pure def apart(a: int, b: int): bool = (a - b >= WINDOW) or (b - a >= WINDOW)
 
   action init = all {
     now' = 0,
     links' = Set(),
     coolAt' = EMAILS.mapBy(e => -100),
     redeems' = RUNS.mapBy(l => 0),
+    redeemedAt' = RUNS.mapBy(l => -1),
     runs' = RUNS.mapBy(r => idle),
     rd' = REDEEMERS.mapBy(r => idleRedeem),
     executed' = EMAILS.mapBy(e => startsExecuted(e)),
-    doubleIssue' = (false),
-    issuedWithoutAgreement' = (false),
-    issuedAfterEnd' = (false),
-    doubleRedeem' = (false),
-    redeemedLate' = (false),
   }
 
   // Time passes.
@@ -101,32 +97,24 @@ module agreementLinkProtocol {
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs,
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
-  // The address's executed agreement stops being executed (the code never does this today: an executed agreement only moves forward).
+  // The address's executed agreement stops being executed (the code never moves it out of executed except by retention deleting it; see the record).
   action agreementEnds = {
     all {
       now' = now,
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs,
       rd' = rd,
       executed' = executed.set(1, false),
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -139,35 +127,28 @@ module agreementLinkProtocol {
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs.set(r, { ...idle, phase: "asked", email: e }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
-  // The cooldown, step 1: read the address's row; the rule judges it at this request's instant. A running window is answered at once.
+  // The cooldown, step 1: read the address's row; the rule judges it at this request's first instant (a retry keeps it). A running window is answered at once.
   action coolRead = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "asked").oneOf()
     val h = runs.get(r)
-    val free = now >= coolAt.get(h.email) + WINDOW
+    val cool = if (h.cool < 0) now else h.cool
+    val free = coolAt.get(h.email) + WINDOW <= cool
     all {
       now' = now,
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
-      runs' = runs.set(r, if (free) { ...h, phase: "coolChecked", at: now } else { ...h, phase: "done", outcome: "cooling" }),
+      redeemedAt' = redeemedAt,
+      runs' = runs.set(r, if (free) { ...h, phase: "coolChecked", cool: cool } else { ...h, phase: "done", cool: cool, outcome: "cooling" }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -175,44 +156,37 @@ module agreementLinkProtocol {
   action coolWrite = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "coolChecked").oneOf()
     val h = runs.get(r)
-    val cas = coolAt.get(h.email) + WINDOW <= h.at
-    val retry = not(cas) and h.tries + 1 < TRIES
+    val cas = coolAt.get(h.email) + WINDOW <= h.cool
+    val retry = not(cas) and h.coolTries + 1 < TRIES
     all {
       now' = now,
       links' = links,
-      coolAt' = if (cas) coolAt.set(h.email, h.at) else coolAt,
+      coolAt' = if (cas) coolAt.set(h.email, h.cool) else coolAt,
       redeems' = redeems,
-      runs' = runs.set(r, if (cas) { ...h, phase: "cooled" } else if (retry) { ...h, phase: "asked", tries: h.tries + 1 } else { ...h, phase: "done", outcome: "cooling" }),
+      redeemedAt' = redeemedAt,
+      runs' = runs.set(r, if (cas) { ...h, phase: "cooled" } else if (retry) { ...h, phase: "asked", coolTries: h.coolTries + 1 } else { ...h, phase: "done", outcome: "cooling" }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
-  // The lookup: the agreements and the links of the address, read in one step. No executed agreement: nothing to do. A link inside the window: the cooldown's refusal.
+  // The lookup: the agreements and the links of the address, read in one step. No executed agreement: nothing to do. A link inside the window: the cooldown's refusal. The instant `at` is the first attempt's and is kept by a retry.
   action lookup = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "cooled").oneOf()
     val h = runs.get(r)
+    val at = if (h.at < 0) now else h.at
     val found = executed.get(h.email)
-    val blocked = not(windowFree(links, h.email, now))
+    val blocked = not(windowFree(links, h.email, at))
     val proceeds = (found or MUTANT == "no-lookup")
     all {
       now' = now,
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
-      runs' = runs.set(r, if (not(proceeds)) { ...h, phase: "done", outcome: "nothingToDo" } else if (blocked and MUTANT != "no-guard") { ...h, phase: "done", outcome: "cooling", found: found } else { ...h, phase: "found", found: found, at: now }),
+      redeemedAt' = redeemedAt,
+      runs' = runs.set(r, if (not(proceeds)) { ...h, phase: "done", at: at, outcome: "nothingToDo" } else if (blocked and MUTANT != "no-guard") { ...h, phase: "done", at: at, outcome: "cooling", found: found } else { ...h, phase: "found", found: found, at: at }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -222,20 +196,16 @@ module agreementLinkProtocol {
     val h = runs.get(r)
     val guardOk = MUTANT == "no-guard" or windowFree(links, h.email, h.at)
     val retry = not(guardOk) and h.tries + 1 < TRIES
-    val newLink = { id: r, email: h.email, issued: h.at, expires: h.at + EXPIRY }
+    val newLink = { id: r, email: h.email, issued: h.at, expires: h.at + EXPIRY, executedAtRead: h.found, executedAtStore: executed.get(h.email) }
     all {
       now' = now,
       links' = if (guardOk) links.union(Set(newLink)) else links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs.set(r, if (guardOk) { ...h, phase: "done", outcome: "stored" } else if (retry) { ...h, phase: "cooled", tries: h.tries + 1 } else { ...h, phase: "done", outcome: "cooling" }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue or (guardOk and not(windowFree(links, h.email, h.at)))),
-      issuedWithoutAgreement' = (issuedWithoutAgreement or (guardOk and not(h.found))),
-      issuedAfterEnd' = (issuedAfterEnd or (guardOk and not(executed.get(h.email)))),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -249,14 +219,10 @@ module agreementLinkProtocol {
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs.set(r, { ...h, phase: "checked", guardOk: windowFree(links, h.email, h.at) }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -264,25 +230,21 @@ module agreementLinkProtocol {
   action insertLink = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "checked").oneOf()
     val h = runs.get(r)
-    val newLink = { id: r, email: h.email, issued: h.at, expires: h.at + EXPIRY }
+    val newLink = { id: r, email: h.email, issued: h.at, expires: h.at + EXPIRY, executedAtRead: h.found, executedAtStore: executed.get(h.email) }
     all {
       MUTANT == "split-guard",
       now' = now,
       links' = if (h.guardOk) links.union(Set(newLink)) else links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs.set(r, { ...h, phase: "done", outcome: if (h.guardOk) "stored" else "cooling" }),
       rd' = rd,
       executed' = executed,
-      doubleIssue' = (doubleIssue or (h.guardOk and not(windowFree(links, h.email, h.at)))),
-      issuedWithoutAgreement' = (issuedWithoutAgreement or (h.guardOk and not(h.found))),
-      issuedAfterEnd' = (issuedAfterEnd or (h.guardOk and not(executed.get(h.email)))),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
-  // The redeem, step 1: read a stored link as unused and unexpired at this instant. Whether it was already expired is recorded as it was at this read.
+  // The redeem, step 1: read a stored link as unused and unexpired at this instant.
   action redeemRead = {
     nondet q = REDEEMERS.filter(i => rd.get(i).phase == "none").oneOf()
     nondet l = links.oneOf()
@@ -292,14 +254,10 @@ module agreementLinkProtocol {
       links' = links,
       coolAt' = coolAt,
       redeems' = redeems,
+      redeemedAt' = redeemedAt,
       runs' = runs,
-      rd' = rd.set(q, if (usable) { phase: "read", link: l.id, at: now, expiredAtRead: now >= l.expires } else { ...idleRedeem, phase: "done" }),
+      rd' = rd.set(q, if (usable) { phase: "read", link: l.id, at: now } else { ...idleRedeem, phase: "done" }),
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem),
-      redeemedLate' = (redeemedLate),
     }
   }
 
@@ -307,21 +265,16 @@ module agreementLinkProtocol {
   action redeemWrite = {
     nondet q = REDEEMERS.filter(i => rd.get(i).phase == "read").oneOf()
     val h = rd.get(q)
-    val stillUnused = redeems.get(h.link) == 0
-    val guardOk = stillUnused or MUTANT == "redeem-no-guard"
+    val guardOk = redeems.get(h.link) == 0 or MUTANT == "redeem-no-guard"
     all {
       now' = now,
       links' = links,
       coolAt' = coolAt,
       redeems' = if (guardOk) redeems.set(h.link, redeems.get(h.link) + 1) else redeems,
+      redeemedAt' = if (guardOk) redeemedAt.set(h.link, h.at) else redeemedAt,
       runs' = runs,
       rd' = rd.set(q, { ...h, phase: "done" }),
       executed' = executed,
-      doubleIssue' = (doubleIssue),
-      issuedWithoutAgreement' = (issuedWithoutAgreement),
-      issuedAfterEnd' = (issuedAfterEnd),
-      doubleRedeem' = (doubleRedeem or (guardOk and not(stillUnused))),
-      redeemedLate' = (redeemedLate or (guardOk and h.expiredAtRead)),
     }
   }
 
@@ -329,23 +282,23 @@ module agreementLinkProtocol {
     tick, agreementEnds, ask, coolRead, coolWrite, lookup, storeLink, checkGuard, insertLink, redeemRead, redeemWrite,
   }
 
-  // ---- Properties ---------------------------------------------------------------------------------------------------
-  // 1. Two links for one address are never issued inside the window.
-  val oneIssuePerWindow = not(doubleIssue)
+  // ---- Properties: invariants over the real state ---------------------------------------------------------------------
+  // 1. No two links for one address were issued less than the window apart.
+  val oneIssuePerWindow = links.forall(a => links.forall(b => a.id == b.id or a.email != b.email or apart(a.issued, b.issued)))
 
-  // 2. A link is issued only when the lookup read an executed agreement for the address.
-  val issuedOnlyWithAgreement = not(issuedWithoutAgreement)
+  // 2. A link was issued only when the lookup had read an executed agreement for the address.
+  val issuedOnlyWithAgreement = links.forall(l => l.executedAtRead)
 
-  // 3. A link is redeemed at most once.
-  val redeemedOnce = not(doubleRedeem)
+  // 3. A link is consumed at most once.
+  val redeemedOnce = RUNS.forall(l => redeems.get(l) <= 1)
 
-  // 4. A link is redeemed only if it was unexpired at the redeem's read.
-  val redeemedUnexpired = not(redeemedLate)
+  // 4. A link is consumed only by a redeem whose read was before its expiry.
+  val redeemedUnexpired = links.forall(l => redeemedAt.get(l.id) < l.expires)
 
-  // The finding, NOT in allProperties: a link is issued only while the agreement is still executed at the batch. The
+  // The finding, NOT in allProperties: a link was issued only while the agreement was still executed at the batch. The
   // batch does not re-check the status, so a link can be issued for an agreement that stopped being executed after the
-  // lookup. The code never moves an agreement out of "executed" today, so this cannot happen yet; run it by hand to see it.
-  val issuedStillExecuted = not(issuedAfterEnd)
+  // lookup (see docs/verification.md); run it by hand to see it.
+  val issuedStillExecuted = links.forall(l => l.executedAtStore)
 
   val allProperties = and {
     oneIssuePerWindow, issuedOnlyWithAgreement, redeemedOnce, redeemedUnexpired,
