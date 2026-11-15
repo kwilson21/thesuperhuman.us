@@ -111,7 +111,7 @@ There is no (c) and no (d): every decision that was in the old INSERT's WHERE, C
 
 ## Findings from independent reviews
 
-Each finding is fixed unless it says otherwise. The reviewed heads predate the merge of `origin/main`, so none of these reviews covered the heads named at the top of this record. UNVERIFIED: an independent review of those heads.
+Each finding is fixed unless it says otherwise. The first three reviews ran on heads before the merge of `origin/main`; the last covers the merged heads.
 
 Independent review of A `46e85258` and B `f3bf03b5`, 2026-11-14 (no behaviour difference and no authorization regression found):
 
@@ -141,6 +141,13 @@ Independent review of a later head (head not recorded), 2026-11-14: no must-fix 
 - N1: the library operation list (here, and in the header of `publication-kv.ts` on A and B) omitted the client-assertion replay marker; it is added with its fixed length.
 - N2: no test pinned the MCP answer for a shown entry whose stored text is not valid JSON; `tests/flows/publication-commit-stories.test.ts` now asserts `unavailable`, and the sentence about what is tested is exact.
 - N3, a judgment call for the owner to confirm: the day read sends one statement per 50 eligible entries, so a feed request makes 2 + ceil(N/50) + ceil(T/50) statements, in three batches (the index of 2, the days, the texts), for N entries that may be shown and T texts read (T is at most 111, so at most 3 text statements); with N = 1,000 the day read alone is 20 statements. D1 limits the number of queries per Worker invocation (no number is cited here: it was not read from Cloudflare documentation available in this repository). A very large journal could therefore reach that limit on the day read; no code changed, and the owner decides whether to bound or cache it.
+
+Independent review of the merged heads, A `ae6e86d7` and B `2864d67e`, 2026-11-15: no code bug found. Its findings, each fixed on B:
+
+- The real-database receiver test `tests/api/publication.test.ts` had been deleted on B; it is restored, with one added case for the lost race that ends as a 409.
+- Two test helpers hard-coded two migration files; both now build on `freshPublicationDb`, which applies every migration.
+- The header of the frozen validator copy named the wrong differential test; corrected.
+- This record overstated what the deleted test's replacements covered, misattributed the `RawValue` typing, and used workflow wording; corrected.
 
 ## Evidence and limits
 
