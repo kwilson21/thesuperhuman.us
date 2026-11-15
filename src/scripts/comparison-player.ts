@@ -78,6 +78,7 @@ export function setupComparisonPlayers() {
 		.forEach((root) => {
 			if (root.dataset.initialized) return;
 			const media = [...root.querySelectorAll<HTMLAudioElement>("audio")];
+			const files = media.map((audio) => audio.getAttribute("src") ?? "");
 
 			const play = root.querySelector<HTMLButtonElement>(
 				"[data-comparison-play]",
@@ -145,7 +146,10 @@ export function setupComparisonPlayers() {
 			const offsetOf = (audio: HTMLAudioElement) =>
 				Number(audio.dataset.offset ?? 0);
 
-			/** The level a version plays at when it is the one selected: the volume, and the loudness match when it is on. */
+			/**
+			 * The level a version plays at when it is the one selected: the volume, and the loudness match when it is on. In
+			 * the fallback the native players share the volume alone, as a visitor switching between them expects.
+			 */
 			function levelOf(audio: HTMLAudioElement) {
 				const quietest = Math.min(
 					...media.map((other) => Number(other.dataset.loudness ?? 0)),
@@ -153,7 +157,7 @@ export function setupComparisonPlayers() {
 
 				return (
 					Number(volume?.value ?? 1) *
-					(match?.checked
+					(match?.checked && root.dataset.audioFallback !== "true"
 						? Math.pow(
 								10,
 								(quietest - Number(audio.dataset.loudness ?? 0)) / 20,
@@ -379,6 +383,16 @@ export function setupComparisonPlayers() {
 
 			async function start() {
 				const request = ++operation;
+
+				// Another try after a load failure hides the native players again, and their note goes with them.
+				if (root.dataset.audioFallback === "true") {
+					delete root.dataset.audioFallback;
+					status.textContent = "";
+				}
+
+				// Play at the end starts the song again, as the transport does.
+				if (!transport && position >= Number(root.dataset.duration) - 0.05)
+					position = 0;
 				media.forEach((audio) => {
 					audio.pause();
 					audio.controls = false;
@@ -445,20 +459,33 @@ export function setupComparisonPlayers() {
 						if (handed.paused || (!loop && at >= transport!.duration)) return;
 						position = at;
 						streaming = undefined;
-						setTimeout(() => handed.pause(), 30);
 					}
 
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
+					// The versions' own players are let go once synced playback has taken over, as they were before the
+					// stream: a media key or the lock screen keeps the controls of the last element that played, and would
+					// otherwise start it alongside synced playback. The fallback gives them their files back.
+					setTimeout(() => {
+						handed?.pause();
+						media.forEach((audio) => {
+							if (!audio.getAttribute("src")) return;
+							audio.removeAttribute("src");
+							audio.load();
+						});
+					}, 30);
 					delete root.dataset.audioFallback;
 					status.textContent = "";
 				} catch {
 					if (request === operation) {
 						// A stream that is playing keeps playing, now in the native player the fallback shows, and the
-						// controls above keep following it.
+						// controls above keep following it. Both players share the volume.
 						root.dataset.audioFallback = "true";
-						media.forEach((audio) => {
+						media.forEach((audio, index) => {
+							if (!audio.getAttribute("src"))
+								audio.setAttribute("src", files[index]);
+							audio.volume = Math.min(1, levelOf(audio));
 							audio.controls = true;
 							audio.hidden = false;
 						});
@@ -721,11 +748,12 @@ export function setupComparisonPlayers() {
 				// A version starts that the comparison did not start. In the fallback a visitor started it from its native
 				// player, and the controls above follow it. Otherwise it is hidden and something outside the page started
 				// it (a media key or the lock screen, whose controls it kept from its stream), so it stops, and the
-				// comparison takes it as a press of its own button: it pauses if it is playing.
+				// comparison takes it as a press of its own button: it pauses if it is playing, and plays if it is not.
 				audio.addEventListener("play", () => {
 					if (streaming === audio || audio.paused) return;
 
 					if (root.dataset.audioFallback === "true") {
+						audio.volume = Math.min(1, levelOf(audio));
 						streaming = audio;
 						selected = index;
 						updateCompactWaveform();
@@ -739,7 +767,7 @@ export function setupComparisonPlayers() {
 					if (transport?.playing || pending) {
 						position = transport?.position ?? position;
 						pause();
-					}
+					} else void start();
 				});
 			});
 			window.addEventListener("pagehide", pause);

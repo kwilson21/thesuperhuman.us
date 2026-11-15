@@ -332,6 +332,9 @@ export function setupMusicPlayback() {
 			);
 
 			media.addEventListener("play", () => {
+				// A play event arrives as a task: an element paused again before it (an A/B switch while the comparison
+				// streams) did not start, and must not pause the one that did.
+				if (media.paused) return;
 				pauseOthers(media);
 
 				if (meter.completed && media.currentTime < 0.5)
