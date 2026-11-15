@@ -132,17 +132,8 @@ export async function agreementDownload(
 	}
 
 	// A visitor whose copy is missing from the bucket gets the same 404 as an unknown id. A bucket read that throws is an
-	// outage: the fixed sentence, as a 500.
-	let object: R2ObjectBody | null;
-
-	try {
-		object = await env.AUDIO.get(artifact.pdf_key);
-	} catch {
-		return new Response("Signed copy unavailable. Contact Kazon.", {
-			status: 500,
-			headers: agreementHeaders,
-		});
-	}
+	// outage: it is not caught here, so the route logs it once through logUnexpected and answers its fixed 500.
+	const object = await env.AUDIO.get(artifact.pdf_key);
 
 	if (!object)
 		return new Response("Not found", {

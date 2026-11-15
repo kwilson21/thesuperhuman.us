@@ -1197,6 +1197,63 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 	expect(response.status).toBe(200);
 });
 
+it("logs a throwing bucket read once through logUnexpected and still answers the fixed 500", async () => {
+	const { GET } = await import("~/pages/api/agreements/[id]/file");
+	const result = await signed();
+
+	const id = await countersignAgreements(
+		db,
+		(await offer())!,
+		result.documents,
+		"Owner",
+		"owner",
+		request(),
+	);
+
+	await prepareAgreementArtifact(env, id, async () =>
+		new TextEncoder().encode("%PDF-synthetic"),
+	);
+	sql.exec(
+		"INSERT INTO software_agreement_links VALUES('archive-link','archive','o',NULL,'client@example.com','archive-token','now','2099-01-01',NULL)",
+	);
+	sql
+		.prepare(
+			"INSERT INTO software_agreement_sessions VALUES(?,'archive','o',NULL,'client@example.com','archive-link','now','2099-01-01',NULL,'archive-csrf')",
+		)
+		.run(await hashOfferToken("a".repeat(43)));
+
+	const bucket = double<R2Bucket>({
+		get: async () => {
+			throw new Error("the bucket is unreachable");
+		},
+	});
+
+	const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	const response = await GET(
+		partial<APIContext>({
+			params: { id },
+			locals: {
+				runtime: partial<TestRuntime>({ env: { ...env, AUDIO: bucket } }),
+			},
+			request: new Request("https://example.com", {
+				headers: { cookie: `agreement_archive=${"a".repeat(43)}` },
+			}),
+		}),
+	);
+
+	expect(response.status).toBe(500);
+	expect(await response.text()).toBe("Signed copy unavailable. Contact Kazon.");
+	expect(logged).toHaveBeenCalledOnce();
+
+	const line = JSON.stringify(logged.mock.calls[0]);
+
+	expect(line).toContain("/api/agreements/[id]/file");
+	expect(line).not.toContain(id);
+	expect(line).not.toContain("client@example.com");
+	logged.mockRestore();
+});
+
 it("refuses to serve a retained signed PDF whose bytes no longer match its digest", async () => {
 	const result = await signed();
 
