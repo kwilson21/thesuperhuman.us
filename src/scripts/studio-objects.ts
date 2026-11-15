@@ -2,7 +2,8 @@
 // with the keyboard, plays that object's own scene (StudioLife.astro reads [data-play]); with reduced motion the scene
 // shows its finished frame instead. The object pointed at leads; with none, the one with keyboard focus (:focus-visible)
 // plays. A mouse press also focuses a link, and a touch screen sends pointer events for a tap, but neither plays a scene
-// (hover effects belong to fine pointers, design.md). Escape hides a label that shows (WCAG 1.4.13). A plain click on
+// (hover effects belong to fine pointers, design.md); a link a mouse press focused shows its focus ring at the next key
+// press, and its scene plays then. Escape hides a label that shows (WCAG 1.4.13). A plain click on
 // the headphones plays the mix-and-master comparison further down Home when it can play here; otherwise, and for a
 // click that opens a new tab or window, they open the audio portfolio, their link.
 export function setupStudioObjects() {
@@ -29,37 +30,52 @@ export function setupStudioObjects() {
 		scene.dataset.play = id;
 	};
 
-	scene
-		.querySelectorAll<HTMLAnchorElement>("[data-studio-object]")
-		.forEach((link) => {
-			const id = link.dataset.studioObject ?? "";
+	const links = [
+		...scene.querySelectorAll<HTMLAnchorElement>("[data-studio-object]"),
+	];
 
-			link.addEventListener("pointerenter", (event) => {
-				if (event.pointerType === "touch" || !fineHover.matches) return;
-				delete scene.dataset.labelsDismissed;
-				hovered = id;
-				update();
-			});
-			link.addEventListener("pointerleave", () => {
-				if (hovered !== id) return;
-				hovered = undefined;
-				update();
-			});
-			link.addEventListener("focus", () => {
-				if (!link.matches(":focus-visible")) return;
-				delete scene.dataset.labelsDismissed;
-				focused = id;
-				update();
-			});
-			link.addEventListener("blur", () => {
-				if (focused !== id) return;
-				focused = undefined;
-				update();
-			});
+	/** Reads which object has keyboard focus (:focus-visible) now; a new one shows its label again after Escape. */
+	const followFocus = () => {
+		const link = links.find(
+			(link) =>
+				link === document.activeElement && link.matches(":focus-visible"),
+		);
+
+		const id = link?.dataset.studioObject;
+
+		if (id && id !== focused) delete scene.dataset.labelsDismissed;
+		focused = id;
+		update();
+	};
+
+	links.forEach((link) => {
+		const id = link.dataset.studioObject ?? "";
+
+		link.addEventListener("pointerenter", (event) => {
+			if (event.pointerType === "touch" || !fineHover.matches) return;
+			delete scene.dataset.labelsDismissed;
+			hovered = id;
+			update();
 		});
+		link.addEventListener("pointerleave", () => {
+			if (hovered !== id) return;
+			hovered = undefined;
+			update();
+		});
+		link.addEventListener("focus", followFocus);
+		link.addEventListener("blur", () => {
+			if (focused !== id) return;
+			focused = undefined;
+			update();
+		});
+	});
 
 	document.addEventListener("keydown", (event) => {
-		if (event.key === "Escape" && (hovered || focused))
+		followFocus();
+
+		const onDesk = links.some((link) => link === document.activeElement);
+
+		if (event.key === "Escape" && (hovered || focused || onDesk))
 			scene.dataset.labelsDismissed = "true";
 	});
 

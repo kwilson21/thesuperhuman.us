@@ -116,6 +116,8 @@ const percent = (value: number, of: number) =>
   @media (hover: hover) and (pointer: fine) {
     .studio-object:hover { z-index: 3; }
     .studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }
+    /* One label at a time: the object pointed at leads, as its scene does, and a focused object's label waits. */
+    .studio-objects:has(.studio-object:hover) .studio-object:not(:hover) .studio-object-label { opacity: 0; pointer-events: none; }
   }
   /* Escape hides a showing label until the visitor points at or focuses an object again (studio-objects.ts). */
   .studio-scene[data-labels-dismissed] .studio-object .studio-object-label { opacity: 0; pointer-events: none; }

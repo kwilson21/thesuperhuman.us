@@ -162,6 +162,11 @@ function mount({
 		leave: (id: string, pointerType = "mouse") =>
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
+		/** Any other key, which makes a link a mouse press focused match :focus-visible, as Chromium does. */
+		press: (key: string) => {
+			if (page.activeElement) page.activeElement.keyboardFocus = true;
+			page.dispatchEvent(new Key(key));
+		},
 		/** The page comes back from the back-forward cache. */
 		restore: () => view.dispatchEvent(new Restored()),
 		/** Focus by keyboard (`keyboard`), which matches :focus-visible, or by a mouse press, which does not. */
@@ -261,6 +266,26 @@ it("hides a showing label on Escape until an object is pointed at or focused aga
 	expect(studio.scene.dataset.play).toBe("notebook");
 	studio.point("controller");
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+});
+
+it("plays the scene of a link a mouse press focused once a key shows its focus, and lets Escape hide its label", () => {
+	const studio = mount();
+
+	// A right-click or a press dragged off the link focuses it without a focus ring.
+	studio.focus("notebook", false);
+	expect(studio.scene.dataset.play).toBeUndefined();
+	studio.press("Shift");
+	expect(studio.scene.dataset.play).toBe("notebook");
+	studio.escape();
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+});
+
+it("hides a label on Escape when it is the first key after a mouse press focused its link", () => {
+	const studio = mount();
+
+	studio.focus("notebook", false);
+	studio.escape();
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
 });
 
 it("rests the scene when the page comes back from the back-forward cache", () => {
