@@ -1,4 +1,4 @@
-import { agreementHeaders } from "./agreement-access";
+import { agreementHeaders } from "./agreement-host";
 import { hashBytes } from "./agreement-artifacts";
 import type { AgreementArtifact } from "./agreement-artifacts";
 

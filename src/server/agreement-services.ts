@@ -7,7 +7,8 @@ import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { sendAudioMessage } from "../lib/audio-resend";
-import { keyedHash, reserveStudioAllowance } from "../lib/audio-client-access";
+import { reserveStudioAllowance } from "../lib/audio-client-access";
+import { keyedHash } from "../lib/client-portal";
 
 /** What Resend said about one message: sent, refused, or not known (the send may have happened). */
 export type MailOutcome = "sent" | "refused" | "uncertain";

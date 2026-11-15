@@ -53,19 +53,19 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    - Split the shared helpers that several areas import into modules of their own, with no behaviour change:
      `softwareGuard` and `softwareAudit` (out of `software-projects.ts`, used by six areas); `softwareInvoiceTerms` (out
      of `software-invoices.ts`, so signing stops pulling in Stripe); the pure parts of `audio-client-access.ts`
-     (`clientPortalEnabled`, `hashValue`, `keyedHash`); the date helpers of `audio-project-updates.ts`; the two
-     middleware helpers of `agreement-access.ts`; and the deposit facts the offers area reads (`depositOfferBlock`,
-     `depositOfferGuard`, today in `software-invoices.ts`), so offers stops loading Stripe and converts without
-     calling an unconverted payments helper.
+     (`normalizeClientEmail`, `clientPortalEnabled`, `hashValue`, `keyedHash`, now `client-portal.ts`); the date
+     helpers of `audio-project-updates.ts`; the two middleware helpers of `agreement-access.ts`; and the deposit facts
+     the offers area reads (`depositOfferBlock`, `depositOfferGuard`, today in `software-invoices.ts`), so offers stops
+     loading Stripe and converts without calling an unconverted payments helper.
 1. **Software offers.** `owner/requests/[id]/software.ts`: fit, question, decline, revoke, draft, send. Its store
    carries the signing statements these actions write (`retireRequestSigning`, the attachment delete) and the PDF
    preflight becomes a service. Design: `docs/plans/2026-11-offers-conversion.md`. Send and decline around their
    emails, and drafts saved while a decline's email is in flight, get a Quint model (an extension of
    `verification/discount-offers.qnt`) before its code.
-2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts` and `audio-client-access.ts`. Small, and signing
-   link issuance needs its allowance rule (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to
-   the browser, a behaviour fix for this area) merged on 2026-11-15, before it. Codes, attempts and sessions under
-   parallel requests get a Quint model.
+2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts`, `audio-client-access.ts` and `client-portal.ts`
+   (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule
+   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this
+   area) merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and

@@ -1270,7 +1270,7 @@ it("runs the same retention when the retired table has already been dropped", as
 	sql.close();
 });
 
-// The schema accepts addresses up to 320 characters (src/lib/audio-client-access.ts), so the worst case is that length.
+// The schema accepts addresses up to 320 characters (src/lib/client-portal.ts), so the worst case is that length.
 const worstEmail = (index: number) =>
 	`${String(index).padStart(4, "0")}${"a".repeat(304)}@example.com`;
 

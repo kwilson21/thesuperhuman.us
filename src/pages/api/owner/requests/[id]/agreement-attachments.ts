@@ -2,12 +2,9 @@ import type { APIRoute } from "astro";
 import { readAttachmentQuery } from "~/lib/agreement-owner-input";
 import { readBodyWithin } from "~/lib/audio-project-uploads";
 import { hashBytes } from "~/lib/agreement-artifacts";
-import {
-	agreementJson,
-	agreementHeaders,
-	signingEnabled,
-} from "~/lib/agreement-access";
-import { softwareGuard } from "~/lib/software-projects";
+import { agreementJson, signingEnabled } from "~/lib/agreement-access";
+import { agreementHeaders } from "~/lib/agreement-host";
+import { softwareGuard } from "~/lib/software-guard";
 
 export const prerender = false;
 
