@@ -66,17 +66,21 @@ const allowed = <A, E>(decision: Effect.Effect<A, E>) =>
 	Effect.map(Effect.result(decision), Result.isSuccess);
 
 /** The reply's text, read as the route always read it: a missing or non-string response is empty, and a value that cannot have a field is a failure. */
-function replyText<Reply>(reply: Reply): string {
-	if (!reply) return "";
+const replyText = <Reply>(reply: Reply) => {
+	if (!reply) return Effect.succeed("");
 
-	// SAFETY: a truthy reply is an object, or a primitive for which `in` throws (a TypeError, as the route always threw); the flow turns that throw into ReplyUnreadable. Only an object reaches the field read below.
-	if (!("response" in (reply as object))) return "";
+	// A truthy primitive cannot have a field: the route's `in` check threw on it, and that is a failure.
+	if (!Predicate.isObject(reply))
+		return Effect.fail(
+			new ReplyUnreadable({
+				cause: new TypeError("The reply is not an object"),
+			}),
+		);
 
-	// SAFETY: the `in` check above passed, so the reply is an object that has a `response` field.
-	const text = (reply as { readonly response: unknown }).response;
+	const text = Predicate.hasProperty(reply, "response") ? reply.response : "";
 
-	return Predicate.isString(text) ? text.trim() : "";
-}
+	return Effect.succeed(Predicate.isString(text) ? text.trim() : "");
+};
 
 /** The old days' cleanup as a background task: it runs after the response, and a failure is logged as the route always logged it. */
 const cleanup = (previousDay: string, db: D1Database) => () => {
@@ -170,10 +174,7 @@ export const suggest = (submission: SuggestSubmission) =>
 		const answer =
 			reply.success.kind === "answered" ? reply.success.value : undefined;
 
-		const raw = yield* Effect.try({
-			try: () => replyText(answer),
-			catch: (cause) => new ReplyUnreadable({ cause }),
-		});
+		const raw = yield* replyText(answer);
 
 		const words = yield* Effect.result(
 			suggestionFromReply.decide({ reply: raw, text: submission.text }, {}),

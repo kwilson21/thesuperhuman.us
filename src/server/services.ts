@@ -8,6 +8,9 @@ import type StripeSdk from "stripe";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import type { IntakeInput } from "../lib/audio-intake";
+import { deliverProjectInvitation } from "../lib/audio-project-invitations";
+import { sendOwnerRequestNotice } from "../lib/audio-resend";
 import type { AudioPayment } from "../lib/audio-payments";
 import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
 import { sendMail } from "../lib/resend";
@@ -341,9 +344,9 @@ export class Assistant extends Context.Service<
 	{
 		/** The model's answer to the chat `content`, as Workers AI gives it. */
 		readonly complete: (
-				content: string,
-				timeoutMs: number,
-			) => Effect.Effect<AssistantReply, ModelFailed>;
+			content: string,
+			timeoutMs: number,
+		) => Effect.Effect<AssistantReply, ModelFailed>;
 	}
 >()("site/Assistant") {}
 
@@ -353,7 +356,16 @@ export class Assistant extends Context.Service<
  */
 export class Background extends Context.Service<
 	Background,
-	{ readonly schedule: (task: () => Promise<void>) => Effect.Effect<void> }
+	{
+		readonly schedule: (task: () => Promise<void>) => Effect.Effect<void>;
+		/**
+		 * Starts each item now, in order, and lets the response go on without them (ctx.waitUntil); with no context it waits
+		 * for them first. An item must not fail: its effect is best effort and says so itself.
+		 */
+		readonly defer: (
+			work: readonly Effect.Effect<void>[],
+		) => Effect.Effect<void>;
+	}
 >()("site/Background") {}
 
 /**
@@ -379,16 +391,19 @@ export const liveTurnstileCheck = (secret: string) =>
 	});
 
 /** The suggestion limiters the request's bindings give. */
-export const liveSuggestLimits = (env: Env) =>
+export const liveSuggestLimits = (limiters: {
+	readonly visitor: NonNullable<Env["BRIEF_SUGGEST_RATE_LIMIT"]>;
+	readonly site: NonNullable<Env["BRIEF_SUGGEST_SITE_LIMIT"]>;
+}) =>
 	Context.make(SuggestLimits, {
 		visitor: (key) =>
 			Effect.tryPromise({
-				try: () => env.BRIEF_SUGGEST_RATE_LIMIT.limit({ key }),
+				try: () => limiters.visitor.limit({ key }),
 				catch: (cause) => new SuggestLimitFailed({ cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 		site: (key) =>
 			Effect.tryPromise({
-				try: () => env.BRIEF_SUGGEST_SITE_LIMIT.limit({ key }),
+				try: () => limiters.site.limit({ key }),
 				catch: (cause) => new SuggestLimitFailed({ cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 	});
@@ -459,5 +474,84 @@ export const liveBackground = (ctx: ExecutionContext | undefined) =>
 				const pending = Promise.resolve().then(task);
 
 				if (ctx) ctx.waitUntil(pending);
+			}),
+		// Each item runs synchronously as it is started, as a route's promise did when it was made before the response: its
+		// first outside call is on the request's side of the response, and the same single waitUntil is registered.
+		defer: (work) =>
+			Effect.suspend(() => {
+				const pending = Promise.all(
+					work.map((item) => Effect.runPromise(item)),
+				);
+
+				if (ctx) {
+					ctx.waitUntil(pending);
+
+					return Effect.void;
+				}
+
+				return Effect.promise(() => pending);
+			}),
+	});
+
+/** The owner notice could not be sent or its state is uncertain. */
+export class OwnerNoticeFailed extends Data.TaggedError("OwnerNoticeFailed") {}
+
+/**
+ * The owner's notice that a visitor sent an audio request (src/lib/audio-resend.ts `sendOwnerRequestNotice`). The flow
+ * treats it as best effort: a failure cannot undo the stored request.
+ */
+export class OwnerNotice extends Context.Service<
+	OwnerNotice,
+	{
+		readonly send: (request: {
+			readonly input: IntakeInput;
+			readonly requestId: string;
+		}) => Effect.Effect<void, OwnerNoticeFailed>;
+	}
+>()("site/OwnerNotice") {}
+
+/** The owner notice through Resend, with the keys and addresses the request's env gives. */
+export const liveOwnerNotice = (env: Env) =>
+	Context.make(OwnerNotice, {
+		send: ({ input, requestId }) =>
+			Effect.tryPromise({
+				try: () =>
+					sendOwnerRequestNotice({
+						input,
+						requestId,
+						origin: env.SITE_ORIGIN,
+						apiKey: env.RESEND_API_KEY,
+						from: env.CONTACT_FROM_EMAIL,
+						to: env.CONTACT_TO_EMAIL,
+					}),
+				catch: () => new OwnerNoticeFailed(),
+			}),
+	});
+
+/** The studio invitation could not be delivered or its state is uncertain. */
+export class ProjectInvitationFailed extends Data.TaggedError(
+	"ProjectInvitationFailed",
+) {}
+
+/**
+ * The studio invitation for a request whose client portal is on (src/lib/audio-project-invitations.ts
+ * `deliverProjectInvitation`, which the owner routes share). Best effort in the flow, as the owner notice is.
+ */
+export class ProjectInvitation extends Context.Service<
+	ProjectInvitation,
+	{
+		readonly deliver: (
+			requestId: string,
+		) => Effect.Effect<void, ProjectInvitationFailed>;
+	}
+>()("site/ProjectInvitation") {}
+
+/** The studio invitation through the project store in `db` and Resend, with the env the request gives. */
+export const liveProjectInvitation = (db: D1Database, env: Env) =>
+	Context.make(ProjectInvitation, {
+		deliver: (requestId) =>
+			Effect.tryPromise({
+				try: () => deliverProjectInvitation(db, requestId, env),
+				catch: () => new ProjectInvitationFailed(),
 			}),
 	});

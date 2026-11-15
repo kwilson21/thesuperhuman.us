@@ -3,13 +3,8 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { musicRequest } from "~/lib/music-request";
 import { suggestionPassCookie } from "~/lib/brief-suggestion-pass";
-import {
-	suggest,
-	SuggestSigningFailed,
-	ReplyUnreadable,
-} from "~/server/flows/brief-suggest";
+import { suggest } from "~/server/flows/brief-suggest";
 import { logUnexpected } from "~/server/failure";
-import { BudgetStoreFailed } from "~/server/brief-suggest-store";
 import { readSuggestInput } from "~/server/brief-input";
 import { runRoute } from "~/server/run";
 import {
@@ -17,7 +12,6 @@ import {
 	liveAssistant,
 	liveBackground,
 	liveSuggestLimits,
-	SuggestLimitFailed,
 } from "~/server/services";
 import type { SuggestAnswer } from "~/server/flows/brief-suggest";
 
@@ -92,7 +86,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 		return runRoute(
 			Context.merge(
-				Context.merge(bindings.services, liveSuggestLimits(env)),
+				Context.merge(
+					bindings.services,
+					liveSuggestLimits({
+						visitor: env.BRIEF_SUGGEST_RATE_LIMIT,
+						site: env.BRIEF_SUGGEST_SITE_LIMIT,
+					}),
+				),
 				Context.merge(
 					liveAssistant(env.AI),
 					liveBackground(locals.runtime?.ctx),

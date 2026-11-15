@@ -5,7 +5,8 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import { createSuggestionPass } from "../../lib/brief-suggestion-pass";
-import { CaptchaUnavailable, issueForPassedCheck } from "../rules/brief-pass";
+import { issueForPassedCheck } from "../rules/brief-pass";
+import { CaptchaUnavailable } from "../rules/captcha";
 import { TurnstileCheck } from "../services";
 
 /** Signing the pass failed (the HMAC could not be made). */

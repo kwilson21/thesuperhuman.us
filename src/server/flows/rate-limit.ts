@@ -9,7 +9,9 @@ import { RateLimit } from "../services";
 /** The rate limit store could not be read or written. */
 export class RateLimitStoreFailed extends Data.TaggedError(
 	"RateLimitStoreFailed",
-) {}
+)<{
+	readonly cause: unknown;
+}> {}
 
 /** Counts one request from `ip` under `prefix`; true when it is within `max` in the window (one when `max` is left out). */
 export const countRequest = (ip: string, prefix: string, max?: number) =>
@@ -18,7 +20,7 @@ export const countRequest = (ip: string, prefix: string, max?: number) =>
 
 		const counted = yield* Effect.tryPromise({
 			try: () => checkRateLimit(rateLimit, ip, prefix, max),
-			catch: () => new RateLimitStoreFailed(),
+			catch: (cause) => new RateLimitStoreFailed({ cause }),
 		});
 
 		return counted.allowed;
@@ -31,6 +33,6 @@ export const giveBack = (ip: string, prefix: string) =>
 
 		yield* Effect.tryPromise({
 			try: () => rateLimit.delete(`${prefix}${ip}`),
-			catch: () => new RateLimitStoreFailed(),
+			catch: (cause) => new RateLimitStoreFailed({ cause }),
 		});
 	});

@@ -1,19 +1,7 @@
-// The decision on a suggestion pass: a pass is issued only when the captcha check passed. A refusal of the token and an
-// unavailable check are different answers (the visitor is asked to try again only when the check could not answer), so
-// each is its own named refusal, and the flow reads the name.
+// The decision on a suggestion pass: a pass is issued only when the captcha check passed. A refused token and an
+// unavailable check are the two named refusals in ./captcha.
 import { alwaysWrites, term, unless } from "../terms";
-
-/** The check said the token is not good: no pass, and the route answers the same empty body as before. */
-export class CaptchaRefused {
-	readonly _tag = "CaptchaRefused";
-	readonly say = "";
-}
-
-/** The check could not answer: no pass, and the route answers 503. */
-export class CaptchaUnavailable {
-	readonly _tag = "CaptchaUnavailable";
-	readonly say = "";
-}
+import { CaptchaRefused, CaptchaUnavailable } from "./captcha";
 
 /** A pass is issued only for a check that passed. */
 export const issueForPassedCheck = alwaysWrites({
