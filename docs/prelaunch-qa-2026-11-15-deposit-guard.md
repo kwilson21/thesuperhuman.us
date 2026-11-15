@@ -6,7 +6,7 @@ Branch: `claude/friendly-fermat-fk9ado`, from `origin/main` at `82e61315`
 Commits: `41913883` (reproduction, recorded from the old code), `4246c592` (fix and re-recorded fixtures), `a288ba73` (review round 1 and this record), `79461783` (review round 2), `61d3d795` (review round 3), then review round 4
 Pull request: [#285](https://github.com/kwilson21/thesuperhuman.us/pull/285)
 Target: production `https://thesuperhuman.us` after merge (the owner API and the owner runbook only)
-Decisions: Kazon Wilson (decision 9 of `docs/plans/2026-11-discount-flow.md`, 2026-11-13: reproduce against the real code and fix if real). Implementation and four independent review passes were done with Claude Code. Merge authorization: not given by this record.
+Decisions: Kazon Wilson (decision 9 of `docs/plans/2026-11-discount-flow.md`, 2026-11-13: reproduce against the real code and fix if real). Implementation and four independent review passes were done with Claude Code. Merge authorization: the owner, in conversation on 2026-11-15 ("Yes").
 Rollback revision: `82e61315`, the revision of `main` this branch was cut from. After merge, revert the merge commit to undo only this change.
 
 ## Scope
@@ -35,14 +35,14 @@ Independent review, round 3 (Claude Code, head `79461783`): no finding in the gu
 
 Independent review, round 4 (Claude Code, head `61d3d795`): `reconciliationArgs` checked against every argument shape with a stub database (no flags, `--remote` before or after the action, `--remote --config path` before or after, `--config` without `--remote` or without a path, which the script refuses before opening the database); behaviour with `--config` is unchanged. Fixed: the audio reconciliation commands in `docs/stripe-invoicing-readiness.md` had no `--remote` (after the script fix they would have run against the local preview database); the usage error named only the two audio actions; this record's count of review passes.
 
-## Owner decision needed
+## Owner decision needed (addressed after merge)
 
+- Addressed by the follow-up #287 (open when this was written), as recommended to the owner on 2026-11-15: both refusals now name the step that records the refund (`owner:stripe:reconcile`), and the owner page is left as it is. The point as raised:
 - After a decline and a reopen, the owner page lists no invoices of the withdrawn offer (the panel shows the project's or the sent offer's invoices only), so the paid deposit that now blocks a send is visible only in Stripe. The new sentence says "Refund it in Stripe" and does not mention the reconciliation command that records the refund (the existing "already paid" sentence has the same gap). The runbook now describes the command and where the id is. Options: show earlier offers' first deposits in the panel, name the reconciliation step in the sentence, or leave both since this path is rare.
 
 ## Remaining work
 
-- Merge, production build and the live check, after the owner authorizes the merge.
-- The owner decision above.
+- #287, the refusal sentences.
 - Discount PRs 3 to 6, after the offers, signing and payments areas move to Effect.
 
 UNVERIFIED until checked:
@@ -82,8 +82,9 @@ UNVERIFIED until checked:
 - **PASS · Diff review.** No secrets, no generated public artifacts, no unrelated changes.
 - **N/A · Bindings, migrations, backups.** None.
 - **PASS · Rollback version.** `82e61315`; after merge, revert the merge commit.
-- **UNVERIFIED · Production revision and live check.** To be recorded after an authorized merge.
-- **UNVERIFIED · Receipt.** Implemented and verified locally (above); not deployed and not verified live.
+- **PASS · Merge and production build.** Merged 2026-11-15 11:03:09 UTC as `86773378` (first parent `82e61315`). On the merge commit: `validate` succeeded (Validate run 43707026841), and the check run "Workers Builds: thesuperhuman-us" succeeded at 11:04:49 UTC.
+- **PASS, with limits · Live check.** 2026-11-15, minutes after the merge: `https://thesuperhuman.us/` answered 200, and `https://thesuperhuman.us/api/owner/requests/r1/software` without an Access login answered 302 (to the Access login), so the owner API still fails closed. The guard itself was not exercised live: that needs the owner's Access login and a request with a paid deposit, and none was made.
+- **PASS, with limits · Receipt.** Implemented, verified locally, deployed (`86773378`). Verified live: the site and the owner API's Access gate only; the new refusal is UNVERIFIED live.
 
 ## 8. Private owner center
 
