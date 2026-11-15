@@ -202,6 +202,9 @@ function mount({
 		focusElsewhere: () => {
 			active = { tagName: "A" };
 		},
+		focusNowhere: () => {
+			active = documentEvents.body;
+		},
 		pressSendNow: () => {
 			active = sendNow;
 			sendNow.click();
@@ -372,6 +375,17 @@ it("sends at once when the visitor leaves or switches away, since Undo only work
 	}
 });
 
+it("moves focus to the count when nothing had focus as the hold ends", async () => {
+	const contact = mount();
+	const sending = contact.submit();
+
+	contact.focusNowhere();
+	await vi.advanceTimersByTimeAsync(CONTACT_HOLD_SECONDS * 1000);
+	expect(contact.count.focus).toHaveBeenCalledWith({ preventScroll: true });
+	contact.answer();
+	await sending;
+});
+
 it("leaves focus where it is when it was outside the panel as the hold ends", async () => {
 	const contact = mount();
 	const sending = contact.submit();
@@ -465,7 +479,8 @@ it("gives the hold every part the script fills, with a fixed label and no other 
 		'<h3 id="contact-hold-title">Check it before it sends.</h3>',
 		`<p id="contact-hold-count" class="contact-hold-count" role="timer" aria-labelledby="contact-hold-count" tabindex="-1" data-hold-count>${holdCountText(CONTACT_HOLD_SECONDS)}</p>`,
 		'aria-labelledby="contact-hold-title" aria-describedby="contact-hold-when contact-hold-about"',
-		`<p id="contact-hold-when" class="sr-only">It sends in ${CONTACT_HOLD_SECONDS} seconds unless you undo it.</p>`,
+		// Hidden from the page's reading order; a description can still be read from a hidden element.
+		`<p id="contact-hold-when" hidden>It sends in ${CONTACT_HOLD_SECONDS} seconds unless you undo it.</p>`,
 		"I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving or switching away from this page sends it right away.",
 		"data-hold-undo>Undo and edit</button>",
 		"data-hold-send>Send now</button>",
@@ -476,10 +491,14 @@ it("gives the hold every part the script fills, with a fixed label and no other 
 
 	expect(holdFromText(" Alex ", "")).toBe("Alex");
 	expect(holdFromText("Alex", " Example Studio ")).toBe("Alex, Example Studio");
+
 	// The count keeps the site's focus ring: it takes focus from the keyboard when the message starts sending.
-	expect(readFileSync("src/styles/global.css", "utf8")).not.toMatch(
-		/contact-hold-count:focus[^}]*outline:\s*none/,
-	);
+	for (const rule of readFileSync("src/styles/global.css", "utf8").match(
+		/[^{}]*(contact-hold|form-hold|data-hold)[^{}]*\{[^}]*\}/g,
+	) ?? [])
+		expect(rule).not.toMatch(
+			/outline(-style)?\s*:\s*(none|0)\b|outline-color\s*:\s*transparent/,
+		);
 	expect(holdPanel).not.toContain("mailto:");
 	expect(success).not.toContain("mailto:");
 	expect(success).not.toMatch(/typo/i);

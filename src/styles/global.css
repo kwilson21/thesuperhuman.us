@@ -328,6 +328,7 @@
 .site-form[hidden], .form-success[hidden], .form-hold[hidden], .site-form [hidden] { display: none; }
 .form-success h3, .form-hold h3 { font-size: 2rem; margin-bottom: .75rem; }
 .form-success, .form-hold { padding-block: 1rem; }
-/* The count has its own line at body size, so the buttons below it only move if enlarged text wraps it. */
-.form-hold .contact-hold-count { font-variant-numeric: tabular-nums; }
+/* The count has its own line at body size, so the buttons below it only move if enlarged text wraps it. It is as
+   wide as its text, so the focus ring it takes when sending starts hugs "Sending…". */
+.form-hold .contact-hold-count { width: fit-content; max-width: 100%; font-variant-numeric: tabular-nums; }
 @media(max-width: 600px) { .site-form .form-pair { grid-template-columns: 1fr; } }
