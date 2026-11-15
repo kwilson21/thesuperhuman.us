@@ -41,8 +41,8 @@ no code.
   local load from parallel jobs and passed alone and in CI.
 - #305 CI at `5215ecd1`: `validate`, `neutrality`, `capture` and the Workers preview build succeeded. An earlier
   `validate` run at `fcaba282` was cancelled by the job's 15-minute limit during `pnpm test`; the same limit cancelled
-  a run on `main` (`a6892d0d`) earlier the same day, so the job is near its limit independent of this change. The PR
-  that carries this record raises it to 25 minutes.
+  a run on `main` (`a6892d0d`) earlier the same day, so the job is near its limit independent of this change. #318
+  raised it to 30 minutes.
 - Reviews of #305: Codex found nothing on an earlier head. An independent Claude Code pass on the merged head
   (`fcaba282`) tried to disprove the "pure move" claim: declarations byte-identical, old modules identical to `main`
   once imports and the moved code are removed, 107 imports of moved names all from the new modules, no `vi.mock` of a

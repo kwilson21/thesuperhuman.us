@@ -1,5 +1,4 @@
 import rendered from "../data/og-media.json";
-import { mediaRange } from "~/lib/music-media";
 
 /**
  * Link-preview scenes: each is a looping silent video whose first frame is also the page's
@@ -170,62 +169,8 @@ export function ogMedia(scene: OgScene): OgMedia {
 	};
 }
 
-const IMMUTABLE = "public, max-age=31536000, immutable";
-
-/**
- * Serves /og/<name>.mp4 with byte ranges. Static assets answer every request with the whole file
- * and no Accept-Ranges, and Safari's media stack expects 206 responses, so the bytes live at
- * /og/raw/<name>.mp4 and this route slices them.
- */
-export async function serveOgVideo(
-	request: Request,
-	name: string | undefined,
-	assets: Pick<Fetcher, "fetch"> | undefined,
-): Promise<Response> {
-	const path = `/og/${name}.mp4`;
-
-	if (
-		!name ||
-		!Object.values(renderedScenes).some((files) => files?.video === path)
-	)
-		return new Response("Not found", { status: 404 });
-
-	const source = await (assets ?? globalThis).fetch(
-		new URL(`/og/raw/${name}.mp4`, request.url),
+/** The paths of the rendered scenes' videos, read when asked: a route names one of these or none. */
+export const renderedVideos = (): string[] =>
+	Object.values(renderedScenes).flatMap((files) =>
+		files ? [files.video] : [],
 	);
-
-	if (!source.ok) return new Response("Not found", { status: 404 });
-	const bytes = await source.arrayBuffer();
-	const size = bytes.byteLength;
-
-	const range =
-		request.method === "HEAD"
-			? null
-			: mediaRange(request.headers.get("range"), size);
-
-	if (range === "invalid")
-		return new Response(null, {
-			status: 416,
-			headers: { "content-range": `bytes */${size}` },
-		});
-
-	const headers = new Headers({
-		"content-type": "video/mp4",
-		"accept-ranges": "bytes",
-		"content-length": String(range?.length ?? size),
-		"cache-control": IMMUTABLE,
-	});
-
-	if (range)
-		headers.set(
-			"content-range",
-			`bytes ${range.offset}-${range.offset + range.length - 1}/${size}`,
-		);
-
-	if (request.method === "HEAD") return new Response(null, { headers });
-
-	return new Response(
-		range ? bytes.slice(range.offset, range.offset + range.length) : bytes,
-		{ status: range ? 206 : 200, headers },
-	);
-}

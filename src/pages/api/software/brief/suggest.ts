@@ -3,7 +3,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { suggestionPassCookie } from "~/lib/brief-suggestion-pass";
 import { suggest } from "~/server/flows/brief-suggest";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
 import { readBody, readSuggestInput } from "~/server/brief-input";
 import { runRoute } from "~/server/run";
 import {
@@ -25,6 +25,8 @@ const empty = () => Response.json({ suggestion: "" }, { headers: noStore });
 /** A store, limiter, signing or reply failure: the same empty body, with 500 so the failure is not taken for a quiet answer. */
 const failedAnswer = () =>
 	Response.json({ suggestion: "" }, { status: 500, headers: noStore });
+
+const failed = loggedAnswer(ROUTE, failedAnswer);
 
 /** The model did not answer usefully: the same empty body, with 503 (a known unavailable dependency). */
 const modelUnavailable = () =>
@@ -103,36 +105,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				UnusableReply: () => Effect.succeed(empty()),
 				PassRequired: () => Effect.succeed(passRequired()),
 				ModelUnavailable: () => Effect.succeed(modelUnavailable()),
-				BodyReadFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return failedAnswer();
-					}),
-				SuggestLimitFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return failedAnswer();
-					}),
-				BudgetStoreFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return failedAnswer();
-					}),
-				SuggestSigningFailed: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return failedAnswer();
-					}),
-				ReplyUnreadable: (failure) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return failedAnswer();
-					}),
+				BodyReadFailed: (failure) => failed(failure.failure),
+				SuggestLimitFailed: (failure) => failed(failure.failure),
+				BudgetStoreFailed: (failure) => failed(failure.failure),
+				SuggestSigningFailed: (failure) => failed(failure.failure),
+				ReplyUnreadable: (failure) => failed(failure.failure),
 			}),
 		),
 		{ route: ROUTE, answer: failedAnswer },
