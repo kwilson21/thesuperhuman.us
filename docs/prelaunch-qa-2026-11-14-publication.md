@@ -4,7 +4,7 @@ Two things are gated: branch A (behavior fixes to the publication routes) and br
 
 Date: November 14, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-12-publication-fixes`, first cut from `origin/main` at `3561a541` (the merge of #273) and since merged with `origin/main` at `8b5b4efd`; its tip is `2896bf33`. B is `claude/effect-12-publication`, cut from A, which merges A's tip (merge `6afdb0fe` for `2896bf33`) and has its evidence head at `005ad90d`.
+Branches: A is `claude/effect-12-publication-fixes`, first cut from `origin/main` at `3561a541` (the merge of #273) and since merged with `origin/main` at `8b5b4efd`; its tip is `f4075209`. B is `claude/effect-12-publication`, cut from A, which merges A's tip (merge `e79b7bf9` for `f4075209`) and has its evidence head at `8c81e86f`.
 Pull requests: not yet opened.
 Target: production
 Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. This record does not certify the checks listed as UNVERIFIED. UNVERIFIED: Codex and Greptile review of these heads.
@@ -170,27 +170,27 @@ Independent review of the fixes above, A `2896bf33` and B `3811a5b1`, 2026-11-15
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Results are filled in below from the last runs at each tip.
 
-Branch A at `2896bf33` (the merge of `origin/main` at `8b5b4efd`, the fixture re-record, then the three fixes for the pull request review comments: rate-limit and app-error answers, their corpus cases and fixture, and the publisher guidance). Every step ran at this tip. Merging `origin/main` conflicted in `tests/api/publication.test.ts` (kept: the real-database test from `origin/main`, expecting 500 and the fixed sentence for an unmigrated database, which is this branch's fix) and in the four publication fixtures (taken from `origin/main`, then re-recorded). Lint reported no finding after the merge and after the review fixes.
+Branch A at `f4075209` (the merge of `origin/main` at `8b5b4efd`, the fixture re-record, the fixes for the pull request review comments: rate-limit and app-error answers, their corpus cases and fixture, the publisher guidance, and then the callback error handling with its corpus cases and fixture). Every step ran at this tip. Merging `origin/main` conflicted in `tests/api/publication.test.ts` (kept: the real-database test from `origin/main`, expecting 500 and the fixed sentence for an unmigrated database, which is this branch's fix) and in the four publication fixtures (taken from `origin/main`, then re-recorded). Lint reported no finding after the merge and after the review fixes.
 
 - `pnpm run format:check`: `Checked 785 files in 99ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 310 test files, 13,142 tests passed, 1 skipped; `git status` unchanged by the run.
-- `pnpm run golden:neutral --all origin/main HEAD`: NOT NEUTRAL, on purpose: `publication-mcp` 60 identical, 1 added; `publication-oauth` 114 identical, 10 not neutral, 14 added; `publication-token` 42 identical, 13 added; `work-feed` 228 identical, 8 not neutral (the eighteen changed cases above are the 10 and the 8; the 28 added cases are the 1, 14 and 13 listed, ten of them from the review comments); compared 77 fixtures and 9,038 cases; 4 of 77 fixtures differ and nothing else does.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 310 test files, 13,150 tests passed, 1 skipped; `git status` unchanged by the run.
+- `pnpm run golden:neutral --all origin/main HEAD`: NOT NEUTRAL, on purpose: `publication-mcp` 60 identical, 1 added; `publication-oauth` 114 identical, 10 not neutral, 17 added; `publication-token` 42 identical, 13 added; `work-feed` 228 identical, 8 not neutral (the eighteen changed cases above are the 10 and the 8; the 31 added cases are the 1, 17 and 13 listed, thirteen of them from the review comments); compared 77 fixtures and 9,038 cases; 4 of 77 fixtures differ and nothing else does.
 - `QUINT_JOBS=4 pnpm run verify:quint:all`: exit 0.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm run lint`: `oxlint --deny-warnings` printed no finding.
 - `pnpm run check`: `Result (811 files): 0 errors, 0 warnings, 17 hints`.
 
-Branch B, evidence head `005ad90d` (A's tip `2896bf33` merged as `6afdb0fe`, then the fixes of the review comments on B; the earlier steps are the lint fix, the fixture re-record, the restored receiver test, the shared test database helper and the record corrections). Every step ran at the evidence head; the commits after it change this record only.
+Branch B, evidence head `8c81e86f` (A's tip `f4075209` merged as `e79b7bf9`, then the fixes of the review comments on B, the refill and callback fixes and their record; the earlier steps are the lint fix, the fixture re-record, the restored receiver test, the shared test database helper and the record corrections). Every step ran at the evidence head; the commits after it change this record only.
 
 Conflicts in the first merge and how they were resolved: `src/lib/publication/contract.ts` and `src/lib/publication/mcp.ts` (kept B's converted modules; `origin/main` had only retyped the old reader's input, and the `RawValue` typing on B's reader came with the lint fix `5373a64c`); `src/lib/publication/delivery.ts` and `tests/lib/publication-delivery.test.ts` (modified on A, deleted on B: kept deleted); `tests/api/publication.test.ts` (modified on A, deleted on B: restored afterwards, see the file map); `docs/verification.md` (both the journal model section and the corpus section kept); `tests/scripts/quint-run.test.ts` (the driver test now lists five models, with the publication model last); the three fixtures `publication-mcp`, `publication-token` and `work-feed` (taken from A, then re-recorded). The merge of A's review fixes conflicted in `src/lib/publication/oauth-login.ts` (kept B's, which holds only the consent page; the two fixes were ported to `src/server/publication-services.ts`, `src/server/rules/publication-login.ts` and `src/server/publication-login.ts`). Two lint findings were fixed in files this branch changed: the unknown-typed input of `parsePublication` and of the frozen copy's reader, which now take the raw-value type the other readers use.
 
 - `pnpm run format:check`: `Checked 807 files in 132ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 315 test files, 13,203 tests passed, 1 skipped; `git status` unchanged by the run.
-- `pnpm run golden:neutral --all refs/heads/claude/effect-12-publication-fixes HEAD`: `publication-mcp` 43 identical, 18 neutral with D1 changes; `publication-token` 51 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,066 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commits; the review fixes needed none on B (the oauth fixture came from A).
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 315 test files, 13,222 tests passed, 1 skipped; `git status` unchanged by the run.
+- `pnpm run golden:neutral --all refs/heads/claude/effect-12-publication-fixes HEAD`: `publication-mcp` 43 identical, 18 neutral with D1 changes; `publication-token` 51 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,069 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commits; the review fixes needed none on B (the oauth fixture came from A).
 - `QUINT_JOBS=4 pnpm run verify:quint:all`: exit 0.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm run lint`: `oxlint --deny-warnings` printed no finding.
