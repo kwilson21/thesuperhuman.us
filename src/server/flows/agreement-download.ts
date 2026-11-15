@@ -22,9 +22,7 @@ import { studioIdentity, visitorSession } from "./agreement-session";
 export class CopyMissing extends Data.TaggedError("CopyMissing") {}
 
 /** The bucket read failed (it threw). The route answers its fixed 500 with no log line, as it always has. */
-export class CopyReadFailed extends Data.TaggedError("CopyReadFailed")<{
-	readonly failure: unknown;
-}> {}
+export class CopyReadFailed extends Data.TaggedError("CopyReadFailed") {}
 
 /** Reading the object's bytes failed (it threw). The route logs it and answers its fixed 500. */
 export class CopyBytesFailed extends Data.TaggedError("CopyBytesFailed")<{
@@ -78,7 +76,7 @@ export const downloadSignedCopy = (input: {
 
 		const object = yield* Effect.tryPromise({
 			try: () => bucket.get(copy.pdf_key),
-			catch: (failure) => new CopyReadFailed({ failure }),
+			catch: () => new CopyReadFailed(),
 		}).pipe(
 			Effect.flatMap((found) =>
 				Effect.fromNullishOr(found).pipe(
