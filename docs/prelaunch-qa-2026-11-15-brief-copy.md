@@ -4,7 +4,7 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 
 Date: November 15, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, at `fbfc3e05` (the media conversion, PRs 309 to 311), at `7beca022`, at `f23d6d01` and at `59573d70` (the last merge; offers files only changed on `origin/main` since the previous one, apart from a dependency).
+Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, at `fbfc3e05` (the media conversion, PRs 309 to 311), at `7beca022`, at `f23d6d01` and at `59573d70` (the last merge; it brought the offers fixes (PRs 313, 314 and 316) and the navigation prediction trial (PR 303) with its `js.foresight` dependency; none touch this area's files).
 Tips: A is `ce96f1d2` (the review fixes, merged with `origin/main` at `59573d70`). B's code is at `f1599382` (A merged in, then the conversion, the record and note fixes of the review items, and the agreement link's cooldown save); the merge conflicts with the media conversion are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
 Pull requests: #321 (A) and #322 (B).
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
