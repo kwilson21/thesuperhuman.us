@@ -18,6 +18,10 @@ import type { Refusal } from "../../src/server/terms";
 
 const NOW = "2026-11-13T12:00:00.000Z";
 
+const OPEN: readonly OwnerRequestStatus[] = ["new", "reviewed"];
+
+const CLOSED: readonly OwnerRequestStatus[] = ["resolved", "withdrawn"];
+
 const SAYS = "This brief copy cannot be sent again here.";
 
 const request = (
@@ -81,14 +85,11 @@ describe("the owner's resend", () => {
 		).toBe("write");
 	});
 
-	it.each(["new", "reviewed"] as OwnerRequestStatus[])(
-		"claims a copy of a request that is %s",
-		(status) => {
-			expect(
-				resend(resendCopy.decide(ask(), { found: found({}, { status }) })).kind,
-			).toBe("write");
-		},
-	);
+	it.each(OPEN)("claims a copy of a request that is %s", (status) => {
+		expect(
+			resend(resendCopy.decide(ask(), { found: found({}, { status }) })).kind,
+		).toBe("write");
+	});
 
 	it("refuses when no request is stored", () => {
 		expect(resend(resendCopy.decide(ask(), { found: null }))).toEqual(
@@ -106,14 +107,11 @@ describe("the owner's resend", () => {
 		);
 	});
 
-	it.each(["resolved", "withdrawn"] as OwnerRequestStatus[])(
-		"refuses a request that is %s",
-		(status) => {
-			expect(
-				resend(resendCopy.decide(ask(), { found: found({}, { status }) })),
-			).toEqual(refuse("BriefCopyRequestClosed", SAYS));
-		},
-	);
+	it.each(CLOSED)("refuses a request that is %s", (status) => {
+		expect(
+			resend(resendCopy.decide(ask(), { found: found({}, { status }) })),
+		).toEqual(refuse("BriefCopyRequestClosed", SAYS));
+	});
 
 	it("refuses a request with no address", () => {
 		expect(

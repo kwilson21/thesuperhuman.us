@@ -1,11 +1,8 @@
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
 import type { OwnerRequestStatus } from "../../src/lib/owner-model";
-import { ChangedSinceRead } from "../../src/server/guarded-save";
 import {
 	claimCopy,
-	IntakeReadFailed,
-	IntakeStoreFailed,
 	readCopyFacts,
 	recordCopyStatus,
 	recordOwnFailure,
@@ -18,20 +15,19 @@ import { musicWorld } from "../helpers/music-world";
 // What the intake store reads and writes for the client's copy of a brief, against the real schema: the read decides
 // nothing, and each write compares only that the row is still as it was read (or still carries this attempt).
 
+type World = ReturnType<typeof musicWorld>;
+
 const DETAILS = JSON.stringify({ path: "webapp", appGoal: "Schedule" });
 
-const seed = (
-	world: ReturnType<typeof musicWorld>,
-	details: string = DETAILS,
-) =>
+const seed = (world: World, details: string = DETAILS) =>
 	world.sql
 		.prepare(
 			`INSERT INTO owner_requests (id,kind,name,email,summary,details_json,status,created_at,updated_at)
-			VALUES ('r1','software','Alex','alex@example.com','Build','${details.replaceAll("'", "''")}','new','2026-11-13T11:00:00.000Z','2026-11-13T11:00:00.000Z')`,
+			VALUES ('r1','software','Alex','alex@example.com','Build',?,'new','2026-11-13T11:00:00.000Z','2026-11-13T11:00:00.000Z')`,
 		)
-		.run();
+		.run(details);
 
-const detailsOf = (world: ReturnType<typeof musicWorld>) =>
+const detailsOf = (world: World) =>
 	JSON.parse(
 		String(
 			world.sql
@@ -40,13 +36,28 @@ const detailsOf = (world: ReturnType<typeof musicWorld>) =>
 		),
 	);
 
-const run = <A, E>(
-	world: ReturnType<typeof musicWorld>,
+/** What a store function ended in: `done` with its value, or `failed` with the name of its failure. */
+const run = <A, E extends { readonly _tag: string }>(
+	world: World,
 	effect: Effect.Effect<A, E, MusicDb>,
 ) =>
 	Effect.runPromise(
-		Effect.result(effect).pipe(Effect.provideService(MusicDb, world.db)),
+		Effect.match(effect, {
+			onFailure: (failure) => ({ failed: failure._tag }),
+			onSuccess: (value) => ({ done: value }),
+		}).pipe(Effect.provideService(MusicDb, world.db)),
 	);
+
+/** A database whose statements that match the pattern throw. */
+const throwing = (pattern: RegExp) =>
+	musicWorld({
+		beforeStatement: [
+			pattern,
+			() => {
+				throw new Error("d1 down");
+			},
+		],
+	});
 
 describe("readCopyFacts", () => {
 	it("answers the request and its details text as stored", async () => {
@@ -55,22 +66,21 @@ describe("readCopyFacts", () => {
 		seed(world);
 		const result = await run(world, readCopyFacts("r1"));
 
-		expect(result._tag).toBe("Success");
-
-		if (result._tag === "Success") {
-			expect(result.success?.request.id).toBe("r1");
-			expect(result.success?.request.details).toEqual({
-				path: "webapp",
-				appGoal: "Schedule",
-			});
-			expect(result.success?.detailsJson).toBe(DETAILS);
-		}
+		expect(result).toMatchObject({
+			done: {
+				request: {
+					id: "r1",
+					details: { path: "webapp", appGoal: "Schedule" },
+				},
+				detailsJson: DETAILS,
+			},
+		});
 	});
 
 	it("answers null for an id nothing is stored under", async () => {
-		const result = await run(musicWorld(), readCopyFacts("nope"));
-
-		expect(result).toMatchObject({ _tag: "Success", success: null });
+		expect(await run(musicWorld(), readCopyFacts("nope"))).toEqual({
+			done: null,
+		});
 	});
 
 	it.each(["not json", "[]", "null", '"text"', "7"])(
@@ -79,30 +89,18 @@ describe("readCopyFacts", () => {
 			const world = musicWorld();
 
 			seed(world, details);
-			const result = await run(world, readCopyFacts("r1"));
 
-			expect(result._tag).toBe("Failure");
-
-			if (result._tag === "Failure")
-				expect(result.failure).toBeInstanceOf(IntakeReadFailed);
+			expect(await run(world, readCopyFacts("r1"))).toEqual({
+				failed: "IntakeReadFailed",
+			});
 		},
 	);
 
 	it("fails with the database's failure when the read throws", async () => {
-		const world = musicWorld({
-			beforeStatement: [
-				/FROM owner_requests WHERE id=\?/,
-				() => {
-					throw new Error("d1 down");
-				},
-			],
-		});
+		const world = throwing(/FROM owner_requests WHERE id=\?/);
 
-		const result = await run(world, readCopyFacts("r1"));
-
-		expect(result).toMatchObject({
-			_tag: "Failure",
-			failure: { _tag: "IntakeReadFailed" },
+		expect(await run(world, readCopyFacts("r1"))).toEqual({
+			failed: "IntakeReadFailed",
 		});
 	});
 });
@@ -142,9 +140,8 @@ describe("claimCopy", () => {
 		const world = musicWorld();
 
 		seed(world);
-		const result = await run(world, claimCopy(write()));
 
-		expect(result._tag).toBe("Success");
+		expect(await run(world, claimCopy(write()))).toEqual({ done: undefined });
 		expect(detailsOf(world)).toEqual({
 			path: "webapp",
 			appGoal: "Schedule",
@@ -163,43 +160,28 @@ describe("claimCopy", () => {
 			const world = musicWorld();
 
 			seed(world);
-			const result = await run(world, claimCopy(write(change)));
 
-			expect(result._tag).toBe("Failure");
-
-			if (result._tag === "Failure")
-				expect(result.failure).toBeInstanceOf(ChangedSinceRead);
-
+			expect(await run(world, claimCopy(write(change)))).toEqual({
+				failed: "ChangedSinceRead",
+			});
 			expect(detailsOf(world)).toEqual(JSON.parse(DETAILS));
 		},
 	);
 
 	it("is a ChangedSinceRead for a request nothing is stored under", async () => {
-		const result = await run(musicWorld(), claimCopy(write()));
-
-		expect(result).toMatchObject({
-			_tag: "Failure",
-			failure: { _tag: "ChangedSinceRead" },
+		expect(await run(musicWorld(), claimCopy(write()))).toEqual({
+			failed: "ChangedSinceRead",
 		});
 	});
 
 	it("fails with an IntakeStoreFailed when the write throws", async () => {
-		const world = musicWorld({
-			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
-				() => {
-					throw new Error("d1 down");
-				},
-			],
-		});
+		const world = throwing(/clientCopyStatus','uncertain'/);
 
 		seed(world);
-		const result = await run(world, claimCopy(write()));
 
-		expect(result._tag).toBe("Failure");
-
-		if (result._tag === "Failure")
-			expect(result.failure).toBeInstanceOf(IntakeStoreFailed);
+		expect(await run(world, claimCopy(write()))).toEqual({
+			failed: "IntakeStoreFailed",
+		});
 	});
 });
 
@@ -226,12 +208,13 @@ describe("recording what happened", () => {
 		const world = musicWorld();
 
 		seed(world, claimed);
+
 		const result = await run(
 			world,
 			recordCopyStatus("r1", "2026-11-13T11:00:00.000Z", "sent"),
 		);
 
-		expect(result._tag).toBe("Success");
+		expect(result).toEqual({ done: undefined });
 		expect(detailsOf(world).clientCopyStatus).toBe("uncertain");
 	});
 
@@ -241,6 +224,7 @@ describe("recording what happened", () => {
 		seed(world, claimed);
 		await run(world, recordOwnFailure("r1", "2026-11-13T11:00:00.000Z"));
 		expect(detailsOf(world).clientCopyStatus).toBe("uncertain");
+
 		await run(world, recordOwnFailure("r1", "2026-11-13T12:00:00.000Z"));
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 	});
@@ -251,29 +235,21 @@ describe("recording what happened", () => {
 		seed(world);
 		await run(world, recordUnclaimedFailure({ id: "r1", expected: "{}" }));
 		expect(detailsOf(world)).toEqual(JSON.parse(DETAILS));
+
 		await run(world, recordUnclaimedFailure({ id: "r1", expected: DETAILS }));
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 	});
 
 	it("fails with an IntakeStoreFailed when a write throws", async () => {
-		const world = musicWorld({
-			beforeStatement: [
-				/clientCopyStatus',\?\)/,
-				() => {
-					throw new Error("d1 down");
-				},
-			],
-		});
+		const world = throwing(/clientCopyStatus',\?\)/);
 
 		seed(world, claimed);
+
 		const result = await run(
 			world,
 			recordCopyStatus("r1", "2026-11-13T12:00:00.000Z", "sent"),
 		);
 
-		expect(result._tag).toBe("Failure");
-
-		if (result._tag === "Failure")
-			expect(result.failure).toBeInstanceOf(IntakeStoreFailed);
+		expect(result).toEqual({ failed: "IntakeStoreFailed" });
 	});
 });

@@ -1,7 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OwnerRequest } from "../../src/lib/owner-model";
 import {
 	type SoftwareInput,
 	validateSoftwareInquiry,

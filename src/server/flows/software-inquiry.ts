@@ -255,10 +255,12 @@ export const submitInquiry = (submission: InquirySubmission) =>
 
 		// SAFETY: the rule stores whenever nothing is stored, so `saved` is the stored brief here.
 		const request = saved as OwnerRequest;
+
 		const clientCopyStatus = yield* sendFirstBriefCopy({
 			id: request.id,
 			now: submission.now,
 		});
+
 		const notice = yield* SoftwareNotice;
 		const background = yield* Background;
 

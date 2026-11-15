@@ -10,12 +10,16 @@ const ACTIONS = ["send", "Send", "resend", "", " send", "send ", 1, null];
 
 const FLAGS = [true, false, "true", "yes", 1, 0, null, undefined, [], {}];
 
+type Value = (typeof ACTIONS)[number] | (typeof FLAGS)[number];
+
+type Body = { action?: Value; confirmedNotSent?: Value; extra?: Value };
+
 describe("the Effect reader for the owner brief copy body", () => {
 	it("accepts and refuses every seeded body as the Zod schema does", () => {
 		const random = seeded(20261115);
 
 		for (let index = 0; index < 3000; index++) {
-			const sent: Record<string, unknown> = {};
+			const sent: Body = {};
 
 			if (random.chance(0.85)) sent.action = random.pick(ACTIONS);
 

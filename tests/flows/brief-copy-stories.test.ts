@@ -1,6 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { RequestDetails } from "../../src/lib/owner-model";
 import {
 	resendBriefCopy,
 	sendFirstBriefCopy,
@@ -15,13 +16,14 @@ import { musicWorld, type MusicWorldOptions } from "../helpers/music-world";
 
 // The client's copy of a brief as stories: the public form sends the first copy, the owner resends it, two senders meet at the
 // claim, and the database fails at each step. Each story runs the real flow against the real schema; the mail provider is a
-// double that says what it answered and what it was asked to send.
+// double that says what it answered and what it was asked to send. A story reads what a flow ended in as `done` (its value)
+// or `failed` (the name of the failure, and the failure).
 
 const NOW = new Date("2026-11-13T12:00:00.000Z");
 
 type World = ReturnType<typeof musicWorld>;
 
-const DETAILS = {
+const DETAILS: RequestDetails = {
 	path: "webapp",
 	appGoal: "Schedule rehearsals",
 	firstVersion: "A calendar",
@@ -29,7 +31,7 @@ const DETAILS = {
 
 const seed = (
 	world: World,
-	details: Record<string, unknown> = DETAILS,
+	details: RequestDetails = DETAILS,
 	over: { status?: string; email?: string } = {},
 ) =>
 	world.sql
@@ -52,14 +54,18 @@ const detailsOf = (world: World) =>
 		),
 	);
 
-const provide = <A, E>(
+/** Runs a flow with the world's database and a mail double that answers `outcome`, and says what it ended in. */
+const provide = <A, E extends { readonly _tag: string }>(
 	world: World,
 	sent: ClientCopy[],
 	outcome: ClientCopyOutcome,
 	program: Effect.Effect<A, E, MusicDb | ClientCopyMail>,
 ) =>
 	Effect.runPromise(
-		Effect.result(program).pipe(
+		Effect.match(program, {
+			onFailure: (failure) => ({ failed: failure._tag, failure }),
+			onSuccess: (value) => ({ done: value }),
+		}).pipe(
 			Effect.provideContext(
 				Context.make(MusicDb, world.db).pipe(
 					Context.add(ClientCopyMail, {
@@ -107,14 +113,7 @@ const first = async (world: World, outcome: ClientCopyOutcome = "sent") => {
 	return { result, sent };
 };
 
-const failureOf = (answer: { result: { _tag: string } }) =>
-	"failure" in answer.result ? answer.result.failure : undefined;
-
-const tag = (failure: unknown) =>
-	typeof failure === "object" && failure !== null && "_tag" in failure
-		? failure._tag
-		: undefined;
-
+/** A database that fails the statements that match, from the `after`-th match on. */
 const throwing = (pattern: RegExp, after = 0): MusicWorldOptions => {
 	let seen = 0;
 
@@ -128,6 +127,12 @@ const throwing = (pattern: RegExp, after = 0): MusicWorldOptions => {
 	};
 };
 
+const CLAIM = /clientCopyStatus','uncertain'/;
+
+const READ = /FROM owner_requests WHERE id=\?/;
+
+const RECORD = /json_set\(details_json,'\$\.clientCopyStatus',\?\)/;
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -140,8 +145,7 @@ describe("the owner's resend", () => {
 		const { result, sent } = await resend(world);
 
 		expect(result).toMatchObject({
-			_tag: "Success",
-			success: { outcome: "sent", status: "sent" },
+			done: { outcome: "sent", status: "sent" },
 		});
 		expect(sent).toHaveLength(1);
 		expect(sent[0]).toMatchObject({
@@ -164,10 +168,7 @@ describe("the owner's resend", () => {
 		seed(world);
 		const { result } = await resend(world, { outcome });
 
-		expect(result).toMatchObject({
-			_tag: "Success",
-			success: { outcome, status },
-		});
+		expect(result).toMatchObject({ done: { outcome, status } });
 		expect(detailsOf(world).clientCopyStatus).toBe(status);
 	});
 
@@ -177,7 +178,7 @@ describe("the owner's resend", () => {
 		seed(world, { ...DETAILS, clientCopyStatus: "sent" });
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("BriefCopyNotDue");
+		expect(result).toMatchObject({ failed: "BriefCopyNotDue" });
 		expect(sent).toEqual([]);
 	});
 
@@ -189,7 +190,7 @@ describe("the owner's resend", () => {
 
 		const second = await resend(world);
 
-		expect(tag(failureOf(second))).toBe("BriefCopyNotDue");
+		expect(second.result).toMatchObject({ failed: "BriefCopyNotDue" });
 		expect(second.sent).toEqual([]);
 	});
 
@@ -202,30 +203,36 @@ describe("the owner's resend", () => {
 			clientCopyAttemptedAt: "2026-11-13T11:59:30.000Z",
 		});
 
-		expect(tag(failureOf(await resend(world, { confirmed: true })))).toBe(
-			"BriefCopyNotDue",
-		);
+		expect((await resend(world, { confirmed: true })).result).toMatchObject({
+			failed: "BriefCopyNotDue",
+		});
 		world.sql.exec(
 			`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyAttemptedAt','2026-11-13T11:58:00.000Z')`,
 		);
-		expect(tag(failureOf(await resend(world)))).toBe("BriefCopyNotDue");
+		expect((await resend(world)).result).toMatchObject({
+			failed: "BriefCopyNotDue",
+		});
 		expect((await resend(world, { confirmed: true })).sent).toHaveLength(1);
 	});
 
 	it("refuses a request that is not there, closed, or with no address", async () => {
-		const missing = await resend(musicWorld());
-
-		expect(tag(failureOf(missing))).toBe("NoSuchSoftwareRequest");
+		expect((await resend(musicWorld())).result).toMatchObject({
+			failed: "NoSuchSoftwareRequest",
+		});
 
 		const closed = musicWorld();
 
 		seed(closed, DETAILS, { status: "withdrawn" });
-		expect(tag(failureOf(await resend(closed)))).toBe("BriefCopyRequestClosed");
+		expect((await resend(closed)).result).toMatchObject({
+			failed: "BriefCopyRequestClosed",
+		});
 
 		const blank = musicWorld();
 
 		seed(blank, DETAILS, { email: "" });
-		expect(tag(failureOf(await resend(blank)))).toBe("BriefCopyNoAddress");
+		expect((await resend(blank)).result).toMatchObject({
+			failed: "BriefCopyNoAddress",
+		});
 	});
 });
 
@@ -233,7 +240,7 @@ describe("two senders at the claim", () => {
 	it("sends once when another sender claims between the read and the claim, and the loser reads again and is refused", async () => {
 		const world = musicWorld({
 			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
+				CLAIM,
 				() => {
 					world.sql.exec(
 						`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','sent','$.clientCopyAttemptedAt','2026-11-13T11:59:59.000Z')`,
@@ -245,7 +252,7 @@ describe("two senders at the claim", () => {
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("BriefCopyNotDue");
+		expect(result).toMatchObject({ failed: "BriefCopyNotDue" });
 		expect(sent).toEqual([]);
 		expect(detailsOf(world).clientCopyStatus).toBe("sent");
 	});
@@ -255,7 +262,7 @@ describe("two senders at the claim", () => {
 
 		const world = musicWorld({
 			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
+				CLAIM,
 				() => {
 					if (changes++ === 0)
 						world.sql.exec("UPDATE owner_requests SET email='new@example.com'");
@@ -266,14 +273,14 @@ describe("two senders at the claim", () => {
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(result._tag).toBe("Success");
+		expect(result).toMatchObject({ done: { outcome: "sent" } });
 		expect(sent.map((copy) => copy.to)).toEqual(["new@example.com"]);
 	});
 
 	it("is refused when the request is closed between the read and the claim", async () => {
 		const world = musicWorld({
 			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
+				CLAIM,
 				() => {
 					world.sql.exec("UPDATE owner_requests SET status='resolved'");
 				},
@@ -283,7 +290,7 @@ describe("two senders at the claim", () => {
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("BriefCopyRequestClosed");
+		expect(result).toMatchObject({ failed: "BriefCopyRequestClosed" });
 		expect(sent).toEqual([]);
 	});
 
@@ -293,7 +300,7 @@ describe("two senders at the claim", () => {
 		// Each pass, another sender rewrites the details between the read and the claim, so no claim wins.
 		const world = musicWorld({
 			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
+				CLAIM,
 				() => {
 					changes++;
 					world.sql.exec(
@@ -306,7 +313,7 @@ describe("two senders at the claim", () => {
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("SaveKeptChanging");
+		expect(result).toMatchObject({ failed: "SaveKeptChanging" });
 		expect(changes).toBe(3);
 		expect(sent).toEqual([]);
 	});
@@ -314,7 +321,7 @@ describe("two senders at the claim", () => {
 	it("does not overwrite another sender's claim with its own answer", async () => {
 		const world = musicWorld({
 			beforeStatement: [
-				/json_set\(details_json,'\$\.clientCopyStatus',\?\)/,
+				RECORD,
 				() => {
 					world.sql.exec(
 						`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyAttemptedAt','2026-11-13T12:05:00.000Z')`,
@@ -326,7 +333,7 @@ describe("two senders at the claim", () => {
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(result._tag).toBe("Success");
+		expect(result).toMatchObject({ done: { outcome: "sent" } });
 		expect(sent).toHaveLength(1);
 		expect(detailsOf(world)).toMatchObject({
 			clientCopyStatus: "uncertain",
@@ -336,25 +343,25 @@ describe("two senders at the claim", () => {
 });
 
 describe("a failure of the database", () => {
-	it("on the read is named and sends nothing, and the owner's copy records nothing", async () => {
-		const world = musicWorld(throwing(/FROM owner_requests WHERE id=\?/));
+	it("on the read is named and sends nothing, and records nothing", async () => {
+		const world = musicWorld(throwing(READ));
 
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("IntakeReadFailed");
+		expect(result).toMatchObject({ failed: "IntakeReadFailed" });
 		expect(sent).toEqual([]);
 		expect(detailsOf(world)).toEqual(DETAILS);
 	});
 
 	it("on the claim is named, records a failure over a copy with no status, and sends nothing", async () => {
 		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-		const world = musicWorld(throwing(/clientCopyStatus','uncertain'/));
+		const world = musicWorld(throwing(CLAIM));
 
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("CopyClaimFailed");
+		expect(result).toMatchObject({ failed: "CopyClaimFailed" });
 		expect(sent).toEqual([]);
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 		expect(logged.mock.calls).toEqual([["Client brief copy state is failed."]]);
@@ -362,12 +369,12 @@ describe("a failure of the database", () => {
 
 	it("on the claim leaves a status another sender recorded", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		const world = musicWorld(throwing(/clientCopyStatus','uncertain'/));
+		const world = musicWorld(throwing(CLAIM));
 
 		seed(world, { ...DETAILS, clientCopyStatus: "failed" });
 		const { result } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("CopyClaimFailed");
+		expect(result).toMatchObject({ failed: "CopyClaimFailed" });
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 	});
 
@@ -375,13 +382,13 @@ describe("a failure of the database", () => {
 		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const world = musicWorld(
-			throwing(/clientCopyStatus','uncertain'|clientCopyStatus','failed'/),
+			throwing(/clientCopyStatus','(uncertain|failed)'/),
 		);
 
 		seed(world);
 		const { result } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("CopyClaimFailed");
+		expect(result).toMatchObject({ failed: "CopyClaimFailed" });
 		expect(logged.mock.calls).toEqual([
 			["Client brief copy failure could not be recorded."],
 			["Client brief copy state is failed."],
@@ -391,37 +398,35 @@ describe("a failure of the database", () => {
 
 	it("on the record after the provider answered leaves the claim, so the copy is held for the owner", async () => {
 		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-
-		const world = musicWorld(
-			throwing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
-		);
+		const world = musicWorld(throwing(RECORD));
 
 		seed(world);
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("CopyNotRecorded");
-		expect(failureOf({ result })).toMatchObject({ status: "uncertain" });
+		expect(result).toMatchObject({
+			failed: "CopyNotRecorded",
+			failure: { status: "uncertain" },
+		});
 		expect(sent).toHaveLength(1);
 		expect(detailsOf(world).clientCopyStatus).toBe("uncertain");
 		expect(logged.mock.calls).toEqual([
 			["Client brief copy state is uncertain."],
 		]);
-		expect(tag(failureOf(await resend(world)))).toBe("BriefCopyNotDue");
+		expect((await resend(world)).result).toMatchObject({
+			failed: "BriefCopyNotDue",
+		});
 	});
 
 	it("on the record when the provider was never asked records a failure over this attempt", async () => {
 		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-
-		const world = musicWorld(
-			throwing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
-		);
+		const world = musicWorld(throwing(RECORD));
 
 		seed(world);
 		const { result } = await resend(world, { outcome: "unconfigured" });
 
-		expect(failureOf({ result })).toMatchObject({
-			_tag: "CopyNotRecorded",
-			status: "failed",
+		expect(result).toMatchObject({
+			failed: "CopyNotRecorded",
+			failure: { status: "failed" },
 		});
 		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 		expect(logged.mock.calls).toEqual([["Client brief copy state is failed."]]);
@@ -429,19 +434,14 @@ describe("a failure of the database", () => {
 
 	it("on the record when the provider was never asked and the failure cannot be recorded either logs both", async () => {
 		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-
-		const world = musicWorld(
-			throwing(
-				/json_set\(details_json,'\$\.clientCopyStatus',\?\)|clientCopyStatus','failed'/,
-			),
-		);
+		const world = musicWorld(throwing(/clientCopyStatus',(\?|'failed')\)/));
 
 		seed(world);
 		const { result } = await resend(world, { outcome: "unconfigured" });
 
-		expect(failureOf({ result })).toMatchObject({
-			_tag: "CopyNotRecorded",
-			status: "failed",
+		expect(result).toMatchObject({
+			failed: "CopyNotRecorded",
+			failure: { status: "failed" },
 		});
 		expect(detailsOf(world).clientCopyStatus).toBe("uncertain");
 		expect(logged.mock.calls).toEqual([
@@ -459,30 +459,30 @@ describe("a failure of the database", () => {
 				VALUES ('r1','software','Alex','alex@example.com','Build','[]','new','2026-11-13T11:00:00.000Z','2026-11-13T11:00:00.000Z')`,
 			)
 			.run();
+
 		const { result, sent } = await resend(world);
 
-		expect(tag(failureOf({ result }))).toBe("IntakeReadFailed");
+		expect(result).toMatchObject({ failed: "IntakeReadFailed" });
 		expect(sent).toEqual([]);
 	});
 });
 
 describe("the public form's first copy", () => {
-	it("answers the status the provider's answer recorded", async () => {
-		for (const [outcome, status] of [
-			["sent", "sent"],
-			["refused", "failed"],
-			["uncertain", "uncertain"],
-			["unconfigured", "failed"],
-		] as const) {
+	it.each([
+		["sent", "sent"],
+		["refused", "failed"],
+		["uncertain", "uncertain"],
+		["unconfigured", "failed"],
+	] as const)(
+		"answers the status the recorded answer gives when the provider answers %s",
+		async (outcome, status) => {
 			const world = musicWorld();
 
 			seed(world);
-			expect(await first(world, outcome)).toMatchObject({
-				result: { _tag: "Success", success: status },
-			});
+			expect((await first(world, outcome)).result).toEqual({ done: status });
 			expect(detailsOf(world).clientCopyStatus).toBe(status);
-		}
-	});
+		},
+	);
 
 	it.each([
 		["a copy that has a status", { ...DETAILS, clientCopyStatus: "failed" }],
@@ -493,7 +493,7 @@ describe("the public form's first copy", () => {
 		seed(world, details);
 		const { result, sent } = await first(world);
 
-		expect(result).toMatchObject({ _tag: "Success", success: null });
+		expect(result).toEqual({ done: null });
 		expect(sent).toEqual([]);
 	});
 
@@ -501,13 +501,13 @@ describe("the public form's first copy", () => {
 		const world = musicWorld();
 
 		seed(world, DETAILS, { status: "withdrawn" });
-		expect((await first(world)).result).toMatchObject({ success: null });
+		expect((await first(world)).result).toEqual({ done: null });
 	});
 
 	it("answers null when another sender claims it between the read and the claim", async () => {
 		const world = musicWorld({
 			beforeStatement: [
-				/clientCopyStatus','uncertain'/,
+				CLAIM,
 				() => {
 					world.sql.exec(
 						`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','uncertain','$.clientCopyAttemptedAt','2026-11-13T11:59:59.000Z')`,
@@ -519,35 +519,54 @@ describe("the public form's first copy", () => {
 		seed(world);
 		const { result, sent } = await first(world);
 
-		expect(result).toMatchObject({ success: null });
+		expect(result).toEqual({ done: null });
+		expect(sent).toEqual([]);
+	});
+
+	it("answers null when another sender keeps changing the request under the claim", async () => {
+		let changes = 0;
+
+		const world = musicWorld({
+			beforeStatement: [
+				CLAIM,
+				() => {
+					changes++;
+					world.sql.exec(
+						`UPDATE owner_requests SET details_json=json_set(details_json,'$.note','${changes}')`,
+					);
+				},
+			],
+		});
+
+		seed(world);
+		const { result, sent } = await first(world);
+
+		expect(result).toEqual({ done: null });
 		expect(sent).toEqual([]);
 	});
 
 	it("answers failed when the claim cannot be written, and uncertain when the answer cannot be recorded", async () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
-		const claim = musicWorld(throwing(/clientCopyStatus','uncertain'/));
+		const claim = musicWorld(throwing(CLAIM));
 
 		seed(claim);
-		expect((await first(claim)).result).toMatchObject({ success: "failed" });
+		expect((await first(claim)).result).toEqual({ done: "failed" });
 
-		const record = musicWorld(
-			throwing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
-		);
+		const record = musicWorld(throwing(RECORD));
 
 		seed(record);
-		expect((await first(record)).result).toMatchObject({
-			success: "uncertain",
-		});
+		expect((await first(record)).result).toEqual({ done: "uncertain" });
 	});
 
 	it("answers failed when the request cannot be read", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const world = musicWorld(throwing(/FROM owner_requests WHERE id=\?/));
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld(throwing(READ));
 
 		seed(world);
 		const { result, sent } = await first(world);
 
-		expect(result).toMatchObject({ success: "failed" });
+		expect(result).toEqual({ done: "failed" });
 		expect(sent).toEqual([]);
+		expect(logged.mock.calls).toEqual([["Client brief copy state is failed."]]);
 	});
 });
