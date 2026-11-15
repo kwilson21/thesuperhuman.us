@@ -19,11 +19,13 @@ import { kailleraStory } from "~/data/project-stories/kaillera-next";
 import { capacityCells, parseFigure } from "~/lib/home-motion";
 import { loadMusicCatalog } from "~/lib/music-content";
 import { audioPath } from "~/lib/host-routing";
+import { latestEssay } from "~/data/writing";
+import { homeComparisonExample } from "~/lib/music-catalog";
 
 const musicCatalog = await loadMusicCatalog();
 
 const oldNewsExample = musicCatalog.examples.find(
-	(example) => example.id === "old-news-mastering",
+	(example) => example.id === homeComparisonExample,
 );
 
 const oldNewsRecording =
@@ -33,7 +35,7 @@ const oldNewsRecording =
 	);
 
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
-const essay = await getEntry("pages", "ai-gives-you-speed");
+const essay = await getEntry("pages", latestEssay.id);
 
 if (!essay) throw new Error("AI essay content missing");
 
@@ -136,7 +138,7 @@ const jsonLd = {
           <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy">
             <h3>{penAt < 0 ? essay.data.title : <>{essay.data.title.slice(0, penAt)}<span class="pen-mark">{penWord}<svg class="pen-stroke" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 C 40 2, 76 8, 116 4.5 S 176 3, 198 5.5" /></svg></span>{essay.data.title.slice(penAt + penWord.length)}</>}</h3>
-            <a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a>
+            <a class="site-link" href={latestEssay.href}>Read the essay <span aria-hidden="true">→</span></a>
           </div>
         </article>
       </section>

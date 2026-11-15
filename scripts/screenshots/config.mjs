@@ -299,8 +299,13 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/scripts/switchboard.ts": ["contact-switchboard"],
 	"src/scripts/contact-page.ts": ["contact-switchboard"],
 	"src/scripts/contact-message.ts": ["contact-switchboard"],
+	"src/components/Hero.astro": ["studio-objects"],
+	"src/components/home/StudioLife.astro": ["studio-objects"],
+	"src/scripts/studio-objects.ts": ["studio-objects"],
 	"src/data/work-with-me.ts": ["services-print"],
 	"src/data/project-stories/tally.ts": ["services-print"],
+	"src/data/writing.ts": ["studio-objects"],
+	"src/lib/music-catalog.ts": ["studio-objects"],
 	"src/data/project-stories/kaillera-next.ts": ["services-print"],
 	"src/components/SoftwareOffer.astro": ["software-offer"],
 	"src/components/owner/SoftwareOfferEditor.astro": [
