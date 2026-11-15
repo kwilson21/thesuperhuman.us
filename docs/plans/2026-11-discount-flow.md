@@ -361,6 +361,10 @@ yet been run against them to show the prover rejects it.
 
 ### 6.2 The model (Quint)
 
+This section describes the model as first written (2026-11-13). It was extended on 2026-11-15 for the offers
+conversion (send and decline in steps around their emails, the link, the sending window, 50-step runs);
+docs/verification.md describes it as it is now.
+
 `verification/discount-offers.qnt`, run by `pnpm run verify:quint:all` (and the `verify:quint` and
 `verify:quint:mutants` halves) through the model list in `scripts/lib/quint-mutants.mjs`; docs/verification.md
 describes it with the invoice-events model. One request, two offer versions, two milestones with odd usual fees (5 and 4 units,
