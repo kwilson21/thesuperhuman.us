@@ -4,7 +4,7 @@ import {
 	parseOfferTerms,
 	type SoftwareOffer,
 } from "./software-offers";
-import { softwareGuard } from "./software-projects";
+import { softwareGuard } from "./software-guard";
 import {
 	agreementValues,
 	validateAgreementDetails,

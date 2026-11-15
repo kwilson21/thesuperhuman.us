@@ -7,8 +7,8 @@ import {
 	listProjectUpdates,
 	queueProjectNoticeForDelivery,
 	saveProjectUpdate,
-	validProjectDate,
 } from "~/lib/audio-project-updates";
+import { validProjectDate } from "~/lib/project-dates";
 import { partial } from "../helpers/doubles";
 import { stubResend } from "../helpers/resend-fetch";
 import { sqliteD1 } from "../helpers/sqlite-d1";
