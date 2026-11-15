@@ -220,6 +220,20 @@ describe("a request with no id", () => {
 	);
 });
 
+describe("a brief whose copy cannot be built", () => {
+	it("records a failure over this attempt, sends nothing and answers 500 with the route's sentence", async () => {
+		// A stored answer that is an object with a text toString cannot be turned into a label.
+		seed(JSON.stringify({ path: "webapp", timing: { toString: "x" } }));
+
+		const response = await call(world.db);
+
+		expect(response.status).toBe(500);
+		await answeredOnlyTheSentence(response);
+		expect(sent()).toHaveLength(0);
+		expect(stored().clientCopyStatus).toBe("failed");
+	});
+});
+
 describe("answers that stay as they were", () => {
 	it("answers 503 when no mail key is set", async () => {
 		seed();
