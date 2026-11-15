@@ -1,5 +1,6 @@
 // The owner's pricing page (src/pages/owner/pricing.astro): each form is sent as JSON to /api/owner/pricing with the
-// version the page was rendered at, and the page reloads once it is saved, so what it shows is what is stored.
+// version the page last saw. A saved form takes the new version (both forms do), so the next save is not refused. New
+// research reloads the page to show its table, unless the other form holds unsaved changes, which a reload would lose.
 import * as Predicate from "effect/Predicate";
 import type { RawValue } from "../lib/fields";
 
@@ -27,7 +28,19 @@ const field = (answer: RawValue, name: string): RawValue =>
 		? answer[name]
 		: undefined;
 
-async function send(body: PricingRequest, status: Status) {
+/** Whether a form holds changes not yet saved: a field whose value differs from the one the page was drawn with. */
+const unsaved = (form: HTMLFormElement) =>
+	[
+		...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+			"input, textarea",
+		),
+	].some((input) => input.value !== input.defaultValue);
+
+async function send(
+	body: PricingRequest,
+	form: HTMLFormElement,
+	status: Status,
+) {
 	if (status) status.textContent = "Saving…";
 
 	try {
@@ -40,9 +53,38 @@ async function send(body: PricingRequest, status: Status) {
 		const answer: RawValue = await response.json().catch(() => null);
 		const error = field(answer, "error");
 
-		if (response.ok && field(answer, "ok") === true) {
-			if (status) status.textContent = "Saved.";
-			location.reload();
+		const version = field(answer, "version");
+
+		if (
+			response.ok &&
+			field(answer, "ok") === true &&
+			Predicate.isNumber(version)
+		) {
+			const forms = [
+				...document.querySelectorAll<HTMLFormElement>("[data-pricing-form]"),
+			];
+
+			for (const each of forms) each.dataset.version = String(version);
+
+			// What was saved is now what the page was drawn with.
+			for (const input of form.querySelectorAll<
+				HTMLInputElement | HTMLTextAreaElement
+			>("input, textarea"))
+				input.defaultValue = input.value;
+
+			const others = forms.filter((each) => each !== form && unsaved(each));
+
+			if (body.action === "market" && others.length === 0) {
+				location.reload();
+
+				return;
+			}
+
+			if (status)
+				status.textContent =
+					body.action === "market"
+						? "Saved. Save or clear your other changes, then reload the page to see the new ranges."
+						: "Saved.";
 
 			return;
 		}
@@ -62,7 +104,7 @@ export function setupOwnerPricing() {
 		"[data-pricing-form]",
 	)) {
 		const status = form.querySelector<HTMLElement>("[data-pricing-status]");
-		const expectedVersion = Number(form.dataset.version ?? "0");
+		const expectedVersion = () => Number(form.dataset.version ?? "0");
 
 		form.addEventListener("submit", (event) => {
 			event.preventDefault();
@@ -76,8 +118,9 @@ export function setupOwnerPricing() {
 						action: "values",
 						dayValue: day === "" ? null : Number(day),
 						contingencyPercent: Number(data.get("contingencyPercent")),
-						expectedVersion,
+						expectedVersion: expectedVersion(),
 					},
+					form,
 					status,
 				);
 
@@ -106,14 +149,26 @@ export function setupOwnerPricing() {
 				return;
 			}
 
-			void send({ action: "market", market, expectedVersion }, status);
+			void send(
+				{ action: "market", market, expectedVersion: expectedVersion() },
+				form,
+				status,
+			);
 		});
 
 		form
 			.querySelector<HTMLButtonElement>("[data-pricing-clear]")
 			?.addEventListener("click", () => {
 				if (!confirm("Clear the saved market research?")) return;
-				void send({ action: "market", market: null, expectedVersion }, status);
+				void send(
+					{
+						action: "market",
+						market: null,
+						expectedVersion: expectedVersion(),
+					},
+					form,
+					status,
+				);
 			});
 	}
 }

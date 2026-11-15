@@ -9,6 +9,7 @@ import * as Predicate from "effect/Predicate";
 import type { JsonValue } from "../lib/json-value";
 import { pricingKind } from "../lib/offer-board";
 import { offerTotal } from "../lib/offer-pricing";
+import { softwareQuestions } from "../lib/software-inquiry";
 import type { PricingKind } from "../lib/pricing-reference";
 import { ChangedSinceRead, raisedByJsonGuard } from "./guarded-save";
 import type { OfferFacts, OfferReservation } from "./rules/offer-board";
@@ -47,13 +48,6 @@ export type OfferBrief = {
 	readonly budgetNote: string;
 	readonly fitLabel: string;
 	readonly fitNote: string;
-};
-
-/** The written answers each path's brief has, by field name (the brief's own questions). */
-const ANSWER_FIELDS: Record<PricingKind, readonly string[]> = {
-	website: ["purpose"],
-	webapp: ["appGoal", "firstVersion"],
-	workflow: ["today", "firstResult"],
 };
 
 const textOf = (details: Readonly<Record<string, JsonValue>>, key: string) => {
@@ -117,7 +111,13 @@ export const readOfferRequest = (id: string, day: string) =>
 				? {
 						kind,
 						answers: Object.fromEntries(
-							ANSWER_FIELDS[kind].map((key) => [key, textOf(details, key)]),
+							// The brief's written questions, never the current site's address; existing content and who
+							// updates it are sent on their own below.
+							softwareQuestions[kind].flatMap((key) =>
+								key === "currentUrl" || key === "existing" || key === "updates"
+									? []
+									: [[key, textOf(details, key)]],
+							),
 						),
 						outline: outlineText(details.outline),
 						existing: textOf(details, "existing"),
@@ -192,7 +192,8 @@ export type PastOffer = {
 };
 
 /**
- * The five most recent offers the owner has sent on briefs of this kind, other than this request's, each with its total
+ * The five most recent offers the owner has sent on briefs of this kind (the version each client last received, not
+ * superseded or withdrawn ones), other than this request's, each with its total
  * (the sum of its milestone fees). For an owner page; not an Effect program. Offers whose terms cannot be read are left
  * out.
  */
@@ -205,7 +206,7 @@ export async function pastOffers(
 		.prepare(
 			`SELECT o.terms_json, o.sent_at, o.request_id, r.details_json
         FROM software_offers o JOIN owner_requests r ON r.id = o.request_id
-        WHERE o.sent_at IS NOT NULL AND o.request_id != ?
+        WHERE o.status = 'sent' AND o.sent_at IS NOT NULL AND o.request_id != ?
         ORDER BY o.sent_at DESC LIMIT 100`,
 		)
 		.bind(exceptRequest)

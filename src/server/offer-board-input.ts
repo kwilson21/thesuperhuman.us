@@ -8,12 +8,11 @@ import {
 	ACCEPTANCE_MAX,
 	DELIVERABLES_MAX,
 	ITEM_MAX,
+	OFFER_CONTENT_MAX,
+	OFFER_CONTEXT_MAX,
 	OFFER_LANES,
 	type OfferBoardRequest,
 } from "../lib/offer-board";
-
-/** The most characters of draft and card text one request may carry. */
-export const OFFER_CONTENT_MAX = 12000;
 
 const text = (max: number) => Schema.String.check(Schema.isMaxLength(max));
 
@@ -25,7 +24,7 @@ const OfferBoardRequestSchema = Schema.Struct({
 			text: text(400),
 			state: Schema.Literals(["open", "yours", "avoid"]),
 		}),
-	).check(Schema.isMaxLength(40)),
+	).check(Schema.isMaxLength(OFFER_CONTEXT_MAX)),
 	draft: Schema.Struct({
 		outcome: text(120),
 		summary: text(300),

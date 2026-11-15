@@ -3,13 +3,24 @@ import { describe, expect, it } from "vitest";
 import {
 	type ReplyCard,
 	applyReplyIn,
+	bringBackIn,
+	editCardIn,
 	emptyBoard,
 	keepCard,
+	lastAction,
 	sendRequest,
+	setAside,
+	undoIn,
+	useCard,
 } from "~/lib/brief-board";
 import {
+	OFFER_CONTENT_MAX,
+	OFFER_CONTEXT_MAX,
+	OFFER_LANES,
 	OFFER_LANE_CONFIG,
+	type OfferContextCard,
 	type OfferLane,
+	fitOfferCards,
 	offerLaneLimits,
 	pricingKind,
 	readOfferReply,
@@ -179,5 +190,97 @@ describe("the offer board's lanes under the board's rules", () => {
 		);
 
 		expect(after.withdrawn).toBe(1);
+	});
+});
+
+describe("found in the offer board's first review", () => {
+	const suggest = (lane: OfferLane, text: string): ReplyCard<OfferLane> => ({
+		ref: "",
+		lane,
+		text,
+		basis: "suggested",
+		quote: "",
+		reason: "",
+	});
+
+	const withCard = () => {
+		const [board, n] = sendRequest(emptyBoard<OfferLane>());
+
+		return applyReplyIn(
+			OFFER_LANE_CONFIG,
+			board,
+			[suggest("outcome", "A studio site")],
+			n,
+			"",
+			false,
+		).board;
+	};
+
+	it("uses an open, an edited and a brought-back card, each as a step Undo names, and never a set-aside one", () => {
+		const open = useCard(withCard(), "c1");
+
+		expect(open.cards[0].status).toBe("kept");
+		expect(lastAction(open)).toBe("used “A studio site”");
+
+		const edited = useCard(
+			editCardIn(OFFER_LANE_CONFIG, withCard(), "c1", "A pottery studio site"),
+			"c1",
+		);
+
+		expect(edited.cards[0].status).toBe("kept");
+		expect(edited.history).toHaveLength(2);
+
+		const back = bringBackIn(
+			OFFER_LANE_CONFIG,
+			setAside(withCard(), "c1"),
+			"c1",
+		);
+
+		expect(back.cards[0].status).toBe("kept");
+		expect(useCard(back, "c1").history).toHaveLength(3);
+		expect(undoIn(OFFER_LANE_CONFIG, useCard(back, "c1")).cards).toEqual(
+			back.cards,
+		);
+
+		const aside = setAside(withCard(), "c1");
+
+		expect(useCard(aside, "c1")).toBe(aside);
+	});
+
+	it("can show the model the whole board: every lane's cards fit in one request", () => {
+		const total = OFFER_LANES.reduce(
+			(sum, lane) => sum + offerLaneLimits[lane],
+			0,
+		);
+
+		expect(total).toBeLessThanOrEqual(OFFER_CONTEXT_MAX);
+	});
+
+	it("fits a request to the route's limit by leaving out set-aside cards, then the owner's, never open ones", () => {
+		const card = (
+			ref: string,
+			state: OfferContextCard["state"],
+		): OfferContextCard => ({
+			ref,
+			lane: "inputs",
+			text: "x".repeat(400),
+			state,
+		});
+
+		const cards = [
+			card("c1", "open"),
+			card("c2", "yours"),
+			card("c3", "yours"),
+			card("c4", "avoid"),
+			card("c5", "avoid"),
+		];
+
+		expect(fitOfferCards(cards, 1000)).toEqual(cards);
+		expect(
+			fitOfferCards(cards, OFFER_CONTENT_MAX - 1000).map((each) => each.ref),
+		).toEqual(["c1", "c2"]);
+		expect(
+			fitOfferCards(cards, OFFER_CONTENT_MAX).map((each) => each.ref),
+		).toEqual(["c1"]);
 	});
 });

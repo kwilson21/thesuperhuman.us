@@ -135,3 +135,35 @@ describe("the stored reference", () => {
 		expect(readPricingReference(null).version).toBe(0);
 	});
 });
+
+describe("found in the offer board's first review", () => {
+	it("reads research without a day rate back after it is stored, where the day rate is null", () => {
+		const { dayRate: _, ...withoutDayRate } = research;
+		const read = readMarketReference(withoutDayRate);
+
+		expect(read.ok).toBe(true);
+
+		if (!read.ok) return;
+		expect(read.value.dayRate).toBeNull();
+
+		const stored = readPricingReference(
+			JSON.parse(
+				JSON.stringify({
+					version: 1,
+					dayValueCents: null,
+					contingencyPercent: 0,
+					market: read.value,
+					updatedAt: "",
+				}),
+			),
+		);
+
+		expect(stored.market).toEqual(read.value);
+	});
+
+	it("still refuses a day rate it cannot read", () => {
+		expect(readMarketReference({ ...research, dayRate: "high" }).ok).toBe(
+			false,
+		);
+	});
+});

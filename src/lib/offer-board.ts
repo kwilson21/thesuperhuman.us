@@ -53,7 +53,7 @@ export const offerLaneLimits: Record<OfferLane, number> = {
 	exclusions: 6,
 	timing: 2,
 	questions: 4,
-	drivers: 6,
+	drivers: 4,
 };
 
 /** Each lane's text limit: the offer editor's own field limits. */
@@ -84,6 +84,12 @@ export const OFFER_REASON_MAX = 160;
 export const DELIVERABLES_MAX = 8;
 export const ACCEPTANCE_MAX = 5;
 export const ITEM_MAX = 200;
+
+/** The most characters of draft and card text one request may carry; the page fits its request to it. */
+export const OFFER_CONTENT_MAX = 24000;
+
+/** The most cards a request shows the model: the whole board (its lanes hold 30) and the cards set aside. */
+export const OFFER_CONTEXT_MAX = 60;
 
 /** The most cards one reply may carry. */
 export const OFFER_REPLY_MAX = 24;
@@ -145,6 +151,29 @@ export type OfferBoardRequest = {
 	readonly cards: readonly OfferContextCard[];
 	readonly draft: OfferDraft;
 };
+
+/**
+ * The cards a request shows the model, within OFFER_CONTENT_MAX characters with the draft (the route's limit): set-aside
+ * cards are left out first, then the owner's, from the last. Open cards are always shown, as in the living brief.
+ */
+export function fitOfferCards(
+	cards: readonly OfferContextCard[],
+	draftLength: number,
+): OfferContextCard[] {
+	const fitted = [...cards];
+
+	let size =
+		draftLength + fitted.reduce((sum, card) => sum + card.text.length, 0);
+
+	for (const state of ["avoid", "yours"] as const)
+		for (let at = fitted.length - 1; size > OFFER_CONTENT_MAX && at >= 0; at--)
+			if (fitted[at].state === state) {
+				size -= fitted[at].text.length;
+				fitted.splice(at, 1);
+			}
+
+	return fitted;
+}
 
 const unreadable = { missing: "Missing.", wrongType: () => "Not text." };
 
@@ -273,9 +302,12 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			figure <= MARKET_USD_MAX
 				? figure
 				: null,
-		figureReason: Predicate.isString(figureReason)
-			? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
-			: "",
+		// The reason may name the figure, but never a link.
+		figureReason:
+			Predicate.isString(figureReason) &&
+			!/https?:\/\/|www\./i.test(figureReason)
+				? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
+				: "",
 	};
 }
 

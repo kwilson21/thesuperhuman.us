@@ -214,10 +214,13 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 			error: "caveats must be at most 20 texts of 2,000 characters.",
 		};
 
+	// No day rate is null when stored, and absent from a research file without one: either reads as none.
 	const dayRateRaw = own(raw, "dayRate");
 
 	const dayRate =
-		dayRateRaw === undefined ? null : readFields(dayRateFields, dayRateRaw);
+		dayRateRaw === undefined || dayRateRaw === null
+			? null
+			: readFields(dayRateFields, dayRateRaw);
 
 	if (dayRate && (!dayRate.ok || dayRate.value.lowUsd > dayRate.value.highUsd))
 		return { ok: false, error: "dayRate is not readable." };

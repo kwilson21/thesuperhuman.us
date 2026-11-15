@@ -12,6 +12,7 @@ import {
 	type Mock,
 } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/offer-board";
+import { pastOffers } from "~/server/offer-board-store";
 import { PRICING_KEY } from "~/server/pricing-store";
 import { fakeKv, partial } from "../helpers/doubles";
 import { readJson, type JsonObject } from "../helpers/json";
@@ -304,5 +305,51 @@ describe("the offer board's route", () => {
 	it("answers 400 for a request the page never sends", async () => {
 		expect((await POST(context({ cards: "no", draft: {} }))).status).toBe(400);
 		expect(run).not.toHaveBeenCalled();
+	});
+});
+
+describe("the owner's past offers, for the pricing panel", () => {
+	function offer(
+		id: string,
+		requestId: string,
+		version: number,
+		status: string,
+		feeCents: number,
+		sentAt: string,
+	) {
+		db.prepare(
+			`INSERT INTO software_offers (id,request_id,version,status,terms_json,created_at,updated_at,sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		).run(
+			id,
+			requestId,
+			version,
+			status,
+			JSON.stringify({
+				outcome: `Offer ${id}`,
+				milestones: [{ feeCents }],
+			}),
+			sentAt,
+			sentAt,
+			sentAt,
+		);
+	}
+
+	it("counts each client's offer once, as last sent, for briefs of the same kind only", async () => {
+		seed("r2");
+		seed("r3");
+		seed("r4", "new", { path: "webapp" });
+		offer("o1", "r2", 1, "superseded", 100000, "2026-11-01T00:00:00.000Z");
+		offer("o2", "r2", 2, "sent", 200000, "2026-11-02T00:00:00.000Z");
+		offer("o3", "r3", 1, "sent", 300000, "2026-11-03T00:00:00.000Z");
+		offer("o4", "r4", 1, "sent", 900000, "2026-11-04T00:00:00.000Z");
+		offer("o5", "r1", 1, "sent", 500000, "2026-11-05T00:00:00.000Z");
+
+		const past = await pastOffers(sqliteD1(db), "website", "r1");
+
+		expect(past.map((each) => [each.requestId, each.totalCents])).toEqual([
+			["r3", 300000],
+			["r2", 200000],
+		]);
 	});
 });

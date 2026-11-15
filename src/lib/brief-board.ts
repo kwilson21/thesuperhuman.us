@@ -972,6 +972,28 @@ export function keepCard<L extends string>(
 	);
 }
 
+/**
+ * Use (the offer board): a card on the board becomes the owner's, as used in the offer. Like Keep, but an edited card, or
+ * one kept by bringing it back, may be used too, and Undo says "used". The step is recorded even when the card was
+ * already the owner's, so the page can undo what Use put into the offer with it.
+ */
+export function useCard<L extends string>(
+	board: Board<L>,
+	id: string,
+): Board<L> {
+	const card = find(board, id);
+
+	if (!card || card.status === "dismissed" || card.status === "wrote")
+		return board;
+
+	return act(
+		board,
+		`used “${card.text}”`,
+		[id],
+		replace<L>(id, (c) => ({ ...c, status: "kept" })),
+	);
+}
+
 /** Edit: the visitor's words replace the card's. A note stays a note. */
 export const editCard = (board: Board, id: string, text: string): Board =>
 	editCardIn(BRIEF_LANES, board, id, text);
@@ -1266,6 +1288,7 @@ export type ContextCard<L extends string = Lane> = {
 /** The cards a request shows the model, at most CONTEXT_MAX: open ones first, then the visitor's, then set-aside ones. */
 export function boardContext<L extends string>(
 	board: Board<L>,
+	max = CONTEXT_MAX,
 ): ContextCard<L>[] {
 	const state = (card: BoardCard<L>): ContextCard["state"] =>
 		card.status === "proposed"
@@ -1284,7 +1307,7 @@ export function boardContext<L extends string>(
 			state: state(card),
 		}))
 		.sort((a, b) => order[a.state] - order[b.state])
-		.slice(0, CONTEXT_MAX);
+		.slice(0, max);
 }
 
 /**

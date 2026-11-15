@@ -274,9 +274,10 @@ const offerBoardOpen = Boolean(
 
 const resumeStore = Astro.locals.runtime.env.RESUME_STORE;
 
+// The board still works without the owner's numbers: a store that fails reads as nothing saved.
 const offerPricing =
 	offerBoardOpen && resumeStore
-		? await loadPricing(resumeStore)
+		? await loadPricing(resumeStore).catch(() => emptyPricing())
 		: emptyPricing();
 
 const offerPast =

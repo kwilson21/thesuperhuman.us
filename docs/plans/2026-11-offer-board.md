@@ -20,12 +20,16 @@ On `/owner/requests/<id>` for a software request with a brief, while an offer ca
 withdrawn or started), a section titled "Shape the offer" sits above the offer editor. It starts with one button,
 "Suggest an offer with AI", so opening a request never calls the model. Once started, the board keeps up with the owner:
 after the owner pauses editing the offer for three seconds, it asks again with the current draft, one request at a
-time, at least ten seconds apart, at most 12 a page. "Suggest again" asks at once.
+time, at least ten seconds apart, at most 12 a page. "Suggest again" asks at once. A failed request (the model busy,
+the day's limit, a network error) is shown in the status line and stops the board asking on its own until the owner
+presses Suggest again, so a failure never spends the day's allowance by itself.
 
 The board's height is bounded (the page never grows with it): the heading, the status line and the controls stay put,
 and the lanes scroll inside a box no taller than about two thirds of the screen. The pricing panel sits below that box,
-so prices that fill in never move a card under the pointer. A reply waits ("Show N updates") only while the owner's
-pointer or focus is among the cards, where it would move something; a press of Suggest is not that. The board is not
+so prices that fill in never move a card under the pointer, and a price row is redrawn only when what it says changes,
+so a focused button in it stays. A reply waits only while the owner's pointer or focus is among the cards, where it
+would move something; a press of Suggest is not that. Its button ("Show N updates") sits beside Undo in the header, so
+it moves nothing either, focusing it does not apply the reply, and its arrival is announced once. The board is not
 saved across a reload: the offer editor's own draft is, and Suggest asks again.
 
 ### What to charge
@@ -35,7 +39,7 @@ Three rows, each with the reasoning behind it:
 | Row | How it is worked out | When it is missing |
 |---|---|---|
 | From your day value | The AI estimates each milestone's working days as a low and a high. Ordinary code multiplies them by the owner's private day value and adds the owner's contingency, rounded up to whole $50. | "Set your day value on the pricing page." |
-| From your past offers | Ordinary code reads the owner's sent offers on the same path (website, web app or workflow): each one's total (the sum of its milestone fees), outcome and date, the five most recent, with the lowest, middle and highest. | "No sent offers on this path yet." |
+| From your past offers | Ordinary code reads the owner's sent offers on the same path (website, web app or workflow), each the version the client last received (never a superseded or withdrawn one): each one's total (the sum of its milestone fees), outcome and date, the five most recent, with the lowest, middle and highest. | "No sent offers on this path yet." |
 | From the market | The researched range for this path and the size the AI chose (small, medium or large), with the date it was researched and its sources. The AI also names a figure in that range with a reason; ordinary code moves a figure outside the range to the nearer end and says so. | "Add the market research on the pricing page." |
 
 Each row can fill the offer's whole-project range ("Use as the estimate range", which also ticks "Whole-project
@@ -54,11 +58,15 @@ nothing is sent until you send the offer."
 | Outside this offer | a line added to "Outside this offer" | 6 | 120 |
 | Timing | the Timing field (replaces it) | 2 | 200 |
 | Questions to ask | the "Ask a question" form (copied, never sent) | 4 | 200 |
-| What drives the cost | nothing; a note for the owner, and context for the next suggestion | 6 | 120 |
+| What drives the cost | nothing; a note for the owner, and context for the next suggestion | 4 | 120 |
 
 Card actions: Use (Keep, for cost drivers), Edit, Not this (to a closed "Set aside" list with Bring back), Undo for the
-board (Undo of a Use also restores the field as it was). Each lane has Add for the owner's own note. Every card says
-where it came from ("Suggestion", "You used this", "Edited by you", "Your note").
+board. An edited card and a card brought back can be used too. A used milestone offers only its fee ("Set its fee to
+$N", which fills the fee and nothing else) and Not this; any used card can be set aside. The owner writes their own
+words in the offer editor itself, so the lanes have no Add. Every card says where it came from ("Suggestion", "You used
+this", "You kept this", "Edited by you"). The lanes hold 30 cards in all, within the 60 a request may show the model,
+and the page fits a request to the route's 24,000-character limit by leaving out set-aside cards, then the owner's,
+never open ones.
 
 ## 2. The rules
 
@@ -77,8 +85,8 @@ And for money and privacy:
    is dropped (money belongs in the pricing panel). Fee and range fields change only when the owner presses Use.
 6. **Nothing is sent or saved by the board.** Use fills the draft form in the page; the offer editor's Save draft and
    Send offer stay the only ways an offer is stored or sent.
-7. **Private numbers stay private.** The day value, the contingency, the market research and past offers live in the
-   database, set from an owner page; none of them is in the repository (it is public), shown to a client, or sent to the
+7. **Private numbers stay private.** The day value, the contingency and the market research live in the private KV
+   store, set from an owner page, and past offers in the database; none of them is in the repository (it is public), shown to a client, or sent to the
    model, except the market ranges for this path, which ground the model's figure. Other clients' offers never reach
    the model.
 8. **No links or markup in model text.** Cards with a link are dropped; every text is rendered as text.
@@ -104,8 +112,11 @@ stateDiagram-v2
   dismissed --> proposed: Undo
 ```
 
-Use has a second effect outside the board (the form field), and Undo reverses both together: the board's history step
-records the field's value before Use.
+Use has a second effect outside the board (the form field), and Undo reverses both together. The page keys what Use
+changed by the board's history step itself, so a step that falls off the 40-step history takes its entry with it. Undo
+puts a field back only while it still holds what Use put there, removes only the line Use added to a one-per-line
+field, and removes a milestone row Use added once that row's fields are empty again: anything the owner typed since
+stays.
 
 ## 4. The pricing reference (private)
 

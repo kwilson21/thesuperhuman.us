@@ -1,19 +1,20 @@
 // The offer board in the owner's request page (docs/plans/2026-11-offer-board.md). The rules are the living brief's
 // (src/lib/brief-board.ts, run with OFFER_LANE_CONFIG): the owner's cards never change from a reply, a set-aside idea
-// is not offered again, an older reply never applies, and a reply that arrives while the owner is in the board waits.
-// Use fills the offer editor's own fields (src/components/owner/SoftwareOfferEditor.astro) and Undo puts them back; the
-// board itself saves and sends nothing. Prices are worked out here from the owner's numbers (src/lib/offer-pricing.ts).
+// is not offered again, an older reply never applies, and a reply that arrives while the owner is among the cards waits.
+// Use fills the offer editor's own fields (src/components/owner/SoftwareOfferEditor.astro); Undo puts back what Use
+// changed, and only that. The board itself saves and sends nothing. Prices are worked out here from the owner's numbers
+// (src/lib/offer-pricing.ts).
 import * as Predicate from "effect/Predicate";
 import {
 	type Board,
 	type BoardCard,
+	type HistoryStep,
 	type ReplyCard,
 	applyReplyIn,
 	boardContext,
 	bringBackIn,
 	editCardIn,
 	emptyBoard,
-	keepCard,
 	lastAction,
 	listOf,
 	ownField,
@@ -21,15 +22,18 @@ import {
 	sendRequest,
 	setAside,
 	undoIn,
+	useCard,
 } from "../lib/brief-board";
 import type { RawValue } from "../lib/fields";
 import {
 	type MilestoneDetail,
+	OFFER_CONTEXT_MAX,
 	OFFER_LANES,
 	OFFER_LANE_CONFIG,
 	type OfferDraft,
 	type OfferLane,
 	type OfferSizing,
+	fitOfferCards,
 	offerLaneLabels,
 	pricingKind,
 	readOfferReply,
@@ -47,6 +51,14 @@ const IDLE = 3000;
 /** The least time between two requests. */
 const GAP = 10000;
 
+/** The milestone fields Use fills; a row it added goes on Undo only when these are empty again. */
+const MILESTONE_FIELDS = [
+	"milestoneName",
+	"deliverables",
+	"acceptance",
+	"fee",
+] as const;
+
 /** Requests one page may make. */
 const REQUESTS_PER_PAGE = 12;
 
@@ -56,6 +68,15 @@ const TIMEOUT = 35000;
 type OfferBoard = Board<OfferLane>;
 
 type OfferCard = BoardCard<OfferLane>;
+
+type Held = {
+	n: number;
+	cards: ReplyCard<OfferLane>[];
+	details: { lane: OfferLane; text: string; detail: MilestoneDetail }[];
+	refs: string[];
+	sizing: OfferSizing;
+	changes: number;
+};
 
 const dollars = (cents: number) =>
 	`$${Math.round(cents / 100).toLocaleString("en-US")}`;
@@ -87,6 +108,7 @@ export function setupOfferBoard() {
 
 	if (!root || !form) return;
 	const endpoint = root.dataset.endpoint ?? "";
+	const kind = pricingKind(root.dataset.kind);
 
 	let pricing: ReturnType<typeof readPricing>;
 
@@ -95,8 +117,6 @@ export function setupOfferBoard() {
 	} catch {
 		pricing = readPricing(null);
 	}
-
-	const kind = pricingKind(root.dataset.kind);
 
 	let useLabels: Partial<Record<OfferLane, string>> = {};
 
@@ -125,6 +145,7 @@ export function setupOfferBoard() {
 		root.querySelector<HTMLButtonElement>("[data-offer-held]")!;
 
 	const heading = root.querySelector<HTMLElement>("#offer-board-title")!;
+	const cardsBox = root.querySelector<HTMLElement>("[data-offer-scroll]")!;
 	const aside = root.querySelector<HTMLDetailsElement>("[data-offer-aside]")!;
 
 	const asideSummary = root.querySelector<HTMLElement>(
@@ -140,42 +161,58 @@ export function setupOfferBoard() {
 	const priceDay = root.querySelector<HTMLElement>("[data-price-day]")!;
 	const priceMarket = root.querySelector<HTMLElement>("[data-price-market]")!;
 
+	// What each price row says before there is anything to work out, to go back to when there is nothing again.
+	const dayDefault = [...priceDay.childNodes].map((node) =>
+		node.cloneNode(true),
+	);
+
+	const marketDefault = [...priceMarket.childNodes].map((node) =>
+		node.cloneNode(true),
+	);
+
 	let board: OfferBoard = emptyBoard<OfferLane>();
 	let sizing: OfferSizing | null = null;
 
-	let started = false,
+	let autoAsk = false,
 		requests = 0,
 		lastSendAt = 0,
 		lastSent = "",
 		hovering = false,
 		timer: ReturnType<typeof setTimeout> | undefined,
 		inFlight: AbortController | null = null,
-		held: {
-			n: number;
-			cards: ReplyCard<OfferLane>[];
-			details: { lane: OfferLane; text: string; detail: MilestoneDetail }[];
-			refs: string[];
-			sizing: OfferSizing;
-			changes: number;
-		} | null = null;
+		held: Held | null = null,
+		priceSignature = "";
 
 	/** Each milestone card's detail: what it delivers and its days. */
 	const details = new Map<string, MilestoneDetail>();
+	/** The cards Use has put into the offer (Undo takes a card out again). */
+	const used = new Set<string>();
 	/** Where a used milestone card went in the offer editor. */
 	const usedIn = new Map<string, HTMLElement>();
-	/** For each board history length, how to put the offer's fields back as they were before that Use. */
-	const fieldUndo = new Map<number, () => void>();
+
+	/**
+	 * For each Use on the board's history, how to put back what it changed in the offer editor. Keyed by the step itself,
+	 * so a step that falls off the capped history takes its entry with it and never answers for another.
+	 */
+	const fieldUndo = new WeakMap<HistoryStep<OfferLane>, () => void>();
 	const nodes = new Map<string, HTMLLIElement>();
 
 	const announce = (text: string) => {
 		live.textContent = text;
 	};
 
-	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply.
-	const cardsBox = root.querySelector<HTMLElement>("[data-offer-scroll]")!;
+	/** A message the owner both sees in the status line and hears. */
+	const say = (text: string) => {
+		status.textContent = text;
+		announce(text);
+	};
 
+	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply. The
+	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
 	const interacting = () =>
-		hovering || cardsBox.contains(document.activeElement);
+		hovering ||
+		cardsBox.contains(document.activeElement) ||
+		document.activeElement === heldButton;
 
 	// ---- The offer editor's fields ------------------------------------------------------------------------------------
 	const named = <E extends HTMLInputElement | HTMLTextAreaElement>(
@@ -183,7 +220,13 @@ export function setupOfferBoard() {
 		name: string,
 	) => scope.querySelector<E>(`[name="${name}"]`);
 
-	/** Sets a field as if the owner typed it (the editor marks the draft changed), and remembers how to put it back. */
+	const changed = (element: HTMLInputElement | HTMLTextAreaElement) =>
+		element.dispatchEvent(new Event("input", { bubbles: true }));
+
+	/**
+	 * Sets a field as if the owner typed it (the editor marks the draft changed). Undo puts it back only while it still
+	 * holds what Use put there: anything the owner typed since stays.
+	 */
 	function setField(
 		element: HTMLInputElement | HTMLTextAreaElement | null,
 		value: string,
@@ -192,52 +235,76 @@ export function setupOfferBoard() {
 		if (!element || element.value === value) return;
 		const before = element.value;
 		element.value = value;
-		element.dispatchEvent(new Event("input", { bubbles: true }));
+		changed(element);
 		restore.push(() => {
+			if (element.value !== value) return;
 			element.value = before;
-			element.dispatchEvent(new Event("input", { bubbles: true }));
+			changed(element);
 		});
 	}
 
-	/** Adds a line to a one-per-line field, unless it is there. */
+	/** Adds a line to a one-per-line field, unless it is there. Undo removes that line, and only that line. */
 	function addLine(
 		element: HTMLTextAreaElement | null,
 		line: string,
 		restore: (() => void)[],
 	) {
 		if (!element) return;
-		const lines = element.value.split("\n").map((item) => item.trim());
 
-		if (lines.includes(line)) return;
-		setField(
-			element,
-			[element.value.trim(), line].filter(Boolean).join("\n"),
-			restore,
-		);
+		if (element.value.split("\n").some((item) => item.trim() === line)) return;
+		element.value = [element.value.trimEnd(), line].filter(Boolean).join("\n");
+		changed(element);
+		restore.push(() => {
+			const kept = element.value.split("\n");
+			const at = kept.findIndex((item) => item.trim() === line);
+
+			if (at < 0) return;
+			kept.splice(at, 1);
+			element.value = kept.join("\n");
+			changed(element);
+		});
 	}
 
-	/** The milestone fieldset a card fills: the one it filled before, the first empty one, or a new one (at most 3). */
-	function milestoneFor(cardId: string): HTMLElement | null {
-		const known = usedIn.get(cardId);
+	const milestones = () => [
+		...form.querySelectorAll<HTMLElement>("[data-milestone]"),
+	];
 
-		if (known?.isConnected) return known;
-		const list = form!.querySelector<HTMLElement>("[data-milestones]");
+	/**
+	 * The milestone fieldset a card fills: the one it filled before (while it still holds that milestone's name), the
+	 * first empty one, or a new one (at most three). `added` says whether this added one.
+	 */
+	function milestoneFor(card: OfferCard) {
+		const known = usedIn.get(card.id);
 
-		if (!list) return null;
+		if (
+			known?.isConnected &&
+			named(known, "milestoneName")?.value.trim() === card.text
+		)
+			return { fieldset: known, added: false };
 
-		const empty = [
-			...list.querySelectorAll<HTMLElement>("[data-milestone]"),
-		].find((fieldset) => !named(fieldset, "milestoneName")?.value.trim());
+		const empty = milestones().find(
+			(fieldset) => !named(fieldset, "milestoneName")?.value.trim(),
+		);
 
-		if (empty) return empty;
+		if (empty) return { fieldset: empty, added: false };
 		const add = form!.querySelector<HTMLButtonElement>("[data-add-milestone]");
 
 		if (!add || add.disabled) return null;
-		add.click();
+		const count = milestones().length;
 
-		return (
-			[...list.querySelectorAll<HTMLElement>("[data-milestone]")].at(-1) ?? null
-		);
+		// The editor moves focus into a row it adds; the owner is still working in the board.
+		const focused =
+			document.activeElement instanceof HTMLElement
+				? document.activeElement
+				: null;
+
+		add.click();
+		focused?.focus();
+		const fieldset = milestones().at(-1);
+
+		return fieldset && milestones().length > count
+			? { fieldset, added: true }
+			: null;
 	}
 
 	/** The fee a milestone card's days give with the owner's day value: the high end, which carries the contingency. */
@@ -255,7 +322,26 @@ export function setupOfferBoard() {
 		return estimate ? estimate.highCents : null;
 	}
 
-	/** Use: puts the card into the offer, keeps it on the board, and records how Undo puts the fields back. */
+	/** Sets only the fee of a milestone already in the offer: the rest of it is the owner's now. */
+	function setFee(card: OfferCard) {
+		const fee = feeFor(card.id);
+		const fieldset = usedIn.get(card.id);
+		const input = fieldset?.isConnected ? named(fieldset, "fee") : null;
+
+		if (fee === null || !input) {
+			say(
+				"This milestone is no longer in the offer. Undo, or add it again from a new suggestion.",
+			);
+
+			return;
+		}
+
+		input.value = String(fee / 100);
+		changed(input);
+		say(`Set the fee to ${dollars(fee)}. Change it in the offer if you like.`);
+	}
+
+	/** Use: puts the card into the offer and makes it the owner's; Undo of that step puts back what it changed. */
 	function use(card: OfferCard, withFee = false) {
 		const restore: (() => void)[] = [];
 		let said = "";
@@ -294,34 +380,30 @@ export function setupOfferBoard() {
 				said = "Added to what is outside this offer.";
 
 				break;
-			case "questions": {
-				const box =
-					document.querySelector<HTMLTextAreaElement>("#software-question");
-
-				if (box)
-					setField(
-						box,
-						[box.value.trim(), card.text].filter(Boolean).join("\n"),
-						restore,
-					);
+			case "questions":
+				addLine(
+					document.querySelector<HTMLTextAreaElement>("#software-question"),
+					card.text,
+					restore,
+				);
 				said =
 					"Copied to Ask a question. It is not sent until you press Send question.";
 
 				break;
-			}
-
 			case "milestones": {
-				const fieldset = milestoneFor(card.id);
 				const detail = details.get(card.id);
+				const target = detail ? milestoneFor(card) : null;
 
-				if (!fieldset || !detail) {
-					announce(
+				if (!detail || !target) {
+					say(
 						"The offer already has three milestones. Remove one to add this.",
 					);
 
 					return;
 				}
 
+				const { fieldset, added } = target;
+				const before = usedIn.get(card.id);
 				usedIn.set(card.id, fieldset);
 				setField(named(fieldset, "milestoneName"), card.text, restore);
 				setField(
@@ -338,6 +420,31 @@ export function setupOfferBoard() {
 
 				if (fee !== null)
 					setField(named(fieldset, "fee"), String(fee / 100), restore);
+
+				// Runs last on Undo (the list is undone from the end), once the fields are back: a row this Use added goes
+				// when nothing is left in it.
+				restore.unshift(() => {
+					if (before) usedIn.set(card.id, before);
+					else usedIn.delete(card.id);
+
+					if (
+						added &&
+						fieldset.isConnected &&
+						MILESTONE_FIELDS.every(
+							(name) => !named(fieldset, name)?.value.trim(),
+						)
+					) {
+						const focused =
+							document.activeElement instanceof HTMLElement
+								? document.activeElement
+								: null;
+
+						fieldset
+							.querySelector<HTMLButtonElement>("[data-remove-milestone]")
+							?.click();
+						focused?.focus();
+					}
+				});
 				said =
 					fee === null
 						? "Added the milestone. Set its fee."
@@ -352,18 +459,29 @@ export function setupOfferBoard() {
 				break;
 		}
 
-		const next = keepCard(board, card.id);
+		const wasUsed = used.has(card.id);
+		used.add(card.id);
+		restore.unshift(() => {
+			if (!wasUsed) used.delete(card.id);
+		});
+		const next = useCard(board, card.id);
 
-		// Undo of this Use puts the fields back too. A fee filled later for a card already used is the owner's to change.
-		if (next !== board) {
-			board = next;
-			fieldUndo.set(board.history.length, () => {
-				for (const undoField of restore.reverse()) undoField();
-			});
+		if (next === board) {
+			for (const undoField of restore.reverse()) undoField();
+
+			return;
 		}
 
+		board = next;
+		const step = board.history.at(-1);
+
+		if (step)
+			fieldUndo.set(step, () => {
+				for (const undoField of restore.reverse()) undoField();
+			});
 		render();
 		announce(said);
+		schedule();
 	}
 
 	// ---- The offer as drafted, for the model (never a fee) -------------------------------------------------------------
@@ -381,7 +499,7 @@ export function setupOfferBoard() {
 		return {
 			outcome: value(form!, "outcome", 120),
 			summary: value(form!, "summary", 300),
-			milestones: [...form!.querySelectorAll<HTMLElement>("[data-milestone]")]
+			milestones: milestones()
 				.slice(0, 3)
 				.map((fieldset) => ({
 					name: value(fieldset, "milestoneName", 80),
@@ -412,27 +530,29 @@ export function setupOfferBoard() {
 			has.dispatchEvent(new Event("change", { bubbles: true }));
 		}
 
-		const ignored: (() => void)[] = [];
-		setField(
-			named(form!, "rangeLow"),
-			String(Math.round(lowCents / 100)),
-			ignored,
-		);
-		setField(
-			named(form!, "rangeHigh"),
-			String(Math.round(highCents / 100)),
-			ignored,
-		);
-		announce(
+		for (const [name, cents] of [
+			["rangeLow", lowCents],
+			["rangeHigh", highCents],
+		] as const) {
+			const input = named(form!, name);
+
+			if (input) {
+				input.value = String(Math.round(cents / 100));
+				changed(input);
+			}
+		}
+
+		say(
 			`Filled the estimate range: ${dollars(lowCents)} to ${dollars(highCents)}. Nothing is saved until you save the draft.`,
 		);
 	}
 
-	const rangeButton = (lowCents: number, highCents: number) => {
+	const rangeButton = (lowCents: number, highCents: number, what: string) => {
 		const button = document.createElement("button");
 		button.type = "button";
-		button.className = "offer-link";
+		button.className = "studio-quiet";
 		button.textContent = "Use as the estimate range";
+		button.setAttribute("aria-label", `Use ${what} as the estimate range`);
 		button.dataset.priceUse = "";
 		button.dataset.low = String(lowCents);
 		button.dataset.high = String(highCents);
@@ -440,89 +560,147 @@ export function setupOfferBoard() {
 		return button;
 	};
 
+	/** Replaces the price rows only when what they say changes, so a focused button in one is never replaced for nothing. */
 	function drawPrices() {
+		const dayParts: (string | Node)[] = [];
+		const marketParts: (string | Node)[] = [];
+
 		// The milestones the owner used, or else the suggested ones: the days the estimate is made from.
-		const milestones = board.cards.filter(
+		const onBoard = board.cards.filter(
 			(card) =>
 				card.lane === "milestones" &&
 				card.status !== "dismissed" &&
 				details.has(card.id),
 		);
 
-		const used = milestones.filter((card) => card.status !== "proposed");
-		const counted = (used.length ? used : milestones).slice(0, 3);
+		const used = onBoard.filter((card) => card.status !== "proposed");
+		const counted = (used.length ? used : onBoard).slice(0, 3);
 		const days = counted.flatMap((card) => details.get(card.id) ?? []);
 
-		if (pricing.dayValueCents !== null && days.length) {
-			const estimate = dayValueEstimate(
-				days,
-				pricing.dayValueCents,
-				pricing.contingencyPercent,
+		const estimate = days.length
+			? dayValueEstimate(
+					days,
+					pricing.dayValueCents,
+					pricing.contingencyPercent,
+				)
+			: null;
+
+		if (estimate) {
+			const low = days.reduce((sum, item) => sum + item.daysLow, 0);
+			const high = days.reduce((sum, item) => sum + item.daysHigh, 0);
+
+			dayParts.push(
+				`${dollars(estimate.lowCents)} to ${dollars(estimate.highCents)}: ${low} to ${high} days for ${counted.length} ${used.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
+				rangeButton(
+					estimate.lowCents,
+					estimate.highCents,
+					"the day-value estimate",
+				),
+			);
+		} else if (pricing.dayValueCents !== null && sizing)
+			dayParts.push("No milestones with days on the board to estimate from.");
+		else dayParts.push(...dayDefault.map((node) => node.cloneNode(true)));
+
+		const range =
+			pricing.market && sizing?.size && kind
+				? marketRange(pricing.market, kind, sizing.size)
+				: null;
+
+		if (range && pricing.market && sizing?.size) {
+			marketParts.push(
+				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI: ${sizing.sizeReason})` : ""}. `,
 			);
 
-			if (estimate) {
-				const low = days.reduce((sum, item) => sum + item.daysLow, 0);
-				const high = days.reduce((sum, item) => sum + item.daysHigh, 0);
+			if (sizing.figureUsd !== null) {
+				const figure = withinRange(
+					sizing.figureUsd,
+					range.lowUsd,
+					range.highUsd,
+				);
 
-				priceDay.replaceChildren(
-					`${dollars(estimate.lowCents)} to ${dollars(estimate.highCents)}: ${low} to ${high} days for ${counted.length} ${used.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
-					rangeButton(estimate.lowCents, estimate.highCents),
+				marketParts.push(
+					`The AI suggests ${dollars(figure * 100)}${figure === sizing.figureUsd ? "" : ", moved into the researched range"}${sizing.figureReason ? `: ${sizing.figureReason}` : ""}. `,
 				);
 			}
-		}
 
-		if (!pricing.market || !sizing?.size || !kind) return;
-		const range = marketRange(pricing.market, kind, sizing.size);
-
-		if (!range) {
-			priceMarket.textContent = `The AI reads this as ${sizing.size}, and your research has no figure for that size.`;
-
-			return;
-		}
-
-		const parts: (string | HTMLElement)[] = [
-			`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI: ${sizing.sizeReason})` : ""}. `,
-		];
-
-		if (sizing.figureUsd !== null) {
-			const figure = withinRange(sizing.figureUsd, range.lowUsd, range.highUsd);
-
-			parts.push(
-				`The AI suggests ${dollars(figure * 100)}${figure === sizing.figureUsd ? "" : ", moved into the researched range"}${sizing.figureReason ? `: ${sizing.figureReason}` : ""}. `,
+			marketParts.push(
+				rangeButton(
+					range.lowUsd * 100,
+					range.highUsd * 100,
+					"the market range",
+				),
 			);
-		}
+		} else if (pricing.market && sizing?.size)
+			marketParts.push(
+				`The AI reads this as ${sizing.size}, and your research has no figure for that size.`,
+			);
+		else marketParts.push(...marketDefault.map((node) => node.cloneNode(true)));
 
-		parts.push(rangeButton(range.lowUsd * 100, range.highUsd * 100));
-		priceMarket.replaceChildren(...parts);
+		const text = (parts: (string | Node)[]) =>
+			parts
+				.map((part) =>
+					Predicate.isString(part)
+						? part
+						: `${part.textContent}${part instanceof HTMLElement ? `[${part.dataset.low}-${part.dataset.high}]` : ""}`,
+				)
+				.join("");
+
+		const signature = `${text(dayParts)}|${text(marketParts)}`;
+
+		if (signature === priceSignature) return;
+		priceSignature = signature;
+
+		const focused =
+			document.activeElement instanceof HTMLElement &&
+			(priceDay.contains(document.activeElement) ||
+				priceMarket.contains(document.activeElement))
+				? document.activeElement.closest("dd")
+				: null;
+
+		priceDay.replaceChildren(...dayParts);
+		priceMarket.replaceChildren(...marketParts);
+
+		// A row redrawn under focus keeps it on its new button, or on the row's heading when it has none.
+		if (focused && !focused.contains(document.activeElement))
+			(
+				focused.querySelector<HTMLElement>("button") ??
+				root!.querySelector<HTMLElement>("#offer-pricing-title") ??
+				heading
+			).focus();
 	}
 
 	// ---- Drawing ------------------------------------------------------------------------------------------------------
 	const originLabel = (card: OfferCard) => {
-		if (card.status === "kept")
+		if (used.has(card.id))
 			return card.lane === "drivers" ? "You kept this" : "You used this";
 
 		if (card.status === "edited") return "Edited by you";
 
+		if (card.status === "kept") return "You kept this";
+
 		return "Suggestion";
 	};
 
+	/** A card in the offer can have its fee set or be set aside; any other card can be used, edited or set aside. */
 	function actionsFor(card: OfferCard): [string, string][] {
 		const list: [string, string][] = [];
+		const fee = card.lane === "milestones" ? feeFor(card.id) : null;
 
-		if (card.status === "kept") {
-			if (card.lane === "milestones" && feeFor(card.id) !== null)
-				list.push(["fee", `Use ${dollars(feeFor(card.id) ?? 0)} as its fee`]);
+		if (
+			used.has(card.id) ||
+			(card.lane === "drivers" && card.status === "kept")
+		) {
+			if (fee !== null && usedIn.has(card.id))
+				list.push(["fee", `Set its fee to ${dollars(fee)}`]);
+			list.push(["aside", "Not this"]);
 
 			return list;
 		}
 
 		list.push(["use", useLabels[card.lane] ?? "Use"]);
 
-		if (card.lane === "milestones" && feeFor(card.id) !== null)
-			list.push([
-				"use-fee",
-				`Add with a fee of ${dollars(feeFor(card.id) ?? 0)}`,
-			]);
+		if (fee !== null)
+			list.push(["use-fee", `Add with a fee of ${dollars(fee)}`]);
 		list.push(["edit", "Edit"], ["aside", "Not this"]);
 
 		return list;
@@ -534,6 +712,9 @@ export function setupOfferBoard() {
 			originLabel(card);
 		node.querySelector<HTMLElement>("[data-card-text]")!.textContent =
 			card.text;
+		node
+			.querySelector<HTMLInputElement>("[data-card-input]")!
+			.setAttribute("aria-label", `Edit “${card.text}”`);
 		const detail = details.get(card.id);
 		const list = node.querySelector<HTMLElement>("[data-card-detail]")!;
 		list.hidden = !detail;
@@ -572,6 +753,7 @@ export function setupOfferBoard() {
 			...wanted.map(([act, label]) => {
 				const button = document.createElement("button");
 				button.type = "button";
+				button.className = "studio-quiet";
 				button.dataset.act = act;
 				button.textContent = label;
 				button.setAttribute("aria-label", `${label}: ${card.text}`);
@@ -652,25 +834,33 @@ export function setupOfferBoard() {
 		const dismissed = board.cards.filter((card) => card.status === "dismissed");
 		aside.hidden = dismissed.length === 0;
 		asideSummary.textContent = `Set aside (${dismissed.length})`;
-		asideList.replaceChildren(
-			...dismissed.map((card) => {
-				const item = document.createElement("li");
-				const back = document.createElement("button");
-				back.type = "button";
-				back.className = "offer-link";
-				back.dataset.bringBack = card.id;
-				back.textContent = "Bring back";
-				back.setAttribute("aria-label", `Bring back: ${card.text}`);
-				item.appendChild(
-					document.createTextNode(
-						`${offerLaneLabels[card.lane]}: ${card.text} `,
-					),
-				);
-				item.appendChild(back);
 
-				return item;
-			}),
-		);
+		const asideSignature = dismissed
+			.map((card) => `${card.id}:${card.text}`)
+			.join("|");
+
+		if (asideList.dataset.signature !== asideSignature) {
+			asideList.dataset.signature = asideSignature;
+			asideList.replaceChildren(
+				...dismissed.map((card) => {
+					const item = document.createElement("li");
+					const back = document.createElement("button");
+					back.type = "button";
+					back.className = "studio-quiet";
+					back.dataset.bringBack = card.id;
+					back.textContent = "Bring back";
+					back.setAttribute("aria-label", `Bring back: ${card.text}`);
+					item.appendChild(
+						document.createTextNode(
+							`${offerLaneLabels[card.lane]}: ${card.text} `,
+						),
+					);
+					item.appendChild(back);
+
+					return item;
+				}),
+			);
+		}
 
 		const label = lastAction(board);
 		undoButton.disabled = !label;
@@ -679,14 +869,15 @@ export function setupOfferBoard() {
 		heldButton.textContent = held
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
 			: "";
-		askButton.textContent = started
-			? "Suggest again"
-			: "Suggest an offer with AI";
+		askButton.textContent =
+			requests > 0 ? "Suggest again" : "Suggest an offer with AI";
 		drawPrices();
 	}
 
 	// ---- Replies ------------------------------------------------------------------------------------------------------
-	function apply(reply: NonNullable<typeof held>) {
+	function apply(reply: Held) {
+		const before = new Set(board.cards.map((card) => card.id));
+
 		const result = applyReplyIn(
 			OFFER_LANE_CONFIG,
 			board,
@@ -697,26 +888,39 @@ export function setupOfferBoard() {
 			reply.refs,
 		);
 
+		// A card's detail follows the reply only where the reply could change the card: a new card, or an open one its
+		// request was sent after (applyReplyIn changes no other).
+		const changeable = new Set(
+			board.cards
+				.filter((card) => card.status === "proposed" && reply.n > card.since)
+				.map((card) => card.id),
+		);
+
 		board = result.board;
 
 		for (const { lane, text, detail } of reply.details) {
 			const card = board.cards.find(
-				(item) => item.lane === lane && item.text === text,
+				(item) =>
+					item.lane === lane &&
+					item.text === text &&
+					item.status === "proposed",
 			);
 
-			if (card && card.status === "proposed") details.set(card.id, detail);
+			if (card && (!before.has(card.id) || changeable.has(card.id)))
+				details.set(card.id, detail);
 		}
 
 		sizing = reply.sizing.size ? reply.sizing : sizing;
 		held = null;
 		render();
-		status.textContent = result.added
-			? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`
-			: "Up to date with your draft.";
-		announce(status.textContent);
+		say(
+			result.added
+				? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`
+				: "Up to date with your draft.",
+		);
 	}
 
-	function deliver(reply: NonNullable<typeof held>) {
+	function deliver(reply: Held) {
 		const preview = applyReplyIn(
 			OFFER_LANE_CONFIG,
 			board,
@@ -730,9 +934,17 @@ export function setupOfferBoard() {
 		const changes = preview.added + preview.updated + preview.withdrawn;
 
 		if (changes > 0 && interacting()) {
+			const first = !held;
+
 			if (!held || reply.n > held.n) held = { ...reply, changes };
 			render();
-			status.textContent = "Updates are waiting below the cards.";
+			status.textContent =
+				"Updates are waiting. Show them with the button beside Undo.";
+
+			if (first)
+				announce(
+					`${held.changes} ${held.changes === 1 ? "update is" : "updates are"} waiting. Show them with the button beside Undo.`,
+				);
 
 			return;
 		}
@@ -742,23 +954,29 @@ export function setupOfferBoard() {
 
 	const canAsk = () => requests < REQUESTS_PER_PAGE && !inFlight;
 
+	/** After the owner has asked once, the board keeps up with the draft; a failure stops that until they ask again. */
 	function schedule(delay = IDLE) {
 		clearTimeout(timer);
 
-		if (!started || !canAsk() || requestKey() === lastSent) return;
+		if (!autoAsk || !canAsk() || requestKey() === lastSent) return;
 		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
+	}
+
+	function failed(text: string) {
+		autoAsk = false;
+		say(`${text} Press Suggest again to try again.`);
 	}
 
 	async function ask() {
 		if (!canAsk()) {
 			if (requests >= REQUESTS_PER_PAGE)
-				status.textContent =
-					"The board reached its limit for this page. Reload to ask again.";
+				say(
+					"The board reached its limit for this page. Reload the page to ask again.",
+				);
 
 			return;
 		}
 
-		started = true;
 		const key = requestKey();
 		const [next, n] = sendRequest(board);
 		board = next;
@@ -770,14 +988,18 @@ export function setupOfferBoard() {
 		requests++;
 		status.textContent = "Reading the brief and your draft…";
 		render();
+		const shown = draft();
 
 		try {
 			const response = await fetch(endpoint, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
-					cards: boardContext(board).slice(0, 40),
-					draft: draft(),
+					cards: fitOfferCards(
+						boardContext(board, OFFER_CONTEXT_MAX),
+						JSON.stringify(shown).length,
+					),
+					draft: shown,
 				}),
 				signal: controller.signal,
 			});
@@ -787,11 +1009,12 @@ export function setupOfferBoard() {
 
 			if (!reply) {
 				const error = field(json, "error");
-				status.textContent = Predicate.isString(error)
-					? error
-					: "The AI couldn’t answer just now. Your draft is unchanged; try again.";
-				lastSent = "";
-				announce(status.textContent);
+
+				failed(
+					Predicate.isString(error)
+						? error
+						: "The AI couldn’t answer just now. Your draft is unchanged.",
+				);
 
 				return;
 			}
@@ -799,9 +1022,9 @@ export function setupOfferBoard() {
 			// The route named these cards; those it or this page then left out still do.
 			const refs = [
 				...replyRefs({
-					cards: (listOf(field(json, "refs"), 40) ?? []).map((ref) => ({
-						ref,
-					})),
+					cards: (listOf(field(json, "refs"), OFFER_CONTEXT_MAX) ?? []).map(
+						(ref) => ({ ref }),
+					),
 				}),
 				...replyRefs(json).filter(
 					(ref) => !reply.cards.some((card) => card.ref === ref),
@@ -828,10 +1051,7 @@ export function setupOfferBoard() {
 				changes: 0,
 			});
 		} catch {
-			status.textContent =
-				"The AI couldn’t answer just now. Your draft is unchanged; try again.";
-			lastSent = "";
-			announce(status.textContent);
+			failed("The AI couldn’t answer just now. Your draft is unchanged.");
 		} finally {
 			clearTimeout(stop);
 			inFlight = null;
@@ -846,17 +1066,17 @@ export function setupOfferBoard() {
 
 	function undoLast() {
 		const label = lastAction(board);
+		const step = board.history.at(-1);
 
-		if (!label) return;
-		const restore = fieldUndo.get(board.history.length);
-		fieldUndo.delete(board.history.length);
-		restore?.();
+		if (!label || !step) return;
+		fieldUndo.get(step)?.();
 		board = undoIn(OFFER_LANE_CONFIG, board);
 		render();
 
 		if (
 			!root!.contains(document.activeElement) ||
-			document.activeElement === document.body
+			document.activeElement === document.body ||
+			(document.activeElement === undoButton && undoButton.disabled)
 		)
 			(undoButton.disabled ? heading : undoButton).focus();
 		announce(`Undid: ${label}.`);
@@ -880,24 +1100,27 @@ export function setupOfferBoard() {
 		}
 
 		if (target.dataset.bringBack) {
-			const next = bringBackIn(
-				OFFER_LANE_CONFIG,
-				board,
-				target.dataset.bringBack,
-			);
+			const id = target.dataset.bringBack;
+			const back = cardOf(id);
+			const next = bringBackIn(OFFER_LANE_CONFIG, board, id);
 
-			if (next === board)
-				announce(
-					"That list is full. Use “Not this” on one of its cards first.",
+			if (next === board) {
+				say(
+					back
+						? `“${offerLaneLabels[back.lane]}” is full. Use “Not this” on one of its cards first.`
+						: "That list is full.",
 				);
-			else {
-				board = next;
-				render();
-				nodes
-					.get(target.dataset.bringBack)
-					?.querySelector<HTMLElement>("button")
-					?.focus();
+
+				return;
 			}
+
+			board = next;
+			render();
+			(
+				nodes.get(id)?.querySelector<HTMLElement>("button") ?? asideSummary
+			).focus();
+			announce(`Brought back “${back?.text ?? ""}”.`);
+			schedule();
 
 			return;
 		}
@@ -910,8 +1133,11 @@ export function setupOfferBoard() {
 
 				break;
 			case "use-fee":
-			case "fee":
 				use(card, true);
+
+				break;
+			case "fee":
+				setFee(card);
 
 				break;
 			case "aside": {
@@ -946,6 +1172,7 @@ export function setupOfferBoard() {
 			if (target.matches("[data-card-save]")) {
 				board = editCardIn(OFFER_LANE_CONFIG, board, card.id, input.value);
 				render();
+				schedule();
 			}
 
 			nodes
@@ -987,11 +1214,15 @@ export function setupOfferBoard() {
 
 	askButton.addEventListener("click", () => {
 		clearTimeout(timer);
+		autoAsk = true;
 		lastSent = "";
 		void ask();
 	});
 	undoButton.addEventListener("click", undoLast);
-	heldButton.addEventListener("click", () => held && apply(held));
+	heldButton.addEventListener("click", () => {
+		if (held) apply(held);
+		heading.focus();
+	});
 	cardsBox.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")
 			hovering = true;
@@ -1002,12 +1233,13 @@ export function setupOfferBoard() {
 		if (held && !interacting()) apply(held);
 	});
 	root.addEventListener("focusout", () => {
+		// Decided once focus has settled: drawing a card can replace the focused button and move focus to its neighbour.
 		setTimeout(() => {
 			if (held && !interacting()) apply(held);
 		}, 0);
 	});
 
-	// The board keeps up with the draft once the owner has asked for it.
+	// Once the owner has asked, the board keeps up with the draft.
 	form.addEventListener("input", () => schedule());
 	form.addEventListener("change", () => schedule());
 	render();

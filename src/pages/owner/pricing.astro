@@ -43,7 +43,7 @@ const updated = pricing.updatedAt
 ---
 <OwnerLayout title="Pricing" current="pricing" newRequestCount={0} ownerEmail={Astro.locals.owner!.email}>
   <p class="owner-breadcrumb"><a href="/owner">Owner center</a> <span aria-hidden="true">/</span> Pricing</p>
-  <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone.</p></div></header>
+  <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone. The offer board shows the AI your research for a brief’s kind of work so its figure stays in range; it never sees your day value or contingency.</p></div></header>
   {!kv && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
   <div class="software-rail pricing-settings">
     <section class="rail-section" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
@@ -57,11 +57,13 @@ const updated = pricing.updatedAt
     <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading">Market research</h2>
       {market ? <>
         <p class="rail-muted">Researched {market.researchedOn}, from {market.sources.length} {market.sources.length === 1 ? 'source' : 'sources'}. The board holds the AI’s market figure inside the range for the brief’s kind and size.</p>
+        <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-table-caption" tabindex="0">
         <table class="pricing-table">
-          <caption class="visually-hidden">Fixed-price ranges by kind of work and size</caption>
+          <caption id="pricing-table-caption" class="visually-hidden">Fixed-price ranges by kind of work and size</caption>
           <thead><tr><th scope="col">Kind</th><th scope="col">Size</th><th scope="col">Range</th><th scope="col">What it covers</th></tr></thead>
           <tbody>{PRICING_KINDS.flatMap(kind => PRICING_SIZES.map(size => { const range = marketRange(market, kind, size); return <tr><th scope="row">{kindLabels[kind]}</th><td>{sizeLabels[size]}</td><td>{range ? `${dollars(range.lowUsd)} to ${dollars(range.highUsd)}` : 'No figure'}</td><td>{range?.definition ?? ''}</td></tr>; }))}</tbody>
         </table>
+        </div>
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
         {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul>{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
         {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol>{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && ` · ${source.published}`}{source.kind && ` · ${source.kind}`}</li>)}</ol></details>}
@@ -82,15 +84,19 @@ const updated = pricing.updatedAt
 </OwnerLayout>
 <style>
   .pricing-settings { display: grid; gap: 1.5rem; }
-  .pricing-table { width: 100%; border-collapse: collapse; font: .9rem/1.45 Inter, sans-serif; margin: .75rem 0 1rem; }
+  /* On a phone the table scrolls sideways in its own box, headers kept, rather than the page. */
+  .pricing-table-scroll { overflow-x: auto; margin: .75rem 0 1rem; }
+  .pricing-table-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .pricing-table { width: 100%; min-width: 40rem; border-collapse: collapse; font: .9rem/1.45 var(--font-sans); }
   .pricing-table th, .pricing-table td { text-align: left; vertical-align: top; padding: .45rem .6rem .45rem 0; border-bottom: 1px solid var(--rule); }
   .pricing-table thead th { color: var(--studio-muted); font-weight: 500; }
   .pricing-table td:nth-child(3) { white-space: nowrap; }
-  .pricing-json { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .85rem; }
-  @media (max-width: 40rem) {
-    .pricing-table thead { display: none; }
-    .pricing-table tr { display: grid; grid-template-columns: auto 1fr; gap: 0 .75rem; padding: .5rem 0; border-bottom: 1px solid var(--rule); }
-    .pricing-table th, .pricing-table td { border: 0; padding: 0; }
-    .pricing-table td:last-child { grid-column: 1 / -1; color: var(--studio-muted); }
-  }
+  /* Wide enough that a definition wraps to a few lines, not a column of single words. */
+  .pricing-table td:last-child { min-width: 18rem; }
+  .pricing-json { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 1rem; }
+  .pricing-settings input[type="number"] { width: min(100%, 14rem); min-width: 0; }
+  .pricing-settings textarea { width: 100%; min-width: 0; }
+  .pricing-settings summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
+  .pricing-settings li a { display: inline-flex; align-items: center; min-height: 44px; }
+  .pricing-settings .studio-quiet { min-height: 44px; }
 </style>
