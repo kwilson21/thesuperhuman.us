@@ -1,59 +1,37 @@
-// The signed copy a verified visitor downloads. The reads run in the order the route has always run them, and they do
-// not depend on the id: an unknown agreement, one not executed or closed, and another client's all read the same rows in
-// the same order, and the decision in src/server/rules/agreement-download.ts is the only place they part. Then the
-// signed copy is read from the bucket and checked against its digest. A failed bucket read is a named failure; a failed
-// database call is a defect, which the route logs and answers with its fixed 500.
+// The signed copy a verified visitor downloads. The reads run in the same order for every id: the visitor's sessions, then
+// ONE batch with the agreement named by the id (whatever its status), the offer a signing session reuses, and a studio
+// visitor's projects; so an unknown agreement, one not executed or closed, and another client's all read the same
+// statements. The rules in src/server/rules/agreement-download.ts are the only place they part. Then the signed copy is
+// read from the bucket and checked against its digest. A failed bucket read is a named failure; so is a failed database
+// call, which the route logs and answers with its fixed 500.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import type { AgreementArtifact } from "../../lib/agreement-artifacts";
 import { hashBytes } from "../../lib/agreement-artifacts";
-import { studioSessionFromRequest } from "../../lib/audio-client-access";
+import { hashing } from "../agreement-services";
+import { readDownloadFacts, readSignedCopy } from "../agreement-store";
 import {
-	executedAgreement,
-	linkedMsaId,
-	offerReusesAgreement,
-	projectAgreementId,
-	readySignedCopy,
-	sessionOf,
-	studioEmail,
-	studioProjects,
-} from "../agreement-store";
-import { AudioBucket, MusicDb } from "../services";
-import {
-	copyIsIntact,
 	decideDownload,
-	type DownloadFacts,
+	intactSignedCopy,
+	readySignedCopy,
+	verifiedVisitor,
 } from "../rules/agreement-download";
-
-/** The visitor has no valid session: the answer asks them to verify. */
-export class SignInFirst extends Data.TaggedError("SignInFirst") {
-	readonly say = "Verify your agreement email first.";
-}
-
-/** Nothing a visitor can download answers here, the same as an unknown id. */
-export class AgreementNotFound extends Data.TaggedError("AgreementNotFound") {}
-
-/** The agreement is signed by both parties but its copy is not ready yet. */
-export class CopyNotReady extends Data.TaggedError("CopyNotReady") {
-	readonly say = "Signed by both parties. Copy preparation needs attention.";
-}
+import { AudioBucket } from "../services";
+import { studioIdentity, visitorSession } from "./agreement-session";
 
 /** The copy's object is not in the bucket. */
 export class CopyMissing extends Data.TaggedError("CopyMissing") {}
 
-/** The bytes in the bucket are not the copy the row names. */
-export class CopyIntegrity extends Data.TaggedError("CopyIntegrity") {
-	readonly say = "Signed copy failed its integrity check. Contact Kazon.";
-}
-
-/** The bucket read failed (it threw). */
+/** The bucket read failed (it threw). The route answers its fixed 500 with no log line, as it always has. */
 export class CopyReadFailed extends Data.TaggedError("CopyReadFailed")<{
 	readonly failure: unknown;
 }> {}
 
-export type SignedCopyDownload = {
-	readonly bytes: ArrayBuffer;
-};
+/** Reading the object's bytes failed (it threw). The route logs it and answers its fixed 500. */
+export class CopyBytesFailed extends Data.TaggedError("CopyBytesFailed")<{
+	readonly failure: unknown;
+}> {}
+
+export type SignedCopyDownload = { readonly bytes: ArrayBuffer };
 
 export const downloadSignedCopy = (input: {
 	readonly id: string;
@@ -61,92 +39,62 @@ export const downloadSignedCopy = (input: {
 	readonly now: () => Date;
 }) =>
 	Effect.gen(function* () {
-		const db = yield* MusicDb;
 		const bucket = yield* AudioBucket;
-		const { id, request } = input;
+		const { id, request, now } = input;
 
-		const archive = yield* sessionOf(db, request, "archive");
-		const signing = yield* sessionOf(db, request, "agreement");
-		const studio = studioSessionFromRequest(request);
+		const archive = yield* visitorSession(request, "archive", now);
+		const signing = yield* visitorSession(request, "agreement", now);
+		const studio = yield* studioIdentity(request, now);
 
-		const studioIdentity = studio
-			? yield* studioEmail(db, studio, input.now())
-			: null;
-
-		if (!archive && !signing && !studioIdentity)
-			return yield* Effect.fail(new SignInFirst());
-
-		const projects = studio ? yield* studioProjects(db, studio) : null;
-		const agreement = yield* executedAgreement(db, id);
-
-		// The same reads whatever the id is: the project and its linked agreement are read even when there is no agreement.
-		const project =
-			projects?.find(
-				(candidate) => candidate.request_id === agreement?.request_id,
-			) ?? null;
-
-		const reuses = yield* offerReusesAgreement(
-			db,
-			signing?.offer_id ?? null,
-			id,
-		);
-
-		const projectAgreement = yield* projectAgreementId(
-			db,
-			project?.request_id ?? null,
-		);
-
-		const linked = yield* linkedMsaId(db, projectAgreement);
-
-		const facts: DownloadFacts = {
-			agreement,
-			archiveEmail: archive?.recipient_email ?? null,
+		const sessions = {
+			archive: archive ? { recipient_email: archive.recipient_email } : null,
 			signing: signing
 				? {
 						recipient_email: signing.recipient_email,
 						offer_id: signing.offer_id,
 					}
 				: null,
-			signingReusesAgreement: reuses,
-			studioEmail: studioIdentity,
-			projectAgreementId: projectAgreement,
-			linkedMsaId: linked,
+			studio,
 		};
 
-		const decision = decideDownload(id, facts);
+		yield* verifiedVisitor.decide(null, sessions);
 
-		if (decision.kind === "refused")
-			return yield* Effect.fail(new AgreementNotFound());
-
-		const copy: AgreementArtifact | null = yield* readySignedCopy(db, id);
-
-		if (!copy?.pdf_key) return yield* Effect.fail(new CopyNotReady());
-
-		const object = yield* Effect.tryPromise({
-			try: () => bucket.get(copy.pdf_key!),
-			catch: (cause) => new CopyReadFailed({ failure: cause }),
+		const read = yield* readDownloadFacts({
+			id,
+			signingOfferId: signing?.offer_id ?? null,
+			studioEmail: studio?.email ?? null,
 		});
 
-		if (!object) return yield* Effect.fail(new CopyMissing());
+		yield* decideDownload.decide({ id }, { ...sessions, ...read });
+
+		const copy = yield* readSignedCopy(id).pipe(
+			Effect.flatMap((stored) => readySignedCopy.decide(null, stored)),
+			Effect.flatMap((ready) =>
+				Effect.fromNullishOr(ready).pipe(
+					Effect.mapError(() => new CopyMissing()),
+				),
+			),
+		);
+
+		const object = yield* Effect.tryPromise({
+			try: () => bucket.get(copy.pdf_key),
+			catch: (failure) => new CopyReadFailed({ failure }),
+		}).pipe(
+			Effect.flatMap((found) =>
+				Effect.fromNullishOr(found).pipe(
+					Effect.mapError(() => new CopyMissing()),
+				),
+			),
+		);
 
 		const bytes = yield* Effect.tryPromise({
 			try: () => object.arrayBuffer(),
-			catch: (cause) => new CopyReadFailed({ failure: cause }),
+			catch: (failure) => new CopyBytesFailed({ failure }),
 		});
 
-		const digest = yield* Effect.promise(() => hashBytes(bytes));
+		const digest = yield* hashing(() => hashBytes(bytes));
 
-		if (
-			!copyIsIntact(
-				{
-					status: copy.status,
-					pdf_key: copy.pdf_key,
-					pdf_sha256: copy.pdf_sha256,
-				},
-				digest,
-			)
-		)
-			return yield* Effect.fail(new CopyIntegrity());
+		yield* intactSignedCopy.decide({ bytesSha256: digest }, copy);
 
 		return { bytes } satisfies SignedCopyDownload;
 	});

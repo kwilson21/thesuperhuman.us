@@ -15,6 +15,13 @@ const text = (body: string, status: number) =>
 
 const unavailable = () => text("Unavailable", 500);
 
+const failed = (cause: unknown) =>
+	Effect.sync(() => {
+		logUnexpected(ROUTE, cause);
+
+		return unavailable();
+	});
+
 export const GET: APIRoute = async ({ locals, request, params }) => {
 	const bindings = bindingsOrUnavailable(locals.runtime.env, [
 		"MUSIC_DB",
@@ -25,7 +32,11 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 
 	return runRoute(
 		bindings.services,
-		downloadAttachment({ id: params.id!, request }).pipe(
+		downloadAttachment({
+			id: params.id ?? "",
+			request,
+			now: () => new Date(),
+		}).pipe(
 			Effect.map(
 				({ bytes }) =>
 					new Response(bytes, {
@@ -40,15 +51,13 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 			),
 			Effect.catchTags({
 				VerifyFirst: (refusal) => Effect.succeed(text(refusal.say, 401)),
-				AttachmentNotFound: () => Effect.succeed(text("Not found", 404)),
+				AttachmentNotFound: (refusal) => Effect.succeed(text(refusal.say, 404)),
 				AttachmentIntegrity: (refusal) =>
 					Effect.succeed(text(refusal.say, 503)),
-				AttachmentReadFailed: (refusal) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, refusal.failure);
-
-						return unavailable();
-					}),
+				AttachmentReadFailed: (failure) => failed(failure.failure),
+				AttachmentDetailsUnreadable: () => failed(new Error("malformed JSON")),
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		{ route: ROUTE, answer: unavailable },

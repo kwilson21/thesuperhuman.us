@@ -1,64 +1,234 @@
-// The store of the archive link and the signed-copy download. Every statement is a plain read, a write guarded by a key
-// or a constraint, or a compare-and-set (the cooldown's conditional upsert). None decides an outcome: the decisions are in
-// src/server/rules. A failed statement is a defect (`orDie`): the route answers its fixed 500 and logs it through
-// logUnexpected. The one guard that can fail a save is the link batch's, and `guardedSave` turns only that into
-// `ChangedSinceRead`.
+// The store of the agreement routes (the archive link, the signed-copy download and the attachment download). Every
+// statement is a plain read of stored columns, a write guarded by a key, or a compare-and-set whose condition the rule
+// has already judged from a read (the cooldown row, the link batch's 30-second guard, `used_at IS NULL`). None decides an
+// outcome: whether a session counts, an agreement is executed, a link is recent, or an attachment is pinned is decided in
+// src/server/rules from the columns read here. Rows are read through Effect Schema readers. A failed statement is an
+// `AgreementStoreFailed`, which carries its cause so the route can log it through logUnexpected and answer its fixed 500;
+// the one guard that can fail a save is the link batch's (and the cooldown's), which is `ChangedSinceRead`.
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import { agreementEvent } from "../lib/agreement-events";
-import { agreementSession } from "../lib/agreement-access";
-import type { AgreementSession } from "../lib/agreement-access";
-import type { AgreementArtifact } from "../lib/agreement-artifacts";
-import {
-	clientSoftwareProjectsForSession,
-	hashValue,
-} from "../lib/audio-client-access";
-import type { DownloadAgreement } from "./rules/agreement-download";
-import { guardedSave, raisedByJsonGuard } from "./guarded-save";
-import type { ChangedSinceRead } from "./guarded-save";
+import { ChangedSinceRead, raisedByJsonGuard } from "./guarded-save";
+import type {
+	DownloadAgreement,
+	StoredSignedCopy,
+	StudioProject,
+} from "./rules/agreement-download";
+import type {
+	AttachmentFacts,
+	StoredAttachment,
+	StoredOffer,
+} from "./rules/agreement-attachment";
+import type {
+	StoredArchiveLink,
+	StoredSignature,
+} from "./rules/agreement-link";
+import type {
+	SigningOfferRow,
+	StoredAgreementSession,
+	StoredStudioSession,
+} from "./rules/agreement-session";
+import { MusicDb } from "./services";
 
-/** Runs one D1 call; a rejection is a defect, which the route logs and answers 500. */
-const dbCall = <A>(call: () => Promise<A>): Effect.Effect<A> =>
-	Effect.tryPromise({ try: call, catch: (cause) => cause }).pipe(Effect.orDie);
+/** A D1 call failed, or a row was not the shape its table has. The cause is for the route's log. */
+export class AgreementStoreFailed extends Data.TaggedError(
+	"AgreementStoreFailed",
+)<{ readonly failure: unknown }> {}
+
+/** Runs a D1 call with the request's database; a rejection is an `AgreementStoreFailed`. */
+const asked = <A>(run: (db: D1Database) => Promise<A>) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		return yield* Effect.tryPromise({
+			try: () => run(db),
+			catch: (cause) => new AgreementStoreFailed({ failure: cause }),
+		});
+	});
+
+const text = Schema.String;
+const maybeText = Schema.NullOr(Schema.String);
+
+/** Reads rows of one shape; a row that is not that shape is a failure, never a half-read value. */
+const rowsOf = <S extends Schema.ConstraintDecoder<unknown>>(
+	row: S,
+	results: readonly unknown[],
+) => {
+	const read = Schema.decodeUnknownResult(Schema.Array(row))(results);
+
+	return Result.isSuccess(read)
+		? Effect.succeed(read.success)
+		: Effect.fail(new AgreementStoreFailed({ failure: read.failure }));
+};
+
+/** One statement's rows. */
+const readAll = <S extends Schema.ConstraintDecoder<unknown>>(
+	row: S,
+	statement: (db: D1Database) => D1PreparedStatement,
+) =>
+	asked(async (db) => (await statement(db).all()).results).pipe(
+		Effect.flatMap((results) => rowsOf(row, results)),
+	);
+
+const CooldownRow = Schema.Struct({ window_start: text });
+
+const ArchiveLinkRow = Schema.Struct({
+	id: text,
+	issued_at: text,
+	used_at: maybeText,
+});
+
+const AgreementStatusRow = Schema.Struct({ status: text });
+
+const SignatureRow = Schema.Struct({
+	typed_name: text,
+	party: text,
+	signed_at: text,
+	status: text,
+});
+
+const SessionRow = Schema.Struct({
+	token_hash: text,
+	purpose: Schema.Literals(["agreement", "archive"]),
+	offer_id: maybeText,
+	link_hash: maybeText,
+	recipient_email: text,
+	verified_at: text,
+	expires_at: text,
+	revoked_at: maybeText,
+	csrf_nonce: text,
+});
+
+const SigningOfferColumns = Schema.Struct({
+	offer_status: text,
+	link_revoked_at: maybeText,
+	request_status: text,
+	recipient_email_snapshot: maybeText,
+});
+
+const StudioSessionRow = Schema.Struct({
+	email: text,
+	expires_at: text,
+	revoked_at: maybeText,
+});
+
+const AgreementRow = Schema.Struct({
+	id: text,
+	offer_id: maybeText,
+	request_id: text,
+	recipient_email: text,
+	status: text,
+	archive_closed_at: maybeText,
+});
+
+const ReusedRow = Schema.Struct({ reused_msa_id: maybeText });
+
+const StudioProjectRow = Schema.Struct({
+	request_id: text,
+	agreement_id: maybeText,
+	linked_msa_id: maybeText,
+	request_status: text,
+	request_email: text,
+	revoked_at: maybeText,
+	content_deleted_at: maybeText,
+});
+
+const CopyRow = Schema.Struct({
+	status: text,
+	pdf_key: maybeText,
+	pdf_sha256: maybeText,
+});
+
+const AttachmentColumns = Schema.Struct({
+	request_id: text,
+	object_key: text,
+	sha256: text,
+});
+
+const AttachedOfferColumns = Schema.Struct({
+	request_id: text,
+	agreement_details_json: maybeText,
+});
+
+// ---- the archive link ----
+
+const cooldownStatement = (db: D1Database, key: string) =>
+	db
+		.prepare("SELECT window_start FROM audio_client_allowances WHERE key=?")
+		.bind(key);
+
+/** Plain read: when the address's cooldown row was last set, or null when it has none. */
+export const readCooldown = (key: string) =>
+	readAll(CooldownRow, (db) => cooldownStatement(db, key)).pipe(
+		Effect.map((rows) => ({ windowStart: rows[0]?.window_start ?? null })),
+	);
 
 /**
- * Compare-and-set: the cooldown row for `key` is written when it is absent or older than `since`. Answers whether it was
- * written (the instant is the caller's).
+ * Compare-and-set: sets the cooldown row to `at` when it is absent or not after `since`. This is the write-time re-check
+ * of what the cooldown rule judged from a read; a lost write is `ChangedSinceRead` and the rule judges again.
  */
-export const takeCooldown = (
-	db: D1Database,
-	key: string,
-	at: string,
-	since: string,
-): Effect.Effect<boolean> =>
-	dbCall(() =>
+export const saveCooldown = (key: string, at: string, since: string) =>
+	asked((db) =>
 		db
 			.prepare(`INSERT INTO audio_client_allowances(key,window_start,uses) VALUES(?,?,1)
       ON CONFLICT(key) DO UPDATE SET window_start=excluded.window_start,uses=1
       WHERE window_start<=? RETURNING key`)
 			.bind(key, at, since)
-			.first(),
-	).pipe(Effect.map((row) => row !== null));
+			.all(),
+	).pipe(
+		Effect.flatMap((answer) =>
+			answer.results.length === 0
+				? Effect.fail(new ChangedSinceRead())
+				: Effect.void,
+		),
+	);
 
-/** Plain read: whether the address has a client with an executed agreement. */
-export const hasExecutedAgreement = (
-	db: D1Database,
-	email: string,
-): Effect.Effect<boolean> =>
-	dbCall(() =>
-		db
-			.prepare(
-				"SELECT 1 FROM software_agreement_clients c JOIN software_agreements a ON a.client_id=c.id WHERE c.recipient_email=? AND a.status='executed'",
-			)
-			.bind(email)
-			.first(),
-	).pipe(Effect.map((row) => row !== null));
+const agreementStatusStatement = (db: D1Database, email: string) =>
+	db
+		.prepare(
+			"SELECT a.status FROM software_agreement_clients c JOIN software_agreements a ON a.client_id=c.id WHERE c.recipient_email=?",
+		)
+		.bind(email);
+
+const archiveLinksStatement = (db: D1Database, email: string) =>
+	db
+		.prepare(
+			"SELECT id,issued_at,used_at FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ?",
+		)
+		.bind("archive", email, null);
+
+/** Plain reads, in one batch (one snapshot): the status of each agreement of the address, and its archive links. */
+export const readLinkFacts = (email: string) =>
+	asked((db) =>
+		db.batch([
+			agreementStatusStatement(db, email),
+			archiveLinksStatement(db, email),
+		]),
+	).pipe(
+		Effect.flatMap(([statuses, links]) =>
+			Effect.all({
+				statuses: rowsOf(AgreementStatusRow, statuses?.results ?? []),
+				links: rowsOf(ArchiveLinkRow, links?.results ?? []),
+			}),
+		),
+		Effect.map(({ statuses, links }) => ({
+			agreementStatuses: statuses.map((row) => row.status),
+			links,
+		})),
+	);
+
+/** Plain read: the address's archive links (read again after the mail, to consume the older ones). */
+export const readArchiveLinks = (email: string) =>
+	readAll(ArchiveLinkRow, (db) => archiveLinksStatement(db, email));
 
 /**
- * Stores the archive link: one batch, whose first statement is a guard that the address had no link issued in the last
- * 30 seconds. A lost guard fails with `ChangedSinceRead`; any other batch failure is a defect.
+ * Stores the archive link: one batch, whose first statement is the write-time guard that the address had no link issued in
+ * the last 30 seconds (what the rule judged from a read). A lost guard fails with `ChangedSinceRead`; any other batch
+ * failure is an `AgreementStoreFailed`.
  */
 export const storeArchiveLink = (input: {
-	readonly db: D1Database;
 	readonly id: string;
 	readonly hash: string;
 	readonly email: string;
@@ -66,196 +236,210 @@ export const storeArchiveLink = (input: {
 	readonly actorHash: string;
 	readonly expiresAt: string;
 	readonly since: string;
-}): Effect.Effect<void, ChangedSinceRead> => {
-	const { db } = input;
+}) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
 
-	return guardedSave(
-		() =>
-			db.batch([
-				db
-					.prepare(
-						`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
-					)
-					.bind("archive", input.email, null, input.since),
-				agreementEvent(
-					db,
-					"link-issued",
-					input.actorHash,
-					input.at,
-					null,
-					null,
-				),
-				db
-					.prepare(
-						"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
-					)
-					.bind(
-						input.id,
-						"archive",
-						null,
-						null,
-						input.email,
-						input.hash,
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(
+							`SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM software_agreement_links WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND issued_at>?) THEN 1 ELSE json_extract('Wait before requesting another link','$') END`,
+						)
+						.bind("archive", input.email, null, input.since),
+					agreementEvent(
+						db,
+						"link-issued",
+						input.actorHash,
 						input.at,
-						input.expiresAt,
+						null,
+						null,
 					),
-			]),
-		raisedByJsonGuard,
-	).pipe(Effect.asVoid);
-};
+					db
+						.prepare(
+							"INSERT INTO software_agreement_links(id,purpose,offer_id,link_hash,recipient_email,token_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?,?,?)",
+						)
+						.bind(
+							input.id,
+							"archive",
+							null,
+							null,
+							input.email,
+							input.hash,
+							input.at,
+							input.expiresAt,
+						),
+				]),
+			catch: (cause) =>
+				cause instanceof Error && raisedByJsonGuard(cause)
+					? new ChangedSinceRead()
+					: new AgreementStoreFailed({ failure: cause }),
+		});
+	});
 
-/** Plain read: the typed name of the address's most recent executed signature, for the greeting. */
-export const signerName = (
-	db: D1Database,
-	email: string,
-): Effect.Effect<string | null> =>
-	dbCall(() =>
+/** Plain read: every signature of the address's clients, with the status of its agreement. */
+export const readSignatures = (email: string) =>
+	readAll(SignatureRow, (db) =>
 		db
 			.prepare(
-				"SELECT sig.typed_name AS name FROM software_agreement_signatures sig JOIN software_agreements a ON a.id=sig.agreement_id JOIN software_agreement_clients c ON c.id=a.client_id WHERE c.recipient_email=? AND sig.party='client' AND a.status='executed' ORDER BY sig.signed_at DESC LIMIT 1",
+				"SELECT sig.typed_name,sig.party,sig.signed_at,a.status FROM software_agreement_signatures sig JOIN software_agreements a ON a.id=sig.agreement_id JOIN software_agreement_clients c ON c.id=a.client_id WHERE c.recipient_email=?",
 			)
-			.bind(email)
-			.first<{ name: string }>(),
-	).pipe(Effect.map((row) => row?.name ?? null));
+			.bind(email),
+	).pipe(Effect.map((rows): readonly StoredSignature[] => rows));
 
 /** Marks one link used. */
-export const markLinkUsed = (
-	db: D1Database,
-	id: string,
-	at: string,
-): Effect.Effect<void> =>
-	dbCall(() =>
+export const markLinkUsed = (id: string, at: string) =>
+	asked((db) =>
 		db
 			.prepare("UPDATE software_agreement_links SET used_at=? WHERE id=?")
 			.bind(at, id)
 			.run(),
 	).pipe(Effect.asVoid);
 
-/** Consumes the older unused archive links of the address, once a link has been sent for it. */
-export const consumeOlderArchiveLinks = (
-	db: D1Database,
-	email: string,
-	id: string,
-	at: string,
-): Effect.Effect<void> =>
-	dbCall(() =>
+/**
+ * Compare-and-set: consumes the older links the rule chose (`ids`, possibly none), unless something used one since it was
+ * read. The ids travel as one JSON list, so any number of them is one statement with one bound value.
+ */
+export const consumeLinks = (ids: readonly string[], at: string) =>
+	asked((db) =>
 		db
 			.prepare(
-				"UPDATE software_agreement_links SET used_at=? WHERE purpose=? AND recipient_email=? AND offer_id IS ? AND used_at IS NULL AND id<>? AND issued_at<=?",
+				"UPDATE software_agreement_links SET used_at=? WHERE id IN (SELECT value FROM json_each(?)) AND used_at IS NULL",
 			)
-			.bind(at, "archive", email, null, id, at)
+			.bind(at, JSON.stringify(ids))
 			.run(),
 	).pipe(Effect.asVoid);
 
-/** A signing or archive session of a visitor, read from the cookie of `purpose`, or null. */
-export const sessionOf = (
-	db: D1Database,
-	request: Request,
+// ---- sessions ----
+
+/** Plain read: the session with this token hash and purpose, whatever its expiry, or null. */
+export const readSession = (
+	tokenHash: string,
 	purpose: "agreement" | "archive",
-): Effect.Effect<AgreementSession | null> =>
-	dbCall(() => agreementSession(db, request, purpose));
-
-/** Plain read: the email of a studio session that has not expired or been revoked, or null. */
-export const studioEmail = (
-	db: D1Database,
-	token: string,
-	now: Date,
-): Effect.Effect<string | null> =>
-	dbCall(async () =>
+) =>
+	readAll(SessionRow, (db) =>
 		db
 			.prepare(
-				"SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
+				"SELECT token_hash,purpose,offer_id,link_hash,recipient_email,verified_at,expires_at,revoked_at,csrf_nonce FROM software_agreement_sessions WHERE token_hash=? AND purpose=?",
 			)
-			.bind(await hashValue(token), now.toISOString())
-			.first<{ email: string }>(),
-	).pipe(Effect.map((row) => row?.email ?? null));
+			.bind(tokenHash, purpose),
+	).pipe(Effect.map((rows): StoredAgreementSession | null => rows[0] ?? null));
 
-/** The studio session's projects, as the studio area lists them (empty or null when the session is not valid). */
-export const studioProjects = (
-	db: D1Database,
-	token: string,
-): Effect.Effect<readonly { readonly request_id: string }[] | null> =>
-	dbCall(() => clientSoftwareProjectsForSession(db, token));
-
-/** Plain read: the executed, not closed agreement with this id, or null (an unknown id, an agreement not executed, or closed). */
-export const executedAgreement = (
-	db: D1Database,
-	id: string,
-): Effect.Effect<DownloadAgreement | null> =>
-	dbCall(() =>
+/** Plain read: the offer, its link and its brief that a signing session names. */
+export const readSigningOffer = (session: StoredAgreementSession) =>
+	readAll(SigningOfferColumns, (db) =>
 		db
 			.prepare(
-				"SELECT a.id,a.offer_id,a.request_id,c.recipient_email FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.status='executed' AND a.archive_closed_at IS NULL",
+				`SELECT o.status AS offer_status,l.revoked_at AS link_revoked_at,r.status AS request_status,o.recipient_email_snapshot FROM software_offers o JOIN software_offer_links l ON l.request_id=o.request_id JOIN owner_requests r ON r.id=o.request_id WHERE o.id=? AND l.token_hash=?`,
 			)
-			.bind(id)
-			.first<DownloadAgreement>(),
-	).pipe(Effect.map((row) => row ?? null));
+			.bind(session.offer_id, session.link_hash),
+	).pipe(Effect.map((rows): readonly SigningOfferRow[] => rows));
 
-/** Plain read: whether the offer reuses this agreement as its master agreement. A null offer reuses nothing. */
-export const offerReusesAgreement = (
-	db: D1Database,
-	offerId: string | null,
-	id: string,
-): Effect.Effect<boolean> =>
-	dbCall(() =>
-		db
-			.prepare("SELECT 1 FROM software_offers WHERE id=? AND reused_msa_id=?")
-			.bind(offerId, id)
-			.first(),
-	).pipe(Effect.map((row) => row !== null));
-
-/** Plain read: the agreement a studio project names, or null. A null request matches nothing. */
-export const projectAgreementId = (
-	db: D1Database,
-	requestId: string | null,
-): Effect.Effect<string | null> =>
-	dbCall(() =>
-		db
-			.prepare("SELECT agreement_id FROM software_projects WHERE request_id=?")
-			.bind(requestId)
-			.first<{ agreement_id: string }>(),
-	).pipe(Effect.map((row) => row?.agreement_id ?? null));
-
-/** Plain read: the master agreement an agreement names, or null. */
-export const linkedMsaId = (
-	db: D1Database,
-	agreementId: string | null,
-): Effect.Effect<string | null> =>
-	dbCall(() =>
-		db
-			.prepare("SELECT msa_id FROM software_agreements WHERE id=?")
-			.bind(agreementId)
-			.first<{ msa_id: string }>(),
-	).pipe(Effect.map((row) => row?.msa_id ?? null));
-
-/** Plain read: the ready signed copy of an agreement, or null. */
-export const readySignedCopy = (
-	db: D1Database,
-	id: string,
-): Effect.Effect<AgreementArtifact | null> =>
-	dbCall(() =>
+/** Plain read: the studio session with this token hash, whatever its expiry, or null. */
+export const readStudioSession = (tokenHash: string) =>
+	readAll(StudioSessionRow, (db) =>
 		db
 			.prepare(
-				"SELECT * FROM software_agreement_artifacts WHERE agreement_id=? AND status='ready'",
+				"SELECT email,expires_at,revoked_at FROM audio_client_sessions WHERE token_hash=?",
 			)
-			.bind(id)
-			.first<AgreementArtifact>(),
-	).pipe(Effect.map((row) => row ?? null));
+			.bind(tokenHash),
+	).pipe(Effect.map((rows): StoredStudioSession | null => rows[0] ?? null));
 
-/** Plain read: the attachment of a signing session's offer, when the offer's details pin it (see the attachment rule). */
-export const pinnedAttachment = (
-	db: D1Database,
-	attachmentId: string,
-	offerId: string | null,
-): Effect.Effect<{
-	readonly object_key: string;
-	readonly sha256: string;
-} | null> =>
-	dbCall(() =>
+// ---- the signed copy ----
+
+/** What the visitor's sessions let the download read besides the agreement itself. */
+export type DownloadReads = {
+	readonly id: string;
+	/** The offer the signing session names, or null without a signing session. */
+	readonly signingOfferId: string | null;
+	/** The studio session's email, or null without a studio session. */
+	readonly studioEmail: string | null;
+};
+
+/**
+ * Plain reads for a download decision, in ONE batch (one snapshot): the agreement with this id, whatever its status; the
+ * master agreement the signing session's offer reuses; and, for a studio session, the studio visitor's projects with
+ * the master agreement each names. Which statements run depends on the visitor's sessions and never on the id, and
+ * every bind but the id and the visitor's own offer and email is fixed, so the sequence is the same for every id.
+ */
+export const readDownloadFacts = (reads: DownloadReads) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					"SELECT a.id,a.offer_id,a.request_id,a.status,a.archive_closed_at,c.recipient_email FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=?",
+				)
+				.bind(reads.id),
+			db
+				.prepare("SELECT reused_msa_id FROM software_offers WHERE id=?")
+				.bind(reads.signingOfferId),
+			...(reads.studioEmail === null
+				? []
+				: [
+						db
+							.prepare(
+								`SELECT p.request_id,p.agreement_id,pa.msa_id AS linked_msa_id,r.status AS request_status,r.email AS request_email,p.revoked_at,p.content_deleted_at FROM software_projects p JOIN owner_requests r ON r.id=p.request_id LEFT JOIN software_agreements pa ON pa.id=p.agreement_id WHERE r.email=?`,
+							)
+							.bind(reads.studioEmail),
+					]),
+		]),
+	).pipe(
+		Effect.flatMap(([agreement, reused, projects]) =>
+			Effect.all({
+				agreement: rowsOf(AgreementRow, agreement?.results ?? []),
+				reused: rowsOf(ReusedRow, reused?.results ?? []),
+				projects: rowsOf(StudioProjectRow, projects?.results ?? []),
+			}),
+		),
+		Effect.map(({ agreement, reused, projects }) => ({
+			agreement: (agreement[0] ?? null) satisfies DownloadAgreement | null,
+			signingReusedMsaId: reused[0]?.reused_msa_id ?? null,
+			studioProjects: projects satisfies readonly StudioProject[],
+		})),
+	);
+
+/** Plain read: the signed copy row of an agreement, or null. */
+export const readSignedCopy = (id: string) =>
+	readAll(CopyRow, (db) =>
 		db
 			.prepare(
-				`SELECT a.object_key,a.sha256 FROM software_agreement_attachments a JOIN software_offers o ON o.request_id=a.request_id WHERE a.id=? AND o.id=? AND EXISTS(SELECT 1 FROM json_each(o.agreement_details_json,'$.attachments') WHERE json_extract(value,'$.key')=a.object_key AND json_extract(value,'$.sha256')=a.sha256)`,
+				"SELECT status,pdf_key,pdf_sha256 FROM software_agreement_artifacts WHERE agreement_id=?",
 			)
-			.bind(attachmentId, offerId)
-			.first<{ object_key: string; sha256: string }>(),
-	).pipe(Effect.map((row) => row ?? null));
+			.bind(id),
+	).pipe(Effect.map((rows): StoredSignedCopy | null => rows[0] ?? null));
+
+// ---- the attachment ----
+
+/**
+ * Plain reads, in ONE batch: the attachment with this id, and the offer the signing session names. Both statements run
+ * for every id, so an unknown id and another request's attachment read the same rows in the same order.
+ */
+export const readAttachmentFacts = (id: string, offerId: string | null) =>
+	asked((db) =>
+		db.batch([
+			db
+				.prepare(
+					"SELECT request_id,object_key,sha256 FROM software_agreement_attachments WHERE id=?",
+				)
+				.bind(id),
+			db
+				.prepare(
+					"SELECT request_id,agreement_details_json FROM software_offers WHERE id=?",
+				)
+				.bind(offerId),
+		]),
+	).pipe(
+		Effect.flatMap(([attachment, offer]) =>
+			Effect.all({
+				attachment: rowsOf(AttachmentColumns, attachment?.results ?? []),
+				offer: rowsOf(AttachedOfferColumns, offer?.results ?? []),
+			}),
+		),
+		Effect.map(
+			({ attachment, offer }): AttachmentFacts => ({
+				attachment: (attachment[0] ?? null) satisfies StoredAttachment | null,
+				offer: (offer[0] ?? null) satisfies StoredOffer | null,
+			}),
+		),
+	);

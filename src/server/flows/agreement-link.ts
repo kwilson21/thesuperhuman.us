@@ -1,52 +1,47 @@
 // The archive link: a client asks for a link to the signed agreements kept for their address. The order is the one the
-// route has always kept, and the order matters because each step is a write or an outside call: the address is counted
-// coarsely first, then the captcha is checked, then the address is counted for the email, then the 30-second cooldown is
-// taken. Only then is the address looked up. The receipt is the same for every address; an address with no executed
-// agreement gets it without a link or a mail. A failed guard in the link batch is a refusal (the same 429 sentence as the
-// cooldown); any other failure is a defect.
-import * as Data from "effect/Data";
+// route has always kept, and it matters because each step is a write or an outside call: the address is counted coarsely
+// first, then the captcha is checked, then the address is counted for the email, then the 30-second cooldown is taken. Only
+// then is the address looked up. The receipt is the same for every address; an address with no executed agreement gets it
+// without a link or a mail. Every decision is a rule in src/server/rules/agreement-link.ts: the limits, the cooldown, the
+// 30-second guard, which older links are consumed. The two writes with a guard (the cooldown row, the link batch) use
+// `decideAndSave`: the rule judges from a read, the guard re-checks at write time, and a lost guard reads and judges
+// again (three tries), then answers the cooldown's sentence. The clock is read where the route has always read it: once
+// for the cooldown (kept across its retries), and once per attempt after the address is read for the link.
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { normalizeClientEmail } from "../../lib/audio-client-access";
 import { hashOfferToken } from "../../lib/software-offers";
 import {
-	hasExecutedAgreement,
-	markLinkUsed,
-	consumeOlderArchiveLinks,
-	signerName,
-	storeArchiveLink,
-	takeCooldown,
-} from "../agreement-store";
-import { AgreementAllowance, AgreementMail } from "../agreement-services";
-import { MusicDb, Turnstile } from "../services";
+	AgreementAllowance,
+	AgreementMail,
+	hashing,
+} from "../agreement-services";
 import {
+	consumeLinks,
+	markLinkUsed,
+	readArchiveLinks,
+	readCooldown,
+	readLinkFacts,
+	readSignatures,
+	saveCooldown,
+	storeArchiveLink,
+} from "../agreement-store";
+import { decideAndSave } from "../guarded-save";
+import {
+	ADDRESS_ALLOWANCE,
+	afterMail,
 	archiveMail,
-	COOLDOWN,
-	CROWDED,
-	INVALID_EMAIL,
-	SECURITY_AGAIN,
+	consumeOlderLinks,
+	CooldownRunning,
+	EMAIL_ALLOWANCE,
+	InvalidEmail,
 	issueArchiveLink,
+	SecurityCheckFailed,
+	signerName,
+	takeCooldown,
+	withinAllowance,
 } from "../rules/agreement-link";
-
-export class InvalidEmail extends Data.TaggedError("InvalidEmail") {
-	readonly say = INVALID_EMAIL;
-}
-
-/** The per-address or per-client-address allowance is used up: a few minutes' wait. */
-export class TooManyLinks extends Data.TaggedError("TooManyLinks") {
-	readonly say = CROWDED;
-}
-
-export class SecurityCheckFailed extends Data.TaggedError(
-	"SecurityCheckFailed",
-) {
-	readonly say = SECURITY_AGAIN;
-}
-
-/** The cooldown is running: the last link for this address is under 30 seconds old. */
-export class CooldownRunning extends Data.TaggedError("CooldownRunning") {
-	readonly say = COOLDOWN;
-}
+import { Turnstile } from "../services";
 
 export type ArchiveLinkRequest = {
 	readonly email: string;
@@ -65,24 +60,22 @@ export type ArchiveLinkRequest = {
 
 export type ArchiveLinkAnswer = { readonly sent: boolean };
 
-const hashed = (value: string) =>
-	Effect.tryPromise({
-		try: () => hashOfferToken(value),
-		catch: (cause) => cause,
-	}).pipe(Effect.orDie);
-
 export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 	Effect.gen(function* () {
-		const db = yield* MusicDb;
 		const allowances = yield* AgreementAllowance;
 		const { ip } = request;
 
-		const email = normalizeClientEmail(request.email);
+		const email = yield* Effect.fromNullishOr(
+			normalizeClientEmail(request.email),
+		).pipe(Effect.mapError(() => new InvalidEmail()));
 
-		if (!email) return yield* Effect.fail(new InvalidEmail());
-
-		if (!(yield* allowances.reserve("archive-link-ip", ip, 20)))
-			return yield* Effect.fail(new TooManyLinks());
+		yield* withinAllowance.decide(null, {
+			allowed: yield* allowances.reserve(
+				ADDRESS_ALLOWANCE.scope,
+				ip,
+				ADDRESS_ALLOWANCE.limit,
+			),
+		});
 
 		const turnstile = yield* Turnstile;
 
@@ -90,8 +83,13 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			.verify(request.turnstileToken, ip)
 			.pipe(Effect.mapError(() => new SecurityCheckFailed()));
 
-		if (!(yield* allowances.reserve("archive-link-email", email, 3)))
-			return yield* Effect.fail(new TooManyLinks());
+		yield* withinAllowance.decide(null, {
+			allowed: yield* allowances.reserve(
+				EMAIL_ALLOWANCE.scope,
+				email,
+				EMAIL_ALLOWANCE.limit,
+			),
+		});
 
 		const cooling = request.now();
 
@@ -99,47 +97,65 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			`archive-link-cooldown:${email}`,
 		);
 
-		const taken = yield* takeCooldown(
-			db,
-			cooldownKey,
-			cooling.toISOString(),
-			new Date(cooling.getTime() - 30000).toISOString(),
+		yield* decideAndSave({
+			facts: readCooldown(cooldownKey),
+			decide: (facts) =>
+				takeCooldown
+					.decide({ at: cooling }, facts)
+					.pipe(Effect.map(Option.some)),
+			save: (write) => saveCooldown(cooldownKey, write.at, write.since),
+		}).pipe(
+			Effect.catchTag("SaveKeptChanging", () =>
+				Effect.fail(new CooldownRunning()),
+			),
 		);
 
-		if (!taken) return yield* Effect.fail(new CooldownRunning());
+		const issued = yield* decideAndSave({
+			facts: Effect.gen(function* () {
+				const read = yield* readLinkFacts(email);
 
-		const found = yield* hasExecutedAgreement(db, email);
+				return { ...read, at: request.now() };
+			}),
+			decide: (facts) => issueArchiveLink.decide(null, facts),
+			save: (write) =>
+				Effect.gen(function* () {
+					const id = request.newId();
+					const key = request.newToken();
+					const hash = yield* hashing(() => hashOfferToken(key));
+					const actorHash = yield* hashing(() => hashOfferToken(id));
 
-		const decision = yield* issueArchiveLink.decide(null, {
-			hasExecutedAgreement: found,
-		});
+					yield* storeArchiveLink({
+						id,
+						hash,
+						email,
+						at: write.at,
+						actorHash,
+						expiresAt: write.expiresAt,
+						since: write.since,
+					});
 
-		// Nothing to do: the address has no executed agreement, so the receipt is given with no link and no mail.
-		if (Option.isNone(decision))
+					return { id, key, at: write.at };
+				}),
+		}).pipe(
+			Effect.catchTag("SaveKeptChanging", () =>
+				Effect.fail(new CooldownRunning()),
+			),
+		);
+
+		// A link was stored only when the rule had something to do; otherwise the receipt is given with no link and no mail.
+		if (issued.saved === undefined)
 			return { sent: false } satisfies ArchiveLinkAnswer;
 
-		const at = request.now(),
-			id = request.newId(),
-			key = request.newToken(),
-			hash = yield* hashed(key),
-			actorHash = yield* hashed(id);
-
-		yield* storeArchiveLink({
-			db,
-			id,
-			hash,
-			email,
-			at: at.toISOString(),
-			actorHash,
-			expiresAt: new Date(at.getTime() + 3600000).toISOString(),
-			since: new Date(at.getTime() - 30000).toISOString(),
-		}).pipe(Effect.mapError(() => new CooldownRunning()));
+		const { id, key, at } = issued.saved;
 
 		const url = new URL("/agreements/verify", request.origin);
 
 		url.searchParams.set("key", key);
 
-		const name = yield* signerName(db, email);
+		const name = yield* readSignatures(email).pipe(
+			Effect.flatMap((rows) => signerName.decide(null, rows)),
+		);
+
 		const mail = archiveMail({ name, url: url.href });
 		const sender = yield* AgreementMail;
 
@@ -151,8 +167,16 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			html: mail.html,
 		});
 
-		if (outcome === "refused") yield* markLinkUsed(db, id, at.toISOString());
-		else yield* consumeOlderArchiveLinks(db, email, id, at.toISOString());
+		const next = yield* afterMail.decide(null, { outcome });
+
+		if (next === "mark-used") yield* markLinkUsed(id, at);
+		else {
+			const older = yield* readArchiveLinks(email).pipe(
+				Effect.flatMap((links) => consumeOlderLinks.decide({ id, at }, links)),
+			);
+
+			yield* consumeLinks(older.ids, at);
+		}
 
 		return { sent: true } satisfies ArchiveLinkAnswer;
 	});

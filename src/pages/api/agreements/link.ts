@@ -1,7 +1,10 @@
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { agreementJson } from "~/lib/agreement-access";
+import {
+	agreementJson,
+	canonicalAgreementRequest,
+} from "~/lib/agreement-access";
 import {
 	agreementRequest,
 	nativeAgreementRoute,
@@ -13,11 +16,11 @@ import {
 	liveAgreementAllowance,
 	liveAgreementMail,
 } from "~/server/agreement-services";
+import { logUnexpected } from "~/server/failure";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import {
 	ARCHIVE_RECEIPT,
-	isCanonicalRequest,
-	linkIsConfigured,
+	linkSettings,
 	UNAVAILABLE,
 } from "~/server/rules/agreement-link";
 import { runRoute } from "~/server/run";
@@ -28,6 +31,13 @@ export const prerender = false;
 const ROUTE = "/api/agreements/link";
 
 const unavailable = () => agreementJson({ ok: false, error: UNAVAILABLE }, 500);
+
+const failed = (cause: unknown) =>
+	Effect.sync(() => {
+		logUnexpected(ROUTE, cause);
+
+		return unavailable();
+	});
 
 const post: APIRoute = async ({ request, locals }) => {
 	const body = await agreementRequest(request, 4096);
@@ -43,27 +53,13 @@ const post: APIRoute = async ({ request, locals }) => {
 		);
 	const env = locals.runtime.env;
 
-	if (
-		!isCanonicalRequest({
-			configuredOrigin: env.SITE_ORIGIN,
-			requestUrl: request.url,
-			hostHeader: request.headers.get("host"),
-		})
-	)
+	if (!canonicalAgreementRequest(env, request))
 		return agreementJson({ ok: false }, 404);
 
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
+	const configured = linkSettings(env);
 
-	if (
-		!bindings.ok ||
-		!linkIsConfigured({
-			database: env.MUSIC_DB,
-			codeKey: env.AUDIO_CLIENT_CODE_KEY,
-			resendKey: env.RESEND_API_KEY,
-			sender: env.CONTACT_FROM_EMAIL,
-			turnstileSecret: env.TURNSTILE_SECRET_KEY,
-		})
-	)
+	if (!bindings.ok || configured === null)
 		return agreementJson({ ok: false, error: UNAVAILABLE }, 503);
 
 	const receipt = () => agreementJson({ ok: true, message: ARCHIVE_RECEIPT });
@@ -73,17 +69,17 @@ const post: APIRoute = async ({ request, locals }) => {
 			Context.merge(
 				Context.merge(
 					bindings.services,
-					liveTurnstile(env.TURNSTILE_SECRET_KEY!),
+					liveTurnstile(configured.turnstileSecret),
 				),
-				liveAgreementAllowance(env.MUSIC_DB!, env.AUDIO_CLIENT_CODE_KEY!),
+				liveAgreementAllowance(configured.database, configured.codeKey),
 			),
-			liveAgreementMail(env.RESEND_API_KEY!),
+			liveAgreementMail(configured.resendKey),
 		),
 		requestArchiveLink({
 			email: read.value.email,
 			turnstileToken: read.value.turnstileToken,
 			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
-			from: env.CONTACT_FROM_EMAIL!,
+			from: configured.sender,
 			origin: siteOrigin(env.SITE_ORIGIN),
 			now: () => new Date(),
 			newId: () => crypto.randomUUID(),
@@ -111,6 +107,11 @@ const post: APIRoute = async ({ request, locals }) => {
 					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 403)),
 				CooldownRunning: (refusal) =>
 					Effect.succeed(agreementJson({ ok: false, error: refusal.say }, 429)),
+				// A failed database, allowance, mail or hash call is the route's fixed sentence as a 500, logged without what was sent.
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				AgreementAllowanceFailed: (failure) => failed(failure.failure),
+				AgreementMailFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// An unexpected failure (a database, allowance or mail call that threw) is the route's fixed sentence as a 500.

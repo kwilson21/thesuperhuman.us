@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { GET as fileGET } from "~/pages/api/agreements/[id]/file";
 import { GET as attachmentGET } from "~/pages/api/agreements/attachments/[id]";
-import { double, fakeD1, partial } from "../helpers/doubles";
+import { boundStatement, preparedStatement } from "../helpers/d1";
+import { double, fakeD1 } from "../helpers/doubles";
 
 // Non-interference of the two download routes for a verified visitor. Whatever a visitor observes (the status, the headers,
 // the body, and the sequence of database statements with their arguments and bucket calls) is the same for an unknown id
@@ -13,22 +14,25 @@ const CLOCK = /^\d{4}-\d\d-\d\dT/;
 const TOKEN = "a".repeat(43);
 const STUDIO = "b".repeat(72);
 
-type Row = Record<string, string | number | null> | null;
+type Row = Record<string, string | number | null>;
 
 type Seen = {
 	readonly statements: { readonly query: string; readonly args: unknown[] }[];
 	readonly buckets: string[];
 };
 
+const FAR = "9999-12-31T00:00:00.000Z";
+
 /** Serves one request against a world: the rows a statement finds, and the bucket. Records every call in order. */
 function serve(input: {
 	readonly path: "file" | "attachment";
 	readonly id: string;
 	readonly cookie: string;
-	readonly agreement: Row;
-	readonly pinned?: Row;
-	readonly artifact?: Row;
-	readonly linkedProject?: Row;
+	readonly agreement: Row | null;
+	readonly pinned?: Row | null;
+	readonly attachmentOffer?: Row | null;
+	readonly artifact?: Row | null;
+	readonly projects?: Row[];
 }): Promise<{
 	readonly status: number;
 	readonly headers: [string, string][];
@@ -37,54 +41,85 @@ function serve(input: {
 }> {
 	const seen: Seen = { statements: [], buckets: [] };
 
-	const answer = (query: string): Row => {
+	const rowsFor = (query: string, args: unknown[]): Row[] => {
 		if (/FROM software_agreement_sessions/.test(query))
-			return {
-				recipient_email: "me@example.test",
-				offer_id: "o-mine",
-				token_hash: "h",
-			};
+			return [
+				{
+					token_hash: "h",
+					purpose: String(args[1]),
+					offer_id: "o-mine",
+					link_hash: "l",
+					recipient_email: "me@example.test",
+					verified_at: "2026-01-01T00:00:00.000Z",
+					expires_at: FAR,
+					revoked_at: null,
+					csrf_nonce: "n",
+				},
+			];
+
+		if (/FROM software_offers o JOIN software_offer_links/.test(query))
+			return [
+				{
+					offer_status: "sent",
+					link_revoked_at: null,
+					request_status: "open",
+					recipient_email_snapshot: "me@example.test",
+				},
+			];
+
+		if (/FROM audio_client_sessions/.test(query))
+			return [{ email: "me@example.test", expires_at: FAR, revoked_at: null }];
+
+		if (/FROM software_agreement_attachments/.test(query))
+			return input.pinned ? [input.pinned] : [];
 
 		if (
-			/FROM software_offer_links|FROM software_offers o JOIN software_offer_links/.test(
+			/SELECT request_id,agreement_details_json FROM software_offers/.test(
 				query,
 			)
 		)
-			return { ok: 1 };
+			return input.attachmentOffer ? [input.attachmentOffer] : [];
 
-		if (/FROM audio_client_sessions/.test(query))
-			return { email: "me@example.test" };
+		if (/SELECT reused_msa_id FROM software_offers/.test(query))
+			return [{ reused_msa_id: null }];
 
-		if (/FROM software_agreement_attachments a JOIN/.test(query))
-			return input.pinned ?? null;
-
-		if (/FROM software_agreements a JOIN/.test(query)) return input.agreement;
+		if (
+			/FROM software_agreements a JOIN software_agreement_clients/.test(query)
+		)
+			return input.agreement ? [input.agreement] : [];
 
 		if (/FROM software_agreement_artifacts/.test(query))
-			return input.artifact ?? null;
+			return input.artifact ? [input.artifact] : [];
 
-		if (/FROM software_projects/.test(query))
-			return input.linkedProject ?? null;
+		if (/FROM software_projects/.test(query)) return input.projects ?? [];
 
-		return null;
+		return [];
+	};
+
+	// SAFETY: the code under test names the row type it reads; the world serves the rows for that statement as plain objects.
+	const resultOf = <T>(rows: Row[]): D1Result<T> =>
+		double<D1Result<T>>({ success: true, results: rows as T[] });
+
+	const record = <T>(query: string, args: unknown[]) => {
+		// A clock reading differs between two runs; the instant itself is not what a visitor could compare.
+		seen.statements.push({
+			query,
+			args: args.map((arg) => (CLOCK.test(String(arg)) ? "<time>" : arg)),
+		});
+
+		return resultOf<T>(rowsFor(query, args));
 	};
 
 	const db = fakeD1({
 		prepare: (query: string) =>
-			partial<D1PreparedStatement>({
-				bind: (...args: unknown[]) => {
-					// A clock reading differs between two runs; the instant itself is not what a visitor could compare.
-					seen.statements.push({
-						query,
-						args: args.map((arg) => (CLOCK.test(String(arg)) ? "<time>" : arg)),
-					});
+			preparedStatement(query, [], (text, args) => ({
+				all: async <T>() => record<T>(text, args),
+			})),
+		batch: async <T>(items: D1PreparedStatement[]) =>
+			items.map((item) => {
+				const { query, args } = boundStatement(item);
 
-					return partial<D1PreparedStatement>({
-						first: async () => answer(query),
-						all: async <T>() =>
-							double<D1Result<T>>({ success: true, results: [] }),
-					});
-				},
+				return record<T>(query, args);
 			}),
 	});
 
@@ -132,18 +167,42 @@ function serve(input: {
 	}));
 }
 
-const theirs: Row = {
+const theirs = {
 	id: "a1",
 	offer_id: "o-other",
 	request_id: "r-other",
 	recipient_email: "other@example.test",
+	status: "executed",
+	archive_closed_at: null,
 };
 
-const sameClientOtherOffer: Row = {
+const sameClientOtherOffer = {
 	id: "a1",
 	offer_id: "o-other",
 	request_id: "r-other",
 	recipient_email: "me@example.test",
+	status: "executed",
+	archive_closed_at: null,
+};
+
+const project = (over: Row = {}) => ({
+	request_id: "r-mine",
+	agreement_id: "a-mine",
+	linked_msa_id: null,
+	request_status: "open",
+	request_email: "me@example.test",
+	revoked_at: null,
+	content_deleted_at: null,
+	...over,
+});
+
+const mine = {
+	id: "a-mine",
+	offer_id: "o-mine-agreement",
+	request_id: "r-mine",
+	recipient_email: "me@example.test",
+	status: "executed",
+	archive_closed_at: null,
 };
 
 describe("the file route for a verified visitor", () => {
@@ -202,6 +261,48 @@ describe("the file route for a verified visitor", () => {
 		expect(other).toEqual(unknown);
 	});
 
+	it("reads the same for a studio visitor with projects, whether the id is unknown or another client's", async () => {
+		const projects = [project(), project({ request_id: "r-second" })];
+
+		const unknown = await serve({
+			path: "file",
+			id: "a1",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: null,
+			projects,
+		});
+
+		const other = await serve({
+			path: "file",
+			id: "a1",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: theirs,
+			projects,
+		});
+
+		expect(other).toEqual(unknown);
+		expect(unknown.status).toBe(404);
+
+		expect(
+			unknown.seen.statements.some((s) =>
+				/FROM software_projects/.test(s.query),
+			),
+		).toBe(true);
+	});
+
+	it("lets a studio visitor reach the copy of their own project's agreement", async () => {
+		const own = await serve({
+			path: "file",
+			id: "a-mine",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: mine,
+			projects: [project()],
+			artifact: { status: "ready", pdf_key: "k", pdf_sha256: "d" },
+		});
+
+		expect(own.seen.buckets).toEqual(["k"]);
+	});
+
 	it("reads no bucket object for anything it refuses", async () => {
 		const other = await serve({
 			path: "file",
@@ -258,9 +359,69 @@ describe("the attachment route for a signing session", () => {
 
 		expect(other.status).toBe(404);
 		expect(other.body).toBe(unknown.body);
+		expect(other.headers).toEqual(unknown.headers);
 		expect(other.seen.buckets).toEqual([]);
-		expect(other.seen.statements.map((s) => s.query)).toEqual(
-			unknown.seen.statements.map((s) => s.query),
-		);
+		expect(other.seen).toEqual(unknown.seen);
+	});
+
+	it("reads the same for an unknown id and an attachment of another request, with the offer's details present", async () => {
+		const offer = {
+			request_id: "r-mine",
+			agreement_details_json: JSON.stringify({
+				attachments: [{ key: "k-other", sha256: "d-other" }],
+			}),
+		};
+
+		const unknown = await serve({
+			path: "attachment",
+			id: "att-unknown",
+			cookie: `agreement_session=${TOKEN}`,
+			agreement: null,
+			pinned: null,
+			attachmentOffer: offer,
+		});
+
+		const other = await serve({
+			path: "attachment",
+			id: "att-unknown",
+			cookie: `agreement_session=${TOKEN}`,
+			agreement: null,
+			pinned: {
+				request_id: "r-other",
+				object_key: "k-other",
+				sha256: "d-other",
+			},
+			attachmentOffer: offer,
+		});
+
+		expect(other.status).toBe(404);
+		expect(other).toEqual(unknown);
+		expect(other.seen.buckets).toEqual([]);
+	});
+
+	it("answers its fixed 500 for an offer whose details are not JSON, only when the attachment is the offer's request's", async () => {
+		const offer = { request_id: "r-mine", agreement_details_json: "{not json" };
+
+		const own = await serve({
+			path: "attachment",
+			id: "att-1",
+			cookie: `agreement_session=${TOKEN}`,
+			agreement: null,
+			pinned: { request_id: "r-mine", object_key: "k", sha256: "d" },
+			attachmentOffer: offer,
+		});
+
+		const other = await serve({
+			path: "attachment",
+			id: "att-1",
+			cookie: `agreement_session=${TOKEN}`,
+			agreement: null,
+			pinned: { request_id: "r-other", object_key: "k", sha256: "d" },
+			attachmentOffer: offer,
+		});
+
+		expect(own.status).toBe(500);
+		expect(own.body).toBe("Unavailable");
+		expect(other.status).toBe(404);
 	});
 });

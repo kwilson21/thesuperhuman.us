@@ -1,72 +1,76 @@
 // The attachment a signing session downloads: a file the owner attached to the offer being signed. The session must be a
-// signing session; the offer's pinned attachment is read by the id the visitor sent, and the id decides nothing a visitor
-// can probe: an unknown id, another request's attachment, and one the offer does not pin are the same refusal.
+// signing session. The attachment and the offer the session names are read in one batch, whatever the id, and the rule in
+// src/server/rules/agreement-attachment.ts decides: an unknown id, another request's attachment, and one the offer does
+// not pin are the same refusal, read by the same statements. The bucket is read only after the rule allows it.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { hashBytes } from "../../lib/agreement-artifacts";
-import { pinnedAttachment, sessionOf } from "../agreement-store";
-import { decideAttachment } from "../rules/agreement-attachment";
-import { AudioBucket, MusicDb } from "../services";
+import { hashing } from "../agreement-services";
+import { readAttachmentFacts } from "../agreement-store";
+import {
+	AttachmentNotFound,
+	decideAttachment,
+	intactAttachment,
+} from "../rules/agreement-attachment";
+import { AudioBucket } from "../services";
+import { visitorSession } from "./agreement-session";
 
 /** No signing session: the answer asks the visitor to verify. */
 export class VerifyFirst extends Data.TaggedError("VerifyFirst") {
 	readonly say = "Verify email first.";
 }
 
-/** The attachment is not one this session may download, or its object is not in the bucket. */
-export class AttachmentNotFound extends Data.TaggedError(
-	"AttachmentNotFound",
-) {}
-
-/** The bucket read failed (it threw). */
+/** The bucket read failed (it threw). The route logs it and answers its fixed 500. */
 export class AttachmentReadFailed extends Data.TaggedError(
 	"AttachmentReadFailed",
-)<{
-	readonly failure: unknown;
-}> {}
+)<{ readonly failure: unknown }> {}
 
-/** The bytes are not the digest the row names. */
-export class AttachmentIntegrity extends Data.TaggedError(
-	"AttachmentIntegrity",
-) {
-	readonly say =
-		"This file couldn’t be verified, so I’ve held it back. Please let me know before you sign.";
-}
+const missing = () => new AttachmentNotFound();
 
 export const downloadAttachment = (input: {
 	readonly id: string;
 	readonly request: Request;
+	readonly now: () => Date;
 }) =>
 	Effect.gen(function* () {
-		const db = yield* MusicDb;
 		const bucket = yield* AudioBucket;
 
-		const session = yield* sessionOf(db, input.request, "agreement");
+		const session = yield* visitorSession(
+			input.request,
+			"agreement",
+			input.now,
+		).pipe(
+			Effect.flatMap((found) =>
+				Effect.fromNullishOr(found).pipe(
+					Effect.mapError(() => new VerifyFirst()),
+				),
+			),
+		);
 
-		if (!session) return yield* Effect.fail(new VerifyFirst());
+		const facts = yield* readAttachmentFacts(input.id, session.offer_id);
+		const pinned = yield* decideAttachment.decide(null, facts);
 
-		const row = yield* pinnedAttachment(db, input.id, session.offer_id);
-		const decision = decideAttachment(row);
-
-		if (decision.kind === "refused")
-			return yield* Effect.fail(new AttachmentNotFound());
+		const row = yield* Effect.fromNullishOr(pinned).pipe(
+			Effect.mapError(missing),
+		);
 
 		const object = yield* Effect.tryPromise({
-			try: () => bucket.get(decision.row.object_key),
-			catch: (cause) => new AttachmentReadFailed({ failure: cause }),
-		});
-
-		if (!object) return yield* Effect.fail(new AttachmentNotFound());
+			try: () => bucket.get(row.object_key),
+			catch: (failure) => new AttachmentReadFailed({ failure }),
+		}).pipe(
+			Effect.flatMap((found) =>
+				Effect.fromNullishOr(found).pipe(Effect.mapError(missing)),
+			),
+		);
 
 		const bytes = yield* Effect.tryPromise({
 			try: () => object.arrayBuffer(),
-			catch: (cause) => new AttachmentReadFailed({ failure: cause }),
+			catch: (failure) => new AttachmentReadFailed({ failure }),
 		});
 
-		const digest = yield* Effect.promise(() => hashBytes(bytes));
+		const digest = yield* hashing(() => hashBytes(bytes));
 
-		if (digest !== decision.row.sha256)
-			return yield* Effect.fail(new AttachmentIntegrity());
+		yield* intactAttachment.decide({ bytesSha256: digest }, row);
 
 		return { bytes };
 	});

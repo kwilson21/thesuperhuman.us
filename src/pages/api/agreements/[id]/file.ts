@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { agreementHeaders } from "~/lib/agreement-access";
+import { logUnexpected } from "~/server/failure";
 import { downloadSignedCopy } from "~/server/flows/agreement-download";
 import { runRoute } from "~/server/run";
 import { bindingsOrUnavailable } from "~/server/services";
@@ -14,6 +15,13 @@ const text = (body: string, status: number) =>
 
 const unavailable = () => text("Signed copy unavailable. Contact Kazon.", 500);
 
+const failed = (cause: unknown) =>
+	Effect.sync(() => {
+		logUnexpected(ROUTE, cause);
+
+		return unavailable();
+	});
+
 export const GET: APIRoute = async ({ locals, request, params }) => {
 	const bindings = bindingsOrUnavailable(locals.runtime.env, [
 		"MUSIC_DB",
@@ -25,7 +33,7 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 	return runRoute(
 		bindings.services,
 		downloadSignedCopy({
-			id: params.id!,
+			id: params.id ?? "",
 			request,
 			now: () => new Date(),
 		}).pipe(
@@ -43,12 +51,16 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 			),
 			Effect.catchTags({
 				SignInFirst: (refusal) => Effect.succeed(text(refusal.say, 401)),
-				AgreementNotFound: () => Effect.succeed(text("Not found", 404)),
+				AgreementNotFound: (refusal) => Effect.succeed(text(refusal.say, 404)),
 				CopyNotReady: (refusal) => Effect.succeed(text(refusal.say, 409)),
 				CopyMissing: () => Effect.succeed(text("Not found", 404)),
 				CopyIntegrity: (refusal) => Effect.succeed(text(refusal.say, 503)),
 				// The bucket read failing answers the fixed 500 without a log line, as the route has always done.
 				CopyReadFailed: () => Effect.succeed(unavailable()),
+				// Reading the bytes, the store and the digest failing are logged and answer the same fixed 500.
+				CopyBytesFailed: (failure) => failed(failure.failure),
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		{ route: ROUTE, answer: unavailable },
