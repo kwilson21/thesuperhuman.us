@@ -15,7 +15,9 @@
 //                   "refused" or "uncertain").
 //   the record:     the final write (one step), only while the row still carries this run's own attempt instant.
 // What is left out, on purpose: the blank address (it is read and judged with `open`), the unconfigured mail keys (a run that
-// never asks the provider records "failed" at once, which is the "refused" path here), and the answers the route gives.
+// never asks the provider records "failed" at once, which is the "refused" path here), the answers the route gives, and the two
+// writes that record a failure when the claim or the answer could not be written (the one over a copy with no status, and the
+// one over this run's own attempt): each is guarded as the claim and the final write are, and writes only "failed".
 //
 // The properties are invariants over the real state, set from what each step found in the row at that moment, never from
 // what the run believed: `claims` records the row each claim overwrote, `overwrites` each final write that changed a row
@@ -150,15 +152,16 @@ module briefCopyClaim {
     nondet r = RUNS.filter(i => runs.get(i).phase == "read").oneOf()
     val h = runs.get(r)
     val won = unchanged(MUTANT, h.seen, row)
+    val wrote = won and MUTANT != "no-claim"
     val retry = not(won) and h.tries + 1 < TRIES
     all {
       now' = now,
-      row' = if (won and MUTANT != "no-claim") { ...row, st: "uncertain", att: h.at } else row,
+      row' = if (wrote) { ...row, st: "uncertain", att: h.at } else row,
       runs' = runs.set(r,
         if (won) { ...h, phase: "claimed" }
         else if (retry) { ...h, phase: "start", tries: h.tries + 1 }
         else { ...h, phase: "done", tries: h.tries + 1, outcome: "kept-changing" }),
-      claims' = if (won and MUTANT != "no-claim") claims.union(Set({ by: r, mode: h.mode, confirmed: h.confirmed, at: h.at, from: row })) else claims,
+      claims' = if (wrote) claims.union(Set({ by: r, mode: h.mode, confirmed: h.confirmed, at: h.at, from: row })) else claims,
       sends' = sends,
       overwrites' = overwrites,
     }

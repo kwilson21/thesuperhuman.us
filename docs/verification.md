@@ -470,6 +470,21 @@ File: `verification/brief-copy.qnt`, written before the conversion of the owner 
 
 **State.** The clock, the row (open, status, instant), three deliveries (phase, mode, whether the owner confirmed, the kept instant, the row as it was read, tries, the provider's answer, how it ended), the claims (who, and the real row each one overwrote), the deliveries that asked the provider, and the final writes that changed a row carrying another delivery's attempt. The claims and overwrites are set from the row each step finds, never from what a delivery believed.
 
+The copy's status moves as drawn. The request's own status (new, reviewed, resolved, withdrawn) is only read here: this area never moves it, so there is no request machine to use until the owner request status area (step 12) defines one.
+
+```mermaid
+stateDiagram-v2
+    [*] --> none: the brief is stored
+    none --> uncertain: a claim, by the public form's first copy or the owner's resend
+    failed --> uncertain: the owner's resend claims it
+    uncertain --> uncertain: the owner confirmed it was not sent, and a minute has passed since the attempt: claimed again
+    uncertain --> sent: the provider sent it
+    uncertain --> failed: the provider refused it, was never asked, or the copy could not be built
+    uncertain --> uncertain: the provider did not answer, or its answer could not be recorded
+    none --> failed: a claim that could not be written, recorded over a copy with no status
+    sent --> [*]: never claimed again
+```
+
 **Properties** (`allProperties`):
 1. `claimsEligible`: every claim was made over a row the rule allows (the master property: a claim from a stale read breaks it).
 2. `closedNeverClaimed`: a resolved or withdrawn request is never claimed.
