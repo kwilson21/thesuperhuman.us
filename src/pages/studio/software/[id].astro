@@ -13,10 +13,10 @@ import {
 import ProjectMessages from "~/components/ProjectMessages.astro";
 import SoftwareReviewResponse from "~/components/SoftwareReviewResponse.astro";
 import {
-	clientPortalEnabled,
 	clientSoftwareProjectForSession,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	deliveredIndexes,
 	projectTerms,
@@ -34,8 +34,8 @@ import {
 	clientSoftwareInvoices,
 	softwareInvoiceKindLabels,
 	softwareInvoiceStatusLabels,
-	softwareInvoiceTerms,
 } from "~/lib/software-invoices";
+import { softwareInvoiceTerms } from "~/lib/software-invoice-terms";
 import { formatUSD } from "~/lib/software-offers";
 import { addBusinessDays } from "~/lib/business-days";
 import {

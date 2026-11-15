@@ -1,7 +1,7 @@
 // Shared seed builders for the studio-access golden corpora: client sign-in (studio/code, studio/session, studio/sign-out)
 // and client file access (the audio file route and the software visual route). Nothing here is a harness change; it only
 // builds rows and hashes the way src/lib/audio-client-access.ts does, so a case can start from an exact state.
-import { hashValue, keyedHash } from "~/lib/audio-client-access";
+import { hashValue, keyedHash } from "~/lib/client-portal";
 import {
 	DEFAULT_ENV,
 	rows,
