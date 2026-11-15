@@ -4,13 +4,13 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 
 Date: November 15, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`.
-Tips: A is `693e6f84`. B's code is at `50dfc58c`; this record is committed after it, in a commit that changes documentation only.
+Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, and again at `fbfc3e05` (the media conversion, PRs 309 to 311) after the review.
+Tips: A is `24c4059c` (the merge of `origin/main` into `693e6f84`, with no file conflicts). B's code is at `064eb1d4` (the merge of A at `d623dc25`, then the route's move to the shared logged answer); the merge conflicts are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
 Pull requests: not opened when this was written.
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
 Reviews: one independent review of A `dba9e556` and B `eaf18814` was run on 2026-11-15; its findings are under "Review findings". The heads that fix them were not reviewed again: UNVERIFIED.
-Rollback revision: for A, `2f7add57`; for B, A's tip `693e6f84`. No deployed revision was observed.
+Rollback revision: for A, `fbfc3e05`; for B, A's tip `24c4059c`. No deployed revision was observed.
 
 ## Scope
 
@@ -90,6 +90,15 @@ There is no statement of class (d) left.
 - The public route's end-to-end "copy cannot be built" case was dropped; the flow tests (`tests/flows/brief-copy-stories.test.ts`, `tests/flows/software-inquiry-stories.test.ts`) cover it.
 - A brief whose copy cannot be built is a named failure after a failure is recorded over the attempt, as before; a test pins it on both branches.
 
+## Merge with the media conversion
+
+After the review, `origin/main` gained the media conversion and its shared `loggedAnswer(route, answer)` in `src/server/answers.ts`. A took it with no conflicts and no corpus change. Merging A into B conflicted in two files:
+
+- `src/pages/api/software-inquiry.ts`: main's route keeps one module-level `failed = loggedAnswer(ROUTE, ...)`; A's side still named a `BriefCopyFailed` tag that B's flow no longer raises. The merge keeps main's helper and its `(failure) => failed(failure.failure)` mapping for `RateLimitStoreFailed`, and drops the `BriefCopyFailed` line.
+- `docs/plans/2026-11-effect-conversion.md`: both sides edited the "Converted" and "Not converted" lines. The merge keeps main's media text and this branch's step 8 status in one line, and the counts are main's minus this branch's one route and one Zod file (31 route files, 27 files under `src/` that use Zod, 26 of which import `zod` or `astro/zod`; checked against a fresh count).
+
+The owner brief copy route now uses the shared helper (`const failed = loggedAnswer(ROUTE, briefCopyFailed)`, each failure tag mapped with `(failure) => failed(failure.failure)`) in place of its own local helper. Its answers and logs are the same, so the corpus is unchanged. The sentences of `docs/verification.md` on `origin/main` are all kept.
+
 ## Review findings
 
 An independent review of A `dba9e556` and B `eaf18814` on 2026-11-15 found:
@@ -102,16 +111,18 @@ An independent review of A `dba9e556` and B `eaf18814` on 2026-11-15 found:
 
 ## Evidence
 
-Branch A at `693e6f84`:
-- `format:check`: `Checked 864 files in 98ms. No fixes applied.`; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  334 passed (334)`, `Tests  13469 passed | 1 skipped (13470)`; `git status` clean apart from `.jolli/`.
-- `golden:neutral --all origin/main HEAD`: `compared 77 fixtures and 9071 cases; 1 of 77 fixtures differ`, `NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
-- `verify:quint:all`: exit 0, 94 `ok` lines. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
+Run after the merge of `origin/main` (the earlier run before it is not repeated here).
 
-Branch B at `50dfc58c`:
-- `format:check`: `Checked 871 files in 200ms. No fixes applied.`; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  338 passed (338)`, `Tests  13599 passed | 1 skipped (13600)`; `git status` clean apart from `.jolli/`.
-- `golden:neutral --all 693e6f84 HEAD`: `compared 77 fixtures and 9073 cases; 2 of 77 fixtures differ`, `golden:neutral: NEUTRAL`.
-- `verify:quint:all`: exit 0, 104 `ok` lines (the nine mutants of the new model break their properties). `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
+Branch A at `24c4059c`:
+- `format:check`: `Checked 882 files in 106ms. No fixes applied.`; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  340 passed (340)`, `Tests  13820 passed | 1 skipped (13821)`; `git status` clean apart from `.jolli/`.
+- `golden:neutral --all origin/main`: `compared 80 fixtures and 9329 cases; 1 of 80 fixtures differ`, `golden:neutral: NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
+- `verify:quint:all`: exit 0. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
+
+Branch B at `064eb1d4`:
+- `format:check`: `Checked 889 files in 111ms. No fixes applied.`; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  344 passed (344)`, `Tests  13950 passed | 1 skipped (13951)`; `git status` clean apart from `.jolli/`.
+- `golden:neutral --all 24c4059c HEAD`: `compared 80 fixtures and 9331 cases; 2 of 80 fixtures differ`, `golden:neutral: NEUTRAL` (`owner-request-brief-copy` 24 identical and 41 neutral with D1 changes; `software-inquiry` 138 identical and 69 neutral with D1 changes).
+- `verify:quint:all`: exit 0. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
 
 UNVERIFIED: the owner page in a browser (the reload after a 500 was driven only with a stubbed fetch); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none).
