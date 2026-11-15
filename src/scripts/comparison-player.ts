@@ -276,6 +276,20 @@ export function setupComparisonPlayers() {
 				});
 			}
 
+			/**
+			 * A place the stream has run to at or past the loop's end goes round into the loop, as the transport would, and
+			 * with Flip on each wrap switches the version, so the pass after it is the other one.
+			 */
+			function wrapStreamPlace(at: number) {
+				if (!loop || at < loop.end) return at;
+				const length = loop.end - loop.start;
+				const wraps = 1 + Math.floor((at - loop.end) / length);
+
+				if (loopFlip?.checked && wraps % 2 === 1) selected = 1 - selected;
+
+				return loop.start + ((at - loop.end) % length);
+			}
+
 			function stopStream() {
 				if (!streaming) return;
 				streamId++;
@@ -407,7 +421,10 @@ export function setupComparisonPlayers() {
 				followFlip();
 
 				// A stream stopped after the transport was made but before it took over: the transport waits at its place.
-				if (streamed) transport?.seek(position);
+				if (streamed) {
+					position = wrapStreamPlace(position);
+					transport?.seek(position);
+				}
 
 				// The fallback's note about the players below stays.
 				if (root.dataset.audioFallback !== "true") status.textContent = "";
@@ -492,7 +509,7 @@ export function setupComparisonPlayers() {
 						// the comparison where it stopped; the transport would start the song again from the top. A loop
 						// has no end: the transport starts inside it.
 						if (handed.paused || (!loop && at >= transport!.duration)) return;
-						position = at;
+						position = wrapStreamPlace(at);
 						streaming = undefined;
 					}
 

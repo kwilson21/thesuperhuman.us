@@ -798,3 +798,19 @@ it("keeps the load failure's note when a seek that moved the loop settles", asyn
 	await new Promise((resolve) => setTimeout(resolve, 750));
 	expect(ab.status.textContent).toContain("couldn’t load");
 });
+
+it("flips at a loop's end that the handover lands on", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.loop.flip.checked = true;
+	ab.loop.flip.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	// The mix streams 13 ms short of the 0:08 end; the transport starts 30 ms on, past it, so the master's pass begins.
+	ab.mix.currentTime = 7.987;
+	await ab.decode();
+	expect(ab.synced()).toBe(true);
+	expect(ab.levelsNow()).toEqual([0, 1]);
+	expect(ab.startedAt()).toBeCloseTo(0.017);
+});
