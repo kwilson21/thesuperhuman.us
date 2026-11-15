@@ -40,6 +40,14 @@ export function setPlaybackAudioSession(scope: Navigator | AudioSessionScope) {
 	}
 }
 
+/** Whether this browser lets a page set an audio element's volume. iOS Safari does not: it always reads 1. */
+function canSetVolume() {
+	const probe = new Audio();
+	probe.volume = 0.5;
+
+	return probe.volume === 0.5;
+}
+
 export function setupComparisonPlayers() {
 	const AudioContextConstructor = getAudioContextConstructor(window);
 
@@ -62,6 +70,8 @@ export function setupComparisonPlayers() {
 
 		return;
 	}
+
+	const fixedVolume = !canSetVolume();
 
 	document
 		.querySelectorAll<HTMLElement>("[data-comparison]")
@@ -110,8 +120,11 @@ export function setupComparisonPlayers() {
 				frame = 0;
 
 			let position = 0;
-			// Until both versions are decoded, the chosen one plays from its own stream, so sound starts at once.
-			let streaming: HTMLAudioElement | undefined;
+
+			// Until both versions are decoded, the chosen one plays from its own stream, so sound starts at once. Each
+			// stream started or stopped takes a new number, so a refusal from an earlier one is not taken for this one.
+			let streaming: HTMLAudioElement | undefined,
+				streamId = 0;
 
 			const format = (n: number) =>
 				`${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
@@ -143,7 +156,15 @@ export function setupComparisonPlayers() {
 					),
 				);
 
-				if (streaming) streaming.volume = Math.min(1, levelOf(streaming));
+				if (!streaming) return;
+
+				// On iOS a stream cannot be turned down, so one that should now play quieter waits for synced playback.
+				if (streamable(streaming))
+					streaming.volume = Math.min(1, levelOf(streaming));
+				else {
+					stopStream();
+					waitForTransport();
+				}
 			}
 
 			/** Where the stream has reached, in the song's time, or the stored position when nothing streams. */
@@ -152,19 +173,49 @@ export function setupComparisonPlayers() {
 					? Math.max(0, streaming.currentTime - offsetOf(streaming))
 					: position;
 
+			/**
+			 * Whether a version may stream at the level it should play at. Where the page cannot set an element's volume
+			 * (iOS), only a version meant to play at full level may; the others wait for synced playback, so the comparison
+			 * never plays a version louder than it should. In the fallback, the native players play at their own level.
+			 */
+			const streamable = (audio: HTMLAudioElement) =>
+				root.dataset.audioFallback === "true" ||
+				!fixedVolume ||
+				levelOf(audio) >= 0.999;
+
+			/** Waits for synced playback with nothing sounding, as the button's busy state and the status say. */
+			function waitForTransport() {
+				pending = true;
+				status.textContent = "Preparing synchronized audio…";
+				render();
+			}
+
 			function streamFrom(seconds: number) {
 				const audio = media[selected];
+
+				if (!streamable(audio)) {
+					position = seconds;
+					waitForTransport();
+
+					return;
+				}
+
+				const id = ++streamId;
 				audio.currentTime = seconds + offsetOf(audio);
 				audio.volume = Math.min(1, levelOf(audio));
 				streaming = audio;
+				// A browser that refuses the stream leaves the comparison waiting for synced playback instead.
 				void audio.play().catch(() => {
-					if (streaming === audio) streaming = undefined;
-					render();
+					if (id !== streamId || streaming !== audio) return;
+					position = seconds;
+					streaming = undefined;
+					waitForTransport();
 				});
 			}
 
 			function stopStream() {
 				if (!streaming) return;
+				streamId++;
 				position = streamPosition();
 				streaming.pause();
 				streaming = undefined;
@@ -206,7 +257,11 @@ export function setupComparisonPlayers() {
 			function render() {
 				cancelAnimationFrame(frame);
 				const duration = transport?.duration ?? Number(root.dataset.duration);
-				const current = transport ? transport.position : streamPosition();
+
+				// A stream still playing leads, even once the transport exists (a stream left to finish on its own).
+				const current = streaming
+					? streamPosition()
+					: (transport?.position ?? position);
 
 				const sounding = Boolean(
 					transport?.playing || (streaming && !streaming.paused),
@@ -250,9 +305,15 @@ export function setupComparisonPlayers() {
 			function pause() {
 				operation++;
 				pending = false;
+				const streamed = Boolean(streaming);
 				stopStream();
 				transport?.pause();
-				status.textContent = "";
+
+				// A stream stopped after the transport was made but before it took over: the transport waits at its place.
+				if (streamed) transport?.seek(position);
+
+				// The fallback's note about the players below stays.
+				if (root.dataset.audioFallback !== "true") status.textContent = "";
 				render();
 			}
 
@@ -268,10 +329,8 @@ export function setupComparisonPlayers() {
 				claimPlayback();
 
 				// Before both versions are decoded, the chosen one plays from its own stream while they load.
-				if (transport) {
-					pending = true;
-					status.textContent = "Preparing synchronized audio…";
-				} else streamFrom(position);
+				if (transport) waitForTransport();
+				else streamFrom(position);
 
 				render();
 
@@ -313,7 +372,12 @@ export function setupComparisonPlayers() {
 					const handed = streaming;
 
 					if (handed) {
-						position = streamPosition() + 0.03;
+						const at = streamPosition() + 0.03;
+
+						// A stream that has stopped, or is about to end, is left to its pause and ended handlers, which park
+						// the comparison where it stopped; the transport would start the song again from the top.
+						if (handed.paused || at >= transport!.duration) return;
+						position = at;
 						streaming = undefined;
 						setTimeout(() => handed.pause(), 30);
 					}
@@ -321,11 +385,12 @@ export function setupComparisonPlayers() {
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
+					delete root.dataset.audioFallback;
 					status.textContent = "";
 				} catch {
 					if (request === operation) {
-						// A stream that is playing keeps playing, now in the native player the fallback shows.
-						streaming = undefined;
+						// A stream that is playing keeps playing, now in the native player the fallback shows, and the
+						// controls above keep following it.
 						root.dataset.audioFallback = "true";
 						media.forEach((audio) => {
 							audio.controls = true;
@@ -353,9 +418,12 @@ export function setupComparisonPlayers() {
 			});
 			switches.forEach((button) =>
 				button.addEventListener("click", () => {
-					selected = media.findIndex(
+					const chosen = media.findIndex(
 						(audio) => audio.dataset.version === button.dataset.selectVersion,
 					);
+
+					if (chosen === selected) return;
+					selected = chosen;
 
 					// Before the synced handover, switching restarts the other version's stream at the same point.
 					if (streaming) {
@@ -476,14 +544,44 @@ export function setupComparisonPlayers() {
 			showVolume();
 			match?.addEventListener("change", applyVolume);
 			root.addEventListener("music-pause", pause);
-			media.forEach((audio) =>
+			media.forEach((audio, index) => {
+				// A stream ends or is paused from outside the page (a media key, the lock screen, headphones coming out):
+				// the comparison pauses with it, so it does not start again by itself once both versions are decoded. The
+				// comparison's own pauses clear `streaming` first, and a stream it restarted is playing again.
+				audio.addEventListener("pause", () => {
+					if (streaming === audio && audio.paused && !audio.ended) pause();
+				});
 				audio.addEventListener("ended", () => {
 					if (streaming !== audio) return;
 					streaming = undefined;
 					position = Number(root.dataset.duration);
-					render();
-				}),
-			);
+					transport?.seek(position);
+					pause();
+				});
+				// A version starts that the comparison did not start. In the fallback a visitor started it from its native
+				// player, and the controls above follow it. Otherwise it is hidden and something outside the page started
+				// it (a media key or the lock screen, whose controls it kept from its stream), so it stops, and the
+				// comparison takes it as a press of its own button: it pauses if it is playing.
+				audio.addEventListener("play", () => {
+					if (streaming === audio || audio.paused) return;
+
+					if (root.dataset.audioFallback === "true") {
+						streaming = audio;
+						selected = index;
+						updateCompactWaveform();
+						render();
+
+						return;
+					}
+
+					audio.pause();
+
+					if (transport?.playing || pending) {
+						position = transport?.position ?? position;
+						pause();
+					}
+				});
+			});
 			window.addEventListener("pagehide", pause);
 
 			const standardControls = root.querySelector<HTMLElement>(
