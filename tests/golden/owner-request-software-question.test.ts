@@ -44,8 +44,9 @@ import type { JsonValue } from "../helpers/json";
 //   502 {ok:false,uncertain,message}  the client's email refused (4xx: not uncertain), answered 5xx or lost to the
 //                               network (uncertain). The reservation stays: updated_at moved, no audit row, no
 //                               question-sent record
-//   503 {ok:false,message:"Software offers are temporarily unavailable."}  no Resend key (absent or empty), no sender
-//                               address or no owner address, checked before any write: nothing reserved, nothing emailed
+//   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
+//                               sent or saved."}  no Resend key (absent or empty), no sender address or no owner address,
+//                               checked before any write: nothing reserved, nothing emailed
 //   409 "...changed or could not be saved..."  the reservation batch fails its guard (updated_at, status or email moved)
 //   409 project started         the project appears between the pre-check and the reservation batch, or between the email
 //                               and the recording batch

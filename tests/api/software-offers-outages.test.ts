@@ -37,7 +37,8 @@ import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 
 const FAILED = "The change could not be saved. Please try again.";
 
-const UNAVAILABLE = "Software offers are temporarily unavailable.";
+const NO_MAIL =
+	"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.";
 
 const NO_STORAGE =
 	"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
@@ -818,7 +819,7 @@ describe("a question or a decline with mail not configured answers 503 and write
 	])("%s", async (_name, body, setting) => {
 		const { sql, call } = setUp({ seed: withSent, omit: [setting] });
 
-		expect(await read(await call(body))).toEqual(answer(503, UNAVAILABLE));
+		expect(await read(await call(body))).toEqual(answer(503, NO_MAIL));
 		expect(sql.prepare("SELECT updated_at FROM owner_requests").get()).toEqual({
 			updated_at: EARLIER,
 		});

@@ -61,8 +61,9 @@ import type { JsonValue } from "../helpers/json";
 //   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
 //            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
 //            not resolved and no audit row says "declined"
-//   503 {ok:false,message:"Software offers are temporarily unavailable."}  mail not configured (no Resend key, sender or
-//            owner address), checked after the refusals and before the first batch: nothing withdrawn or emailed
+//   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
+//            sent or saved."}  mail not configured (no Resend key, sender or owner address), checked after the refusals
+//            and before the first batch: nothing withdrawn or emailed
 //   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
 //   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and

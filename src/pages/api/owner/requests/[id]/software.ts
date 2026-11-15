@@ -31,8 +31,8 @@ import {
 	offersFailed,
 	offersFailedAfterDraft,
 	offersFailedAfterEmail,
+	offersMailNotConfigured,
 	offersStorageNotConfigured,
-	offersUnavailable,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { logUnexpected } from "~/server/failure";
@@ -361,7 +361,7 @@ const answer = async ({
 			// Both actions write before the email. Without the mail settings the email cannot be sent, so nothing is
 			// written: a dependency this deployment does not have.
 			if (!env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL || !env.OWNER_EMAIL)
-				return offersUnavailable();
+				return offersMailNotConfigured();
 
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();

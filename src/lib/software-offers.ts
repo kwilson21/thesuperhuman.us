@@ -472,9 +472,12 @@ const offersAnswer = (message: string, status: number) =>
 		{ status, headers: { "cache-control": "private, no-store" } },
 	);
 
-/** A dependency this deployment does not have: a deliberate 503. */
-export const offersUnavailable = () =>
-	offersAnswer("Software offers are temporarily unavailable.", 503);
+/** A question or a decline with the mail settings missing: 503, answered before anything is written. */
+export const offersMailNotConfigured = () =>
+	offersAnswer(
+		"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.",
+		503,
+	);
 
 /** A send that needs R2 (attachments, or a reused MSA whose signed copy the packet imports) with no R2 binding: 503. */
 export const offersStorageNotConfigured = () =>
