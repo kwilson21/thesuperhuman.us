@@ -980,6 +980,37 @@ function check(name, ok, detail = "") {
 		);
 		await page.mouse.move(2, 2);
 
+		// The tenth review's bug: a milestone reworded and given new days is one update, not two.
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const rewording = await next();
+
+		await card("outcome").hover();
+
+		const reworded = scriptedOfferReply(rewording.request().postData());
+
+		reworded.cards = reworded.cards.map((each) =>
+			each.text === "Design direction"
+				? {
+						...each,
+						reason: "Smaller first",
+						detail: { ...each.detail, daysLow: 4, daysHigh: 6 },
+					}
+				: each,
+		);
+		await release(rewording, reworded);
+		await page.waitForTimeout(500);
+
+		const rewordedLabel = await page.locator("[data-offer-held]").textContent();
+
+		check(
+			"a milestone reworded and given new days is held as one update",
+			rewordedLabel === "Show 1 update",
+			rewordedLabel ?? "",
+		);
+		await page.mouse.move(2, 2);
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

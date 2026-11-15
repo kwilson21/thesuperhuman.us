@@ -1130,9 +1130,11 @@ export function setupOfferBoard() {
 				const was = board.cards.find((card) => card.id === id);
 				const now = preview.board.cards.find((card) => card.id === id);
 
+				// A card the reply changed otherwise (its words or reason) is already counted once in `updated`, and
+				// applyReplyIn keeps the same card object for a card it leaves alone.
 				return (
 					was !== undefined &&
-					now?.text === was.text &&
+					now === was &&
 					!sameDetail(details.get(id), detail)
 				);
 			}).length;
