@@ -53,7 +53,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 	try {
 		return reply(await readProject(env.PUBLICATION_DB, project));
 	} catch {
-		return reply({ error: "Updates unavailable." }, 503);
+		return reply({ error: "Updates unavailable." }, 500);
 	}
 };
 
@@ -126,6 +126,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
 						: 200,
 		);
 	} catch {
-		return reply({ error: "Delivery pending. Retry the same event." }, 503);
+		return reply({ error: "Delivery pending. Retry the same event." }, 500);
 	}
 };
