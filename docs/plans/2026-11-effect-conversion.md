@@ -1,6 +1,6 @@
 # Moving the rest of the server to Effect: order
 
-Status: proposed, 2026-11-15. The owner asked for the rest of the site to move to XState, Effect and Effect Schema,
+Status: decided, 2026-11-15. The owner asked for the rest of the site to move to XState, Effect and Effect Schema,
 and for the friends and family discount to be stated in the agreement. This plan orders the work so the discount
 comes as early as the rules allow. Every area follows the Back-end rules in CLAUDE.md; nothing here changes them.
 
@@ -13,18 +13,14 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
   it). Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in `package.json` as the MCP SDK's
   required peer; see "Library boundaries".
 - **Stacked branches.** Owner, 2026-11-15: conversion PRs may be stacked so one does not wait for another to merge.
-
-## Proposed, not yet decided
-
-- **Order: the discount first.** Recommended 2026-11-15 (offers, then studio sign-in, then signing, then the discount),
-  with the alternative of small areas first named. The owner has not chosen yet; the first steps below are needed in
-  either order.
+- **Order: the discount first.** Owner, 2026-11-15 ("Go", to the recommendation of offers, then studio sign-in, then
+  signing, then the discount, over small areas first).
 
 ## Where things stand
 
-- Converted: contact and resume (3 routes), the public music routes (2 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod).
-- Not converted: 42 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
-  components (all reads), 31 files under `src/` that use Zod (30 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
+- Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod).
+- Not converted: 39 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
+  components (all reads), 30 files under `src/` that use Zod (29 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
   parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
   Stripe reconciliation are operator scripts.
 - Every route but the three media routes has a golden corpus (recorded in PRs 246, 248 and 249).
@@ -51,10 +47,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 0. **Prerequisites, each its own PR.**
    - Discount PR 2, the deposit guard of decision 9: merged (#285). The follow-up that names the refund record step
-     in the refusals: #287.
-   - `offerTermsSchema` from Zod to Effect Schema, the Zod copy frozen in `tests/fixtures/legacy-validators/` with a
-     differential block, as was done for the agreement validators. Offers, signing, projects and `sign.astro` all parse
-     it, so it moves first and alone.
+     in the refusals: merged (#287).
+   - The offer terms validator from Zod to Effect Schema, the Zod copy frozen in `tests/fixtures/legacy-validators/`
+     with a differential block: merged (#289; it is now `readOfferTerms` and `parseOfferTerms`).
    - Split the shared helpers that several areas import into modules of their own, with no behaviour change:
      `softwareGuard` and `softwareAudit` (out of `software-projects.ts`, used by six areas); `softwareInvoiceTerms` (out
      of `software-invoices.ts`, so signing stops pulling in Stripe); the pure parts of `audio-client-access.ts`

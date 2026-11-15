@@ -380,6 +380,42 @@ File: `verification/publication-journal.qnt`, written for the conversion of the 
 
 **What it does not cover.** The content and the erasure of a withdrawn entry's text, the hash, the origin (backfill changes the feed, not the journal's rules), the allowlist and token checks, and the feed (pure rules over plain reads, `tests/rules/publication-feed.test.ts`, and its interleaving with a withdrawal, `tests/flows/publication-commit-stories.test.ts`). The event id key adds nothing a property could see once the revision key and the rule are in place (every accepted write takes the next revision), so no property or mutant names it.
 
+## The agreement-link model
+
+File: `verification/agreement-link.qnt`, written for the conversion of the agreement access routes (module `agreementLink`). A client asks for a link to the signed agreements kept for their address (`POST /api/agreements/link`), and later redeems the link it was mailed (`completeAgreementLink`); the Worker serves several requests at once. The issue is: the cooldown (read the address's row, then a compare-and-set that re-checks it; a lost set reads again, three tries, and the retry keeps the request's first instant, as the code keeps `cooling`), the lookup (the address's agreements and links in ONE batch, one snapshot), then the link batch (its first statement is the guard "no link issued in the window before `at`"; a lost guard reads again, three tries of its own, and the retry keeps the first `at`). The redeem is two steps: a read of the link as unused and unexpired at the instant `at`, then a guarded batch that consumes it while it is still unused.
+
+**State.** The stored links (each with the address, the instant it was issued, its expiry, and whether the agreement was still executed at the store), the cooldown rows and a record of each cooldown taken (by which request, for which address, at which instant), how many times each link was consumed and the instant of the read of the redeem that consumed it, three issue requests (phase, the two kept instants, what the lookup read, the two try counters, outcome), two redeems (phase, link, instant of the read), and whether each address still has an executed agreement. There are no flags set by a step: each property is an invariant over this state. Two addresses, three requests and two redeemers; the check of the unmutated model takes about six to ten seconds in the pooled run, and each mutant a few seconds, at 20,000 random runs of 20 steps (every mutant was found on seeds 0x1 to 0x7).
+
+**Properties** (`allProperties`):
+1. `oneIssuePerWindow`: no two stored links for one address were issued less than the window apart.
+2. `issuedOnlyWithAgreement`: every stored link is for an address that started with an executed agreement (address 1; a link for the address that never had one fails it). It reads the starting state, so it still holds for an address whose agreement ends later; `issuedStillExecuted` below is the finding about that.
+3. `redeemedOnce`: every link was consumed at most once.
+4. `redeemedUnexpired`: every consumed link was consumed by a redeem whose read was before its expiry.
+5. `oneCooldownPerWindow`: no two cooldowns for one address were taken less than the window apart.
+6. `lostCooldownNeverTakes`: a request that lost its cooldown compare-and-set never takes a cooldown. A retry keeps the request's first instant, so the row that beat it still beats it; a retry that took a new instant succeeds once the window has passed.
+7. `lostGuardNeverStores`: a request that lost the link batch's guard never stores a link, for the same reason.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoGuard` | The link batch's guard is not checked | `oneIssuePerWindow` |
+| `SplitGuard` | The guard is read in one step and the insert done in a later one (the code before the batch) | `oneIssuePerWindow` |
+| `NoLookup` | A link is issued without reading whether the address has an executed agreement | `issuedOnlyWithAgreement` |
+| `RedeemNoGuard` | The redeem's batch does not check the link is still unused: two redeems that both read it unused both consume it | `redeemedOnce` |
+| `RedeemNoExpiry` | Neither the redeem's read nor its batch checks the expiry | `redeemedUnexpired` |
+| `NoCas` | The cooldown's compare-and-set does not re-check the row: two requests that both read it free both take it | `oneCooldownPerWindow` |
+| `RetryNewCool` | A cooldown retry takes a new instant instead of keeping its first | `lostCooldownNeverTakes` |
+| `RetryNewAt` | A link retry takes a new instant instead of keeping its first | `lostGuardNeverStores` |
+
+**How the search for `RetryNewAt` differs.** Its violation needs a lost guard, then a clock that has moved two ticks, then the retry: about sixteen exact steps, which random runs over all the steps never reached (not at 150,000 runs). For that one mutant (`onlyIssue` in the model) the search leaves out the redeems and the agreement ending, which cannot take part in it. The check of the unmutated model, `agreementLink`, is never narrowed: it takes every step.
+
+**Finding.** `issuedStillExecuted` (not in `allProperties`; run it by hand with `quint run verification/agreement-link.qnt --main agreementLink --invariant issuedStillExecuted`) says every stored link was stored while the agreement was still executed. It fails: the lookup reads the status, and the batch's guard checks only the 30-second window, so a link can be issued for an agreement that stopped being executed after the lookup. Retention can delete an executed agreement (`src/lib/agreement-retention.ts`), and the lookup does not look at `archive_closed_at`. The effect is harmless and identical on branch A: the link is mailed and the session it opens finds no agreement to show. If an executed agreement can ever become non-executed in a way that matters, the batch needs a guard on the status as well.
+
+**Found by writing it.** The redeem judges the expiry once, at the read's instant, and the batch repeats the same clause with the same instant. An expiry never moves, so the batch's expiry clause can never fail where the read passed; the model therefore has one expiry mutant (both removed) and no mutant for the repeated clause alone. A redeem that began before the expiry completes after it, and its session starts at the read's instant; this is intended. An earlier version of the properties held by construction (a flag set from the same condition as the guard it checked); they now read the stored links, the cooldowns taken and the redeem record.
+
+**Exhaustive run.** `agreementLink` has `stepOrEnd`, so `pnpm run verify:quint:exhaustive` (Apalache) runs it with the other exhaustive modules: six modules (`audioExhaustive`, `softwareExhaustive`, `discount`, `music`, `publication`, `agreementLink`) from five model files; `signin` has no exhaustive run. Run at the default 7 steps it prints "agreementLink keeps every property in every order up to 7 steps" in about twelve seconds. Seven steps is shallow for this model: of the mutants, only `NoLookup` and `NoCas` are reachable that fast. Two stored links need at least 10 steps, `RetryNewCool` about 10 and `RetryNewAt` about 16, so the exhaustive run does not reach the cases properties 1, 3, 4, 6 and 7 guard against; the random runs (20,000 runs of 20 steps, seeds 0x1 to 0x7) cover them. The bound was not raised: 9 steps took about 112 seconds and found no violation, and each further step costs several times more.
+
+**What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart
