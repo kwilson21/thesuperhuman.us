@@ -145,6 +145,8 @@ Branch B at `1f4cb680` (A's tip `c2049762` merged in, then the conversion and th
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - Lint and `check` are re-run on the commit that holds this record: see "Final lines".
 
+2026-11-15, merge with `origin/main` at `e23b7357` (#288, #289, #287, #293): taken on A with no conflict (`064f0ab9`), then into B with no conflict (`1f8ee043`); all 87 golden test files passed on A without a re-record; `golden:neutral --all origin/main HEAD` on A still differs only in the four fixtures of this area (`compared 77 fixtures and 9066 cases; 4 of 77 fixtures differ`); on B, `Test Files  317 passed (317)`, `Tests  13239 passed | 1 skipped (13240)`, `golden:neutral --all refs/heads/claude/effect-11-intake-fixes HEAD`: `golden:neutral: NEUTRAL` (9069 cases, 2 of 77 fixtures differ), `verify:quint:all` 77 lines, every one `ok`; `docs/verification.md` differs from `origin/main` by additions only.
+
 The `pass` signing-failure path has a unit test but no corpus case: `tests/api/brief-suggestion-pass.test.ts` ("answers 500 without a pass when the pass cannot be signed") makes the signature fail, and the golden harness cannot make signing fail.
 
 Limits: no browser run of any form; no real email was sent, so the client copy, the owner notice, the studio invitation and the owner alert are UNVERIFIED in the intended environment. The rate limit store has a read-then-write window (`src/lib/rate-limit.ts`) that this area does not change; the inquiry model keeps the read and the write as two steps and shows the race that follows (STOP item 5).
@@ -214,4 +216,4 @@ Deployment: the owner's standing instruction is that a complete pull request (CI
 
 ## Final lines
 
-On the commit that holds this record: `pnpm run format:check`: `Checked 804 files in 154ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (830 files):  - 0 errors - 0 warnings - 17 hints`.
+On the commit that holds this record: `pnpm run format:check`: `Checked 808 files in 162ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (834 files):  - 0 errors - 0 warnings - 17 hints`.
