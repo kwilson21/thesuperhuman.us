@@ -30,10 +30,11 @@ import { BASE, owner, resendOk, running } from "./areas/software-projects";
 //   404 {ok:false}              unknown id, a request that is not software (service)
 //   409 "cannot be sent again"  the claim finds nothing: status sent, uncertain without confirmation, uncertain and too
 //                               recent even with confirmation, resolved, withdrawn, blank email
-//   503 "could not be sent"     the provider refused (failed), the network or 5xx (uncertain is still a 200), no
-//                               RESEND_API_KEY / CONTACT_FROM_EMAIL / CONTACT_TO_EMAIL, the claim throws, the lookup
-//                               throws (route catch), stored details that are not JSON (route catch)
-//   200 {ok:true}               sent, uncertain (network down, 5xx, a timeout) because "uncertain" is truthy
+//   503 "could not be sent"     no RESEND_API_KEY / CONTACT_FROM_EMAIL / CONTACT_TO_EMAIL (nothing was asked of the
+//                               provider)
+//   500 "could not be sent"     the provider refused (failed), the network or 5xx (uncertain), the claim throws, a status
+//                               write throws, the lookup throws, stored details that are not JSON or not an object
+//   200 {ok:true}               sent
 //   deliverSoftwareBriefCopy    claim states: absent, failed, uncertain at 60s, uncertain at 61s with confirmation;
 //                               status write: normal, throws after the provider started (uncertain, no second write),
 //                               throws with no provider call (second write, failed), both writes throw (console.error),
@@ -274,13 +275,13 @@ const cases: Case[] = [
 		steps: [send(GOOD)],
 	},
 	{
-		name: "the provider answers 500: uncertain, and the route says ok",
+		name: "the provider answers 500: uncertain, and the route answers 500",
 		music: { seed: withCopy(null) },
 		fetches: resend(json(500, {})),
 		steps: [send(GOOD)],
 	},
 	{
-		name: "the network is down: uncertain, and the route says ok",
+		name: "the network is down: uncertain, and the route answers 500",
 		music: { seed: withCopy(null) },
 		fetches: resend(networkDown()),
 		steps: [send(GOOD)],
