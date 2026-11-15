@@ -17,8 +17,8 @@ Decisions and merge authorization: Kazon Wilson, in conversation on 2026-11-15: 
 to the recommendations of `docs/plans/2026-11-offers-conversion.md`, section 5. Implementation, the model and the
 independent review passes were done with Claude Code. Codex could not review these pull requests (its review quota was
 used up), so the reviews were Claude Code passes, as CLAUDE.md allows without a Greptile review.
-Rollback revision: `7beca022`, the revision of `main` before #317. To undo the fixes only, revert `6e276e5b`, `6f90e87e`
-and `d0b51e78` in that order; #317 changes no code.
+Rollback revision: `7beca022`, the revision of `main` before #317. To undo the fixes only, revert the merge commits `6e276e5b`,
+`6f90e87e` and `d0b51e78` in that order (`git revert -m 1`); #317 changes no code.
 
 ## Scope
 

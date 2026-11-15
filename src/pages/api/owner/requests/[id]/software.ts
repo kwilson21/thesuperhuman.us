@@ -518,7 +518,7 @@ const act = async (
 					offersFailedAfterEmail,
 				))
 			)
-				return changedAfterEmail();
+				return await changedAfterEmail();
 
 			try {
 				await db.batch([
@@ -548,7 +548,7 @@ const act = async (
 				if (!refusedByGuard(error))
 					throw new StoreFailed(offersFailedAfterEmail, error);
 
-				return changedAfterEmail();
+				return await changedAfterEmail();
 			}
 
 			return json({ ok: true, copySent: sent.copySent });

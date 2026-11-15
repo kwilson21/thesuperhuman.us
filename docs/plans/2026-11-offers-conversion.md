@@ -596,7 +596,7 @@ decided in review; for the others the owner accepted the recommendations on 2026
 | F7 | A decision that SQL makes today, moved into the rule, answers otherwise | revoke: "a link made 10 seconds ago and the lookups after the batch fail" (rejected today). offer-draft: "another writer takes the version before the batch inserts it" (409 today) | 2 |
 | F8 | With no mail configured, question and decline write first (decline withdraws the offers and closes the link) and only then answer 502 | question: "no Resend key", "an empty Resend key", "no sender address", "no owner address". decline: "no Resend key", "no sender address", "no owner address" | 7 |
 | F9 | A send whose client email failed answers 200 with the link even when the live-link check found the link closed | offer-send: "the link is revoked while an email that fails is sent" | 1 |
-| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft. Fixed (branch `claude/offers-fix-f10`) | decline: "a draft is saved while the email is sent", "a draft is saved and sent while the email is sent, its link made 20 seconds before", "a draft is saved just before the second batch" (found by reading and confirmed by the model, section 7; the fix's PR recorded these on the old code first) | 3 |
+| F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft. Fixed (#331) | decline: "a draft is saved while the email is sent", "a draft is saved and sent while the email is sent, its link made 20 seconds before", "a draft is saved just before the second batch" (found by reading and confirmed by the model, section 7; the fix's PR recorded these on the old code first) | 3 |
 
 **F2, a store failure that rejects (decided).** A converted route passes `{ route, answer }` to `runRoute`
 (src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the
@@ -687,7 +687,7 @@ it. The fix, as recommended and accepted: the second batch also requires that no
 sent, read after the email and refused by name (section 2), with the guard as its re-check; refused, it answers
 EmailSentButChanged as the second batch does today (376-405).
 
-Fixed on branch `claude/offers-fix-f10`, as recommended. After the email, a decline reads
+Fixed on #331, as recommended. After the email, a decline reads
 `SELECT 1 FROM software_offers WHERE request_id=? AND status IN ('draft','sent')` and, when an offer is left, refuses
 before the second batch; the batch carries the same condition as a guard, for a draft saved after that read. Refused
 either way, the route answers through the lookups that already answer a refused second batch: ProjectStarted, then
@@ -759,9 +759,10 @@ Properties, each with a mutant that breaks it (the driver fails a property witho
   real. Until the fix its mutant was G5 left out of the second batch, which broke the weakened property; with the fix
   that mutant is equivalent (a live link always has a sent offer, which the fix refuses), and the fix's PR moved it to
   the equivalents and removed the weakened form.
-- `acceptedSendLinkLive`: a send that answers 200 with its client email accepted had its link live at the check. Mutant:
-  the check left out. With F9 accepted, the fix PR drops "with its client email accepted" from the property, and today's
-  condition (838) becomes a second mutant.
+- `sendLinkLive` (first `acceptedSendLinkLive`): a send that answers 200 had its link live at the check, whatever became
+  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so the
+  property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is equivalent in
+  the model, which never closes a link during a failed email (docs/verification.md).
 
 **The deposit decision, a LemmaScript contract (decided).** `depositOfferBlock`'s decision (software-invoices.ts:365-397)
 becomes a pure function with no imports, in its own module listed in `LemmaScript-files.txt`, in the style of

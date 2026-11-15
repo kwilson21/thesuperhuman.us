@@ -52,7 +52,7 @@ export const discountMutants = {
 	discountStartCopiesNewest: { property: "invoicedMatchesSigned" },
 	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
 	discountTodaySecondBatch: { property: "declinedHasNoOffer" },
-	discountNoLiveCheck: { property: "acceptedSendLinkLive" },
+	discountNoLiveCheck: { property: "sendLinkLive" },
 	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
 };
 
@@ -157,14 +157,19 @@ export const models = [
 		current: ["discount"],
 		mutants: discountMutants,
 		// The decline's second batch without its sending guard (G5): since F10's fix it refuses nothing more, because a live
-		// link always has a sent offer, which the fix refuses (docs/verification.md, "The discount-offers model").
-		equivalents: ["discountSecondBatchNoSendingGuard"],
+		// link always has a sent offer, which the fix refuses. The live-link check as it was before F9's fix (counted only for
+		// an accepted email): a failed email ends within one tick and every step that closes a link waits two, so the model
+		// never reaches a link closed during a failed email (docs/verification.md, "The discount-offers model").
+		equivalents: [
+			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
+		],
 		exhaustive: ["discount"],
 		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant
 		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
 		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
-		// about 25. At 50 steps, seed 0x1, the mutant is found in about 2,700 runs and the witness's state is reached in
-		// about 150 (at 40 in about 9,300, at 30 not in 100,000), so each mutant check allows 20,000 and each run that
+		// about 25. At 50 steps, seed 0x1, the mutant is found in about 1,300 runs and the witness's state is reached in
+		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check allows 20,000 and each run that
 		// must pass makes 10,000.
 		steps: "50",
 		samples: "20000",

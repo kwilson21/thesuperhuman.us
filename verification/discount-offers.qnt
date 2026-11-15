@@ -91,7 +91,7 @@ module discountOffers {
   type Ghost = {
     badSign: bool,         // a sign batch wrote while its offer was not sent
     badInvoice: bool,      // an invoice was written for an offer that was neither sent nor the project's
-    badAcceptedSend: bool, // a send answered 200 with its client email accepted while its link was not live at the check
+    badSend: bool, // a send answered 200 while its link was not live at the check
     declined: bool,        // a decline's second batch resolved the request, and it was not reopened since
   }
 
@@ -180,7 +180,7 @@ module discountOffers {
     link' = { live: false, created: 0, token: 0 },
     sending' = { phase: "none", v: 0, token: 0, start: 0, accepted: false },
     declining' = { phase: "none", start: 0 },
-    ghost' = { badSign: false, badInvoice: false, badAcceptedSend: false, declined: false },
+    ghost' = { badSign: false, badInvoice: false, badSend: false, declined: false },
   }
 
   // Everything else stays as it is.
@@ -281,15 +281,16 @@ module discountOffers {
   }
 
   // Send, the live-link check after the email: the link row still has this send's token and is not revoked, and the offer
-  // is still sent. With the client email accepted and the link not live, the send answers 409; otherwise 200 (also when
-  // the email failed and the link closed: F9). The check writes nothing.
+  // is still sent. With the link not live the send answers 409, whatever became of the client email (F9, fixed in #314);
+  // otherwise 200. The check writes nothing. "accepted-only-check" is the check as it was before F9's fix, which counted
+  // only for an accepted email.
   action sendCheck = {
     val linkLive = link.live and link.token == sending.token and offers.get(sending.v).status == "sent"
-    val answers200 = not(sending.accepted) or linkLive or MUTANT == "no-live-check"
+    val answers200 = linkLive or MUTANT == "no-live-check" or (MUTANT == "accepted-only-check" and not(sending.accepted))
     all {
       sending.phase == "check",
       sending' = { ...sending, phase: "none" },
-      ghost' = { ...ghost, badAcceptedSend: ghost.badAcceptedSend or (answers200 and sending.accepted and not(linkLive)) },
+      ghost' = { ...ghost, badSend: ghost.badSend or (answers200 and not(linkLive)) },
       keepOffers, keepClient, keepMoney, keepRequest,
       clock' = clock, link' = link, declining' = declining,
     }
@@ -513,12 +514,12 @@ module discountOffers {
   val declinedHasNoOffer =
     not(ghost.declined) or (versionIds.forall(v => not(draftOrSent(offers.get(v)))) and not(link.live))
 
-  // 7. A send that answers 200 with its client email accepted had its link live at the check.
-  val acceptedSendLinkLive = not(ghost.badAcceptedSend)
+  // 7. A send that answers 200 had its link live at the check, whatever became of its client email (F9).
+  val sendLinkLive = not(ghost.badSend)
 
   val allProperties = and {
     invoicedMatchesSigned, sentTermsFrozen, oneVersionInvoiced, installmentsSum, supersededInert, declinedHasNoOffer,
-    acceptedSendLinkLive,
+    sendLinkLive,
   }
 
   // Reachability witness, for a hand run with the negated invariant (docs/plans/2026-11-discount-flow.md, "The model"):
@@ -560,4 +561,5 @@ module discountStartDropsDiscount { import discountOffers(MUTANT = "start-drops-
 module discountSecondBatchNoSendingGuard { import discountOffers(MUTANT = "second-batch-no-sending-guard", VERSIONS = 2).* }
 module discountTodaySecondBatch { import discountOffers(MUTANT = "today-second-batch", VERSIONS = 2).* }
 module discountNoLiveCheck { import discountOffers(MUTANT = "no-live-check", VERSIONS = 2).* }
+module discountAcceptedOnlyCheck { import discountOffers(MUTANT = "accepted-only-check", VERSIONS = 2).* }
 module discountFirstBatchKeepsLink { import discountOffers(MUTANT = "first-batch-keeps-link", VERSIONS = 2).* }

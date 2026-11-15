@@ -966,6 +966,16 @@ describe("a decline does not resolve a request whose offer was saved while its e
 		unresolved(sql);
 	});
 
+	it("a draft saved and sent after the read, its link 20 seconds old, is refused by the batch's guard", async () => {
+		const { sql, call } = setUp({
+			seed: withSent,
+			race: { on: resolve, sql: savesAndSends(20_000) },
+		});
+
+		expect(await read(await call(decline))).toEqual(answer(409, CHANGED));
+		unresolved(sql);
+	});
+
 	it("a draft saved and sent with its link under 20 seconds old answers as the batch's sending guard does", async () => {
 		const { sql, call } = setUp({
 			seed: withSent,

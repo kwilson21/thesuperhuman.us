@@ -190,11 +190,12 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 		);
 	});
 
-	it("checks the code, with F10's fix, keeping every property, and the second batch's G5 as an equivalent mutant", () => {
+	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
 		expect(models[1].current).toEqual(["discount"]);
 		expect(models[1].exhaustive).toEqual(["discount"]);
 		expect(models[1].equivalents).toEqual([
 			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
 		]);
 		expect(Object.keys(discountMutants)).not.toContain(
 			"discountSecondBatchNoSendingGuard",
