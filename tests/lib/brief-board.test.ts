@@ -1466,3 +1466,22 @@ describe("found in the ninth review", () => {
 		expect(commits(text)).toBe(true);
 	});
 });
+
+describe("found by the automated review", () => {
+	it.each([
+		"USD 5,000 including launch support",
+		"EUR 300 a month",
+		"about GBP 2k",
+		"cad 900",
+	])("refuses an amount after its currency's code: %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each([
+		"A USB drive with the photos",
+		"Euro-style booking form",
+		"The CAD drawings",
+	])("accepts words that only look like a currency: %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+});
