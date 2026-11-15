@@ -8,9 +8,9 @@ import {
 	defineCorpus,
 	type Case,
 	type Handler,
-	type R2Seed,
 	type Step,
 } from "./harness";
+import type { R2Seed } from "./harness/r2";
 import { BODY, CONDITIONALS, RANGES } from "./areas/media";
 
 // The golden corpus for GET and HEAD /music/file/[id]/[version]: the public player and the lyric video stream a

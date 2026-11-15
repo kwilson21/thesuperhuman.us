@@ -6,9 +6,9 @@ import {
 	asVisitor,
 	defineCorpus,
 	type Case,
-	type R2Seed,
 	type Step,
 } from "./harness";
+import type { R2Seed } from "./harness/r2";
 import { BODY, CONDITIONALS, RANGES } from "./areas/media";
 
 // The golden corpus for GET /audio/file/[slug]: an mp3 of the portfolio's audio-tracks collection, streamed from R2
