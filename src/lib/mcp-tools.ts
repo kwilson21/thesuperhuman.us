@@ -82,16 +82,16 @@ export function defineTool<A>(definition: ToolDefinition<A>): Tool {
 					`Input validation error: Invalid arguments for tool ${definition.name}: ${mcpRefusal(read.issues)}`,
 				);
 
-			// A tool that fails answers the text of its failure, as the SDK's server did.
-			return definition.call(read.value).catch((error: Error | string) => ({
-				content: [
-					{
-						type: "text",
-						text: error instanceof Error ? error.message : String(error),
-					},
-				],
-				isError: true,
-			}));
+			// This reproduces the SDK's answer for a tool that fails (a rejection, or a throw before its promise): a tool result
+			// that carries the failure's own message, or the failure as text when it is not an `Error`. The site's tools
+			// catch their own defects (src/server/publication-mcp.ts), so none reaches here today.
+			try {
+				return await definition.call(read.value);
+			} catch (failure) {
+				return toolError(
+					failure instanceof Error ? failure.message : String(failure),
+				);
+			}
 		},
 	};
 }

@@ -311,6 +311,42 @@ describe("the publication tools against the server they replaced", {
 		}
 	});
 
+	it("answer a tool that rejects with the text of its failure, whatever it rejected with", async () => {
+		for (const failure of [
+			new Error("it broke"),
+			new TypeError("wrong"),
+			"just text",
+			42,
+			null,
+			undefined,
+			{ message: "not an error" },
+			["a", "b"],
+		]) {
+			const failing: PublicationTools = {
+				progress: () => Promise.reject(failure),
+				publish: () => Promise.reject(failure),
+			};
+
+			const progress = bodyOf(
+				call("get_project_progress", { projectId: "threadline" }),
+			);
+
+			const publish = bodyOf(
+				call("publish_project_update", { publication: validEnvelope }),
+			);
+
+			for (const body of [progress, publish])
+				expect(
+					await heard(await publicationMcp(post(body), identity, failing)),
+					String(failure),
+				).toEqual(
+					await heard(
+						await legacyPublicationMcp(post(body), identity, failing),
+					),
+				);
+		}
+	});
+
 	it("read the progress tool's arguments as the old tool did, and call the tool with the same project", async () => {
 		const random = seeded(20261115);
 
