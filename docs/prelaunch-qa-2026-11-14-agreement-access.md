@@ -134,18 +134,18 @@ Oxlint reports no findings on either branch (`oxlint --deny-warnings`, zero). Re
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the agreement worktree. Logs are not retained.
 
-Branch A tip `d40036e5` (it merges `origin/main` at `8b5b4efd`, golden format 5; the three area fixtures were re-recorded in a fixture-only commit):
+Branch A tip `69c1f345` (it merges `origin/main` at `8b5b4efd`, golden format 5; the three area fixtures were re-recorded in a fixture-only commit):
 
 - `pnpm run format:check`: "Checked 783 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 308 files passed; 13074 tests passed, 1 skipped (13075); the tree is clean afterwards.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 308 files passed; 13075 tests passed, 1 skipped (13076); the tree is clean afterwards.
 - `golden:neutral --all origin/main HEAD`: "compared 77 fixtures and 9038 cases; 3 of 77 fixtures differ" (the file, attachment and link corpora) and "NOT NEUTRAL", as expected.
 - `verify:quint:all`: exit 0, no failed check. `publicist:gate`: "publicist-gate passed: 84 entries checked."
 - `pnpm run lint`: no findings. `pnpm run check`: "Result (809 files)", 0 errors, 0 warnings, 17 hints.
 
-Branch B head `3fa3a25d` (the figures below were measured on it; this record is the commit after it; it merges A's tip `d40036e5`):
+Branch B head `0e680b2b` (the figures below were measured on it; this record is the commit after it; it merges A's tip `69c1f345`):
 
 - `pnpm run format:check`: "Checked 802 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 315 files passed; 13188 tests passed, 1 skipped (13189); the tree is clean afterwards.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 315 files passed; 13190 tests passed, 1 skipped (13191); the tree is clean afterwards.
 - `golden:neutral --all refs/heads/claude/effect-13-agreement-access-fixes HEAD`: "compared 77 fixtures and 9038 cases; 3 of 77 fixtures differ" and "golden:neutral: NEUTRAL". Statements changed; answers, stored rows and every other effect did not.
 - `verify:quint:all`: exit 0, 73 checks ok and none failed, including `agreementLink` (6.6 s) and its eight mutants, each found at 20,000 random runs on seeds 0x1 to 0x7 (the search for `RetryNewAt` leaves out the redeems and the agreement ending, which cannot take part in it; the unmutated model's check is never narrowed). `verify:quint:exhaustive`: the five exhaustive modules (from four model files; `signin` has none) keep every property in every order up to 7 steps, `agreementLink` included (about twelve seconds for it); 7 steps reaches only the `NoLookup` and `NoCas` mutants, and the other cases are covered by the random runs. `publicist:gate`: "publicist-gate passed: 84 entries checked." `publicist:sync --check`: "AGENTS.md publicist block already in sync."
 - `pnpm run lint`: no findings. `pnpm run check`: "Result (828 files)", 0 errors, 0 warnings, 16 hints.
