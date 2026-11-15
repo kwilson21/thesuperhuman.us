@@ -33,15 +33,26 @@ import {
 	completeAgreementLink,
 	issueAgreementLink,
 } from "~/lib/agreement-access";
+import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
 	prepareAgreementArtifact,
 	deliverAgreementCopies,
 	hashBytes,
 	type SigningCertificate,
 } from "~/lib/agreement-artifacts";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import { agreementDownload } from "~/lib/agreement-download";
 import {
+	liveAgreementAllowance,
+	liveAgreementMail,
+} from "~/server/agreement-services";
+import { downloadSignedCopy } from "~/server/flows/agreement-download";
+import { requestArchiveLink } from "~/server/flows/agreement-link";
+import { AudioBucket, liveTurnstile, MusicDb } from "~/server/services";
+import {
 	hashOfferToken,
+	newOfferToken,
 	type OfferTerms,
 	type SoftwareOffer,
 } from "~/lib/software-offers";
@@ -307,6 +318,57 @@ afterEach(() => {
 	sql.close();
 	vi.unstubAllGlobals();
 });
+
+// The archive link and the visitor's signed-copy download are flows in src/server; these run them against the real schema
+// on SQLite with the same fetch stub and bucket the rest of this file uses.
+const archiveServices = () =>
+	Context.make(MusicDb, db).pipe(
+		Context.merge(liveTurnstile("fake")),
+		Context.merge(liveAgreementAllowance(db, secret)),
+		Context.merge(liveAgreementMail("fake")),
+	);
+
+/** Asks for an archive link as a visitor would; answers the receipt (a link may or may not have been sent) or the refusal. */
+const archiveLink = (email: string, turnstileToken = "test") =>
+	Effect.runPromise(
+		requestArchiveLink({
+			email,
+			turnstileToken,
+			ip: request().headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			from: "sender@example.com",
+			origin: "https://example.com",
+			now: () => new Date(),
+			newId: () => crypto.randomUUID(),
+			newToken: newOfferToken,
+		}).pipe(
+			Effect.match({
+				onFailure: (refusal) => ({ refused: refusal._tag }),
+				onSuccess: (answer) => ({ receipt: true as const, sent: answer.sent }),
+			}),
+			Effect.provideContext(archiveServices()),
+		),
+	);
+
+/** The visitor's download of a signed copy, with the cookie they hold; answers its bytes or the refusal. */
+const visitorDownload = (id: string, cookie?: string) =>
+	Effect.runPromise(
+		downloadSignedCopy({
+			id,
+			request: new Request(
+				"https://example.com",
+				cookie ? { headers: { cookie } } : {},
+			),
+			now: () => new Date(),
+		}).pipe(
+			Effect.match({
+				onFailure: (refusal) => ({ refused: refusal._tag }),
+				onSuccess: ({ bytes }) => ({ bytes: bytes.byteLength }),
+			}),
+			Effect.provideContext(
+				Context.make(MusicDb, db).pipe(Context.add(AudioBucket, env.AUDIO)),
+			),
+		),
+	);
 
 const request = () =>
 	new Request(`https://example.com/offer/${token}/sign`, {
@@ -943,12 +1005,9 @@ it("countersigns identical hashes atomically and blocks start until artifact and
 		expect(payload.text).not.toContain(`Receipt: ${id}\n`);
 	}
 
-	const ownerCopy = await agreementDownload(env, request(), id, true);
+	const ownerCopy = await agreementDownload(env, id);
 	expect(ownerCopy.status).toBe(200);
-	expect(
-		(await agreementDownload(env, new Request("https://example.com"), id))
-			.status,
-	).toBe(401);
+	expect(await visitorDownload(id)).toEqual({ refused: "SignInFirst" });
 });
 
 it("retains signatures after artifact failure and copy provider uncertainty", async () => {
@@ -1186,15 +1245,66 @@ it("keeps archive access after project cleanup and disabling signing", async () 
 			.get().used_at,
 	).toBeNull();
 
-	const response = await agreementDownload(
-		env,
-		new Request("https://example.com", {
-			headers: { cookie: `agreement_archive=${"a".repeat(43)}` },
-		}),
-		id,
+	expect(
+		await visitorDownload(id, `agreement_archive=${"a".repeat(43)}`),
+	).toMatchObject({ bytes: expect.any(Number) });
+});
+
+it("logs a throwing bucket read once through logUnexpected and still answers the fixed 500", async () => {
+	const { GET } = await import("~/pages/api/agreements/[id]/file");
+	const result = await signed();
+
+	const id = await countersignAgreements(
+		db,
+		(await offer())!,
+		result.documents,
+		"Owner",
+		"owner",
+		request(),
 	);
 
-	expect(response.status).toBe(200);
+	await prepareAgreementArtifact(env, id, async () =>
+		new TextEncoder().encode("%PDF-synthetic"),
+	);
+	sql.exec(
+		"INSERT INTO software_agreement_links VALUES('archive-link','archive','o',NULL,'client@example.com','archive-token','now','2099-01-01',NULL)",
+	);
+	sql
+		.prepare(
+			"INSERT INTO software_agreement_sessions VALUES(?,'archive','o',NULL,'client@example.com','archive-link','now','2099-01-01',NULL,'archive-csrf')",
+		)
+		.run(await hashOfferToken("a".repeat(43)));
+
+	const bucket = double<R2Bucket>({
+		get: async () => {
+			throw new Error("the bucket is unreachable");
+		},
+	});
+
+	const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	const response = await GET(
+		partial<APIContext>({
+			params: { id },
+			locals: {
+				runtime: partial<TestRuntime>({ env: { ...env, AUDIO: bucket } }),
+			},
+			request: new Request("https://example.com", {
+				headers: { cookie: `agreement_archive=${"a".repeat(43)}` },
+			}),
+		}),
+	);
+
+	expect(response.status).toBe(500);
+	expect(await response.text()).toBe("Signed copy unavailable. Contact Kazon.");
+	expect(logged).toHaveBeenCalledOnce();
+
+	const line = JSON.stringify(logged.mock.calls[0]);
+
+	expect(line).toContain("/api/agreements/[id]/file");
+	expect(line).not.toContain(id);
+	expect(line).not.toContain("client@example.com");
+	logged.mockRestore();
 });
 
 it("refuses to serve a retained signed PDF whose bytes no longer match its digest", async () => {
@@ -1221,7 +1331,7 @@ it("refuses to serve a retained signed PDF whose bytes no longer match its diges
 
 	if (!artifact.pdf_key) throw new Error("The agreement has no stored PDF.");
 	bucketData.set(artifact.pdf_key, new TextEncoder().encode("%PDF-changed"));
-	const response = await agreementDownload(env, request(), id, true);
+	const response = await agreementDownload(env, id);
 	expect(response.status).toBe(503);
 	expect(await response.text()).toMatch(/integrity check/i);
 });
@@ -2439,52 +2549,68 @@ it.each([false, true])(
 	},
 );
 
-it.each(["agreement", "archive"] as const)(
-	"invalid Turnstile requests count only the address allowance, not the recipient's, for %s",
-	async (purpose) => {
-		vi.mocked(fetch).mockResolvedValue(
-			new Response('{"success":false}', { status: 200 }),
-		);
+it("invalid Turnstile requests count only the address allowance, not the recipient's, for a signing link", async () => {
+	vi.mocked(fetch).mockResolvedValue(
+		new Response('{"success":false}', { status: 200 }),
+	);
 
-		for (let i = 0; i < 3; i++) {
-			const response = await issueAgreementLink(
-				env,
-				request(),
-				{ turnstileToken: "invalid", email: "client@example.com" },
-				purpose === "agreement" ? token : undefined,
-			);
-
-			expect(response.status).toBe(403);
-		}
-
-		// Only the address allowance counts the failed checks; the recipient's own allowance is untouched.
-		expect(
-			sql.prepare("SELECT uses FROM audio_client_allowances").all(),
-		).toEqual([{ uses: 3 }]);
-		vi.mocked(fetch).mockImplementation(
-			async () => new Response('{"success":true}', { status: 200 }),
-		);
-
+	for (let i = 0; i < 3; i++) {
 		const response = await issueAgreementLink(
 			env,
 			request(),
-			{ turnstileToken: "valid", email: "client@example.com" },
-			purpose === "agreement" ? token : undefined,
+			{ turnstileToken: "invalid" },
+			token,
 		);
 
-		expect(response.status).toBe(200);
-		expect(
-			sql
-				.prepare("SELECT uses FROM audio_client_allowances ORDER BY uses")
-				.all(),
-		).toEqual([
-			...Array.from({ length: purpose === "archive" ? 2 : 1 }, () => ({
-				uses: 1,
-			})),
-			{ uses: 4 },
-		]);
-	},
-);
+		expect(response.status).toBe(403);
+	}
+
+	// Only the address allowance counts the failed checks; the recipient's own allowance is untouched.
+	expect(sql.prepare("SELECT uses FROM audio_client_allowances").all()).toEqual(
+		[{ uses: 3 }],
+	);
+	vi.mocked(fetch).mockImplementation(
+		async () => new Response('{"success":true}', { status: 200 }),
+	);
+
+	const response = await issueAgreementLink(
+		env,
+		request(),
+		{ turnstileToken: "valid" },
+		token,
+	);
+
+	expect(response.status).toBe(200);
+	expect(
+		sql.prepare("SELECT uses FROM audio_client_allowances ORDER BY uses").all(),
+	).toEqual([{ uses: 1 }, { uses: 4 }]);
+});
+
+it("invalid Turnstile requests count only the address allowance, not the recipient's or the cooldown, for the archive link", async () => {
+	vi.mocked(fetch).mockResolvedValue(
+		new Response('{"success":false}', { status: 200 }),
+	);
+
+	for (let i = 0; i < 3; i++)
+		expect(await archiveLink("client@example.com", "invalid")).toEqual({
+			refused: "SecurityCheckFailed",
+		});
+
+	expect(sql.prepare("SELECT uses FROM audio_client_allowances").all()).toEqual(
+		[{ uses: 3 }],
+	);
+	vi.mocked(fetch).mockImplementation(
+		async () => new Response('{"success":true}', { status: 200 }),
+	);
+	expect(await archiveLink("client@example.com", "valid")).toMatchObject({
+		receipt: true,
+	});
+
+	// The recipient's allowance and the cooldown row are each one use; the address has counted four.
+	expect(
+		sql.prepare("SELECT uses FROM audio_client_allowances ORDER BY uses").all(),
+	).toEqual([{ uses: 1 }, { uses: 1 }, { uses: 4 }]);
+});
 
 it.each([true, false])(
 	"external start atomically retires unsigned reviews and signing access when request is current (%s)",
@@ -3909,15 +4035,18 @@ it("keeps definite archive send rejection generic", async () => {
 		),
 	);
 
-	const response = await issueAgreementLink(env, request(), {
-		turnstileToken: "test",
-		email: "client@example.com",
+	// The mail service refusing is not shown: the answer is still the receipt, and the new link is marked used.
+	expect(await archiveLink("client@example.com")).toEqual({
+		receipt: true,
+		sent: true,
 	});
-
-	expect(response.status).toBe(200);
-	expect(await response.json()).toMatchObject({
-		message: "If an agreement is available, a link is on its way.",
-	});
+	expect(
+		sql
+			.prepare(
+				"SELECT used_at FROM software_agreement_links WHERE purpose='archive'",
+			)
+			.get().used_at,
+	).not.toBeNull();
 });
 
 it("verifies the attachment bytes against the offer hash before client download", async () => {
@@ -4659,26 +4788,18 @@ it("applies the same archive cooldown to known and unknown emails without storin
 	const results = [];
 
 	for (const email of ["client@example.com", "unknown@example.com"]) {
-		const first = await issueAgreementLink(env, request(), {
-			turnstileToken: "test",
-			email,
-		});
+		const first = await archiveLink(email);
+		const second = await archiveLink(email);
 
-		const second = await issueAgreementLink(env, request(), {
-			turnstileToken: "test",
-			email,
-		});
-
+		// A known and an unknown address both get the receipt the first time and the cooldown the second time.
 		results.push([
-			first.status,
-			await first.json(),
-			second.status,
-			await second.json(),
+			"receipt" in first,
+			"refused" in second ? second.refused : "receipt",
 		]);
 	}
 
 	expect(results[0]).toEqual(results[1]);
-	expect(results[1][2]).toBe(429);
+	expect(results[1][1]).toBe("CooldownRunning");
 	expect(
 		JSON.stringify(sql.prepare("SELECT * FROM audio_client_allowances").all()),
 	).not.toContain("unknown@example.com");
@@ -4709,10 +4830,7 @@ it("applies the same archive cooldown to known and unknown emails without storin
 	sql
 		.prepare("UPDATE audio_client_allowances SET window_start=? WHERE key=?")
 		.run("2000-01-01", key);
-	await issueAgreementLink(env, request(), {
-		turnstileToken: "test",
-		email: "another@example.com",
-	});
+	await archiveLink("another@example.com");
 	expect(
 		sql.prepare("SELECT key FROM audio_client_allowances WHERE key=?").get(key),
 	).toBeUndefined();
@@ -4851,16 +4969,20 @@ it.each(["agreement", "archive"])(
 			.prepare("SELECT count(*) n FROM audio_client_allowances")
 			.get().n;
 
-		expect(
-			(
-				await issueAgreementLink(
-					env,
-					foreign,
-					{ email: "client@example.com", turnstileToken: "valid" },
-					purpose === "agreement" ? token : undefined,
-				)
-			).status,
-		).toBe(404);
+		// The archive link's route answers a foreign host with the same check (its corpus case names it); the signing link does here.
+		expect(canonicalAgreementRequest(env, foreign)).toBe(false);
+
+		if (purpose === "agreement")
+			expect(
+				(
+					await issueAgreementLink(
+						env,
+						foreign,
+						{ turnstileToken: "valid" },
+						token,
+					)
+				).status,
+			).toBe(404);
 		expect(
 			(
 				await completeAgreementLink(
@@ -4895,10 +5017,7 @@ it("emails archive access with signed-document copy and the canonical link", asy
 		"owner",
 		request(),
 	);
-	await issueAgreementLink(env, request(), {
-		email: "client@example.com",
-		turnstileToken: "valid",
-	});
+	await archiveLink("client@example.com");
 
 	const payload = JSON.parse(
 		String(vi.mocked(fetch).mock.calls.at(-1)![1]?.body),

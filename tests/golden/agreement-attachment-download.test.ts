@@ -34,18 +34,18 @@ import {
 //
 // Every response branch of the handler (src/pages/api/agreements/attachments/[id].ts), and its cases:
 //
-//   503 "Unavailable" (no agreement headers)         no database
+//   503 "Unavailable" + agreement headers            no database, or no bucket bound (both before any read)
 //   401 "Verify email first." + agreement headers    no cookie, an archive cookie, a studio cookie, an expired, revoked or
 //                                                    unknown signing session, an offer no longer sent, a revoked offer link, a
 //                                                    withdrawn or resolved request, a snapshot email that differs, a malformed cookie
-//   404 "Not found"                                  unknown attachment, an attachment of another request, details that do not pin
-//                                                    it (null, other key, other digest, other attachments), another offer's session
-//   503 "Unavailable" + agreement headers            object missing
+//   404 "Not found" + agreement headers              unknown attachment, an attachment of another request, details that do not pin
+//                                                    it (null, other key, other digest, other attachments), another offer's session,
+//                                                    and an object missing from the bucket (the same answer as an unknown id)
 //   503 the integrity sentence (curly apostrophes)   stored bytes differ from the row's digest
+//   500 "Unavailable" + agreement headers            a database failure (a session lookup, the attachment query, the live check,
+//                                                    stored details that are not JSON) or a bucket read that throws
 //   200 application/pdf, attachment agreement-attachment.pdf   the signing session, two attachments, an unusual stored filename
 //                                                    (never used in the header), Range ignored, twice in a row
-//   rejected                                         details that are not JSON (the SQL errors), a database outage, the bucket read
-//                                                    throws, no bucket bound
 
 const KEY = attachmentKey("att1");
 
@@ -274,7 +274,7 @@ const cases: Case[] = [
 	scene("the attachment query fails", signing, [], {
 		failures: [
 			{
-				on: /FROM software_agreement_attachments a JOIN software_offers o/,
+				on: /FROM software_agreement_attachments WHERE id=\?/,
 				message: "d1 down",
 			},
 		],

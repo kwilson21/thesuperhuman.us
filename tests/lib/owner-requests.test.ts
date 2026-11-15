@@ -1,13 +1,14 @@
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { double } from "../helpers/doubles";
+import { createRequest } from "../helpers/owner-request-store";
+import { BriefTooLarge } from "~/server/intake-store";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import {
 	changeOwnerRequest,
 	getOwnerRequest,
 	listOwnerRequests,
-	RequestDetailsTooLargeError,
-	saveOwnerRequest,
 } from "~/lib/owner-requests";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
@@ -47,9 +48,35 @@ const purchase = {
 };
 
 describe("owner requests", () => {
+	it("returns the stored request without reading it back", async () => {
+		const { db } = fixture();
+		const reads: string[] = [];
+
+		const watched = double<D1Database>({
+			prepare: (query: string) => {
+				if (query.trimStart().toUpperCase().startsWith("SELECT")) {
+					reads.push(query);
+				}
+
+				return db.prepare(query);
+			},
+			batch: (statements) => db.batch(statements),
+		});
+
+		const request = await createRequest(watched, {
+			...purchase,
+			details: { format: "digital", nested: { keep: [1, "two"] } },
+			name: "  Fan  ",
+			releaseId: undefined,
+		});
+
+		expect(reads).toEqual([]);
+		expect(request).toEqual(await getOwnerRequest(db, request.id));
+	});
+
 	it("stores a request and its creation audit atomically", async () => {
 		const { db, sql } = fixture();
-		const request = await saveOwnerRequest(db, purchase);
+		const request = await createRequest(db, purchase);
 		expect(request).toMatchObject({
 			kind: "purchase",
 			status: "new",
@@ -70,7 +97,7 @@ describe("owner requests", () => {
 		async (kind) => {
 			const { db, sql } = fixture();
 
-			const request = await saveOwnerRequest(db, {
+			const request = await createRequest(db, {
 				...purchase,
 				kind,
 				email: "  Grace@Example.COM ",
@@ -88,16 +115,16 @@ describe("owner requests", () => {
 	it("rejects oversized request details with the typed error", async () => {
 		const { db } = fixture();
 		await expect(
-			saveOwnerRequest(db, {
+			createRequest(db, {
 				...purchase,
 				details: { note: "x".repeat(16_000) },
 			}),
-		).rejects.toBeInstanceOf(RequestDetailsTooLargeError);
+		).rejects.toBeInstanceOf(BriefTooLarge);
 	});
 
 	it("applies only defined status transitions and records the owner actor", async () => {
 		const { db, sql } = fixture();
-		const request = await saveOwnerRequest(db, purchase);
+		const request = await createRequest(db, purchase);
 		expect(
 			(
 				await changeOwnerRequest(db, {
@@ -148,8 +175,8 @@ describe("owner requests", () => {
 
 	it("updates bounded private notes without changing status and filters the inbox", async () => {
 		const { db } = fixture();
-		const purchaseRequest = await saveOwnerRequest(db, purchase);
-		await saveOwnerRequest(db, {
+		const purchaseRequest = await createRequest(db, purchase);
+		await createRequest(db, {
 			...purchase,
 			kind: "service",
 			serviceId: "mastering",
@@ -185,7 +212,7 @@ describe("owner requests", () => {
 it("saves a service request before software migration 0019", async () => {
 	const { db, sql } = fixture(true);
 
-	const request = await saveOwnerRequest(db, {
+	const request = await createRequest(db, {
 		kind: "service",
 		serviceId: "mixing",
 		email: "CLIENT@EXAMPLE.COM",

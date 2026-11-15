@@ -358,6 +358,112 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The software-inquiry model
+
+File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, made once however many passes there are, in two steps as the code makes them: the key is read, and a later step writes it; a delivery that read the key as set is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`): it finds the other brief and answers with it, and keeps the allowance it spent (the key is not deleted); when the look-up finds nothing, the try ends on the lost-brief path (no second insert, the key is given back, the visitor is told the brief was not stored).
+
+**State.** The stored briefs (submission id, email, the delivery that stored it), three deliveries (phase, id, email, address, tries, whether it read the key as unset, how it ended), the set of addresses whose key is set, and the client copies sent. Two ids, two emails, two addresses, three deliveries. The allowance is the set of keys, not a flag on a delivery: a refusal reads the set, and the property reads it too.
+
+**Properties** (`allProperties`):
+1. `oneBriefPerId`: no two stored briefs share a submission id.
+2. `oneCopyPerId`: one client copy per id, sent by the delivery that stored the brief.
+3. `loserNeverFailed`: a delivery is never told its brief was lost while a brief for its id is stored.
+4. `loserKeepsAllowance`: a delivery that counted and was then answered with the stored brief leaves its address's key set.
+5. `keptForStored`: a stored brief keeps its address's key, whatever other deliveries from the same address do. It holds with no exception in the model because no modelled step deletes a key after a stored brief (the model's lost-brief step cannot happen, since stored rows only grow, and a delivery that finds a brief stored keeps its key). The code has one unmodelled deletion that predates the conversion: after a failed insert (the database failing, not the index), the flow gives back the whole address-wide key, so a request from the same address that stored at the same moment loses its count. That is left as it was. Checked by simulation, and `RetryGivesBack` and `NeverCounts` break it.
+6. `strangerNeverSeesBrief`: a stored brief is answered only to the email that sent it.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoIndex` | The submission id is not unique | `oneBriefPerId` |
+| `NoRetry` | A lost race answers a failure at once, without looking up again | `loserNeverFailed` |
+| `LoserGivesBack` | The loser of a race, answered with the stored brief, deletes its address's key (the earlier behaviour) | `loserKeepsAllowance` |
+| `RetryGivesBack` | A plain retry (a brief already stored, nothing counted) deletes its address's key | `keptForStored` |
+| `NeverCounts` | The count never sets the key | `keptForStored` |
+| `AnyAddress` | A stored brief is answered to any email | `strangerNeverSeesBrief` |
+| `CopyForAll` | The client copy goes out for every delivery answered with a stored brief | `oneCopyPerId` |
+
+No property is a flag set by the guard it checks: each reads the stored rows and the deliveries' own fields. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored a brief and another, from another address, which had been counted, was answered with it. Each mutant is found in under 2 s in the pooled driver (2026-11-15).
+
+**What it does not cover.** The attempt limit and the captcha (they come before the look-up and decide nothing about the brief), the owner notice, the alert on a failed insert, and the key a failed insert gives back, and an insert that fails for a reason other than the index (a defect in this model's terms: the flow answers it with the fixed sentence and gives the count back, which `tests/flows/software-inquiry-stories.test.ts` checks). No Apalache run.
+
+## The suggestion-budget model
+
+File: `verification/suggestion-budget.qnt`, written for the conversion of the public intake routes (module `budget`). A visitor may take 300 suggestions a day and the site 10,000 (`brief_suggestion_budget`). The flow reads the site's count first (a plain read, which only decides the early answer), then reserves for the visitor and then for the site. Each reservation is ONE statement: an upsert that adds one only while the stored count is under the cap, so the table cannot pass a cap however many requests read the same count (a compare-and-set write). The model scales the caps to 2 for a visitor and 3 for the site, with two visitors and four requests.
+
+**Properties** (`allProperties`):
+1. `visitorWithinCap` and 2. `siteWithinCap`: a count never passes its daily cap.
+3. `countsAreReservations`: each count is exactly the reservations made: none lost, none counted twice.
+4. `modelOnlyForReserved`: the model is called only for a request that holds both of its reservations.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `UnguardedVisitor` | A visitor's reservation adds one without the `count < cap` guard (nothing else reads a visitor's count) | `visitorWithinCap` |
+| `UnguardedSite` | The site's reservation adds one without the guard, so only the early read protects the site | `siteWithinCap` |
+| `ReadThenWrite` | The reservation reads the count in one step and writes it plus one in another | `countsAreReservations` |
+| `IgnoreRefusal` | A refused reservation does not stop the request | `modelOnlyForReserved` |
+
+**Found by writing it.** The early read of the site's count is not what protects the cap: with the guard removed, two requests that both read "under the cap" both reserve the last unit (`UnguardedSite`). The guard on the write is the protection, and the early read is only a shortcut. A visitor's count has no early read at all.
+
+**What it does not cover.** The per-minute limits (Cloudflare's own counters), the pass and the captcha, the model's answer, the cleanup of old days. A visitor's reservation that succeeds when the site's is then refused is not given back (the visitor's day count stays used): the model treats this as the design, and it is not a property. No Apalache run.
+
+## The publication-journal model
+
+File: `verification/publication-journal.qnt`, written for the conversion of the publication routes (module `publication`). An agent delivers envelopes (publish, correct, withdraw) to one project's journal and retries on a failure; the Worker serves several deliveries at once. A delivery reads (the project's latest revision, the event under its event id and the operations of its entry, as ONE batch), judges by the commit rule and inserts; the table's constraints (the primary key on project and event id, and `UNIQUE (project_id, revision)`) refuse an insert another delivery got to first, and the delivery then reads and judges again, three tries in all (`src/server/flows/publication-commit.ts`). Every accepted write takes the next revision, so the revision key is the compare-and-set for everything the rule read.
+
+**State.** The stored events (event id, entry, operation, expected revision, the revision taken and the delivery that stored it), four deliveries and one ghost flag. Two event ids, two entries and expected revisions 0 to 3.
+
+**Properties** (`allProperties`): `oneRowPerRevision`; `contiguousFromOne` (the revisions are 1, 2, 3 with none missing); `entryNeverResurrected` (nothing of an entry is stored after its withdrawal); `onePublishPerEntry`; `correctionHasTarget` (a correction follows an event of its entry); `retryNeverConflicts` (an event that was stored when a delivery last read, or that its insert last met as a constraint, is never answered as a conflict when it is delivered again: the loser of a race reads again and finds it. A conflict for a read that came before the store is right, even though the same envelope is stored by the time the delivery judges, so the ghost judges what was stored at the delivery's last read or at its insert's last constraint hit, not what is stored when it judges).
+
+**Scripted run and witness.** The scripted run `staleReadTest` replays the stale-read trace on which this property was first stated wrongly (run 1 reads an empty journal, run 2 stores another entry, run 3 stores run 1's envelope, then run 1 judges its stale read and answers conflict); the ghost must stay false and the journal holds the envelope once. `tests/scripts/publication-journal-trace.test.ts` runs it with `quint test` on every `pnpm test`. The witness `neverRaced` (negated by hand) reaches a state where two deliveries took the same envelope at once, one stored it and the other answered duplicate, so the properties are not vacuous over the race.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoRevisionKey` | The revision is not unique | `oneRowPerRevision` |
+| `AnyRevision` | The rule accepts any expected revision, not only the latest | `contiguousFromOne` |
+| `NoWithdrawnRule` | The rule does not refuse events for a withdrawn entry | `entryNeverResurrected` |
+| `NoNewEntryRule` | The rule accepts a publish of an entry that has events | `onePublishPerEntry` |
+| `NoTargetRule` | The rule accepts a correction of an entry with no events | `correctionHasTarget` |
+| `NoRetry` | A lost race answers conflict at once, without reading again | `retryNeverConflicts` |
+| `SplitRead` | The event id and the latest revision are read in two steps, not one snapshot | `retryNeverConflicts` |
+
+**What it does not cover.** The content and the erasure of a withdrawn entry's text, the hash, the origin (backfill changes the feed, not the journal's rules), the allowlist and token checks, and the feed (pure rules over plain reads, `tests/rules/publication-feed.test.ts`, and its interleaving with a withdrawal, `tests/flows/publication-commit-stories.test.ts`). The event id key adds nothing a property could see once the revision key and the rule are in place (every accepted write takes the next revision), so no property or mutant names it.
+
+## The agreement-link model
+
+File: `verification/agreement-link.qnt`, written for the conversion of the agreement access routes (module `agreementLink`). A client asks for a link to the signed agreements kept for their address (`POST /api/agreements/link`), and later redeems the link it was mailed (`completeAgreementLink`); the Worker serves several requests at once. The issue is: the cooldown (read the address's row, then a compare-and-set that re-checks it; a lost set reads again, three tries, and the retry keeps the request's first instant, as the code keeps `cooling`), the lookup (the address's agreements and links in ONE batch, one snapshot), then the link batch (its first statement is the guard "no link issued in the window before `at`"; a lost guard reads again, three tries of its own, and the retry keeps the first `at`). The redeem is two steps: a read of the link as unused and unexpired at the instant `at`, then a guarded batch that consumes it while it is still unused.
+
+**State.** The stored links (each with the address, the instant it was issued, its expiry, and whether the agreement was still executed at the store), the cooldown rows and a record of each cooldown taken (by which request, for which address, at which instant), how many times each link was consumed and the instant of the read of the redeem that consumed it, three issue requests (phase, the two kept instants, what the lookup read, the two try counters, outcome), two redeems (phase, link, instant of the read), and whether each address still has an executed agreement. There are no flags set by a step: each property is an invariant over this state. Two addresses, three requests and two redeemers; the check of the unmutated model takes about six to ten seconds in the pooled run, and each mutant a few seconds, at 20,000 random runs of 20 steps (every mutant was found on seeds 0x1 to 0x7).
+
+**Properties** (`allProperties`):
+1. `oneIssuePerWindow`: no two stored links for one address were issued less than the window apart.
+2. `issuedOnlyWithAgreement`: every stored link is for an address that started with an executed agreement (address 1; a link for the address that never had one fails it). It reads the starting state, so it still holds for an address whose agreement ends later; `issuedStillExecuted` below is the finding about that.
+3. `redeemedOnce`: every link was consumed at most once.
+4. `redeemedUnexpired`: every consumed link was consumed by a redeem whose read was before its expiry.
+5. `oneCooldownPerWindow`: no two cooldowns for one address were taken less than the window apart.
+6. `lostCooldownNeverTakes`: a request that lost its cooldown compare-and-set never takes a cooldown. A retry keeps the request's first instant, so the row that beat it still beats it; a retry that took a new instant succeeds once the window has passed.
+7. `lostGuardNeverStores`: a request that lost the link batch's guard never stores a link, for the same reason.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoGuard` | The link batch's guard is not checked | `oneIssuePerWindow` |
+| `SplitGuard` | The guard is read in one step and the insert done in a later one (the code before the batch) | `oneIssuePerWindow` |
+| `NoLookup` | A link is issued without reading whether the address has an executed agreement | `issuedOnlyWithAgreement` |
+| `RedeemNoGuard` | The redeem's batch does not check the link is still unused: two redeems that both read it unused both consume it | `redeemedOnce` |
+| `RedeemNoExpiry` | Neither the redeem's read nor its batch checks the expiry | `redeemedUnexpired` |
+| `NoCas` | The cooldown's compare-and-set does not re-check the row: two requests that both read it free both take it | `oneCooldownPerWindow` |
+| `RetryNewCool` | A cooldown retry takes a new instant instead of keeping its first | `lostCooldownNeverTakes` |
+| `RetryNewAt` | A link retry takes a new instant instead of keeping its first | `lostGuardNeverStores` |
+
+**How the search for `RetryNewAt` differs.** Its violation needs a lost guard, then a clock that has moved two ticks, then the retry: about sixteen exact steps, which random runs over all the steps never reached (not at 150,000 runs). For that one mutant (`onlyIssue` in the model) the search leaves out the redeems and the agreement ending, which cannot take part in it. The check of the unmutated model, `agreementLink`, is never narrowed: it takes every step.
+
+**Finding.** `issuedStillExecuted` (not in `allProperties`; run it by hand with `quint run verification/agreement-link.qnt --main agreementLink --invariant issuedStillExecuted`) says every stored link was stored while the agreement was still executed. It fails: the lookup reads the status, and the batch's guard checks only the 30-second window, so a link can be issued for an agreement that stopped being executed after the lookup. Retention can delete an executed agreement (`src/lib/agreement-retention.ts`), and the lookup does not look at `archive_closed_at`. The effect is harmless and identical on branch A: the link is mailed and the session it opens finds no agreement to show. If an executed agreement can ever become non-executed in a way that matters, the batch needs a guard on the status as well.
+
+**Found by writing it.** The redeem judges the expiry once, at the read's instant, and the batch repeats the same clause with the same instant. An expiry never moves, so the batch's expiry clause can never fail where the read passed; the model therefore has one expiry mutant (both removed) and no mutant for the repeated clause alone. A redeem that began before the expiry completes after it, and its session starts at the read's instant; this is intended. An earlier version of the properties held by construction (a flag set from the same condition as the guard it checked); they now read the stored links, the cooldowns taken and the redeem record.
+
+**Exhaustive run.** `agreementLink` has `stepOrEnd`, so `pnpm run verify:quint:exhaustive` (Apalache) runs it with the other exhaustive modules: six modules (`audioExhaustive`, `softwareExhaustive`, `discount`, `music`, `publication`, `agreementLink`) from five model files; `signin` has no exhaustive run. Run at the default 7 steps it prints "agreementLink keeps every property in every order up to 7 steps" in about twelve seconds. Seven steps is shallow for this model: of the mutants, only `NoLookup` and `NoCas` are reachable that fast. Two stored links need at least 10 steps, `RetryNewCool` about 10 and `RetryNewAt` about 16, so the exhaustive run does not reach the cases properties 1, 3, 4, 6 and 7 guard against; the random runs (20,000 runs of 20 steps, seeds 0x1 to 0x7) cover them. The bound was not raised: 9 steps took about 112 seconds and found no violation, and each further step costs several times more.
+
+**What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart

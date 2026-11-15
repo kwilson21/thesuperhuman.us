@@ -4,7 +4,7 @@ export const prerender = false;
 import ProjectLayout from "~/layouts/ProjectLayout.astro";
 import threadline from "~/assets/site/threadline-v1.webp";
 import ProjectUpdates from "~/components/ProjectUpdates.astro";
-import { websiteFeed } from "~/lib/publication/website";
+import { websiteFeed } from "~/server/publication-feed";
 import { threadlineStory } from "~/data/project-stories/threadline";
 
 const feed = await websiteFeed(Astro.locals.runtime.env, "threadline");

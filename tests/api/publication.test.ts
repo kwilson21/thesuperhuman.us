@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
 import { afterEach, describe, it, expect } from "vitest";
-import { partial } from "../helpers/doubles";
+import { boundStatement } from "../helpers/d1";
+import { double, partial } from "../helpers/doubles";
 import { testRuntime, type TestRuntime } from "../helpers/runtime";
 import type { JsonValue } from "../helpers/json";
 import {
@@ -164,6 +165,36 @@ describe("publication receiver", () => {
 			expect(await response.json()).toEqual(expected);
 		},
 	);
+	it("answers 409 conflict when every guarded try loses the race", async () => {
+		const real = publicationD1();
+		let inserts = 0;
+
+		const losing = double<D1Database>({
+			prepare: (query: string) => real.prepare(query),
+			batch: async <T>(items: D1PreparedStatement[]) => {
+				if (
+					items.some((item) =>
+						boundStatement(item).query.includes(
+							"INSERT INTO publication_events",
+						),
+					)
+				) {
+					inserts += 1;
+					throw new Error(
+						"D1_ERROR: UNIQUE constraint failed: publication_events.project_id, publication_events.revision",
+					);
+				}
+
+				return real.batch<T>(items);
+			},
+		});
+
+		const response = await POST(ctx(body, { PUBLICATION_DB: losing }));
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({ status: "conflict" });
+		// Three guarded tries in all, then SaveKeptChanging, which the route answers as the same 409.
+		expect(inserts).toBe(3);
+	});
 	it("does not expose storage errors and serves only listed public projects", async () => {
 		const response = await POST(ctx(body, { PUBLICATION_DB: unmigratedD1() }));
 		expect(response.status).toBe(500);
