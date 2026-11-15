@@ -1,3 +1,4 @@
+import { POST as changeRequest } from "~/pages/api/owner/requests/[id]";
 import { POST } from "~/pages/api/owner/requests/[id]/software";
 import {
 	act,
@@ -56,9 +57,10 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            (or the sent offer's when no draft exists), an updated_at that is not the offer's
 //   400 {ok:false,errors}   the stored terms are not valid terms: {}, null, an array, a text, a missing field, a repeated
 //            deliverable (shown with the error text of each field)
-//   409 deposit block text  a draft is being sent over a sent offer whose first-milestone deposit invoice is creating, open,
-//            payment_failed or uncollectible ("Void the open deposit invoice in Stripe first...") or paid ("A deposit is
-//            already paid...")
+//   409 deposit block text  a draft is being sent while a first-milestone deposit invoice of any offer version (sent,
+//            superseded or withdrawn) is creating, open, payment_failed or uncollectible ("Void the open deposit invoice in
+//            Stripe first..."), paid on the sent offer ("A deposit is already paid...") or paid on an earlier offer, such as
+//            one a decline withdrew ("A deposit is paid on an earlier offer...")
 //   500 "The offer link couldn't be built. Check SITE_ORIGIN."  SITE_ORIGIN that is not a URL (nothing written)
 //   200 {ok:true,version,link,linkCreatedAt,sentAt,updatedAt,emailSent,uncertain,copySent}  a draft sent (the sent offer
 //            superseded), a sent offer reissued after its link was revoked (sentAt and updatedAt kept), each Resend outcome
@@ -67,9 +69,10 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   409 "The email went out, but the link was closed while it was sending..."  the email was accepted and the link was
 //            revoked, the offer superseded or the request withdrawn before the check
 //   409 generic "...changed or could not be saved..."  a guard of the batch fails (updated_at, status or email moved; the
-//            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a deposit
-//            invoice opened; the draft changed), the batch throws, stored terms that are not JSON, a read throws inside the
-//            try, the check after the email throws (the email has already gone out)
+//            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a first
+//            deposit of any offer version opened or was paid; the draft changed), the batch throws, stored terms that
+//            are not JSON, a read throws inside the try, the check after the email throws (the email has already gone
+//            out)
 //   409 project started     the project appears between the checks and the batch
 //   rejected                the first read or the project pre-check throws
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
@@ -328,7 +331,7 @@ const cases: Case[] = [
 		draft2,
 	),
 	sendCase(
-		"an open deposit of a superseded offer does not block",
+		"an open deposit of a superseded offer blocks",
 		withOffers([offer("superseded"), offer("sent", 2), offer("draft", 3)], {
 			software_offer_links: [liveLink()],
 			software_invoices: [deposit("open")],
@@ -337,12 +340,78 @@ const cases: Case[] = [
 		sendBody(3),
 	),
 	sendCase(
+		"a paid deposit of a withdrawn offer blocks",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{
+				software_offer_links: [revokedLink()],
+				software_invoices: [deposit("paid")],
+			},
+			{ status: "new" },
+		),
+		{},
+		draft2,
+	),
+	sendCase(
+		"a paid deposit of a superseded offer blocks",
+		withOffers([offer("superseded"), offer("sent", 2), offer("draft", 3)], {
+			software_offer_links: [liveLink()],
+			software_invoices: [deposit("paid")],
+		}),
+		{},
+		sendBody(3),
+	),
+	sendCase(
+		"a refunded deposit of a withdrawn offer does not block",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{
+				software_offer_links: [revokedLink()],
+				software_invoices: [deposit("paid", { refunded_at: EARLIER })],
+			},
+			{ status: "new" },
+		),
+		{},
+		draft2,
+	),
+	sendCase(
 		"an open deposit does not stop a reissue",
 		withOffers([offer("sent")], {
 			software_offer_links: [revokedLink()],
 			software_invoices: [deposit("open")],
 		}),
 	),
+	{
+		// A decline does not wait for a paid deposit (only an open one blocks it), and it withdraws the sent offer. After a
+		// reopen, the deposit paid on the withdrawn offer still stops new terms (decision 9 of the discount plan).
+		name: "a deposit paid, then the request declined, reopened, redrafted and sent",
+		music: {
+			seed: withOffers([offer("sent")], {
+				software_offer_links: [liveLink()],
+				software_invoices: [deposit("paid")],
+			}),
+		},
+		fetches: mail(),
+		steps: [
+			step({ action: "decline", text: "Not a fit right now." }),
+			step(
+				{ action: "reopen" },
+				{
+					handler: changeRequest,
+					path: "/api/owner/requests/r1",
+					advanceMs: 1000,
+				},
+			),
+			step(
+				{ action: "draft", terms: terms(), expectedUpdatedAt: null },
+				{ advanceMs: 1000 },
+			),
+			step(undefined, {
+				json: (prior) => sendBody(2, prior.answerJson(2).updatedAt ?? null),
+				advanceMs: 1000,
+			}),
+		],
+	},
 	// the sending window
 	sendCase(
 		"a draft sent over a link made 10 seconds ago",
@@ -556,6 +625,24 @@ const cases: Case[] = [
 		draft2,
 	),
 	sendCase(
+		"a deposit of a withdrawn offer is paid before the batch",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{ software_offer_links: [revokedLink()] },
+			{ status: "new" },
+		),
+		{
+			interleave: [
+				{
+					on: onBatch,
+					label: "a deposit of the withdrawn offer is paid",
+					run: inserting("software_invoices", deposit("paid")),
+				},
+			],
+		},
+		draft2,
+	),
+	sendCase(
 		"a project starts before the batch",
 		replacing(),
 		{
@@ -707,7 +794,7 @@ const cases: Case[] = [
 		{
 			failures: [
 				{
-					on: /SELECT i\.status FROM software_invoices/,
+					on: /SELECT i\.status,o\.status AS offer_status FROM software_invoices/,
 					message: "D1 is down",
 				},
 			],

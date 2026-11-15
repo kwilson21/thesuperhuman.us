@@ -75,3 +75,10 @@ describe("publication transport boundary", () => {
 		expect(parsed?.story?.summary).not.toBe(input.story.summary);
 	});
 });
+
+it.each([null, "text", 42, []])(
+	"refuses a publication that is not an object (%j)",
+	(value) => {
+		expect(parsePublication(value)).toBeNull();
+	},
+);

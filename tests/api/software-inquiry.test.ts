@@ -18,6 +18,7 @@ import {
 } from "~/lib/software-inquiry";
 import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
 import type { OwnerRequest } from "~/lib/owner-model";
+import type { RawValue } from "~/lib/fields";
 import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { boundQuery } from "../helpers/d1";
@@ -1589,12 +1590,13 @@ it("labels stored briefs by the path they were sent with", () => {
 
 it("labels a stored timing that coerces to a known key, as before", () => {
 	// Shapes a stored timing can have that still coerce to a label key.
-	const brief = (timing: string | string[] | { toString(): string }) =>
+	const brief = (timing: RawValue) =>
 		softwareBrief(
 			partial<OwnerRequest>({
 				name: "Alex",
 				email: "alex@example.com",
-				details: { ...base, timing },
+				// SAFETY: a stored timing can be any shape; softwareBrief reads it only with isText and String, so the cast only types the fixture.
+				details: { ...base, timing } as OwnerRequest["details"],
 			}),
 		);
 

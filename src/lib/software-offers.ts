@@ -1,3 +1,4 @@
+import type { RawValue } from "./fields";
 import { z } from "astro/zod";
 import type { OwnerRequest } from "./owner-model";
 import { softwarePathLabel, softwarePaths } from "./software-inquiry";
@@ -94,7 +95,8 @@ export const offerTermsSchema = z
 
 export type OfferTerms = z.infer<typeof offerTermsSchema>;
 
-export function validateOfferTerms(input: unknown) {
+/** `input` is whatever arrived, parsed from JSON; the schema is the only code that reads it. */
+export function validateOfferTerms(input: RawValue) {
 	const result = offerTermsSchema.safeParse(input, {
 		errorMap: (issue) => ({
 			message:

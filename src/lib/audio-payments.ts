@@ -1,5 +1,6 @@
 import { audioOffers } from "./audio-intake";
 import { guardTime, invoiceEventDecision } from "./invoice-event-order";
+import type { RequestDetails } from "./owner-model";
 import { isText } from "./type-guards";
 
 export const invoiceStatuses = [
@@ -808,7 +809,7 @@ function isOfferId(value: string): value is keyof typeof audioOffers {
  */
 export function paymentDefaults(
 	serviceId: string | null | undefined,
-	details: Record<string, unknown>,
+	details: RequestDetails,
 ) {
 	const offer =
 		serviceId && isOfferId(serviceId) ? audioOffers[serviceId] : null;

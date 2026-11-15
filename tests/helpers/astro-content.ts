@@ -62,7 +62,27 @@ function frontMatter(text: string) {
 	return { data, body: match[2] };
 }
 
+/** Entries a test gave a collection in place of its files (see supplyEntries). */
+const supplied = new Map<string, Entry[]>();
+
+/**
+ * Test seam: the entries a test gives a collection, returned by getCollection and getEntry in place of the files in
+ * src/content. The entries are returned as given, without the schema check. clearSuppliedEntries removes them.
+ */
+export function supplyEntries(name: string, entries: Entry[]): void {
+	supplied.set(name, entries);
+}
+
+/** Removes every entry given by supplyEntries, so each collection reads its files again. */
+export function clearSuppliedEntries(): void {
+	supplied.clear();
+}
+
 async function load(name: string): Promise<Entry[]> {
+	const given = supplied.get(name);
+
+	if (given) return given;
+
 	// Loaded when first used: config.ts imports this module, so importing it up front would be circular.
 	const { collections } = await import("../../src/content/config");
 

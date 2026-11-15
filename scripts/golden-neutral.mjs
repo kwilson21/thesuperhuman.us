@@ -88,10 +88,13 @@ const rest = ({ name: _name, effects: _effects, ...others }) => others;
 const formatOf = (entry) => (entry.format === undefined ? 1 : entry.format);
 
 /** The formats this tool understands. Any other number, higher or not, is an error, never "not comparable". */
-export const KNOWN_FORMATS = [1, 2, 3, 4];
+export const KNOWN_FORMATS = [1, 2, 3, 4, 5];
 
-/** The newest format: the one whose full shape is checked before anything is compared. */
-export const CURRENT_FORMAT = 4;
+/** The first format that records the state of the databases at every outside effect and at the response. Every format from here on has the full shape. */
+const STATE_FORMAT = 4;
+
+/** The newest format. Format 5 has the shape of format 4, but `phase` and the digest at the response mean what the response waited for (tests/golden/README.md). */
+export const CURRENT_FORMAT = 5;
 
 /** Log entries that carry no `state`: D1 statements and the harness's own markers (the same set as tests/golden/harness/log.ts). */
 export const UNSTATED_KINDS = new Set([
@@ -289,9 +292,6 @@ function assertKnownFormat(entry, side) {
 		);
 }
 
-/** The first format that records the state of the databases at every outside effect and at the response. */
-const STATE_FORMAT = 4;
-
 /** Where in the later log an effect difference is, as a name: the n-th outside effect, in words. */
 function effectAt(path, list) {
 	const index = /^\[(\d+)\]/.exec(path)?.[1];
@@ -311,7 +311,7 @@ export function compareCase(before, after) {
 	assertKnownFormat(after, "later revision");
 
 	for (const entry of [before, after])
-		if (formatOf(entry) === CURRENT_FORMAT) assertCompleteRecord(entry);
+		if (formatOf(entry) >= STATE_FORMAT) assertCompleteRecord(entry);
 
 	if (formatOf(before) !== formatOf(after))
 		return {
@@ -406,7 +406,7 @@ export function compareFixture(before, after, { renames = {} } = {}) {
 		for (const entry of list) {
 			assertKnownFormat(entry, side);
 
-			if (formatOf(entry) === CURRENT_FORMAT) assertCompleteRecord(entry);
+			if (formatOf(entry) >= STATE_FORMAT) assertCompleteRecord(entry);
 		}
 
 	const byName = (list) => new Map(list.map((entry) => [entry.name, entry]));
@@ -500,6 +500,14 @@ export function compareFixture(before, after, { renames = {} } = {}) {
 	return result;
 }
 
+/** What the NOT COMPARABLE line says about a format mismatch. Only formats 4 and 5 differ in the digests' meaning at the response. */
+export function formatMismatchNote(expected, actual) {
+	if ([expected, actual].sort().join() === "4,5")
+		return "The digests differ between formats (format 5 records whether the response waited for an effect, where format 4 recorded when it started), so neutrality cannot be shown across a format change. Re-record the earlier revision's fixture with the later revision's harness first.";
+
+	return `The two formats are not comparable: neutrality cannot be shown across a format change (format ${expected} and format ${actual}).`;
+}
+
 function print(fixture, result) {
 	console.log(
 		`${fixture}: ${result.identical.length} identical, ${result.d1Only.length} neutral with D1 changes, ${result.nonNeutral.length} NOT neutral, ${result.notComparable.length} NOT COMPARABLE, ${result.added.length} added, ${result.removed.length} removed, ${result.renamed.length} renamed`,
@@ -511,7 +519,7 @@ function print(fixture, result) {
 		console.log(
 			reason
 				? `  NOT COMPARABLE: ${result.notComparable.length} cases differ, have D1 statements, and were recorded in format ${expected}, which ${reason.replace(/^format \d+ recordings do not hold/, "does not hold")}.`
-				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. The digests differ between formats, so neutrality cannot be shown across a format change.`,
+				: `  NOT COMPARABLE: ${result.notComparable.length} cases are format ${expected} before and format ${actual} after. ${formatMismatchNote(expected, actual)}`,
 		);
 
 		for (const item of result.notComparable.slice(0, 3))

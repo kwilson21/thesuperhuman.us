@@ -43,7 +43,7 @@ compares two revisions of a fixture (`<from>` defaults to `HEAD`, `<to>` to the 
 and exits 0 only when every case that existed before is neutral. It prints the two commits it resolved, how many fixtures
 and cases it compared, and refuses (exit 2) a fixture that exists in neither revision, a revision git cannot find, an
 unknown flag, extra arguments, a malformed allow file, a run that compared no case, a record in a format it does not
-understand (it knows formats 1 to 4; any other number, higher or not, on either side), and a format 4 record whose shape
+understand (it knows formats 1 to 5; any other number, higher or not, on either side), and a format 4 or 5 record whose shape
 is not complete (an outside effect without its `state` and sorted `touched`, a step without its `digest` and
 `atResponse`, a missing `finalState` or change count, a `threw` that is not a message, a committed batch with no
 `statements`, a name twice in `touched`): every case of both revisions is validated, added and removed ones included, and
@@ -159,6 +159,12 @@ Formats cannot be compared with each other: the tool says NOT COMPARABLE and exi
 across a format change. `node scripts/golden-format-proof.mjs <from> [<to>]` proves the format 3 to 4 re-record changed
 only the allowed things (see its header): trigger-hit entries and the older digests are compared exactly, and a recorded
 count may change only for a read that now says 0.
+
+**Fixture format 5.** The tool accepts format 5, which has the shape of format 4 above. Two fields mean something else in it:
+the `phase` of an effect records whether the response waited for that effect, and the digest at the response (`atResponse`)
+is taken when the answer has been produced and read, not when the response is sent. A format 5 recording is NOT COMPARABLE
+with a recording in any other format, as stated above. The harness that writes format 5 arrives in the next change; this
+change only lets the tool read it.
 
 A recording from before format 4 (formats 1 to 3: no table sets, and in format 3 counts that could belong to another
 statement) cannot show that an effect did not move across a write. So `golden:neutral` reports every case of such a
