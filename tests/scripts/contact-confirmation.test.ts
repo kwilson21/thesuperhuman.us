@@ -136,7 +136,7 @@ it("rests on the flow the copy describes: the owner's copy replies to the visito
 	expect(contactReplyMessage({ input, from: "from@example.com" }).to).toEqual([
 		"alex@example.com",
 	]);
-	expect(readFileSync("src/server/flows/contact.ts", "utf8")).toContain(
-		"yield* mail.send(contactReplyMessage({ input, from })).pipe(Effect.ignore);",
+	expect(readFileSync("src/server/flows/contact.ts", "utf8")).toMatch(
+		/mail\s*\.send\(\s*contactReplyMessage\(\s*\{\s*input,\s*from\s*\}\s*\)\s*\)\s*\.pipe\(\s*Effect\.ignore\s*\)/,
 	);
 });

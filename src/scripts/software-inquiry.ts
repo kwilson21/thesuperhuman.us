@@ -26,14 +26,6 @@ const pathFields = {
 	workflow: ["today", "firstResult"],
 } as const;
 
-const questionLimits = {
-	today: 2000,
-	firstResult: 2000,
-	purpose: 2000,
-	appGoal: 1000,
-	firstVersion: 1000,
-};
-
 type BriefQuestion = {
 	key: string;
 	title: string;
@@ -347,7 +339,8 @@ export function setupSoftwareInquiry(
 
 			const validPath = isSoftwarePath(stored.path);
 
-			for (const [key, max] of Object.entries(questionLimits)) {
+			// Every path's written answers, each cut to its question's limit.
+			for (const { key, max } of Object.values(briefQuestions).flat()) {
 				const value = stored[key];
 
 				if (isString(value)) answers[key] = value.slice(0, max);
