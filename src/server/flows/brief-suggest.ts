@@ -35,12 +35,12 @@ const MODEL_TIMEOUT_MS = 1200;
 export class SuggestSigningFailed extends Data.TaggedError(
 	"SuggestSigningFailed",
 )<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 /** The model answered with something that is not a reply object (the route logs the cause and answers 500). */
 export class ReplyUnreadable extends Data.TaggedError("ReplyUnreadable")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 export type SuggestAnswer =
@@ -73,7 +73,7 @@ const replyText = <Reply>(reply: Reply) => {
 	if (!Predicate.isObject(reply))
 		return Effect.fail(
 			new ReplyUnreadable({
-				cause: new TypeError("The model reply is not an object"),
+				raised: new TypeError("The model reply is not an object"),
 			}),
 		);
 
@@ -118,7 +118,7 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const valid = yield* Effect.tryPromise({
 			try: () => validSuggestionPass(submission.cookie, submission.secret, ip),
-			catch: (cause) => new SuggestSigningFailed({ cause }),
+			catch: (cause) => new SuggestSigningFailed({ raised: cause }),
 		});
 
 		if (!(yield* allowed(requirePass.decide({ valid }, {}))))
@@ -126,7 +126,7 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const hash = yield* Effect.tryPromise({
 			try: () => suggestionVisitorHash(submission.secret, ip, now),
-			catch: (cause) => new SuggestSigningFailed({ cause }),
+			catch: (cause) => new SuggestSigningFailed({ raised: cause }),
 		});
 
 		const limits = yield* SuggestLimits;

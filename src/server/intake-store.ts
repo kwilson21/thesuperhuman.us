@@ -1,8 +1,9 @@
 // What the public intake routes read from and write to MUSIC_DB. A write stores one owner request and its creation audit in
-// one batch (src/lib/owner-requests.ts `saveOwnerRequest`, which the owner routes share). A read asks for what is stored
-// and decides nothing. The only SQL that can refuse is the unique index on the submission id, which `insertBrief` turns
-// into ChangedSinceRead (a SubmissionIdClash) so the flow asks the rule again on fresh facts. A failure carries its cause, which the route logs
-// as it always has.
+// one batch (src/lib/owner-requests.ts `saveOwnerRequest`: only this store calls it in `src/`, and it stays there because
+// the owner-request tests use it to create requests). A read asks for what is stored and decides nothing. The only SQL
+// that can refuse is the unique index on the submission id, which `insertBrief` turns into ChangedSinceRead (a
+// SubmissionIdClash) so the flow asks the rule again on fresh facts. A failure carries what it raised, which the route
+// logs as it always has.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { OwnerRequest } from "../lib/owner-model";
@@ -17,12 +18,12 @@ import { MusicDb } from "./services";
 
 /** The database refused the write. */
 export class IntakeStoreFailed extends Data.TaggedError("IntakeStoreFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 /** The database could not be read. */
 export class IntakeReadFailed extends Data.TaggedError("IntakeReadFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 /** The brief's details are larger than a request may store. Nothing was written. */
@@ -42,7 +43,7 @@ export const storeRequest = (request: NewOwnerRequest) =>
 
 		return yield* Effect.tryPromise({
 			try: () => saveOwnerRequest(db, request),
-			catch: (cause) => new IntakeStoreFailed({ cause }),
+			catch: (cause) => new IntakeStoreFailed({ raised: cause }),
 		});
 	});
 
@@ -54,7 +55,7 @@ export const findStoredBrief = (submissionId: string) =>
 		return yield* Effect.tryPromise({
 			try: (): Promise<OwnerRequest | null> =>
 				getOwnerRequestBySubmission(db, submissionId),
-			catch: (cause) => new IntakeReadFailed({ cause }),
+			catch: (cause) => new IntakeReadFailed({ raised: cause }),
 		});
 	});
 
@@ -75,7 +76,7 @@ export const insertBrief = (request: NewOwnerRequest) =>
 
 				return isUniqueViolation(cause) && cause instanceof Error
 					? new SubmissionIdClash(cause)
-					: new IntakeStoreFailed({ cause });
+					: new IntakeStoreFailed({ raised: cause });
 			},
 		});
 	});

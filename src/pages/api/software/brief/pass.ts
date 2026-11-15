@@ -59,7 +59,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				}),
 				Effect.catchTag("PassSigningFailed", (failure: PassSigningFailed) =>
 					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.cause);
+						logUnexpected(ROUTE, failure.raised);
 
 						return signingFailed();
 					}),

@@ -110,25 +110,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				Effect.catchTags({
 					SuggestLimitFailed: (failure) =>
 						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.cause);
+							logUnexpected(ROUTE, failure.raised);
 
 							return failedAnswer();
 						}),
 					BudgetStoreFailed: (failure) =>
 						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.cause);
+							logUnexpected(ROUTE, failure.raised);
 
 							return failedAnswer();
 						}),
 					SuggestSigningFailed: (failure) =>
 						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.cause);
+							logUnexpected(ROUTE, failure.raised);
 
 							return failedAnswer();
 						}),
 					ReplyUnreadable: (failure) =>
 						Effect.sync(() => {
-							logUnexpected(ROUTE, failure.cause);
+							logUnexpected(ROUTE, failure.raised);
 
 							return failedAnswer();
 						}),

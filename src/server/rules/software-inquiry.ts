@@ -1,7 +1,7 @@
 // The decisions on a software brief once the visitor has passed the limits: whether the brief is stored, and what a brief
 // already stored under the same submission id means for this visitor. The id is made by the form when it opens, so a second
 // submission with the same id is a retry (or a clash with someone else's id), and the visitor is answered with what is
-// already stored instead of a second request. The facts are read by the flow (src/server/inquiry-store.ts).
+// already stored instead of a second request. The facts are read by the flow (src/server/intake-store.ts).
 import type { OwnerRequest } from "../../lib/owner-model";
 import { alwaysWrites, rule, term, unless } from "../terms";
 import { TooManyRequests } from "./intake-limits";

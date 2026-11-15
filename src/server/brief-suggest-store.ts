@@ -1,14 +1,14 @@
 // What the brief suggestion route reads from and writes to the budget table (brief_suggestion_budget in MUSIC_DB). A read
 // asks for the stored count and decides nothing. A reservation is a guarded write: the upsert adds one only while the count
 // is under its cap, so the table can never pass the cap even when two requests read the same count. Each database
-// failure is a BudgetStoreFailed carrying its cause, which the route logs the way it always has.
+// failure is a BudgetStoreFailed carrying what it raised, which the route logs the way it always has.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { MusicDb } from "./services";
 
 /** The budget table failed (a read, a reservation or the cleanup). */
 export class BudgetStoreFailed extends Data.TaggedError("BudgetStoreFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 /** The stored count of the site for `day`, or null when no row has been written that day. */
@@ -24,7 +24,7 @@ export const readSiteCount = (day: string) =>
 					)
 					.bind(day, "site")
 					.first<{ count: number }>(),
-			catch: (cause) => new BudgetStoreFailed({ cause }),
+			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
 		}).pipe(Effect.map((row) => row?.count ?? null));
 	});
 
@@ -43,7 +43,7 @@ export const reserve = (day: string, scope: string, cap: number) =>
         ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)
 					.bind(day, scope, cap)
 					.first<{ count: number }>(),
-			catch: (cause) => new BudgetStoreFailed({ cause }),
+			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
 		}).pipe(Effect.map((row) => row?.count ?? null));
 	});
 

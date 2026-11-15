@@ -320,12 +320,12 @@ export const liveOwnerAlert = (env: Env) =>
 	});
 
 // Brief suggestions (src/pages/api/software/brief/suggest.ts): the two limiters a visitor and the site are counted in, the
-// model, and the background task that trims old budget rows. A limiter or model failure carries its cause, which the
+// model, and the background task that trims old budget rows. A limiter or model failure carries what it raised, which the
 // route logs as the route always has; the route, not the service, decides what the visitor sees.
 
 /** A suggestion limiter could not answer. */
 export class SuggestLimitFailed extends Data.TaggedError("SuggestLimitFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 export class SuggestLimits extends Context.Service<
@@ -342,7 +342,7 @@ export class SuggestLimits extends Context.Service<
 
 /** The model (Workers AI) failed or threw. The route answers 503 and logs a fixed line. */
 export class ModelFailed extends Data.TaggedError("ModelFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 export class Assistant extends Context.Service<
@@ -405,12 +405,12 @@ export const liveSuggestLimits = (limiters: {
 		visitor: (key) =>
 			Effect.tryPromise({
 				try: () => limiters.visitor.limit({ key }),
-				catch: (cause) => new SuggestLimitFailed({ cause }),
+				catch: (cause) => new SuggestLimitFailed({ raised: cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 		site: (key) =>
 			Effect.tryPromise({
 				try: () => limiters.site.limit({ key }),
-				catch: (cause) => new SuggestLimitFailed({ cause }),
+				catch: (cause) => new SuggestLimitFailed({ raised: cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 	});
 
@@ -462,7 +462,7 @@ export const liveAssistant = (ai: Ai) =>
 					Effect.flatMap(
 						(outcome): Effect.Effect<AssistantReply, ModelFailed> =>
 							outcome.kind === "failed"
-								? Effect.fail(new ModelFailed({ cause: undefined }))
+								? Effect.fail(new ModelFailed({ raised: undefined }))
 								: Effect.succeed(outcome),
 					),
 				);
@@ -564,7 +564,7 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 
 /** The client's copy of their software brief could not be delivered at all (a database or provider failure the copy does not record). */
 export class BriefCopyFailed extends Data.TaggedError("BriefCopyFailed")<{
-	readonly cause: unknown;
+	readonly raised: unknown;
 }> {}
 
 /**
@@ -587,7 +587,7 @@ export const liveBriefCopy = (db: D1Database, env: Env) =>
 		deliver: (request) =>
 			Effect.tryPromise({
 				try: () => deliverSoftwareBriefCopy(db, request, env),
-				catch: (cause) => new BriefCopyFailed({ cause }),
+				catch: (cause) => new BriefCopyFailed({ raised: cause }),
 			}),
 	});
 

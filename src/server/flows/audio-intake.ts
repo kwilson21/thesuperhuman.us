@@ -1,7 +1,8 @@
 // An audio request: the attempt limit is counted first, then the captcha is checked, then the request limit is counted, and
 // only then is the request stored. A storage failure gives the request's allowance back, is logged and sends the owner an
 // urgent alert, and the visitor is told the request was not stored. A stored request answers at once; the owner notice and
-// the studio invitation (when the client portal is on) are started after the response and never change the answer.
+// the studio invitation (when the client portal is on) are handed to the background (ctx.waitUntil, with no context they are waited for) at the point the route always did,
+// and never change the answer.
 import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import {
@@ -100,9 +101,9 @@ export const submitIntake = (submission: IntakeSubmission) =>
 			);
 
 			if (Result.isFailure(released))
-				yield* Effect.sync(() => logUnexpected(ROUTE, released.failure.cause));
+				yield* Effect.sync(() => logUnexpected(ROUTE, released.failure.raised));
 
-			yield* Effect.sync(() => logUnexpected(ROUTE, stored.failure.cause));
+			yield* Effect.sync(() => logUnexpected(ROUTE, stored.failure.raised));
 
 			const alert = yield* OwnerAlert;
 
