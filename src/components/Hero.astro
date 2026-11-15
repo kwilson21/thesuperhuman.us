@@ -155,7 +155,8 @@ const percent = (value: number, of: number) =>
   .studio-object-pin { display: none; }
   @media (hover: none), (pointer: coarse), (max-width: 800px) {
     .studio-object-label { width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-    /* A pin sits at its object's edge, so the object stays in view, and its accent dot says it can be tapped. */
+    /* A pin's accent dot says it can be tapped. The headphones' and the controller's pins sit at their edges, so those
+       small objects stay in view; the monitor's sits on its screen and the notebook's low on its page. */
     .studio-object-pin { display: flex; align-items: center; gap: .4rem; position: absolute; left: var(--pin-x, 50%); top: var(--pin-y, 50%); transform: translate(-50%, -50%); padding: .2rem .7rem .2rem .55rem; border: 1px solid var(--glass-edge); border-radius: var(--radius-button); background: linear-gradient(var(--glass-top), var(--glass)); -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-edge), 0 8px 20px -10px var(--glass-shadow); font: .875rem/1.35 var(--font-serif); white-space: nowrap; }
     .studio-object-pin::before { content: ""; width: .4rem; height: .4rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
     .studio-object[data-studio-object="monitor"] .studio-object-pin { border-color: var(--glass-dark-edge); background: linear-gradient(var(--glass-dark-top), var(--glass-dark)); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-dark-edge), 0 8px 20px -10px var(--glass-shadow); color: var(--paper); }
