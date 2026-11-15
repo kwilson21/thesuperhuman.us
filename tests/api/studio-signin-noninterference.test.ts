@@ -223,14 +223,18 @@ async function send(
 	body: Record<string, string>,
 	label: string | undefined,
 	database: D1Database,
+	turn?: string,
 ) {
 	const url = `${ORIGIN}${path}`;
 	const jar = label ? jarOf(label) : undefined;
 	const handler = path.endsWith("/code") ? requestCode : completeCode;
 
-	const response = await handler(
-		context(path, body, jar?.headerFor(url), database),
-	);
+	// The browser sends its request now, with the cookie it holds now; the server may begin handling it only at its turn.
+	const sent = context(path, body, jar?.headerFor(url), database);
+
+	if (turn) await gate(turn);
+
+	const response = await handler(sent);
 
 	jar?.apply(response.clone(), url);
 
@@ -242,12 +246,14 @@ const ask = (
 	email: string,
 	cookie: string | undefined,
 	gated = true,
+	turn?: string,
 ) =>
 	send(
 		"/api/studio/code",
 		{ email, turnstileToken: "ok" },
 		cookie,
 		scripted(who, gated),
+		turn,
 	);
 
 const enter = (
@@ -372,6 +378,21 @@ const request = (
 	start: (target) => ask(id, address(target), cookie),
 });
 
+/**
+ * A request the browser sends at once but the server begins handling only when the request's first step is next in the script.
+ * The handler reads the clock before that step, after several awaits that the script does not control; begun at once, it would
+ * read the clock before or after a clock step depending on how fast those awaits finished, which varies with load. Held to its
+ * turn, it reads the clock while no other actor can run.
+ */
+const requestAtItsTurn = (
+	id: string,
+	address: (target: string) => string,
+	cookie: string,
+): Actor => ({
+	steps: [`${id}.r`, `${id}.c`, `${id}.w`],
+	start: (target) => ask(id, address(target), cookie, true, `${id}.r`),
+});
+
 const atomic = (
 	id: string,
 	work: (target: string) => Promise<void>,
@@ -483,6 +504,8 @@ async function observe(
 }
 
 type Scenario = {
+	/** Runs before each run's database is built, for state outside the database (a fake clock) that the run must start from. */
+	reset?: () => void;
 	setup?: (target: string) => Promise<void>;
 	actors: Actor[];
 	pairs: [string, string][];
@@ -503,6 +526,7 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 		const seen = new Map<string, string>();
 
 		for (const name of scenario.targets ?? TARGETS) {
+			scenario.reset?.();
 			fresh();
 			stubFetch();
 			await scenario.setup?.(ADDR[name]);
@@ -866,14 +890,15 @@ describe("a request for one address does not change what an attacker sees of ano
 				vi.setSystemTime(start);
 
 				const result = await explore({
+					// Every run starts from the one instant, also when its rows are seeded (the previous run ended 11 minutes later).
+					reset: () => vi.setSystemTime(start),
 					setup: async (target) => {
-						vi.setSystemTime(start);
 						await setup();
 						await ask("setup", target, K2, false);
 					},
 					actors: [
-						request("B", (target) => target, K1),
-						request("A", () => attacker.own, K1),
+						requestAtItsTurn("B", (target) => target, K1),
+						requestAtItsTurn("A", () => attacker.own, K1),
 						atomic("X", async () => {
 							vi.setSystemTime(start + 11 * 60_000);
 						}),
