@@ -253,7 +253,7 @@ const cases: Case[] = [
 		setup: () => catalog(recording("a-song", { duration: -1 })),
 	}),
 	open(
-		"a catalog entry with a private object key",
+		"a catalog entry with a private object key (the catalog refuses it)",
 		[read("a-song", "master")],
 		{
 			setup: () =>

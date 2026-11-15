@@ -115,7 +115,6 @@ const cases: Case[] = [
 	open("an entry whose key is a studio file", [read("studio-file")], {
 		setup: entries(["studio-file", "studio/projects/r1/f1.mp3"]),
 		r2: { seed: { "studio/projects/r1/f1.mp3": { body: BODY } } },
-		mustNotFire: [],
 	}),
 	open("an entry whose key is a software visual", [read("software-file")], {
 		setup: entries(["software-file", "software/r1/u1/visual.png"]),

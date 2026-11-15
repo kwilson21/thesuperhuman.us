@@ -25,7 +25,8 @@ import { BODY, CONDITIONALS, RANGES } from "./areas/media";
 // is the fetch of the raw file: through the ASSETS binding in production, through the global fetch in a development
 // server (import.meta.env.DEV). Both are recorded as the same outgoing request, so a case in production forwards the
 // binding's calls to the recorded global fetch. A case whose name says "in development" runs the route as it is
-// without the forwarding.
+// without the forwarding. The forwarded call carries a marker header, x-golden-via, so a recording shows whether the
+// binding or the global fetch made it.
 //
 // The rendered file names carry a hash of their content (src/data/og-media.json), so this file pins the names of two
 // scenes: a re-render of a scene never changes this corpus.
@@ -74,7 +75,8 @@ const bound =
 	async (context) => {
 		vi.stubEnv("DEV", false);
 		context.locals.runtime.env.ASSETS = double<Fetcher>({
-			fetch: (input, init) => fetch(input, init),
+			fetch: (input, init) =>
+				fetch(input, { ...init, headers: { "x-golden-via": "ASSETS" } }),
 		});
 
 		try {
