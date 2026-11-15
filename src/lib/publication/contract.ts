@@ -157,7 +157,7 @@ function hasExactly(value: RawValue, keys: readonly string[]): boolean {
  * object's own enumerable string-keyed members count, as they do for JSON, so an envelope whose members are inherited or
  * hidden is refused before the Schema reads it.
  */
-export function parsePublication(value: unknown): Publication | null {
+export function parsePublication(value: RawValue): Publication | null {
 	if (!Predicate.isObject(value) || !hasExactly(value, topKeys)) return null;
 	const story = new Map(Object.entries(value)).get("story");
 

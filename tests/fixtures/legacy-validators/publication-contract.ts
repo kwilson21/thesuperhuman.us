@@ -26,7 +26,7 @@ export type LegacyPublication = {
 	} | null;
 };
 
-function record(value: unknown): value is object {
+function record(value: LegacyInput): value is object {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
@@ -71,7 +71,7 @@ function day(value: unknown): value is string {
 
 /** Strict shape validation, NOT content sanitization or publication permission. */
 export function legacyParsePublication(
-	value: unknown,
+	value: LegacyInput,
 ): LegacyPublication | null {
 	if (!record(value)) return null;
 	const fields = new Map<string, unknown>(Object.entries(value));
