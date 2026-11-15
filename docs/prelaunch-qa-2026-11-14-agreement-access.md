@@ -134,7 +134,7 @@ Oxlint reports no findings on either branch (`oxlint --deny-warnings`, zero). Re
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the agreement worktree. Logs are not retained.
 
-Branch A tip `69c1f345` (it merges `origin/main` at `8b5b4efd`, golden format 5; the three area fixtures were re-recorded in a fixture-only commit):
+Branch A tip `69c1f345` (it merges `origin/main` at `8b5b4efd`, golden format 5; the three area fixtures were re-recorded in fixture-only commits):
 
 - `pnpm run format:check`: "Checked 783 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
 - Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 308 files passed; 13075 tests passed, 1 skipped (13076); the tree is clean afterwards.
@@ -149,6 +149,11 @@ Branch B head `0e680b2b` (the figures below were measured on it; this record is 
 - `golden:neutral --all refs/heads/claude/effect-13-agreement-access-fixes HEAD`: "compared 77 fixtures and 9038 cases; 3 of 77 fixtures differ" and "golden:neutral: NEUTRAL". Statements changed; answers, stored rows and every other effect did not.
 - `verify:quint:all`: exit 0, 73 checks ok and none failed, including `agreementLink` (6.6 s) and its eight mutants, each found at 20,000 random runs on seeds 0x1 to 0x7 (the search for `RetryNewAt` leaves out the redeems and the agreement ending, which cannot take part in it; the unmutated model's check is never narrowed). `verify:quint:exhaustive`: the five exhaustive modules (from four model files; `signin` has none) keep every property in every order up to 7 steps, `agreementLink` included (about twelve seconds for it); 7 steps reaches only the `NoLookup` and `NoCas` mutants, and the other cases are covered by the random runs. `publicist:gate`: "publicist-gate passed: 84 entries checked." `publicist:sync --check`: "AGENTS.md publicist block already in sync."
 - `pnpm run lint`: no findings. `pnpm run check`: "Result (828 files)", 0 errors, 0 warnings, 16 hints.
+
+Merge with `origin/main`, 2026-11-15 (main at `e23b7357`, which adds the offer-terms reader, the publication fixes and the conversion plan). Branch A is now `c0375a8c` and branch B is `0dacc359`. Both merges were clean, and no fixture needed re-recording. The figures below were measured at those two commits:
+
+- A: `format:check` 787 files, `lint` no findings, `build` complete, client bundle test 27 passed; `pnpm test` with the digest and count checks 310 files passed, 13158 tests passed, 1 skipped (13159), tree clean afterwards; `golden:neutral --all origin/main HEAD` "compared 77 fixtures and 9069 cases; 3 of 77 fixtures differ" and "NOT NEUTRAL" (the file, attachment and link corpora only, as expected); `verify:quint:all` exit 0, 64 checks ok; `publicist:gate` 84 entries; `run check` "Result (813 files)", 0 errors, 0 warnings, 17 hints.
+- B: `format:check` 806 files (before this record), `lint` no findings, `build` complete, client bundle test 27 passed; `pnpm test` with the digest and count checks 317 files passed, 13273 tests passed, 1 skipped (13274), tree clean afterwards; `golden:neutral --all refs/heads/claude/effect-13-agreement-access-fixes HEAD` "compared 77 fixtures and 9069 cases; 3 of 77 fixtures differ" and "golden:neutral: NEUTRAL"; `verify:quint:all` exit 0, 73 checks ok, none failed; `publicist:gate` 84 entries; `run check` "Result (832 files)", 0 errors, 0 warnings, 16 hints.
 
 The one skipped test is "renders the real v1 agreements and embeds exact signing evidence" in `tests/lib/agreement-pdf.test.ts`. It is gated on the private file `.private/signing/templates.json`, which is absent here. UNVERIFIED for the private templates. The template test in `tests/lib/software-agreements.test.ts` returns without checking when `AGREEMENT_PRIVATE_TEMPLATES` is unset, so it passes without checking anything. UNVERIFIED.
 
