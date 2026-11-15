@@ -77,13 +77,19 @@ export function setupContactForm() {
 				listening.abort();
 
 				if (send) {
-					// The panel stays up while the message sends; the form comes back only if the send fails. The count takes
-					// focus, so "Sending…" is read out and focus does not drop with the buttons it disables.
+					// The panel stays up while the message sends; the form comes back only if the send fails. Focus inside the
+					// panel moves to the count, so "Sending…" is read out and focus does not drop with the buttons this
+					// disables; focus elsewhere on the page stays where it is.
+					const focusHere =
+						panel.contains(document.activeElement) ||
+						document.activeElement === document.body;
+
 					showCount("Sending…");
 
 					for (const button of [undo, sendNow])
 						if (button) button.disabled = true;
-					count?.focus({ preventScroll: true });
+
+					if (focusHere) count?.focus();
 				} else {
 					panel.hidden = true;
 					form.hidden = false;
