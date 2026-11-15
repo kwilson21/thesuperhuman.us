@@ -53,20 +53,22 @@ describe("which catalog file a listener asked for", () => {
 		);
 	});
 
-	it.each(["studio/projects/r1/f1.mp3", "software/r1/u1/visual.png"])(
-		"never serves a private object: %s",
-		async (key) => {
-			const private_ = recording({ master: { key, type: "audio/mpeg" } });
+	it.each([
+		"studio/projects/r1/f1.mp3",
+		"software/r1/u1/visual.png",
+		"agreements/a1/signed.pdf",
+		"Studio/projects/r1/f1.mp3",
+		"/studio/projects/r1/f1.mp3",
+		"other/file.mp3",
+	])("never serves a key outside music/: %s", async (key) => {
+		const private_ = recording({ master: { key, type: "audio/mpeg" } });
 
-			expect(
-				await answerOfRun(
-					decideMusicFile.decide({ id: "a-song", version: "master" }, [
-						private_,
-					]),
-				),
-			).toEqual(refuse("MusicFileWithheld", "Media unavailable"));
-		},
-	);
+		expect(
+			await answerOfRun(
+				decideMusicFile.decide({ id: "a-song", version: "master" }, [private_]),
+			),
+		).toEqual(refuse("MusicFileWithheld", "Media unavailable"));
+	});
 });
 
 describe("which bytes a media read answers with", () => {
@@ -113,6 +115,9 @@ describe("which portfolio track file a visitor asked for", () => {
 		{ id: "slow-burn", file: "tracks/slow-burn.mp3" },
 		{ id: "inside", file: "studio/projects/r1/f1.mp3" },
 		{ id: "visual", file: "software/r1/u1/visual.png" },
+		{ id: "agreement", file: "agreements/a1/signed.pdf" },
+		{ id: "capitals", file: "Studio/projects/r1/f1.mp3" },
+		{ id: "slashed", file: "/tracks/slow-burn.mp3" },
 	];
 
 	it("names the key of a public track", async () => {
@@ -121,7 +126,7 @@ describe("which portfolio track file a visitor asked for", () => {
 		).toEqual(done("tracks/slow-burn.mp3"));
 	});
 
-	it.each(["unknown", "inside", "visual"])(
+	it.each(["unknown", "inside", "visual", "agreement", "capitals", "slashed"])(
 		"answers one 404 for %s",
 		async (slug) => {
 			expect(

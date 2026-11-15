@@ -1,12 +1,12 @@
 // Which portfolio track an audio file request names, and which bytes it asks for. The track is found by its slug among the
-// audio-tracks entries the route read; its file must not be a private object (a studio file or a software visual). Every
+// audio-tracks entries the route read; its file's key must start with tracks/ (the bucket also holds studio files, software visuals, signed agreements and attachments). Every
 // refusal is one 404. A Range header is read the way this route always has: only `bytes=<start>-` and `bytes=<start>-<end>`
 // are ranges; anything else (a suffix range, two ranges, another unit, no header) asks for the whole file. A range is
 // checked against the file's size after the bucket says it, with an end past the size taken as the end (RFC 9110, 14.1.2).
 import * as Data from "effect/Data";
 import { alwaysWrites, term, unless } from "../terms";
 
-/** No track has this slug, or its file is a private object. */
+/** No track has this slug, or its file is not under tracks/. */
 export class AudioFileNotFound extends Data.TaggedError("AudioFileNotFound") {
 	readonly say = "not found";
 }
@@ -23,9 +23,8 @@ export type AudioTrack = { readonly id: string; readonly file: string };
 
 type Given = { readonly found: boolean; readonly key: string };
 
-/** Keys under these folders belong to a client's project, never to the portfolio. */
-const isPrivateKey = (key: string) =>
-	key.startsWith("studio/") || key.startsWith("software/");
+/** The one folder the portfolio serves from: a key must start with exactly this, case and all, with nothing normalised. */
+const PUBLIC_FOLDER = "tracks/";
 
 export const decideAudioFile = alwaysWrites({
 	name: "choose the portfolio track file a visitor asked for",
@@ -44,8 +43,8 @@ export const decideAudioFile = alwaysWrites({
 		),
 		unless(
 			term(
-				"the file is not a private object",
-				(given: Given) => !isPrivateKey(given.key),
+				"the file's key starts with tracks/",
+				(given: Given) => given.key.startsWith(PUBLIC_FOLDER),
 			),
 			() => new AudioFileNotFound(),
 		),
