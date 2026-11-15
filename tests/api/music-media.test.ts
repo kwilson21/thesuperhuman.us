@@ -26,7 +26,7 @@ it("allows public media responses to use shared caching", async () => {
 		new Request("https://example.test/music/file/old-news/master"),
 		bucket,
 		{
-			key: "old-news/master.mp3",
+			key: "music/old-news/master.mp3",
 			type: "audio/mpeg",
 		},
 	);

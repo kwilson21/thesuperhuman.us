@@ -26,7 +26,7 @@ import { BODY, CONDITIONALS, RANGES } from "./areas/media";
 //
 //   404 "not found"      the collection is empty (the real one); an unknown slug; no slug, an empty slug, capitals, an
 //                        underscore, a dot, a space, a slash, a traversal, an encoded dot; an entry whose key starts with
-//                        studio/ or software/ (R2 is never read); the object missing from R2 (on a whole read, on a range
+//                        a key that does not start with tracks/ (R2 is never read); the object missing from R2 (on a whole read, on a range
 //                        read at head, and between head and get)
 //   200 full body        a whole read; a missing, empty or malformed Range header; a range with a suffix, two ranges,
 //                        another unit, capitals, letters (all read as "not a range"); conditional request headers (no
