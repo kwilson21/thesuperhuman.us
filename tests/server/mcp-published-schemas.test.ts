@@ -1,3 +1,4 @@
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vitest";
 import type { JsonValue } from "../../src/lib/json-value";
 import { publicationMcp } from "../../src/lib/publication/mcp";
@@ -10,7 +11,11 @@ import { ALL as probeRoute } from "../../src/pages/api/mcp-probe";
 // and no frozen copy, so it stays when those are deleted.
 
 type Schema = { readonly [key: string]: JsonValue };
+
 type Path = readonly string[];
+
+const isMembers = (value: JsonValue | undefined) =>
+	Predicate.isObject(value) && !Array.isArray(value);
 
 const HEADERS = {
 	"content-type": "application/json",
@@ -18,8 +23,7 @@ const HEADERS = {
 };
 
 const asSchema = (value: JsonValue | undefined): Schema => {
-	if (value === null || typeof value !== "object" || Array.isArray(value))
-		throw new Error("expected a schema object");
+	if (!isMembers(value)) throw new Error("expected a schema object");
 
 	return value;
 };
@@ -64,6 +68,7 @@ async function published(server: Server) {
 		id: 1,
 		method: "tools/list",
 	});
+
 	const body: { result: { tools: { name: string; inputSchema: Schema }[] } } =
 		JSON.parse(await response.text());
 
@@ -93,12 +98,12 @@ function valid(schema: Schema): JsonValue {
 
 	if (Array.isArray(schema.enum)) return schema.enum[0];
 
-	if (typeof schema.pattern === "string") {
-		const examples: { [pattern: string]: string } = {
-			"^[a-z0-9][a-z0-9_-]{0,79}$": "a",
-			"^\\d{4}-\\d{2}-\\d{2}$": "2026-11-15",
-		};
-		const example = examples[schema.pattern];
+	if (Predicate.isString(schema.pattern)) {
+		const examples = new Map([
+			["^[a-z0-9][a-z0-9_-]{0,79}$", "a"],
+			["^\\d{4}-\\d{2}-\\d{2}$", "2026-11-15"],
+		]);
+		const example = examples.get(schema.pattern);
 
 		if (example === undefined)
 			throw new Error(`no example for the pattern ${schema.pattern}`);
@@ -121,10 +126,10 @@ function put(
 		return value;
 	}
 
-	if (root === null || typeof root !== "object" || Array.isArray(root))
-		throw new Error("the path leaves the arguments");
+	if (!isMembers(root)) throw new Error("the path leaves the arguments");
 
 	const [key, ...below] = path;
+
 	const entries = Object.entries(root).filter(
 		([name]) => name !== key || below.length > 0 || value !== undefined,
 	);
@@ -139,14 +144,12 @@ function put(
 
 const adding = (root: JsonValue, path: Path, name: string): JsonValue => {
 	const here = path.reduce<JsonValue>((value, key) => {
-		if (value === null || typeof value !== "object" || Array.isArray(value))
-			throw new Error("the path leaves the arguments");
+		if (!isMembers(value)) throw new Error("the path leaves the arguments");
 
 		return value[key];
 	}, root);
 
-	if (here === null || typeof here !== "object" || Array.isArray(here))
-		throw new Error("not an object");
+	if (!isMembers(here)) throw new Error("not an object");
 
 	return put(root, path, { ...here, [name]: true });
 };
@@ -166,12 +169,14 @@ describe("what each tool publishes is what its reader enforces", () => {
 						method: "tools/call",
 						params: { name: tool.name, arguments: args },
 					});
+
 					const body: { result: { isError?: boolean } } = JSON.parse(
 						await response.text(),
 					);
 
 					return body.result.isError !== true;
 				};
+
 				const base = valid(tool.inputSchema);
 				let checked = 0;
 
@@ -186,6 +191,7 @@ describe("what each tool publishes is what its reader enforces", () => {
 						`${tool.name} ${path.join(".")}: ${why}`,
 					).toBe(true);
 				};
+
 				const expectRefused = async (args: JsonValue, why: string) => {
 					checked++;
 					expect(await accepts(args), `${tool.name}: ${why}`).toBe(false);
@@ -217,6 +223,7 @@ describe("what each tool publishes is what its reader enforces", () => {
 
 					if (schema.type === "object") {
 						const properties = asSchema(schema.properties);
+
 						const required = Array.isArray(schema.required)
 							? schema.required
 							: [];
@@ -264,7 +271,7 @@ describe("what each tool publishes is what its reader enforces", () => {
 							return;
 						}
 
-						if (typeof schema.pattern === "string") {
+						if (Predicate.isString(schema.pattern)) {
 							await expectAccepted(
 								path,
 								valid(schema),
