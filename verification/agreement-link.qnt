@@ -333,7 +333,7 @@ module agreementLinkProtocol {
   val oneCooldownPerWindow = takes.forall(a => takes.forall(b => a.by == b.by or a.email != b.email or apart(a.at, b.at)))
 
   // 6. A request that lost its cooldown compare-and-set never takes a cooldown. A retry keeps the request's first instant, so
-  // the row that beat it still beats it; a retry that took a new instant would succeed.
+  // the row that beat it still beats it; a retry that took a new instant succeeds once the window has passed.
   val lostCooldownNeverTakes = takes.forall(t => runs.get(t.by).coolTries == 0)
 
   // 7. A request that lost the link batch's guard never stores a link, for the same reason.
