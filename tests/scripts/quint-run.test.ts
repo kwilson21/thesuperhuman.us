@@ -264,7 +264,7 @@ describe("the agreement link model", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(4);
+		expect(properties).toHaveLength(7);
 		expect(propertiesWithoutMutant(properties, agreementLinkMutants)).toEqual(
 			[],
 		);
@@ -291,7 +291,7 @@ describe("the agreement link model", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the four models, each with its own registry", () => {
+	it("lists the five models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
