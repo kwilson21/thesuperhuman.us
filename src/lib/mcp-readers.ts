@@ -6,10 +6,11 @@ import { leaf, type Reader, type RecordSentences } from "./readers";
 
 // The readers of an MCP tool's arguments. They read with Effect Schema, and say what the MCP SDK's own argument check
 // said while the tools gave it Zod 4 schemas: the same sentences, in the same order, so a client sees no change. The
-// differential test (tests/server/mcp-tools-differential.test.ts) holds them to the old server, frozen in
-// tests/fixtures/legacy-validators/mcp-tool-inputs.ts. Arguments arrive as JSON, so a value is a string, a number, a
+// differential test (tests/server/mcp-tools-differential.test.ts) holds them to the old server, a frozen copy kept
+// with the other reference copies of replaced validators. Arguments arrive as JSON, so a value is a string, a number, a
 // boolean, null, a list or an object. The rules, as Zod 4 had them:
-// - A value of the wrong type is reported once and nothing else is checked on it.
+// - A value of the wrong type is reported once and nothing else is checked on it, except that the size checks of a text
+//   still run on a value that has a length (a list, or an object with a `length` member).
 // - Every other check reports when it fails, and the checks after it still run, except that a number that is not a whole
 //   number is reported once and its range is not checked.
 // - A text is measured in characters as a person counts them (an emoji is one), not in UTF-16 units.
@@ -49,6 +50,45 @@ const textCheck = (check: TextCheck) =>
 			: `Invalid string: must match pattern ${check.pattern}`;
 	});
 
+/** The length a value that is not text claims to have: a list's, or an object's member named `length`. */
+const claimedLength = (raw: RawValue): RawValue => {
+	if (Array.isArray(raw)) return raw.length;
+
+	return Predicate.isObject(raw)
+		? new Map(Object.entries(raw)).get("length")
+		: undefined;
+};
+
+/**
+ * What a length check says of a value that is not text but has a length (Zod's size checks run on it after the sentence
+ * for its type): a list is measured in items, any other object with a `length` member is "unknown", and the length is
+ * compared as a number is, so a length that is not a number fails both ends.
+ */
+const sizeCheck = (check: TextCheck) =>
+	Schema.makeFilter((raw: RawValue) => {
+		const length = claimedLength(raw);
+
+		if (length === undefined || Predicate.isString(raw)) return true;
+
+		const unit = Array.isArray(raw);
+
+		if ("least" in check)
+			return Number(length) >= check.least
+				? true
+				: unit
+					? `Too small: expected array to have >=${check.least} items`
+					: `Too small: expected unknown to be >=${check.least}`;
+
+		if ("most" in check)
+			return Number(length) <= check.most
+				? true
+				: unit
+					? `Too big: expected array to have <=${check.most} items`
+					: `Too big: expected unknown to be <=${check.most}`;
+
+		return true;
+	});
+
 /** A text that passes every check, each failed check giving its own sentence; a value that is not text stops it. */
 export function mcpText(
 	checks: readonly [TextCheck, ...TextCheck[]],
@@ -59,6 +99,7 @@ export function mcpText(
 		Schema.makeFilter((raw: RawValue) =>
 			Predicate.isString(raw) ? true : notKind("string", raw),
 		),
+		...checks.map(sizeCheck),
 	).pipe(
 		Schema.decodeTo(Schema.String.check(first, ...rest), {
 			decode: SchemaGetter.transform((raw: RawValue) =>
@@ -162,12 +203,12 @@ export const mcpObjectSentences: RecordSentences = {
 /** Where an issue was found, as the MCP SDK wrote it: names joined with dots, a position in brackets. */
 const where = (path: Issue["path"]) =>
 	path.reduce<string>(
-		(so_far, step, index) =>
-			typeof step === "number"
-				? `${so_far}[${step}]`
+		(soFar, step, index) =>
+			Predicate.isNumber(step)
+				? `${soFar}[${step}]`
 				: index === 0
 					? step
-					: `${so_far}.${step}`,
+					: `${soFar}.${step}`,
 		"",
 	);
 

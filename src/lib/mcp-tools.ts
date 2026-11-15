@@ -6,6 +6,8 @@ import {
 	ListToolsRequestSchema,
 	McpError,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { RawValue } from "./fields";
+import type { JsonValue } from "./json-value";
 import { mcpRefusal } from "./mcp-readers";
 import { type Reader, readWith } from "./readers";
 
@@ -25,7 +27,7 @@ export interface ToolResult {
 
 /** A tool's input as JSON Schema, written out as plain data: the keys in the order a client has always seen them. */
 export interface PublishedInput {
-	readonly [key: string]: unknown;
+	readonly [key: string]: JsonValue;
 }
 
 export interface ToolDefinition<A> {
@@ -39,7 +41,7 @@ export interface ToolDefinition<A> {
 		openWorldHint: boolean;
 	};
 	/** Extra data the tool list carries for the client, when the tool has any. */
-	meta?: { readonly [key: string]: unknown };
+	meta?: PublishedInput;
 	/** Reads the arguments the client sent; a refusal answers the client with every sentence it gave. */
 	read: Reader<A>;
 	call(args: A): Promise<ToolResult>;
@@ -54,22 +56,25 @@ export interface Tool {
 		inputSchema: PublishedInput;
 		annotations: ToolDefinition<never>["annotations"];
 		execution: { taskSupport: "forbidden" };
-		_meta?: { readonly [key: string]: unknown };
+		_meta?: PublishedInput;
 	};
-	run(args: unknown): Promise<ToolResult>;
+	run(args: RawValue): Promise<ToolResult>;
 }
 
 export function defineTool<A>(definition: ToolDefinition<A>): Tool {
+	const listing: Tool["listing"] = {
+		name: definition.name,
+		description: definition.description,
+		inputSchema: definition.inputSchema,
+		annotations: definition.annotations,
+		execution: { taskSupport: "forbidden" },
+	};
+
+	if (definition.meta) listing._meta = definition.meta;
+
 	return {
 		name: definition.name,
-		listing: {
-			name: definition.name,
-			description: definition.description,
-			inputSchema: definition.inputSchema,
-			annotations: definition.annotations,
-			execution: { taskSupport: "forbidden" },
-			...(definition.meta ? { _meta: definition.meta } : {}),
-		},
+		listing,
 		run: async (args) => {
 			const read = readWith(definition.read, args ?? {});
 
@@ -114,13 +119,15 @@ export async function serveTools(
 	},
 	tools: readonly Tool[],
 ): Promise<Response> {
+	const capabilities = { tools: { listChanged: true } };
+
 	const server = new Server(
 		{ name: about.name, version: about.version },
-		{
-			capabilities: { tools: { listChanged: true } },
-			...(about.instructions ? { instructions: about.instructions } : {}),
-		},
+		about.instructions
+			? { capabilities, instructions: about.instructions }
+			: { capabilities },
 	);
+
 	const byName = new Map(tools.map((tool) => [tool.name, tool]));
 
 	server.setRequestHandler(ListToolsRequestSchema, () => ({
