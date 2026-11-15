@@ -26,10 +26,12 @@ export type SwitchboardOptions = {
 export type Switchboard = { connect: (id: string) => void };
 
 // A slightly under-damped spring: the plug overshoots a touch as it seats or drops and settles in
-// well under a second. Reaching toward a line on hover or focus is critically damped, with no overshoot.
-const STIFFNESS = 320;
-const DAMPING = 26;
-const REACH_DAMPING = 36;
+// about half a second. Reaching toward a line on hover or focus is quicker and critically damped, so
+// the plug keeps up with a sweeping pointer and never overshoots.
+const STIFFNESS = 420;
+const DAMPING = 30;
+const REACH_STIFFNESS = 700;
+const REACH_DAMPING = 53;
 const LIFTED = 1.14;
 
 // Long enough to see the lamp strike, short enough not to feel like a wait.
@@ -110,8 +112,18 @@ export function setupSwitchboard(
 	let ropeClock = 0;
 	let ropeStirring = 0;
 
+	// Where everything sits on the board, read only when the board's layout changes (measure), so the
+	// animation frames never ask the page for layout.
+	let layoutKind: "row" | "column" = "row";
+	let youPoint: Point = { x: 0, y: 0 };
+	let restAt: Point = { x: 0, y: 0 };
+	const jackPoints = new Map<HTMLAnchorElement, Point>();
+
 	const jackOf = (link: HTMLAnchorElement) =>
 		link.querySelector<HTMLElement>("[data-jack]")!;
+
+	const jackCentre = (link: HTMLAnchorElement) =>
+		jackPoints.get(link) ?? { x: 0, y: 0 };
 
 	function centre(element: Element): Point {
 		const box = element.getBoundingClientRect();
@@ -122,15 +134,12 @@ export function setupSwitchboard(
 		};
 	}
 
-	const layout = () =>
-		getComputedStyle(root).getPropertyValue("--sb-layout").trim() === "column"
-			? "column"
-			: "row";
+	const layout = () => layoutKind;
 
 	// Where the free plug lies when nothing is chosen: under your jack on a wide board, beside it on a
 	// narrow one, past the "You" label at whatever size the text is.
 	function restPoint(): Point {
-		const you = centre(youJack!);
+		const you = youPoint;
 
 		if (layout() === "row") return { x: you.x + 20, y: you.y + 62 };
 
@@ -143,26 +152,20 @@ export function setupSwitchboard(
 		};
 	}
 
+	// A lifted plug sits square over its jack; the larger plug and its shadow show the lift.
 	function goal(): Goal {
 		switch (target.kind) {
 			case "rest":
-				return { point: restPoint(), scale: 1 };
-			case "reach": {
-				const jack = centre(jackOf(target.link));
-
-				return { point: { x: jack.x - 4, y: jack.y - 7 }, scale: LIFTED };
-			}
-
+				return { point: restAt, scale: 1 };
+			case "reach":
+				return { point: jackCentre(target.link), scale: LIFTED };
 			case "seated":
-				return { point: centre(jackOf(target.link)), scale: 1 };
+				return { point: jackCentre(target.link), scale: 1 };
 			case "drag":
-				if (target.near) {
-					const jack = centre(jackOf(target.near));
-
-					return { point: { x: jack.x - 3, y: jack.y - 5 }, scale: LIFTED };
-				}
-
-				return { point: target.point, scale: LIFTED };
+				return {
+					point: target.near ? jackCentre(target.near) : target.point,
+					scale: LIFTED,
+				};
 		}
 	}
 
@@ -228,7 +231,7 @@ export function setupSwitchboard(
 	}
 
 	function swing(dt: number) {
-		const from = centre(youJack!);
+		const from = youPoint;
 		const hang = restingRope(from, position);
 		let length = 0;
 
@@ -315,7 +318,7 @@ export function setupSwitchboard(
 	}
 
 	function draw() {
-		const from = centre(youJack!);
+		const from = youPoint;
 		rope[0] = { ...from };
 		rope[LINKS] = { ...position };
 		const path = ropePath();
@@ -336,30 +339,40 @@ export function setupSwitchboard(
 	}
 
 	function settle() {
-		boardBox = board!.getBoundingClientRect();
 		const { point, scale: goalScale } = goal();
 		position.x = point.x;
 		position.y = point.y;
 		velocity.x = velocity.y = scaleVelocity = 0;
 		scale = goalScale;
-		layRope(restingRope(centre(youJack!), position));
+		layRope(restingRope(youPoint, position));
 		draw();
 	}
 
 	function step(time: number) {
 		const dt = Math.min((time - last) / 1000, 1 / 30);
 		last = time;
-		boardBox = board!.getBoundingClientRect();
 		const { point, scale: goalScale } = goal();
-		const damping = target.kind === "reach" ? REACH_DAMPING : DAMPING;
-		velocity.x +=
-			(STIFFNESS * (point.x - position.x) - damping * velocity.x) * dt;
-		velocity.y +=
-			(STIFFNESS * (point.y - position.y) - damping * velocity.y) * dt;
+		const reaching = target.kind === "reach";
+		const stiffness = reaching ? REACH_STIFFNESS : STIFFNESS;
+		const damping = reaching ? REACH_DAMPING : DAMPING;
+
+		// A carried plug stays under the pointer; its speed is kept, so a plug let go mid-swing is thrown.
+		if (target.kind === "drag" && !target.near && dt > 0) {
+			velocity.x = clamp((point.x - position.x) / dt, -2400, 2400);
+			velocity.y = clamp((point.y - position.y) / dt, -2400, 2400);
+			position.x = point.x;
+			position.y = point.y;
+		} else {
+			velocity.x +=
+				(stiffness * (point.x - position.x) - damping * velocity.x) * dt;
+			velocity.y +=
+				(stiffness * (point.y - position.y) - damping * velocity.y) * dt;
+			position.x += velocity.x * dt;
+			position.y += velocity.y * dt;
+		}
+
 		scaleVelocity +=
-			(STIFFNESS * (goalScale - scale) - damping * scaleVelocity) * dt;
-		position.x += velocity.x * dt;
-		position.y += velocity.y * dt;
+			(stiffness * (goalScale - scale) - damping * scaleVelocity) * dt;
 		scale += scaleVelocity * dt;
 		swing(dt);
 		draw();
@@ -524,7 +537,7 @@ export function setupSwitchboard(
 		let distance = SNAP;
 
 		for (const link of links) {
-			const jack = centre(jackOf(link));
+			const jack = jackCentre(link);
 			const gap = Math.hypot(jack.x - point.x, jack.y - point.y);
 
 			if (gap < distance) {
@@ -588,10 +601,18 @@ export function setupSwitchboard(
 	});
 
 	function measure() {
-		const box = board!.getBoundingClientRect();
+		boardBox = board!.getBoundingClientRect();
+		layoutKind =
+			getComputedStyle(root).getPropertyValue("--sb-layout").trim() === "column"
+				? "column"
+				: "row";
+		youPoint = centre(youJack!);
+
+		for (const link of links) jackPoints.set(link, centre(jackOf(link)));
+		restAt = restPoint();
 		svg!.setAttribute(
 			"viewBox",
-			`0 0 ${Math.max(1, box.width)} ${Math.max(1, box.height)}`,
+			`0 0 ${Math.max(1, boardBox.width)} ${Math.max(1, boardBox.height)}`,
 		);
 
 		if (target.kind !== "drag") settle();
@@ -626,7 +647,7 @@ export function setupSwitchboard(
 			arrival.disconnect();
 
 			if (reduced.matches || target.kind !== "rest") return;
-			const from = centre(youJack);
+			const from = youPoint;
 			layRope(
 				Array.from({ length: LINKS + 1 }, (_, index) => ({
 					x: from.x + ((position.x - from.x) * index) / LINKS,

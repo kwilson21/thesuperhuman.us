@@ -170,9 +170,11 @@ files; a test checks those literals against `global.css`.
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
 - Anything that plays on its own rests within five seconds. Page cross-fade 180ms.
-- The switchboard's plug settles in under a second: reaching toward a line on hover or
-  focus has no overshoot, and seating or dropping it overshoots a touch, like a plug
-  clicking home. Its lamp strikes twice in 420ms. The cable is a chain under gravity
+- The switchboard's plug sits square over the jack it reaches toward or seats in; a lifted
+  plug shows the lift by its size and shadow. Reaching toward a line on hover or focus
+  arrives in about 0.15s with no overshoot; seating or dropping it overshoots a touch,
+  like a plug clicking home, and settles in about half a second. A carried plug stays
+  under the pointer. Its lamp strikes twice in 420ms. The cable is a chain under gravity
   pinned at both plugs, so it whips and sways as the plug moves; the first time the
   board comes into view it drops from straight into its hang. Each settles within three
   seconds. With reduced motion the cable is drawn at rest and never swings. A chosen line navigates 560ms after the click so the lamp can
