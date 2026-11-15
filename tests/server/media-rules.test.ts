@@ -134,6 +134,12 @@ describe("which portfolio track file a visitor asked for", () => {
 			).toEqual(refuse("AudioFileNotFound", "not found"));
 		},
 	);
+
+	it("answers one 404 for a slug that is not well formed", async () => {
+		expect(
+			await answerOfRun(decideAudioFile.decide({ slug: null }, tracks)),
+		).toEqual(refuse("AudioFileNotFound", "not found"));
+	});
 });
 
 describe("the portfolio audio Range header", () => {

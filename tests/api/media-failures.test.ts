@@ -263,3 +263,84 @@ describe("the link preview video route", () => {
 		}
 	});
 });
+
+describe("failures that are not the bucket", () => {
+	const noRuntime = partial<APIContext>({
+		params: { id: "old-news-recording", version: "master", slug: "slow-burn" },
+		request: new Request("https://thesuperhuman.us/media"),
+		locals: partial<APIContext["locals"]>({}),
+	});
+
+	it.each([
+		["music file", music],
+		["audio file", audio],
+	])(
+		"answers a request with no runtime with the fixed 500 on the %s route, logged once",
+		async (_name, route) => {
+			expect(await answered(await route(noRuntime))).toEqual({
+				status: 500,
+				text: "Media unavailable",
+			});
+
+			expect(logged).toHaveLength(1);
+		},
+	);
+
+	it("answers 500, logged once, when the audio collection cannot be read", async () => {
+		supplyEntries("audio-tracks", [
+			{
+				id: "slow-burn",
+				collection: "audio-tracks",
+				get data(): never {
+					throw new Error(LEAK);
+				},
+			},
+		]);
+
+		expect(
+			await answered(
+				await audio(context({ slug: "slow-burn" }, { AUDIO: good })),
+			),
+		).toEqual({ status: 500, text: "Media unavailable" });
+
+		expect(logged).toHaveLength(1);
+	});
+
+	it("answers 500, logged once, when the assets' bytes cannot be read after a success", async () => {
+		const assets = double<Fetcher>({
+			fetch: async () =>
+				new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.error(new Error(LEAK));
+						},
+					}),
+				),
+		});
+
+		vi.stubEnv("DEV", false);
+
+		try {
+			const response = await og(
+				partial<APIContext>({
+					params: { name: OG_NAME },
+					request: new Request(`https://thesuperhuman.us${OG}`),
+					locals: partial<APIContext["locals"]>({
+						runtime: partial<TestRuntime>({
+							env: partial<TestRuntime["env"]>({ ASSETS: assets }),
+						}),
+					}),
+				}),
+			);
+
+			expect(await answered(response)).toEqual({
+				status: 500,
+				text: "Media unavailable",
+			});
+
+			expect(logged).toHaveLength(1);
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+});
