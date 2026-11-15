@@ -38,6 +38,15 @@ const PUT_THROUGH_MS = 560;
 // How close a dragged plug must come to a jack to seat in it.
 const SNAP = 44;
 
+// The cable is a chain of points under gravity, pinned at your jack and at the plug (Verlet
+// integration with distance constraints, stepped at a fixed rate). Its length is the length of the
+// resting curve between its two ends, so it hangs about as drawn, and it whips and sways as the plug
+// moves. Friction settles it within a couple of seconds.
+const LINKS = 16;
+const ROPE_STEP = 1 / 120;
+const ROPE_FRICTION = 0.985;
+const ROPE_PASSES = 12;
+
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
 }
@@ -96,6 +105,10 @@ export function setupSwitchboard(
 	let scale = 1;
 	let scaleVelocity = 0;
 	let measured = false;
+	let rope: Point[] = [];
+	let ropeBefore: Point[] = [];
+	let ropeClock = 0;
+	let ropeStirring = 0;
 
 	const jackOf = (link: HTMLAnchorElement) =>
 		link.querySelector<HTMLElement>("[data-jack]")!;
@@ -155,25 +168,157 @@ export function setupSwitchboard(
 
 	// The cable leaves each plug toward the viewer and falls: on a wide board it hangs in a curve
 	// below the jacks; on a narrow one it runs down the left of the jacks, bowed outward.
-	function cablePath(from: Point, to: Point) {
+	function cableCurve(from: Point, to: Point): [Point, Point] {
 		const dx = to.x - from.x;
 		const dy = to.y - from.y;
 
 		if (layout() === "row" || Math.abs(dy) < 36) {
 			const sag = clamp(Math.hypot(dx, dy) * 0.22, 30, 112);
 
-			return `M ${from.x} ${from.y} C ${from.x + dx * 0.12} ${from.y + sag}, ${to.x - dx * 0.12} ${to.y + sag}, ${to.x} ${to.y}`;
+			return [
+				{ x: from.x + dx * 0.12, y: from.y + sag },
+				{ x: to.x - dx * 0.12, y: to.y + sag },
+			];
 		}
 
 		// It may swing past the board's left edge into the page gutter; content past a left edge never scrolls.
 		const bow = Math.max(0, Math.min(Math.abs(dy) * 0.12, from.x + 12));
 
-		return `M ${from.x} ${from.y} C ${from.x - bow} ${from.y + dy * 0.35}, ${to.x - bow} ${to.y - dy * 0.35}, ${to.x} ${to.y}`;
+		return [
+			{ x: from.x - bow, y: from.y + dy * 0.35 },
+			{ x: to.x - bow, y: to.y - dy * 0.35 },
+		];
+	}
+
+	// The resting curve, as points along it.
+	function restingRope(from: Point, to: Point): Point[] {
+		const [a, b] = cableCurve(from, to);
+
+		return Array.from({ length: LINKS + 1 }, (_, index) => {
+			const t = index / LINKS;
+			const u = 1 - t;
+
+			return {
+				x:
+					u * u * u * from.x +
+					3 * u * u * t * a.x +
+					3 * u * t * t * b.x +
+					t * t * t * to.x,
+				y:
+					u * u * u * from.y +
+					3 * u * u * t * a.y +
+					3 * u * t * t * b.y +
+					t * t * t * to.y,
+			};
+		});
+	}
+
+	function layRope(points: Point[]) {
+		rope = points.map((point) => ({ ...point }));
+		ropeBefore = points.map((point) => ({ ...point }));
+		ropeClock = 0;
+		// Counts as moving until a step has measured it, so a frame too short for a step never ends the swing.
+		ropeStirring = 1;
+	}
+
+	// Pulls toward the floor on a wide board; on a narrow one the board stands on its side, so the
+	// cable also drifts out past the jacks' left edge rather than across them.
+	function gravity(): Point {
+		return layout() === "row" ? { x: 0, y: 1900 } : { x: -1500, y: 800 };
+	}
+
+	function swing(dt: number) {
+		const from = centre(youJack!);
+		const hang = restingRope(from, position);
+		let length = 0;
+
+		for (let index = 0; index < LINKS; index++)
+			length += Math.hypot(
+				hang[index + 1].x - hang[index].x,
+				hang[index + 1].y - hang[index].y,
+			);
+
+		const link = length / LINKS;
+		const pull = gravity();
+		ropeClock = Math.min(ropeClock + dt, ROPE_STEP * 8);
+
+		if (ropeClock >= ROPE_STEP) ropeStirring = 0;
+
+		while (ropeClock >= ROPE_STEP) {
+			ropeClock -= ROPE_STEP;
+
+			for (let index = 1; index < LINKS; index++) {
+				const point = rope[index];
+				const before = ropeBefore[index];
+				const vx = (point.x - before.x) * ROPE_FRICTION;
+				const vy = (point.y - before.y) * ROPE_FRICTION;
+				before.x = point.x;
+				before.y = point.y;
+				point.x += vx + pull.x * ROPE_STEP * ROPE_STEP;
+				point.y += vy + pull.y * ROPE_STEP * ROPE_STEP;
+			}
+
+			rope[0] = { ...from };
+			rope[LINKS] = { ...position };
+
+			for (let pass = 0; pass < ROPE_PASSES; pass++)
+				for (let index = 0; index < LINKS; index++) {
+					const a = rope[index];
+					const b = rope[index + 1];
+					const dx = b.x - a.x;
+					const dy = b.y - a.y;
+					const gap = Math.hypot(dx, dy) || 0.0001;
+					const pullIn = (gap - link) / gap;
+					const share = index === 0 || index === LINKS - 1 ? 1 : 0.5;
+
+					if (index !== 0) {
+						a.x += dx * pullIn * share;
+						a.y += dy * pullIn * share;
+					}
+
+					if (index !== LINKS - 1) {
+						b.x -= dx * pullIn * share;
+						b.y -= dy * pullIn * share;
+					}
+				}
+
+			// Never so far out past the board's left edge that the gutter loses it.
+			for (const point of rope) point.x = Math.max(point.x, -14);
+
+			// How far the cable moved in this step, once the links have pulled it back into shape: at
+			// rest gravity and the links cancel out and this falls to nothing.
+			for (let index = 1; index < LINKS; index++)
+				ropeStirring = Math.max(
+					ropeStirring,
+					Math.hypot(
+						rope[index].x - ropeBefore[index].x,
+						rope[index].y - ropeBefore[index].y,
+					),
+				);
+		}
+	}
+
+	// A smooth line through the chain: quadratic curves between the midpoints of its links.
+	function ropePath() {
+		let path = `M ${rope[0].x} ${rope[0].y}`;
+
+		for (let index = 1; index < LINKS - 1; index++) {
+			const point = rope[index];
+			const next = rope[index + 1];
+			path += ` Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
+		}
+
+		const end = rope[LINKS];
+		path += ` Q ${rope[LINKS - 1].x} ${rope[LINKS - 1].y} ${end.x} ${end.y}`;
+
+		return path;
 	}
 
 	function draw() {
 		const from = centre(youJack!);
-		const path = cablePath(from, position);
+		rope[0] = { ...from };
+		rope[LINKS] = { ...position };
+		const path = ropePath();
 		const lift = clamp((scale - 1) / (LIFTED - 1), 0, 1.4);
 		cable!.setAttribute("d", path);
 		cableShadow!.setAttribute("d", path);
@@ -197,6 +342,7 @@ export function setupSwitchboard(
 		position.y = point.y;
 		velocity.x = velocity.y = scaleVelocity = 0;
 		scale = goalScale;
+		layRope(restingRope(centre(youJack!), position));
 		draw();
 	}
 
@@ -215,17 +361,24 @@ export function setupSwitchboard(
 		position.x += velocity.x * dt;
 		position.y += velocity.y * dt;
 		scale += scaleVelocity * dt;
+		swing(dt);
 		draw();
 
 		const resting =
 			Math.hypot(point.x - position.x, point.y - position.y) < 0.3 &&
 			Math.hypot(velocity.x, velocity.y) < 2 &&
 			Math.abs(goalScale - scale) < 0.002 &&
-			Math.abs(scaleVelocity) < 0.02;
+			Math.abs(scaleVelocity) < 0.02 &&
+			ropeStirring < 0.02;
 
 		if (resting) {
+			// The plug lands exactly; the cable keeps the shape it came to rest in.
 			frame = 0;
-			settle();
+			position.x = point.x;
+			position.y = point.y;
+			velocity.x = velocity.y = scaleVelocity = 0;
+			scale = goalScale;
+			draw();
 
 			return;
 		}
@@ -247,8 +400,9 @@ export function setupSwitchboard(
 		frame = requestAnimationFrame(step);
 	}
 
-	// While the plug reaches toward a line it hangs over that line's jack. The handle lets clicks
-	// through then, so a press there is a press on the link itself, modifier keys and middle click included.
+	// While the plug reaches toward a line it hangs over that line's jack. A plain press there picks
+	// the plug up; with a modifier key held the handle lets the click through to the link, and a middle
+	// click opens the line in a new tab, as a link would.
 	function setTarget(next: Target) {
 		target = next;
 		root.classList.toggle("is-reaching", next.kind === "reach");
@@ -302,7 +456,7 @@ export function setupSwitchboard(
 		standDown();
 		lightOnly(null);
 		target = { kind: "rest" };
-
+		root.classList.remove("is-reaching");
 		showRestingHint();
 		settle();
 	}
@@ -443,10 +597,51 @@ export function setupSwitchboard(
 		if (target.kind !== "drag") settle();
 	}
 
+	// A modifier key held over a reaching plug lets the click through to the link underneath.
+	const modifying = (event: KeyboardEvent | MouseEvent) =>
+		root.classList.toggle(
+			"is-modifying",
+			event.metaKey || event.ctrlKey || event.shiftKey || event.altKey,
+		);
+
+	window.addEventListener("keydown", modifying);
+	window.addEventListener("keyup", modifying);
+	board.addEventListener("pointermove", modifying);
+	window.addEventListener("blur", () => root.classList.remove("is-modifying"));
+	handle.addEventListener("auxclick", (event) => {
+		if (event.button === 1 && target.kind === "reach")
+			window.open(target.link.href, "_blank", "noopener");
+	});
+
 	root.classList.add("is-wired");
 	measured = true;
 	measure();
 	new ResizeObserver(measure).observe(board);
+
+	// The first time the board comes into view the cable drops from straight into its hang and sways
+	// to rest, so it reads as a cable before anyone touches it.
+	if (typeof IntersectionObserver !== "undefined") {
+		const arrival = new IntersectionObserver((entries) => {
+			if (!entries.some((entry) => entry.isIntersecting)) return;
+			arrival.disconnect();
+
+			if (reduced.matches || target.kind !== "rest") return;
+			const from = centre(youJack);
+			layRope(
+				Array.from({ length: LINKS + 1 }, (_, index) => ({
+					x: from.x + ((position.x - from.x) * index) / LINKS,
+					y:
+						from.y +
+						((position.y - from.y) * index) / LINKS -
+						18 * Math.sin((Math.PI * index) / LINKS),
+				})),
+			);
+			move();
+		});
+
+		arrival.observe(board);
+	}
+
 	// Back and forward restore the page as it was left; put the plug back and the lamps out. Leaving
 	// first (Back during the pause, or another link) cancels the pending put-through.
 	window.addEventListener("pagehide", standDown);
@@ -463,6 +658,7 @@ export function setupSwitchboard(
 			!putThrough ||
 			!(other instanceof HTMLAnchorElement) ||
 			links.includes(other) ||
+			other.href.split("#")[0] === window.location.href.split("#")[0] ||
 			event.defaultPrevented ||
 			event.button !== 0 ||
 			event.metaKey ||

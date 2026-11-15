@@ -172,7 +172,10 @@ files; a test checks those literals against `global.css`.
 - Anything that plays on its own rests within five seconds. Page cross-fade 180ms.
 - The switchboard's plug settles in under a second: reaching toward a line on hover or
   focus has no overshoot, and seating or dropping it overshoots a touch, like a plug
-  clicking home. Its lamp strikes twice in 420ms. A chosen line navigates 560ms after the click so the lamp can
+  clicking home. Its lamp strikes twice in 420ms. The cable is a chain under gravity
+  pinned at both plugs, so it whips and sways as the plug moves; the first time the
+  board comes into view it drops from straight into its hang. Each settles within three
+  seconds. With reduced motion the cable is drawn at rest and never swings. A chosen line navigates 560ms after the click so the lamp can
   be seen; with reduced motion the plug moves without animating and the page changes at
   once.
 
