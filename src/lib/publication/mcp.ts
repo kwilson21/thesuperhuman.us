@@ -5,7 +5,12 @@ import {
 	mcpObjectSentences,
 	mcpText,
 } from "../mcp-readers";
-import { defineTool, serveTools, type ToolResult } from "../mcp-tools";
+import {
+	defineTool,
+	type PublishedInput,
+	serveTools,
+	type ToolResult,
+} from "../mcp-tools";
 import { nullable, record, type Value } from "../readers";
 
 export interface PublicationIdentity {
@@ -71,11 +76,14 @@ const result = (answer: ToolAnswer): ToolResult => ({
 
 // The tools' input as JSON Schema, written out as plain data. It is what the tool list has always shown a client (the
 // differential test compares it with what Zod made of the schemas these readers replaced), so keep the keys in this order.
+
 const idSchema = { type: "string", pattern: idPattern.source };
-const orNull = (schema: { readonly [key: string]: unknown }) => ({
+
+const orNull = (schema: PublishedInput) => ({
 	anyOf: [schema, { type: "null" }],
 });
-const choice = (values: readonly string[]) => ({
+
+const choice = (values: string[]) => ({
 	type: "string",
 	enum: values,
 });
