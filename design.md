@@ -251,7 +251,9 @@ PR: paper glass that blurs the desk behind it, in pill corners like the buttons,
 bright top edge, a hairline and a soft shadow; dark glass for the monitor's pin over its
 screen; an accent dot on each pin; the headphones' pin near their top and the controller's
 just above it, so both stay in view; plain paper where a browser cannot blur. Its colours are local tokens mixed from the
-site's own (`--glass-*` in `src/components/Hero.astro`). The controller's pin is "Play".
+site's own (`--glass-*` in `src/components/Hero.astro`). The controller's pin is "Play",
+and it opens the game itself at kaillera-next.thesuperhuman.us, its label ending in ↗ as a
+link that leaves the site ("yes straight to the game").
 Pointing at the controller or focusing it plays the Combo: the D-pad glints, then the four
 face buttons light in turn, resting within two seconds.
 

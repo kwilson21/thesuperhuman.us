@@ -61,7 +61,8 @@ const objects = [
 		id: "controller",
 		label: "Play Kaillera Next",
 		short: "Play",
-		href: "/building/kaillera-next",
+		// Straight to the game itself (owner's answer, November 15, 2026), the address the project page links as "Kaillera Next".
+		href: "https://kaillera-next.thesuperhuman.us",
 		x: 585,
 		y: 692,
 		w: 285,
@@ -87,7 +88,7 @@ const percent = (value: number, of: number) =>
       <img src={studio.src} width={studio.width} height={studio.height} alt="" loading="eager" fetchpriority="high" />
       <StudioLife />
       <nav class="studio-objects" aria-label="Around the studio">
-        {objects.map(object => <a class="studio-object" href={object.href} data-studio-object={object.id} data-plays-here={object.id === "headphones" && playsHere ? "true" : undefined} style={`left:${percent(object.x, 1536)};top:${percent(object.y, 1024)};width:${percent(object.w, 1536)};height:${percent(object.h, 1024)}`}><span class="studio-object-label">{object.label} <span aria-hidden="true">→</span></span><span class="studio-object-pin" aria-hidden="true">{object.short}</span></a>)}
+        {objects.map(object => <a class="studio-object" href={object.href} data-studio-object={object.id} data-plays-here={object.id === "headphones" && playsHere ? "true" : undefined} style={`left:${percent(object.x, 1536)};top:${percent(object.y, 1024)};width:${percent(object.w, 1536)};height:${percent(object.h, 1024)}`}><span class="studio-object-label">{object.label} <span aria-hidden="true">{object.href.startsWith("https://") ? "↗" : "→"}</span></span><span class="studio-object-pin" aria-hidden="true">{object.short}</span></a>)}
       </nav>
     </div>
   </div>

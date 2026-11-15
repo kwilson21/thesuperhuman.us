@@ -464,11 +464,6 @@ it("follows the headphones' link to a newer song that Home's comparison does not
 it("links each object to a page that exists, with its label as the link's name", () => {
 	for (const [label, href, page] of [
 		["What I’m building", "/building", "src/pages/building.astro"],
-		[
-			"Play Kaillera Next",
-			"/building/kaillera-next",
-			"src/pages/building/kaillera-next.astro",
-		],
 	]) {
 		expect(hero).toContain(`label: "${label}",`);
 		expect(hero).toContain(`href: "${href}",`);
@@ -518,4 +513,16 @@ it("names each pin with a word from its label, so speech input can say what it s
 		expect(label.toLowerCase()).toContain(short.toLowerCase());
 		expect(hero).toContain(`label: "${label}",\n\t\tshort: "${short}",`);
 	}
+});
+
+it("takes the controller straight to the game, the same address the project page links, marked as leaving the site", () => {
+	const game = "https://kaillera-next.thesuperhuman.us";
+
+	expect(hero).toContain('label: "Play Kaillera Next",');
+	expect(hero).toContain(`href: "${game}",`);
+	expect(
+		readFileSync("src/pages/building/kaillera-next.astro", "utf8"),
+	).toContain(`href="${game}"`);
+	// The site marks a link that leaves it with ↗; links within it keep →.
+	expect(hero).toContain('{object.href.startsWith("https://") ? "↗" : "→"}');
 });
