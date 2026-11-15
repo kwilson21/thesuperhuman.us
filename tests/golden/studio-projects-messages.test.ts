@@ -1309,6 +1309,33 @@ const cases: Case[] = [
 		},
 		[text("The lookup answers first")],
 	),
+	audioCase(
+		"send an invalid body with 12 client messages in the window",
+		{
+			extra: { audio_project_messages: clientMessages("r1", 12) },
+		},
+		[text("a".repeat(4001))],
+	),
+	audioCase(
+		"the rate-limit count would fail on a closed project, which never reaches it",
+		{ revoked: EARLIER },
+		[text("Hello")],
+		{
+			failures: [
+				{
+					on: /SELECT count\(\*\) AS total FROM audio_project_messages/,
+					message: "D1 is down",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /SELECT count\\(\\*\\) AS total FROM audio_project_messages/",
+					reason: "a closed project is refused by the lookup, before any count",
+				},
+			],
+		},
+	),
 ];
 
 defineCorpus("studio-projects-messages", POST, cases);

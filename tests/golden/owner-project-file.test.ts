@@ -994,6 +994,9 @@ const cases: Case[] = [
 		failures: [{ on: PUBLISH, message: "D1 is down" }],
 		steps: [publish(), publish({ advanceMs: 1000 })],
 	},
+	pub("a final revokes the live review", "review_ready", FINAL, {
+		files: [published("f2", { object_key: keyOf("f2") })],
+	}),
 ];
 
 defineCorpus("owner-project-file", POST, cases);

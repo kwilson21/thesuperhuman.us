@@ -1256,6 +1256,17 @@ const cases: Case[] = [
 		),
 		failures: [{ on: INSERT_UPLOAD, message: "D1 is down" }],
 	},
+	named(
+		"complete: no object and R2 reports a concurrent write to the same key",
+		{
+			...open(),
+			r2: {
+				uploads: { "upload-1": keyOf(U1) },
+				concurrentWrites: ["complete"],
+			},
+		},
+		act(complete()),
+	),
 ];
 
 defineCorpus("owner-project-uploads", POST, cases);
