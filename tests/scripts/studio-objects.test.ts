@@ -465,7 +465,7 @@ it("links each object to a page that exists, with its label as the link's name",
 	for (const [label, href, page] of [
 		["What I’m building", "/building", "src/pages/building.astro"],
 		[
-			"Kaillera Next, netplay for old games",
+			"Play Kaillera Next",
 			"/building/kaillera-next",
 			"src/pages/building/kaillera-next.astro",
 		],
@@ -501,5 +501,18 @@ it("links each object to a page that exists, with its label as the link's name",
 		expect(label.toLowerCase().split(/\W+/), label).toContain(
 			short.toLowerCase(),
 		);
+	}
+});
+
+it("names each pin with a word from its label, so speech input can say what it sees", () => {
+	for (const [label, short] of [
+		["What I’m building", "Building"],
+		["Hear a mix and master", "Hear"],
+		["What I’m writing", "Writing"],
+		["Play Kaillera Next", "Play"],
+	]) {
+		// Speech input matches words whatever their case.
+		expect(label.toLowerCase()).toContain(short.toLowerCase());
+		expect(hero).toContain(`label: "${label}",\n\t\tshort: "${short}",`);
 	}
 });

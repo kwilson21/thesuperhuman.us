@@ -57,8 +57,8 @@ const objects = [
 	},
 	{
 		id: "controller",
-		label: "Kaillera Next, netplay for old games",
-		short: "Netplay",
+		label: "Play Kaillera Next",
+		short: "Play",
 		href: "/building/kaillera-next",
 		x: 585,
 		y: 692,
@@ -109,7 +109,21 @@ const percent = (value: number, of: number) =>
   /* Each object on the desk is a link over its own area of the picture. The label is the link's text: it shows on
      keyboard focus, and on hover with a fine pointer. The headphones sit above the notebook where their areas meet, and
      their label hangs from their right edge so it stays on screen. */
-  .studio-objects { position: absolute; inset: 0; }
+  /* Labels and pins are frosted glass (owner decision, November 15, 2026): paper glass that blurs the desk behind it,
+     with a bright top edge, a hairline and a soft shadow. The monitor's pin sits on its dark screen, so it is dark glass.
+     Local colour tokens, each mixed from the site's own. */
+  .studio-objects {
+    position: absolute; inset: 0;
+    --glass: color-mix(in srgb, var(--paper) 74%, transparent);
+    --glass-top: color-mix(in srgb, var(--paper) 90%, transparent);
+    --glass-edge: color-mix(in srgb, var(--paper) 92%, transparent);
+    --glass-line: color-mix(in srgb, var(--ink) 12%, transparent);
+    --glass-shadow: color-mix(in srgb, var(--ink) 32%, transparent);
+    --glass-dark: color-mix(in srgb, var(--ink) 62%, transparent);
+    --glass-dark-top: color-mix(in srgb, var(--ink) 48%, transparent);
+    --glass-dark-edge: color-mix(in srgb, var(--paper) 24%, transparent);
+    --glass-dark-accent: color-mix(in srgb, var(--accent) 45%, var(--paper));
+  }
   .studio-object { position: absolute; display: block; pointer-events: auto; border-radius: 6px; border-bottom: 0; padding: 0; color: var(--ink); text-decoration: none; }
   .studio-object:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .studio-object[data-studio-object="headphones"] { z-index: 1; }
@@ -118,8 +132,8 @@ const percent = (value: number, of: number) =>
   .studio-object[data-studio-object="notebook"] { --pin-y: 65%; }
   /* A label takes clicks only while it shows. The strip under it bridges the gap to its object, so the pointer can
      move onto the label without it disappearing (WCAG 1.4.13). */
-  .studio-object-label { position: absolute; left: 0; bottom: calc(100% + .35rem); width: max-content; max-width: 16rem; padding: .3rem .6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: .875rem/1.35 var(--font-serif); white-space: normal; opacity: 0; pointer-events: none; }
-  .studio-object-label::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(.35rem + 1px); }
+  .studio-object-label { position: absolute; left: 0; bottom: calc(100% + .45rem); width: max-content; max-width: 16rem; padding: .42rem .95rem; border: 1px solid var(--glass-edge); border-radius: var(--radius-button); background: linear-gradient(var(--glass-top), var(--glass)); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-edge), 0 14px 30px -14px var(--glass-shadow); font: .9rem/1.3 var(--font-serif); white-space: normal; opacity: 0; pointer-events: none; }
+  .studio-object-label::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(.45rem + 1px); }
   .studio-object[data-studio-object="headphones"] .studio-object-label { left: auto; right: 0; }
   .studio-object-label span { color: var(--accent); }
   .studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }
@@ -139,10 +153,29 @@ const percent = (value: number, of: number) =>
   .studio-object-pin { display: none; }
   @media (hover: none), (pointer: coarse), (max-width: 800px) {
     .studio-object-label { width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-    .studio-object-pin { display: block; position: absolute; left: var(--pin-x, 50%); top: var(--pin-y, 50%); transform: translate(-50%, -50%); padding: .1rem .5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: .875rem/1.4 var(--font-serif); white-space: nowrap; }
+    /* A pin sits at its object's edge, so the object stays in view, and its accent dot says it can be tapped. */
+    .studio-object-pin { display: flex; align-items: center; gap: .4rem; position: absolute; left: var(--pin-x, 50%); top: var(--pin-y, 50%); transform: translate(-50%, -50%); padding: .2rem .7rem .2rem .55rem; border: 1px solid var(--glass-edge); border-radius: var(--radius-button); background: linear-gradient(var(--glass-top), var(--glass)); -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-edge), 0 8px 20px -10px var(--glass-shadow); font: .875rem/1.35 var(--font-serif); white-space: nowrap; }
+    .studio-object-pin::before { content: ""; width: .4rem; height: .4rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin { border-color: var(--glass-dark-edge); background: linear-gradient(var(--glass-dark-top), var(--glass-dark)); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-dark-edge), 0 8px 20px -10px var(--glass-shadow); color: var(--paper); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin::before { background: var(--glass-dark-accent); }
+    .studio-object[data-studio-object="headphones"] { --pin-y: 12%; }
+    /* The controller is small on a phone, so its pin sits just above it. */
+    .studio-object[data-studio-object="controller"] { --pin-y: -55%; }
     .studio-object::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
   }
-  @media (prefers-reduced-motion: no-preference) { .studio-object-label { transition: opacity 180ms var(--ease-site); } }
+  /* Where a browser cannot blur, the glass is plain paper, so the text keeps its contrast. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .studio-object-label, .studio-object-pin { background: var(--paper); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin { background: var(--ink); }
+  }
+  /* A label rises a few pixels into place as it appears. */
+  @media (prefers-reduced-motion: no-preference) {
+    .studio-object-label { translate: 0 .25rem; transition: opacity 180ms var(--ease-site), translate 180ms var(--ease-site); }
+    .studio-object:focus-visible .studio-object-label { translate: 0 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+    .studio-object[data-hovered] .studio-object-label { translate: 0 0; }
+  }
   .studio-scene :global(img), .studio-scene :global(.studio-life) { mask-image: linear-gradient(to right, transparent, #000 18%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 80%, transparent); mask-composite: intersect; }
   @media (prefers-reduced-motion: no-preference) {
     .studio-copy > * { animation: studio-rise 900ms var(--ease-site) both; }

@@ -239,6 +239,17 @@ At enlarged text on phone widths the footer's side gutter stops growing, so the 
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 
+## Owner decisions (November 15, 2026)
+Kazon chose the studio's labels and phone pins from sketches drawn on the real page: frosted
+glass for both ("Frosted glass looks the best but let's improve upon what we have with that").
+The glass is paper glass that blurs the desk behind it, with a bright top edge, a hairline
+and a soft shadow; the monitor's pin is dark glass over its screen; each pin carries an
+accent dot and sits at its object's edge, so the object stays in view; where a browser
+cannot blur, the glass is plain paper. Its colours are local tokens mixed from the site's
+own (`--glass-*` in `src/components/Hero.astro`). The controller's label is "Play Kaillera
+Next" (pin "Play"). Pointing at it or focusing it plays the Combo scene: the D-pad glints,
+then the four face buttons light in turn, resting within two seconds.
+
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision
 and an amendment here first.
