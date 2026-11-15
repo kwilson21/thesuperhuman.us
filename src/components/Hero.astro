@@ -28,10 +28,11 @@ const objects = [
 		label: "Listen to a mix and master",
 		short: "Listen",
 		href: "/audio/portfolio",
-		// Its area stops short of the headband's tip, which is off screen at widths from 1233 to about 1290 pixels.
+		// Its area stops short of the headband's tip, which is off screen at widths from 1233 to about 1290 pixels, so
+		// its focus ring stays on screen.
 		x: 1075,
 		y: 590,
-		w: 365,
+		w: 360,
 		h: 200,
 	},
 	{
@@ -96,22 +97,32 @@ const percent = (value: number, of: number) =>
   .studio-scene { position: relative; }
   .studio-scene :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
   /* Each object on the desk is a link over its own area of the picture. The label is the link's text: it shows on
-     hover or focus with a fine pointer, and takes no clicks of its own. The headphones sit above the notebook where
-     their areas meet, and their label hangs from their right edge so it stays on screen. */
+     keyboard focus, and on hover with a fine pointer. The headphones sit above the notebook where their areas meet, and
+     their label hangs from their right edge so it stays on screen. */
   .studio-objects { position: absolute; inset: 0; }
   .studio-object { position: absolute; display: block; pointer-events: auto; border-radius: 6px; border-bottom: 0; padding: 0; color: var(--ink); text-decoration: none; }
-  .studio-object:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .studio-object:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .studio-object[data-studio-object="headphones"] { z-index: 1; }
+  .studio-object[data-studio-object="notebook"] { --pin-y: 65%; }
+  /* A label takes clicks only while it shows. The strip under it bridges the gap to its object, so the pointer can
+     move onto the label without it disappearing (WCAG 1.4.13). */
   .studio-object-label { position: absolute; left: 0; bottom: calc(100% + .35rem); width: max-content; max-width: 16rem; padding: .3rem .6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: .875rem/1.35 var(--font-serif); white-space: normal; opacity: 0; pointer-events: none; }
+  .studio-object-label::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(.35rem + 1px); }
   .studio-object[data-studio-object="headphones"] .studio-object-label { left: auto; right: 0; }
   .studio-object-label span { color: var(--accent); }
-  .studio-object:is(:hover, :focus-visible) .studio-object-label { opacity: 1; }
-  /* Touch screens have no hover, and the full labels would collide on a phone, so each object shows a one-word pin at
-     its centre; the full label stays the link's name for screen readers. Each area is at least 44px tall to tap. */
+  .studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }
+  @media (hover: hover) and (pointer: fine) {
+    .studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }
+  }
+  /* Escape hides a showing label until the visitor points at or focuses an object again (studio-objects.ts). */
+  .studio-scene[data-labels-dismissed] .studio-object .studio-object-label { opacity: 0; pointer-events: none; }
+  /* Touch screens have no hover, and on a narrow screen the full labels would cover the copy and run off the edge, so
+     each object shows a one-word pin instead; the full label stays the link's name for screen readers. Each area is
+     at least 44px tall to tap. */
   .studio-object-pin { display: none; }
-  @media (hover: none), (pointer: coarse) {
+  @media (hover: none), (pointer: coarse), (max-width: 800px) {
     .studio-object-label { width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-    .studio-object-pin { display: block; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: .1rem .5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: .875rem/1.4 var(--font-serif); white-space: nowrap; }
+    .studio-object-pin { display: block; position: absolute; left: var(--pin-x, 50%); top: var(--pin-y, 50%); transform: translate(-50%, -50%); padding: .1rem .5rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--paper); font: .875rem/1.4 var(--font-serif); white-space: nowrap; }
     .studio-object::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
   }
   @media (prefers-reduced-motion: no-preference) { .studio-object-label { transition: opacity 180ms var(--ease-site); } }

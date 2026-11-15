@@ -11,6 +11,33 @@ afterEach(() => {
 /** The scene's data attributes, as the script reads and writes them. */
 class SceneData {
 	play?: string;
+	labelsDismissed?: string;
+}
+
+/** A pointer entering or leaving a link, from a mouse unless `pointerType` says otherwise (Node has no PointerEvent). */
+class Pointer extends Event {
+	constructor(
+		type: string,
+		readonly pointerType = "mouse",
+	) {
+		super(type);
+	}
+}
+
+/** The keyboard's Escape, as the document hears it (Node has no KeyboardEvent). */
+class Key extends Event {
+	constructor(readonly key: string) {
+		super("keydown");
+	}
+}
+
+/** The document as the script uses it: listeners, the focused element and two lookups. */
+class StandInDocument extends EventTarget {
+	activeElement: StudioLink | null = null;
+
+	constructor(readonly querySelector: (selector: string) => object | null) {
+		super();
+	}
 }
 
 /**
@@ -61,7 +88,12 @@ class Click extends Event {
  * The hero's scene with its four links, and Home's comparison player when `player` is set (`playing` is whether it is
  * already playing).
  */
-function mount({ player = true, playing = false, busy = false } = {}) {
+function mount({
+	player = true,
+	playing = false,
+	busy = false,
+	fineHover = true,
+} = {}) {
 	const links = new Map(
 		["monitor", "headphones", "notebook", "controller"].map((id) => [
 			id,
@@ -90,20 +122,20 @@ function mount({ player = true, playing = false, busy = false } = {}) {
 		querySelector: () => button,
 	};
 
-	let active: StudioLink | null = null;
+	// A mouse that hovers unless `fineHover` is off; reduced motion is off.
+	vi.stubGlobal("matchMedia", (query: string) => ({
+		matches: query === "(hover: hover) and (pointer: fine)" && fineHover,
+	}));
 
-	vi.stubGlobal("matchMedia", () => ({ matches: false }));
-	vi.stubGlobal("document", {
-		get activeElement() {
-			return active;
-		},
-		querySelector: (selector: string) =>
-			selector === "[data-studio-scene]"
-				? scene
-				: player && selector.startsWith(".music-proof-preview")
-					? comparison
-					: null,
-	});
+	const page = new StandInDocument((selector: string) =>
+		selector === "[data-studio-scene]"
+			? scene
+			: player && selector.startsWith(".music-proof-preview")
+				? comparison
+				: null,
+	);
+
+	vi.stubGlobal("document", page);
 	setupStudioObjects();
 
 	const link = (id: string) => links.get(id)!;
@@ -113,16 +145,19 @@ function mount({ player = true, playing = false, busy = false } = {}) {
 		button,
 		comparison,
 		link,
-		point: (id: string) => link(id).dispatchEvent(new Event("pointerenter")),
-		leave: (id: string) => link(id).dispatchEvent(new Event("pointerleave")),
+		point: (id: string, pointerType = "mouse") =>
+			link(id).dispatchEvent(new Pointer("pointerenter", pointerType)),
+		leave: (id: string, pointerType = "mouse") =>
+			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
+		escape: () => page.dispatchEvent(new Key("Escape")),
 		/** Focus by keyboard (`keyboard`), which matches :focus-visible, or by a mouse press, which does not. */
 		focus: (id: string, keyboard = true) => {
-			active = link(id);
+			page.activeElement = link(id);
 			link(id).keyboardFocus = keyboard;
 			link(id).dispatchEvent(new Event("focus"));
 		},
 		blur: (id: string) => {
-			active = null;
+			page.activeElement = null;
 			link(id).keyboardFocus = false;
 			link(id).dispatchEvent(new Event("blur"));
 		},
@@ -168,6 +203,50 @@ it("rests a scene once the pointer leaves, even when a mouse press focused its l
 	studio.focus("monitor", false);
 	studio.leave("monitor");
 	expect(studio.scene.dataset.play).toBeUndefined();
+});
+
+it("returns to the focused object's scene when the pointer passes over another and away", () => {
+	const studio = mount();
+
+	studio.focus("monitor");
+	studio.point("headphones");
+	expect(studio.scene.dataset.play).toBe("headphones");
+	studio.leave("headphones");
+	expect(studio.scene.dataset.play).toBe("monitor");
+});
+
+it("keeps the scene under the pointer when keyboard focus moves away", () => {
+	const studio = mount();
+
+	studio.point("monitor");
+	studio.focus("monitor");
+	studio.blur("monitor");
+	expect(studio.scene.dataset.play).toBe("monitor");
+});
+
+it("plays no scene for a tap on a touch screen, or for a pointer that cannot hover", () => {
+	const touch = mount();
+
+	touch.point("headphones", "touch");
+	expect(touch.scene.dataset.play).toBeUndefined();
+
+	const coarse = mount({ fineHover: false });
+
+	coarse.point("headphones");
+	expect(coarse.scene.dataset.play).toBeUndefined();
+});
+
+it("hides a showing label on Escape until an object is pointed at or focused again", () => {
+	const studio = mount();
+
+	studio.escape();
+	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+	studio.focus("notebook");
+	studio.escape();
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+	expect(studio.scene.dataset.play).toBe("notebook");
+	studio.point("controller");
+	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
 });
 
 it("plays Old News on Home from the headphones, without leaving the page", () => {

@@ -25,8 +25,9 @@ interface Props {
 
 const { headline } = Astro.props;
 
-// Where the typed line's baseline sits on the screen, level like the code above it, under the last row. It is
-// revealed by a stepped clip, so nothing moves outside the screen.
+// Where the typed line's baseline sits on the screen, under the last row. It stays level, since the rows' slope would
+// carry a long headline down past the screen's edge, and it is revealed by a stepped clip, so nothing moves outside the
+// screen.
 const line = { x: 897, y: 463, size: 11 };
 ---
 <svg class="studio-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
@@ -61,7 +62,7 @@ const line = { x: 897, y: 463, size: 11 };
   .type-row, .life-sound ellipse, .life-headline { display: none; }
   /* Pointing at the monitor shows the typed line; with reduced motion it simply appears. */
   :global([data-play="monitor"]) .life-headline { display: inline; }
-  .life-headline text { fill: var(--studio-code); font-family: var(--font-mono); }
+  .life-headline text { fill: var(--studio-code); font-family: var(--font-serif); }
   .type-row rect { fill: var(--studio-screen); }
   .type-row .caret { fill: var(--studio-code); }
   .life-sound ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
