@@ -1433,3 +1433,36 @@ describe("found in the eighth review", () => {
 		},
 	);
 });
+
+describe("found in the ninth review", () => {
+	it.each([
+		"1주 차엔 기획",
+		"1년 차와 3년 차 직원",
+		"1주 차만 무료인가요?",
+		"1주 차마다 리포트",
+		"1주 차보다",
+		"1주 차쯤",
+		"1주 차랑",
+		"1주 차하고",
+		"개발 3년 차입니다",
+		"3년 차예요",
+		"3년 차라서",
+		"3년 차지만",
+		"3년 차였어요",
+		"3년 차면",
+	])("accepts the ordinal %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+
+	it.each([
+		"2주간 차를 렌트",
+		"1년간 차를 운행",
+		"2주간 차에서 촬영",
+		"3주간 차도 없이",
+		"2주간 차",
+		"2주간 차로 이동",
+		"2주일간 차를",
+	])("refuses the duration in %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+});
