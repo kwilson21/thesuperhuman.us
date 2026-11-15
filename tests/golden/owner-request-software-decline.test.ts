@@ -61,10 +61,13 @@ import type { JsonValue } from "../helpers/json";
 //   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
 //            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
 //            not resolved and no audit row says "declined"
-//   503 {ok:false,message:"Software offers are temporarily unavailable."}  mail not configured (no Resend key, sender or
-//            owner address), checked after the refusals and before the first batch: nothing withdrawn or emailed
+//   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
+//            sent or saved."}  mail not configured (no Resend key, sender or owner address), checked after the refusals
+//            and before the first batch: nothing withdrawn or emailed
 //   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement
 //   guard, request guard, sending guard, deposit guard, audio guard, no-project guard, withdraw offers, four
 //   signing-retirement statements, revoke links, update updated_at, audit "offer-link-revoked"), Resend POST for the
@@ -546,6 +549,46 @@ const cases: Case[] = [
 						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
 					reason:
 						"a control: the failure before it is a store failure, which answers 500 at once, so the sending lookup after it is never made",
+				},
+			],
+		},
+	),
+	declineCase(
+		"the first batch is refused by a race and the sending lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE software_offers SET status='withdrawn'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	declineCase(
+		"the second batch is refused by a race and the project lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE owner_requests SET status='resolved'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},

@@ -12,17 +12,18 @@ import {
 	type AgreementTemplate,
 } from "~/lib/agreement-templates";
 import type { OfferTerms } from "~/lib/software-offers";
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { inflateSync } from "node:zlib";
 import { PDFDocument, PDFArray, PDFDict, PDFName } from "pdf-lib";
 import {
+	PreflightReadFailed,
 	preflightAgreementPacket,
 	renderAgreementPacket,
 } from "~/lib/agreement-pdf";
 import { canonicalJson, hashBytes } from "~/lib/agreement-artifacts";
 import type { Agreement } from "~/lib/software-agreements";
 import { double, partial } from "../helpers/doubles";
-import { fakeD1First } from "../helpers/d1";
+import { fakeD1First, fakeFirst } from "../helpers/d1";
 import { fakeR2Bytes } from "../helpers/r2";
 import { rawStreamOf } from "../helpers/pdf";
 
@@ -203,7 +204,8 @@ it("imports the original executed MSA pages unchanged before the later SOW", asy
 	);
 });
 
-it("preflights exact attachment merge inputs and rejects a missing original MSA before send", async () => {
+/** What the send's preflight is given: terms, details, contractor details and both templates. */
+function preflightInputs() {
 	const terms: OfferTerms = {
 		outcome: "Synthetic",
 		summary: "Test",
@@ -265,6 +267,12 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		}),
 	);
 
+	return { terms, details, contractor, templates };
+}
+
+it("preflights exact attachment merge inputs and rejects a missing original MSA before send", async () => {
+	const { terms, details, contractor, templates } = preflightInputs();
+
 	const env = partial<Env>({
 		ASSETS: assets,
 		MUSIC_DB: fakeD1First(null),
@@ -298,6 +306,164 @@ it("preflights exact attachment merge inputs and rejects a missing original MSA 
 		preflightAgreementPacket(env, terms, details, contractor, templates, null),
 	).rejects.toThrow("Attachment hash mismatch");
 }, 30000);
+
+describe("a D1 or R2 read that rejects while the packet is rendered", () => {
+	const failure = new Error("D1_ERROR: the store is down");
+
+	const rejected = async () => {
+		throw failure;
+	};
+
+	const attachmentKey =
+		"agreements/attachments/00000000-0000-4000-8000-000000000001.pdf";
+
+	/** Where the packet's sources are, and which of its reads rejects. */
+	type Sources = {
+		readonly artifact?: () => Promise<{
+			pdf_key: string;
+			pdf_sha256: string;
+		} | null>;
+		readonly get?: () => Promise<R2ObjectBody | null>;
+		readonly attachments?: boolean;
+	};
+
+	const object = (bytes: Uint8Array) =>
+		double<R2ObjectBody>({ arrayBuffer: async () => bytes.slice().buffer });
+
+	/** The env both callers render with: the executed MSA from an earlier offer, its artifact record and its signed copy. */
+	async function world(sources: Sources) {
+		const signed = await renderAgreementPacket(
+			partial<Env>({ ASSETS: assets }),
+			[document("msa", "Original MSA")],
+			[{}],
+		);
+
+		const msa = document("msa", "Original MSA", "previous");
+
+		const env = partial<Env>({
+			ASSETS: assets,
+			MUSIC_DB: double<D1Database>({
+				prepare: (query: string) =>
+					double<D1PreparedStatement>({
+						bind: () =>
+							double<D1PreparedStatement>({
+								first: fakeFirst(async () =>
+									query.startsWith("SELECT pdf_key")
+										? (
+												sources.artifact ??
+												(async () => ({
+													pdf_key: "original",
+													pdf_sha256: await hashBytes(signed),
+												}))
+											)()
+										: msa,
+								),
+							}),
+					}),
+			}),
+			AUDIO: double<R2Bucket>({
+				// SAFETY: get() is overloaded, so one function cannot be typed as the member; the packet calls get(key) and
+				// reads only arrayBuffer() of the object, which the double supplies.
+				get: (async () =>
+					(sources.get ?? (async () => object(signed)))()) as R2Bucket["get"],
+			}),
+		});
+
+		const sow = document("sow", "Later SOW");
+
+		if (sources.attachments)
+			sow.attachment_manifest_json = JSON.stringify([
+				{ key: attachmentKey, sha256: "a".repeat(64) },
+			]);
+
+		return { env, documents: sources.attachments ? [sow] : [msa, sow] };
+	}
+
+	it.each<[string, Sources]>([
+		["the signed MSA's artifact read", { artifact: rejected }],
+		["the signed MSA's R2 read", { get: rejected }],
+		[
+			"the signed MSA's body",
+			{
+				get: async () => double<R2ObjectBody>({ arrayBuffer: rejected }),
+			},
+		],
+		["an attachment's R2 read", { get: rejected, attachments: true }],
+	])(
+		"%s: countersigning gets the rejection as it came, the preflight names it",
+		async (_name, sources) => {
+			const { env, documents } = await world(sources);
+
+			// prepareAgreementArtifact (countersigning, src/lib/agreement-artifacts.ts) renders with its own env, as here.
+			await expect(
+				renderAgreementPacket(
+					env,
+					documents,
+					documents.map(() => ({})),
+				),
+			).rejects.toBe(failure);
+
+			const { terms, details, contractor, templates } = preflightInputs();
+
+			if (sources.attachments)
+				details.attachments = [
+					{
+						filename: "Example.pdf",
+						version: "1",
+						date: "2026-10-01",
+						key: attachmentKey,
+						sha256: "a".repeat(64),
+						bytes: 10,
+					},
+				];
+
+			const preflight = preflightAgreementPacket(
+				env,
+				terms,
+				details,
+				contractor,
+				templates,
+				sources.attachments ? null : "msa",
+			);
+
+			await expect(preflight).rejects.toBeInstanceOf(PreflightReadFailed);
+			await expect(preflight).rejects.toHaveProperty("failure", failure);
+		},
+		30000,
+	);
+
+	it("a missing artifact record or signed copy is still a plain error in both", async () => {
+		for (const [sources, sentence] of [
+			[{ artifact: async () => null }, "Original signed MSA copy unavailable."],
+			[{ get: async () => null }, "Original signed MSA unavailable."],
+		] as const) {
+			const { env, documents } = await world(sources);
+
+			const rendered = renderAgreementPacket(
+				env,
+				documents,
+				documents.map(() => ({})),
+			);
+
+			await expect(rendered).rejects.toThrow(sentence);
+			await expect(rendered).rejects.not.toBeInstanceOf(PreflightReadFailed);
+
+			const { terms, details, contractor, templates } = preflightInputs();
+
+			const preflight = preflightAgreementPacket(
+				env,
+				terms,
+				details,
+				contractor,
+				templates,
+				"msa",
+			);
+
+			await expect(preflight).rejects.toThrow(sentence);
+			await expect(preflight).rejects.not.toBeInstanceOf(PreflightReadFailed);
+		}
+	}, 30000);
+});
 
 it("bundles exactly the licensed source font bytes", () => {
 	for (const [name, encoded] of [

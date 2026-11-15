@@ -476,18 +476,38 @@ const offersAnswer = (message: string, status: number) =>
 		{ status, headers: { "cache-control": "private, no-store" } },
 	);
 
-/** A dependency this deployment does not have (the mail settings, the attachment bucket): a deliberate 503. */
-export const offersUnavailable = () =>
-	offersAnswer("Software offers are temporarily unavailable.", 503);
+/** A question or a decline with the mail settings missing: 503, answered before anything is written. */
+export const offersMailNotConfigured = () =>
+	offersAnswer(
+		"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.",
+		503,
+	);
 
-/** A store that failed unexpectedly, or a defect: 500, because nothing is known to be unavailable. */
+/** A send that needs R2 (attachments, or a reused MSA whose signed copy the packet imports) with no R2 binding: 503. */
+export const offersStorageNotConfigured = () =>
+	offersAnswer(
+		"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.",
+		503,
+	);
+
+/**
+ * A store that failed unexpectedly: 500, because nothing is known to be unavailable. A defect never gets this answer in
+ * that route: it rejects, and the runtime answers it.
+ */
 export const offersFailed = () =>
 	offersAnswer("The change could not be saved. Please try again.", 500);
 
-/** A store that failed after the client email (a question's record, a decline's resolve, a send's live-link check). */
+/** A store that failed after the client email went out (a question's record, a decline's resolve). */
 export const offersFailedAfterEmail = () =>
 	offersAnswer(
 		"The email was sent, but saving failed. Reload before you try again.",
+		500,
+	);
+
+/** A send's live-link check that failed after the client email was accepted: the offer was saved, and only the read failed. */
+export const offersCheckFailedAfterEmail = () =>
+	offersAnswer(
+		"The email was sent, but the link could not be checked. Reload before you try again.",
 		500,
 	);
 

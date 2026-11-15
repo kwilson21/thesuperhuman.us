@@ -77,10 +77,17 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //                           closed archive) after validation passed
 //   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails while the agreement is
 //                           prepared: the signing setting, template, contractor, reused MSA or attachment metadata read, an
-//                           attachment's R2 read, the preflight's read of the reused MSA; and the send batch (an outage).
-//                           Nothing is written or emailed
-//   503 {ok:false,message:"Software offers are temporarily unavailable."}  attachments to read and no R2 binding, answered
-//                           where the first attachment's bytes are read; nothing is written or emailed
+//                           attachment's R2 read, and every D1 or R2 read the preflight makes (the reused MSA, its artifact
+//                           record, its signed copy in R2; an attachment read again there is reachable only in
+//                           tests/api/software-offers-outages.test.ts, since an R2 failure here fails every get); and the
+//                           send batch (an outage). Nothing is written or emailed. A row or an object the preflight finds
+//                           missing is still incomplete details (400)
+//   503 {ok:false,message:"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent."}  no R2 binding
+//                           when the send needs it: attachments to read (answered where the first attachment's bytes are
+//                           read) or a reused MSA whose signed copy the packet imports (answered before the preflight);
+//                           nothing is written or emailed
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (signing setting, templates, contractor config, reused MSA, attachment metadata), R2 get and a hash per
 //   attachment, the batch (attachment guards, the offer pinned with its snapshots), Resend POSTs, the live-link read.
 
@@ -391,6 +398,29 @@ const cases: Case[] = [
 				},
 			],
 		},
+	),
+	signCase(
+		"the signed MSA's artifact read fails in the preflight",
+		signSeed({ msa: true, offer: { reused_msa_id: MSA_ID } }),
+		{
+			r2: msaBucket,
+			failures: [
+				{
+					on: /SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts/,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	signCase(
+		"the signed MSA's R2 read fails in the preflight",
+		signSeed({ msa: true, offer: { reused_msa_id: MSA_ID } }),
+		{ r2: { ...msaBucket, fails: ["get"] } },
+	),
+	signCase(
+		"a reused MSA with no R2 binding",
+		signSeed({ msa: true, offer: { reused_msa_id: MSA_ID } }),
+		{ r2: { missing: true } },
 	),
 	signCase(
 		"a draft sent over a sent offer with a pinned template",

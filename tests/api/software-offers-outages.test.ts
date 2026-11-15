@@ -31,16 +31,24 @@ import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 // How POST /api/owner/requests/[id]/software answers when its database, R2 or mail settings fail it, when the id is
 // missing, and when a send's link closes while its email fails. The owner's decisions (2026-11-14 and 2026-11-15, F1 to
 // F4, F6, F8 and F9 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the route's
-// fixed sentence and never the error's own text; after the client email went out (or the draft was saved), it says so; a
-// missing R2 binding while a send reads its attachments, or mail that is not configured for a question or a decline, is
-// a known unavailable dependency, 503, with nothing written; a guard that refuses a batch (a lost race or a stale page)
-// still answers 409. Real SQLite with the music schema; nothing is mocked.
+// fixed sentence and never the error's own text, and is logged once; after the client email went out (or the draft was
+// saved), it says so; a missing R2 binding when a send needs it, or mail that is not configured for a question or a
+// decline, is a known unavailable dependency, 503, with nothing written; a guard that refuses a batch (a lost race or a
+// stale page) still answers 409. Real SQLite with the music schema; nothing is mocked.
 
 const FAILED = "The change could not be saved. Please try again.";
-const UNAVAILABLE = "Software offers are temporarily unavailable.";
+
+const NO_MAIL =
+	"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.";
+
+const NO_STORAGE =
+	"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
 
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
+
+const CHECK_AFTER_EMAIL =
+	"The email was sent, but the link could not be checked. Reload before you try again.";
 
 const AFTER_FAILED_EMAIL =
 	"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.";
@@ -67,6 +75,8 @@ type Race = {
 type Bucket = {
 	readonly objects?: Readonly<Record<string, Uint8Array>>;
 	readonly fails?: readonly ("get" | "delete")[];
+	/** get() rejects from its n-th call on (the calls before it answer). */
+	readonly getFailsFrom?: number;
 };
 
 type World = {
@@ -163,12 +173,19 @@ function faultyDb(sql: SqliteDatabase, world: World): D1Database {
 
 function r2(bucket: Bucket): R2Bucket {
 	const objects = new Map(Object.entries(bucket.objects ?? {}));
+	let gets = 0;
 
 	return double<R2Bucket>({
 		// SAFETY: get() is overloaded (with and without conditional options), so one function cannot be typed as the member;
 		// the route calls get(key) and reads only size and arrayBuffer() of the object, which the double supplies.
 		get: (async (key: string) => {
-			if (bucket.fails?.includes("get")) throw new Error(SECRET);
+			gets += 1;
+
+			if (
+				bucket.fails?.includes("get") ||
+				gets >= (bucket.getFailsFrom ?? Number.POSITIVE_INFINITY)
+			)
+				throw new Error(SECRET);
 			const bytes = objects.get(key);
 
 			return bytes
@@ -238,7 +255,18 @@ function setUp(world: World) {
 const emails = () =>
 	vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("resend"));
 
+/** The lines the route logged through console.error (silenced in every test). */
+const logs = () => vi.mocked(console.error).mock.calls;
+
+/** The one line a failed store logs: the route, and the error the database or R2 gave. */
+const LOGGED = [
+	"/api/owner/requests/[id]/software failed unexpectedly:",
+	"Error",
+	SECRET,
+];
+
 beforeEach(() => {
+	vi.spyOn(console, "error").mockImplementation(() => undefined);
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ id: "em_1" })),
@@ -250,6 +278,7 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 /** The answer's status and body, and whether it is private. */
@@ -301,7 +330,39 @@ const withDraft: Seed = {
 	software_offers: [offer("draft")],
 };
 
-describe("a store that fails answers 500 with the fixed sentence, and nothing is emailed", () => {
+/** Signing on, and a draft that reuses an executed MSA from another offer, with its signed copy in R2. */
+const reusing = (over: Partial<World> = {}): World => ({
+	signing: true,
+	bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
+	seed: {
+		...signingBase(),
+		owner_requests: [request()],
+		software_agreements: [executedMsa()],
+		software_agreement_artifacts: [readyArtifact()],
+		software_offers: [
+			offer("draft", 1, {
+				agreement_details_json: JSON.stringify(details()),
+				reused_msa_id: MSA_ID,
+			}),
+		],
+	},
+	...over,
+});
+
+/** Every table an action of this route writes, row by row. */
+const written = (sql: SqliteDatabase) =>
+	Object.fromEntries(
+		[
+			"owner_requests",
+			"owner_request_audit",
+			"software_fit_reviews",
+			"software_offers",
+			"software_offer_links",
+			"software_agreement_attachments",
+		].map((table) => [table, sql.prepare(`SELECT * FROM ${table}`).all()]),
+	);
+
+describe("a store that fails answers 500 with the fixed sentence, and nothing is written or emailed", () => {
 	it.each<[string, JsonObject, Seed, RegExp]>([
 		["fit: the first read", fit, plain, /FROM owner_requests WHERE id=\?/],
 		["fit: the batch", fit, plain, /INSERT INTO software_fit_reviews/],
@@ -346,7 +407,8 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 		],
 		["send: the batch", send, withDraft, /INSERT INTO software_offer_links/],
 	])("%s", async (_name, body, rows, on) => {
-		const { call } = setUp({ seed: rows, faults: [{ on }] });
+		const { sql, call } = setUp({ seed: rows, faults: [{ on }] });
+		const before = written(sql);
 
 		const response = await call(body);
 		const text = await response.clone().text();
@@ -354,18 +416,23 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 		expect(await read(response)).toEqual(answer(500, FAILED));
 		expect(text).not.toContain("D1_ERROR");
 		expect(emails()).toEqual([]);
+		expect(written(sql)).toEqual(before);
+		expect(logs()).toEqual([LOGGED]);
 	});
 
 	it("a request whose stored details are not JSON answers 500 too", async () => {
-		const { call } = setUp({
+		const { sql, call } = setUp({
 			seed: { owner_requests: [request({ details_json: "{bad" })] },
 		});
 
+		const before = written(sql);
+
 		expect(await read(await call(fit))).toEqual(answer(500, FAILED));
+		expect(written(sql)).toEqual(before);
 	});
 
 	it("a lookup that fails after a refused batch answers 500", async () => {
-		const { call } = setUp({
+		const { sql, call } = setUp({
 			seed: plain,
 			race: {
 				on: /UPDATE owner_requests SET updated_at/,
@@ -374,8 +441,20 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 			faults: [{ on: /^SELECT 1 FROM software_projects/, nth: 2 }],
 		});
 
+		const before = written(sql);
+
 		expect(await read(await call(question))).toEqual(answer(500, FAILED));
 		expect(emails()).toEqual([]);
+		// The race's own change is the only one: the refused batch wrote nothing.
+		expect(written(sql)).toEqual({
+			...before,
+			owner_requests: [
+				{
+					...before.owner_requests[0],
+					updated_at: "2026-11-13T11:30:00.000Z",
+				},
+			],
+		});
 	});
 });
 
@@ -406,10 +485,11 @@ describe("a refused guard still answers 409", () => {
 			},
 		});
 
-		const { status, body } = await read(await call(draft));
-
-		expect(status).toBe(409);
-		expect(body).toMatchObject({ updatedAt: "2026-11-13T11:45:00.000Z" });
+		expect(await read(await call(draft))).toMatchObject({
+			status: 409,
+			body: { ok: false, updatedAt: "2026-11-13T11:45:00.000Z" },
+			private: true,
+		});
 	});
 
 	it("draft: the reused MSA was deleted before the batch (a foreign key, with the MSA gone)", async () => {
@@ -425,12 +505,15 @@ describe("a refused guard still answers 409", () => {
 			},
 		});
 
-		const { status, body } = await read(
-			await call({ ...draft, reusedMsaId: MSA_ID, confirmMsaReuse: true }),
-		);
-
-		expect(status).toBe(409);
-		expect(body).toMatchObject({ updatedAt: null });
+		expect(
+			await read(
+				await call({ ...draft, reusedMsaId: MSA_ID, confirmMsaReuse: true }),
+			),
+		).toMatchObject({
+			status: 409,
+			body: { ok: false, updatedAt: null },
+			private: true,
+		});
 	});
 
 	it("revoke: the link changed (the lookups after the batch answer)", async () => {
@@ -472,6 +555,7 @@ describe("after the client email went out, a failure says so", () => {
 		});
 
 		expect(await read(await call(question))).toEqual(answer(500, AFTER_EMAIL));
+		expect(emails()).toHaveLength(2);
 	});
 
 	it("decline: the second batch fails", async () => {
@@ -493,7 +577,9 @@ describe("after the client email went out, a failure says so", () => {
 			faults: [{ on: /WHERE request_id=\? AND token_hash=\?/ }],
 		});
 
-		expect(await read(await call(send))).toEqual(answer(500, AFTER_EMAIL));
+		expect(await read(await call(send))).toEqual(
+			answer(500, CHECK_AFTER_EMAIL),
+		);
 		expect(emails()).toHaveLength(2);
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",
@@ -510,6 +596,8 @@ describe("after the client email went out, a failure says so", () => {
 		expect(await read(await call(send))).toEqual(
 			answer(500, AFTER_FAILED_EMAIL),
 		);
+		// The client email was refused, so no copy was sent.
+		expect(emails()).toHaveLength(1);
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",
 		});
@@ -591,34 +679,83 @@ describe("signing: preparing the agreement", () => {
 	it("no R2 binding: 503, nothing written", async () => {
 		const { sql, call } = setUp(signing({ bucket: undefined }));
 
-		expect(await read(await call(send))).toEqual(answer(503, UNAVAILABLE));
+		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
 		unsent(sql);
 	});
 
-	it("the reused MSA read in the preflight fails: 500", async () => {
-		const world = signing();
+	it("a reused MSA with its signed copy in R2 is sent", async () => {
+		const { sql, call } = setUp(reusing());
 
-		const { sql, call } = setUp({
-			...world,
-			bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
-			faults: [
-				{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
-			],
-			seed: {
-				...signingBase(),
-				owner_requests: [request()],
-				software_agreements: [executedMsa()],
-				software_agreement_artifacts: [readyArtifact()],
-				software_offers: [
-					offer("draft", 1, {
-						agreement_details_json: JSON.stringify(details()),
-						reused_msa_id: MSA_ID,
-					}),
+		expect(await read(await call(send))).toMatchObject({
+			status: 200,
+			body: { ok: true, emailSent: true },
+			private: true,
+		});
+		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
+			status: "sent",
+		});
+	});
+
+	it.each<[string, Partial<World>]>([
+		[
+			"the reused MSA read",
+			{
+				faults: [
+					{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
 				],
 			},
-		});
+		],
+		[
+			"the signed MSA's artifact read",
+			{
+				faults: [
+					{ on: /SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts/ },
+				],
+			},
+		],
+		[
+			"the signed MSA's R2 read",
+			{ bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES }, fails: ["get"] } },
+		],
+	])("%s in the preflight fails: 500", async (_name, over) => {
+		const { sql, call } = setUp(reusing(over));
 
 		expect(await read(await call(send))).toEqual(answer(500, FAILED));
+		unsent(sql);
+	});
+
+	it("an attachment's R2 read in the preflight fails after the route's own read passed: 500", async () => {
+		const { sql, call } = setUp(
+			signing({
+				bucket: { objects: { [ATTACHMENT_KEY]: PDF_BYTES }, getFailsFrom: 2 },
+			}),
+		);
+
+		expect(await read(await call(send))).toEqual(answer(500, FAILED));
+		unsent(sql);
+	});
+
+	it("a signed MSA missing from R2 is still incomplete details: 400", async () => {
+		const { sql, call } = setUp(reusing({ bucket: { objects: {} } }));
+
+		expect(await read(await call(send))).toEqual(
+			answer(400, "Complete and validate Agreement details before sending."),
+		);
+		unsent(sql);
+	});
+
+	it("a reused MSA and no R2 binding: 503 before the packet is rendered, nothing written", async () => {
+		const { sql, call } = setUp(
+			reusing({
+				bucket: undefined,
+				// The preflight's read of the MSA would fail: it is never made.
+				faults: [
+					{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
+				],
+			}),
+		);
+
+		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
 		unsent(sql);
 	});
 
@@ -690,7 +827,7 @@ describe("a question or a decline with mail not configured answers 503 and write
 	])("%s", async (_name, body, setting) => {
 		const { sql, call } = setUp({ seed: withSent, omit: [setting] });
 
-		expect(await read(await call(body))).toEqual(answer(503, UNAVAILABLE));
+		expect(await read(await call(body))).toEqual(answer(503, NO_MAIL));
 		expect(sql.prepare("SELECT updated_at FROM owner_requests").get()).toEqual({
 			updated_at: EARLIER,
 		});
@@ -849,5 +986,80 @@ describe("a draft whose version another writer takes is read and decided again",
 				)
 				.get(),
 		).toEqual({ taken: 3 });
+	});
+});
+
+describe("what failed is logged once, and never answered", () => {
+	it.each<[string, World, JsonObject, string]>([
+		[
+			"a batch that fails",
+			{ seed: plain, faults: [{ on: /INSERT INTO software_fit_reviews/ }] },
+			fit,
+			FAILED,
+		],
+		[
+			"a record that fails after the email",
+			{ seed: plain, faults: [{ on: /INSERT INTO owner_request_audit/ }] },
+			question,
+			AFTER_EMAIL,
+		],
+		[
+			"a lookup that fails after a refused batch (the refusal is not logged)",
+			{
+				seed: plain,
+				race: {
+					on: /UPDATE owner_requests SET updated_at/,
+					sql: "UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+				},
+				faults: [{ on: /^SELECT 1 FROM software_projects/, nth: 2 }],
+			},
+			question,
+			FAILED,
+		],
+		[
+			"a read in the preflight that fails (the rejection itself, not its name)",
+			reusing({
+				faults: [
+					{ on: /SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts/ },
+				],
+			}),
+			send,
+			FAILED,
+		],
+	])("%s", async (_name, world, body, sentence) => {
+		const { call } = setUp(world);
+
+		expect(await read(await call(body))).toEqual(answer(500, sentence));
+		expect(logs()).toEqual([LOGGED]);
+	});
+
+	it.each<[string, World, JsonObject, number]>([
+		[
+			"a refused guard",
+			{
+				seed: plain,
+				race: {
+					on: /INSERT INTO software_fit_reviews/,
+					sql: "UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+				},
+			},
+			fit,
+			409,
+		],
+		[
+			"a send that needs R2 with no R2 binding",
+			reusing({ bucket: undefined }),
+			send,
+			503,
+		],
+	])("%s logs nothing", async (_name, world, body, status) => {
+		const { call } = setUp(world);
+
+		expect(await read(await call(body))).toMatchObject({
+			status,
+			body: { ok: false },
+			private: true,
+		});
+		expect(logs()).toEqual([]);
 	});
 });
