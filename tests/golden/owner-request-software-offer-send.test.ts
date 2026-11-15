@@ -352,6 +352,15 @@ const cases: Case[] = [
 		draft2,
 	),
 	sendCase(
+		"a paid deposit of a superseded offer blocks",
+		withOffers([offer("superseded"), offer("sent", 2), offer("draft", 3)], {
+			software_offer_links: [liveLink()],
+			software_invoices: [deposit("paid")],
+		}),
+		{},
+		sendBody(3),
+	),
+	sendCase(
 		"a refunded deposit of a withdrawn offer does not block",
 		withOffers(
 			[offer("withdrawn"), offer("draft", 2)],
@@ -373,7 +382,7 @@ const cases: Case[] = [
 	),
 	{
 		// A decline does not wait for a paid deposit (only an open one blocks it), and it withdraws the sent offer. After a
-		// reopen, the send guard looks only at a sent offer's deposit, so new terms can go out over money already paid.
+		// reopen, the deposit paid on the withdrawn offer still stops new terms (decision 9 of the discount plan).
 		name: "a deposit paid, then the request declined, reopened, redrafted and sent",
 		music: {
 			seed: withOffers([offer("sent")], {
@@ -609,6 +618,24 @@ const cases: Case[] = [
 					on: onBatch,
 					label: "an invoice opens",
 					run: inserting("software_invoices", deposit("open")),
+				},
+			],
+		},
+		draft2,
+	),
+	sendCase(
+		"a deposit of a withdrawn offer is paid before the batch",
+		withOffers(
+			[offer("withdrawn"), offer("draft", 2)],
+			{ software_offer_links: [revokedLink()] },
+			{ status: "new" },
+		),
+		{
+			interleave: [
+				{
+					on: onBatch,
+					label: "a deposit of the withdrawn offer is paid",
+					run: inserting("software_invoices", deposit("paid")),
 				},
 			],
 		},

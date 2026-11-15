@@ -1,7 +1,8 @@
 # Discounts on software offers: design
 
-Status: decided (owner, 2026-11-13: "go with the discount recommendations"). Nothing under `src/` changes in this PR.
-It adds this plan, a Quint model (`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
+Status: decided (owner, 2026-11-13: "go with the discount recommendations"). The design PR changed nothing under `src/`;
+PR 2 (the deposit guard of decision 9) is the first change to the code.
+The design PR added this plan, a Quint model (`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
 (`tests/fixtures/discount-installments.ts`) and the tests that tie them to today's code.
 
 Every engagement stays fixed price. The amounts in this document ($2,400 usual fee, $400 discount) are made up for the
