@@ -328,10 +328,8 @@ export function setupOfferBoard() {
 		return { fieldset, added: true, drawn: snapshot(parts) };
 	}
 
-	/** What a control holds, a checkbox by whether it is ticked. */
-	const valueOf = (
-		control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
-	) =>
+	/** What a control holds, a checkbox by whether it is ticked. The rows hold only inputs and text areas. */
+	const valueOf = (control: HTMLInputElement | HTMLTextAreaElement) =>
 		control instanceof HTMLInputElement &&
 		(control.type === "checkbox" || control.type === "radio")
 			? String(control.checked)
@@ -341,9 +339,9 @@ export function setupOfferBoard() {
 	function snapshot(parts: readonly HTMLElement[]) {
 		return parts.flatMap((part) =>
 			[
-				...part.querySelectorAll<
-					HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-				>("input, textarea, select"),
+				...part.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+					"input, textarea",
+				),
 			].map((control) => ({ control, value: valueOf(control) })),
 		);
 	}

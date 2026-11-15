@@ -189,7 +189,6 @@ function walk(seed: number, steps: number) {
 			request.live = false;
 
 			// The adversary: any lane, any of its ideas or a rewording, sometimes a price or a link, a ref to any card or none.
-			// The adversary: any lane, any of its ideas or a rewording, sometimes a price or a link, a ref to any card or none.
 			// Its answer goes through the page's own reader (readOfferReply), which drops prices and links, as the page does.
 			const raw = OFFER_LANES.flatMap((lane) =>
 				IDEAS[lane].flatMap((text) =>
@@ -293,9 +292,12 @@ function walk(seed: number, steps: number) {
 						`reply ${request.n} added "${card.text}", which the owner set aside`,
 					);
 
-				// No card that names a price is added or kept by the rules (the reader drops them before; this is the net).
-				if (card.text.includes("$"))
-					fail(step, `reply ${request.n} added a priced card "${card.text}"`);
+				// No card that names a price or a link reaches the board.
+				if (pricesOrLinks(card.text))
+					fail(
+						step,
+						`reply ${request.n} added "${card.text}", which names a price or a link`,
+					);
 			}
 
 			// An older reply never changes the board.
