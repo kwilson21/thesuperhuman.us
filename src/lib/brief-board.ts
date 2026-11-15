@@ -460,8 +460,9 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		// The currency's code before the amount ("USD 5,000", "EUR 300").
-		"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?\\d",
+		// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
+		// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
+		"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d",
 		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
 		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
 		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
@@ -490,9 +491,13 @@ const DURATION = new RegExp(
 		// Not an ordinal ("1일차", "3주차", "1주 차에", "3년 차입니다", "1년 차일 때") or parking ("주차장"). Unspaced, 차
 		// fails the lookahead at the end; spaced, 차 is an ordinal only alone or before a particle or ending (a one-syllable
 		// ending only at the end of the word, so "차일피일" is not one), and "2주 차이" (a difference) still counts. The
-		// ordinal check comes before 간: "2주간 차를" is a duration. Known limits of this net: months written with 달,
-		// minutes, and a date followed by 에 ("3월 1일에") pass; "10년 차이며" (formal copula) is refused.
-		"\\d+\\s?(?:주일|주|일|년)(?!\\s차(?:$|[^가-힣]|에|의|인|부터|까지|로|를|가|는|도|째|이상|이하|와|만|마다|보다|처럼|랑|하고|엔|쯤|께|입니|예요|였|라서|라도|지만|면|여서|여야|라면|라고|라는|니까|며|든|죠|밖에|(?:일|나|요|고|다)(?![가-힣])))(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도|면|를|은|로|으로|짜리|밖에|뿐|씩|나|미만|까지|부터|에\\s?걸쳐)",
+		// ordinal check comes before 간: "2주간 차를" is a duration. A four-digit year ("1876년부터") is a date, not a
+		// duration, and the date rules handle it.
+		"(?<!\\d)(?!\\d{4}\\s?년)\\d+\\s?(?:주일|주|일|년)(?!\\s차(?:$|[^가-힣]|에|의|인|부터|까지|로|를|가|는|도|째|이상|이하|와|만|마다|보다|처럼|랑|하고|엔|쯤|께|입니|예요|였|라서|라도|지만|면|여서|여야|라면|라고|라는|니까|며|든|죠|밖에|(?:일|나|요|고|다)(?![가-힣])))(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
+		// More endings, only with the unit written straight after the number ("2주면", "2주를", "2주짜리"), so "React 18
+		// 주로 사용" (mainly) is not one. Known limits of this net: shares written with 주 ("10주를 매수") are refused;
+		// months written with 달, minutes, and a date followed by 에 ("3월 1일에") pass; "10년 차이며" is refused.
+		"(?<!\\d)(?!\\d{4}년)\\d+(?:주일|주|일|년)(?:간)?(?=면|를|은|로|으로|짜리|밖에|뿐|씩|나|미만|까지|부터|에\\s?걸쳐)",
 	].join("|"),
 	"iu",
 );
