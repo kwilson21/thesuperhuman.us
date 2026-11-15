@@ -480,3 +480,22 @@ describe("found in the offer board's eighth review", () => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
+
+describe("found in the offer board's ninth review", () => {
+	it.each([
+		"Fee 1,500.00 for the build",
+		"The fee is 4,500.00.",
+		"Costs 1,200.00 per month",
+		"Quote 10,000.00 total",
+		"Budget of 12,500.50",
+		"Preis: 1.500,00",
+		"Precio: 2.500,00 por la integración",
+		"Hosting, billed separately at a fee of 1,200.00 a year",
+	])("drops %s: a large amount with cents after a money word", (text) => {
+		expect(pricesOrLinks(text)).toBe(true);
+	});
+
+	it("keeps a count with a thousands separator after a money word", () => {
+		expect(pricesOrLinks("Estimated 1,500 rows of history")).toBe(false);
+	});
+});

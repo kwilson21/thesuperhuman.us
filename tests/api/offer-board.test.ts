@@ -462,6 +462,15 @@ describe("the offer board's route", () => {
 		expect(count()).toBe(0);
 	});
 
+	it("refuses a request that is not a software brief with 404, through the rule", async () => {
+		db.prepare(
+			"UPDATE owner_requests SET kind = 'service' WHERE id = 'r1'",
+		).run();
+		expect((await POST(context())).status).toBe(404);
+		expect(run).not.toHaveBeenCalled();
+		expect(count()).toBe(0);
+	});
+
 	it("refuses the retired idea path with 409, and an unknown request with 404", async () => {
 		db.exec("DELETE FROM owner_requests");
 		seed("r1", "new", { path: "idea" });

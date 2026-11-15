@@ -529,9 +529,9 @@ const OFFER_MONEY_WORD =
 const OFFER_CONNECTOR =
 	"\\s*(?:(?:of|is|at|around|about|under|over|roughly|approximately|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*)?[:：]?\\s*";
 
-/** A large amount: a thousands separator, three digits or more, or a scale ("1,500", "3 000", "120", "5k"). */
+/** A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k"). */
 const LARGE_AMOUNT =
-	"(?:\\d{1,3}(?:[,.\\s]\\d{3})+|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m)\\b)(?!\\d|[.,]\\d)";
+	"(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m)\\b)(?!\\d|[.,]\\d)";
 
 /** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";

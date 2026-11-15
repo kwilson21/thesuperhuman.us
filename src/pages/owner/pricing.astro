@@ -76,7 +76,7 @@ const updated = pricing.updatedAt
         </table>
         </div>
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
-        {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
+        {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats" role="list">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
         {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{(source.published || source.kind) && <span class="pricing-source-meta">{[source.published, source.kind].filter((part): part is string => Boolean(part)).map((part) => part.replace(/(\d)-(\d)/g, '$1\u2011$2')).join('\u00a0· ')}</span>}</li>)}</ol></details>}
       </div> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
       <form data-pricing-form data-part="market" data-version={pricing.version}>
@@ -95,7 +95,7 @@ const updated = pricing.updatedAt
 </OwnerLayout>
 <style>
   .pricing-settings { display: grid; gap: 1.5rem; }
-  .pricing-settings > * { min-width: 0; }
+  .pricing-settings > *, [data-pricing-research] { min-width: 0; }
   .pricing-settings h2 { overflow-wrap: break-word; hyphens: auto; }
   /* On a phone the table scrolls sideways in its own box, headers kept, rather than the page. */
   .pricing-table-scroll { overflow-x: auto; margin: .75rem 0 1rem; }
@@ -122,7 +122,7 @@ const updated = pricing.updatedAt
   .pricing-caveats li + li { margin-top: .5rem; }
   /* Numbered, because the caveats cite sources by number. */
   .pricing-sources { list-style: decimal; padding-left: 2rem; }
-  .pricing-sources a { display: block; padding-block: .75rem .2rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+  .pricing-sources a { display: inline-block; min-height: 44px; padding-block: .75rem .2rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
   .pricing-source-meta { display: block; color: var(--studio-muted); font-size: .82rem; padding-bottom: .35rem; }
   .pricing-settings textarea[aria-invalid="true"] { border-color: var(--accent); }
   .pricing-settings .studio-quiet { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; }

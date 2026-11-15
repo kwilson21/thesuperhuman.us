@@ -159,6 +159,76 @@ function check(name, ok, detail = "") {
 			`${saved}`,
 		);
 
+		// The research table scrolls in its own box: /owner/pricing never scrolls sideways on a phone. Research is saved for the
+		// check only when none is stored (in CI there is none; the figures are made up).
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto(new URL("/owner/pricing", targetUrl).href);
+
+		if ((await page.locator("[data-pricing-research]").count()) === 0) {
+			const researchVersion = Number(
+				await page.locator('[data-part="market"]').getAttribute("data-version"),
+			);
+
+			const stored = await page.evaluate(
+				async (expectedVersion) =>
+					(
+						await fetch("/api/owner/pricing", {
+							method: "POST",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({
+								action: "market",
+								expectedVersion,
+								market: {
+									researchedOn: "2026-11-15",
+									ranges: [
+										{
+											kind: "website",
+											size: "small",
+											definition:
+												"Made up for the check: a range whose definition is long enough to wrap in its cell",
+											lowUsd: 1000,
+											highUsd: 2000,
+											sourceIds: [1],
+										},
+									],
+									caveats: ["Made up for the check."],
+									sources: [
+										{
+											id: 1,
+											title:
+												"A made-up source for the check, with a title long enough to wrap on a phone",
+											url: "https://example.org/made-up",
+											published: "2026-11-01",
+											kind: "other",
+										},
+									],
+								},
+							}),
+						})
+					).status,
+				researchVersion,
+			);
+
+			check(
+				"made-up research is saved for the check",
+				stored === 200,
+				`${stored}`,
+			);
+			await page.reload();
+		}
+
+		const pricingWidths = await page.evaluate(() => [
+			document.documentElement.scrollWidth,
+			document.documentElement.clientWidth,
+		]);
+
+		check(
+			"the research table never makes /owner/pricing scroll sideways on a phone",
+			pricingWidths[0] <= pricingWidths[1],
+			pricingWidths.join(" in "),
+		);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
 		// retry-after-lost (verification/pricing-save.qnt): after a save whose answer was lost, the page asks for a reload
 		// and sends nothing more until then.
 		await page.reload();
@@ -875,6 +945,40 @@ function check(name, ok, detail = "") {
 					afterKeep,
 			afterKeep ?? "",
 		);
+
+		// The ninth review's bug: a reply that adds one milestone is one update, not two.
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const addingOne = await next();
+
+		await card("outcome").hover();
+
+		const oneMore = scriptedOfferReply(addingOne.request().postData());
+
+		oneMore.cards.push({
+			ref: "",
+			lane: "milestones",
+			text: "Content migration",
+			reason: "Old posts move over",
+			detail: {
+				deliverables: ["Old posts moved to the new site"],
+				acceptance: ["Open any old post on the new site"],
+				daysLow: 1,
+				daysHigh: 2,
+			},
+		});
+		await release(addingOne, oneMore);
+		await page.waitForTimeout(500);
+
+		const heldLabel = await page.locator("[data-offer-held]").textContent();
+
+		check(
+			"a reply that adds one milestone is held as one update",
+			heldLabel === "Show 1 update",
+			heldLabel ?? "",
+		);
+		await page.mouse.move(2, 2);
 
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();

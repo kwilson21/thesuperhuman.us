@@ -14,6 +14,13 @@ export const OFFER_OWNER_LIMIT = 40;
 /** The scope the owner's count is kept under, in the table the brief's suggestions also count in. */
 export const OFFER_OWNER_SCOPE = "offer:owner";
 
+/** There is no software request with this id. */
+export class OfferRequestMissing extends Data.TaggedError(
+	"OfferRequestMissing",
+) {
+	readonly say = "There is no software request with this id.";
+}
+
 export class OfferNotOfferable extends Data.TaggedError("OfferNotOfferable") {
 	readonly say =
 		"This request can no longer take an offer, so the board has nothing to suggest.";
@@ -24,8 +31,9 @@ export class OfferDailyLimit extends Data.TaggedError("OfferDailyLimit") {
 		"The offer board reached today’s limit of 40 suggestions. It resets at midnight UTC.";
 }
 
-/** What the rule reads about the request: null when there is no such software request. */
+/** What the rule reads about the request; `found` is false when there is no software request with this id. */
 export type OfferFacts = {
+	readonly found: boolean;
 	readonly kind: PricingKind | null;
 	readonly status: string;
 	readonly started: boolean;
@@ -40,6 +48,11 @@ export type OfferReservation = {
 };
 
 type Given = { readonly day: string } & OfferFacts;
+
+const found = term<Given>(
+	"there is a software request with this id",
+	(g) => g.found,
+);
 
 const offerable = term<Given>(
 	"the request is a website, web app or workflow brief that can still take an offer",
@@ -62,6 +75,7 @@ export const reserveOfferSuggestion = alwaysWrites({
 		...facts,
 	}),
 	refusals: [
+		unless(found, () => new OfferRequestMissing()),
 		unless(offerable, () => new OfferNotOfferable()),
 		unless(under, () => new OfferDailyLimit()),
 	],

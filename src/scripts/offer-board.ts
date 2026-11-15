@@ -1126,9 +1126,16 @@ export function setupOfferBoard() {
 			preview.added +
 			preview.updated +
 			preview.withdrawn +
-			detailsSet(reply, preview.board).filter(
-				({ id, detail }) => !sameDetail(details.get(id), detail),
-			).length;
+			detailsSet(reply, preview.board).filter(({ id, detail }) => {
+				const was = board.cards.find((card) => card.id === id);
+				const now = preview.board.cards.find((card) => card.id === id);
+
+				return (
+					was !== undefined &&
+					now?.text === was.text &&
+					!sameDetail(details.get(id), detail)
+				);
+			}).length;
 
 		if (changes > 0 && interacting()) {
 			const first = !held;
@@ -1503,7 +1510,7 @@ export function setupOfferBoard() {
 		error.hidden = false;
 		input.setAttribute("aria-invalid", "true");
 		input.setAttribute("aria-describedby", `${error.id} offer-card-hint-${id}`);
-		announce(message);
+		say(message);
 		input.focus();
 	}
 

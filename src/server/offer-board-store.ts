@@ -19,11 +19,6 @@ import { MusicDb } from "./services";
 /** The database failed. The error carries no text. */
 export class OfferStoreFailed extends Data.TaggedError("OfferStoreFailed") {}
 
-/** There is no software request with this id. */
-export class OfferRequestMissing extends Data.TaggedError(
-	"OfferRequestMissing",
-) {}
-
 const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 	Effect.gen(function* () {
 		const db = yield* MusicDb;
@@ -53,6 +48,12 @@ export type OfferBrief = {
 	 * one appears in what the model reads, it is replaced first (`withheldFrom` in ./offer-board-model).
 	 */
 	readonly withheld: readonly { readonly text: string; readonly as: string }[];
+};
+
+/** The request's facts for the rule, and its brief for the model when it is a software brief the board prices. */
+export type OfferRead = {
+	readonly facts: OfferFacts;
+	readonly brief: OfferBrief | null;
 };
 
 const textOf = (details: Readonly<Record<string, JsonValue>>, key: string) => {
@@ -88,12 +89,20 @@ export const readOfferRequest = (id: string, day: string) =>
 			.bind(id, day, OFFER_OWNER_SCOPE)
 			.first<RequestRow>(),
 	).pipe(
-		Effect.flatMap((row) =>
-			row && row.kind === "software"
-				? Effect.succeed(row)
-				: Effect.fail(new OfferRequestMissing()),
-		),
-		Effect.map((row) => {
+		Effect.map((row): OfferRead => {
+			// No such software request: the rule refuses it (OfferRequestMissing), so the read decides nothing.
+			if (!row || row.kind !== "software")
+				return {
+					facts: {
+						found: false,
+						kind: null,
+						status: "",
+						started: false,
+						count: 0,
+					},
+					brief: null,
+				};
+
 			let details: Readonly<Record<string, JsonValue>> = {};
 
 			try {
@@ -108,6 +117,7 @@ export const readOfferRequest = (id: string, day: string) =>
 			const kind = pricingKind(details.path);
 
 			const facts: OfferFacts = {
+				found: true,
 				kind,
 				status: row.status,
 				started: row.started === 1,
