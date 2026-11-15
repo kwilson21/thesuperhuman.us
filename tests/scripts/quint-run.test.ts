@@ -12,6 +12,7 @@ import {
 	exhaustive,
 	models,
 	mutants,
+	signinMutants,
 } from "../../scripts/lib/quint-mutants.mjs";
 
 // Outputs captured from `quint run` 0.33.1.
@@ -191,6 +192,35 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	});
 });
 
+describe("the mutants of verification/signin-codes.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/signin-codes.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(13);
+		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
+
+		for (const { property } of Object.values<{ property: string }>(
+			signinMutants,
+		))
+			expect(properties).toContain(property);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import signinCodes/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(signinMutants), "signin"].sort(),
+		);
+	});
+});
+
 describe("the mutants of verification/music-playback.qnt", () => {
 	const model = readFileSync(
 		new URL("../../verification/music-playback.qnt", import.meta.url),
@@ -225,14 +255,16 @@ describe("the mutants of verification/music-playback.qnt", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the three models, each with its own registry", () => {
+	it("lists the four models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
+			"verification/signin-codes.qnt",
 			"verification/music-playback.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
 		expect(models[1].mutants).toBe(discountMutants);
-		expect(models[2].mutants).toBe(musicMutants);
+		expect(models[2].mutants).toBe(signinMutants);
+		expect(models[3].mutants).toBe(musicMutants);
 	});
 });

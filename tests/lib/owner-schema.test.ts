@@ -367,6 +367,7 @@ describe("owner insights schema", () => {
 			"audio_projects",
 			"audio_project_audit",
 			"audio_client_codes",
+			"audio_client_signin_codes",
 			"audio_client_sessions",
 			"audio_client_access_audit",
 			"audio_project_messages",

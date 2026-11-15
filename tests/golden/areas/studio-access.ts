@@ -6,6 +6,7 @@ import {
 	DEFAULT_ENV,
 	rows,
 	uuidFor,
+	type Prior,
 	type Seed,
 	type SeedRow,
 	type World,
@@ -15,6 +16,53 @@ export const ORIGIN = "https://thesuperhuman.us";
 
 /** The same-origin header every JSON sign-in request carries (musicRequest checks it before anything else). */
 export const SAME_ORIGIN = { origin: ORIGIN };
+
+/** The pending sign-in value a seeded code row is bound to, and the cookie header the browser that asked for it sends. */
+export const PENDING = "ab".repeat(32);
+export const PENDING_COOKIE = `__Host-studio_pending=${PENDING}`;
+
+/** The headers of a browser that asked for the seeded code: same origin, and its pending sign-in cookie. */
+export const BROWSER = { ...SAME_ORIGIN, cookie: PENDING_COOKIE };
+
+/**
+ * The headers of a browser that keeps its cookies: it sends back the pending sign-in cookie of the latest code request
+ * that set one, as a real browser does between steps of a case.
+ */
+export const browser = (prior: Prior) => {
+	for (const step of [...prior.steps].reverse()) {
+		if (step.answer.outcome !== "response") continue;
+
+		for (const value of step.answer.setCookies) {
+			const match = value.match(/^__Host-studio_pending=([^;]*)/);
+
+			if (match)
+				return match[1]
+					? { ...SAME_ORIGIN, cookie: `__Host-studio_pending=${match[1]}` }
+					: SAME_ORIGIN;
+		}
+	}
+
+	return SAME_ORIGIN;
+};
+
+/** The headers of the browser that made the code request at step `index`: the pending cookie that request set. */
+export const browserAt = (index: number) => (prior: Prior) => {
+	const answer = prior.steps[index]?.answer;
+
+	const pending =
+		answer?.outcome === "response"
+			? answer.setCookies
+					.map(
+						(value) =>
+							value.match(/^__Host-studio_pending=([0-9a-f]{64})/)?.[1],
+					)
+					.find(Boolean)
+			: undefined;
+
+	return pending
+		? { ...SAME_ORIGIN, cookie: `__Host-studio_pending=${pending}` }
+		: SAME_ORIGIN;
+};
 
 /** The code key the default env uses. */
 export const KEY = DEFAULT_ENV.AUDIO_CLIENT_CODE_KEY ?? "";
@@ -66,15 +114,19 @@ export const sessionRow = (
 	...over,
 });
 
-/** A sign-in code row for a code the case knows, so it can be right, wrong, used or expired. */
+/** A sign-in code row for a code the case knows, bound to the browser holding `nonce`, so it can be right, wrong, used or expired. */
 export async function codeRow(
 	email: string,
 	code: string,
 	over: SeedRow = {},
+	nonce: string = PENDING,
 ): Promise<SeedRow> {
+	const nonceHash = await hashValue(nonce);
+
 	return {
+		nonce_hash: nonceHash,
 		email,
-		code_hash: await keyedHash(KEY, `${email}:${code}`),
+		code_hash: await keyedHash(KEY, `${email}:${nonceHash}:${code}`),
 		attempts: 0,
 		created_at: "2026-11-13T11:55:00.000Z",
 		expires_at: "2026-11-13T12:05:00.000Z",

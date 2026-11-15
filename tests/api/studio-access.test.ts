@@ -6,7 +6,7 @@ import type { TestRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 import { freshMusicDb, rows, seed } from "../golden/harness";
 import { type ResendEmail, stubResend } from "../helpers/resend-fetch";
-import { keyedHash } from "~/lib/audio-client-access";
+import { hashValue, keyedHash } from "~/lib/audio-client-access";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { POST as signOut } from "~/pages/api/studio/sign-out";
@@ -20,12 +20,16 @@ const ROUTE_IP = "0.0.0.0";
 
 type StudioContext = APIContext & { pending: Promise<unknown>[] };
 
-type Options = { enabled?: boolean; database?: D1Database };
+type Options = { enabled?: boolean; database?: D1Database; cookie?: string };
 
 let sql: SqliteDatabase, db: D1Database;
 
 // Every email Resend was asked to send in the current test, in order. Each test sets its answers with stubResend.
 let emails: ResendEmail[];
+
+// The pending sign-in value of the browser that asked for the latest code. Every code answer that issues or refuses a
+// code sets it; a refused answer leaves the value the browser already had.
+let browser: string | undefined;
 
 // The eight-digit code in the latest email, read the way a client reads it.
 function sentCode(): string {
@@ -35,6 +39,13 @@ function sentCode(): string {
 	if (!spaced) throw new Error("no sign-in code in the email");
 
 	return `${spaced[1]}${spaced[2]}`;
+}
+
+// The cookie the requesting browser holds. A code only works in the browser that asked for it.
+function browserCookie(): string {
+	if (!browser) throw new Error("no code was requested in this browser");
+
+	return `__Host-studio_pending=${browser}`;
 }
 
 function seedProject() {
@@ -64,17 +75,21 @@ async function exhaustAllowance(scope: string, subject: string) {
 function context(
 	path: string,
 	body: JsonObject,
-	{ enabled = true, database = db }: Options = {},
+	{ enabled = true, database = db, cookie }: Options = {},
 ): StudioContext {
 	const pending: Promise<unknown>[] = [];
+
+	const headers = new Headers({
+		origin: "https://thesuperhuman.us",
+		"content-type": "application/json",
+	});
+
+	if (cookie) headers.set("cookie", cookie);
 
 	return partial<StudioContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
-			headers: {
-				origin: "https://thesuperhuman.us",
-				"content-type": "application/json",
-			},
+			headers,
 			body: JSON.stringify(body),
 		}),
 		locals: {
@@ -109,6 +124,12 @@ async function requestSignInCode(options: Options = {}) {
 	const response = await requestCode(ctx);
 	await Promise.all(ctx.pending);
 
+	const nonce = /__Host-studio_pending=([0-9a-f]{64})/.exec(
+		response.headers.get("set-cookie") ?? "",
+	)?.[1];
+
+	browser = nonce ?? browser;
+
 	return response;
 }
 
@@ -117,7 +138,11 @@ async function signIn(): Promise<string> {
 	expect((await requestSignInCode()).status).toBe(200);
 
 	const response = await completeCode(
-		context("/api/studio/session", { email, code: sentCode() }),
+		context(
+			"/api/studio/session",
+			{ email, code: sentCode() },
+			{ cookie: browserCookie() },
+		),
 	);
 
 	expect(response.status).toBe(200);
@@ -135,6 +160,7 @@ beforeEach(() => {
 	sql = freshMusicDb();
 	db = sqliteD1(sql);
 	emails = stubResend();
+	browser = undefined;
 });
 
 afterEach(() => {
@@ -214,17 +240,23 @@ describe("studio access routes", () => {
 		expect((await requestSignInCode({ enabled: false })).status).toBe(404);
 		expect(emails).toEqual([]);
 		expect(
-			sql.prepare("SELECT COUNT(*) AS total FROM audio_client_codes").get(),
+			sql
+				.prepare("SELECT COUNT(*) AS total FROM audio_client_signin_codes")
+				.get(),
 		).toEqual({ total: 0 });
 
 		expect((await requestSignInCode()).status).toBe(200);
 
 		const response = await completeCode(
-			context("/api/studio/session", { email, code: sentCode() }),
+			context(
+				"/api/studio/session",
+				{ email, code: sentCode() },
+				{ cookie: browserCookie() },
+			),
 		);
 
 		expect(response.status).toBe(200);
-		const cookie = response.headers.get("set-cookie");
+		const cookie = response.headers.getSetCookie()[0];
 		expect(cookie).toContain("HttpOnly");
 		expect(cookie).toContain("SameSite=Lax");
 		expect(cookie).toContain("Secure");
@@ -242,7 +274,11 @@ describe("studio access routes", () => {
 		expect(
 			(
 				await completeCode(
-					context("/api/studio/session", { email, code: rejected }),
+					context(
+						"/api/studio/session",
+						{ email, code: rejected },
+						{ cookie: browserCookie() },
+					),
 				)
 			).status,
 		).toBe(401);
@@ -272,7 +308,11 @@ describe("studio access routes", () => {
 
 		// The provider answered 5xx, so the code was not discarded and still completes.
 		const response = await completeCode(
-			context("/api/studio/session", { email, code: sentCode() }),
+			context(
+				"/api/studio/session",
+				{ email, code: sentCode() },
+				{ cookie: browserCookie() },
+			),
 		);
 
 		expect(response.status).toBe(200);
@@ -290,17 +330,24 @@ describe("studio access routes", () => {
 		expect((await requestSignInCode()).status).toBe(429);
 		expect(emails).toHaveLength(sentBefore);
 
-		await exhaustAllowance("session-email", client);
+		await exhaustAllowance(
+			"session-requester",
+			`${client}:${await hashValue(browser ?? "")}`,
+		);
 		expect(
 			(
 				await completeCode(
-					context("/api/studio/session", { email, code: issued }),
+					context(
+						"/api/studio/session",
+						{ email, code: issued },
+						{ cookie: browserCookie() },
+					),
 				)
 			).status,
 		).toBe(429);
-		expect(sql.prepare("SELECT used_at FROM audio_client_codes").get()).toEqual(
-			{ used_at: null },
-		);
+		expect(
+			sql.prepare("SELECT used_at FROM audio_client_signin_codes").get(),
+		).toEqual({ used_at: null });
 		expect(
 			sql.prepare("SELECT COUNT(*) AS total FROM audio_client_sessions").get(),
 		).toEqual({ total: 0 });
