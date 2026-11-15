@@ -11,7 +11,7 @@
 type Point = { x: number; y: number };
 
 // Where the plug is heading and how far it is lifted toward the viewer (1 is flat on the board).
-type Goal = { point: Point; scale: number };
+export type Goal = { point: Point; scale: number };
 
 type Target =
 	| { kind: "rest" }
@@ -34,31 +34,72 @@ export const DAMPING = 30;
 export const REACH_STIFFNESS = 700;
 export const REACH_DAMPING = 53;
 
-// The plug's springs advance in fixed steps, like the cable, so a slow frame rate (a battery saver's
-// 30 frames a second) takes more steps per frame instead of one long, unstable one.
-export const PLUG_STEP = 1 / 120;
+export const REACH = { stiffness: REACH_STIFFNESS, damping: REACH_DAMPING };
+export const SEAT = { stiffness: STIFFNESS, damping: DAMPING };
 
-export type Spring = { value: number; speed: number };
+// The plug and the cable advance in steps of at most 1/120 s. A frame is split into equal steps, so a
+// slow frame (a battery saver's 30 frames a second) takes several short, stable steps instead of one
+// long, unstable one, and a steady frame rate of any kind (60, 90, 120, 144 Hz) takes the same number
+// of steps every frame, so the motion never stalls on one frame and jumps on the next.
+export const STEP = 1 / 120;
 
-/** How many fixed steps a frame of dt seconds holds, and the time carried to the next frame. */
-export function plugSteps(clock: number, dt: number) {
-	const total = Math.min(clock + clamp(dt, 0, 1 / 30), PLUG_STEP * 8);
-	const steps = Math.floor(total / PLUG_STEP);
+export function frameSteps(dt: number) {
+	const time = clamp(dt, 0, 1 / 30);
 
-	return { steps, clock: total - steps * PLUG_STEP };
+	// A frame a little over a whole number of steps (a 60 Hz frame's 16.7 ms) keeps that number, so
+	// timing jitter never flips the count; a step is then at most 1.25 times 1/120 s, still stable.
+	const count = time > 0 ? Math.max(1, Math.ceil(time / STEP - 0.25)) : 0;
+
+	return { count, size: count ? time / count : 0 };
 }
 
-export function springSteps(
-	spring: Spring,
-	goal: number,
-	steps: number,
-	stiffness: number,
-	damping: number,
+export type PlugMotion = {
+	position: Point;
+	velocity: Point;
+	scale: number;
+	scaleVelocity: number;
+};
+
+/**
+ * One animation frame of the plug. A carried plug stays under the pointer and keeps its speed, so a
+ * plug let go mid-swing is thrown; otherwise its springs pull it toward the goal. Its lift (scale)
+ * always follows its spring.
+ */
+export function advancePlug(
+	plug: PlugMotion,
+	goal: Goal,
+	dt: number,
+	spring: { stiffness: number; damping: number },
+	carried: boolean,
 ) {
-	for (let index = 0; index < steps; index++) {
-		spring.speed +=
-			(stiffness * (goal - spring.value) - damping * spring.speed) * PLUG_STEP;
-		spring.value += spring.speed * PLUG_STEP;
+	const { count, size } = frameSteps(dt);
+	const { stiffness, damping } = spring;
+
+	if (carried && dt > 0) {
+		plug.velocity.x = clamp((goal.point.x - plug.position.x) / dt, -2400, 2400);
+		plug.velocity.y = clamp((goal.point.y - plug.position.y) / dt, -2400, 2400);
+		plug.position.x = goal.point.x;
+		plug.position.y = goal.point.y;
+	}
+
+	for (let index = 0; index < count; index++) {
+		if (!carried) {
+			plug.velocity.x +=
+				(stiffness * (goal.point.x - plug.position.x) -
+					damping * plug.velocity.x) *
+				size;
+			plug.velocity.y +=
+				(stiffness * (goal.point.y - plug.position.y) -
+					damping * plug.velocity.y) *
+				size;
+			plug.position.x += plug.velocity.x * size;
+			plug.position.y += plug.velocity.y * size;
+		}
+
+		plug.scaleVelocity +=
+			(stiffness * (goal.scale - plug.scale) - damping * plug.scaleVelocity) *
+			size;
+		plug.scale += plug.scaleVelocity * size;
 	}
 }
 
@@ -71,11 +112,10 @@ const PUT_THROUGH_MS = 560;
 const SNAP = 44;
 
 // The cable is a chain of points under gravity, pinned at your jack and at the plug (Verlet
-// integration with distance constraints, stepped at a fixed rate). Its length is the length of the
+// integration with distance constraints, in the same steps as the plug). Its length is the length of the
 // resting curve between its two ends, so it hangs about as drawn, and it whips and sways as the plug
 // moves. Friction settles it within a couple of seconds.
 const LINKS = 16;
-const ROPE_STEP = 1 / 120;
 const ROPE_FRICTION = 0.98;
 const ROPE_PASSES = 12;
 
@@ -134,13 +174,11 @@ export function setupSwitchboard(
 	let boardBox = board.getBoundingClientRect();
 	const position: Point = { x: 0, y: 0 };
 	const velocity: Point = { x: 0, y: 0 };
-	let scale = 1;
-	let scaleVelocity = 0;
-	let plugClock = 0;
+	const motion: PlugMotion = { position, velocity, scale: 1, scaleVelocity: 0 };
 	let measured = false;
 	let rope: Point[] = [];
 	let ropeBefore: Point[] = [];
-	let ropeClock = 0;
+	let ropeLastStep = STEP;
 	let ropeStirring = 0;
 
 	// Where everything sits on the board, read only when the board's layout changes (measure), so the
@@ -296,7 +334,7 @@ export function setupSwitchboard(
 	function layRope(points: Point[]) {
 		rope = points.map((point) => ({ ...point }));
 		ropeBefore = points.map((point) => ({ ...point }));
-		ropeClock = 0;
+		ropeLastStep = STEP;
 		// Counts as moving until a step has measured it, so a frame too short for a step never ends the swing.
 		ropeStirring = 1;
 	}
@@ -311,22 +349,26 @@ export function setupSwitchboard(
 		const from = youPoint;
 		const link = ropeLength(from, position) / LINKS;
 		const pull = gravity();
-		ropeClock = Math.min(ropeClock + dt, ROPE_STEP * 8);
+		const { count, size } = frameSteps(dt);
+		// Friction is set per 1/120 s; a shorter step takes a proportionally smaller share.
+		const friction = ROPE_FRICTION ** (size / STEP);
 
-		if (ropeClock >= ROPE_STEP) ropeStirring = 0;
+		if (count) ropeStirring = 0;
 
-		while (ropeClock >= ROPE_STEP) {
-			ropeClock -= ROPE_STEP;
+		for (let tick = 0; tick < count; tick++) {
+			// Verlet with a changing step carries the last step's motion scaled to this one.
+			const carry = (size / ropeLastStep) * friction;
+			ropeLastStep = size;
 
 			for (let index = 1; index < LINKS; index++) {
 				const point = rope[index];
 				const before = ropeBefore[index];
-				const vx = (point.x - before.x) * ROPE_FRICTION;
-				const vy = (point.y - before.y) * ROPE_FRICTION;
+				const vx = (point.x - before.x) * carry;
+				const vy = (point.y - before.y) * carry;
 				before.x = point.x;
 				before.y = point.y;
-				point.x += vx + pull.x * ROPE_STEP * ROPE_STEP;
-				point.y += vy + pull.y * ROPE_STEP * ROPE_STEP;
+				point.x += vx + pull.x * size * size;
+				point.y += vy + pull.y * size * size;
 			}
 
 			rope[0] = { ...from };
@@ -364,7 +406,8 @@ export function setupSwitchboard(
 					Math.hypot(
 						rope[index].x - ropeBefore[index].x,
 						rope[index].y - ropeBefore[index].y,
-					),
+					) /
+						(size / STEP),
 				);
 		}
 	}
@@ -390,18 +433,18 @@ export function setupSwitchboard(
 		rope[0] = { ...from };
 		rope[LINKS] = { ...position };
 		const path = ropePath();
-		const lift = clamp((scale - 1) / (LIFTED - 1), 0, 1.4);
+		const lift = clamp((motion.scale - 1) / (LIFTED - 1), 0, 1.4);
 		cable!.setAttribute("d", path);
 		cableShadow!.setAttribute("d", path);
 		cableShadow!.setAttribute("transform", "translate(1.5 3)");
 		fixed!.setAttribute("transform", `translate(${from.x} ${from.y})`);
 		plug!.setAttribute(
 			"transform",
-			`translate(${position.x} ${position.y}) scale(${scale})`,
+			`translate(${position.x} ${position.y}) scale(${motion.scale})`,
 		);
 		plugShadow!.setAttribute(
 			"transform",
-			`translate(${position.x + 2 + lift * 4} ${position.y + 3 + lift * 8}) scale(${scale})`,
+			`translate(${position.x + 2 + lift * 4} ${position.y + 3 + lift * 8}) scale(${motion.scale})`,
 		);
 		handle!.style.translate = `${position.x}px ${position.y}px`;
 	}
@@ -426,8 +469,8 @@ export function setupSwitchboard(
 		const { point, scale: goalScale } = goal();
 		position.x = point.x;
 		position.y = point.y;
-		velocity.x = velocity.y = scaleVelocity = 0;
-		scale = goalScale;
+		velocity.x = velocity.y = motion.scaleVelocity = 0;
+		motion.scale = goalScale;
 
 		if (relay || !rope.length)
 			layRope(dropPending ? waitingRope() : restingRope(youPoint, position));
@@ -437,43 +480,23 @@ export function setupSwitchboard(
 	function step(time: number) {
 		const dt = Math.min((time - last) / 1000, 1 / 30);
 		last = time;
-		const { point, scale: goalScale } = goal();
-		const reaching = target.kind === "reach";
-		const stiffness = reaching ? REACH_STIFFNESS : STIFFNESS;
-		const damping = reaching ? REACH_DAMPING : DAMPING;
-
-		const tick = plugSteps(plugClock, dt);
-		plugClock = tick.clock;
-
-		// A carried plug stays under the pointer; its speed is kept, so a plug let go mid-swing is thrown.
-		if (target.kind === "drag" && !target.near && dt > 0) {
-			velocity.x = clamp((point.x - position.x) / dt, -2400, 2400);
-			velocity.y = clamp((point.y - position.y) / dt, -2400, 2400);
-			position.x = point.x;
-			position.y = point.y;
-		} else {
-			const across = { value: position.x, speed: velocity.x };
-			const down = { value: position.y, speed: velocity.y };
-			springSteps(across, point.x, tick.steps, stiffness, damping);
-			springSteps(down, point.y, tick.steps, stiffness, damping);
-			position.x = across.value;
-			velocity.x = across.speed;
-			position.y = down.value;
-			velocity.y = down.speed;
-		}
-
-		const size = { value: scale, speed: scaleVelocity };
-		springSteps(size, goalScale, tick.steps, stiffness, damping);
-		scale = size.value;
-		scaleVelocity = size.speed;
+		const aim = goal();
+		const { point, scale: goalScale } = aim;
+		advancePlug(
+			motion,
+			aim,
+			dt,
+			target.kind === "reach" ? REACH : SEAT,
+			target.kind === "drag" && !target.near,
+		);
 		swing(dt);
 		draw();
 
 		const resting =
 			Math.hypot(point.x - position.x, point.y - position.y) < 0.3 &&
 			Math.hypot(velocity.x, velocity.y) < 2 &&
-			Math.abs(goalScale - scale) < 0.002 &&
-			Math.abs(scaleVelocity) < 0.02 &&
+			Math.abs(goalScale - motion.scale) < 0.002 &&
+			Math.abs(motion.scaleVelocity) < 0.02 &&
 			ropeStirring < 0.03;
 
 		if (resting) {
@@ -481,8 +504,8 @@ export function setupSwitchboard(
 			frame = 0;
 			position.x = point.x;
 			position.y = point.y;
-			velocity.x = velocity.y = scaleVelocity = 0;
-			scale = goalScale;
+			velocity.x = velocity.y = motion.scaleVelocity = 0;
+			motion.scale = goalScale;
 			draw();
 
 			return;
