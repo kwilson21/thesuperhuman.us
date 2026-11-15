@@ -41,7 +41,14 @@ it("supports a compact homepage variant while keeping the same synchronized, acc
 	expect(component).toContain("comparison-player--compact");
 	expect(component).toContain("aria-label={labels[0]}");
 	expect(component).toContain("aria-label={labels[1]}");
-	expect(home).toContain('example.id === "old-news-mastering"');
+	// Home's comparison is named once, where the headphones on its desk read it too.
+	expect(home).toContain("example.id === homeComparisonExample");
+	expect(
+		readFileSync(
+			new URL("../../src/lib/music-catalog.ts", import.meta.url),
+			"utf8",
+		),
+	).toContain('export const homeComparisonExample = "old-news-mastering";');
 	expect(home).toContain(
 		"<ComparisonPlayer example={oldNewsExample} recording={oldNewsRecording} compact />",
 	);
