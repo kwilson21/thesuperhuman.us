@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { POST as access } from "~/pages/api/owner/projects/[id]/access";
 import { POST as invitation } from "~/pages/api/owner/projects/[id]/invitation";
 import { POST as messages } from "~/pages/api/owner/projects/[id]/messages";
@@ -307,8 +307,123 @@ describe("a lost race answers 409", () => {
 	});
 });
 
+const GONE = new Error(
+	"The specified multipart upload does not exist. (10024)",
+);
+
+const BAD_PART = new Error(
+	"One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag. (10025)",
+);
+
+const completeUpload = () =>
+	post(`${owner}/uploads`, {
+		action: "complete",
+		uploadId: UPLOAD,
+		parts: [{ partNumber: 1, etag: "etag-1" }],
+	});
+
+/** A bucket whose head answers one object after the first call (or never) and whose multipart upload fails to complete. */
+function bucketCompleting(
+	failure: Error,
+	object: { size: number } | null,
+): R2Bucket {
+	let heads = 0;
+
+	return double<R2Bucket>({
+		head: async () =>
+			heads++ === 0 || !object ? null : double<R2Object>(object),
+		resumeMultipartUpload: () =>
+			double<R2MultipartUpload>({
+				complete: async () => {
+					throw failure;
+				},
+				uploadPart: async () => {
+					throw failure;
+				},
+			}),
+	});
+}
+
+describe("an upload that R2 no longer has, or a completion it refuses, is a lost race", () => {
+	const putRequest = () =>
+		new Request(
+			`https://thesuperhuman.us${owner}/uploads?uploadId=${UPLOAD}&part=1`,
+			{
+				method: "PUT",
+				headers: { "content-length": "10" },
+				body: new Uint8Array(10),
+			},
+		);
+
+	it("a part for a multipart upload R2 no longer has answers 409 with the part sentence", async () => {
+		const response = await part(
+			context(world({ upload: "pending" }), putRequest(), {
+				AUDIO: bucketCompleting(GONE, null),
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "This part could not be uploaded. Please try again.",
+		});
+	});
+
+	it("a completion for a multipart upload R2 no longer has, and no object, answers 409", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(GONE, null),
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "This upload cannot be finished now.",
+		});
+	});
+
+	it("a completion that lost the race to another completion finishes when the object is there", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(GONE, { size: 10 }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ ok: true, fileId: UPLOAD });
+	});
+
+	it("a completion R2 refuses for a missing part or a wrong entity tag answers 409", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(BAD_PART, null),
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "This upload cannot be finished now.",
+		});
+	});
+
+	it("any other R2 failure of a completion stays 500", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(new Error(LEAK), null),
+			}),
+		);
+
+		expect(response.status).toBe(500);
+		expect(await response.text()).not.toContain(LEAK);
+	});
+});
+
 describe("a stored state that disagrees with R2 is not an unavailable service", () => {
-	it("a file whose object has another size answers 500", async () => {
+	it("a file whose object has another size answers 500 and logs one fixed line", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
 		const response = await studioFile(
 			context(
 				world({ stage: "review_ready", files: true }),
@@ -326,5 +441,10 @@ describe("a stored state that disagrees with R2 is not an unavailable service", 
 
 		expect(response.status).toBe(500);
 		expect(await response.text()).toBe("File unavailable");
+		expect(logged).toHaveBeenCalledTimes(1);
+		expect(String(logged.mock.calls[0])).toContain(
+			"studio/projects/file failed unexpectedly",
+		);
+		logged.mockRestore();
 	});
 });
