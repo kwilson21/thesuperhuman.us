@@ -53,10 +53,10 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    - Split the shared helpers that several areas import into modules of their own, with no behaviour change:
      `softwareGuard` and `softwareAudit` (out of `software-projects.ts`, used by six areas); `softwareInvoiceTerms` (out
      of `software-invoices.ts`, so signing stops pulling in Stripe); the pure parts of `audio-client-access.ts`
-     (`clientPortalEnabled`, `hashValue`, `keyedHash`); the date helpers of `audio-project-updates.ts`; the two
-     middleware helpers of `agreement-access.ts`; and the deposit facts the offers area reads (`depositOfferBlock`,
-     `depositOfferGuard`, today in `software-invoices.ts`), so offers stops loading Stripe and converts without
-     calling an unconverted payments helper.
+     (`normalizeClientEmail`, `clientPortalEnabled`, `hashValue`, `keyedHash`, now `client-portal.ts`); the date
+     helpers of `audio-project-updates.ts`; the two middleware helpers of `agreement-access.ts`; and the deposit facts
+     the offers area reads (`depositOfferBlock`, `depositOfferGuard`, today in `software-invoices.ts`), so offers stops
+     loading Stripe and converts without calling an unconverted payments helper.
 1. **Software offers.** `owner/requests/[id]/software.ts`: fit, question, decline, revoke, draft, send. Its store
    carries the signing statements these actions write (`retireRequestSigning`, the attachment delete) and the PDF
    preflight becomes a service. Design: `docs/plans/2026-11-offers-conversion.md`. Send and decline around their

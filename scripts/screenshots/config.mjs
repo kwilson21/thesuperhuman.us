@@ -314,6 +314,7 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/scripts/software-project.ts": ["software-project"],
 	"src/scripts/software-composer.ts": ["software-project"],
 	"src/lib/software-projects.ts": ["software-project"],
+	"src/lib/software-guard.ts": ["software-project"],
 	"src/lib/software-project-messages.ts": ["software-project"],
 	"src/lib/software-visuals.ts": ["software-project"],
 	"src/pages/api/owner/requests/[id]/project.ts": ["software-project"],
