@@ -20,7 +20,7 @@ import {
 	currentSigningNotification,
 	recoverAgreementRendering,
 } from "~/lib/agreement-artifacts";
-import { softwareGuard } from "~/lib/software-projects";
+import { softwareGuard } from "~/lib/software-guard";
 import type { SoftwareOffer } from "~/lib/software-offers";
 
 export const prerender = false;

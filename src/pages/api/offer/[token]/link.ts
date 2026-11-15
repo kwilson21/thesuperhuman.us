@@ -1,10 +1,7 @@
 import type { APIRoute } from "astro";
 import { z } from "astro/zod";
-import {
-	agreementJson,
-	canonicalAgreementRequest,
-	issueAgreementLink,
-} from "~/lib/agreement-access";
+import { agreementJson, issueAgreementLink } from "~/lib/agreement-access";
+import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import { linkSettings } from "~/server/rules/agreement-link";
 import {
 	nativeAgreementRoute,

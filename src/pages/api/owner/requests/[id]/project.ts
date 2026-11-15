@@ -7,15 +7,13 @@ import {
 	executedOfferAgreement,
 	offerAgreements,
 } from "~/lib/software-agreements";
-import { projectToday, validProjectDate } from "~/lib/audio-project-updates";
+import { projectToday, validProjectDate } from "~/lib/project-dates";
 import { musicRequest } from "~/lib/music-request";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	getSoftwareProject,
 	projectTerms,
 	projectDate,
-	softwareAudit,
-	softwareGuard,
 	openSoftwareGuard,
 	deliverSoftwareNotice,
 	queueSoftwareNotice,
@@ -25,6 +23,7 @@ import {
 	priorMilestonePaymentGuard,
 	milestoneDepositGuard,
 } from "~/lib/software-projects";
+import { softwareAudit, softwareGuard } from "~/lib/software-guard";
 import {
 	manualSoftwarePaymentGuard,
 	manualPaymentReminder,

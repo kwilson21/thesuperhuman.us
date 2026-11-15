@@ -1,15 +1,14 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import {
-	clientPortalEnabled,
 	discardUndeliveredCode,
 	issueClientCode,
 	newPendingNonce,
-	normalizeClientEmail,
 	pendingSignInCookie,
 	pendingSignInFromRequest,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled, normalizeClientEmail } from "~/lib/client-portal";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { musicRequest } from "~/lib/music-request";
 import { verifyTurnstile } from "~/lib/turnstile";
