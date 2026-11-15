@@ -26,6 +26,10 @@ export const agreementHeaders = {
 export const agreementJson = (body: JsonValue, status = 200) =>
 	Response.json(body, { status, headers: agreementHeaders });
 
+/** A plain-text answer with the agreement headers (private, no store, no index). */
+export const agreementText = (body: string, status: number) =>
+	new Response(body, { status, headers: agreementHeaders });
+
 export function canonicalAgreementRequest(env: Env, request: Request) {
 	try {
 		const canonical = new URL(siteOrigin(env.SITE_ORIGIN));
