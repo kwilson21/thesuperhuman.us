@@ -68,6 +68,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				BriefCopyRequestClosed: (refusal) => cannotSend(refusal.say),
 				BriefCopyNoAddress: (refusal) => cannotSend(refusal.say),
 				BriefCopyNotDue: (refusal) => cannotSend(refusal.say),
+				// Its stored details cannot record a claim: nothing is sent, and the failure is logged as it always was.
+				BriefCopyDetailsNotObject: (refusal) => failed(new Error(refusal.say)),
 				// The claim was lost to another sender three times in a row.
 				SaveKeptChanging: () => cannotSend(CANNOT_SEND),
 				IntakeReadFailed: (failure) => failed(failure.failure),

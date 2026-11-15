@@ -5,7 +5,7 @@
 // only by the sender that won the claim, and the answer is recorded over that sender's own attempt, so another sender's
 // claim is never overwritten. verification/brief-copy.qnt models the claim.
 //
-// A claim that could not be written is recorded as a failure over a copy with no status; an answer that could not be recorded
+// A claim that could not be written, or (for the public form) a request that could not be read, is recorded as a failure over a copy with no status; an answer that could not be recorded
 // leaves the claim, so a copy the provider may have sent is never sent again without the owner's confirmation. Each of these
 // logs the line it always has, and ends in a named failure: the owner's route answers it, and the public form answers the
 // status the copy has (`sendFirstBriefCopy`). Time is an input (`now`), taken once at the start.
@@ -14,7 +14,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import { briefCopyMessage } from "../../lib/client-emails";
-import { decideAndSave } from "../guarded-save";
+import { alwaysDecideAndSave, decideAndSave } from "../guarded-save";
 import {
 	claimCopy,
 	type IntakeStoreFailed,
@@ -22,9 +22,9 @@ import {
 	recordCopyStatus,
 	recordOwnFailure,
 	recordUnclaimedFailure,
+	recordUnreadFailure,
 } from "../intake-store";
 import {
-	BriefCopyNotDue,
 	type ClaimWrite,
 	type CopyFacts,
 	firstCopy,
@@ -72,6 +72,29 @@ const stateIs = (status: string) =>
 
 const NOT_RECORDED = "Client brief copy failure could not be recorded.";
 
+/**
+ * The copy could not be claimed: a failure is recorded where the copy has no status (`unclaimedFailure` decides, and the
+ * write compares what was read, or only that no status is there when the request could not be read), and a failure to record
+ * it is logged.
+ */
+const recordClaimFailure = (
+	id: string,
+	found: CopyFacts | null,
+	read: boolean,
+) =>
+	Effect.gen(function* () {
+		const recorded = yield* unclaimedFailure.decide({ id, read }, { found });
+
+		if (Option.isNone(recorded)) return;
+		const write = recorded.value;
+
+		yield* (
+			write.expected === null
+				? recordUnreadFailure(write.id)
+				: recordUnclaimedFailure({ id: write.id, expected: write.expected })
+		).pipe(Effect.catchTag("IntakeStoreFailed", () => say(NOT_RECORDED)));
+	});
+
 /** The claim could not be written: the failure is recorded where the copy has no status, then named. */
 const claimFailed = (
 	id: string,
@@ -79,14 +102,7 @@ const claimFailed = (
 	failure: IntakeStoreFailed,
 ) =>
 	Effect.gen(function* () {
-		const found = yield* Ref.get(seen);
-		const recorded = yield* unclaimedFailure.decide({ id }, { found });
-
-		if (Option.isSome(recorded))
-			yield* recordUnclaimedFailure(recorded.value).pipe(
-				Effect.catchTag("IntakeStoreFailed", () => say(NOT_RECORDED)),
-			);
-
+		yield* recordClaimFailure(id, yield* Ref.get(seen), true);
 		yield* stateIs("failed");
 
 		return yield* Effect.fail(
@@ -150,33 +166,18 @@ const sendClaimed = (write: ClaimWrite) =>
 		return { outcome, status } satisfies CopyDelivery;
 	});
 
-/** Reads the request, asks `decide` whether the copy may be claimed, claims it, and sends it. Nothing to do is `none`. */
-const claimAndSend = <E>(
-	id: string,
-	decide: (
-		found: CopyFacts | null,
-	) => Effect.Effect<Option.Option<ClaimWrite>, E>,
-) =>
-	Effect.gen(function* () {
-		const seen = yield* Ref.make<CopyFacts | null>(null);
+/** The read of the request, remembering what it saw so that a claim that cannot be written is recorded over it. */
+const readFacts = (id: string, seen: Ref.Ref<CopyFacts | null>) =>
+	readCopyFacts(id).pipe(Effect.tap((found) => Ref.set(seen, found)));
 
-		const claimed = yield* decideAndSave({
-			facts: readCopyFacts(id).pipe(
-				Effect.tap((found) => Ref.set(seen, found)),
+/** The claim, which names its own failure. */
+const saveClaim =
+	(id: string, seen: Ref.Ref<CopyFacts | null>) => (write: ClaimWrite) =>
+		claimCopy(write).pipe(
+			Effect.catchTag("IntakeStoreFailed", (failure) =>
+				claimFailed(id, seen, failure),
 			),
-			decide,
-			save: (write: ClaimWrite) =>
-				claimCopy(write).pipe(
-					Effect.catchTag("IntakeStoreFailed", (failure) =>
-						claimFailed(id, seen, failure),
-					),
-				),
-		});
-
-		if (Option.isNone(claimed.decided)) return Option.none();
-
-		return Option.some(yield* sendClaimed(claimed.decided.value));
-	});
+		);
 
 /** The owner resends the copy of the request `id`. Every refusal and failure is named and goes to the route. */
 export const resendBriefCopy = (input: {
@@ -186,22 +187,20 @@ export const resendBriefCopy = (input: {
 }) =>
 	Effect.gen(function* () {
 		const at = input.now().toISOString();
+		const seen = yield* Ref.make<CopyFacts | null>(null);
 
-		const delivery = yield* claimAndSend(input.id, (found) =>
-			Effect.map(
+		// The resend rule always writes or refuses, so there is always a claim to send.
+		const claimed = yield* alwaysDecideAndSave({
+			facts: readFacts(input.id, seen),
+			decide: (found) =>
 				resendCopy.decide(
 					{ at, confirmedNotSent: input.confirmedNotSent },
 					{ found },
 				),
-				Option.some,
-			),
-		);
-
-		// The resend rule always writes or refuses, so a decision to claim is always made; the refusal below keeps the types honest.
-		return yield* Option.match(delivery, {
-			onNone: () => Effect.fail(new BriefCopyNotDue()),
-			onSome: (sent) => Effect.succeed(sent),
+			save: saveClaim(input.id, seen),
 		});
+
+		return yield* sendClaimed(claimed.decided);
 	});
 
 /**
@@ -216,17 +215,32 @@ export const sendFirstBriefCopy = (input: {
 	Effect.gen(function* () {
 		const at = input.now().toISOString();
 
-		const delivery = yield* claimAndSend(input.id, (found) =>
-			firstCopy.decide({ at }, { found }),
-		);
+		const seen = yield* Ref.make<CopyFacts | null>(null);
 
-		return Option.isSome(delivery) ? delivery.value.status : null;
+		const claimed = yield* decideAndSave({
+			facts: readFacts(input.id, seen),
+			decide: (found) => firstCopy.decide({ at }, { found }),
+			save: saveClaim(input.id, seen),
+		});
+
+		if (Option.isNone(claimed.decided)) return null;
+		const delivery = yield* sendClaimed(claimed.decided.value);
+
+		return delivery.status;
 	}).pipe(
 		Effect.catchTags({
 			// Another sender kept changing the request: it holds the copy.
 			SaveKeptChanging: () => Effect.succeed(null),
-			// The request could not be read, so nothing was claimed.
-			IntakeReadFailed: () => Effect.as(stateIs("failed"), "failed"),
+			// The request could not be read, so nothing was claimed: a failure is recorded where the copy has no status.
+			IntakeReadFailed: () =>
+				Effect.gen(function* () {
+					yield* recordClaimFailure(input.id, null, false);
+					yield* stateIs("failed");
+
+					return "failed" as const;
+				}),
+			// Its details cannot record a claim: nothing was sent.
+			BriefCopyDetailsNotObject: () => Effect.as(stateIs("failed"), "failed"),
 			CopyClaimFailed: () => Effect.succeed("failed"),
 			CopyNotBuilt: () => Effect.succeed("failed"),
 			CopyNotRecorded: (failure) => Effect.succeed(failure.status),

@@ -12,9 +12,8 @@ import {
 	ownerRequestFromRow,
 } from "../lib/owner-model";
 import { type NewOwnerRequest, requestColumns } from "../lib/owner-requests";
-import { isObject } from "../lib/type-guards";
 import { ChangedSinceRead, isUniqueViolation } from "./guarded-save";
-import type { ClaimWrite, FailureWrite } from "./rules/brief-copy";
+import type { ClaimWrite, DetailsFailureWrite } from "./rules/brief-copy";
 import { MusicDb } from "./services";
 
 /** The database refused the write. */
@@ -178,17 +177,6 @@ export const readCopyFacts = (id: string) =>
 			catch: (failure) => new IntakeReadFailed({ failure }),
 		});
 
-		// A software request's details are a JSON object: anything else cannot record that a copy was claimed, so no email is sent for it. A request of another kind is left to the rule's kind check.
-		if (
-			request.kind === "software" &&
-			(!isObject(request.details) || Array.isArray(request.details))
-		)
-			return yield* Effect.fail(
-				new IntakeReadFailed({
-					failure: new Error("Stored details are not a JSON object."),
-				}),
-			);
-
 		return { request, detailsJson: row.details_json };
 	});
 
@@ -255,7 +243,7 @@ export const recordOwnFailure = (id: string, at: string) =>
 	});
 
 /** Records a failure for a claim that could not be written, only while the details are the text that was read. */
-export const recordUnclaimedFailure = (write: FailureWrite) =>
+export const recordUnclaimedFailure = (write: DetailsFailureWrite) =>
 	Effect.gen(function* () {
 		const db = yield* MusicDb;
 
@@ -266,6 +254,23 @@ export const recordUnclaimedFailure = (write: FailureWrite) =>
 						.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','failed')
           WHERE id=? AND details_json=?`)
 						.bind(write.id, write.expected),
+				]),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
+		});
+	});
+
+/** Records a failure for a request that could not be read, only while no copy status is recorded on it. */
+export const recordUnreadFailure = (id: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','failed')
+          WHERE id=? AND json_extract(details_json,'$.clientCopyStatus') IS NULL`)
+						.bind(id),
 				]),
 			catch: (failure) => new IntakeStoreFailed({ failure }),
 		});

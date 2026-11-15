@@ -499,7 +499,7 @@ describe("a failure of the database", () => {
 
 		const { result, sent } = await resend(world);
 
-		expect(result).toMatchObject({ failed: "IntakeReadFailed" });
+		expect(result).toMatchObject({ failed: "BriefCopyDetailsNotObject" });
 		expect(sent).toEqual([]);
 	});
 });
@@ -612,6 +612,54 @@ describe("the public form's first copy", () => {
 		const world = musicWorld(throwing(READ));
 
 		seed(world);
+		const { result, sent } = await first(world);
+
+		expect(result).toEqual({ done: "failed" });
+		expect(sent).toEqual([]);
+		expect(detailsOf(world).clientCopyStatus).toBe("failed");
+		expect(logged.mock.calls).toEqual([["Client brief copy state is failed."]]);
+	});
+
+	it("leaves a status another sender recorded when the request cannot be read", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld(throwing(READ));
+
+		seed(world, { ...DETAILS, clientCopyStatus: "sent" });
+		const { result } = await first(world);
+
+		expect(result).toEqual({ done: "failed" });
+		expect(detailsOf(world).clientCopyStatus).toBe("sent");
+	});
+
+	it("logs that the failure could not be recorded when the request cannot be read and the record fails too", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const world = musicWorld(
+			throwing(/FROM owner_requests WHERE id=\?|clientCopyStatus','failed'/),
+		);
+
+		seed(world);
+		const { result } = await first(world);
+
+		expect(result).toEqual({ done: "failed" });
+		expect(detailsOf(world)).toEqual(DETAILS);
+		expect(logged.mock.calls).toEqual([
+			["Client brief copy failure could not be recorded."],
+			["Client brief copy state is failed."],
+		]);
+	});
+
+	it("answers failed and sends nothing when the details are not a JSON object", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld();
+
+		world.sql
+			.prepare(
+				`INSERT INTO owner_requests (id,kind,name,email,summary,details_json,status,created_at,updated_at)
+				VALUES ('r1','software','Alex','alex@example.com','Build','[]','new','2026-11-13T11:00:00.000Z','2026-11-13T11:00:00.000Z')`,
+			)
+			.run();
+
 		const { result, sent } = await first(world);
 
 		expect(result).toEqual({ done: "failed" });

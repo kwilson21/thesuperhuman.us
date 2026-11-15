@@ -107,6 +107,47 @@ describe("the owner's resend", () => {
 		);
 	});
 
+	it.each([
+		["an array", "[]"],
+		["a number", "3"],
+		["text", '"x"'],
+		["null", "null"],
+	])(
+		"refuses a software request whose stored details are %s",
+		(_name, text) => {
+			const details: RequestDetails = JSON.parse(text);
+			const stored = request(details);
+
+			expect(
+				resend(
+					resendCopy.decide(ask(), {
+						found: { request: stored, detailsJson: text },
+					}),
+				),
+			).toEqual(
+				refuse(
+					"BriefCopyDetailsNotObject",
+					"Stored details are not a JSON object.",
+				),
+			);
+		},
+	);
+
+	it("judges the kind before the details", () => {
+		const details: RequestDetails = JSON.parse("[]");
+		const stored = request(details, { kind: "service" });
+
+		expect(
+			resend(
+				resendCopy.decide(ask(), {
+					found: { request: stored, detailsJson: "[]" },
+				}),
+			),
+		).toEqual(
+			refuse("NoSuchSoftwareRequest", "There is no such software request."),
+		);
+	});
+
 	it.each(CLOSED)("refuses a request that is %s", (status) => {
 		expect(
 			resend(resendCopy.decide(ask(), { found: found({}, { status }) })),
@@ -225,8 +266,18 @@ describe("recording a failed claim", () => {
 		const facts = found({ path: "webapp" });
 
 		expect(
-			answerOf(unclaimedFailure.decide({ id: "r1" }, { found: facts })),
+			answerOf(
+				unclaimedFailure.decide({ id: "r1", read: true }, { found: facts }),
+			),
 		).toEqual(write({ id: "r1", expected: facts.detailsJson }));
+	});
+
+	it("records the failure over a copy with no status when the request could not be read", () => {
+		expect(
+			answerOf(
+				unclaimedFailure.decide({ id: "r1", read: false }, { found: null }),
+			),
+		).toEqual(write({ id: "r1", expected: null }));
 	});
 
 	it.each([
@@ -234,7 +285,9 @@ describe("recording a failed claim", () => {
 		["no stored request", null],
 	])("has nothing to record when there is %s", (_name, facts) => {
 		expect(
-			answerOf(unclaimedFailure.decide({ id: "r1" }, { found: facts })),
+			answerOf(
+				unclaimedFailure.decide({ id: "r1", read: true }, { found: facts }),
+			),
 		).toEqual(nothingToDo());
 	});
 });

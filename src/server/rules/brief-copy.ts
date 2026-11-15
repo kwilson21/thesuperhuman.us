@@ -7,7 +7,7 @@
 // request's own record says: no status or "failed" can be claimed; "uncertain" (the provider may have sent it) only by the
 // owner, who confirmed, once a minute has passed since that attempt; "sent" never. verification/brief-copy.qnt models it.
 import * as Data from "effect/Data";
-import { isText } from "../../lib/type-guards";
+import { isObject, isText } from "../../lib/type-guards";
 import type { OwnerRequest } from "../../lib/owner-model";
 import { alwaysWrites, rule, term, unless } from "../terms";
 
@@ -22,6 +22,16 @@ export class NoSuchSoftwareRequest extends Data.TaggedError(
 	"NoSuchSoftwareRequest",
 ) {
 	readonly say = "There is no such software request.";
+}
+
+/**
+ * The stored details of a software request are JSON but not an object, so a copy claimed on them could not be recorded.
+ * Nothing is sent for it. The route logs it as a failure and answers its fixed sentence.
+ */
+export class BriefCopyDetailsNotObject extends Data.TaggedError(
+	"BriefCopyDetailsNotObject",
+) {
+	readonly say = "Stored details are not a JSON object.";
 }
 
 /** The sentence every refusal to send the copy again gives the owner, and a claim lost three times in a row. */
@@ -56,6 +66,15 @@ type Given = Found & Attempt & { readonly confirmedNotSent: boolean };
 const isSoftwareRequest = term(
 	"a software request is stored under the id",
 	(given: Found) => given.found?.request.kind === "software",
+);
+
+const detailsAreObject = term(
+	"the stored details of a software request are a JSON object",
+	(given: Found) =>
+		given.found === null ||
+		given.found.request.kind !== "software" ||
+		(isObject(given.found.request.details) &&
+			!Array.isArray(given.found.request.details)),
 );
 
 const isOpen = term(
@@ -140,6 +159,7 @@ export const resendCopy = alwaysWrites({
 	}),
 	refusals: [
 		unless(isSoftwareRequest, () => new NoSuchSoftwareRequest()),
+		unless(detailsAreObject, () => new BriefCopyDetailsNotObject()),
 		unless(isOpen, () => new BriefCopyRequestClosed()),
 		unless(hasAddress, () => new BriefCopyNoAddress()),
 		unless(mayBeSentAgain, () => new BriefCopyNotDue()),
@@ -160,8 +180,9 @@ export const firstCopy = rule({
 		confirmedNotSent: false,
 	}),
 	nothingToDoIf: term(
-		"another sender has the copy, or there is no open software request with an address",
+		"the copy is not this sender's to claim (another sender has it, or no open software request with an address holds it) and its details can be recorded",
 		(given: Given) =>
+			detailsAreObject.holds(given) &&
 			!(
 				isSoftwareRequest.holds(given) &&
 				isOpen.holds(given) &&
@@ -169,34 +190,48 @@ export const firstCopy = rule({
 				hasNoStatus.holds(given)
 			),
 	),
-	refusals: [],
+	refusals: [unless(detailsAreObject, () => new BriefCopyDetailsNotObject())],
 	writes: claimOf,
 	writesText: "the claim of the copy, with the instant of this attempt",
 });
 
-/** What a failed claim records: which request, and its details as they were read, which the write compares. */
-export type FailureWrite = {
+/**
+ * What a failed claim records: which request, and either its details as they were read, which the write compares, or, when
+ * the request could not be read at all, only that no copy status is recorded yet.
+ */
+export type DetailsFailureWrite = {
 	readonly id: string;
 	readonly expected: string;
 };
 
+export type UnreadFailureWrite = {
+	readonly id: string;
+	readonly expected: null;
+};
+
+export type FailureWrite = DetailsFailureWrite | UnreadFailureWrite;
+
 /**
- * A claim that could not be written is recorded as a failure, over the details as they were read, only on a copy that has no
- * status: a status already there is another sender's and stays.
+ * A claim that could not be written is recorded as a failure only on a copy that has no status: a status already there is
+ * another sender's and stays. When the request was read, the write compares the details as they were read. When the read
+ * itself failed (`read` is false) nothing is known, so the write holds only while no status is recorded.
  */
 export const unclaimedFailure = rule({
 	name: "Record a copy whose claim could not be written",
-	given: (_request: { readonly id: string }, facts: Found) => facts,
+	given: (
+		request: { readonly id: string; readonly read: boolean },
+		facts: Found,
+	) => ({ ...facts, ...request }),
 	nothingToDoIf: term(
-		"a copy status is already recorded, or there is no stored request",
-		(given: Found) => !hasNoStatus.holds(given),
+		"the request was read and a copy status is already recorded, or there is no stored request",
+		(given: Found & { readonly read: boolean }) =>
+			given.read && !hasNoStatus.holds(given),
 	),
 	refusals: [],
-	writes: (given): FailureWrite => {
-		// SAFETY: nothingToDoIf holds when no request is stored, so `found` is the stored request here.
-		const found = given.found as CopyFacts;
-
-		return { id: found.request.id, expected: found.detailsJson };
-	},
-	writesText: "the failure of the copy, over the details as they were read",
+	writes: (given): FailureWrite =>
+		given.found === null
+			? { id: given.id, expected: null }
+			: { id: given.found.request.id, expected: given.found.detailsJson },
+	writesText:
+		"the failure of the copy, over the details as they were read, or over a copy with no status when they were not read",
 });
