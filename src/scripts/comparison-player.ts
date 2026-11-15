@@ -332,6 +332,8 @@ export function setupComparisonPlayers() {
 				pending = true;
 				claimPlayback();
 				status.textContent = "Preparing synchronized audio…";
+				// Another try after a load failure offers the desk again.
+				offerDesk(true);
 				render();
 
 				try {
@@ -372,6 +374,8 @@ export function setupComparisonPlayers() {
 					await Promise.all([resumed, loading]);
 
 					if (request !== operation) return;
+					// A try that works after a load failure leaves the fallback behind.
+					delete root.dataset.audioFallback;
 					transport!.seek(position);
 					applyVolume();
 					transport!.play();
@@ -383,6 +387,7 @@ export function setupComparisonPlayers() {
 							audio.controls = true;
 							audio.hidden = false;
 						});
+						offerDesk(false);
 						status.textContent =
 							"The comparison couldn’t load. Use either audio player below.";
 					}
@@ -495,8 +500,26 @@ export function setupComparisonPlayers() {
 						if (!pending && root.dataset.audioFallback !== "true")
 							status.textContent = note;
 					}, 700);
-				else status.textContent = note;
+				// Loop pressed while the audio loads leaves the wait's note; the button says whether it is on.
+				else if (!pending) status.textContent = note;
 				render();
+			}
+
+			/**
+			 * The native players the fallback shows cannot loop or flip, so there the desk is off and cannot be used; another
+			 * try offers it again.
+			 */
+			function offerDesk(offered: boolean) {
+				if (!offered && loop) {
+					loopToggle?.setAttribute("aria-pressed", "false");
+					loop = undefined;
+					transport?.setLoop(undefined, position);
+				}
+
+				if (loopToggle) loopToggle.disabled = !offered;
+
+				if (loopLength) loopLength.disabled = !offered;
+				drawLoop();
 			}
 
 			loopToggle?.addEventListener("click", () => {

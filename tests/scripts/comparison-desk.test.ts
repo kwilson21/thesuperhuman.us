@@ -146,6 +146,9 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 	// One loudness meter per version, as the full player renders them.
 	const meters = [new StandInMeter(), new StandInMeter()];
 
+	// The shaded loop on each waveform.
+	const regions = [{ hidden: true }, { hidden: true }];
+
 	const dataset: RootData = { duration: "160", title: "Old News" };
 	const styles = new Map<string, string>();
 
@@ -162,10 +165,14 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 					? switches
 					: selector === "[data-lane-meter]"
 						? meters
-						: [],
+						: selector === "[data-loop-region]"
+							? regions
+							: [],
 		contains: () => false,
 	});
 
+	// Whether the versions' files load: a test can let a later try succeed.
+	let loads = decodes;
 	let releaseDecode = () => {};
 
 	const decoded = new Promise<void>((resolve) => {
@@ -250,7 +257,7 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 	vi.stubGlobal("cancelAnimationFrame", () => {});
 	vi.stubGlobal("fetch", () =>
 		decoded.then(() => ({
-			ok: decodes,
+			ok: loads,
 			arrayBuffer: async () => new ArrayBuffer(0),
 		})),
 	);
@@ -274,6 +281,12 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 			releaseDecode();
 			await settle();
 		},
+		/** Lets the next try load the versions' files. */
+		loadNextTime: () => {
+			loads = true;
+		},
+		/** Whether each waveform shows the shaded loop. */
+		shaded: () => regions.map((region) => !region.hidden),
 		loop,
 		styles,
 		/** Each meter's bar share and its line. */
@@ -508,4 +521,56 @@ it("tells the page how loud it sounds at each frame while playing, and once when
 	// Once stopped, it stays quiet.
 	ab.choose("before");
 	expect(heard).toHaveLength(sent);
+});
+
+it("shades the loop on both waveforms while Loop is on", () => {
+	const ab = mount();
+
+	expect(ab.shaded()).toEqual([false, false]);
+	ab.loop.toggle.click();
+	expect(ab.shaded()).toEqual([true, true]);
+	ab.loop.toggle.click();
+	expect(ab.shaded()).toEqual([false, false]);
+});
+
+it("keeps the wait for synced playback on the status line when Loop is pressed while the audio loads", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	expect(ab.loop.toggle.getAttribute("aria-pressed")).toBe("true");
+	expect(ab.status.textContent).toBe("Preparing synchronized audio…");
+	await ab.decode();
+	expect(ab.synced()).toBe(true);
+	expect(ab.shaded()).toEqual([true, true]);
+});
+
+it("turns the desk off where the comparison could not load, keeps that note, and offers the desk again on another try", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.loop.toggle.click();
+	ab.flipOn();
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	expect(ab.loop.toggle.getAttribute("aria-pressed")).toBe("false");
+	expect(ab.loop.toggle.disabled).toBe(true);
+	expect(ab.loop.length.disabled).toBe(true);
+	expect(ab.loop.flip.disabled).toBe(true);
+	expect(ab.shaded()).toEqual([false, false]);
+	expect(ab.status.textContent).toContain("couldn’t load");
+	// Another try that works leaves the fallback behind, and the desk works again.
+	ab.loadNextTime();
+	ab.play.click();
+	expect(ab.loop.toggle.disabled).toBe(false);
+	expect(ab.loop.length.disabled).toBe(false);
+	await settle();
+	expect(ab.synced()).toBe(true);
+	expect(ab.root.dataset.audioFallback).toBeUndefined();
+	ab.loop.toggle.click();
+	ab.seekTo(40);
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toBe("Looping 0:40 to 0:48.");
 });
