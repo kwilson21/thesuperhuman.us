@@ -1,50 +1,62 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { z } from "zod";
+import {
+	mcpChoice,
+	mcpInteger,
+	mcpLiteral,
+	mcpObjectSentences,
+	mcpText,
+} from "../mcp-readers";
+import { defineTool, serveTools, type ToolResult } from "../mcp-tools";
+import { nullable, record, type Value } from "../readers";
 
 export interface PublicationIdentity {
 	ownerId: string;
 	readonly scopes: readonly string[];
 }
 
-const id = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/);
+const object = { strict: true, says: mcpObjectSentences };
 
-const envelope = z
-	.object({
-		version: z.literal(1),
+const idPattern = /^[a-z0-9][a-z0-9_-]{0,79}$/;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+const id = mcpText([{ pattern: idPattern }]);
+
+const story = record(
+	{
+		headline: mcpText([{ least: 1 }, { most: 140 }]),
+		summary: mcpText([{ least: 1 }, { most: 1000 }]),
+		technicalDetail: nullable(mcpText([{ least: 1 }, { most: 4000 }])),
+		delivery: mcpChoice(["proposed", "implemented", "tested", "available"]),
+		basis: mcpChoice([
+			"agent-reported",
+			"repository-verified",
+			"human-confirmed",
+		]),
+	},
+	object,
+);
+
+const envelope = record(
+	{
+		version: mcpLiteral(1),
 		projectId: id,
 		eventId: id,
 		entryId: id,
-		expectedRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-		operation: z.enum(["publish", "correct", "withdraw"]),
-		origin: z.enum(["work", "shutdown", "backfill"]),
-		occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-		threadId: id.nullable(),
-		milestoneId: id.nullable(),
-		story: z
-			.object({
-				headline: z.string().min(1).max(140),
-				summary: z.string().min(1).max(1000),
-				technicalDetail: z.string().min(1).max(4000).nullable(),
-				delivery: z.enum(["proposed", "implemented", "tested", "available"]),
-				basis: z.enum([
-					"agent-reported",
-					"repository-verified",
-					"human-confirmed",
-				]),
-			})
-			.strict()
-			.nullable(),
-	})
-	.strict();
-
-const result = (answer: ToolAnswer) => ({
-	content: [{ type: "text" as const, text: JSON.stringify(answer.value) }],
-	isError: answer.isError,
-});
+		expectedRevision: mcpInteger({
+			least: 0,
+			most: Number.MAX_SAFE_INTEGER,
+		}),
+		operation: mcpChoice(["publish", "correct", "withdraw"]),
+		origin: mcpChoice(["work", "shutdown", "backfill"]),
+		occurredOn: mcpText([{ pattern: datePattern }]),
+		threadId: nullable(id),
+		milestoneId: nullable(id),
+		story: nullable(story),
+	},
+	object,
+);
 
 /** The envelope as the tool's declared input shapes it; the commit reads it again as a publication before it is used. */
-export type Envelope = z.infer<typeof envelope>;
+export type Envelope = Value<typeof envelope>;
 
 /** What a tool answers: a value that becomes the tool result's JSON text, and whether it is an error result. */
 export interface ToolAnswer {
@@ -52,9 +64,73 @@ export interface ToolAnswer {
 	isError: boolean;
 }
 
+const result = (answer: ToolAnswer): ToolResult => ({
+	content: [{ type: "text", text: JSON.stringify(answer.value) }],
+	isError: answer.isError,
+});
+
+// The tools' input as JSON Schema, written out as plain data. It is what the tool list has always shown a client (the
+// differential test compares it with what Zod made of the schemas these readers replaced), so keep the keys in this order.
+const idSchema = { type: "string", pattern: idPattern.source };
+const orNull = (schema: { readonly [key: string]: unknown }) => ({
+	anyOf: [schema, { type: "null" }],
+});
+const choice = (values: readonly string[]) => ({
+	type: "string",
+	enum: values,
+});
+
+const storySchema = {
+	type: "object",
+	properties: {
+		headline: { type: "string", minLength: 1, maxLength: 140 },
+		summary: { type: "string", minLength: 1, maxLength: 1000 },
+		technicalDetail: orNull({ type: "string", minLength: 1, maxLength: 4000 }),
+		delivery: choice(["proposed", "implemented", "tested", "available"]),
+		basis: choice(["agent-reported", "repository-verified", "human-confirmed"]),
+	},
+	required: ["headline", "summary", "technicalDetail", "delivery", "basis"],
+	additionalProperties: false,
+};
+
+const envelopeSchema = {
+	type: "object",
+	properties: {
+		version: { type: "number", const: 1 },
+		projectId: idSchema,
+		eventId: idSchema,
+		entryId: idSchema,
+		expectedRevision: {
+			type: "integer",
+			minimum: 0,
+			maximum: Number.MAX_SAFE_INTEGER,
+		},
+		operation: choice(["publish", "correct", "withdraw"]),
+		origin: choice(["work", "shutdown", "backfill"]),
+		occurredOn: { type: "string", pattern: datePattern.source },
+		threadId: orNull(idSchema),
+		milestoneId: orNull(idSchema),
+		story: orNull(storySchema),
+	},
+	required: [
+		"version",
+		"projectId",
+		"eventId",
+		"entryId",
+		"expectedRevision",
+		"operation",
+		"origin",
+		"occurredOn",
+		"threadId",
+		"milestoneId",
+		"story",
+	],
+	additionalProperties: false,
+};
+
 /**
  * What the two tools do. The decisions and the journal are in src/server (src/lib may not import it), so the route hands
- * them in; this file is the MCP transport and the tools' declared inputs, which the MCP SDK requires to be Zod schemas.
+ * them in; this file is the MCP transport and the tools' declared inputs.
  */
 export interface PublicationTools {
 	progress(projectId: string): Promise<ToolAnswer>;
@@ -67,65 +143,64 @@ export async function publicationMcp(
 	identity: PublicationIdentity,
 	tools: PublicationTools,
 ): Promise<Response> {
-	const server = new McpServer(
-		{ name: "superhuman-publication", version: "1.0.0" },
-		{
-			instructions:
-				"Follow docs/publication-agent-protocol.md in kwilson21/thesuperhuman.us. Reconcile the project roadmap and review public wording before delivery. Never send raw private evidence or secrets. Receipts confirm ingestion, not completion or website rendering. Retry identical envelopes; reconcile conflicts without blindly increasing revisions.",
-		},
-	);
-
 	const scopes = identity.scopes.filter((scope) =>
 		scope.startsWith("publication:"),
 	);
 
-	const security = { securitySchemes: [{ type: "oauth2", scopes }] };
-	server.registerTool(
-		"get_project_progress",
+	const meta = { securitySchemes: [{ type: "oauth2", scopes }] };
+
+	return serveTools(
+		request,
 		{
-			description:
-				"Read published progress and the current revision for an authorized project. Use before preparing an update or resolving a conflict.",
-			inputSchema: z.object({ projectId: id }).strict(),
-			_meta: security,
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false,
-			},
+			name: "superhuman-publication",
+			version: "1.0.0",
+			instructions:
+				"Follow docs/publication-agent-protocol.md in kwilson21/thesuperhuman.us. Reconcile the project roadmap and review public wording before delivery. Never send raw private evidence or secrets. Receipts confirm ingestion, not completion or website rendering. Retry identical envelopes; reconcile conflicts without blindly increasing revisions.",
 		},
-		async ({ projectId }) => result(await tools.progress(projectId)),
+		[
+			defineTool({
+				name: "get_project_progress",
+				description:
+					"Read published progress and the current revision for an authorized project. Use before preparing an update or resolving a conflict.",
+				inputSchema: {
+					$schema: "http://json-schema.org/draft-07/schema#",
+					type: "object",
+					properties: { projectId: idSchema },
+					required: ["projectId"],
+					additionalProperties: false,
+				},
+				meta,
+				annotations: {
+					readOnlyHint: true,
+					destructiveHint: false,
+					idempotentHint: true,
+					openWorldHint: false,
+				},
+				read: record({ projectId: id }, object),
+				call: async ({ projectId }) => result(await tools.progress(projectId)),
+			}),
+			defineTool({
+				name: "publish_project_update",
+				description:
+					"Publish, correct, backfill, or permanently withdraw public website progress after canonical reconciliation and audience review. Use plain-language outcomes and accurate delivery/basis. Preserve event identity on retries. A withdrawal removes the entry and blocks restoration. A conflict requires source reconciliation, not automatic revision advancement.",
+				inputSchema: {
+					$schema: "http://json-schema.org/draft-07/schema#",
+					type: "object",
+					properties: { publication: envelopeSchema },
+					required: ["publication"],
+					additionalProperties: false,
+				},
+				meta,
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: true,
+					idempotentHint: true,
+					openWorldHint: true,
+				},
+				read: record({ publication: envelope }, object),
+				call: async ({ publication }) =>
+					result(await tools.publish(publication.projectId, publication)),
+			}),
+		],
 	);
-	server.registerTool(
-		"publish_project_update",
-		{
-			description:
-				"Publish, correct, backfill, or permanently withdraw public website progress after canonical reconciliation and audience review. Use plain-language outcomes and accurate delivery/basis. Preserve event identity on retries. A withdrawal removes the entry and blocks restoration. A conflict requires source reconciliation, not automatic revision advancement.",
-			inputSchema: z.object({ publication: envelope }).strict(),
-			_meta: security,
-			annotations: {
-				readOnlyHint: false,
-				destructiveHint: true,
-				idempotentHint: true,
-				openWorldHint: true,
-			},
-		},
-		async ({ publication }) =>
-			result(await tools.publish(publication.projectId, publication)),
-	);
-
-	const transport = new WebStandardStreamableHTTPServerTransport({
-		sessionIdGenerator: undefined,
-		enableJsonResponse: true,
-	});
-
-	try {
-		await server.connect(transport);
-		const response = await transport.handleRequest(request);
-		response.headers.set("Cache-Control", "no-store");
-
-		return response;
-	} finally {
-		await server.close();
-	}
 }
