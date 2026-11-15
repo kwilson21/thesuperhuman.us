@@ -399,7 +399,7 @@ export function recordingR2(
 
 						if (!bodyPart || etagOf(bodyPart) !== part.etag)
 							throw new Error(
-								"r2: multipart part is missing or its etag differs",
+								"One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag. (10025)",
 							);
 
 						return bodyPart;
