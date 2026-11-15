@@ -473,8 +473,16 @@ describe("the feed's two reads", () => {
 		expect(raced.current).toEqual(after.current);
 	});
 
-	/** Delivers `total` entries on one day, then withdraws the `count` newest between the index read and the text read. */
-	const racedWithdrawals = async (total: number, count: number) => {
+	/**
+	 * Delivers `total` entries on one day, then (when `oldCurrent`) one more, the newest publish, from long ago, so it is the
+	 * current entry and sorts last in the history; then withdraws entries at the given positions of the history (0 is the
+	 * newest) between the index read and the text read.
+	 */
+	const racedWithdrawals = async (
+		total: number,
+		positions: readonly number[],
+		oldCurrent = false,
+	) => {
 		const world = publicationWorld();
 
 		for (let i = 0; i < total; i += 1)
@@ -484,15 +492,27 @@ describe("the feed's two reads", () => {
 				entryId: `n${i}`,
 				expectedRevision: i,
 			});
+
+		if (oldCurrent)
+			await deliver(world, {
+				...base,
+				eventId: "old",
+				entryId: "old",
+				occurredOn: "2026-01-01",
+				expectedRevision: total,
+			});
+
+		const written = total + (oldCurrent ? 1 : 0);
+
 		// All on one day, so the later publish is shown first: n(total-1) is the newest.
 		world.before(/SELECT revision,payload/, async () => {
-			for (let k = 0; k < count; k += 1)
+			for (const [k, position] of positions.entries())
 				await deliver(
 					world,
 					withdrawal({
 						eventId: `remove${k}`,
-						entryId: `n${total - 1 - k}`,
-						expectedRevision: total + k,
+						entryId: `n${total - 1 - position}`,
+						expectedRevision: written + k,
 					}),
 				);
 		});
@@ -502,8 +522,11 @@ describe("the feed's two reads", () => {
 		return { raced, after };
 	};
 
+	const range = (from: number, to: number) =>
+		Array.from({ length: to - from }, (_, k) => from + k);
+
 	it("shows the 100 entries a request after the withdrawals would, when 11 of 111 are withdrawn between the reads", async () => {
-		const { raced, after } = await racedWithdrawals(111, 11);
+		const { raced, after } = await racedWithdrawals(111, range(0, 11));
 
 		expect(raced.history).toHaveLength(100);
 		expect(raced.history).toEqual(after.history);
@@ -511,11 +534,39 @@ describe("the feed's two reads", () => {
 	});
 
 	it("shows the 100 entries a request after the withdrawals would, when 150 of 250 are withdrawn between the reads", async () => {
-		const { raced, after } = await racedWithdrawals(250, 150);
+		const { raced, after } = await racedWithdrawals(250, range(0, 150));
 
 		expect(raced.history).toHaveLength(100);
 		expect(raced.history).toEqual(after.history);
 		expect(raced.current).toEqual(after.current);
+	});
+
+	it.each([11, 15])(
+		"shows the 100 entries a request after the withdrawals would, when the current entry sorts below the first 110 and %s are withdrawn between the reads",
+		async (count) => {
+			const { raced, after } = await racedWithdrawals(
+				120,
+				range(0, count),
+				true,
+			);
+
+			expect(raced.current?.entryId).toBe("old");
+			expect(raced.history).toHaveLength(100);
+			expect(raced.history).toEqual(after.history);
+			expect(raced.current).toEqual(after.current);
+			expect(raced.history.map((e) => e.entryId)).not.toContain("old");
+		},
+	);
+
+	it("keeps asking when the next candidates were withdrawn too", async () => {
+		// 11 of the first 110 and the four candidates after them: 99 of the first read, and the next four are gone as well.
+		const { raced, after } = await racedWithdrawals(130, [
+			...range(0, 11),
+			...range(110, 114),
+		]);
+
+		expect(raced.history).toHaveLength(100);
+		expect(raced.history).toEqual(after.history);
 	});
 
 	it("reads a long history in statements of at most 50 revisions", async () => {

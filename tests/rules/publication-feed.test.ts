@@ -290,9 +290,39 @@ describe("what the public sees of a journal", () => {
 			expect(Result.isSuccess(answer) && answer.success.history).toHaveLength(
 				100,
 			);
-			// The 150 erased, the 100 live: never the whole 250.
+			// The 150 newest are erased and the 100 live ones are the oldest, so every entry has to be read to find them.
 			expect(asked.size).toBeLessThanOrEqual(251);
 			expect(asked.size).toBeGreaterThanOrEqual(250);
+		});
+
+		it("does not count the current entry as one of the history read when it sorts below the first 110", () => {
+			const events = Array.from({ length: 120 }, (_, k) =>
+				event(k + 1, `e${k}`),
+			);
+
+			const i = index(events, { e119: "2026-01-01" });
+			const picked = choice(i);
+			const first = revisionsToRead(picked);
+
+			// The current entry (the newest publish) is asked for with the first read, and is the history's last entry.
+			expect(picked.current?.entryId).toBe("e119");
+			expect(picked.history.at(-1)?.entryId).toBe("e119");
+			expect(first).toContain(picked.current?.revision);
+			const asked = new Set(first);
+
+			const texts: Map<number, string | null> = new Map(
+				first.map((revision) => [revision, "x"]),
+			);
+
+			for (const pick of picked.history.slice(0, 11))
+				texts.set(pick.revision, null);
+
+			const more = Effect.runSync(
+				moreToRead.decide({ choice: picked, asked, texts }, {}),
+			);
+
+			expect(more.length).toBeGreaterThan(0);
+			expect(more).not.toContain(picked.current?.revision);
 		});
 
 		it("shows what is left when fewer than 100 live entries remain, and stops asking", () => {

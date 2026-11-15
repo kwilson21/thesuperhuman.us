@@ -8,7 +8,8 @@
 //               its newest event, newest day first), in full: only the first few are read at once. Backfilled entries are
 //               history only.
 //   moreToRead  from the texts read so far, the next candidates to read when withdrawals that landed between the reads
-//               left fewer than 100 entries with text, so the history is the 100 a request just after them would show.
+//               left fewer than 100 entries with text, so the history is the 100 a request just after them would show
+//               (see its comment for what is and is not guaranteed).
 //   showFeed    from the text of the picked events, reads each as a publication and builds the feed. A picked event whose
 //               text is gone by now (a withdrawal landed between the reads and erased it) is treated as withdrawn and
 //               left out, and `moreToRead` has had the next candidate read in its place. A story that is shown and does not read as a publication makes the whole feed
@@ -74,8 +75,11 @@ const MOST_IN_HISTORY = 100;
  */
 const SPARE_IN_HISTORY = 10;
 
-/** The most rounds of further reading after the first read; each asks for no more than the entries still missing. */
+/** The most rounds of further reading after the first read. */
 export const MOST_REFILL_ROUNDS = 4;
+
+/** Candidates asked for beyond the number missing in each round, so a few that were withdrawn as well do not cost another round. */
+const REFILL_MARGIN = 10;
 
 /** The newest event of each entry. */
 function newestOfEach(events: readonly FeedEvent[]): FeedEvent[] {
@@ -215,9 +219,16 @@ const hasText = (texts: FeedTexts, revision: number) => {
 };
 
 /**
- * The next candidates to read, in the history's order, when fewer than 100 of those asked for so far still have their
- * text (a withdrawal landed between the reads and erased some): exactly as many as are missing, or what is left. Nothing
- * when 100 have text or no candidate is left, so the answer is what a request just after the withdrawals would show.
+ * The next candidates to read, in the history's order, when fewer than 100 of the history read so far still have their
+ * text (a withdrawal landed between the reads and erased some). The history read so far is the unbroken run of candidates
+ * from the first that were asked for; the current entry's text is asked for with the first read, and counts only when
+ * its own place in the history is reached. Each round asks for the number missing and ten more, or what is left, so a few
+ * candidates withdrawn as well do not need another round. Nothing when 100 have text or no candidate is left.
+ *
+ * What this guarantees: the history is the one a request made just after the withdrawals shows, unless more entries are
+ * withdrawn while this one request is read than its rounds cover (the first read of 110 and at most four rounds, each
+ * asking for the missing number and ten more, so at most 111 + 4 x 110 = 551 texts); then it shows what the reads found, which can be
+ * fewer than 100. It does not guarantee anything about withdrawals that land after the last read.
  */
 export const moreToRead = alwaysWrites({
 	name: "Read more of the history when withdrawals left it short",
@@ -229,18 +240,22 @@ export const moreToRead = alwaysWrites({
 		},
 		_facts: Record<string, never>,
 	) => {
-		const read = request.choice.history.filter((pick) =>
-			request.asked.has(pick.revision),
+		const { history } = request.choice;
+		const firstUnread = history.findIndex(
+			(pick) => !request.asked.has(pick.revision),
 		);
+		const read = firstUnread < 0 ? history : history.slice(0, firstUnread);
 
 		const missing =
 			MOST_IN_HISTORY -
 			read.filter((pick) => hasText(request.texts, pick.revision)).length;
 
-		return request.choice.history
-			.filter((pick) => !request.asked.has(pick.revision))
-			.slice(0, Math.max(missing, 0))
-			.map((pick) => pick.revision);
+		return missing <= 0
+			? []
+			: history
+					.filter((pick) => !request.asked.has(pick.revision))
+					.slice(0, missing + REFILL_MARGIN)
+					.map((pick) => pick.revision);
 	},
 	refusals: [],
 	writes: (revisions) => revisions,
@@ -294,12 +309,15 @@ function assemble(
 
 	if (!current.ok) return refused(projectId, choice.revision);
 
-	// The first 100 entries that still have text; one that does not read as a publication refuses the feed. A spare that
-	// is not reached is never read as one.
+	// The first 100 entries that still have text, in order; one that does not read as a publication refuses the feed. It
+	// stops at the first candidate whose text was never read (the rounds ended before it), so a candidate that was read only
+	// because it is the current entry is not shown out of its place. A spare that is not reached is never read as one.
 	const history: PublicEntry[] = [];
 
 	for (const pick of choice.history) {
 		if (history.length >= MOST_IN_HISTORY) break;
+
+		if (!texts.has(pick.revision)) break;
 		const item = entryOf(pick, texts.get(pick.revision));
 
 		if (!item.ok) return refused(projectId, choice.revision);
