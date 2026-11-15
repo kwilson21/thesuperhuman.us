@@ -17,7 +17,16 @@ export function setupStudioObjects() {
 		hovered: string | undefined,
 		focused: string | undefined;
 
+	const links = [
+		...scene.querySelectorAll<HTMLAnchorElement>("[data-studio-object]"),
+	];
+
 	const update = () => {
+		links.forEach((link) => {
+			if (link.dataset.studioObject === hovered) link.dataset.hovered = "true";
+			else delete link.dataset.hovered;
+		});
+
 		const id = hovered ?? focused;
 
 		if (id === current) return;
@@ -29,10 +38,6 @@ export function setupStudioObjects() {
 		void scene.getBoundingClientRect();
 		scene.dataset.play = id;
 	};
-
-	const links = [
-		...scene.querySelectorAll<HTMLAnchorElement>("[data-studio-object]"),
-	];
 
 	/** Reads which object has keyboard focus (:focus-visible) now; a new one shows its label again after Escape. */
 	const followFocus = () => {
@@ -51,8 +56,12 @@ export function setupStudioObjects() {
 	links.forEach((link) => {
 		const id = link.dataset.studioObject ?? "";
 
-		link.addEventListener("pointerenter", (event) => {
-			if (event.pointerType === "touch" || !fineHover.matches) return;
+		// An object is pointed at once the pointer moves over it (its label included). A label that appears under a
+		// resting mouse, or a scroll that brings an object under it, sends pointerenter with no movement, and takes no
+		// hover until the pointer moves.
+		link.addEventListener("pointermove", (event) => {
+			if (event.pointerType === "touch" || !fineHover.matches || hovered === id)
+				return;
 			hovered = id;
 			update();
 		});

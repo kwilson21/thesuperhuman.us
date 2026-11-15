@@ -58,7 +58,7 @@ class StandInDocument extends EventTarget {
 class StudioLink extends EventTarget {
 	keyboardFocus = false;
 
-	constructor(readonly dataset: { studioObject: string }) {
+	constructor(readonly dataset: { studioObject: string; hovered?: string }) {
 		super();
 	}
 
@@ -159,8 +159,14 @@ function mount({
 		button,
 		comparison,
 		link,
-		point: (id: string, pointerType = "mouse") =>
-			link(id).dispatchEvent(new Pointer("pointerenter", pointerType)),
+		/** The pointer moves onto the object: pointerenter, then pointermove over it. */
+		point: (id: string, pointerType = "mouse") => {
+			link(id).dispatchEvent(new Pointer("pointerenter", pointerType));
+			link(id).dispatchEvent(new Pointer("pointermove", pointerType));
+		},
+		/** The object arrives under a pointer at rest (a label appearing under it, or a scroll): no movement. */
+		arriveUnder: (id: string) =>
+			link(id).dispatchEvent(new Pointer("pointerenter")),
 		leave: (id: string, pointerType = "mouse") =>
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
@@ -350,13 +356,29 @@ it("keeps labels hidden after Escape when a scroll then brings the desk under a 
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
 });
 
-it("gives a label keyboard focus shows no pointer of its own, so it cannot take a resting mouse's hover", () => {
+it("lets a mouse click a label keyboard focus shows, and shows hover from the object the pointer moved onto", () => {
 	expect(hero).toContain(
-		".studio-object:focus-visible .studio-object-label { opacity: 1; }",
+		".studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }",
 	);
 	expect(hero).toContain(
-		".studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }",
+		".studio-object[data-hovered] .studio-object-label { opacity: 1; pointer-events: auto; }",
 	);
+	expect(hero).not.toContain(".studio-object:hover");
+});
+
+it("gives no hover to an object that arrives under a resting pointer, until the pointer moves", () => {
+	const studio = mount();
+
+	studio.focus("notebook");
+	// The headphones' label appears under the mouse, or a scroll brings them under it.
+	studio.arriveUnder("headphones");
+	expect(studio.scene.dataset.play).toBe("notebook");
+	expect(studio.link("headphones").dataset.hovered).toBeUndefined();
+	studio.point("headphones");
+	expect(studio.scene.dataset.play).toBe("headphones");
+	expect(studio.link("headphones").dataset.hovered).toBe("true");
+	studio.leave("headphones");
+	expect(studio.link("headphones").dataset.hovered).toBeUndefined();
 });
 
 it("rests the scene when the page comes back from the back-forward cache", () => {
