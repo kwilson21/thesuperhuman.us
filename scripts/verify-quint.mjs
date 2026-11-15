@@ -39,7 +39,11 @@ function quint(args) {
 	});
 }
 
-const simulate = (model, main, invariant) =>
+/** How many random runs a check makes: a model may make fewer for the runs that must pass (`passSamples`) than it needs to find its rarest mutant. */
+const samplesFor = (model, kind) =>
+	kind === "pass" ? (model.passSamples ?? model.samples) : model.samples;
+
+const simulate = (model, main, invariant, kind) =>
 	quint([
 		"run",
 		model.file,
@@ -54,7 +58,7 @@ const simulate = (model, main, invariant) =>
 		"--max-steps",
 		STEPS,
 		"--max-samples",
-		model.samples,
+		samplesFor(model, kind),
 		"--seed",
 		SEED,
 	]);
@@ -120,14 +124,15 @@ async function runChecks(checks) {
 		.sort(
 			(a, b) =>
 				Number(b.check.kind === "pass") - Number(a.check.kind === "pass") ||
-				Number(b.check.model.samples) - Number(a.check.model.samples),
+				Number(samplesFor(b.check.model, b.check.kind)) -
+					Number(samplesFor(a.check.model, a.check.kind)),
 		);
 
 	const started = await runAll(
 		order.map(
-			({ check: { model, main, invariant } }) =>
+			({ check: { model, main, invariant, kind } }) =>
 				() =>
-					simulate(model, main, invariant),
+					simulate(model, main, invariant, kind),
 		),
 		jobs,
 	);
