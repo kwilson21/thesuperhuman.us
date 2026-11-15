@@ -17,8 +17,11 @@ import {
 	offersFailedAfterEmail,
 	offersUnavailable,
 } from "~/lib/music-request";
-import { softwareGuard } from "~/lib/software-projects";
-import { depositOfferBlock, depositOfferGuard } from "~/lib/software-invoices";
+import { softwareGuard } from "~/lib/software-guard";
+import {
+	depositOfferBlock,
+	depositOfferGuard,
+} from "~/lib/software-offer-deposit";
 import { z } from "astro/zod";
 import { getOwnerRequest } from "~/lib/owner-requests";
 import {

@@ -1,5 +1,5 @@
 import type { RawValue } from "./fields";
-import { hashValue } from "./audio-client-access";
+import { hashValue } from "./client-portal";
 import { nonHttpsLinkText } from "./link-check";
 import { isText } from "./type-guards";
 
