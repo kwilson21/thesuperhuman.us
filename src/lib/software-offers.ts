@@ -462,6 +462,45 @@ export async function getLinkedOffer(db: D1Database, token: string) {
 export const offerSendingMessage =
 	"An offer is still being sent. Try again in a moment.";
 
+// The fixed answers of the owner's software request actions (POST /api/owner/requests/[id]/software). The owner's page
+// shows `message`, and every answer of that route is private. A refusal's own sentence is the route's; what is here is
+// answered for a failure, which is no refusal.
+
+const offersAnswer = (message: string, status: number) =>
+	Response.json(
+		{ ok: false, message },
+		{ status, headers: { "cache-control": "private, no-store" } },
+	);
+
+/** A dependency this deployment does not have (the mail settings, the attachment bucket): a deliberate 503. */
+export const offersUnavailable = () =>
+	offersAnswer("Software offers are temporarily unavailable.", 503);
+
+/** A store that failed unexpectedly, or a defect: 500, because nothing is known to be unavailable. */
+export const offersFailed = () =>
+	offersAnswer("The change could not be saved. Please try again.", 500);
+
+/** A store that failed after the client email (a question's record, a decline's resolve, a send's live-link check). */
+export const offersFailedAfterEmail = () =>
+	offersAnswer(
+		"The email was sent, but saving failed. Reload before you try again.",
+		500,
+	);
+
+/** A store that failed after the draft was saved, while an attachment the draft removed was being cleaned up. */
+export const offersFailedAfterDraft = () =>
+	offersAnswer(
+		"The draft was saved, but an attachment could not be cleaned up. Reload before you try again.",
+		500,
+	);
+
+/** A store that failed after a client email that was refused or may not have gone out, in a send's live-link check. */
+export const offersCheckFailedAfterFailedEmail = () =>
+	offersAnswer(
+		"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.",
+		500,
+	);
+
 const recentLiveLink =
 	"SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?";
 

@@ -39,6 +39,8 @@ const UNAVAILABLE = "Software offers are temporarily unavailable.";
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
 
+const AFTER_FAILED_EMAIL =
+	"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.";
 const AFTER_DRAFT =
 	"The draft was saved, but an attachment could not be cleaned up. Reload before you try again.";
 
@@ -464,6 +466,23 @@ describe("after the client email went out, a failure says so", () => {
 
 		expect(await read(await call(send))).toEqual(answer(500, AFTER_EMAIL));
 		expect(emails()).toHaveLength(2);
+		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
+			status: "sent",
+		});
+	});
+
+	it("send: the live-link check fails after the client email failed", async () => {
+		vi.mocked(fetch).mockImplementation(async () =>
+			Response.json({ message: "refused" }, { status: 422 }),
+		);
+		const { sql, call } = setUp({
+			seed: withDraft,
+			faults: [{ on: /WHERE request_id=\? AND token_hash=\?/ }],
+		});
+
+		expect(await read(await call(send))).toEqual(
+			answer(500, AFTER_FAILED_EMAIL),
+		);
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",
 		});
