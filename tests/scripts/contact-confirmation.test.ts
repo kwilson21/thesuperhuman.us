@@ -27,6 +27,9 @@ type ContactAnswer = {
 	errors?: Record<string, string>;
 };
 
+/** What the page reports as focused: one of the stand-ins below, another element, or nothing. */
+type FocusedStandIn = object | null;
+
 /** A stand-in element: the members the contact script and the shared form helper touch. */
 const element = () => ({
 	textContent: "",
@@ -86,6 +89,12 @@ function mount({
 		["[data-hold-send]", sendNow],
 	]);
 
+	// What the panel holds, for its contains(): its buttons and text parts, and the panel itself (added below).
+	const inPanel = new Set<FocusedStandIn>([
+		...buttons.values(),
+		...texts.values(),
+	]);
+
 	const panel = {
 		...element(),
 		hidden: true,
@@ -93,10 +102,27 @@ function mount({
 			selector === "h3"
 				? heading
 				: (texts.get(selector) ?? buttons.get(selector) ?? null),
+		contains: inPanel.has.bind(inPanel),
 	};
+
+	inPanel.add(panel);
 
 	const text = (selector: string) => texts.get(selector)?.textContent;
 	const count = texts.get("[data-hold-count]")!;
+	// What has focus, as the page would report it, and the order the hold scrolled and focused in.
+	let active: FocusedStandIn = null;
+	const order: string[] = [];
+
+	panel.focus.mockImplementation(() => {
+		active = panel;
+		order.push(`focus panel (hidden: ${panel.hidden})`);
+	});
+	count.focus.mockImplementation(() => {
+		active = count;
+	});
+	heading.scrollIntoView.mockImplementation(() => {
+		order.push(`scroll heading (hidden: ${panel.hidden})`);
+	});
 
 	let submit: (() => Promise<void>) | undefined;
 
@@ -128,6 +154,7 @@ function mount({
 
 	const documentEvents = Object.assign(new EventTarget(), {
 		visibilityState: "visible",
+		body: { tagName: "BODY" },
 		querySelector: () => form,
 		getElementById: (id: string) =>
 			({
@@ -136,6 +163,9 @@ function mount({
 			})[id] ?? null,
 	});
 
+	Object.defineProperty(documentEvents, "activeElement", {
+		get: () => active,
+	});
 	vi.stubGlobal("window", windowEvents);
 	vi.stubGlobal("document", documentEvents);
 	vi.stubGlobal(
@@ -168,6 +198,17 @@ function mount({
 		panel,
 		heading,
 		count,
+		order,
+		focusElsewhere: () => {
+			active = { tagName: "A" };
+		},
+		focusNowhere: () => {
+			active = documentEvents.body;
+		},
+		pressSendNow: () => {
+			active = sendNow;
+			sendNow.click();
+		},
 		page,
 		status,
 		email,
@@ -239,6 +280,11 @@ it("holds the message where the visitor can check it, then sends it when the tim
 		block: "nearest",
 	});
 	expect(contact.panel.focus).toHaveBeenCalledWith({ preventScroll: true });
+	// The heading is scrolled to once the panel is shown (a hidden panel has no box to scroll to), then focused.
+	expect(contact.order).toEqual([
+		"scroll heading (hidden: false)",
+		"focus panel (hidden: false)",
+	]);
 	expect(contact.text("[data-hold-count]")).toBe(
 		holdCountText(CONTACT_HOLD_SECONDS),
 	);
@@ -299,7 +345,8 @@ it("sends nothing on Undo and edit, and sends at once on Send now", async () => 
 
 	expect(contact.undo.disabled).toBe(false);
 	expect(contact.text("[data-hold-email]")).toBe("alex@example.org");
-	contact.sendNow.click();
+	expect(contact.panel.focus).toHaveBeenLastCalledWith({ preventScroll: true });
+	contact.pressSendNow();
 	await vi.advanceTimersByTimeAsync(0);
 	expect(contact.sentBodies()).toEqual([
 		expect.objectContaining({ email: "alex@example.org" }),
@@ -326,6 +373,29 @@ it("sends at once when the visitor leaves or switches away, since Undo only work
 		await sending;
 		vi.unstubAllGlobals();
 	}
+});
+
+it("moves focus to the count when nothing had focus as the hold ends", async () => {
+	const contact = mount();
+	const sending = contact.submit();
+
+	contact.focusNowhere();
+	await vi.advanceTimersByTimeAsync(CONTACT_HOLD_SECONDS * 1000);
+	expect(contact.count.focus).toHaveBeenCalledWith({ preventScroll: true });
+	contact.answer();
+	await sending;
+});
+
+it("leaves focus where it is when it was outside the panel as the hold ends", async () => {
+	const contact = mount();
+	const sending = contact.submit();
+
+	contact.focusElsewhere();
+	await vi.advanceTimersByTimeAsync(CONTACT_HOLD_SECONDS * 1000);
+	expect(contact.fetch).toHaveBeenCalledTimes(1);
+	expect(contact.count.focus).not.toHaveBeenCalled();
+	contact.answer();
+	await sending;
 });
 
 it("ignores a second send while a message is held", async () => {
@@ -407,8 +477,10 @@ it("names the address that was sent, even when the field changes while sending",
 it("gives the hold every part the script fills, with a fixed label and no other address", () => {
 	for (const hook of [
 		'<h3 id="contact-hold-title">Check it before it sends.</h3>',
-		`<p id="contact-hold-count" class="contact-hold-count" role="timer" tabindex="-1" data-hold-count>${holdCountText(CONTACT_HOLD_SECONDS)}</p>`,
-		'aria-labelledby="contact-hold-title" aria-describedby="contact-hold-count contact-hold-about"',
+		`<p id="contact-hold-count" class="contact-hold-count" role="timer" aria-labelledby="contact-hold-count" tabindex="-1" data-hold-count>${holdCountText(CONTACT_HOLD_SECONDS)}</p>`,
+		'aria-labelledby="contact-hold-title" aria-describedby="contact-hold-when contact-hold-about"',
+		// Hidden from the page's reading order; a description can still be read from a hidden element.
+		`<p id="contact-hold-when" hidden>It sends in ${CONTACT_HOLD_SECONDS} seconds unless you undo it.</p>`,
 		"I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving or switching away from this page sends it right away.",
 		"data-hold-undo>Undo and edit</button>",
 		"data-hold-send>Send now</button>",
@@ -419,6 +491,14 @@ it("gives the hold every part the script fills, with a fixed label and no other 
 
 	expect(holdFromText(" Alex ", "")).toBe("Alex");
 	expect(holdFromText("Alex", " Example Studio ")).toBe("Alex, Example Studio");
+
+	// The count keeps the site's focus ring: it takes focus from the keyboard when the message starts sending.
+	for (const rule of readFileSync("src/styles/global.css", "utf8").match(
+		/[^{}]*(contact-hold|form-hold|data-hold)[^{}]*\{[^}]*\}/g,
+	) ?? [])
+		expect(rule).not.toMatch(
+			/outline(-style)?\s*:\s*(none|0)\b|outline-color\s*:\s*transparent/,
+		);
 	expect(holdPanel).not.toContain("mailto:");
 	expect(success).not.toContain("mailto:");
 	expect(success).not.toMatch(/typo/i);

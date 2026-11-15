@@ -77,13 +77,20 @@ export function setupContactForm() {
 				listening.abort();
 
 				if (send) {
-					// The panel stays up while the message sends; the form comes back only if the send fails. The count takes
-					// focus, so "Sending…" is read out and focus does not drop with the buttons it disables.
+					// The panel stays up while the message sends; the form comes back only if the send fails. Focus inside the
+					// panel (or nowhere) moves to the count, so "Sending…" is read out and focus does not drop with the buttons
+					// this disables. Focus elsewhere is left alone while it sends; when the answer arrives, the success message
+					// or the form's message takes focus, as on every form (form-submission.ts).
+					const focusHere =
+						panel.contains(document.activeElement) ||
+						document.activeElement === document.body;
+
 					showCount("Sending…");
 
 					for (const button of [undo, sendNow])
 						if (button) button.disabled = true;
-					count?.focus({ preventScroll: true });
+
+					if (focusHere) count?.focus({ preventScroll: true });
 				} else {
 					panel.hidden = true;
 					form.hidden = false;
