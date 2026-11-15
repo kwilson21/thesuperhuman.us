@@ -3289,12 +3289,10 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 });
 
 it("releases offer blocks only after an explicit full pre-start refund record and lets old absent attempts recover", async () => {
-	const {
-		reserveSoftwareInvoice,
-		depositOfferBlock,
-		paidFirstDeposit,
-		listSoftwareInvoices,
-	} = await import("~/lib/software-invoices");
+	const { reserveSoftwareInvoice, paidFirstDeposit, listSoftwareInvoices } =
+		await import("~/lib/software-invoices");
+
+	const { depositOfferBlock } = await import("~/lib/software-offer-deposit");
 
 	const { reconciliationStatements } = await import(
 		"../../scripts/stripe-reconciliation.mjs"
@@ -3757,6 +3755,9 @@ it.each(["balance", "milestone"])(
 it.each([false, true])(
 	"atomically blocks offer changes or declines for an uncollectible deposit (decline=%s)",
 	async (decline) => {
+		// A decline without the mail settings is refused before any write; with them it reaches the batch under test.
+		env.OWNER_EMAIL = "owner@example.com";
+
 		const saved = await call(offerPost, {
 			action: "draft",
 			terms: { ...terms, summary: "Updated" },

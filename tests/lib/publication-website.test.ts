@@ -1,45 +1,66 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { websiteFeed } from "~/lib/publication/website";
-import type { readProject as ReadProject } from "~/lib/publication/read";
+import { describe, expect, it } from "vitest";
+import { websiteFeed } from "~/server/publication-feed";
 import { double, partial } from "../helpers/doubles";
+import { publicationWorld } from "../helpers/publication-world";
 
-const readProject = vi.fn<typeof ReadProject>();
+const world = () => {
+	const w = publicationWorld();
 
-const env = partial<Env>({
-	PUBLICATION_DB: double<D1Database>({}),
-	PUBLICATION_PROJECTS: "threadline, the-engineers-daily",
-});
-
-beforeEach(() => vi.clearAllMocks());
+	return {
+		w,
+		env: partial<Env>({
+			PUBLICATION_DB: w.db,
+			PUBLICATION_PROJECTS: "threadline, the-engineers-daily",
+		}),
+	};
+};
 
 describe("optional project feeds", () => {
 	it("preserves the default Threadline caller", async () => {
-		await websiteFeed(env, undefined, readProject);
-		expect(readProject).toHaveBeenCalledWith(env.PUBLICATION_DB, "threadline");
+		const { env } = world();
+
+		expect(await websiteFeed(env)).toMatchObject({
+			projectId: "threadline",
+			revision: 0,
+		});
 	});
+
 	it("reads the requested allowed project, never another project", async () => {
-		await websiteFeed(env, "the-engineers-daily", readProject);
-		expect(readProject).toHaveBeenCalledTimes(1);
-		expect(readProject).toHaveBeenCalledWith(
-			env.PUBLICATION_DB,
-			"the-engineers-daily",
-		);
+		const { env, w } = world();
+
+		expect(await websiteFeed(env, "the-engineers-daily")).toMatchObject({
+			projectId: "the-engineers-daily",
+		});
+		expect(w.batches).toHaveLength(1);
 	});
+
 	it("does not query projects outside the allowlist or without a binding", async () => {
-		expect(await websiteFeed(env, "private-project", readProject)).toBeNull();
+		const { env, w } = world();
+
+		expect(await websiteFeed(env, "private-project")).toBeNull();
 		expect(
-			await websiteFeed(
-				partial<Env>({ PUBLICATION_PROJECTS: "threadline" }),
-				undefined,
-				readProject,
-			),
+			await websiteFeed(partial<Env>({ PUBLICATION_PROJECTS: "threadline" })),
 		).toBeNull();
-		expect(readProject).not.toHaveBeenCalled();
+		expect(w.batches).toEqual([]);
 	});
+
 	it("does not break the page if optional publication data fails", async () => {
-		vi.mocked(readProject).mockRejectedValueOnce(new Error("offline"));
-		expect(
-			await websiteFeed(env, "the-engineers-daily", readProject),
-		).toBeNull();
+		const { env, w } = world();
+
+		w.failing(/publication_events/);
+		expect(await websiteFeed(env, "the-engineers-daily")).toBeNull();
+	});
+
+	it("does not break the page if the database throws where a failure was not named", async () => {
+		const env = partial<Env>({
+			PUBLICATION_DB: double<D1Database>({
+				prepare: () => {
+					throw new Error("offline");
+				},
+			}),
+			PUBLICATION_PROJECTS: "threadline",
+		});
+
+		expect(await websiteFeed(env)).toBeNull();
 	});
 });

@@ -78,10 +78,17 @@ function wrap(text: string, font: PDFFont, size: number, width: number) {
 /** A value the packet prints (display converts it with String): a recorded field, or null or undefined when it was not recorded. */
 type CertificateValue = string | number | null | undefined;
 
+/** How the packet awaits each D1 or R2 read it makes: as it comes, or, in the preflight, with a rejection named. */
+type PacketRead = <T>(work: Promise<T>) => Promise<T>;
+
+/** Every read as it comes: what countersigning (prepareAgreementArtifact) and every other caller get. */
+const asItComes: PacketRead = (work) => work;
+
 export async function renderAgreementPacket(
 	env: Env,
 	documents: Agreement[],
 	certificates: SigningCertificate[],
+	read: PacketRead = asItComes,
 ): Promise<Uint8Array> {
 	const records = certificates;
 	const pdf = await PDFDocument.create();
@@ -144,18 +151,20 @@ export async function renderAgreementPacket(
 			documents.length > 1 &&
 			doc.offer_id !== documents[documents.length - 1].offer_id
 		) {
-			const artifact = await env
-				.MUSIC_DB!.prepare(
-					"SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts WHERE agreement_id=? AND status='ready'",
-				)
-				.bind(doc.id)
-				.first<{ pdf_key: string; pdf_sha256: string }>();
+			const artifact = await read(
+				env
+					.MUSIC_DB!.prepare(
+						"SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts WHERE agreement_id=? AND status='ready'",
+					)
+					.bind(doc.id)
+					.first<{ pdf_key: string; pdf_sha256: string }>(),
+			);
 
 			if (!artifact) throw new Error("Original signed MSA copy unavailable.");
-			const object = await env.AUDIO.get(artifact.pdf_key);
+			const object = await read(env.AUDIO.get(artifact.pdf_key));
 
 			if (!object) throw new Error("Original signed MSA unavailable.");
-			const bytes = await object.arrayBuffer();
+			const bytes = await read(object.arrayBuffer());
 
 			if ((await hashBytes(bytes)) !== artifact.pdf_sha256)
 				throw new Error("Original MSA hash mismatch.");
@@ -341,10 +350,10 @@ export async function renderAgreementPacket(
 	);
 
 	for (const attachment of attachments) {
-		const object = await env.AUDIO.get(attachment.key);
+		const object = await read(env.AUDIO.get(attachment.key));
 
 		if (!object) throw new Error("Missing attachment.");
-		const bytes = await object.arrayBuffer();
+		const bytes = await read(object.arrayBuffer());
 
 		if ((await hashBytes(bytes)) !== attachment.sha256)
 			throw new Error("Attachment hash mismatch.");
@@ -374,6 +383,30 @@ export async function renderAgreementPacket(
 
 	return pdf.save();
 }
+
+/**
+ * A D1 or R2 read the preflight makes rejected: the reused MSA, its artifact record, its signed copy (the object or its
+ * body) or an attachment (the object or its body). The store failed, which says nothing about the details, so
+ * POST /api/owner/requests/[id]/software answers it as a failed store; `failure` is the rejection, for that route's log
+ * and never for an answer. Everything else the preflight throws is a plain Error about the inputs, which the route
+ * answers as incomplete details: a row or an object a read found missing, bytes whose hash differs or that are not a
+ * PDF, a character the packet font cannot draw, a packet over the copy limit. renderAgreementPacket's other callers
+ * (countersigning) get every rejection as it came.
+ */
+export class PreflightReadFailed<Failure> extends Error {
+	readonly failure: Failure;
+
+	constructor(failure: Failure) {
+		super("A read of the agreement preflight failed.");
+		this.failure = failure;
+	}
+}
+
+/** The preflight's reads: a rejection becomes PreflightReadFailed; what a read finds, nothing included, is passed on. */
+const preflightRead: PacketRead = (work) =>
+	work.catch((failure) => {
+		throw new PreflightReadFailed(failure);
+	});
 
 /** Validate the actual merge inputs before sending. Reserve space for bounded signer evidence. */
 export async function preflightAgreementPacket(
@@ -428,12 +461,14 @@ export async function preflightAgreementPacket(
 	});
 
 	if (reusedMsaId) {
-		const original = await env
-			.MUSIC_DB!.prepare(
-				"SELECT * FROM software_agreements WHERE id=? AND status='executed' AND archive_closed_at IS NULL",
-			)
-			.bind(reusedMsaId)
-			.first<Agreement>();
+		const original = await preflightRead(
+			env
+				.MUSIC_DB!.prepare(
+					"SELECT * FROM software_agreements WHERE id=? AND status='executed' AND archive_closed_at IS NULL",
+				)
+				.bind(reusedMsaId)
+				.first<Agreement>(),
+		);
 
 		if (!original) throw new Error("Original MSA unavailable.");
 		documents[0] = original;
@@ -457,6 +492,7 @@ export async function preflightAgreementPacket(
 				verified_at: "2026-12-31T13:25:00Z",
 			})),
 		})),
+		preflightRead,
 	);
 
 	if (packet.length + 1024 * 1024 > 25 * 1024 * 1024)

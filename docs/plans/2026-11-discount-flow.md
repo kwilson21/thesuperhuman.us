@@ -40,7 +40,9 @@ mock-ups; $2,400 is the public placeholder of the fee field.
    model (the mutant `discountTodayDepositGuard` is the old guard, and it fails). Reproduced against the real handlers
    and fixed in PR 2: the golden case "a deposit paid, then the request declined, reopened, redrafted and sent"
    answered 200 with a new link before the fix and answers 409 after it, with the refusal "A deposit is paid on an
-   earlier offer. Refund it in Stripe before sending new terms."
+   earlier offer. Refund it in Stripe before sending new terms." #287 revised it to name the step that records the refund
+   (a Stripe refund alone does not release the block): "A deposit is paid on an earlier offer. Refund it in Stripe and
+   record the refund with owner:stripe:reconcile --software-deposit-refunded before sending new terms."
 
 Two smaller rules follow from these: a checkpoint's cancellation amount is a share of the discounted price (what the
 client agreed to pay), and the non-binding project estimate must be at least the discounted total.
@@ -56,8 +58,13 @@ An offer without a discount stores exactly what it stores today.
 
 ## 3. State diagrams
 
-The offer version, with the moves that set, read or fix the discount. This is the XState machine the offers area gets
-when it moves to Effect; the discount adds data to its context, not new states.
+The offer version, with the moves that set, read or fix the discount. The diagram is the picture of the offer's whole
+life; where the offers area's moves differ from it (the revoke of a link, the reissue of a sent version, and the decline
+in two steps around its email), see the list of differences in docs/plans/2026-11-offers-conversion.md, section 1,
+"Where this differs from the discount plan's diagram". Amended 2026-11-15 (the same document, section 1): the XState
+machine the offers area gets when it moves to Effect stores four of these states, the values of `software_offers.status`
+(draft, sent, superseded, withdrawn); InReview, ClientSigned and Started are facts its rules read from agreement and
+project rows. The discount adds data to the machine's context, not new states.
 
 ```mermaid
 stateDiagram-v2
@@ -353,6 +360,10 @@ run). Dafny is not installed on the machine this was written on, so they were no
 yet been run against them to show the prover rejects it.
 
 ### 6.2 The model (Quint)
+
+This section describes the model as first written (2026-11-13). It was extended on 2026-11-15 for the offers
+conversion (send and decline in steps around their emails, the link, the sending window, 50-step runs);
+docs/verification.md describes it as it is now.
 
 `verification/discount-offers.qnt`, run by `pnpm run verify:quint:all` (and the `verify:quint` and
 `verify:quint:mutants` halves) through the model list in `scripts/lib/quint-mutants.mjs`; docs/verification.md

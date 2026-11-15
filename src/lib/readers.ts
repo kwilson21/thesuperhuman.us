@@ -292,7 +292,7 @@ export function list<T>(
 		raw.forEach((item: RawValue, index: number) => {
 			const read = element(item, [...path, index]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else values.push(read.value);
@@ -321,19 +321,33 @@ export type Fielded<F extends Fields> = Flat<
 /** One object type with the properties of an intersection. */
 type Flat<T> = { [K in keyof T]: T[K] };
 
+/** What `record` says of a value that is not an object, and of keys that should not be there. Zod 3's words unless given. */
+export type RecordSentences = {
+	readonly notObject: (raw: RawValue) => string;
+	readonly unrecognized: (keys: readonly string[]) => string;
+};
+
+const zod3Sentences: RecordSentences = {
+	notObject: (raw) => notKind("object", raw),
+	unrecognized: (keys) =>
+		`Unrecognized key(s) in object: ${keys.map((key) => `'${key}'`).join(", ")}`,
+};
+
 /**
  * An object that holds these fields and, with `strict`, nothing else (an unknown key is reported, and does not stop it).
  * The fields are read in order, each from the body's key of that name, and the value has the fields in that order.
  */
 export function record<F extends Fields>(
 	fields: F,
-	options: { readonly strict: boolean },
+	options: { readonly strict: boolean; readonly says?: RecordSentences },
 ): Reader<Fielded<F>> {
+	const says = options.says ?? zod3Sentences;
+
 	return (raw, path) => {
 		if (receivedKind(raw) !== "object" || !Predicate.isObject(raw))
 			return {
 				stopped: true,
-				issues: [{ path, message: notKind("object", raw) }],
+				issues: [{ path, message: says.notObject(raw) }],
 			};
 
 		const issues: Issue[] = [];
@@ -347,7 +361,7 @@ export function record<F extends Fields>(
 				name,
 			]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else if (read.value !== undefined) values.push([name, read.value]);
@@ -359,10 +373,7 @@ export function record<F extends Fields>(
 			for (const key in raw) if (!Object.hasOwn(fields, key)) extra.push(key);
 
 			if (extra.length > 0)
-				issues.push({
-					path,
-					message: `Unrecognized key(s) in object: ${extra.map((key) => `'${key}'`).join(", ")}`,
-				});
+				issues.push({ path, message: says.unrecognized(extra) });
 		}
 
 		// SAFETY: every value was read by the reader of the field it is stored under, which Fielded<F> names.

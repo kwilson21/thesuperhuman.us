@@ -10,7 +10,7 @@ import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { hashOfferToken, type OfferTerms } from "~/lib/software-offers";
 import { agreementValues, parseAgreementDetails } from "~/lib/agreement-fields";
-import { projectToday } from "~/lib/audio-project-updates";
+import { projectToday } from "~/lib/project-dates";
 import { double, fakeD1 } from "../helpers/doubles";
 import { fakeLocals } from "../helpers/runtime";
 import { sqliteD1 } from "../helpers/sqlite-d1";
