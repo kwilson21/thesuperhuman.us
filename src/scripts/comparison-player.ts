@@ -179,9 +179,14 @@ export function setupComparisonPlayers() {
 				updateCompactWaveform();
 			}
 
+			/** Sets the levels for the version sounding now, after reading it from a flip in progress. */
 			function applyVolume() {
 				followFlip();
+				applyLevels();
+			}
 
+			/** Sets the levels for the selected version as it stands, as after an A/B press. */
+			function applyLevels() {
 				// The gains with each version selected.
 				const levels = media.map((_, version) =>
 					media.map((audio, index) => (index === version ? levelOf(audio) : 0)),
@@ -551,7 +556,8 @@ export function setupComparisonPlayers() {
 						streamFrom(at);
 					}
 
-					applyVolume();
+					// The version chosen sounds now, and with Flip on the flips go on from it.
+					applyLevels();
 					updateCompactWaveform();
 					render();
 				}),
@@ -631,8 +637,12 @@ export function setupComparisonPlayers() {
 				// After a seek the line waits until the seeking settles, so a drag is not read out at every step.
 				clearTimeout(loopNote);
 
+				// It leaves alone a note that matters more by then: the wait for synced playback, or the load failure.
 				if (seeking)
-					loopNote = setTimeout(() => (status.textContent = note), 700);
+					loopNote = setTimeout(() => {
+						if (!pending && root.dataset.audioFallback !== "true")
+							status.textContent = note;
+					}, 700);
 				else status.textContent = note;
 				render();
 			}

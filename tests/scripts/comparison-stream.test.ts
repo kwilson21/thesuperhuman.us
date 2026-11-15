@@ -764,3 +764,37 @@ it("plays a transport decoded during a drag held past the end at its levels, onc
 	expect(ab.levelsNow()).toEqual([1, 0]);
 	expect(ab.mix.getAttribute("src")).toBeNull();
 });
+
+it("switches to the version chosen while flipping, playing or paused, and flips on from it", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.loop.flip.checked = true;
+	ab.loop.flip.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	ab.choose("after");
+	expect(ab.levelsNow()).toEqual([0, 1]);
+	expect(ab.label()).toMatch(/Master$/);
+	ab.play.click();
+	ab.choose("before");
+	expect(ab.label()).toMatch(/Mix$/);
+	ab.play.click();
+	await settle();
+	expect(ab.levelsNow()).toEqual([1, 0]);
+});
+
+it("keeps the load failure's note when a seek that moved the loop settles", async () => {
+	const ab = mount({ desk: true, decodes: false });
+
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	ab.seek.value = "60";
+	ab.seek.dispatchEvent(new Event("input"));
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toContain("couldn’t load");
+});
