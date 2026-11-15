@@ -26,6 +26,7 @@ import {
 	bringBack,
 	editCard,
 	emptyBoard,
+	fitContext,
 	keepCard,
 	laneCount,
 	laneLabels,
@@ -59,6 +60,19 @@ const TIMEOUT = 12000;
 
 /** Failures in a row before the board stops asking for this page. */
 const FAILURES = 3;
+
+/** What the board says when it stops asking. The board's AI is "the outline"; "suggestions" are the answer boxes' too. */
+const NOT_HERE =
+	"The outline isn’t available here. You can add your own notes.";
+
+const NOT_NOW =
+	"The outline isn’t available right now. You can add your own notes.";
+
+const LIMIT =
+	"The outline reached today’s limit. You can still add your own notes.";
+
+const UNREADABLE =
+	"The outline couldn’t read this brief. You can still add your own notes.";
 
 /** How long after the visitor last touched or scrolled the board a held reply waits before it applies. */
 const QUIET = 3000;
@@ -278,11 +292,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 	/** What the board is doing, in one line: why it is not asking, or whether it has read the answers as they are now. */
 	function statusText(words: number) {
-		if (!options.live)
-			return "Suggestions aren’t available here. You can add your own notes.";
+		if (!options.live) return NOT_HERE;
 
 		if (!options.aiEnabled())
-			return "Suggestions are off. You can still add your own notes.";
+			return "Suggestions are off, so the outline is too. You can still add your own notes.";
 
 		if (paused) return "Paused. Your cards stay as they are.";
 
@@ -291,9 +304,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (phase === "reading") return "Reading your answers…";
 
 		if (failures > 0)
-			return "Couldn’t read your answers just now. Trying again shortly.";
+			return "The outline couldn’t update just now. Trying again shortly.";
 
-		if (held) return "Updates are waiting below.";
+		if (held) return "Updates are waiting at the end of the board.";
 
 		if (words < MIN_WORDS)
 			return "Write a few sentences and an outline starts here.";
@@ -322,15 +335,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
 			: "";
 
+		// Only suggestions wait for the visitor: cards read from the answers go with the brief unless they are removed.
 		const fresh = board().cards.filter(
-			(card) => card.status === "proposed",
+			(card) => card.status === "proposed" && card.basis === "suggested",
 		).length;
 
 		for (const pulse of pulses) {
 			pulse.hidden = plain || board().cards.length === 0;
 			pulse.textContent =
 				fresh > 0
-					? `Your brief so far: ${fresh} to review`
+					? `Your brief so far: ${fresh} ${fresh === 1 ? "suggestion" : "suggestions"} to review`
 					: "See your brief so far";
 		}
 	}
@@ -385,7 +399,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			card.status !== "wrote";
 
 		quote.hidden = !showQuote;
-		quote.textContent = showQuote ? `You wrote: “${card.quote}”` : "";
+		quote.textContent = showQuote
+			? `${grounded ? "You wrote" : "You wrote earlier"}: “${card.quote}”`
+			: "";
 		const reason = node.querySelector<HTMLElement>("[data-card-reason]")!;
 		reason.hidden = !(
 			card.status === "proposed" &&
@@ -592,6 +608,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const changes = preview.added + preview.updated + preview.withdrawn;
 
 		if (changes > 0 && interacting()) {
+			if (!held)
+				announce(
+					`${changes} ${changes === 1 ? "update is" : "updates are"} waiting at the end of the board.`,
+					true,
+				);
+
 			if (!held || n > held.n) held = { n, path, cards, changes };
 			updateStatus();
 
@@ -639,8 +661,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (lastSent[path] === key) return;
 
 		if (!(await options.startPass())) {
-			stopped =
-				"Suggestions aren’t available right now. You can add your own notes.";
+			stop(NOT_NOW);
 			updateStatus();
 
 			return;
@@ -668,7 +689,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					options.answers()[name] ?? "",
 				]),
 			),
-			cards: boardContext(next),
+			cards: fitContext(
+				boardContext(next),
+				answerText(options.answers(), path).length,
+			),
 		});
 
 		const controller = new AbortController();
@@ -701,33 +725,39 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			if (cards) {
 				failures = 0;
 				deliver(path, n, cards);
-			} else if (answer.status === 429 || read.reason === "limit") {
-				stopped =
-					"Suggestions reached today’s limit. You can still add your own notes.";
+			} else if (read.reason === "limit") {
+				stop(LIMIT);
 			} else if (answer.status === 403 || read.reason === "off") {
-				stopped =
-					"Suggestions aren’t available here. You can add your own notes.";
+				stop(NOT_HERE);
+			} else if (answer.status === 400) {
+				// The page fits every request to what the route reads; a refusal means asking again would not help.
+				stop(UNREADABLE);
 			} else {
 				failures++;
 				// A request that failed is asked again once the visitor writes or the back-off ends.
 				delete lastSent[path];
 			}
 		} catch {
-			if (!controller.signal.aborted) {
-				failures++;
-				delete lastSent[path];
-			} else retry = IDLE;
+			// An aborted request (Pause, the plain form, another path) was never answered, so it is asked again later.
+			delete lastSent[path];
+
+			if (!controller.signal.aborted) failures++;
+			else retry = IDLE;
 		} finally {
 			if (inFlight?.controller === controller) inFlight = null;
 			phase = "idle";
 
-			if (failures >= FAILURES)
-				stopped =
-					"Suggestions aren’t available right now. You can add your own notes.";
+			if (failures >= FAILURES && !stopped) stop(NOT_NOW);
 			updateStatus();
 			retryAt = failures > 0 ? Date.now() + retry : 0;
 			schedule();
 		}
+	}
+
+	/** Stops asking for this page, and says why to everyone, screen reader users included. */
+	function stop(why: string) {
+		stopped = why;
+		announce(why, true);
 	}
 
 	function stopAsking() {
@@ -880,7 +910,15 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const label = lastAction(board());
 
 		if (!label) return;
-		change(undo(board()));
+		change(undo(board()), () =>
+			// Undo can remove the card that held focus; focus then goes to Undo, or to the heading when nothing is left to undo.
+			document.activeElement === document.body ||
+			!document.activeElement?.isConnected
+				? undoButton.disabled
+					? heading
+					: undoButton
+				: null,
+		);
 		announce(`Undid: ${label}.`, true);
 	}
 
@@ -919,12 +957,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		if (paused) stopAsking();
 		persist();
-		announce(paused ? "Suggestions paused." : "Suggestions resumed.", true);
+		announce(paused ? "Outline paused." : "Outline resumed.", true);
 		schedule();
 	});
 	plainButton.addEventListener("click", () => {
 		handle.setPlain(true);
-		showButtons.find((button) => !button.closest("[hidden]"))?.focus();
+		// Focus goes to the step's own "Show the outline", or to the step's heading.
+		(
+			showButtons.find((button) => !button.closest("[hidden]")) ??
+			form.querySelector<HTMLElement>("[data-step]:not([hidden]) h1")
+		)?.focus();
 	});
 	heldButton.addEventListener("click", () => applyHeld(true));
 	showButtons.forEach((button) =>

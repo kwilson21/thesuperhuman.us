@@ -14,6 +14,7 @@ import {
 	commits,
 	editCard,
 	emptyBoard,
+	fitContext,
 	keepCard,
 	laneLimits,
 	lastAction,
@@ -370,7 +371,8 @@ describe("the visitor's actions", () => {
 		board = setAside(board, "c1");
 		expect(board.cards[0].status).toBe("dismissed");
 		board = bringBack(board, "c1");
-		expect(board.cards[0].status).toBe("kept");
+		// It was edited before it was set aside, so it comes back as the visitor's words.
+		expect(board.cards[0].status).toBe("edited");
 		expect(lastAction(board)).toBe("brought back “Contact page”");
 
 		for (let i = 0; i < 5; i++) board = undo(board);
@@ -619,5 +621,181 @@ describe("the saved boards", () => {
 		expect(read.plain).toBe(true);
 		expect(Object.keys(read.boards)).toEqual(["webapp"]);
 		expect(read.boards.webapp?.cards.map((c) => c.id)).toEqual(["c1", "c2"]);
+	});
+});
+
+describe("found in review", () => {
+	it("needs three whole words for a passage, so a word or a fragment grounds nothing", () => {
+		const answers =
+			"We run a small dog grooming shop and book appointments by phone.";
+
+		expect(quotedFrom("and", answers)).toBe(false);
+		expect(quotedFrom("ook", answers)).toBe(false);
+		expect(quotedFrom("grooming shop", answers)).toBe(false);
+		expect(quotedFrom("og grooming sho", answers)).toBe(false);
+		expect(quotedFrom("small dog grooming", answers)).toBe(true);
+		expect(quotedFrom("Shop, and book", answers)).toBe(true);
+		expect(
+			readReply(
+				{
+					cards: [
+						{
+							lane: "audience",
+							text: "Veterinary clinics",
+							basis: "said",
+							quote: "and",
+						},
+					],
+				},
+				answers,
+			),
+		).toEqual([]);
+	});
+
+	it("never rewords a card into an idea the visitor set aside or owns", () => {
+		let board = started(
+			suggested("parts", "Booking"),
+			suggested("parts", "Price list"),
+			suggested("parts", "Gallery"),
+		);
+
+		board = setAside(board, "c2");
+		board = keepCard(board, "c3");
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		const after = applyReply(
+			board,
+			[
+				suggested("parts", "Price list", "c1"),
+				suggested("parts", "Photo gallery"),
+			],
+			n,
+			ANSWERS,
+			false,
+		).board;
+
+		expect(after.cards.map((c) => [c.id, c.text, c.status])).toEqual([
+			["c1", "Booking", "proposed"],
+			["c2", "Price list", "dismissed"],
+			["c3", "Gallery", "kept"],
+		]);
+
+		// Without a ref, an item that says the same idea as an open card would reword it; not into a set-aside idea.
+		let other = started(
+			suggested("parts", "Booking"),
+			suggested("parts", "Price list"),
+		);
+
+		other = setAside(other, "c2");
+		let m: number;
+		[other, m] = sendRequest(other);
+
+		expect(
+			applyReply(
+				other,
+				[suggested("parts", "Price list booking")],
+				m,
+				ANSWERS,
+				false,
+			).board.cards[0].text,
+		).toBe("Booking");
+	});
+
+	it("brings an edited card back as edited, so the outline still says the words are the visitor's", () => {
+		let board = started(suggested("parts", "Booking"));
+		board = editCard(board, "c1", "Booking with a $20 deposit");
+		board = setAside(board, "c1");
+		board = bringBack(board, "c1");
+
+		expect(board.cards[0].status).toBe("edited");
+		const outline = briefOutline(board, ANSWERS);
+
+		expect(outline).toEqual([
+			{ lane: "parts", text: "Booking with a $20 deposit", origin: "edited" },
+		]);
+		expect(readBriefOutline(outline, ANSWERS)).toEqual({
+			ok: true,
+			value: outline,
+		});
+	});
+
+	it("keeps each lane of the outline within its limit when Undo has filled it past, leaving out what the visitor does not own", () => {
+		let board = emptyBoard();
+
+		for (const note of ["Fans", "Venues", "Press"])
+			board = addNote(board, "audience", note);
+		board = removeNote(board, "c2");
+		let n: number;
+		[board, n] = sendRequest(board);
+		board = applyReply(
+			board,
+			[said("audience", "Listeners", "hear new music")],
+			n,
+			ANSWERS,
+			false,
+		).board;
+		board = undo(board);
+
+		expect(board.cards.filter((c) => c.lane === "audience")).toHaveLength(4);
+		const outline = briefOutline(board, ANSWERS);
+
+		expect(outline.map((item) => item.text)).toEqual([
+			"Fans",
+			"Venues",
+			"Press",
+		]);
+		expect(readBriefOutline(outline, ANSWERS).ok).toBe(true);
+	});
+
+	it.each([
+		"Launch by March 1",
+		"Due 2027-01-15",
+		"Live before Christmas",
+		"Costs about a thousand dollars",
+		"Fixed price, affordable",
+		"Kazon can deliver it next month",
+		"Ready next week",
+		"Done by the end of the year",
+	])("refuses the commitment %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each([
+		"Pricing",
+		"Price list",
+		"Request a quote",
+		"Budget planner",
+		"Booking calendar",
+		"Classes in May",
+		"When do you need it by?",
+	])("still accepts %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+
+	it("fits a request to its limit by leaving out set-aside cards, then the visitor's, never the open ones", () => {
+		const card = (ref: string, state: "open" | "yours" | "avoid") => ({
+			ref,
+			lane: "parts" as const,
+			text: "x".repeat(1000),
+			state,
+		});
+
+		const cards = [
+			card("c1", "open"),
+			card("c2", "yours"),
+			card("c3", "yours"),
+			card("c4", "avoid"),
+			card("c5", "avoid"),
+		];
+
+		expect(fitContext(cards, 3500).map((c) => c.ref)).toEqual([
+			"c1",
+			"c2",
+			"c3",
+		]);
+		expect(fitContext(cards, 5500).map((c) => c.ref)).toEqual(["c1"]);
+		expect(fitContext(cards, 6900).map((c) => c.ref)).toEqual(["c1"]);
+		expect(fitContext(cards, 100)).toEqual(cards);
 	});
 });

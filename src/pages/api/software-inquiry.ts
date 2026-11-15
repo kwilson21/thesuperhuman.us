@@ -74,7 +74,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	if (!result.ok)
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
 
-	const outline = readOutline(body, result.value);
+	// The outline counts only while the board is switched on; with it off, a brief is read and stored as before.
+	const outline: OutlineRead =
+		locals.runtime?.env?.SOFTWARE_BOARD_ENABLED === "true"
+			? readOutline(body, result.value)
+			: { ok: true, value: undefined };
 
 	if (!outline.ok)
 		return Response.json(

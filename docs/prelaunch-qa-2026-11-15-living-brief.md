@@ -17,9 +17,10 @@ Rollback revision: the head of PR #286 (`02074f87`), or turn the switch off.
 ## Owner decisions this needs
 
 1. **The AI spending envelope** (plan, section 6), and then the switch. Live interpretation calls
-   `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON Mode: about 120 neurons a call, at most about 223. Limits: 40 a
-   visitor a day, 150 for the site a day, 24 a page. Worst case at the site limit is about $0.37 a day before the
-   10,000 free daily neurons, at most about $11 a month. Until the owner approves, the switch stays off.
+   `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON Mode: about 120 neurons a call, at most about 231. Limits: 40 a
+   visitor a day, 150 for the site a day, 24 a page. Worst case at the site limit is about $0.38 a day before the
+   10,000 free daily neurons, at most about $12 a month (about $16 if every brief were in a script that takes more
+   tokens per character). Until the owner approves, the switch stays off.
 2. **The model.** JSON Mode supports `llama-3.3-70b-instruct-fp8-fast` and `llama-3.1-8b-instruct` (the cheaper 8B
    fp8-fast model is not on Cloudflare's JSON Mode list). The 70B costs about 1.6 times the 8B per call and was chosen
    for quality; neither has been tried against real briefs here.

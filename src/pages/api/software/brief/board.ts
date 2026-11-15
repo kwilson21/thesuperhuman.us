@@ -5,9 +5,11 @@
 //   400 { ok: false }                 a request the page never sends
 //   403 { reason: "pass" }            no valid suggestion pass: the page renews it once and asks again
 //   409 { reason: "busy" }            the day's count kept changing under three tries
-//   429 { reason: "limit", error }    the visitor's or the site's limit for today
+//   429 { reason: "limit", error }    the visitor's or the site's limit for today: the page stops asking
+//   429 { reason: "busy" }            a per-minute rate limit: the page tries later
 //   503 { reason: "off" }             switched off, a binding or secret missing, or a local preview: the page stops asking
-//   503 { reason: "busy" }            a rate limit, the model failing or timing out, or an unreadable reply: try later
+//   503 { reason: "busy" }            a rate limit binding failing, the model failing or timing out, or an unreadable
+//                                     reply: the page tries later
 //   500 { error }                     the store failed, or a defect: the fixed sentence, logged once without the request
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
@@ -117,7 +119,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 						),
 					),
 				SaveKeptChanging: () => Effect.succeed(boardBusy(409)),
-				BoardTooFast: () => Effect.succeed(boardBusy()),
+				BoardTooFast: () => Effect.succeed(boardBusy(429)),
 				RateLimiterFailed: () => Effect.succeed(boardBusy()),
 				BoardModelFailed: () => Effect.succeed(boardBusy()),
 				BoardModelTimedOut: () => Effect.succeed(boardBusy()),

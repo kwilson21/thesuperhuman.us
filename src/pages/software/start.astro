@@ -73,9 +73,9 @@ const href = (path: string) =>
         <div id={`brief-help-${index}`}>
           <p class="intake-muted" data-accept-hint hidden></p>
           <button type="button" class="sr-only" data-accept hidden></button>
-          <p class="intake-muted"><span data-suggestions-disclosure>{boardEnabled ? 'Suggestions and the brief board use Cloudflare’s AI, which sees only your written answers and board notes.' : 'Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.'} <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
+          <p class="intake-muted"><span data-suggestions-disclosure>{boardEnabled ? 'Suggestions and the outline use Cloudflare’s AI, which sees only your written answers and your outline.' : 'Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.'} <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
         </div>
-        {boardEnabled && <p class="intake-muted board-links"><a href="#brief-board-title" data-board-pulse hidden></a><button type="button" data-board-show hidden>Show the brief board</button></p>}
+        {boardEnabled && <p class="intake-muted board-links"><a href="#brief-board-title" data-board-pulse hidden></a><button type="button" data-board-show hidden>Show the outline</button></p>}
         <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
         <button type="button" data-skip hidden={index !== 2}>Skip</button>
       </section>)}
@@ -116,6 +116,7 @@ const href = (path: string) =>
         <label class="intake-field">What you already have (optional)<textarea name="existing" rows="4" maxlength="2000" placeholder="A logo and about 30 class photos. The About and Pricing pages are still accurate. I like how calm the Example Ceramics site feels."></textarea></label>
         <p data-form-error="existing" hidden></p>
         <button type="button" data-skip>Skip</button>
+        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
       <section data-step="8" hidden>
         <h1 tabindex="-1">Who will keep it up to date?</h1>
@@ -125,6 +126,7 @@ const href = (path: string) =>
         </fieldset>
         <p data-form-error="updates" hidden></p>
         <p class="intake-footnote">Updates after launch are quoted separately, at a fixed price.</p>
+        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
       <p data-form-status role="status" tabindex="-1"></p>
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Next</button><button type="submit" class="site-button" hidden disabled>Send brief</button></div>

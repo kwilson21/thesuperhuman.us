@@ -223,13 +223,13 @@ describe("a request the page never sends", () => {
 			},
 		],
 		[
-			"over 6,000 characters in all",
+			"over 7,000 characters in all",
 			{
 				...body,
 				cards: Array.from({ length: 30 }, (_, i) => ({
 					ref: `c${i}`,
 					lane: "questions",
-					text: "Q".repeat(200),
+					text: "Q".repeat(240),
 					state: "open",
 				})),
 			},
@@ -285,16 +285,18 @@ describe("the limits", () => {
 		});
 	});
 
-	it("answers 503 busy when a rate limit refuses or fails, with nothing reserved", async () => {
+	it("answers 429 busy when a rate limit refuses, 503 busy when it fails, with nothing reserved", async () => {
 		visitorLimit.limit.mockResolvedValueOnce({ success: false });
-		expect(await readJson(await POST(context()))).toEqual({
-			ok: false,
-			reason: "busy",
-		});
+		let response = await POST(context());
+
+		expect(response.status).toBe(429);
+		expect(await readJson(response)).toEqual({ ok: false, reason: "busy" });
 		siteLimit.limit.mockResolvedValueOnce({ success: false });
-		expect((await POST(context())).status).toBe(503);
+		expect((await POST(context())).status).toBe(429);
 		siteLimit.limit.mockRejectedValueOnce(new Error("limiter down"));
-		expect((await POST(context())).status).toBe(503);
+		response = await POST(context());
+		expect(response.status).toBe(503);
+		expect(await readJson(response)).toEqual({ ok: false, reason: "busy" });
 		expect(run).not.toHaveBeenCalled();
 		expect(counts()).toEqual({});
 	});
@@ -310,7 +312,7 @@ describe("the limits", () => {
 			ok: false,
 			reason: "limit",
 			error:
-				"Suggestions reached today’s limit. You can still add your own notes.",
+				"The outline reached today’s limit. You can still add your own notes.",
 		});
 
 		db.exec("DELETE FROM brief_suggestion_budget");

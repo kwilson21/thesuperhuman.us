@@ -1,12 +1,13 @@
 // What the brief board's route reads from a request before anything runs: the path, its written answers (only the boxes
 // that path sends, src/lib/brief-board.ts `boardAnswerKeys`) and the board's cards as context, decoded with Effect Schema.
-// The whole of it must fit the prompt the cost table in the plan assumes (6,000 characters) and hold enough words to
+// The whole of it must fit the prompt the cost table in the plan assumes (7,000 characters) and hold enough words to
 // interpret. Anything else is a 400; the page never sends it.
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import {
 	ANSWER_MAX,
 	type BoardRequest,
+	CONTENT_MAX,
 	CONTEXT_MAX,
 	LANES,
 	answerText,
@@ -15,8 +16,8 @@ import {
 } from "../lib/brief-board";
 import type { RawValue } from "../lib/fields";
 
-/** The most characters of answers and card text one request may carry. */
-export const BOARD_CONTENT_MAX = 6000;
+/** The most characters of answers and card text one request may carry (the page fits its context to it). */
+export const BOARD_CONTENT_MAX = CONTENT_MAX;
 
 /** The fewest words of answers worth interpreting; the page waits for as many. */
 export const BOARD_MIN_WORDS = 6;

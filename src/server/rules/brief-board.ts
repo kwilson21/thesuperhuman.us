@@ -21,7 +21,7 @@ export const boardVisitorScope = (hash: string) => `board:${hash}`;
 
 export class BoardDailyLimit extends Data.TaggedError("BoardDailyLimit") {
 	readonly say =
-		"Suggestions reached today’s limit. You can still add your own notes.";
+		"The outline reached today’s limit. You can still add your own notes.";
 }
 
 /** The day's counts, as read: 0 when no row has been written today. */

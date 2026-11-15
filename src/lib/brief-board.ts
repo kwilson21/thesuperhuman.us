@@ -94,6 +94,9 @@ export const REPLY_MAX = 12;
 /** The most cards a request shows the model as context. */
 export const CONTEXT_MAX = 30;
 
+/** The most characters of answers and card text one request may carry (the server refuses more). */
+export const CONTENT_MAX = 7000;
+
 /** The most requests one page makes. */
 export const REQUESTS_PER_PAGE = 24;
 
@@ -132,6 +135,8 @@ export type BoardCard = {
 	readonly answer: string;
 	/** How many requests had been sent when the card last became unowned. Only a later request's reply may change it. */
 	readonly since: number;
+	/** Whether the visitor's words replaced the model's, so a card set aside and brought back is still theirs as edited. */
+	readonly edited: boolean;
 };
 
 /** One visitor action, for Undo: each card it changed as it was before (null: the action added it), and where it was. */
@@ -194,11 +199,26 @@ export const comparable = (text: string) =>
 		.replace(/^["'.,;:!?()-]+|["'.,;:!?()-]+$/g, "")
 		.trim();
 
-/** Whether `quote` is a passage of the answers: at least three characters, found in them as written (case, spacing and quote marks aside). */
-export function quotedFrom(quote: string, answers: string): boolean {
-	const passage = comparable(quote);
+/** Text as a run of words: comparable, with every other character a single space. */
+const wordRun = (text: string) =>
+	comparable(text)
+		.replace(/[^\p{L}\p{N}']+/gu, " ")
+		.trim();
 
-	return passage.length >= 3 && comparable(answers).includes(passage);
+/** The fewest words a passage needs: a word or two of the answers ("and", "shop") would ground anything. */
+export const PASSAGE_MIN_WORDS = 3;
+
+/**
+ * Whether `quote` is a passage of the answers: at least PASSAGE_MIN_WORDS whole words, found in them in order as written
+ * (case, spacing, punctuation and quote marks aside), starting and ending on word boundaries.
+ */
+export function quotedFrom(quote: string, answers: string): boolean {
+	const passage = wordRun(quote);
+
+	return (
+		passage.split(" ").filter(Boolean).length >= PASSAGE_MIN_WORDS &&
+		` ${wordRun(answers)} `.includes(` ${passage} `)
+	);
 }
 
 const STOP_WORDS = new Set([
@@ -277,6 +297,30 @@ const DURATION =
 const PROMISE =
 	/\b(?:i will|i'll|we will|we'll|kazon will|guarantee[sd]?|promise[sd]?|deadline|delivered by|ready by|done by)\b/i;
 
+const MONTHS =
+	"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+
+const DATE = new RegExp(
+	[
+		"\\b\\d{4}-\\d{2}-\\d{2}\\b",
+		"\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b",
+		`\\b(?:${MONTHS})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?\\b`,
+		`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?:${MONTHS})\\b`,
+		`\\b(?:by|before|until|in time for)\\s+(?:the\\s+)?(?:${MONTHS}|christmas|holidays|spring|summer|fall|autumn|winter|launch|next|end of|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b`,
+		"\\b(?:next|this|end of the)\\s+(?:week|month|quarter|year|season)\\b",
+	].join("|"),
+	"i",
+);
+
+// What the project costs is the owner's to say, after reading the brief. A page named "Pricing" or "Request a quote"
+// is about the visitor's own business and is allowed.
+const COST =
+	/\b(?:costs?|costing)\s+(?:about|around|roughly|under|less|no more|at most|only|just|\$)|\b(?:affordable|cheap|inexpensive|low[- ]cost|fixed[- ]price)\b|\b(?:a|one|two|three|four|five|six|seven|eight|nine|ten|few|several)\s+(?:hundred|thousand)\b/i;
+
+// Cards are about the visitor's project; a card never speaks for the owner or says what will be delivered when.
+const ON_BEHALF =
+	/\bkazon\b|\b(?:can|could|will|would)\s+(?:deliver|build|launch|ship|finish|have it)\b|\bdeliver(?:ed|s)?\s+(?:it|by|in|within|on)\b/i;
+
 const LINK =
 	/https?:\/\/|www\.|\b[\w-]+\.(?:com|net|org|io|dev|app|co|us|uk|ai)\b|[\w.+-]+@[\w-]+\./i;
 
@@ -284,6 +328,9 @@ const LINK =
 export const commits = (text: string) =>
 	MONEY.test(text) ||
 	DURATION.test(text) ||
+	DATE.test(text) ||
+	COST.test(text) ||
+	ON_BEHALF.test(text) ||
 	PROMISE.test(text.replace(/[‘’]/g, "'")) ||
 	LINK.test(text);
 
@@ -455,17 +502,35 @@ export function applyReply(
 	for (const item of reply) {
 		if (item.basis === "said" && !quotedFrom(item.quote, answers)) continue;
 
-		const index = cards.findIndex(
+		// The card the item names: by its ref first, then by saying the same idea.
+		const byRef = cards.findIndex(
 			(card) =>
-				card.lane === item.lane &&
-				(card.id === item.ref || sameIdea(card.text, item.text)),
+				card.lane === item.lane && item.ref !== "" && card.id === item.ref,
 		);
+
+		const index =
+			byRef >= 0
+				? byRef
+				: cards.findIndex(
+						(card) => card.lane === item.lane && sameIdea(card.text, item.text),
+					);
 
 		if (index >= 0) {
 			const card = cards[index];
 			named.add(card.id);
 
 			if (!mayChange(card, n)) continue;
+
+			// A rewording never turns a card into another card's idea: one set aside, one the visitor owns, or a duplicate.
+			if (
+				cards.some(
+					(other, at) =>
+						at !== index &&
+						other.lane === item.lane &&
+						sameIdea(other.text, item.text),
+				)
+			)
+				continue;
 
 			const next: BoardCard = {
 				...card,
@@ -507,6 +572,7 @@ export function applyReply(
 			reason: item.reason,
 			answer: "",
 			since: board.sent,
+			edited: false,
 		});
 		added++;
 	}
@@ -584,6 +650,7 @@ export function editCard(board: Board, id: string, text: string): Board {
 			...c,
 			text: words,
 			status: c.status === "wrote" ? "wrote" : "edited",
+			edited: c.status !== "wrote",
 		})),
 	);
 }
@@ -628,7 +695,7 @@ export function setAside(board: Board, id: string): Board {
 	);
 }
 
-/** Bring back: a set-aside card returns as kept. */
+/** Bring back: a set-aside card returns as kept, or as edited when the visitor had reworded it. */
 export function bringBack(board: Board, id: string): Board {
 	const card = find(board, id);
 
@@ -643,7 +710,7 @@ export function bringBack(board: Board, id: string): Board {
 		board,
 		`brought back “${card.text}”`,
 		[id],
-		replace(id, (c) => ({ ...c, status: "kept" })),
+		replace(id, (c) => ({ ...c, status: c.edited ? "edited" : "kept" })),
 	);
 }
 
@@ -681,6 +748,7 @@ export function addNote(board: Board, lane: Lane, text: string): Board {
 				reason: "",
 				answer: "",
 				since: 0,
+				edited: false,
 			},
 		],
 		board.nextId + 1,
@@ -764,6 +832,30 @@ export function boardContext(board: Board): ContextCard[] {
 		.slice(0, CONTEXT_MAX);
 }
 
+/**
+ * The context a request can carry with these answers: within CONTENT_MAX characters in all, leaving out set-aside cards
+ * first and then the visitor's own, from the last. Open cards are always shown: a reply may withdraw an open card it
+ * was not shown (its request was sent after the card became open), so leaving one out would risk losing it.
+ */
+export function fitContext(
+	cards: readonly ContextCard[],
+	answersLength: number,
+): ContextCard[] {
+	const fitted = [...cards];
+
+	let size =
+		answersLength + fitted.reduce((sum, card) => sum + card.text.length, 0);
+
+	for (const state of ["avoid", "yours"] as const)
+		for (let at = fitted.length - 1; size > CONTENT_MAX && at >= 0; at--)
+			if (fitted[at].state === state) {
+				size -= fitted[at].text.length;
+				fitted.splice(at, 1);
+			}
+
+	return fitted;
+}
+
 /** A request to interpret the brief: the path, its written answers and the board as context (read on the server by src/server/brief-board-input.ts). */
 export type BoardRequest = {
 	readonly path: SoftwarePath;
@@ -802,9 +894,12 @@ export type OutlineItem = {
 export function briefOutline(board: Board, answers: string): OutlineItem[] {
 	const items: OutlineItem[] = [];
 
-	for (const lane of LANES)
+	for (const lane of LANES) {
+		const inLane: { item: OutlineItem; owned: boolean }[] = [];
+
 		for (const card of board.cards) {
 			if (card.lane !== lane || card.status === "dismissed") continue;
+
 			const grounded = card.basis === "said" && quotedFrom(card.quote, answers);
 
 			if (card.status === "proposed" && !grounded) continue;
@@ -818,17 +913,26 @@ export function briefOutline(board: Board, answers: string): OutlineItem[] {
 							? "answers"
 							: "kept";
 
-			const item: Mutable<OutlineItem> = {
-				lane,
-				text: card.text,
-				origin,
-			};
+			const item: Mutable<OutlineItem> = { lane, text: card.text, origin };
 
 			if (origin === "answers") item.quote = card.quote;
 
 			if (card.answer) item.answer = card.answer;
-			items.push(item);
+			inLane.push({ item, owned: isOwned(card) });
 		}
+
+		// Undo can bring a lane past its limit for a moment (a note back where a reply has just added a card). The outline
+		// keeps to the limit the server holds it to, leaving out the cards read from the answers before the visitor's own.
+		let over = inLane.length - laneLimits[lane];
+
+		for (let at = inLane.length - 1; over > 0 && at >= 0; at--)
+			if (!inLane[at].owned) {
+				inLane.splice(at, 1);
+				over--;
+			}
+
+		items.push(...inLane.slice(0, laneLimits[lane]).map((entry) => entry.item));
+	}
 
 	return items;
 }
@@ -869,7 +973,7 @@ function readOutlineItems(raw: RawValue): OutlineItem[] | null {
 
 /** The sentence a visitor sees when the outline sent does not match the brief. */
 export const OUTLINE_CHANGED =
-	"Your brief outline no longer matches your answers. Go back to it, check it and send again.";
+	"Your brief outline no longer matches your answers. Go back to your first answer, check the outline beside it and send again.";
 
 /**
  * The outline sent with a brief, read on the server: undefined when none was sent; the items when each is within its
@@ -926,8 +1030,8 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 /** How each origin reads to the visitor and the owner. */
 export const originLabels: Record<OutlineOrigin, string> = {
 	answers: "From your answers",
-	kept: "Suggestion you kept",
-	edited: "Suggestion you edited",
+	kept: "You kept this",
+	edited: "Edited by you",
 	wrote: "Your note",
 };
 
@@ -1052,6 +1156,7 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 				reason: oneLine(value.reason),
 				answer: value.lane === "questions" ? oneLine(value.answer) : "",
 				since: 0,
+				edited: ownField(item, "edited") === true,
 			});
 		}
 

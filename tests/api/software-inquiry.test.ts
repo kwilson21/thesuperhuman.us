@@ -78,6 +78,8 @@ function context(
 		db?: D1Database | null;
 		token?: string | null;
 		rate?: KVNamespace | null;
+		/** SOFTWARE_BOARD_ENABLED: whether an outline sent with the brief counts. */
+		board?: string;
 	} = {},
 ): APIContext {
 	return partial<APIContext>({
@@ -102,6 +104,7 @@ function context(
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "from@example.com",
 					CONTACT_TO_EMAIL: "inbox@example.com",
+					SOFTWARE_BOARD_ENABLED: options.board ?? "true",
 				}),
 			}),
 		}),
@@ -1729,7 +1732,7 @@ describe("the living brief's outline", () => {
 				ok: false,
 				errors: {
 					outline:
-						"Your brief outline no longer matches your answers. Go back to it, check it and send again.",
+						"Your brief outline no longer matches your answers. Go back to your first answer, check the outline beside it and send again.",
 				},
 			});
 			expect(
@@ -1738,6 +1741,25 @@ describe("the living brief's outline", () => {
 			expect(kv.put).not.toHaveBeenCalled();
 		},
 	);
+
+	it("ignores an outline while the board is switched off, and stores the brief as before", async () => {
+		const response = await POST(
+			context(
+				JSON.stringify({
+					...websiteInput,
+					outline: [{ lane: "parts", text: "x", origin: "nonsense" }],
+				}),
+				{
+					board: "false",
+				},
+			),
+		);
+
+		expect(response.status).toBe(200);
+		expect(JSON.parse(savedRequest().details_json)).not.toHaveProperty(
+			"outline",
+		);
+	});
 
 	it("refuses an outline on the retired idea path, which has no board", async () => {
 		const response = await POST(

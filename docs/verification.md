@@ -253,7 +253,7 @@ File: `verification/brief-board.qnt` (module `board`), written from the design i
 
 **Tied to the code.** `tests/lib/brief-board-walk.test.ts` checks the same seven properties on the real `applyReply` and actions over 400 seeded random walks of 80 steps with an adversarial reply generator, and reports how often each interesting case was reached. Planting `SeenOnly` or `NoNumberGuard` in the real code makes it fail with a seed that reproduces the failure (checked by hand while writing it).
 
-**What it does not cover.** Lanes and lane limits (each lane is reconciled on its own), the similarity of two wordings (`sameIdea`, unit tested), holding a reply while the visitor is in the board (the same as a later delivery), and the scheduler's timing.
+**What it does not cover.** Lanes and lane limits (each lane is reconciled on its own; the outline's per-lane cap after an Undo is unit tested), the similarity of two wordings (`sameIdea`), and a reply rewording one card into another card's idea (an idea is one key here, so the model cannot express it; review found it, and `tests/lib/brief-board.test.ts` holds the fix), holding a reply while the visitor is in the board (the same as a later delivery), and the scheduler's timing.
 
 ## Verified modules
 

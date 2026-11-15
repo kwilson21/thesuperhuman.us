@@ -1,6 +1,6 @@
 import { setupBriefAutocomplete } from "./brief-autocomplete";
 import { type BriefBoardHandle, setupBriefBoard } from "./brief-board";
-import { boardAnswerKeys, originLabels } from "../lib/brief-board";
+import { boardAnswerKeys, laneLabels, originLabels } from "../lib/brief-board";
 import { setupSuggestionPass } from "./brief-suggestion-pass";
 import {
 	clientSoftwareLabels,
@@ -511,7 +511,12 @@ export function setupSoftwareInquiry(
 
 				origin.className = "review-outline-origin";
 				origin.textContent = ` · ${originLabels[item.origin]}`;
-				entry.appendChild(document.createTextNode(item.text));
+				// Each item with its lane, as the outline is grouped on the board ("Pages: Shows").
+				entry.appendChild(
+					document.createTextNode(
+						`${laneLabels[path()][item.lane]}: ${item.text}`,
+					),
+				);
 				entry.appendChild(origin);
 
 				if (item.answer)
