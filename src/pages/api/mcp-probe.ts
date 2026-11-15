@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { mcpObjectSentences, mcpText } from "~/lib/mcp-readers";
+import { mcpObjectSentences, mcpSized } from "~/lib/mcp-readers";
 import { defineTool, serveTools } from "~/lib/mcp-tools";
 import { record } from "~/lib/readers";
 import { runRoute } from "~/server/run";
@@ -11,6 +11,9 @@ export const prerender = false;
 
 /** The MCP transport failed while it read or answered the request. */
 class ProbeFailed extends Data.TaggedError("ProbeFailed") {}
+
+/** What the challenge reader and the published schema both say. */
+const challengeLength = { least: 1, most: 80 };
 
 /** Public connectivity probe only. No credentials, database access, or publication. */
 const probe = (request: Request) =>
@@ -26,7 +29,11 @@ const probe = (request: Request) =>
 					$schema: "http://json-schema.org/draft-07/schema#",
 					type: "object",
 					properties: {
-						challenge: { type: "string", minLength: 1, maxLength: 80 },
+						challenge: {
+							type: "string",
+							minLength: challengeLength.least,
+							maxLength: challengeLength.most,
+						},
 					},
 					required: ["challenge"],
 					additionalProperties: false,
@@ -38,7 +45,7 @@ const probe = (request: Request) =>
 					openWorldHint: false,
 				},
 				read: record(
-					{ challenge: mcpText([{ least: 1 }, { most: 80 }]) },
+					{ challenge: mcpSized(challengeLength) },
 					{ strict: true, says: mcpObjectSentences },
 				),
 				call: async ({ challenge }) => ({

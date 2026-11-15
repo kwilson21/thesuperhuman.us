@@ -8,7 +8,7 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 - **No Zod in our code.** Owner, 2026-11-15: "Effect schema as our only validator no zod use from us". The frozen
   reference copies in `tests/fixtures/legacy-validators/` and the tests that compare against them
-  (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts`) import Zod until the last
+  (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts`, `tests/server/mcp-tools-differential.test.ts`) import Zod until the last
   step deletes them (the copies' headers say the final layer deletes the directory; the tests that read it go with
   it). Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in `package.json` as the MCP SDK's
   required peer; see "Library boundaries".
@@ -97,8 +97,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
     file.
 13. **Finish.** The content collections stop importing Zod (see "Library boundaries"); remove the Zod import from
     `src/server/failure.ts`; delete `tests/fixtures/legacy-validators/`, as the copies' headers say, with the tests
-    that read it (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts` and
-    `tests/architecture/legacy-validators.test.ts`, whose own header says it goes with the directory); convert the
+    that read it (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts`,
+    `tests/server/mcp-tools-differential.test.ts` and `tests/architecture/legacy-validators.test.ts`, whose own header says it goes with the directory); convert the
     test helpers and tests that still import Zod (`tests/helpers/astro-content.ts`, `tests/security/failure.test.ts`,
     `tests/lib/software-agreements.test.ts` and any others by then) and `scripts/prepare-music.mjs`, which parses with
     the music Zod schemas; then add the architecture test that fails on any Zod import in `src/`, `scripts/` or

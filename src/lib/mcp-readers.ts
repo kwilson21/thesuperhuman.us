@@ -129,6 +129,12 @@ export function mcpText(
 	return leaf(schema, () => undefined);
 }
 
+/** A text from `least` to `most` characters. */
+export const mcpSized = (limit: {
+	readonly least: number;
+	readonly most: number;
+}): Reader<string> => mcpText([{ least: limit.least }, { most: limit.most }]);
+
 /**
  * A whole number from `least` to `most`: a number that is not whole is reported once and its range is not checked; a whole
  * number beyond the safe range says so and is checked against the range as well; a value that is not a number, or is not

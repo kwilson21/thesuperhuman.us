@@ -3,6 +3,7 @@ import {
 	mcpInteger,
 	mcpLiteral,
 	mcpObjectSentences,
+	mcpSized,
 	mcpText,
 } from "../mcp-readers";
 import {
@@ -23,42 +24,50 @@ const object = { strict: true, says: mcpObjectSentences };
 const idPattern = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
+// What the readers and the published JSON Schema below both say, written once.
+const headline = { least: 1, most: 140 };
+const summary = { least: 1, most: 1000 };
+const technicalDetail = { least: 1, most: 4000 };
+const revision = { least: 0, most: Number.MAX_SAFE_INTEGER };
+
+const deliveries = ["proposed", "implemented", "tested", "available"] as const;
+
+const bases = [
+	"agent-reported",
+	"repository-verified",
+	"human-confirmed",
+] as const;
+
+const operations = ["publish", "correct", "withdraw"] as const;
+const origins = ["work", "shutdown", "backfill"] as const;
+
 const id = mcpText([{ pattern: idPattern }]);
 
-const story = record(
-	{
-		headline: mcpText([{ least: 1 }, { most: 140 }]),
-		summary: mcpText([{ least: 1 }, { most: 1000 }]),
-		technicalDetail: nullable(mcpText([{ least: 1 }, { most: 4000 }])),
-		delivery: mcpChoice(["proposed", "implemented", "tested", "available"]),
-		basis: mcpChoice([
-			"agent-reported",
-			"repository-verified",
-			"human-confirmed",
-		]),
-	},
-	object,
-);
+const storyFields = {
+	headline: mcpSized(headline),
+	summary: mcpSized(summary),
+	technicalDetail: nullable(mcpSized(technicalDetail)),
+	delivery: mcpChoice(deliveries),
+	basis: mcpChoice(bases),
+};
 
-const envelope = record(
-	{
-		version: mcpLiteral(1),
-		projectId: id,
-		eventId: id,
-		entryId: id,
-		expectedRevision: mcpInteger({
-			least: 0,
-			most: Number.MAX_SAFE_INTEGER,
-		}),
-		operation: mcpChoice(["publish", "correct", "withdraw"]),
-		origin: mcpChoice(["work", "shutdown", "backfill"]),
-		occurredOn: mcpText([{ pattern: datePattern }]),
-		threadId: nullable(id),
-		milestoneId: nullable(id),
-		story: nullable(story),
-	},
-	object,
-);
+const story = record(storyFields, object);
+
+const envelopeFields = {
+	version: mcpLiteral(1),
+	projectId: id,
+	eventId: id,
+	entryId: id,
+	expectedRevision: mcpInteger(revision),
+	operation: mcpChoice(operations),
+	origin: mcpChoice(origins),
+	occurredOn: mcpText([{ pattern: datePattern }]),
+	threadId: nullable(id),
+	milestoneId: nullable(id),
+	story: nullable(story),
+};
+
+const envelope = record(envelopeFields, object);
 
 /** The envelope as the tool's declared input shapes it; the commit reads it again as a publication before it is used. */
 export type Envelope = Value<typeof envelope>;
@@ -83,21 +92,27 @@ const orNull = (schema: PublishedInput) => ({
 	anyOf: [schema, { type: "null" }],
 });
 
-const choice = (values: string[]) => ({
+const choice = (values: readonly string[]) => ({
 	type: "string",
-	enum: values,
+	enum: [...values],
+});
+
+const sized = (limit: { least: number; most: number }) => ({
+	type: "string",
+	minLength: limit.least,
+	maxLength: limit.most,
 });
 
 const storySchema = {
 	type: "object",
 	properties: {
-		headline: { type: "string", minLength: 1, maxLength: 140 },
-		summary: { type: "string", minLength: 1, maxLength: 1000 },
-		technicalDetail: orNull({ type: "string", minLength: 1, maxLength: 4000 }),
-		delivery: choice(["proposed", "implemented", "tested", "available"]),
-		basis: choice(["agent-reported", "repository-verified", "human-confirmed"]),
+		headline: sized(headline),
+		summary: sized(summary),
+		technicalDetail: orNull(sized(technicalDetail)),
+		delivery: choice(deliveries),
+		basis: choice(bases),
 	},
-	required: ["headline", "summary", "technicalDetail", "delivery", "basis"],
+	required: Object.keys(storyFields),
 	additionalProperties: false,
 };
 
@@ -110,35 +125,23 @@ const envelopeSchema = {
 		entryId: idSchema,
 		expectedRevision: {
 			type: "integer",
-			minimum: 0,
-			maximum: Number.MAX_SAFE_INTEGER,
+			minimum: revision.least,
+			maximum: revision.most,
 		},
-		operation: choice(["publish", "correct", "withdraw"]),
-		origin: choice(["work", "shutdown", "backfill"]),
+		operation: choice(operations),
+		origin: choice(origins),
 		occurredOn: { type: "string", pattern: datePattern.source },
 		threadId: orNull(idSchema),
 		milestoneId: orNull(idSchema),
 		story: orNull(storySchema),
 	},
-	required: [
-		"version",
-		"projectId",
-		"eventId",
-		"entryId",
-		"expectedRevision",
-		"operation",
-		"origin",
-		"occurredOn",
-		"threadId",
-		"milestoneId",
-		"story",
-	],
+	required: Object.keys(envelopeFields),
 	additionalProperties: false,
 };
 
 /**
  * What the two tools do. The decisions and the journal are in src/server (src/lib may not import it), so the route hands
- * them in; this file is the MCP transport and the tools' declared inputs.
+ * them in; the MCP transport is src/lib/mcp-tools.ts, and this file holds the tools' declared inputs.
  */
 export interface PublicationTools {
 	progress(projectId: string): Promise<ToolAnswer>;
