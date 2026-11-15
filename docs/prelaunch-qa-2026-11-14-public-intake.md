@@ -5,11 +5,11 @@ Two branches are gated: branch A (behavior fixes to the four public form routes)
 Date: November 15, 2026
 Repository: the personal website repository
 Branches: A is `claude/effect-11-intake-fixes`, B is `claude/effect-11-intake`, cut from A. Both were merged with `origin/main` at `8b5b4efd` (the merge of #283), the revision this record was written against. Re-check `origin/main` with `git fetch` before merge.
-Tips: A is `5905c1e4`. B's code is at `dc8ca827`; this record is committed after it, in a commit that changes documentation only.
+Tips: A is `c2049762` (`5905c1e4` plus the array reply corpus case and its fixture). B's code is at `efd353e4`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: none are opened by this record.
 Target: production
 Reviews: independent reviews of branch A, before its head `5905c1e4`, are listed below. An independent review of B at `ad2cdfd9` (2026-11-15) found no email sent twice, no duplicate request and no leak, and made the findings fixed in the commits after it (see "Review of branch B"). The heads after those fixes have not been reviewed again: UNVERIFIED.
-Rollback revision: for A, `8b5b4efd`; for B, A's tip `5905c1e4`. No deployed revision was observed.
+Rollback revision: for A, `8b5b4efd`; for B, A's tip `c2049762`. No deployed revision was observed.
 
 ## Scope
 
@@ -50,7 +50,7 @@ The visitor-facing sentences are unchanged in every case; only the status and wh
 | Suggest: the model answers with a bare string | 200 with an empty suggestion, the log quoting the string | 500, with a fixed log line (found while converting, fixed on A at `b1075890`, one corpus case) |
 | Suggest: the cleanup of old budget rows fails | silent | logged through `logUnexpected` |
 
-Changed corpus cases, from `golden:neutral --all origin/main 5905c1e4`: `audio-intake` 13 changed, 2 removed (the two read-back cases) and 1 added (the stored request answered without a read-back); `software-inquiry` 19 changed, 1 removed (the read-back case) and 1 added; `software-brief-pass` 4 changed (200 to 503); `software-brief-suggest` 7 changed (the cleanup failure is now logged; reading or reserving the budget throws, and an unscripted rate limit throws: 200 to 500; the model throws: 200 to 503; a bare string: 200 to 500). Every changed case differs in the status, the logged lines and, for the two software cases where a rival stored the id first, the KV digest (the allowance given back).
+Changed corpus cases, from `golden:neutral --all origin/main c2049762` (the suggest array case is one more added case): `audio-intake` 13 changed, 2 removed (the two read-back cases) and 1 added (the stored request answered without a read-back); `software-inquiry` 19 changed, 1 removed (the read-back case) and 1 added; `software-brief-pass` 4 changed (200 to 503); `software-brief-suggest` 7 changed (the cleanup failure is now logged; reading or reserving the budget throws, and an unscripted rate limit throws: 200 to 500; the model throws: 200 to 503; a bare string: 200 to 500). Every changed case differs in the status, the logged lines and, for the two software cases where a rival stored the id first, the KV digest (the allowance given back).
 
 ## Review of branch A (before head `5905c1e4`)
 
@@ -114,26 +114,26 @@ The counters of the audio and software routes are in KV, not SQL; the pass route
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in one worktree. No logs retained.
 
-Branch A at `5905c1e4`:
+Branch A at `c2049762`:
 
 - `pnpm run format:check`: `Checked 782 files in 98ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run once: `Test Files  308 passed (308)`, `Tests  13101 passed | 1 skipped (13102)`; `git status` clean apart from untracked local files.
-- `pnpm run golden:neutral --all origin/main 5905c1e4`: NOT NEUTRAL, on purpose, in four fixtures only: `audio-intake` 72 identical, 43 neutral with D1 changes, 13 NOT neutral, 1 added, 2 removed; `software-brief-pass` 39 identical, 4 NOT neutral; `software-brief-suggest` 117 identical, 7 NOT neutral; `software-inquiry` 119 identical, 67 neutral with D1 changes, 19 NOT neutral, 1 added, 1 removed; `compared 77 fixtures and 9035 cases; 4 of 77 fixtures differ`.
-- `pnpm run verify:quint:all`: every line `ok`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run once: `Test Files  308 passed (308)`, `Tests  13102 passed | 1 skipped (13103)`; `git status` clean apart from untracked local files.
+- `pnpm run golden:neutral --all origin/main HEAD`: NOT NEUTRAL, on purpose, in four fixtures only: `audio-intake` 72 identical, 43 neutral with D1 changes, 13 NOT neutral, 1 added, 2 removed; `software-brief-pass` 39 identical, 4 NOT neutral; `software-brief-suggest` 117 identical, 7 NOT neutral, 1 added; `software-inquiry` 119 identical, 67 neutral with D1 changes, 19 NOT neutral, 1 added, 1 removed; `compared 77 fixtures and 9035 cases; 4 of 77 fixtures differ`.
+- `pnpm run verify:quint:all`: 64 lines, every one `ok`.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm run lint`: no findings (exit 0).
 - `pnpm run check`: `Result (808 files):`, `0 errors`, `0 warnings`, `17 hints`.
 
-Branch B at `dc8ca827` (A's tip merged in, then the conversion):
+Branch B at `efd353e4` (A's tip `c2049762` merged in, then the conversion and the fixes after review; the checks that read documentation are repeated on the commit that holds this record):
 
-- `pnpm run format:check`, `pnpm run build` and the client bundle test (27 passed): as for A.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, run twice on this branch (the first run found one failing architecture test, the tagged-error field name, fixed in `dc8ca827`; the second is the result here): `Test Files  313 passed (313)`, `Tests  13146 passed | 1 skipped (13147)`; `git status` clean.
-- `pnpm run golden:neutral --all 5905c1e4 HEAD` (exit 0): `software-inquiry: 113 identical, 93 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed`; `compared 77 fixtures and 9037 cases; 1 of 77 fixtures differ`; `golden:neutral: NEUTRAL`. The other three fixtures are byte-identical to A's. The `software-inquiry` fixture is re-recorded in its own commit (`dc8d1119`).
-- `pnpm run verify:quint:all`: 75 result lines, every one `ok`, with the two new models (the run that must pass takes about 4 s for `inquiry` and 3 s for `budget`; each mutant about 0.7 s).
+- `pnpm run format:check`: `Checked 803 files in 125ms. No fixes applied.`; `pnpm run build`: completed; the client bundle test: 27 passed.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  314 passed (314)`, `Tests  13150 passed | 1 skipped (13151)`; `git status` clean. (An earlier head, `dc8ca827`, had one failing architecture test, the tagged-error field name, fixed there.)
+- `pnpm run golden:neutral --all refs/heads/claude/effect-11-intake-fixes HEAD` (exit 0): `audio-intake: 77 identical, 52 neutral with D1 changes, 0 NOT neutral`; `software-inquiry: 113 identical, 93 neutral with D1 changes, 0 NOT neutral`; `compared 77 fixtures and 9038 cases; 2 of 77 fixtures differ`; `golden:neutral: NEUTRAL`. `software-brief-pass` and `software-brief-suggest` are byte-identical to A's. The two fixtures are re-recorded in their own commits (`dc8d1119`, and `29dd6530` for the intake store's statements).
+- `pnpm run verify:quint:all`: 77 lines, every one `ok`. The inquiry model's run that must pass took 3.7 s alone and 11.1 s inside the pooled driver on a loaded machine (2026-11-15); the budget model's took 7.0 s in the same pooled run; each mutant under 2 s.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
-- Lint and `check` are re-run on the commit that holds this record: see "Final lines" at the end.
+- Lint and `check` are re-run on the commit that holds this record: see "Final lines".
 
 The `pass` signing-failure path has a unit test but no corpus case: `tests/api/brief-suggestion-pass.test.ts` ("answers 500 without a pass when the pass cannot be signed") makes the signature fail, and the golden harness cannot make signing fail.
 
@@ -186,7 +186,7 @@ Also: the cleanup of old suggestion budget rows binds its cutoff from TypeScript
 - PASS, 7.1 Required checks: the local gates above for each branch.
 - UNVERIFIED, 7.2 Review of each pull request head: no pull request exists yet.
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The conversion relies on the trigger in STOP item 2, as before.
-- PASS, 7.4 Rollback is the previous revision (A: `8b5b4efd`; B: A's tip `5905c1e4`).
+- PASS, 7.4 Rollback is the previous revision (A: `8b5b4efd`; B: A's tip `c2049762`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed.
 - PASS, 7.6 Receipt and QA evidence for the local gates, with the four states reported separately (below).
 
@@ -204,4 +204,4 @@ Deployment: the owner's standing instruction is that a complete pull request (CI
 
 ## Final lines
 
-On the commit that holds this record: `pnpm run format:check`: `Checked 801 files in 95ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (827 files):`, `0 errors`, `0 warnings`, `17 hints`.
+On the commit that holds this record: `pnpm run format:check`: `Checked 803 files in 96ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (829 files):  - 0 errors - 0 warnings - 17 hints`.
