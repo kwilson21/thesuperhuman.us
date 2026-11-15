@@ -19,6 +19,8 @@ class Pointer extends Event {
 	constructor(
 		type: string,
 		readonly pointerType = "mouse",
+		readonly clientX = 0,
+		readonly clientY = 0,
 	) {
 		super(type);
 	}
@@ -110,13 +112,13 @@ function mount({
 		]),
 	);
 
-	const scene = {
+	const scene = Object.assign(new EventTarget(), {
 		dataset: new SceneData(),
 		getBoundingClientRect: vi.fn(),
 		querySelectorAll: () => [...links.values()],
 		querySelector: (selector: string) =>
 			links.get(selector.match(/"(.+)"/)?.[1] ?? "") ?? null,
-	};
+	});
 
 	const button = {
 		dataset: { playing: String(playing) },
@@ -162,6 +164,9 @@ function mount({
 		leave: (id: string, pointerType = "mouse") =>
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
+		/** The pointer moves to (x, y) over the desk. */
+		move: (x: number, y: number) =>
+			scene.dispatchEvent(new Pointer("pointermove", "mouse", x, y)),
 		/** Any other key, which makes a link a mouse press focused match :focus-visible, as Chromium does. */
 		press: (key: string) => {
 			if (page.activeElement) page.activeElement.keyboardFocus = true;
@@ -255,7 +260,7 @@ it("plays no scene for a tap on a touch screen, or for a pointer that cannot hov
 	expect(coarse.scene.dataset.play).toBeUndefined();
 });
 
-it("hides a showing label on Escape until an object is pointed at or focused again", () => {
+it("hides a showing label on Escape until the pointer moves or an object is focused again", () => {
 	const studio = mount();
 
 	studio.escape();
@@ -265,6 +270,7 @@ it("hides a showing label on Escape until an object is pointed at or focused aga
 	expect(studio.scene.dataset.labelsDismissed).toBe("true");
 	expect(studio.scene.dataset.play).toBe("notebook");
 	studio.point("controller");
+	studio.move(50, 50);
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
 });
 
@@ -286,6 +292,22 @@ it("hides a label on Escape when it is the first key after a mouse press focused
 	studio.focus("notebook", false);
 	studio.escape();
 	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+});
+
+it("keeps labels hidden after Escape until the pointer really moves, even when the hover passes to the object below", () => {
+	const studio = mount();
+
+	studio.move(100, 100);
+	studio.point("notebook");
+	studio.escape();
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+	// Hiding the notebook's label hands the hover to the controller under it, with no movement.
+	studio.leave("notebook");
+	studio.point("controller");
+	studio.move(100, 100);
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+	studio.move(108, 100);
+	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
 });
 
 it("rests the scene when the page comes back from the back-forward cache", () => {

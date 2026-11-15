@@ -53,7 +53,6 @@ export function setupStudioObjects() {
 
 		link.addEventListener("pointerenter", (event) => {
 			if (event.pointerType === "touch" || !fineHover.matches) return;
-			delete scene.dataset.labelsDismissed;
 			hovered = id;
 			update();
 		});
@@ -70,13 +69,35 @@ export function setupStudioObjects() {
 		});
 	});
 
+	// Labels hidden with Escape show again once the pointer really moves. Hiding a label the pointer rests on can hand the
+	// hover to the object under it with no movement, and that must not bring a label straight back.
+	let pointer: { x: number; y: number } | undefined,
+		dismissedAt: { x: number; y: number } | undefined;
+
+	scene.addEventListener("pointermove", (event) => {
+		pointer = { x: event.clientX, y: event.clientY };
+
+		const moved =
+			!dismissedAt ||
+			Math.abs(pointer.x - dismissedAt.x) +
+				Math.abs(pointer.y - dismissedAt.y) >
+				2;
+
+		if (scene.dataset.labelsDismissed && moved) {
+			delete scene.dataset.labelsDismissed;
+			dismissedAt = undefined;
+		}
+	});
+
 	document.addEventListener("keydown", (event) => {
 		followFocus();
 
 		const onDesk = links.some((link) => link === document.activeElement);
 
-		if (event.key === "Escape" && (hovered || focused || onDesk))
+		if (event.key === "Escape" && (hovered || focused || onDesk)) {
 			scene.dataset.labelsDismissed = "true";
+			dismissedAt = pointer;
+		}
 	});
 
 	// A click that leaves the page sends no pointerleave: a page restored from the back-forward cache starts at rest.
