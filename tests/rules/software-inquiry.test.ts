@@ -39,7 +39,12 @@ describe("storing a brief", () => {
 	it("refuses a brief from an address over its request limit", () => {
 		expect(
 			answerOf(storeBrief.decide({ requestAllowed: false }, { stored: null })),
-		).toEqual(refuse("TooManyRequests", ""));
+		).toEqual(
+			refuse(
+				"TooManyBriefs",
+				"Please wait a few minutes before sending again. Your details are still here.",
+			),
+		);
 	});
 
 	it("has nothing to store when a brief is already stored under the id, even over the limit", () => {
@@ -68,7 +73,10 @@ describe("answering a stored brief", () => {
 
 	it("refuses another address a brief stored under the id", () => {
 		expect(answer("someone@else.test")).toEqual(
-			refuse("SubmissionIdTaken", ""),
+			refuse(
+				"SubmissionIdTaken",
+				"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.",
+			),
 		);
 	});
 });

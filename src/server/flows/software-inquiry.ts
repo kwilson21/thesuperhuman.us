@@ -3,14 +3,14 @@
 // of the same form) is answered with the stored one and is not counted. The store is guarded by the unique index on the id:
 // when another request stores the same id between the look-up and the insert, the look-up is made again (three tries, src/server/guarded-save.ts),
 // finds the other request's brief and answers with it, as a retry would have been answered; the rival is the same visitor's
-// same submission, so this request keeps the allowance it spent and the address-wide count is left alone. A failed insert gives the allowance back too, is logged, sends the owner an urgent alert and tells the visitor the
-// brief was not stored, unless a look-up then finds it stored. A stored brief is answered after the client's copy is sent;
-// the owner notice is handed to the background (ctx.waitUntil, with no context it is waited for) at the point the route always
-// did, and never changes the answer.
+// same submission, so this request keeps the allowance it spent and the address-wide count is left alone. A failed insert gives the
+// allowance back, is logged, sends the owner an urgent alert and goes on as `BriefNotStored`, unless a look-up then finds the
+// brief stored. Every refusal and failure is named and goes to the route, which says what the visitor is told. A stored brief is
+// answered after the client's copy is sent; the owner notice is handed to the background (ctx.waitUntil, with no context it is
+// waited for) at the point the route always did, and never changes the answer.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
-import * as Result from "effect/Result";
 import type { OwnerRequest } from "../../lib/owner-model";
 import {
 	type SoftwareInput,
@@ -31,7 +31,6 @@ import {
 	admitForPassedCheck,
 	attemptWithinLimit,
 } from "../rules/intake-limits";
-import { CaptchaUnavailable } from "../rules/captcha";
 import { answerStoredBrief, storeBrief } from "../rules/software-inquiry";
 import {
 	Background,
@@ -53,20 +52,15 @@ const ATTEMPTS = 10;
 const ATTEMPT_PREFIX = "rl:software-attempt:";
 const REQUEST_PREFIX = "rl:software:";
 
-/** Each answer of the software inquiry, as the route shows it. */
+/** The look-up of the submission id failed before anything was counted or stored; the owner has been told. */
+export class BriefReadFailed extends Data.TaggedError("BriefReadFailed") {}
+
+/** The brief was not stored and no other request stored it; its allowance was given back and the owner has been told. */
+export class BriefNotStored extends Data.TaggedError("BriefNotStored") {}
+
+/** What the software inquiry answers when it goes through: a brief stored by an earlier request of this visitor, or the one just stored. */
 export type InquiryAnswer =
-	| { readonly kind: "tooManyAttempts" }
-	| { readonly kind: "captchaUnavailable" }
-	| { readonly kind: "captchaRefused" }
-	| { readonly kind: "tooManyRequests" }
-	/** The look-up of the submission id failed before anything was counted or stored. */
-	| { readonly kind: "readFailed" }
-	/** The brief was stored by an earlier request of this visitor; it is answered as stored. */
 	| { readonly kind: "alreadyStored"; readonly request: OwnerRequest }
-	/** The submission id belongs to a brief from another address. */
-	| { readonly kind: "idTaken" }
-	| { readonly kind: "tooLarge" }
-	| { readonly kind: "unstored" }
 	| {
 			readonly kind: "sent";
 			readonly request: OwnerRequest;
@@ -86,24 +80,13 @@ export const submitInquiry = (submission: InquirySubmission) =>
 
 		const attempts = yield* countRequest(ip, ATTEMPT_PREFIX, ATTEMPTS);
 
-		const attempt = yield* Effect.result(
-			attemptWithinLimit.decide({ attemptsAllowed: attempts }, {}),
-		);
-
-		if (Result.isFailure(attempt)) return { kind: "tooManyAttempts" } as const;
+		yield* attemptWithinLimit.decide({ attemptsAllowed: attempts }, {});
 
 		const check = yield* TurnstileCheck;
 
 		const outcome = yield* check.check(input.turnstileToken, ip);
 
-		const admitted = yield* Effect.result(
-			admitForPassedCheck.decide({ outcome }, {}),
-		);
-
-		if (Result.isFailure(admitted))
-			return admitted.failure instanceof CaptchaUnavailable
-				? ({ kind: "captchaUnavailable" } as const)
-				: ({ kind: "captchaRefused" } as const);
+		yield* admitForPassedCheck.decide({ outcome }, {});
 
 		// The request limit is counted once, on the first pass that finds nothing stored, and the count is kept for the
 		// passes that follow a lost race; `counted` says whether it was made (and so whether to give it back).
@@ -135,56 +118,50 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				const alert = yield* OwnerAlert;
 
 				// The alert is best effort: when it cannot be sent the visitor is still told the brief was not stored.
-				yield* Effect.result(
-					alert.send({
+				yield* alert
+					.send({
 						category: "request-storage",
 						route: ROUTE,
 						requestId: submission.newId(),
 						code,
 						occurredAt: submission.now().toISOString(),
-					}),
-				);
+					})
+					.pipe(Effect.ignore);
 			});
 
-		/** What a brief stored under the id means for this visitor: the stored brief for the same address, a clash for another. */
-		const answerStored = (stored: OwnerRequest) =>
+		/** What a brief stored under the id means for this visitor: the stored brief for the same address, `SubmissionIdTaken` for another. */
+		const answerStored = (found: OwnerRequest) =>
 			Effect.map(
-				Effect.result(
-					answerStoredBrief.decide({ email: input.email }, { stored }),
-				),
-				(answered) =>
-					Result.isSuccess(answered)
-						? ({ kind: "alreadyStored", request: answered.success } as const)
-						: ({ kind: "idTaken" } as const),
+				answerStoredBrief.decide({ email: input.email }, { stored: found }),
+				(request) => ({ kind: "alreadyStored", request }) as const,
 			);
 
 		/** The insert did not store the brief: a look-up says whether another request did, and if not the brief is lost. */
-		const afterFailedSave = (
-			failure: BriefTooLarge | IntakeStoreFailed | undefined,
-		) =>
+		const afterFailedSave = (failure: BriefTooLarge | IntakeStoreFailed) =>
 			Effect.gen(function* () {
-				const rival = yield* Effect.result(findStoredBrief(input.submissionId));
-
-				if (Result.isFailure(rival))
-					yield* Effect.sync(() => logUnexpected(ROUTE, rival.failure.failure));
+				const rival = yield* findStoredBrief(input.submissionId).pipe(
+					Effect.catchTag("IntakeReadFailed", (lookup) =>
+						Effect.as(
+							Effect.sync(() => logUnexpected(ROUTE, lookup.failure)),
+							null,
+						),
+					),
+				);
 
 				// The rival is the same visitor's same submission, already stored: the allowance stays spent.
-				if (Result.isSuccess(rival) && rival.success)
-					return yield* answerStored(rival.success);
+				if (rival) return rival;
 
 				if (failure instanceof BriefTooLarge) {
 					yield* release;
 
-					return { kind: "tooLarge" } as const;
+					return yield* Effect.fail(failure);
 				}
 
-				if (failure instanceof IntakeStoreFailed)
-					yield* Effect.sync(() => logUnexpected(ROUTE, failure.failure));
-
+				yield* Effect.sync(() => logUnexpected(ROUTE, failure.failure));
 				yield* release;
 				yield* alertLost("d1-write-failed");
 
-				return { kind: "unstored" } as const;
+				return yield* Effect.fail(new BriefNotStored());
 			});
 
 		/** The brief was refused by the index and no other brief is stored: log what the database said, give the allowance back, alert the owner. */
@@ -197,7 +174,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 			yield* release;
 			yield* alertLost("d1-write-failed");
 
-			return { kind: "answer", answer: { kind: "unstored" } } as const;
+			return yield* Effect.fail(new BriefNotStored());
 		});
 
 		const stored = yield* decideAndSave({
@@ -230,11 +207,6 @@ export const submitInquiry = (submission: InquirySubmission) =>
 		}).pipe(
 			Effect.map((done) => ({ kind: "done", done }) as const),
 			Effect.catchTags({
-				TooManyRequests: () =>
-					Effect.succeed({
-						kind: "answer",
-						answer: { kind: "tooManyRequests" },
-					} as const),
 				IntakeReadFailed: (failure: IntakeReadFailed) =>
 					Effect.gen(function* () {
 						yield* Effect.sync(() => logUnexpected(ROUTE, failure.failure));
@@ -243,10 +215,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 						if ((yield* Ref.get(counted)) === null) {
 							yield* alertLost("d1-read-failed");
 
-							return {
-								kind: "answer",
-								answer: { kind: "readFailed" },
-							} as const;
+							return yield* Effect.fail(new BriefReadFailed());
 						}
 
 						// The refused insert is logged after the look-up, in the order the route has always logged them.
@@ -258,27 +227,24 @@ export const submitInquiry = (submission: InquirySubmission) =>
 						yield* release;
 						yield* alertLost("d1-write-failed");
 
-						return {
-							kind: "answer",
-							answer: { kind: "unstored" },
-						} as const;
+						return yield* Effect.fail(new BriefNotStored());
 					}),
 				BriefTooLarge: (failure: BriefTooLarge) =>
 					Effect.map(
 						afterFailedSave(failure),
-						(answer) => ({ kind: "answer", answer }) as const,
+						(rival) => ({ kind: "found", stored: rival }) as const,
 					),
 				IntakeStoreFailed: (failure: IntakeStoreFailed) =>
 					Effect.map(
 						afterFailedSave(failure),
-						(answer) => ({ kind: "answer", answer }) as const,
+						(rival) => ({ kind: "found", stored: rival }) as const,
 					),
 				LostWithoutRival: () => lostBrief,
 				SaveKeptChanging: () => lostBrief,
 			}),
 		);
 
-		if (stored.kind === "answer") return stored.answer;
+		if (stored.kind === "found") return yield* answerStored(stored.stored);
 
 		const { facts, saved } = stored.done;
 

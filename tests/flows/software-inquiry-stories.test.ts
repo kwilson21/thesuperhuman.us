@@ -96,6 +96,10 @@ const send = async (
 			now: () => new Date("2026-09-19T12:00:00.000Z"),
 			newId: () => `id-${++ids}`,
 		}).pipe(
+			Effect.match({
+				onFailure: (failure) => ({ kind: failure._tag }),
+				onSuccess: (answered) => answered,
+			}),
 			Effect.provideContext(
 				Context.make(MusicDb, world.db).pipe(
 					Context.add(RateLimit, options.kv ?? world.kv),
@@ -218,9 +222,9 @@ describe("a visitor's brief", () => {
 	it("fails with the copy's name when the client copy cannot be delivered, after the brief is stored", async () => {
 		const world = musicWorld();
 
-		await expect(send(world, { copyFails: true })).rejects.toBeInstanceOf(
-			BriefCopyFailed,
-		);
+		expect((await send(world, { copyFails: true })).answer).toEqual({
+			kind: "BriefCopyFailed",
+		});
 		expect(requests(world)).toHaveLength(1);
 	});
 });
@@ -251,7 +255,7 @@ describe("a brief sent twice", () => {
 			input: read({ email: "other@example.com" }),
 		});
 
-		expect(answer).toEqual({ kind: "idTaken" });
+		expect(answer).toEqual({ kind: "SubmissionIdTaken" });
 		expect(requests(world)).toHaveLength(1);
 	});
 });
@@ -275,7 +279,7 @@ describe("two requests with the same submission id", () => {
 		const world = racing("someone@else.test");
 		const { answer } = await send(world);
 
-		expect(answer).toEqual({ kind: "idTaken" });
+		expect(answer).toEqual({ kind: "SubmissionIdTaken" });
 		expect(world.counts.has(REQUESTS)).toBe(true);
 	});
 });
@@ -292,7 +296,7 @@ describe("the limits and the captcha", () => {
 					input: read({ submissionId: "00000000-0000-4000-8000-000000000002" }),
 				})
 			).answer,
-		).toEqual({ kind: "tooManyRequests" });
+		).toEqual({ kind: "TooManyBriefs" });
 	});
 
 	it("refuse an address that has made ten attempts, before asking the captcha", async () => {
@@ -300,17 +304,17 @@ describe("the limits and the captcha", () => {
 
 		world.counts.set("rl:software-attempt:203.0.113.7", "10");
 
-		expect((await send(world)).answer).toEqual({ kind: "tooManyAttempts" });
+		expect((await send(world)).answer).toEqual({ kind: "TooManyAttempts" });
 	});
 
 	it("tell a refused token from a captcha that cannot answer", async () => {
 		const world = musicWorld();
 
 		expect((await send(world, { captcha: "refused" })).answer).toEqual({
-			kind: "captchaRefused",
+			kind: "CaptchaRefused",
 		});
 		expect((await send(world, { captcha: "unavailable" })).answer).toEqual({
-			kind: "captchaUnavailable",
+			kind: "CaptchaUnavailable",
 		});
 		expect(requests(world)).toEqual([]);
 	});
@@ -333,7 +337,7 @@ describe("a storage failure", () => {
 		const world = failing(/FROM owner_requests WHERE submission_id/);
 		const { answer, told } = await send(world);
 
-		expect(answer).toEqual({ kind: "readFailed" });
+		expect(answer).toEqual({ kind: "BriefReadFailed" });
 		expect(told.alerts).toHaveLength(1);
 		expect(told.alerts[0]).toMatchObject({ code: "d1-read-failed" });
 		expect(world.counts.has(REQUESTS)).toBe(false);
@@ -345,7 +349,7 @@ describe("a storage failure", () => {
 		const world = failing(/INSERT INTO owner_requests/);
 		const { answer, told } = await send(world);
 
-		expect(answer).toEqual({ kind: "unstored" });
+		expect(answer).toEqual({ kind: "BriefNotStored" });
 		expect(requests(world)).toEqual([]);
 		expect(world.counts.has(REQUESTS)).toBe(false);
 		expect(told.alerts).toHaveLength(1);
@@ -375,7 +379,7 @@ describe("a storage failure", () => {
 
 		const { answer, told } = await send(world);
 
-		expect(answer).toEqual({ kind: "unstored" });
+		expect(answer).toEqual({ kind: "BriefNotStored" });
 		expect(inserts).toBe(1);
 		expect(requests(world)).toEqual([]);
 		expect(world.counts.has(REQUESTS)).toBe(false);
@@ -400,7 +404,7 @@ describe("a storage failure", () => {
 		const world = musicWorld();
 		const { answer, told } = await send(world, { input: oversized() });
 
-		expect(answer).toEqual({ kind: "tooLarge" });
+		expect(answer).toEqual({ kind: "BriefTooLarge" });
 		expect(requests(world)).toEqual([]);
 		expect(world.counts.has(REQUESTS)).toBe(false);
 		expect(told.alerts).toEqual([]);
@@ -425,7 +429,7 @@ describe("a storage failure", () => {
 			kv,
 		});
 
-		expect(answer).toEqual({ kind: "tooLarge" });
+		expect(answer).toEqual({ kind: "BriefTooLarge" });
 		expect(logged).toHaveBeenCalledTimes(1);
 		// The log names no one: not the visitor's name, address or words.
 		expect(JSON.stringify(logged.mock.calls)).not.toMatch(/alex|example|xxxx/i);

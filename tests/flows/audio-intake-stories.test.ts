@@ -82,6 +82,10 @@ const send = async (
 			now: () => new Date("2026-09-19T12:00:00.000Z"),
 			newId: () => `id-${++ids}`,
 		}).pipe(
+			Effect.match({
+				onFailure: (failure) => ({ kind: failure._tag }),
+				onSuccess: () => ({ kind: "sent" }),
+			}),
 			Effect.provideContext(
 				Context.make(MusicDb, world.db).pipe(
 					Context.add(RateLimit, options.kv ?? world.kv),
@@ -189,7 +193,7 @@ describe("the limits and the captcha", () => {
 
 		await send(world);
 
-		expect((await send(world)).answer).toEqual({ kind: "tooManyRequests" });
+		expect((await send(world)).answer).toEqual({ kind: "TooManyRequests" });
 		expect(requests(world)).toHaveLength(1);
 	});
 
@@ -200,7 +204,7 @@ describe("the limits and the captcha", () => {
 
 		const { answer, told } = await send(world);
 
-		expect(answer).toEqual({ kind: "tooManyAttempts" });
+		expect(answer).toEqual({ kind: "TooManyAttempts" });
 		expect(told.asked).toBe(0);
 	});
 
@@ -208,7 +212,7 @@ describe("the limits and the captcha", () => {
 		const world = musicWorld();
 		const { answer } = await send(world, { captcha: "refused" });
 
-		expect(answer).toEqual({ kind: "captchaRefused" });
+		expect(answer).toEqual({ kind: "CaptchaRefused" });
 		expect(world.counts.has(REQUESTS)).toBe(false);
 		expect(requests(world)).toEqual([]);
 	});
@@ -217,7 +221,7 @@ describe("the limits and the captcha", () => {
 		const world = musicWorld();
 		const { answer } = await send(world, { captcha: "unavailable" });
 
-		expect(answer).toEqual({ kind: "captchaUnavailable" });
+		expect(answer).toEqual({ kind: "CaptchaUnavailable" });
 		// The attempt was counted before the captcha was asked and is not given back.
 		expect(world.counts.get(ATTEMPTS)).toBe("1");
 		expect(requests(world)).toEqual([]);
@@ -283,7 +287,7 @@ describe("a storage failure", () => {
 		const world = failing();
 		const { answer, told } = await send(world);
 
-		expect(answer).toEqual({ kind: "unstored" });
+		expect(answer).toEqual({ kind: "RequestNotStored" });
 		expect(requests(world)).toEqual([]);
 		expect(world.counts.has(REQUESTS)).toBe(false);
 		expect(told.notices).toEqual([]);
@@ -314,7 +318,7 @@ describe("a storage failure", () => {
 
 		const { answer, told } = await send(world, { kv });
 
-		expect(answer).toEqual({ kind: "unstored" });
+		expect(answer).toEqual({ kind: "RequestNotStored" });
 		expect(told.alerts).toHaveLength(1);
 		expect(logged).toHaveBeenCalledTimes(2);
 	});
@@ -324,6 +328,6 @@ describe("a storage failure", () => {
 
 		const { answer } = await send(failing(), { alertFails: true });
 
-		expect(answer).toEqual({ kind: "unstored" });
+		expect(answer).toEqual({ kind: "RequestNotStored" });
 	});
 });

@@ -2,14 +2,19 @@
 // already stored under the same submission id means for this visitor. The id is made by the form when it opens, so a second
 // submission with the same id is a retry (or a clash with someone else's id), and the visitor is answered with what is
 // already stored instead of a second request. The facts are read by the flow (src/server/intake-store.ts).
+import * as Data from "effect/Data";
+import { intakeNotStored, intakeWaitKept } from "../../lib/music-request";
 import type { OwnerRequest } from "../../lib/owner-model";
 import { alwaysWrites, rule, term, unless } from "../terms";
-import { TooManyRequests } from "./intake-limits";
 
 /** Another visitor's brief is stored under this submission id: 409. */
-export class SubmissionIdTaken {
-	readonly _tag = "SubmissionIdTaken";
-	readonly say = "";
+export class SubmissionIdTaken extends Data.TaggedError("SubmissionIdTaken") {
+	readonly say = intakeNotStored;
+}
+
+/** The address has already sent a brief in the window: 429. The form still holds what was typed, and says so. */
+export class TooManyBriefs extends Data.TaggedError("TooManyBriefs") {
+	readonly say = intakeWaitKept;
 }
 
 /** What the store holds under the submission id (a brief the form sent before), or nothing. */
@@ -36,7 +41,7 @@ export const storeBrief = rule({
 				"the address is within its request limit",
 				(given: { readonly requestAllowed: boolean }) => given.requestAllowed,
 			),
-			() => new TooManyRequests(),
+			() => new TooManyBriefs(),
 		),
 	],
 	writes: () => true,

@@ -1,19 +1,19 @@
 // The decisions the public forms share before anything is stored: the attempt limit, the captcha check and the request limit,
 // each a refusal the route answers as it always has. The counters are read by the flow (src/server/flows/rate-limit.ts), so
 // each rule is given the answer of its count, and the order of the rules is the order the flows check them in.
+import * as Data from "effect/Data";
+import { intakeWait } from "../../lib/music-request";
 import { alwaysWrites, term, unless } from "../terms";
 import { CaptchaRefused, CaptchaUnavailable } from "./captcha";
 
 /** The address has used up its attempts in the window: 429. */
-export class TooManyAttempts {
-	readonly _tag = "TooManyAttempts";
-	readonly say = "";
+export class TooManyAttempts extends Data.TaggedError("TooManyAttempts") {
+	readonly say = intakeWait;
 }
 
 /** The address has already sent a request in the window: 429. */
-export class TooManyRequests {
-	readonly _tag = "TooManyRequests";
-	readonly say = "";
+export class TooManyRequests extends Data.TaggedError("TooManyRequests") {
+	readonly say = intakeWait;
 }
 
 /** An attempt is allowed while the address is within the attempt limit. */

@@ -2,10 +2,56 @@
 // facts (the stored count, the limiters' answers, whether the pass is valid) and asks a rule what to do. A refusal says
 // nothing to the visitor, so each one is answered the way the route has always answered it (an empty suggestion, or the
 // pass prompt); the refusal's name is what tells the cases apart in the flow.
+import * as Data from "effect/Data";
 import { alwaysWrites, term, unless } from "../terms";
 
-/** A refusal with no sentence: the route answers with an empty suggestion. */
-const quietly = (tag: string) => ({ _tag: tag, say: "" });
+// Every refusal here has no sentence (`say` is empty): the route answers each with an empty suggestion, or with the pass
+// prompt, and the refusal's name is what tells the cases apart.
+
+/** The text has fewer than three words. */
+export class TooFewWords extends Data.TaggedError("TooFewWords") {
+	readonly say = "";
+}
+
+/** The prompt is longer than 2000 characters. */
+export class PromptTooLong extends Data.TaggedError("PromptTooLong") {
+	readonly say = "";
+}
+
+/** The request carries no address. */
+export class NoAddress extends Data.TaggedError("NoAddress") {
+	readonly say = "";
+}
+
+/** The visitor has no valid suggestion pass: the route asks for one. */
+export class PassRequired extends Data.TaggedError("PassRequired") {
+	readonly say = "";
+}
+
+/** The visitor has used up this minute's suggestions. */
+export class VisitorMinuteLimit extends Data.TaggedError("VisitorMinuteLimit") {
+	readonly say = "";
+}
+
+/** The site has used up this minute's suggestions. */
+export class SiteMinuteLimit extends Data.TaggedError("SiteMinuteLimit") {
+	readonly say = "";
+}
+
+/** The site's daily count has reached its cap. */
+export class SiteDailyCap extends Data.TaggedError("SiteDailyCap") {
+	readonly say = "";
+}
+
+/** The model gave no reply text. */
+export class NoReply extends Data.TaggedError("NoReply") {
+	readonly say = "";
+}
+
+/** The model's reply is not one plain short line. */
+export class UnusableReply extends Data.TaggedError("UnusableReply") {
+	readonly say = "";
+}
 
 /** How many stored suggestions a site may take in one UTC day. */
 export const SITE_DAILY_CAP = 10000;
@@ -32,20 +78,20 @@ export const askForSuggestion = alwaysWrites({
 				"the text has at least three words",
 				(given: SuggestionRequest) => wordCount(given.text) >= 3,
 			),
-			() => quietly("TooFewWords"),
+			() => new TooFewWords(),
 		),
 		unless(
 			term(
 				"the prompt is at most 2000 characters",
 				(given: SuggestionRequest) => given.content.length <= 2000,
 			),
-			() => quietly("PromptTooLong"),
+			() => new PromptTooLong(),
 		),
 		unless(
 			term("the address is known", (given: SuggestionRequest) =>
 				Boolean(given.ip),
 			),
-			() => quietly("NoAddress"),
+			() => new NoAddress(),
 		),
 	],
 	writes: (given: SuggestionRequest) => ({
@@ -68,7 +114,7 @@ export const requirePass = alwaysWrites({
 				"the pass is valid",
 				(given: { readonly valid: boolean }) => given.valid,
 			),
-			() => quietly("PassRequired"),
+			() => new PassRequired(),
 		),
 	],
 	writes: () => true,
@@ -88,14 +134,14 @@ export const withinMinuteLimits = alwaysWrites({
 				"the visitor is within the minute limit",
 				(given: { readonly visitor: boolean }) => given.visitor,
 			),
-			() => quietly("VisitorMinuteLimit"),
+			() => new VisitorMinuteLimit(),
 		),
 		unless(
 			term(
 				"the site is within the minute limit",
 				(given: { readonly site: boolean }) => given.site,
 			),
-			() => quietly("SiteMinuteLimit"),
+			() => new SiteMinuteLimit(),
 		),
 	],
 	writes: () => true,
@@ -116,7 +162,7 @@ export const withinSiteBudget = alwaysWrites({
 				(given: { readonly siteCount: number | null }) =>
 					given.siteCount === null || given.siteCount < SITE_DAILY_CAP,
 			),
-			() => quietly("SiteDailyCap"),
+			() => new SiteDailyCap(),
 		),
 	],
 	writes: () => true,
@@ -139,7 +185,7 @@ export const suggestionFromReply = alwaysWrites({
 				"the reply has text",
 				(given: { readonly reply: string }) => given.reply.length > 0,
 			),
-			() => quietly("NoReply"),
+			() => new NoReply(),
 		),
 		unless(
 			term(
@@ -147,7 +193,7 @@ export const suggestionFromReply = alwaysWrites({
 				(given: { readonly reply: string }) =>
 					!/[\r\n"\x00-\x1f]/.test(given.reply) && given.reply.length <= 100,
 			),
-			() => quietly("UnusableReply"),
+			() => new UnusableReply(),
 		),
 	],
 	writes: (given: { readonly reply: string; readonly text: string }) => {

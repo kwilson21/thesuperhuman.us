@@ -29,7 +29,12 @@ describe("the attempt limit", () => {
 	it("refuses an address that has used its attempts up", () => {
 		expect(
 			answered(attemptWithinLimit.decide({ attemptsAllowed: false }, {})),
-		).toEqual(refuse("TooManyAttempts", ""));
+		).toEqual(
+			refuse(
+				"TooManyAttempts",
+				"Please wait a few minutes before sending again.",
+			),
+		);
 	});
 });
 
@@ -43,13 +48,20 @@ describe("the captcha check", () => {
 	it("refuses a token the check refused", () => {
 		expect(
 			answered(admitForPassedCheck.decide({ outcome: "refused" }, {})),
-		).toEqual(refuse("CaptchaRefused", ""));
+		).toEqual(
+			refuse("CaptchaRefused", "Please complete the security check again."),
+		);
 	});
 
 	it("says the check is unavailable, not refused, when it could not answer", () => {
 		expect(
 			answered(admitForPassedCheck.decide({ outcome: "unavailable" }, {})),
-		).toEqual(refuse("CaptchaUnavailable", ""));
+		).toEqual(
+			refuse(
+				"CaptchaUnavailable",
+				"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+			),
+		);
 	});
 });
 
@@ -63,6 +75,11 @@ describe("the request limit", () => {
 	it("refuses a second request from the same address in the window", () => {
 		expect(
 			answered(requestWithinLimit.decide({ requestAllowed: false }, {})),
-		).toEqual(refuse("TooManyRequests", ""));
+		).toEqual(
+			refuse(
+				"TooManyRequests",
+				"Please wait a few minutes before sending again.",
+			),
+		);
 	});
 });

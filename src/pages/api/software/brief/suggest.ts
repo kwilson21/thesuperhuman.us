@@ -12,7 +12,6 @@ import {
 	liveBackground,
 	liveSuggestLimits,
 } from "~/server/services";
-import type { SuggestAnswer } from "~/server/flows/brief-suggest";
 
 export const prerender = false;
 
@@ -31,24 +30,13 @@ const failedAnswer = () =>
 const modelUnavailable = () =>
 	Response.json({ suggestion: "" }, { status: 503, headers: noStore });
 
-const answerResponse = (answer: SuggestAnswer) => {
-	switch (answer.kind) {
-		case "empty":
-			return empty();
-		case "passRequired":
-			return Response.json(
-				{ suggestion: "", passRequired: true },
-				{ headers: noStore },
-			);
-		case "modelUnavailable":
-			return modelUnavailable();
-		case "suggestion":
-			return Response.json(
-				{ suggestion: answer.suggestion },
-				{ headers: noStore },
-			);
-	}
-};
+/** The words to show after the visitor's text. */
+const suggestion = (words: string) =>
+	Response.json({ suggestion: words }, { headers: noStore });
+
+/** No valid pass: the form is asked to get one. */
+const passRequired = () =>
+	Response.json({ suggestion: "", passRequired: true }, { headers: noStore });
 
 /** The pass cookie's value, when the visitor sent one. */
 const passCookie = (request: Request) =>
@@ -100,9 +88,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				cookie: passCookie(request),
 				secret: env.TURNSTILE_SECRET_KEY,
 				now: () => Date.now(),
-			}).pipe(Effect.map(answerResponse));
+			}).pipe(Effect.map(suggestion));
 		}).pipe(
 			Effect.catchTags({
+				// Each refusal says nothing to the visitor: the same empty suggestion, whatever the reason.
+				TooFewWords: () => Effect.succeed(empty()),
+				PromptTooLong: () => Effect.succeed(empty()),
+				NoAddress: () => Effect.succeed(empty()),
+				VisitorMinuteLimit: () => Effect.succeed(empty()),
+				SiteMinuteLimit: () => Effect.succeed(empty()),
+				SiteDailyCap: () => Effect.succeed(empty()),
+				BudgetSpent: () => Effect.succeed(empty()),
+				NoReply: () => Effect.succeed(empty()),
+				UnusableReply: () => Effect.succeed(empty()),
+				PassRequired: () => Effect.succeed(passRequired()),
+				ModelUnavailable: () => Effect.succeed(modelUnavailable()),
 				BodyReadFailed: (failure) =>
 					Effect.sync(() => {
 						logUnexpected(ROUTE, failure.failure);

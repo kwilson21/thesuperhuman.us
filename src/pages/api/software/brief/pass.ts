@@ -39,20 +39,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			if (!read.ok) return notIssued();
 
 			return yield* issuePass({ token: read.value.token, ip, secret }).pipe(
-				Effect.map((answer) => {
-					if (answer.kind === "unavailable")
-						// The captcha service cannot answer: a known unavailable dependency.
-						return Response.json(
-							{ ok: false },
-							{ status: 503, headers: headers() },
-						);
-
-					if (answer.kind === "refused") return notIssued();
+				Effect.map((cookie) => {
 					const issued = headers();
 
 					issued.set(
 						"set-cookie",
-						`${suggestionPassCookie}=${answer.cookie}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
+						`${suggestionPassCookie}=${cookie}; Path=/api/software/brief; HttpOnly; Secure; SameSite=Strict; Max-Age=1800`,
 					);
 
 					return Response.json({ ok: true }, { headers: issued });
@@ -60,6 +52,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			);
 		}).pipe(
 			Effect.catchTags({
+				// The captcha service cannot answer: a known unavailable dependency.
+				CaptchaUnavailable: () =>
+					Effect.succeed(
+						Response.json({ ok: false }, { status: 503, headers: headers() }),
+					),
+				CaptchaRefused: () => Effect.succeed(notIssued()),
 				BodyReadFailed: (failure: BodyReadFailed) =>
 					Effect.sync(() => {
 						logUnexpected(ROUTE, failure.failure);

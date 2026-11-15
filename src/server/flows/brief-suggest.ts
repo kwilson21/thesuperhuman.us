@@ -2,13 +2,12 @@
 // has always used, and it matters: the pass is checked before anything is counted; the visitor's minute limit is counted
 // before the site's, and the site's before the budget is read; the budget is reserved for the visitor, then for the site,
 // with a cleanup of old days started once the site's reservation is the first of the day; the model is asked last, with a
-// 1200 ms limit. Every refusal is decided by a rule and answered quietly. A store, limiter, signing or reply failure is a
-// named error the route logs (the cause, as it always was) and answers 500; a model failure answers 503, logged as a fixed
-// line, never with the model's own text.
+// 1200 ms limit. Every refusal is decided by a rule and is a named refusal the route answers quietly. A store, limiter,
+// signing or reply failure is a named error the route logs (the cause, as it always was) and answers 500; a model failure is
+// logged here as a fixed line (never the model's own text) and is a named failure the route answers 503.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
-import * as Result from "effect/Result";
 import {
 	suggestionVisitorHash,
 	validSuggestionPass,
@@ -48,11 +47,13 @@ export class ReplyUnreadable extends Data.TaggedError("ReplyUnreadable")<{
 	readonly failure: unknown;
 }> {}
 
-export type SuggestAnswer =
-	| { readonly kind: "empty" }
-	| { readonly kind: "passRequired" }
-	| { readonly kind: "modelUnavailable" }
-	| { readonly kind: "suggestion"; readonly suggestion: string };
+/** The model did not answer usefully (it failed, or threw): the route answers 503, and the failure was logged as a fixed line. */
+export class ModelUnavailable extends Data.TaggedError("ModelUnavailable") {}
+
+/** A reservation found the visitor's or the site's daily count at its cap: nothing is suggested. */
+export class BudgetSpent extends Data.TaggedError("BudgetSpent") {
+	readonly say = "";
+}
 
 export type SuggestSubmission = {
 	readonly text: string;
@@ -65,10 +66,6 @@ export type SuggestSubmission = {
 	/** The time in milliseconds, read once when the request starts. */
 	readonly now: () => number;
 };
-
-/** Whether a rule allowed the request; a refusal is an answer, not a failure. */
-const allowed = <A, E>(decision: Effect.Effect<A, E>) =>
-	Effect.map(Effect.result(decision), Result.isSuccess);
 
 /** The reply's text, read as the route always read it: a missing or non-string response is empty, and a value that cannot have a field is a failure. */
 const replyText = <Reply>(reply: Reply) => {
@@ -108,27 +105,23 @@ export const suggest = (submission: SuggestSubmission) =>
 		const day = new Date(now).toISOString().slice(0, 10);
 		const previousDay = new Date(now - 86400000).toISOString().slice(0, 10);
 
-		const asked = yield* Effect.result(
-			askForSuggestion.decide(
-				{
-					text: submission.text,
-					content: submission.content,
-					ip: submission.ip,
-				},
-				{},
-			),
+		const asked = yield* askForSuggestion.decide(
+			{
+				text: submission.text,
+				content: submission.content,
+				ip: submission.ip,
+			},
+			{},
 		);
 
-		if (Result.isFailure(asked)) return { kind: "empty" } as const;
-		const ip = asked.success.ip;
+		const ip = asked.ip;
 
 		const valid = yield* Effect.tryPromise({
 			try: () => validSuggestionPass(submission.cookie, submission.secret, ip),
 			catch: (cause) => new SuggestSigningFailed({ failure: cause }),
 		});
 
-		if (!(yield* allowed(requirePass.decide({ valid }, {}))))
-			return { kind: "passRequired" } as const;
+		yield* requirePass.decide({ valid }, {});
 
 		const hash = yield* Effect.tryPromise({
 			try: () => suggestionVisitorHash(submission.secret, ip, now),
@@ -139,13 +132,11 @@ export const suggest = (submission: SuggestSubmission) =>
 		const visitor = yield* limits.visitor(hash);
 		const site = visitor ? yield* limits.site("site") : false;
 
-		if (!(yield* allowed(withinMinuteLimits.decide({ visitor, site }, {}))))
-			return { kind: "empty" } as const;
+		yield* withinMinuteLimits.decide({ visitor, site }, {});
 
 		const siteCount = yield* readSiteCount(day);
 
-		if (!(yield* allowed(withinSiteBudget.decide({ siteCount }, {}))))
-			return { kind: "empty" } as const;
+		yield* withinSiteBudget.decide({ siteCount }, {});
 
 		const background = yield* Background;
 		const db = yield* MusicDb;
@@ -156,7 +147,7 @@ export const suggest = (submission: SuggestSubmission) =>
 		] as const) {
 			const reserved = yield* reserve(day, scope, cap);
 
-			if (reserved === null) return { kind: "empty" } as const;
+			if (reserved === null) return yield* Effect.fail(new BudgetSpent());
 
 			if (scope === "site" && reserved === 1)
 				yield* background.schedule(cleanup(previousDay, db));
@@ -164,29 +155,27 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const assistant = yield* Assistant;
 
-		const reply = yield* Effect.result(
-			assistant.complete(submission.content, MODEL_TIMEOUT_MS),
-		);
+		const reply = yield* assistant
+			.complete(submission.content, MODEL_TIMEOUT_MS)
+			.pipe(
+				Effect.catchTag("ModelFailed", () =>
+					Effect.gen(function* () {
+						yield* Effect.sync(() =>
+							logUnexpected(ROUTE, new Error("Workers AI call failed")),
+						);
 
-		if (Result.isFailure(reply)) {
-			yield* Effect.sync(() =>
-				logUnexpected(ROUTE, new Error("Workers AI call failed")),
+						return yield* Effect.fail(new ModelUnavailable());
+					}),
+				),
 			);
 
-			return { kind: "modelUnavailable" } as const;
-		}
-
 		// A timeout reads as no reply, as the route always read it: the empty suggestion follows.
-		const answer =
-			reply.success.kind === "answered" ? reply.success.value : undefined;
+		const answer = reply.kind === "answered" ? reply.value : undefined;
 
 		const raw = yield* replyText(answer);
 
-		const words = yield* Effect.result(
-			suggestionFromReply.decide({ reply: raw, text: submission.text }, {}),
+		return yield* suggestionFromReply.decide(
+			{ reply: raw, text: submission.text },
+			{},
 		);
-
-		if (Result.isFailure(words)) return { kind: "empty" } as const;
-
-		return { kind: "suggestion", suggestion: words.success } as const;
 	});

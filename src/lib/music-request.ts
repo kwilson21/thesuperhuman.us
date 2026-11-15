@@ -68,3 +68,42 @@ export const musicUnavailable = () =>
 /** A store that failed unexpectedly, or a defect: the same sentence, and 500 because nothing is known to be unavailable. */
 export const musicFailed = () =>
 	Response.json({ ok: false, error: NOT_SAVED }, { status: 500 });
+
+// The fixed sentences of the public intake forms (the audio request and the software brief), which both routes and their
+// refusals show. A route builds the response around them; the status is the route's.
+
+/** An address that has used its attempts or its request allowance. */
+export const intakeWait = "Please wait a few minutes before sending again.";
+
+/** The software brief's own wait: the visitor is also told the form still holds what was typed. */
+export const intakeWaitKept =
+	"Please wait a few minutes before sending again. Your details are still here.";
+
+/** The captcha token was refused. */
+export const intakeCheckAgain = "Please complete the security check again.";
+
+/** The captcha service, or the intake's own limiter, could not answer. */
+export const intakeUnavailable =
+	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
+
+/** The request or brief was not stored, or its stored copy cannot be told to be this visitor's. */
+export const intakeNotStored =
+	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
+
+/** The brief's details are too large to store. */
+export const intakeTooLarge = "Keep the brief shorter and try again.";
+
+/** A binding or secret this deployment does not have: a deliberate 503. */
+export const intakeNotAvailable = () =>
+	Response.json(
+		{
+			ok: false,
+			error:
+				"Sending is unavailable right now. Your details are still here. Please email kazon.wilson@thesuperhuman.us.",
+		},
+		{ status: 503 },
+	);
+
+/** The intake's temporary sentence, with the status the route gives it (503 for a known outage, 500 otherwise). */
+export const intakeTemporarilyUnavailable = (status: number) =>
+	Response.json({ ok: false, error: intakeUnavailable }, { status });

@@ -3,9 +3,14 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { clientPortalEnabled } from "~/lib/audio-client-access";
 import { validateIntake } from "~/lib/audio-intake";
-import { musicRequest } from "~/lib/music-request";
+import {
+	intakeNotAvailable,
+	intakeNotStored,
+	intakeTemporarilyUnavailable,
+	musicRequest,
+} from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
-import { type IntakeAnswer, submitIntake } from "~/server/flows/audio-intake";
+import { submitIntake } from "~/server/flows/audio-intake";
 import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
@@ -20,52 +25,6 @@ export const prerender = false;
 
 const ROUTE = "/api/audio-intake";
 
-const unavailable =
-	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
-
-const unstored =
-	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
-
-const wait = "Please wait a few minutes before sending again.";
-
-const notAvailable = () =>
-	Response.json(
-		{
-			ok: false,
-			error:
-				"Sending is unavailable right now. Your details are still here. Please email kazon.wilson@thesuperhuman.us.",
-		},
-		{ status: 503 },
-	);
-
-const temporarilyUnavailable = (status: number) =>
-	Response.json({ ok: false, error: unavailable }, { status });
-
-/** Each answer of the intake flow, as the form shows it. */
-const answerResponse = (answer: IntakeAnswer) => {
-	switch (answer.kind) {
-		case "tooManyAttempts":
-		case "tooManyRequests":
-			return Response.json({ ok: false, error: wait }, { status: 429 });
-		case "captchaUnavailable":
-			return temporarilyUnavailable(503);
-		case "captchaRefused":
-			return Response.json(
-				{
-					ok: false,
-					errors: {
-						turnstileToken: "Please complete the security check again.",
-					},
-				},
-				{ status: 403 },
-			);
-		case "unstored":
-			return Response.json({ ok: false, error: unstored }, { status: 500 });
-		case "sent":
-			return Response.json({ ok: true });
-	}
-};
-
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
 
@@ -76,13 +35,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
 	const env = locals.runtime?.env;
 
-	if (!env?.TURNSTILE_SECRET_KEY) return notAvailable();
+	if (!env?.TURNSTILE_SECRET_KEY) return intakeNotAvailable();
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
 	const db = env.MUSIC_DB;
 
-	if (!bindings.ok || !db) return notAvailable();
+	if (!bindings.ok || !db) return intakeNotAvailable();
 
-	const answer = await runRoute(
+	return runRoute(
 		Context.merge(
 			Context.merge(
 				bindings.services,
@@ -103,18 +62,43 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			now: () => new Date(),
 			newId: () => crypto.randomUUID(),
 		}).pipe(
-			Effect.map(answerResponse),
-			Effect.catchTag("RateLimitStoreFailed", (failure) =>
-				Effect.sync(() => {
-					logUnexpected(ROUTE, failure.failure);
+			Effect.map(() => Response.json({ ok: true })),
+			Effect.catchTags({
+				TooManyAttempts: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 429 }),
+					),
+				TooManyRequests: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 429 }),
+					),
+				CaptchaUnavailable: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 503 }),
+					),
+				CaptchaRefused: (refusal) =>
+					Effect.succeed(
+						Response.json(
+							{ ok: false, errors: { turnstileToken: refusal.say } },
+							{ status: 403 },
+						),
+					),
+				RequestNotStored: () =>
+					Effect.succeed(
+						Response.json(
+							{ ok: false, error: intakeNotStored },
+							{ status: 500 },
+						),
+					),
+				RateLimitStoreFailed: (failure) =>
+					Effect.sync(() => {
+						logUnexpected(ROUTE, failure.failure);
 
-					return temporarilyUnavailable(500);
-				}),
-			),
+						return intakeTemporarilyUnavailable(500);
+					}),
+			}),
 		),
 		// A defect is the route's temporary sentence, logged once.
-		{ route: ROUTE, answer: () => temporarilyUnavailable(500) },
+		{ route: ROUTE, answer: () => intakeTemporarilyUnavailable(500) },
 	);
-
-	return answer;
 };

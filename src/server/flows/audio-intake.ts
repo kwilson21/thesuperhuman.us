@@ -1,10 +1,11 @@
 // An audio request: the attempt limit is counted first, then the captcha is checked, then the request limit is counted, and
-// only then is the request stored. A storage failure gives the request's allowance back, is logged and sends the owner an
-// urgent alert, and the visitor is told the request was not stored. A stored request answers at once; the owner notice and
+// only then is the request stored. Each refusal is the rule's named refusal and goes to the route. A storage failure gives the
+// request's allowance back, is logged and sends the owner an urgent alert, and then goes on as `RequestNotStored`, which the
+// route tells the visitor. A stored request answers at once; the owner notice and
 // the studio invitation (when the client portal is on) are handed to the background (ctx.waitUntil, with no context they are waited for) at the point the route always did,
 // and never change the answer.
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import * as Result from "effect/Result";
 import {
 	type IntakeInput,
 	ownerRequestForIntake,
@@ -20,7 +21,6 @@ import {
 	attemptWithinLimit,
 	requestWithinLimit,
 } from "../rules/intake-limits";
-import { CaptchaUnavailable } from "../rules/captcha";
 import {
 	Background,
 	OwnerAlert,
@@ -38,14 +38,8 @@ const ATTEMPTS = 10;
 const ATTEMPT_PREFIX = "rl:audio-attempt:";
 const REQUEST_PREFIX = "rl:audio:";
 
-/** Each answer of the intake, as the route shows it. */
-export type IntakeAnswer =
-	| { readonly kind: "tooManyAttempts" }
-	| { readonly kind: "captchaUnavailable" }
-	| { readonly kind: "captchaRefused" }
-	| { readonly kind: "tooManyRequests" }
-	| { readonly kind: "unstored" }
-	| { readonly kind: "sent" };
+/** The request was not stored (it was too large to store, or the database refused it), and the owner has been told. */
+export class RequestNotStored extends Data.TaggedError("RequestNotStored") {}
 
 export type IntakeSubmission = {
 	readonly input: IntakeInput;
@@ -64,11 +58,7 @@ export const submitIntake = (submission: IntakeSubmission) =>
 			ATTEMPTS,
 		);
 
-		const attempt = yield* Effect.result(
-			attemptWithinLimit.decide({ attemptsAllowed: attempts }, {}),
-		);
-
-		if (Result.isFailure(attempt)) return { kind: "tooManyAttempts" } as const;
+		yield* attemptWithinLimit.decide({ attemptsAllowed: attempts }, {});
 
 		const check = yield* TurnstileCheck;
 
@@ -77,63 +67,50 @@ export const submitIntake = (submission: IntakeSubmission) =>
 			submission.ip,
 		);
 
-		const admitted = yield* Effect.result(
-			admitForPassedCheck.decide({ outcome }, {}),
-		);
-
-		if (Result.isFailure(admitted))
-			return admitted.failure instanceof CaptchaUnavailable
-				? ({ kind: "captchaUnavailable" } as const)
-				: ({ kind: "captchaRefused" } as const);
+		yield* admitForPassedCheck.decide({ outcome }, {});
 
 		const requested = yield* countRequest(submission.ip, REQUEST_PREFIX);
 
-		const limit = yield* Effect.result(
-			requestWithinLimit.decide({ requestAllowed: requested }, {}),
-		);
+		yield* requestWithinLimit.decide({ requestAllowed: requested }, {});
 
-		if (Result.isFailure(limit)) return { kind: "tooManyRequests" } as const;
+		const stored = yield* insertRequest(
+			ownerRequestForIntake(submission.input),
+		).pipe(
+			Effect.tapError((failure) =>
+				Effect.gen(function* () {
+					// Giving the allowance back is best effort: the owner must hear of a lost request even when the counter cannot be cleared.
+					yield* giveBack(submission.ip, REQUEST_PREFIX).pipe(
+						Effect.catchTag("RateLimitStoreFailed", (released) =>
+							Effect.sync(() => logUnexpected(ROUTE, released.failure)),
+						),
+					);
 
-		const stored = yield* Effect.result(
-			insertRequest(ownerRequestForIntake(submission.input)),
-		);
+					yield* Effect.sync(() =>
+						logUnexpected(
+							ROUTE,
+							failure instanceof BriefTooLarge
+								? new Error("Request details are too large.")
+								: failure instanceof IntakeStoreFailed
+									? failure.failure
+									: failure.clash,
+						),
+					);
 
-		if (Result.isFailure(stored)) {
-			// Giving the allowance back is best effort: the owner must hear of a lost request even when the counter cannot be cleared.
-			const released = yield* Effect.result(
-				giveBack(submission.ip, REQUEST_PREFIX),
-			);
+					const alert = yield* OwnerAlert;
 
-			if (Result.isFailure(released))
-				yield* Effect.sync(() =>
-					logUnexpected(ROUTE, released.failure.failure),
-				);
-
-			yield* Effect.sync(() =>
-				logUnexpected(
-					ROUTE,
-					stored.failure instanceof BriefTooLarge
-						? new Error("Request details are too large.")
-						: stored.failure instanceof IntakeStoreFailed
-							? stored.failure.failure
-							: stored.failure.clash,
-				),
-			);
-
-			const alert = yield* OwnerAlert;
-
-			yield* Effect.result(
-				alert.send({
-					category: "request-storage",
-					route: "/api/audio-intake",
-					requestId: submission.newId(),
-					code: "d1-write-failed",
-					occurredAt: submission.now().toISOString(),
+					yield* alert
+						.send({
+							category: "request-storage",
+							route: "/api/audio-intake",
+							requestId: submission.newId(),
+							code: "d1-write-failed",
+							occurredAt: submission.now().toISOString(),
+						})
+						.pipe(Effect.ignore);
 				}),
-			);
-
-			return { kind: "unstored" } as const;
-		}
+			),
+			Effect.mapError(() => new RequestNotStored()),
+		);
 
 		const owner = yield* OwnerNotice;
 		const background = yield* Background;
@@ -141,7 +118,7 @@ export const submitIntake = (submission: IntakeSubmission) =>
 		// Each notice is best effort and says so itself: a failure is logged in the words the route has always used.
 		const work = [
 			owner
-				.send({ input: submission.input, requestId: stored.success.id })
+				.send({ input: submission.input, requestId: stored.id })
 				.pipe(
 					Effect.catchTag("OwnerNoticeFailed", () =>
 						Effect.sync(() =>
@@ -156,7 +133,7 @@ export const submitIntake = (submission: IntakeSubmission) =>
 
 			work.push(
 				invitation
-					.deliver(stored.success.id)
+					.deliver(stored.id)
 					.pipe(
 						Effect.catchTag("ProjectInvitationFailed", () =>
 							Effect.sync(() =>
@@ -168,6 +145,4 @@ export const submitIntake = (submission: IntakeSubmission) =>
 		}
 
 		yield* background.defer(work);
-
-		return { kind: "sent" } as const;
 	});
