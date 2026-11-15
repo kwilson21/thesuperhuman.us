@@ -65,6 +65,10 @@ const failedAnswer = () =>
 function hasResponseText(
 	result: { response?: unknown } | null,
 ): result is { response: string } {
+	// A reply that is not an object cannot have a field. The `in` operator would throw a message that quotes the reply, so the failure is raised here with a fixed one.
+	if (result && typeof result !== "object")
+		throw new TypeError("The model reply is not an object");
+
 	return (
 		!!result && "response" in result && typeof result.response === "string"
 	);
