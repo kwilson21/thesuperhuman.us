@@ -29,12 +29,14 @@ import { testRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 
 // How POST /api/owner/requests/[id]/software answers when its database, R2 or mail settings fail it, when the id is
-// missing, and when a send's link closes while its email fails. The owner's decisions (2026-11-14 and 2026-11-15, F1 to
-// F4, F6, F8 and F9 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the route's
-// fixed sentence and never the error's own text, and is logged once; after the client email went out (or the draft was
-// saved), it says so; a missing R2 binding when a send needs it, or mail that is not configured for a question or a
-// decline, is a known unavailable dependency, 503, with nothing written; a guard that refuses a batch (a lost race or a
-// stale page) still answers 409. Real SQLite with the music schema; nothing is mocked.
+// missing, when a send's link closes while its email fails, and where a decision moved out of SQL reads first. The
+// owner's decisions (2026-11-14 and 2026-11-15, F1 to F4 and F6 to F9 of docs/plans/2026-11-offers-conversion.md): an
+// unexpected store failure answers 500 with the route's fixed sentence and never the error's own text, and is logged
+// once; after the client email went out (or the draft was saved), it says so; a missing R2 binding when a send needs
+// it, or mail that is not configured for a question or a decline, is a known unavailable dependency, 503, with nothing
+// written; a guard that refuses a batch (a lost race or a stale page) still answers 409; revoke reads its link before
+// the batch, and a draft whose version or open-draft slot another writer took is read and decided again. Real SQLite
+// with the music schema; nothing is mocked.
 
 const FAILED = "The change could not be saved. Please try again.";
 
@@ -967,10 +969,11 @@ describe("a draft whose version another writer takes is read and decided again",
 			race: { on: /INSERT INTO software_offers/, sql: takeNextVersion },
 		});
 
-		const { status, body } = await read(await call(draft));
-
-		expect(status).toBe(200);
-		expect(body).toMatchObject({ ok: true, version: 2 });
+		expect(await read(await call(draft))).toMatchObject({
+			status: 200,
+			body: { ok: true, version: 2 },
+			private: true,
+		});
 		expect(
 			sql
 				.prepare("SELECT version,status FROM software_offers ORDER BY version")
@@ -991,10 +994,11 @@ describe("a draft whose version another writer takes is read and decided again",
 			},
 		});
 
-		const { status, body } = await read(await call(draft));
-
-		expect(status).toBe(409);
-		expect(body).toMatchObject({ ok: false, updatedAt: null });
+		expect(await read(await call(draft))).toMatchObject({
+			status: 409,
+			body: { ok: false, updatedAt: null },
+			private: true,
+		});
 		expect(
 			sql
 				.prepare(
