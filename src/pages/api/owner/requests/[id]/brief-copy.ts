@@ -6,8 +6,8 @@ import {
 	briefCopyUnavailable,
 	musicRequest,
 } from "~/lib/music-request";
+import { loggedAnswer } from "~/server/answers";
 import { readBriefCopyInput } from "~/server/brief-copy-input";
-import { logUnexpected } from "~/server/failure";
 import { type CopyDelivery, resendBriefCopy } from "~/server/flows/brief-copy";
 import { CANNOT_SEND } from "~/server/rules/brief-copy";
 import { runRoute } from "~/server/run";
@@ -37,12 +37,7 @@ const cannotSend = (say: string) =>
 	Effect.succeed(Response.json({ ok: false, error: say }, { status: 409 }));
 
 /** A failure of the database, logged once without what was sent, and answered with the route's fixed sentence. */
-const failed = (failure: { readonly failure: unknown }) =>
-	Effect.sync(() => {
-		logUnexpected(ROUTE, failure.failure);
-
-		return briefCopyFailed();
-	});
+const failed = loggedAnswer(ROUTE, briefCopyFailed);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
@@ -75,10 +70,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				BriefCopyNotDue: (refusal) => cannotSend(refusal.say),
 				// The claim was lost to another sender three times in a row.
 				SaveKeptChanging: () => cannotSend(CANNOT_SEND),
-				IntakeReadFailed: failed,
-				CopyClaimFailed: failed,
-				CopyNotBuilt: failed,
-				CopyNotRecorded: failed,
+				IntakeReadFailed: (failure) => failed(failure.failure),
+				CopyClaimFailed: (failure) => failed(failure.failure),
+				CopyNotBuilt: (failure) => failed(failure.failure),
+				CopyNotRecorded: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's fixed sentence, logged once.
