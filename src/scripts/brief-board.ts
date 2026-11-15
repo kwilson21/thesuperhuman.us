@@ -262,28 +262,36 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		live.textContent = text;
 	};
 
+	/** What the board is doing, in one line: why it is not asking, or whether it has read the answers as they are now. */
+	function statusText(words: number) {
+		if (!options.live)
+			return "Suggestions aren’t available here. You can add your own notes.";
+
+		if (!options.aiEnabled())
+			return "Suggestions are off. You can still add your own notes.";
+
+		if (paused) return "Paused. Your cards stay as they are.";
+
+		if (stopped) return stopped;
+
+		if (phase === "reading") return "Reading your answers…";
+
+		if (held) return "Updates are waiting below.";
+
+		if (words < MIN_WORDS)
+			return "Write a few sentences and an outline starts here.";
+
+		return lastSent[options.path()] === answersKey()
+			? "Up to date with your answers."
+			: "Keep writing. The outline catches up when you pause.";
+	}
+
 	function updateStatus() {
 		const words = currentAnswers().split(/\s+/).filter(Boolean).length;
 
-		status.textContent = !options.live
-			? "Suggestions aren’t available here. You can add your own notes."
-			: !options.aiEnabled()
-				? "Suggestions are off. You can still add your own notes."
-				: paused
-					? "Paused. Your cards stay as they are."
-					: stopped
-						? stopped
-						: phase === "reading"
-							? "Reading your answers…"
-							: held
-								? "Updates are waiting below."
-								: words < MIN_WORDS
-									? "Write a few sentences and an outline starts here."
-									: "Up to date with your answers.";
+		status.textContent = statusText(words);
 		pauseButton.hidden = !options.live || !options.aiEnabled();
-		pauseButton.textContent = paused
-			? "Resume suggestions"
-			: "Pause suggestions";
+		// The label stays the same and aria-pressed says whether it is on, so the row of controls never reflows under a click.
 		pauseButton.setAttribute("aria-pressed", String(paused));
 		const label = lastAction(board());
 		undoButton.disabled = !label;

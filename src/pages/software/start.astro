@@ -105,6 +105,7 @@ const href = (path: string) =>
         <div class="intake-review"><dl data-review></dl></div>
         {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to delivery yet. You can try every step; sending is unavailable.</p>}
         <p data-form-error="turnstileToken" hidden></p>
+        {boardEnabled && <p data-form-error="outline" hidden></p>}
       </section>
       {/* Website-only screens. The script's step plan for each path sets their order. */}
       <section data-step="7" hidden>

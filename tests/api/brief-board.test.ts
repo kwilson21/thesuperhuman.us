@@ -45,13 +45,15 @@ const DAY = "2026-11-15";
 const ANSWERS =
 	"A home for my band. Fans should hear new music, see upcoming shows near them and join the mailing list.";
 
+const cards = [
+	{ ref: "c1", lane: "parts", text: "Shows", state: "open" },
+	{ ref: "c2", lane: "parts", text: "Contact", state: "avoid" },
+];
+
 const body: JsonObject = {
 	path: "website",
 	answers: { purpose: ANSWERS },
-	cards: [
-		{ ref: "c1", lane: "parts", text: "Shows", state: "open" },
-		{ ref: "c2", lane: "parts", text: "Contact", state: "avoid" },
-	],
+	cards,
 };
 
 let db: SqliteDatabase;
@@ -205,15 +207,9 @@ describe("a request the page never sends", () => {
 		],
 		["fewer than six words", { ...body, answers: { purpose: "A band site" } }],
 		["only another path's answer", { ...body, answers: { today: ANSWERS } }],
-		["a repeated ref", { ...body, cards: [body.cards[0], body.cards[0]] }],
-		[
-			"a ref of another form",
-			{ ...body, cards: [{ ...body.cards[0], ref: "x1" }] },
-		],
-		[
-			"an unknown state",
-			{ ...body, cards: [{ ...body.cards[0], state: "maybe" }] },
-		],
+		["a repeated ref", { ...body, cards: [cards[0], cards[0]] }],
+		["a ref of another form", { ...body, cards: [{ ...cards[0], ref: "x1" }] }],
+		["an unknown state", { ...body, cards: [{ ...cards[0], state: "maybe" }] }],
 		[
 			"31 cards",
 			{
@@ -429,7 +425,7 @@ describe("the model", () => {
 				questions: "Open questions",
 			},
 			answers: ANSWERS,
-			cards: body.cards,
+			cards,
 		});
 		expect(inputs.messages[1].content).not.toMatch(/Secret notes|Alex/);
 	});
@@ -584,7 +580,11 @@ describe("the model", () => {
 	it("gives up after eight seconds", async () => {
 		vi.useRealTimers();
 		vi.useFakeTimers();
-		const never = double<Ai>({ run: () => new Promise(() => {}) });
+
+		// SAFETY: a run that never settles stands in for Workers AI; Ai["run"] is overloaded and generic, and askWorkersAi only awaits it.
+		const never = double<Ai>({
+			run: (() => new Promise(() => {})) as Ai["run"],
+		});
 
 		const exit = Effect.runPromiseExit(
 			askWorkersAi(never, {

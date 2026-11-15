@@ -3,6 +3,7 @@
 // server: what a card is, the reply and outline schemas, how a passage is checked against the answers, how a reply is
 // applied (`applyReply`, modelled in verification/brief-board.qnt) and what the visitor's own actions do. Pure and
 // synchronous: Effect Schema only, decoded with `decodeUnknownResult`; no Effect runtime, service or storage.
+import * as Predicate from "effect/Predicate";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import type { Mutable, RawValue } from "./fields";
@@ -854,12 +855,12 @@ export const OUTLINE_CHANGED =
  * lane's limits, plain one-line text, no commitment or link, an answer only on a question, and a passage for (and only
  * for) an item read from the answers that is in the submitted `answers`; otherwise a refusal with OUTLINE_CHANGED.
  */
-export function readBriefOutline(
-	raw: RawValue,
-	answers: string,
-):
-	| { ok: true; value: OutlineItem[] | undefined }
-	| { ok: false; error: string } {
+/** What reading a sent outline answers: the items (undefined when there are none), or the sentence refusing it. */
+export type OutlineRead =
+	| { readonly ok: true; readonly value: OutlineItem[] | undefined }
+	| { readonly ok: false; readonly error: string };
+
+export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 	if (raw === undefined) return { ok: true, value: undefined };
 	const read = readOutlineItems(raw);
 
@@ -911,13 +912,59 @@ export const originLabels: Record<OutlineOrigin, string> = {
 	wrote: "Your note",
 };
 
-/** How each origin reads to the owner, who is not the visitor. */
-export const ownerOriginLabels: Record<OutlineOrigin, string> = {
-	answers: "from their answers",
-	kept: "AI suggestion they kept",
-	edited: "AI suggestion they edited",
-	wrote: "their own note",
+/** How each origin reads in the stored brief, which the owner and the visitor both read (the owner page and the copy). */
+export const outlineOriginWords: Record<OutlineOrigin, string> = {
+	answers: "from the answers",
+	kept: "AI suggestion, kept",
+	edited: "AI suggestion, edited",
+	wrote: "own note",
 };
+
+const SentSchema = Schema.Struct({
+	outline: Schema.optionalKey(Schema.Unknown),
+});
+
+const readSent = Schema.decodeUnknownResult(SentSchema);
+
+/** The outline a brief's body carries, unread; undefined when it has none. */
+export function sentOutline(body: RawValue): RawValue | undefined {
+	const read = readSent(body);
+
+	return Result.isSuccess(read) ? read.success.outline : undefined;
+}
+
+/** An outline as stored with a brief, read for display (it was checked against the answers when it was sent). */
+export function storedOutline(raw: RawValue): OutlineItem[] {
+	const read = readOutlineItems(raw);
+
+	return Result.isSuccess(read)
+		? read.success.map((item) => ({ ...item }))
+		: [];
+}
+
+/** The outline as JSON to store with a brief: each item's fields, an absent passage or answer left out. */
+export const outlineJson = (items: readonly OutlineItem[]) =>
+	items.map((item) =>
+		Object.fromEntries(
+			Object.entries(item).filter((entry): entry is [string, string] =>
+				Predicate.isString(entry[1]),
+			),
+		),
+	);
+
+/** The outline as text, one item a line with its lane, its origin and any passage or answer, for the brief's readers. */
+export const outlineText = (
+	items: readonly OutlineItem[],
+	path: SoftwarePath,
+) =>
+	items
+		.map((item) => {
+			const quote = item.quote ? ` (“${item.quote}”)` : "";
+			const answer = item.answer ? `\nAnswer: ${item.answer}` : "";
+
+			return `${laneLabels[path][item.lane]}: ${item.text} · ${outlineOriginWords[item.origin]}${quote}${answer}`;
+		})
+		.join("\n");
 
 // ---- The saved boards ---------------------------------------------------------------------------------------------
 

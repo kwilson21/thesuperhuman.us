@@ -10,11 +10,22 @@ import {
 } from "~/lib/owner-requests";
 import { checkRateLimit } from "~/lib/rate-limit";
 import {
+	type SoftwareInput,
 	softwareBrief,
 	softwareRequest,
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
 import { verifyTurnstile } from "~/lib/turnstile";
+import {
+	OUTLINE_CHANGED,
+	type OutlineRead,
+	answerText,
+	boardAnswerKeys,
+	outlineJson,
+	readBriefOutline,
+	sentOutline,
+} from "~/lib/brief-board";
+import type { JsonValue } from "~/lib/json-value";
 
 export const prerender = false;
 
@@ -30,6 +41,30 @@ async function existing(db: D1Database, submissionId: string) {
 	return row ? getOwnerRequest(db, row.id) : null;
 }
 
+/**
+ * The living brief's outline, when the board sent one, checked against the written answers sent with it. A brief without
+ * one is read and stored exactly as before. The retired idea path has no board, so an outline with it is refused.
+ */
+function readOutline(body: JsonValue, input: SoftwareInput): OutlineRead {
+	const raw = sentOutline(body);
+
+	if (input.path === "idea")
+		return raw === undefined
+			? { ok: true, value: undefined }
+			: { ok: false, error: OUTLINE_CHANGED };
+
+	const sent = new Map(Object.entries(input));
+
+	const answers = Object.fromEntries(
+		boardAnswerKeys[input.path].map((key) => [
+			key,
+			String(sent.get(key) ?? ""),
+		]),
+	);
+
+	return readBriefOutline(raw, answerText(answers, input.path));
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
 
@@ -38,6 +73,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	if (!result.ok)
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
+
+	const outline = readOutline(body, result.value);
+
+	if (!outline.ok)
+		return Response.json(
+			{ ok: false, errors: { outline: outline.error } },
+			{ status: 400 },
+		);
 	const env = locals.runtime?.env;
 
 	if (!env?.MUSIC_DB || !env.TURNSTILE_SECRET_KEY || !env.RATE_LIMIT)
@@ -120,7 +163,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		let saved;
 
 		try {
-			saved = await saveOwnerRequest(env.MUSIC_DB, softwareRequest(input));
+			const newRequest = softwareRequest(input);
+
+			saved = await saveOwnerRequest(
+				env.MUSIC_DB,
+				outline.value
+					? {
+							...newRequest,
+							details: {
+								...newRequest.details,
+								outline: outlineJson(outline.value),
+							},
+						}
+					: newRequest,
+			);
 		} catch (error) {
 			const raced = await existing(env.MUSIC_DB, input.submissionId).catch(
 				() => null,

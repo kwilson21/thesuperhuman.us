@@ -52,7 +52,9 @@
 }
 .software-intake .brief-board h2{margin:0}
 .software-intake .board-explain{color:var(--muted);font-size:.9rem;margin-top:.5rem;max-width:var(--measure-prose)}
-.software-intake .board-status{color:var(--muted);font-size:.85rem;min-height:1.5em;margin-top:.5rem}
+/* Two lines are kept for the status, so a longer message never moves the cards below it. */
+.software-intake .board-status{color:var(--muted);font-size:.85rem;line-height:1.5;min-height:3em;margin-top:.5rem}
+.software-intake [data-board-pause][aria-pressed="true"]{color:var(--accent)}
 .software-intake .board-controls{display:flex;flex-wrap:wrap;gap:0 1.25rem;margin-top:.25rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button,.software-intake .board-add{min-height:44px;text-decoration:underline;text-underline-offset:.2em;cursor:pointer;font-size:.9rem}
 .software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:disabled,.software-intake .board-add:disabled{opacity:.5;cursor:not-allowed}
