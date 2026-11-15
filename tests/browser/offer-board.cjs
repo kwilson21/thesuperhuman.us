@@ -19,25 +19,40 @@ const artifactDir = process.env.PW_ARTIFACT_DIR || "/tmp";
 const root = path.resolve(__dirname, "../..");
 const REQUEST = "offer-board-check";
 
-const sql = (command) =>
-	execFileSync(
-		process.execPath,
-		[
-			path.join(root, "node_modules/wrangler/bin/wrangler.js"),
-			"d1",
-			"execute",
-			"MUSIC_DB",
-			"--local",
-			"--config",
-			path.join(root, ".screenshots/wrangler.json"),
-			"--persist-to",
-			path.join(root, ".wrangler/state"),
-			"--json",
-			"--command",
-			command,
-		],
-		{ encoding: "utf8", env: { ...process.env, CI: "1" } },
-	);
+// The preview server holds the same local database, so a statement can meet its lock (CI saw SQLITE_BUSY once, in
+// the first statement). Only that is tried again, up to five times; any other failure stops the check.
+async function sql(command) {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return execFileSync(
+				process.execPath,
+				[
+					path.join(root, "node_modules/wrangler/bin/wrangler.js"),
+					"d1",
+					"execute",
+					"MUSIC_DB",
+					"--local",
+					"--config",
+					path.join(root, ".screenshots/wrangler.json"),
+					"--persist-to",
+					path.join(root, ".wrangler/state"),
+					"--json",
+					"--command",
+					command,
+				],
+				{ encoding: "utf8", env: { ...process.env, CI: "1" } },
+			);
+		} catch (error) {
+			const busy = /SQLITE_BUSY/.test(
+				`${error.stderr ?? ""}${error.stdout ?? ""}`,
+			);
+
+			if (!busy || attempt === 5) throw error;
+			console.log(`The local database is busy; trying again (${attempt}).`);
+			await new Promise((done) => setTimeout(done, 1000 * attempt));
+		}
+	}
+}
 
 const details = {
 	path: "website",
@@ -74,10 +89,10 @@ function check(name, ok, detail = "") {
 		path.join(root, "scripts/screenshots/offer-board-script.mjs")
 	);
 
-	sql(
+	await sql(
 		`DELETE FROM software_offers WHERE request_id='${REQUEST}'; DELETE FROM owner_requests WHERE id='${REQUEST}'`,
 	);
-	sql(
+	await sql(
 		`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,private_note,created_at,updated_at) VALUES ('${REQUEST}','software','website','Sam Example','sam@example.com','A home for my band on the web.','${JSON.stringify(details).replaceAll("'", "''")}','new','','2026-11-15T12:00:00.000Z','2026-11-15T12:00:00.000Z')`,
 	);
 
