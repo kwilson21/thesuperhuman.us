@@ -6,9 +6,10 @@
 //   the read:    ONE batch reads the session, the project (revoked, stage), the latest published review, the decisions
 //                since it, the revision rounds begun and the client's messages in the last five minutes; the rule decides
 //                from those plain columns (src/server/rules/audio-project-messages.ts, to be written)
-//   the write:   ONE statement that inserts the message only while each fact the rule used is still what the read saw
-//                (compare-and-set); a stop writes the decision and closes the project's access in ONE batch
-//   the retry:   a write that finds a fact changed reads again and decides again, at most three times, then answers 409
+//   the write:   ONE statement that inserts the message only while the conditions the rule used still hold now (the guard
+//                keeps today's conditions, as the offers design does); a stop writes the decision and closes the project's
+//                access in ONE batch
+//   a lost guard: is not retried: the request answers what a refused write answers today (409, or 429 when the count is full)
 // What is left out, on purpose: the owner's notes and messages (they do not read the client's counts), the session's
 // creation, what a refused rule answers (400, 409 or 429; the model only needs "no write"), and the text's checks.
 // The rate limit is scaled down: CAP messages in any WINDOW ticks (the code has 12 in 300 seconds), and the revision
@@ -108,14 +109,16 @@ module audioProjectMessages {
     },
   }
 
-  // The compare-and-set: each fact the rule used for this kind of request is still what the read saw.
-  def casHolds(kind: str, s: Snap): bool = and {
-    MUTANT == "no-count" or countAfter(s.at) == s.count,
-    MUTANT == "no-access" or (revoked == s.revoked and session == s.session),
+  // The write's guard: the conditions the rule used, checked again now, for this kind of request. A message is written only
+  // while they hold; otherwise nothing is written.
+  def guardHolds(kind: str, named: int, s: Snap): bool = and {
+    MUTANT == "no-count" or countAfter(s.at) < CAP,
+    MUTANT == "no-access" or (not(revoked) and session),
     kind == "send" or and {
-      MUTANT == "no-stage" or stage == s.stage,
-      MUTANT == "no-review" or latest == s.latest,
-      MUTANT == "no-decision" or decisionsFor(s.latest) == s.decisions,
+      MUTANT == "no-stage" or stage == "review_ready",
+      MUTANT == "no-review" or latest == named,
+      MUTANT == "no-decision" or decisionsFor(latest) == 0,
+      kind == "approved" or MUTANT == "rule-no-rounds" or (rounds < ROUNDS) == (kind == "changes"),
     },
   }
 
@@ -145,7 +148,7 @@ module audioProjectMessages {
     }
   }
 
-  // The write: ONE statement when the facts are as the read saw them; otherwise read again, at most three times.
+  // The write: ONE statement while the conditions still hold; otherwise nothing is written and the request answers a refusal.
   action write = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "write").oneOf()
     val h = runs.get(r)
@@ -155,14 +158,14 @@ module audioProjectMessages {
       ts: h.snap.at, kind: h.kind, named: h.named,
       answers: latest, rounds: rounds, revoked: revoked, session: session, stage: stage,
     }
-    if (casHolds(h.kind, h.snap)) all {
+    if (guardHolds(h.kind, h.named, h.snap)) all {
       msgs' = msgs.append(m),
       revoked' = (revoked or closeHere),
       session' = session, stage' = stage, latest' = latest, rounds' = rounds, clock' = clock,
       runs' = runs.set(r, { ...h, phase: if (stops and MUTANT == "stop-split") "closing" else "done" }),
     } else all {
       msgs' = msgs, revoked' = revoked, session' = session, stage' = stage, latest' = latest, rounds' = rounds, clock' = clock,
-      runs' = runs.set(r, { ...h, phase: if (h.reads < 3) "read" else "conflict" }),
+      runs' = runs.set(r, { ...h, phase: "conflict" }),
     }
   }
 

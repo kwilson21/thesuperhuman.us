@@ -158,7 +158,7 @@ export const audioProjectFilesMutants = {
 	projectFilesPublishNoPayment: { property: "publishedOnlyWhenAllowed" },
 	projectFilesPublishNoStage: { property: "publishedOnlyWhenAllowed" },
 	projectFilesNoSupersede: { property: "oneLiveReview" },
-	projectFilesRevokeNoOthers: { property: "readyStagesHaveFiles" },
+	projectFilesRevokeStaleReset: { property: "readyStagesHaveFiles" },
 	projectFilesCompleteNoStage: { property: "readyStagesHaveFiles" },
 	projectFilesCompleteNoPayment: { property: "completedOnlyWhenPaid" },
 };
@@ -254,8 +254,7 @@ export const models = [
 		mutants: audioProjectMessagesMutants,
 		equivalents: [],
 		exhaustive: [],
-		// The rarest mutant (NoDecision) takes about 26,000 random runs to find with the fixed seed (about 2 s); the rest a few hundred.
-		samples: "60000",
+		samples: "20000",
 		passSamples: "8000",
 	},
 	{
@@ -264,6 +263,8 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: [],
 		exhaustive: [],
+		// The rarest mutant (CompleteNoStage) takes a few thousand random runs to find with the fixed seed (up to 60,000 in
+		// the first versions of the model); the run that must pass makes 8,000.
 		samples: "60000",
 		passSamples: "8000",
 	},

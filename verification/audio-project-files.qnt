@@ -5,8 +5,9 @@
 // a rule and a guarded write, which is what the model has):
 //   the read:     one batch reads the facts a rule uses: the project (access, stage), the request's status, the payments and the
 //                 file or upload row; R2 is a separate call (createMultipartUpload, complete, head, delete, abort)
-//   the write:    ONE statement or batch that changes a row only while each fact the rule used is still what the read saw
-//                 (compare-and-set), and that revokes the review files a publish replaces
+//   the write:    ONE statement or batch that changes a row only while the conditions the rule used still hold now (the guard
+//                 keeps today's conditions, as the offers design does), and that revokes the review files a publish replaces;
+//                 a lost guard is not retried, the request answers what a refused write answers today (409)
 //   the upload:   the row is created before the file exists; `abort` marks it discarding in one guarded statement (only while
 //                 no file row exists) and only then deletes the object; a file row is inserted only from a pending upload row
 // What is left out, on purpose: the file's name, size, peaks and expiry, the notices queued by a publish or revoke (the
@@ -94,9 +95,24 @@ module audioProjectFiles {
     othersLive: liveOthers(w.files.get(id).version, id), finalLive: liveOf("final"),
   }
 
-  // The compare-and-set parts, each as the code has them: true while the fact is still what the read saw.
-  def sameAccess(s: Snap): bool = w.revoked == s.revoked and w.withdrawn == s.withdrawn
-  def samePayments(s: Snap): bool = w.booking == s.booking and w.balance == s.balance
+  // The guards of the writes, each the conditions the code checks today, now. A mutant leaves one out.
+  def uploadGuard(version: str): bool = and {
+    MUTANT == "start-no-access" or (not(w.revoked) and not(w.withdrawn)),
+    w.booking,
+    openStage(w.stage) or (version == "final" and w.stage == "final_files_ready"),
+  }
+
+  def insertGuard(version: str): bool = and {
+    MUTANT == "insert-no-access" or (not(w.revoked) and not(w.withdrawn)),
+    w.booking,
+    openStage(w.stage) or (version == "final" and w.stage == "final_files_ready"),
+  }
+
+  def publishGuard(version: str): bool = and {
+    MUTANT == "publish-no-access" or (not(w.revoked) and not(w.withdrawn)),
+    MUTANT == "publish-no-payment" or (w.booking and (version == "review" or w.balance)),
+    MUTANT == "publish-no-stage" or (if (version == "review") openStage(w.stage) else (openStage(w.stage) or w.stage == "final_files_ready")),
+  }
 
   // A request is between its read and its write: the facts it read can change now.
   def inflightPhase(p: str): bool = or {
@@ -179,21 +195,13 @@ module audioProjectFiles {
     val rev = f.version
     val others = liveOthers(rev, h.id)
     val ok =
-      if (h.kind == "publish") and {
-        fresh,
-        MUTANT == "publish-no-access" or sameAccess(s),
-        MUTANT == "publish-no-payment" or samePayments(s),
-        MUTANT == "publish-no-stage" or w.stage == s.stage,
-      }
-      else if (h.kind == "revoke") and {
-        fresh, w.stage == s.stage,
-        MUTANT == "revoke-no-others" or others == s.othersLive,
-      }
+      if (h.kind == "publish") and { fresh, publishGuard(rev) }
+      else if (h.kind == "revoke") and { fresh, not(w.revoked) }
       else and {
         // The stage guard is also what protects the published final: a revoke of the last final resets the stage in its own batch.
-        MUTANT == "complete-no-stage" or w.stage == s.stage,
-        MUTANT == "complete-no-payment" or samePayments(s),
-        sameAccess(s),
+        MUTANT == "complete-no-stage" or w.stage == "final_files_ready",
+        MUTANT == "complete-no-payment" or (w.booking and w.balance),
+        not(w.revoked) and not(w.withdrawn),
       }
     if (not(ok)) all { w' = w, runs' = runs.set(r, { ...h, phase: "conflict" }) }
     else if (h.kind == "publish") all {
@@ -208,10 +216,11 @@ module audioProjectFiles {
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else if (h.kind == "revoke") all {
-      // The rule decided from the read: without another published file of its version the project returns to in_progress (also a completed project losing its only final).
+      // Without another published file of its version the project returns to in_progress (also a completed project losing its only final). The
+      // statement keeps today's condition and checks it at the write; the mutant decides it from the count the read saw.
       w' = { ...w,
         files: w.files.set(h.id, { ...f, status: "revoked" }),
-        stage: if (s.othersLive == 0 and ((rev == "review" and w.stage == "review_ready") or (rev == "final" and (w.stage == "final_files_ready" or w.stage == "complete")))) "in_progress"
+        stage: if ((if (MUTANT == "revoke-stale-reset") s.othersLive == 0 else others == 0) and ((rev == "review" and w.stage == "review_ready") or (rev == "final" and (w.stage == "final_files_ready" or w.stage == "complete")))) "in_progress"
                else w.stage },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
@@ -236,13 +245,7 @@ module audioProjectFiles {
   action row = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "row").oneOf()
     val h = runs.get(r)
-    val s = h.snap
-    val ok = and {
-      w.ups.get(h.id) == "none",
-      MUTANT == "start-no-access" or sameAccess(s),
-      samePayments(s),
-      w.stage == s.stage,
-    }
+    val ok = and { w.ups.get(h.id) == "none", uploadGuard(h.version) }
     if (ok) all {
       w' = { ...w,
         ups: w.ups.set(h.id, "pending"),
@@ -280,14 +283,11 @@ module audioProjectFiles {
   action fileRow = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "fileRow").oneOf()
     val h = runs.get(r)
-    val s = h.snap
     val v = w.upVersion.get(h.id)
     val ok = and {
       w.files.get(h.id).status == "none",
       MUTANT == "insert-no-state" or w.ups.get(h.id) == "pending",
-      MUTANT == "insert-no-access" or sameAccess(s),
-      samePayments(s),
-      w.stage == s.stage,
+      insertGuard(v),
     }
     if (ok) all {
       w' = { ...w,
@@ -395,6 +395,6 @@ module projectFilesPublishNoAccess { import audioProjectFiles(MUTANT = "publish-
 module projectFilesPublishNoPayment { import audioProjectFiles(MUTANT = "publish-no-payment").* }
 module projectFilesPublishNoStage { import audioProjectFiles(MUTANT = "publish-no-stage").* }
 module projectFilesNoSupersede { import audioProjectFiles(MUTANT = "no-supersede").* }
-module projectFilesRevokeNoOthers { import audioProjectFiles(MUTANT = "revoke-no-others").* }
+module projectFilesRevokeStaleReset { import audioProjectFiles(MUTANT = "revoke-stale-reset").* }
 module projectFilesCompleteNoStage { import audioProjectFiles(MUTANT = "complete-no-stage").* }
 module projectFilesCompleteNoPayment { import audioProjectFiles(MUTANT = "complete-no-payment").* }

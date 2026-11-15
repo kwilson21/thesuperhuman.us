@@ -6,7 +6,8 @@
 // conversion a read, a rule and a compare-and-set write for each of the three):
 //   queue:   the owner's retry reads the status and whether the project is open and the request not withdrawn, and moves a
 //            failed or pending notice (or one stuck in `sending` that the owner confirms was not sent) back to pending
-//   claim:   a delivery moves pending to sending, only while the status is still what it read and the project still open
+//   claim:   a delivery moves pending to sending, only while the status is still pending and the project still open (the
+//            statement keeps today's conditions; a lost claim is not retried)
 //   send:    the recipient is read, the email is sent (it can be refused, uncertain, or sent), and the outcome is written
 //            only while the status is still `sending`; an uncertain outcome writes nothing
 // What is left out, on purpose: the 60 second staleness test itself (the model lets the owner confirm only a notice that is
@@ -74,7 +75,7 @@ module audioProjectNotices {
   action claim = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "claim").oneOf()
     val h = runs.get(r)
-    val ok = (MUTANT == "claim-no-status" or status == h.snap.status) and (MUTANT == "claim-no-open" or open == h.snap.open)
+    val ok = (MUTANT == "claim-no-status" or status == "pending") and (MUTANT == "claim-no-open" or open)
     if (ok) all {
       status' = "sending", open' = open, epoch' = epoch, mailed' = mailed,
       badClaim' = (badClaim or not(open)),
