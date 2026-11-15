@@ -5,6 +5,9 @@ import { ComparisonTransport } from "../../src/scripts/comparison-transport";
 /** An audio buffer source with the members the transport calls; the transport sets and clears onended. */
 type FakeSource = {
 	buffer: null;
+	loop?: boolean;
+	loopStart?: number;
+	loopEnd?: number;
 	connect: Mock;
 	disconnect: Mock;
 	start: Mock;
@@ -133,5 +136,76 @@ describe("shared comparison clock", () => {
 		expect(transport.position).toBe(160);
 		transport.play();
 		expect(sources[4].start.mock.calls[0][1]).toBe(0.05);
+	});
+});
+
+describe("looping a passage", () => {
+	it("loops both exports over the same passage at their own offsets, without an end", () => {
+		const { transport, sources } = fixture();
+		transport.seek(40);
+		transport.setLoop({ start: 40, end: 48 });
+		transport.play();
+		expect(sources.map((s) => [s.loop, s.loopStart, s.loopEnd])).toEqual([
+			[true, 40.05, 48.05],
+			[true, 40, 48],
+		]);
+		expect(sources[0].start.mock.calls[0]).toEqual([10.03, 40.05]);
+		expect(sources[1].start.mock.calls[0]).toEqual([10.03, 40]);
+	});
+
+	it("wraps the position and counts passes on the shared clock", () => {
+		const { transport, context } = fixture();
+		transport.setLoop({ start: 40, end: 48 });
+		transport.play();
+		context.currentTime = 10.03 + 7.5;
+		expect(transport.position).toBeCloseTo(47.5);
+		expect(transport.pass).toBe(0);
+		context.currentTime = 10.03 + 9;
+		expect(transport.position).toBeCloseTo(41);
+		expect(transport.pass).toBe(1);
+		context.currentTime = 10.03 + 8 * 3 + 0.5;
+		expect(transport.pass).toBe(3);
+		expect(transport.position).toBeCloseTo(40.5);
+	});
+
+	it("names the clock time of the next wrap, for a switch that lands on it", () => {
+		const { transport, context } = fixture();
+		transport.seek(44);
+		transport.setLoop({ start: 40, end: 48 });
+		transport.play();
+		// From 44 the first wrap is 4 s in; later ones every 8 s.
+		expect(transport.nextWrap).toBeCloseTo(10.03 + 4);
+		context.currentTime = 10.03 + 5;
+		expect(transport.nextWrap).toBeCloseTo(10.03 + 12);
+		transport.pause();
+		expect(transport.nextWrap).toBeUndefined();
+	});
+
+	it("moves playback into the passage, keeps playing, and stops looping when cleared", () => {
+		const { transport, sources, context } = fixture();
+		transport.seek(100);
+		transport.play();
+		transport.setLoop({ start: 40, end: 48 });
+		expect(transport.playing).toBe(true);
+		expect(sources[2].start.mock.calls[0][1]).toBe(40.05);
+		context.currentTime += 2;
+		transport.setLoop(undefined);
+		expect(sources[4].loop).toBeUndefined();
+		expect(sources[4].start.mock.calls[0]).toHaveLength(3);
+		expect(transport.playing).toBe(true);
+	});
+
+	it("keeps the passage inside the song", () => {
+		const { transport } = fixture();
+		transport.setLoop({ start: 155, end: 163 });
+		transport.play();
+		expect(transport.nextWrap).toBeCloseTo(10.03 + 5);
+	});
+
+	it("schedules a level change at a clock time, replacing any change scheduled from then on", () => {
+		const { transport, gains } = fixture();
+		transport.setLevelsAt([0, 0.8], 25);
+		expect(gains[0].gain.cancelScheduledValues).toHaveBeenCalledWith(25);
+		expect(gains[1].gain.setTargetAtTime).toHaveBeenCalledWith(0.8, 25, 0.003);
 	});
 });

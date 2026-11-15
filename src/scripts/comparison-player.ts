@@ -1,4 +1,4 @@
-import { ComparisonTransport } from "./comparison-transport";
+import { ComparisonTransport, type LoopRegion } from "./comparison-transport";
 import { registerMusicPlayer } from "./music-playback";
 import {
 	isWaveformScrub,
@@ -100,6 +100,17 @@ export function setupComparisonPlayers() {
 				...root.querySelectorAll<HTMLButtonElement>("[data-select-version]"),
 			];
 
+			// The listening desk, on the full player only: loop a passage from the playhead, flip A/B on each pass.
+			const loopToggle = root.querySelector<HTMLButtonElement>("[data-loop]");
+
+			// The DOM typing in use rejects HTMLSelectElement as querySelector's type argument, so it is narrowed instead.
+			const loopLengthNode = root.querySelector("[data-loop-length]");
+
+			const loopLength =
+				loopLengthNode instanceof HTMLSelectElement ? loopLengthNode : null;
+
+			const loopFlip = root.querySelector<HTMLInputElement>("[data-loop-flip]");
+
 			let context: AudioContext | undefined,
 				transport: ComparisonTransport | undefined;
 
@@ -112,6 +123,10 @@ export function setupComparisonPlayers() {
 			let position = 0;
 			// Until both versions are decoded, the chosen one plays from its own stream, so sound starts at once.
 			let streaming: HTMLAudioElement | undefined;
+			let loop: LoopRegion | undefined;
+			// The loop pass the selection last followed, and the wrap a flip is already scheduled for.
+			let lastPass = 0;
+			let flipScheduledFor: number | undefined;
 
 			const format = (n: number) =>
 				`${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, "0")}`;
@@ -137,6 +152,8 @@ export function setupComparisonPlayers() {
 			}
 
 			function applyVolume() {
+				// Setting levels now cancels a flip scheduled for the next wrap; render schedules it again.
+				flipScheduledFor = undefined;
 				transport?.setLevels(
 					media.map((audio, index) =>
 						index !== selected ? 0 : levelOf(audio),
@@ -203,8 +220,37 @@ export function setupComparisonPlayers() {
 						media[selected].dataset.label ?? "Audio version";
 			}
 
+			/**
+			 * With Flip on, the version switches exactly at each wrap: the next wrap's levels are scheduled on the audio clock,
+			 * and the selection follows once the wrap has passed.
+			 */
+			function followLoop() {
+				if (streaming && loop && streamPosition() >= loop.end)
+					streaming.currentTime = loop.start + offsetOf(streaming);
+
+				if (!transport?.playing || !loop || !loopFlip?.checked) return;
+
+				if (transport.pass !== lastPass) {
+					lastPass = transport.pass;
+					selected = 1 - selected;
+					flipScheduledFor = undefined;
+					updateCompactWaveform();
+				}
+
+				const wrap = transport.nextWrap;
+
+				if (wrap === undefined || wrap === flipScheduledFor) return;
+				const next = 1 - selected;
+				transport.setLevelsAt(
+					media.map((audio, index) => (index === next ? levelOf(audio) : 0)),
+					wrap,
+				);
+				flipScheduledFor = wrap;
+			}
+
 			function render() {
 				cancelAnimationFrame(frame);
+				followLoop();
 				const duration = transport?.duration ?? Number(root.dataset.duration);
 				const current = transport ? transport.position : streamPosition();
 
@@ -250,6 +296,7 @@ export function setupComparisonPlayers() {
 			function pause() {
 				operation++;
 				pending = false;
+				lastPass = 0;
 				stopStream();
 				transport?.pause();
 				status.textContent = "";
@@ -298,6 +345,7 @@ export function setupComparisonPlayers() {
 								render,
 							);
 							// A stream paused before both versions loaded left its place in position; start the transport there.
+							transport.setLoop(loop);
 							transport.seek(position);
 						})
 						.catch((error) => {
@@ -320,6 +368,7 @@ export function setupComparisonPlayers() {
 
 					transport!.seek(position);
 					applyVolume();
+					lastPass = 0;
 					transport!.play();
 					status.textContent = "";
 				} catch {
@@ -373,11 +422,72 @@ export function setupComparisonPlayers() {
 			function seekTo(seconds: number) {
 				const duration = transport?.duration ?? Number(root.dataset.duration);
 				position = Math.max(0, Math.min(seconds, duration));
+
+				// While looping, a seek moves the loop: it starts again from where the visitor chose.
+				if (loop) {
+					setLoop(position);
+
+					return;
+				}
+
 				transport?.seek(position);
 
 				if (streaming) streaming.currentTime = position + offsetOf(streaming);
 				render();
 			}
+
+			/** Loops the chosen length from `from` (the playhead by default), or stops looping when Loop is off. */
+			function setLoop(from?: number) {
+				const duration = transport?.duration ?? Number(root.dataset.duration);
+				const length = Number(loopLength?.value ?? 8);
+				const at = from ?? (transport ? transport.position : streamPosition());
+
+				if (loopToggle?.getAttribute("aria-pressed") === "true") {
+					const start = Math.max(0, Math.min(at, duration - length));
+					loop = { start, end: Math.min(duration, start + length) };
+				} else loop = undefined;
+
+				position = loop ? Math.min(Math.max(at, loop.start), loop.end) : at;
+				transport?.setLoop(loop);
+				// A flip already scheduled for the old loop's wrap is cancelled with the current levels.
+				applyVolume();
+
+				if (streaming && loop)
+					streaming.currentTime = position + offsetOf(streaming);
+				lastPass = 0;
+				flipScheduledFor = undefined;
+
+				if (loopFlip) loopFlip.disabled = !loop;
+				root.style.setProperty(
+					"--loop-start",
+					`${((loop?.start ?? 0) / duration) * 100}%`,
+				);
+				root.style.setProperty(
+					"--loop-width",
+					`${(((loop?.end ?? 0) - (loop?.start ?? 0)) / duration) * 100}%`,
+				);
+				root
+					.querySelectorAll<HTMLElement>("[data-loop-region]")
+					.forEach((region) => (region.hidden = !loop));
+				status.textContent = loop
+					? `Looping ${format(loop.start)} to ${format(loop.end)}.`
+					: "Loop off.";
+				render();
+			}
+
+			loopToggle?.addEventListener("click", () => {
+				loopToggle.setAttribute(
+					"aria-pressed",
+					String(loopToggle.getAttribute("aria-pressed") !== "true"),
+				);
+				setLoop();
+			});
+			loopLength?.addEventListener("change", () => setLoop(loop?.start));
+			loopFlip?.addEventListener("change", () => {
+				lastPass = transport?.pass ?? 0;
+				applyVolume();
+				render();
+			});
 
 			seek.addEventListener("input", () => seekTo(Number(seek.value)));
 			root
