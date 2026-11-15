@@ -1,7 +1,11 @@
 import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
+import { mediaFailed, mediaUnavailable } from "~/lib/media-answers";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+
+const ROUTE = "/audio/file/[slug]";
 
 type RangeRequest =
 	| { kind: "none" }
@@ -31,14 +35,15 @@ function parseRangeRequest(header: string | null): RangeRequest {
 function resolveRange(request: RangeRequest, size: number): RangeParse {
 	if (request.kind !== "bytes") return request;
 	const { start, endRaw } = request;
-	const end = endRaw !== null ? endRaw : size - 1;
+	// A last byte past the end of the file means "to the end" (RFC 9110, 14.1.2); only a start past the end is unsatisfiable.
+	const end = Math.min(endRaw ?? size - 1, size - 1);
 
-	if (start > end || end >= size) return { kind: "unsatisfiable" };
+	if (start > end || start >= size) return { kind: "unsatisfiable" };
 
 	return { kind: "ok", offset: start, length: end - start + 1 };
 }
 
-export const GET: APIRoute = async (context) => {
+const serve: APIRoute = async (context) => {
 	const slug = context.params.slug;
 
 	if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
@@ -56,6 +61,8 @@ export const GET: APIRoute = async (context) => {
 
 	if (key.startsWith("studio/") || key.startsWith("software/"))
 		return new Response("not found", { status: 404 });
+
+	if (!env.AUDIO) return mediaUnavailable();
 
 	const rangeHeader = context.request.headers.get("range");
 	const rangeRequest = parseRangeRequest(rangeHeader);
@@ -117,4 +124,14 @@ export const GET: APIRoute = async (context) => {
 			"content-disposition": `inline; filename="${slug}.mp3"`,
 		},
 	});
+};
+
+export const GET: APIRoute = async (context) => {
+	try {
+		return await serve(context);
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
+		return mediaFailed();
+	}
 };

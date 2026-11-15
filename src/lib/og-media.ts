@@ -1,4 +1,5 @@
 import rendered from "../data/og-media.json";
+import { mediaUnavailable } from "~/lib/media-answers";
 import { mediaRange } from "~/lib/music-media";
 
 /**
@@ -175,7 +176,7 @@ const IMMUTABLE = "public, max-age=31536000, immutable";
 /**
  * Serves /og/<name>.mp4 with byte ranges. Static assets answer every request with the whole file
  * and no Accept-Ranges, and Safari's media stack expects 206 responses, so the bytes live at
- * /og/raw/<name>.mp4 and this route slices them.
+ * /og/raw/<name>.mp4 and this route slices them. A failure throws; the route answers it.
  */
 export async function serveOgVideo(
 	request: Request,
@@ -190,11 +191,18 @@ export async function serveOgVideo(
 	)
 		return new Response("Not found", { status: 404 });
 
-	const source = await (assets ?? globalThis).fetch(
+	// No source to read the bytes from: the route passes the global fetch in development and the ASSETS binding in production.
+	if (!assets) return mediaUnavailable();
+
+	const source = await assets.fetch(
 		new URL(`/og/raw/${name}.mp4`, request.url),
 	);
 
-	if (!source.ok) return new Response("Not found", { status: 404 });
+	if (source.status === 404) return new Response("Not found", { status: 404 });
+
+	// Any other answer that is not a success is a fault of the site: the route logs this and answers its fixed 500.
+	if (!source.ok)
+		throw new Error(`The static assets answered ${source.status}`);
 	const bytes = await source.arrayBuffer();
 	const size = bytes.byteLength;
 

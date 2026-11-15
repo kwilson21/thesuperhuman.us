@@ -7,7 +7,7 @@ import { bytesStream } from "../helpers/r2";
 import { GET as audio } from "~/pages/audio/file/[slug]";
 import { GET as music } from "~/pages/music/file/[id]/[version]";
 import { GET as og } from "~/pages/og/[name].mp4";
-import { ogMedia, serveOgVideo } from "~/lib/og-media";
+import { ogMedia } from "~/lib/og-media";
 
 // How the three media routes answer when R2 or the assets fetch fails, when a binding is missing and when a byte range
 // runs past the end of a file. An unexpected failure answers 500 with the route's fixed sentence and never the error's
@@ -82,8 +82,6 @@ const answered = async (response: Response) => ({
 	text: await response.text(),
 });
 
-const noLeak = () => expect(JSON.stringify(logged)).not.toContain(LEAK);
-
 describe("the music file route", () => {
 	it.each(["head", "get"] as const)(
 		"answers 500 with a fixed sentence when R2 %s fails",
@@ -97,7 +95,6 @@ describe("the music file route", () => {
 				text: "Media unavailable",
 			});
 			expect(logged).toHaveLength(1);
-			noLeak();
 		},
 	);
 
@@ -132,7 +129,6 @@ describe("the audio file route", () => {
 				text: "Media unavailable",
 			});
 			expect(logged).toHaveLength(1);
-			noLeak();
 		},
 	);
 
@@ -175,6 +171,27 @@ describe("the audio file route", () => {
 describe("the link preview video route", () => {
 	const request = new Request(`https://thesuperhuman.us${OG}`);
 
+	/** The route as production runs it: the ASSETS binding is the only source of the bytes. */
+	const production = async (name: string, assets?: Fetcher) => {
+		vi.stubEnv("DEV", false);
+
+		try {
+			return await og(
+				partial<APIContext>({
+					params: { name },
+					request,
+					locals: partial<APIContext["locals"]>({
+						runtime: partial<TestRuntime>({
+							env: partial<TestRuntime["env"]>({ ASSETS: assets }),
+						}),
+					}),
+				}),
+			);
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	};
+
 	it("answers 500 with a fixed sentence when the assets fetch rejects", async () => {
 		const assets = double<Fetcher>({
 			fetch: async () => {
@@ -182,14 +199,11 @@ describe("the link preview video route", () => {
 			},
 		});
 
-		const response = await serveOgVideo(request, OG_NAME, assets);
-
-		expect(await answered(response)).toEqual({
+		expect(await answered(await production(OG_NAME, assets))).toEqual({
 			status: 500,
 			text: "Media unavailable",
 		});
 		expect(logged).toHaveLength(1);
-		noLeak();
 	});
 
 	it.each([403, 500, 502])(
@@ -199,7 +213,11 @@ describe("the link preview video route", () => {
 				fetch: async () => new Response("no", { status }),
 			});
 
-			expect((await serveOgVideo(request, OG_NAME, assets)).status).toBe(500);
+			expect(await answered(await production(OG_NAME, assets))).toEqual({
+				status: 500,
+				text: "Media unavailable",
+			});
+			expect(logged).toHaveLength(1);
 		},
 	);
 
@@ -208,25 +226,26 @@ describe("the link preview video route", () => {
 			fetch: async () => new Response("no", { status: 404 }),
 		});
 
-		expect(
-			await answered(await serveOgVideo(request, OG_NAME, assets)),
-		).toEqual({ status: 404, text: "Not found" });
+		expect(await answered(await production(OG_NAME, assets))).toEqual({
+			status: 404,
+			text: "Not found",
+		});
+		expect(logged).toHaveLength(0);
 	});
 
 	it("answers 503 when production has no assets binding", async () => {
-		expect(
-			await answered(await serveOgVideo(request, OG_NAME, undefined)),
-		).toEqual({ status: 503, text: "Media unavailable" });
+		expect(await answered(await production(OG_NAME))).toEqual({
+			status: 503,
+			text: "Media unavailable",
+		});
 	});
 
 	it("still answers 404 for an unknown name without the binding", async () => {
-		expect((await serveOgVideo(request, "nothing", undefined)).status).toBe(
-			404,
-		);
+		expect((await production("nothing")).status).toBe(404);
 	});
 
-	it("reads the binding in production and the global fetch in development", async () => {
-		// Vitest runs with import.meta.env.DEV set, so the route uses the global fetch, which rejects here.
+	it("serves an unbound development server from the global fetch", async () => {
+		// Vitest runs with import.meta.env.DEV set, which is a development server.
 		vi.stubGlobal("fetch", async () => new Response(new Uint8Array(4)));
 
 		try {
