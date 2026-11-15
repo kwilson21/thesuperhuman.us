@@ -43,6 +43,13 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 			const result = (await response.json()) as { error?: string };
 			status.textContent = result.error ?? failure;
 		} catch {
+			// A brief copy request that gave no readable answer (the fetch failed, or an edge page that is not JSON came back) may have reached the server and claimed the copy. The page shows the recorded status and only the buttons it allows, as after a 500, so a second click cannot send a second copy.
+			if (!isInvitation) {
+				location.reload();
+
+				return;
+			}
+
 			status.textContent = failure;
 		}
 
