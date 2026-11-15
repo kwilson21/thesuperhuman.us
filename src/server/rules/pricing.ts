@@ -2,7 +2,10 @@
 // replace what is stored. It decides from the reference as read and the version the page read it at, and answers the
 // new reference, with the next version and the time, or refuses when another save came in since the page was loaded
 // (another tab, say). KV has no compare-and-set, so nothing re-checks it at write time: one owner writes this record, and
-// the read just before the write is the guard. Time is an input; the rule reads no clock.
+// the read just before the write is the guard. That guard is not complete: verification/pricing-save.qnt (the TodayKv
+// mutant) shows a save from a second tab can put back the research another tab just saved, and a cached read can refuse
+// a save that should pass. Moving the record to D1 removes both; it is the owner's decision (docs/verification.md).
+// Time is an input; the rule reads no clock.
 import * as Data from "effect/Data";
 import type {
 	MarketReference,

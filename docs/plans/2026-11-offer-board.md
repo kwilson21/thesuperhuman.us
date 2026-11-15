@@ -174,8 +174,16 @@ and nothing it suggests reaches the client unless the owner puts it in an offer.
 ## 8. Verification
 
 - The reconciliation is the living brief's `applyReply`, generalised over its lanes with no change in behaviour: the
-  `brief-board.qnt` model, its mutants and the seeded walks cover it, and the walks also run with the offer board's
-  lanes and limits.
+  `brief-board.qnt` model, its mutants and the seeded walks cover it, and `tests/lib/offer-board-walk.test.ts` runs the
+  same kind of walk with the offer board's lanes and limits (small, so full lanes are reached often) and the page's own
+  reply reader.
+- Added after the owner asked (2026-11-15) for the risky areas to be checked by search: `verification/offer-board.qnt`
+  (Use and Undo with the offer editor's fields, Set its fee, late replies, failures; eleven mutants, eight of them
+  bugs the first review or the model found in the code; `tests/browser/offer-board.cjs` tries each on the real page in the
+  Screenshots workflow), `verification/daily-allowance.qnt` (both boards' daily reservation under concurrent requests)
+  and `verification/pricing-save.qnt` (the pricing page's saves; its intended design is a compare-and-set, and today's
+  KV code is the `TodayKv` mutant, which shows a lost save between two tabs: the owner's decision is whether to move the
+  record to D1). See docs/verification.md.
 - `src/lib/offer-pricing.ts` is a pure money rule, so it carries LemmaScript contracts checked by Dafny in CI: each end
   of the day value range is a whole $50 amount, at least the exact amount and less than $50 above it (the high end with
   the contingency, a half cent rounded up); the market figure always lies in the researched range, equals the AI's

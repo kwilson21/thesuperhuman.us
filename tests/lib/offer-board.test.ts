@@ -8,6 +8,7 @@ import {
 	emptyBoard,
 	keepCard,
 	lastAction,
+	pricesOrLinks,
 	sendRequest,
 	setAside,
 	undoIn,
@@ -283,4 +284,17 @@ describe("found in the offer board's first review", () => {
 			fitOfferCards(cards, OFFER_CONTENT_MAX).map((each) => each.ref),
 		).toEqual(["c1"]);
 	});
+});
+
+describe("found by the automated review", () => {
+	it.each(["USD 5,000 including launch support", "EUR 300 a month"])(
+		"drops a card that names an amount after its currency's code: %s",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+			expect(
+				readOfferReply({ cards: [{ lane: "exclusions", text, reason: "" }] })
+					?.cards,
+			).toEqual([]);
+		},
+	);
 });

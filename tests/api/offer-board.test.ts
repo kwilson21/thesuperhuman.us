@@ -352,4 +352,27 @@ describe("the owner's past offers, for the pricing panel", () => {
 			["r2", 200000],
 		]);
 	});
+
+	it("filters by kind before its limit, so many newer offers of another kind never hide this kind's", async () => {
+		seed("r2");
+		offer("o1", "r2", 1, "sent", 123456, "2026-01-01T00:00:00.000Z");
+
+		for (let i = 0; i < 105; i++) {
+			seed(`w${i}`, "new", { path: "webapp" });
+			offer(
+				`ow${i}`,
+				`w${i}`,
+				1,
+				"sent",
+				900000,
+				`2026-11-${String((i % 9) + 1).padStart(2, "0")}T00:00:00.000Z`,
+			);
+		}
+
+		const past = await pastOffers(sqliteD1(db), "website", "r1");
+
+		expect(past.map((each) => [each.requestId, each.totalCents])).toEqual([
+			["r2", 123456],
+		]);
+	});
 });

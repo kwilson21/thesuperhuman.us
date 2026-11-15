@@ -3,7 +3,8 @@
 // is not offered again, an older reply never applies, and a reply that arrives while the owner is among the cards waits.
 // Use fills the offer editor's own fields (src/components/owner/SoftwareOfferEditor.astro); Undo puts back what Use
 // changed, and only that. The board itself saves and sends nothing. Prices are worked out here from the owner's numbers
-// (src/lib/offer-pricing.ts).
+// (src/lib/offer-pricing.ts). Use, Undo, Set its fee, replies and failures are modelled in verification/offer-board.qnt;
+// tests/browser/offer-board.cjs tries each of its mutants on the real page.
 import * as Predicate from "effect/Predicate";
 import {
 	type Board,
@@ -51,7 +52,7 @@ const IDLE = 3000;
 /** The least time between two requests. */
 const GAP = 10000;
 
-/** The milestone fields Use fills; a row it added goes on Undo only when these are empty again. */
+/** The milestone fields Use fills. Use fills a row only when these are all empty, and a row it added goes on Undo only when they are empty again. */
 const MILESTONE_FIELDS = [
 	"milestoneName",
 	"deliverables",
@@ -80,6 +81,13 @@ type Held = {
 
 const dollars = (cents: number) =>
 	`$${Math.round(cents / 100).toLocaleString("en-US")}`;
+
+/** An amount to the cent when it has cents: what fills the offer. */
+const exactDollars = (cents: number) =>
+	`$${(cents / 100).toLocaleString("en-US", {
+		minimumFractionDigits: cents % 100 ? 2 : 0,
+		maximumFractionDigits: 2,
+	})}`;
 
 const field = (raw: RawValue, name: string) => ownField(raw, name);
 
@@ -282,8 +290,10 @@ export function setupOfferBoard() {
 		)
 			return { fieldset: known, added: false };
 
-		const empty = milestones().find(
-			(fieldset) => !named(fieldset, "milestoneName")?.value.trim(),
+		// Empty means every field Use fills is empty: a row with no name may still hold deliverables or a fee the owner
+		// typed (verification/offer-board.qnt, ownerWordsKept, mutant name-only-empty).
+		const empty = milestones().find((fieldset) =>
+			MILESTONE_FIELDS.every((name) => !named(fieldset, name)?.value.trim()),
 		);
 
 		if (empty) return { fieldset: empty, added: false };
@@ -522,7 +532,13 @@ export function setupOfferBoard() {
 		]);
 
 	// ---- Prices -------------------------------------------------------------------------------------------------------
+	/**
+	 * Fills the offer's estimate range, to the cent (past offers can hold cents). The editor's range starts at $1, so a
+	 * researched low end of $0 fills as $1.
+	 */
 	function useRange(lowCents: number, highCents: number) {
+		const low = Math.max(100, lowCents);
+		const high = Math.max(low, highCents);
 		const has = named<HTMLInputElement>(form!, "hasRange");
 
 		if (has && !has.checked) {
@@ -531,19 +547,19 @@ export function setupOfferBoard() {
 		}
 
 		for (const [name, cents] of [
-			["rangeLow", lowCents],
-			["rangeHigh", highCents],
+			["rangeLow", low],
+			["rangeHigh", high],
 		] as const) {
 			const input = named(form!, name);
 
 			if (input) {
-				input.value = String(Math.round(cents / 100));
+				input.value = String(cents / 100);
 				changed(input);
 			}
 		}
 
 		say(
-			`Filled the estimate range: ${dollars(lowCents)} to ${dollars(highCents)}. Nothing is saved until you save the draft.`,
+			`Filled the estimate range: ${exactDollars(low)} to ${exactDollars(high)}. Nothing is saved until you save the draft.`,
 		);
 	}
 

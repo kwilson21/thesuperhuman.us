@@ -153,7 +153,8 @@ function outlineText(raw: JsonValue | undefined): string {
 
 /**
  * Counts one suggestion for the owner, in one batch. The guard raises (the site's form, `json_extract` of a sentence)
- * unless the count is still under the limit, and the batch then writes nothing: that is ChangedSinceRead.
+ * unless the count is still under the limit, and the batch then writes nothing: that is ChangedSinceRead. The brief
+ * board's guard with one scope; verification/daily-allowance.qnt checks both under concurrent requests.
  */
 export const reserveOfferBudget = (write: OfferReservation) =>
 	Effect.gen(function* () {
@@ -207,9 +208,10 @@ export async function pastOffers(
 			`SELECT o.terms_json, o.sent_at, o.request_id, r.details_json
         FROM software_offers o JOIN owner_requests r ON r.id = o.request_id
         WHERE o.status = 'sent' AND o.sent_at IS NOT NULL AND o.request_id != ?
+          AND json_extract(r.details_json, '$.path') = ?
         ORDER BY o.sent_at DESC LIMIT 100`,
 		)
-		.bind(exceptRequest)
+		.bind(exceptRequest, kind)
 		.all<{
 			terms_json: string;
 			sent_at: string;
