@@ -86,6 +86,18 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/publication-journal.qnt: one project's journal when several deliveries of envelopes reach the Worker at once
+// (src/server/flows/publication-commit.ts). Module name -> the property its change must break.
+export const publicationMutants = {
+	publicationNoRevisionKey: { property: "oneRowPerRevision" },
+	publicationAnyRevision: { property: "contiguousFromOne" },
+	publicationNoWithdrawnRule: { property: "entryNeverResurrected" },
+	publicationNoNewEntryRule: { property: "onePublishPerEntry" },
+	publicationNoTargetRule: { property: "correctionHasTarget" },
+	publicationNoRetry: { property: "retryNeverConflicts" },
+	publicationSplitRead: { property: "retryNeverConflicts" },
+};
+
 // verification/agreement-link.qnt: the archive link's issue (cooldown, executed lookup, the guarded batch) and its single
 // redeem before expiry (src/server/flows/agreement-link.ts, src/lib/agreement-access.ts completeAgreementLink). Module name
 // -> the property its change must break.
@@ -137,6 +149,14 @@ export const models = [
 		mutants: musicMutants,
 		equivalents: [],
 		exhaustive: ["music"],
+		samples: "20000",
+	},
+	{
+		file: "verification/publication-journal.qnt",
+		current: ["publication"],
+		mutants: publicationMutants,
+		equivalents: [],
+		exhaustive: ["publication"],
 		samples: "20000",
 	},
 	{
