@@ -1,27 +1,20 @@
 import type { APIContext } from "astro";
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { double, partial, fakeKv } from "../helpers/doubles";
-import type { JsonObject } from "../helpers/json";
-import type { TestRuntime } from "../helpers/runtime";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	type Mock,
+	vi,
+} from "vitest";
 import { POST } from "~/pages/api/audio-intake";
-import { saveOwnerRequest } from "~/lib/owner-requests";
-import { sendUrgentOwnerAlert } from "~/lib/owner-alerts";
-import { deliverProjectInvitation } from "~/lib/audio-project-invitations";
-
-vi.mock("~/lib/owner-requests", () => ({
-	saveOwnerRequest: vi.fn(async (_db, input) => ({
-		id: "request-123",
-		...input,
-	})),
-}));
-
-vi.mock("~/lib/owner-alerts", () => ({
-	sendUrgentOwnerAlert: vi.fn(async () => true),
-}));
-
-vi.mock("~/lib/audio-project-invitations", () => ({
-	deliverProjectInvitation: vi.fn(async () => {}),
-}));
+import { freshMusicDb } from "../golden/harness";
+import { double, fakeKv, partial } from "../helpers/doubles";
+import type { JsonObject } from "../helpers/json";
+import { type ResendEmail, stubResend } from "../helpers/resend-fetch";
+import type { TestRuntime } from "../helpers/runtime";
+import { type SqliteDatabase, sqliteD1 } from "../helpers/sqlite-d1";
 
 const base = {
 	service: "vocal-mix",
@@ -38,6 +31,12 @@ const base = {
 /** The rate-limit read of the latest context(), so a test can change what the limiter reports. */
 let rateLimitGet: Mock;
 
+/** The database every context() writes to; each test starts with a fresh one. */
+let sql: SqliteDatabase;
+
+/** The emails Resend was asked to send in the current test. */
+let emails: ResendEmail[];
+
 function context(
 	body: JsonObject = base,
 	origin = "https://thesuperhuman.us",
@@ -53,7 +52,7 @@ function context(
 		locals: {
 			runtime: partial<TestRuntime>({
 				env: partial<TestRuntime["env"]>({
-					MUSIC_DB: double<D1Database>({}),
+					MUSIC_DB: sqliteD1(sql),
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "test@example.com",
 					CONTACT_TO_EMAIL: "owner@example.com",
@@ -71,40 +70,35 @@ function context(
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	vi.stubGlobal(
-		"fetch",
-		vi.fn(async (url: string) =>
-			url.includes("siteverify")
-				? { ok: true, json: async () => ({ success: true }) }
-				: { ok: true },
-		),
-	);
+	sql = freshMusicDb();
+	sql.exec("PRAGMA foreign_keys=ON");
+	emails = stubResend();
+});
+
+afterEach(() => {
+	sql.close();
+	vi.unstubAllGlobals();
 });
 
 describe("intake endpoint", () => {
 	it("stores reviewed details without fetching the shared file", async () => {
 		const res = await POST(context());
 		expect(res.status).toBe(200);
-		expect(saveOwnerRequest).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				kind: "service",
-				serviceId: "vocal-mix",
-				email: "artist@example.com",
-			}),
-		);
+		expect(
+			sql.prepare("SELECT kind,service_id,email FROM owner_requests").all(),
+		).toEqual([
+			{ kind: "service", service_id: "vocal-mix", email: "artist@example.com" },
+		]);
 	});
 	it("sends the owner an immediate notice with the service, title, client, files, direction and a dashboard link, regardless of the client portal flag", async () => {
 		const res = await POST(context());
 		expect(res.status).toBe(200);
-		expect(deliverProjectInvitation).not.toHaveBeenCalled();
+		expect(
+			sql.prepare("SELECT invitation_attempted_at FROM audio_projects").get(),
+		).toEqual({ invitation_attempted_at: null });
 
-		const resendCalls = vi
-			.mocked(fetch)
-			.mock.calls.filter(([url]) => String(url).includes("api.resend.com"));
-
-		expect(resendCalls).toHaveLength(1);
-		const body = JSON.parse(String(resendCalls[0][1]?.body));
+		expect(emails).toHaveLength(1);
+		const body = emails[0];
 		expect(body.to).toEqual(["owner@example.com"]);
 		expect(body.reply_to).toBe("artist@example.com");
 		expect(body.subject).not.toContain("—");
@@ -115,29 +109,40 @@ describe("intake endpoint", () => {
 		expect(body.text).toContain("Email: artist@example.com");
 		expect(body.text).toContain("Files: https://drive.google.com/example");
 		expect(body.text).toContain("Direction: Use your judgment");
+		const requestId = sql.prepare("SELECT id FROM owner_requests").get()?.id;
 		expect(body.text).toContain(
-			"https://thesuperhuman.us/owner/requests/request-123",
+			`https://thesuperhuman.us/owner/requests/${requestId}`,
 		);
 	});
 	it("queues a sign-in invitation in addition to the owner notice when the private portal is enabled", async () => {
 		const ctx = context();
-		const waitUntil = vi.fn();
-		ctx.locals.runtime.ctx = double<ExecutionContext>({ waitUntil });
+		const background: Promise<unknown>[] = [];
+		ctx.locals.runtime.ctx = double<ExecutionContext>({
+			waitUntil: vi.fn((work: Promise<unknown>) => {
+				background.push(work);
+			}),
+		});
 		ctx.locals.runtime.env.AUDIO_CLIENT_PORTAL_ENABLED = "true";
 		expect((await POST(ctx)).status).toBe(200);
-		expect(deliverProjectInvitation).toHaveBeenCalledWith(
-			ctx.locals.runtime.env.MUSIC_DB,
-			"request-123",
-			ctx.locals.runtime.env,
+		await Promise.all(background);
+		expect(background).toHaveLength(1);
+		expect(
+			sql
+				.prepare(
+					"SELECT invitation_status FROM audio_projects WHERE request_id=(SELECT id FROM owner_requests)",
+				)
+				.get(),
+		).toEqual({ invitation_status: "sent" });
+
+		expect(emails).toContainEqual(
+			expect.objectContaining({
+				to: ["artist@example.com"],
+				subject: "Your private studio project",
+			}),
 		);
-		expect(waitUntil).toHaveBeenCalledTimes(1);
 	});
 	it("still returns success when the owner notice fails to send, since the request is already stored", async () => {
-		vi.mocked(fetch).mockImplementation(async (input) =>
-			String(input).includes("siteverify")
-				? double<Response>({ ok: true, json: async () => ({ success: true }) })
-				: double<Response>({ ok: false, json: async () => ({}) }),
-		);
+		emails = stubResend({ resend: [{ status: 500 }] });
 		const res = await POST(context());
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ ok: true });
@@ -149,14 +154,14 @@ describe("intake endpoint", () => {
 		expect((await POST(context({ padding: "x".repeat(33000) }))).status).toBe(
 			413,
 		);
-		expect(fetch).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
 	});
 	it("requires files and permission before sending", async () => {
 		expect(
 			(await POST(context({ ...base, fileLink: "", permission: false })))
 				.status,
 		).toBe(400);
-		expect(fetch).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
 	});
 	it("does not accept obsolete upload session instead of files", async () => {
 		expect(
@@ -175,17 +180,18 @@ describe("intake endpoint", () => {
 		const ctx = context();
 		ctx.locals.runtime.env.MUSIC_DB = undefined;
 		expect((await POST(ctx)).status).toBe(503);
-		vi.mocked(saveOwnerRequest).mockRejectedValueOnce(
-			new Error("database unavailable"),
+		sql.exec(
+			"CREATE TRIGGER reject_request_storage BEFORE INSERT ON owner_requests BEGIN SELECT RAISE(ABORT,'database unavailable'); END;",
 		);
 		expect((await POST(context())).status).toBe(503);
-		expect(sendUrgentOwnerAlert).toHaveBeenCalledWith(
-			expect.anything(),
-			expect.objectContaining({
-				category: "request-storage",
-				route: "/api/audio-intake",
-			}),
-		);
+
+		expect(emails).toHaveLength(1);
+		expect(emails[0]).toMatchObject({
+			subject: "Urgent: website request storage failed",
+			to: ["owner@example.com"],
+		});
+		expect(emails[0].text).toContain("Category: request-storage");
+		expect(emails[0].text).toContain("Route: /api/audio-intake");
 	});
 	it("rejects empty specific direction before external calls", async () => {
 		const response = await POST(
@@ -199,7 +205,7 @@ describe("intake endpoint", () => {
 				referenceNote: "Describe the specific direction you have in mind.",
 			},
 		});
-		expect(fetch).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
 	});
 	it("allows a corrected captcha immediately while limiting successful submissions", async () => {
 		const stored = new Map<string, string>();
@@ -218,22 +224,13 @@ describe("intake endpoint", () => {
 			return POST(ctx);
 		};
 
-		vi.mocked(fetch).mockResolvedValueOnce(
-			double<Response>({
-				ok: true,
-				json: async () => ({ success: false }),
-			}),
-		);
+		emails = stubResend({ turnstile: [false, true] });
 		expect((await submit()).status).toBe(403);
 		expect(stored.has("rl:audio:0.0.0.0")).toBe(false);
 		expect((await submit()).status).toBe(200);
 		expect((await submit()).status).toBe(429);
 		// Exactly one submission succeeded, so exactly one owner notice went out.
-		expect(
-			vi
-				.mocked(fetch)
-				.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
-		).toHaveLength(1);
+		expect(emails).toHaveLength(1);
 	});
 	it("bounds repeated failed captcha attempts before external verification", async () => {
 		const ctx = context();
@@ -241,18 +238,13 @@ describe("intake endpoint", () => {
 			key.startsWith("rl:audio-attempt:") ? "10" : null,
 		);
 		expect((await POST(ctx)).status).toBe(429);
-		expect(fetch).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
 	});
 	it("blocks failed captcha and rate limit", async () => {
 		const ctx = context();
 		rateLimitGet.mockResolvedValue("1");
 		expect((await POST(ctx)).status).toBe(429);
-		vi.mocked(fetch).mockResolvedValue(
-			double<Response>({
-				ok: true,
-				json: async () => ({ success: false }),
-			}),
-		);
+		stubResend({ turnstile: [false] });
 		expect((await POST(context())).status).toBe(403);
 	});
 });

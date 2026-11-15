@@ -23,6 +23,7 @@ import {
 } from "./agreement-templates";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
+import type { RawValue } from "./fields";
 import { LostRace, ReaderMessage } from "./reader-message";
 
 export const legalNameKey = (value: string) =>
@@ -161,7 +162,7 @@ export async function reviewAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
 	session: AgreementSession,
-	input: unknown,
+	input: RawValue,
 ) {
 	const client = parseClientAgreement(input),
 		terms = offerTermsSchema.parse(JSON.parse(offer.terms_json)),

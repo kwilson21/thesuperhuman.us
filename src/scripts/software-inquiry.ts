@@ -9,6 +9,7 @@ import {
 	validateSoftwareInquiry,
 	type SoftwarePath,
 } from "../lib/software-inquiry";
+import { ownLabel } from "../lib/type-guards";
 import { setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
@@ -54,11 +55,6 @@ type DraftAnswers = Partial<Record<string, string | number | boolean | null>>;
 
 function isDraftAnswers(value: unknown): value is DraftAnswers {
 	return typeof value === "object" && value !== null;
-}
-
-// Own-key lookup for a label table. Returns undefined for any other key.
-function ownLabel(table: Record<string, string>, key: string) {
-	return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
 export function renderSoftwareReceipt(
@@ -389,7 +385,8 @@ export function setupSoftwareInquiry(
 				dd = document.createElement("dd"),
 				edit = document.createElement("button");
 
-			dt.textContent = ownLabel(labels, key) ?? clientSoftwareLabels[key];
+			dt.textContent =
+				ownLabel(labels, key) ?? ownLabel(clientSoftwareLabels, key) ?? "";
 			dd.textContent =
 				key === "path"
 					? (ownLabel(softwarePaths, value) ?? value)

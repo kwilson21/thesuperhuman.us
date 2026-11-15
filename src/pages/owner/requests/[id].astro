@@ -39,6 +39,8 @@ import {
 	listOwnerRequests,
 } from "~/lib/owner-requests";
 import { safeExternalUrl } from "~/lib/owner-model";
+import type { RequestDetails } from "~/lib/owner-model";
+import { isObject } from "~/lib/type-guards";
 import { stripeAvailable } from "~/lib/stripe-invoicing";
 import {
 	currentSiteHref,
@@ -174,14 +176,10 @@ const detailRows = Object.entries(request.details).filter(
 		(!Array.isArray(value) || value.length),
 );
 
-function isObjectValue(value: unknown): value is object {
-	return typeof value === "object" && value !== null;
-}
-
-const detailValue = (value: unknown) =>
+const detailValue = (value: RequestDetails[string]) =>
 	Array.isArray(value)
 		? value.join(", ")
-		: isObjectValue(value)
+		: isObject(value)
 			? Object.entries(value)
 					.map(([key, item]) => `${label(key)}: ${String(item)}`)
 					.join(" · ")

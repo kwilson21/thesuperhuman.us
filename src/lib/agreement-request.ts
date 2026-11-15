@@ -2,6 +2,8 @@ import type { APIRoute } from "astro";
 import { escapeHtml } from "./email-template";
 import { musicRequest } from "./music-request";
 import { agreementJson } from "./agreement-access";
+import type { JsonValue } from "./json-value";
+import { isText } from "./type-guards";
 
 /** Native forms use the same bounded JSON parser and Origin check as enhanced requests. */
 export async function agreementRequest(request: Request, max = 16384) {
@@ -41,7 +43,8 @@ export async function agreementRequest(request: Request, max = 16384) {
 			offset += c.length;
 		}
 
-		const fields = Object.fromEntries(
+		// Form fields start as text. The boolean and JSON steps below replace some of them with the parsed value.
+		const fields: { [key: string]: JsonValue } = Object.fromEntries(
 			new URLSearchParams(new TextDecoder().decode(bytes)),
 		);
 
@@ -57,17 +60,18 @@ export async function agreementRequest(request: Request, max = 16384) {
 			"held",
 		])
 			if (key in fields)
-				(fields as Record<string, unknown>)[key] =
-					fields[key] === "true" || fields[key] === "on";
+				fields[key] = fields[key] === "true" || fields[key] === "on";
 
-		for (const key of ["documents", "values", "manifest"])
-			if (fields[key]) {
+		for (const key of ["documents", "values", "manifest"]) {
+			const raw = fields[key];
+
+			if (isText(raw) && raw)
 				try {
-					(fields as Record<string, unknown>)[key] = JSON.parse(fields[key]);
+					fields[key] = JSON.parse(raw);
 				} catch {
 					return agreementJson({ ok: false, error: "Invalid fields" }, 400);
 				}
-			}
+		}
 
 		if (fields.action === "config" && !fields.values) {
 			const { action, expectedCurrentVersion, ...values } = fields;
@@ -92,12 +96,10 @@ export async function agreementRequest(request: Request, max = 16384) {
 			};
 		}
 
-		if (fields.action === "hold")
-			(fields as Record<string, unknown>).held =
-				(fields as Record<string, unknown>).held === true;
+		if (fields.action === "hold") fields.held = fields.held === true;
 
 		if (fields.action === "setting" && !("enabled" in fields))
-			(fields as Record<string, unknown>).enabled = false;
+			fields.enabled = false;
 
 		return fields;
 	}
