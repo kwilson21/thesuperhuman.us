@@ -22,12 +22,12 @@ import { BASE, owner, resendOk, running } from "./areas/software-projects";
 //
 //   handler
 //   403 {ok:false}              a visitor, a signed-in client
-//   503 {ok:false}              no MUSIC_DB, no id param, empty id param
+//   503 {ok:false}              no MUSIC_DB
 //   musicRequest (1024 bytes)   403 no or foreign Origin; 415 text/plain, form, no content type; 400 no body; 413 over
 //                               1024 bytes; 400 Invalid JSON (bad JSON, empty body)
 //   400 {ok:false}              null, array, string, number body; no action, other action, non-text action;
 //                               confirmedNotSent not a boolean
-//   404 {ok:false}              unknown id, a request that is not software (service)
+//   404 {ok:false}              unknown id, no id param, empty id param, a request that is not software (service)
 //   409 "cannot be sent again"  the claim finds nothing: status sent, uncertain without confirmation, uncertain and too
 //                               recent even with confirmation, resolved, withdrawn, blank email
 //   503 "could not be sent"     no RESEND_API_KEY / CONTACT_FROM_EMAIL / CONTACT_TO_EMAIL (nothing was asked of the
