@@ -363,6 +363,71 @@ function check(name, ok, detail = "") {
 		);
 		await page.unroute("**/api/owner/pricing");
 
+		// A clear whose answer arrives after the owner moved to another field leaves focus where they put it.
+		await page.reload();
+
+		const slowVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({ json: { ok: true, version: slowVersion + 1 } });
+		});
+		await contingency.fill(contingencyBefore === "12" ? "13" : "12");
+		page.once("dialog", (dialog) => dialog.accept());
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+		await contingency.focus();
+		await page.waitForFunction(() =>
+			/Research cleared/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a clear answered after the owner moved to another field leaves focus there",
+			(await page.evaluate(() =>
+				document.activeElement?.getAttribute("name"),
+			)) === "contingencyPercent",
+		);
+		await contingency.fill(contingencyBefore);
+		await page.unroute("**/api/owner/pricing");
+
+		// Clear research names unsaved text in the research box before it goes; dismissing sends nothing.
+		await page.reload();
+		let clearPosts = 0;
+
+		await page.route("**/api/owner/pricing", (route) => {
+			clearPosts += 1;
+
+			return route.abort();
+		});
+
+		const box = page.locator("[data-pricing-market]");
+		const boxBefore = await box.inputValue();
+		let asked = "";
+
+		await box.fill(`${boxBefore} `);
+		page.once("dialog", (dialog) => {
+			asked = dialog.message();
+
+			return dialog.dismiss();
+		});
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+		await page.waitForTimeout(200);
+		check(
+			"Clear research warns that unsaved text in the research box will be lost",
+			/not saved and will be lost/.test(asked) && clearPosts === 0,
+			asked,
+		);
+		await box.fill(boxBefore);
+		await page.unroute("**/api/owner/pricing");
+
 		const queue = [];
 
 		await page.route("**/api/owner/requests/*/offer-board", (route) =>

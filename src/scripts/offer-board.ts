@@ -322,7 +322,7 @@ export function setupOfferBoard() {
 	/** Says that a line was not added because its field would pass its own character limit. */
 	const tooLong = (field: HTMLTextAreaElement | null, name: string) =>
 		say(
-			`This would make “${name}” longer than its ${field?.maxLength ?? 0}-character limit, so it was not added. Shorten that field first.`,
+			`Adding this would take “${name}” past its ${(field?.maxLength ?? 0).toLocaleString("en-US")}-character limit, so the board left it out. Shorten that field first.`,
 		);
 
 	const milestones = () => [

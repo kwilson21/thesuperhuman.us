@@ -251,11 +251,17 @@ async function save(
 
 				const clear = form.querySelector<HTMLElement>("[data-pricing-clear]");
 
-				// Focus leaves the button about to hide for Save research, so it never falls to the page.
+				// Focus on the button about to hide (or already fallen to the page) goes to Save research. Focus the owner
+				// moved elsewhere while the answer was on its way stays where they put it.
 				if (clear) {
-					form
-						.querySelector<HTMLElement>('button[type="submit"]')
-						?.focus({ preventScroll: true });
+					if (
+						document.activeElement === clear ||
+						document.activeElement === document.body ||
+						document.activeElement === null
+					)
+						form
+							.querySelector<HTMLElement>('button[type="submit"]')
+							?.focus({ preventScroll: true });
 					clear.hidden = true;
 				}
 
@@ -479,7 +485,21 @@ export function setupOwnerPricing() {
 					return;
 				}
 
-				if (!confirm("Clear the saved market research?")) return;
+				const box = form.querySelector<HTMLTextAreaElement>(
+					"[data-pricing-market]",
+				);
+
+				// Clearing empties the box too, so text the owner changed there and has not saved is named before it goes.
+				const changed = box !== null && box.value !== box.defaultValue;
+
+				if (
+					!confirm(
+						changed
+							? "Clear the saved market research? What you changed in the research box is not saved and will be lost too."
+							: "Clear the saved market research?",
+					)
+				)
+					return;
 				void send(
 					{
 						action: "market",
