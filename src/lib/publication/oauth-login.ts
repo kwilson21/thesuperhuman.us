@@ -149,16 +149,25 @@ async function library<T>(call: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Token errors GitHub documents ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set up
- * wrong, so they are this site's fault (500): incorrect_client_credentials (the client id or secret is wrong),
- * redirect_uri_mismatch (the callback URL does not match the app's) and application_suspended (the app is suspended).
- * Not listed: bad_verification_code (the visitor's code is bad or expired), unverified_user_email (about the visitor's
- * account, not the app) and any code GitHub does not document, which all stay the visitor's 400.
+ * Errors of GitHub's token endpoint ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set
+ * up wrong, so they are this site's fault (500): incorrect_client_credentials (the client id or secret is wrong) and
+ * redirect_uri_mismatch (the callback URL does not match the app's). Not listed: bad_verification_code (the visitor's code
+ * is bad or expired), unverified_user_email (about the visitor's account, not the app) and any code GitHub does not
+ * document, which all stay the visitor's 400.
  */
-const appConfigurationErrors = [
+const tokenConfigurationErrors = [
 	"incorrect_client_credentials",
 	"redirect_uri_mismatch",
+];
+
+/**
+ * Errors GitHub sends to the callback in place of a code ("Troubleshooting authorization request errors") that say the
+ * OAuth app is set up wrong: application_suspended (the app is suspended) and redirect_uri_mismatch (the callback URL does
+ * not match the app's). access_denied (the visitor declined) and any other code stay the visitor's 400.
+ */
+const callbackConfigurationErrors = [
 	"application_suspended",
+	"redirect_uri_mismatch",
 ];
 
 /** Calls GitHub; a call that cannot be made, or a 5xx answer, or an answer that is not JSON, is GitHub being unavailable (503). */
@@ -346,6 +355,16 @@ export async function publicationLogin(
 			const state = await unseal(request, env);
 			const code = url.searchParams.get("code");
 
+			const reported = url.searchParams.get("error");
+
+			// Only a callback that belongs to this approved sign-in may say the site is set up wrong.
+			if (
+				state.approved &&
+				url.searchParams.get("state") === state.nonce &&
+				callbackConfigurationErrors.some((known) => known === reported)
+			)
+				throw new Unavailable(500);
+
 			if (
 				!state.approved ||
 				!code ||
@@ -379,8 +398,8 @@ export async function publicationLogin(
 				error?: string;
 			};
 
-			// GitHub's documented access token errors that are about this site's own OAuth app, not about the visitor's code.
-			if (appConfigurationErrors.some((code) => code === token.error))
+			// GitHub's token errors that are about this site's own OAuth app, not about the visitor's code.
+			if (tokenConfigurationErrors.some((code) => code === token.error))
 				throw new Unavailable(500);
 
 			if (!exchange.response.ok || token.error || !token.access_token)

@@ -745,9 +745,55 @@ describe("publication sign-in when something other than the visitor's request fa
 	);
 
 	it.each<[string, number]>([
+		["application_suspended", 500],
+		["redirect_uri_mismatch", 500],
+		["access_denied", 400],
+		["some_code_nobody_documented", 400],
+	])(
+		"answers GitHub's callback error %s (no code) as %s",
+		async (error, wanted) => {
+			const { env, complete } = fixture();
+			const { response, nonce } = await start(env);
+			const fetcher = vi.fn();
+
+			vi.stubGlobal("fetch", fetcher);
+
+			const result = await publicationLogin(
+				new Request(
+					origin + `/api/publication/callback?error=${error}&state=` + nonce,
+					{ headers: { cookie: cookie(response) } },
+				),
+				env,
+			);
+
+			expect(result.status).toBe(wanted);
+
+			if (wanted === 500) expect(await result.text()).toBe(SENTENCE);
+			expect(fetcher).not.toHaveBeenCalled();
+			expect(complete).not.toHaveBeenCalled();
+		},
+	);
+
+	it("answers a callback error with the wrong state as the visitor's, whatever the error", async () => {
+		const { env } = fixture();
+		const { response } = await start(env);
+
+		const result = await publicationLogin(
+			new Request(
+				origin +
+					"/api/publication/callback?error=application_suspended&state=wrong",
+				{ headers: { cookie: cookie(response) } },
+			),
+			env,
+		);
+
+		expect(result.status).toBe(400);
+	});
+
+	it.each<[string, number]>([
 		["incorrect_client_credentials", 500],
 		["redirect_uri_mismatch", 500],
-		["application_suspended", 500],
+		["application_suspended", 400],
 		["bad_verification_code", 400],
 		["unverified_user_email", 400],
 		["some_code_nobody_documented", 400],
