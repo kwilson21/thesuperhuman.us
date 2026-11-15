@@ -82,6 +82,22 @@ export function changedRows(value) {
 	return (Number.isFinite(changes) ? changes : 0) + changedRows(value.results);
 }
 
+/**
+ * The action and its values, without `--remote` and without `--config` and the path after it. Without `--config` nothing
+ * else is dropped (an earlier version dropped the first argument, so `--software-deposit-refunded ID Confirmed` lost its
+ * action unless `--remote` came first).
+ */
+export function reconciliationArgs(rawArgs) {
+	const configIndex = rawArgs.indexOf("--config");
+
+	return rawArgs.filter(
+		(value, index) =>
+			value !== "--remote" &&
+			value !== "--config" &&
+			(configIndex < 0 || index !== configIndex + 1),
+	);
+}
+
 if (
 	process.argv[1] &&
 	import.meta.url === pathToFileURL(process.argv[1]).href
@@ -97,15 +113,7 @@ if (
 	const database = await openMusicDatabase(remote, configPath);
 
 	try {
-		const rawArgs = process.argv.slice(2),
-			rawConfigIndex = rawArgs.indexOf("--config");
-
-		const args = rawArgs.filter(
-			(value, index) =>
-				value !== "--remote" &&
-				value !== "--config" &&
-				index !== rawConfigIndex + 1,
-		);
+		const args = reconciliationArgs(process.argv.slice(2));
 
 		if (!args.length) {
 			console.log(

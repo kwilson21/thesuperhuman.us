@@ -3,7 +3,7 @@
 Date: November 15, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/friendly-fermat-fk9ado`, from `origin/main` at `82e61315`
-Commits: `41913883` (reproduction, recorded from the old code), `4246c592` (fix and re-recorded fixtures), `a288ba73` (review round 1 and this record), then review round 2
+Commits: `41913883` (reproduction, recorded from the old code), `4246c592` (fix and re-recorded fixtures), `a288ba73` (review round 1 and this record), `79461783` (review round 2), then review round 3
 Pull request: [#285](https://github.com/kwilson21/thesuperhuman.us/pull/285)
 Target: production `https://thesuperhuman.us` after merge (the owner API and the owner runbook only)
 Decisions: Kazon Wilson (decision 9 of `docs/plans/2026-11-discount-flow.md`, 2026-11-13: reproduce against the real code and fix if real). Implementation and two independent review passes were done with Claude Code. Merge authorization: not given by this record.
@@ -14,7 +14,8 @@ Rollback revision: `82e61315`, the revision of `main` this branch was cut from. 
 - `depositOfferBlock` and `depositOfferGuard` (`src/lib/software-invoices.ts`) count the first-milestone deposit invoice of every offer version of a request, not only the sent offer's. Sending a new draft is refused while one is creating, open, payment_failed, uncollectible or paid (and not refunded). A paid deposit on an earlier offer answers the new sentence "A deposit is paid on an earlier offer. Refund it in Stripe before sending new terms."; the other two sentences are unchanged.
 - A decline and a withdraw are still stopped only by an open deposit. Reissuing the sent offer's link is not affected.
 - Tests, all in `tests/golden/`: a cross-route case (deposit paid, decline, reopen, draft, send); four single-route cases (a paid deposit of a withdrawn offer and of a superseded offer, a refunded deposit of a withdrawn offer, and a deposit of a withdrawn offer paid between the read and the batch); one renamed case; five re-recorded fixtures; two trigger patterns that follow the new SELECT.
-- Docs: the plan, `docs/verification.md`, the comments of `verification/discount-offers.qnt`, and the owner runbook (`docs/owner-operations.md`: which deposits block new terms, and the refund reconciliation command, which now carries `--remote` and says where to find the invoice id).
+- Docs: the plan, `docs/verification.md`, the comments of `verification/discount-offers.qnt`, and the owner runbook (`docs/owner-operations.md`: which deposits block new terms; the software reconciliation commands now carry `--remote`, and the runbook says where to find the invoice id).
+- Script: `scripts/stripe-reconciliation.mjs` dropped its first argument whenever `--config` was not given, so every documented reconciliation command lost its action (for example `--software-deposit-refunded`) and was refused with a usage error, writing nothing. The argument handling is now `reconciliationArgs`, which drops only `--remote` and `--config` with its path, with a test (`tests/scripts/stripe-reconciliation.test.ts`). This matters here because recording a refund is the only way to release the new block.
 - No migration, no binding, no page or copy change outside the one new refusal sentence. No client-facing change.
 
 ## Evidence and limits
@@ -28,7 +29,9 @@ Rollback revision: `82e61315`, the revision of `main` this branch was cut from. 
 
 Independent review, round 1 (Claude Code, head `4246c592`): the code change is correct; every caller of the two functions behaves as described (decline and withdraw see only SQL text changes; reissue never calls the guard; a send is refused anyway once a project exists); the read and the batch guard use the same predicate. Fixed: the runbook still said only the current offer's deposit blocks; a stale comment on the cross-route case; no case exercised the batch guard on an earlier offer's deposit, and none had a paid deposit on a superseded offer; the plan's status line; this record was uncommitted.
 
-Independent review, round 2 (Claude Code, head `a288ba73`): no code finding. Fixed: the runbook's refund reconciliation command had no `--remote`, so as written it changed only the local preview database and would not release the block in production; round 1's note claimed the local invoice id is only in D1, but every software invoice carries it in Stripe metadata as `software_invoice_id`; this record's evidence did not match the final head and lacked the rollback, receipt and remaining-work items; the plan still said Apalache had been run only to 3 steps and that every existing golden case is kept; the send corpus header did not list the new batch-guard failure.
+Independent review, round 2 (Claude Code, head `a288ba73`): no code finding. Fixed: the runbook's refund reconciliation command had no `--remote`, so it could not reach production; round 1's note claimed the local invoice id is only in D1, but every software invoice carries it in Stripe metadata as `software_invoice_id`; this record's evidence did not match the final head and lacked the rollback, receipt and remaining-work items; the plan still said Apalache had been run only to 3 steps and that every existing golden case is kept; the send corpus header did not list the new batch-guard failure.
+
+Independent review, round 3 (Claude Code, head `79461783`): no finding in the guard. Found and fixed: the reconciliation script's argument bug above (reproduced with a stub database: the documented order was refused, and only `--remote` first reached the batch); the paragraph's two other software reconciliation commands had no `--remote`; round 2's note said the old command changed the local database, when it was refused; the receipt line had no status.
 
 ## Owner decision needed
 
@@ -77,7 +80,8 @@ UNVERIFIED until checked:
 - **PASS · Diff review.** No secrets, no generated public artifacts, no unrelated changes.
 - **N/A · Bindings, migrations, backups.** None.
 - **PASS · Rollback version.** `82e61315`; after merge, revert the merge commit.
-- **Receipt.** Implemented: yes. Verified locally: yes (above). Deployed: no. Verified live: no.
+- **UNVERIFIED · Production revision and live check.** To be recorded after an authorized merge.
+- **UNVERIFIED · Receipt.** Implemented and verified locally (above); not deployed and not verified live.
 
 ## 8. Private owner center
 
