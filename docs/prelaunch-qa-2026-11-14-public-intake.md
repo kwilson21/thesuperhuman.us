@@ -8,7 +8,7 @@ Branches: A is `claude/effect-11-intake-fixes`, B is `claude/effect-11-intake`, 
 Tips: A is `5905c1e4`. B's code is at `dc8ca827`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: none are opened by this record.
 Target: production
-Reviewer: independent reviews of branch A were made in two rounds (below). The conversion on B has not been reviewed independently when this record is written: UNVERIFIED.
+Reviews: independent reviews of branch A, before its head `5905c1e4`, are listed below. An independent review of B at `ad2cdfd9` (2026-11-15) found no email sent twice, no duplicate request and no leak, and made the findings fixed in the commits after it (see "Review of branch B"). The heads after those fixes have not been reviewed again: UNVERIFIED.
 Rollback revision: for A, `8b5b4efd`; for B, A's tip `5905c1e4`. No deployed revision was observed.
 
 ## Scope
@@ -21,12 +21,12 @@ The four public form routes: `POST /api/audio-intake`, `POST /api/software-inqui
 
 The responses do not change in B (shown by `golden:neutral`): the corpus of `audio-intake`, `software-brief-pass` and `software-brief-suggest` passes against A's recording unchanged, and `software-inquiry` is neutral with changed D1 statements.
 
-Outside this area and untouched: the owner routes that share `deliverProjectInvitation` (`src/lib/audio-project-invitations.ts`) and `deliverSoftwareBriefCopy` (`src/lib/software-brief-copy.ts`); the wrapped functions stay in `src/lib/`, each behind a service with a named failure. `saveOwnerRequest` (`src/lib/owner-requests.ts`) is called in `src/` only by the intake store; it stays in place because the owner-request tests use it to create requests.
+Outside this area and untouched: the owner routes that share `deliverProjectInvitation` (`src/lib/audio-project-invitations.ts`) and `deliverSoftwareBriefCopy` (`src/lib/software-brief-copy.ts`); the wrapped functions stay in `src/lib/`, each behind a service with a named failure.
 
 ## Owner decisions
 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
-- Owner, 2026-11-14 (relayed in the task): fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database or KV failure answers 500 with the route's fixed sentence; a real lost race stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
+- Owner, 2026-11-14: fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database or KV failure answers 500 with the route's fixed sentence; a real lost race stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
 - Judgment calls made under that instruction, for the owner to confirm: a captcha service that cannot answer is a known unavailable dependency and answers 503 (it answered 403 and asked the visitor to complete the check again); a captcha secret that is missing or wrong, or an internal error code from the captcha service, is our fault and is also reported as unavailable; a model failure on the suggestion route answers 503 (it answered 200 with nothing) and logs a fixed line, never the model's own text.
 
 ## Fixes on branch A
@@ -52,9 +52,9 @@ The visitor-facing sentences are unchanged in every case; only the status and wh
 
 Changed corpus cases, from `golden:neutral --all origin/main 5905c1e4`: `audio-intake` 13 changed, 2 removed (the two read-back cases) and 1 added (the stored request answered without a read-back); `software-inquiry` 19 changed, 1 removed (the read-back case) and 1 added; `software-brief-pass` 4 changed (200 to 503); `software-brief-suggest` 7 changed (the cleanup failure is now logged; reading or reserving the budget throws, and an unscripted rate limit throws: 200 to 500; the model throws: 200 to 503; a bare string: 200 to 500). Every changed case differs in the status, the logged lines and, for the two software cases where a rival stored the id first, the KV digest (the allowance given back).
 
-## Review of branch A (two independent rounds)
+## Review of branch A (before head `5905c1e4`)
 
-Neutral, one line each, as recorded in the history of A (which round found which is not recorded here, UNVERIFIED):
+One line each, as recorded in the history of A:
 
 - A captcha service fault code (a wrong or missing secret, an internal error) was reported as a refused token: fixed.
 - A read after the insert could make a stored request look unsaved: removed.
@@ -74,10 +74,18 @@ The audio and software forms show the server's own sentence in the status line a
 - Rules: the attempt limit, the captcha check and the request limit are shared by the audio and software flows (`intake-limits.ts`, `captcha.ts`); the software rules are "store a brief" (nothing to do when one is stored under the id) and "answer a stored brief to the visitor who sent it" (`software-inquiry.ts`).
 - The duplicate submission path: the look-up and the insert are the facts and the save of `decideAndSave`. The request limit is counted once, on the first pass that finds nothing stored, and the count is kept for the passes that follow. A unique violation on the submission id is a `SubmissionIdClash` (a `ChangedSinceRead`), so the loser reads again, finds the other brief, gives its allowance back and answers as a duplicate, exactly as A does. Any other insert failure is followed by a look-up (the insert may have stored the brief before its answer was lost), then the allowance is given back, the failure is logged and the owner is alerted.
 - Background work is handed over with `Background.defer` at the point the old code called `ctx.waitUntil`; the corpus records the same phases.
-- Services added: `Background.defer`, `OwnerNotice`, `ProjectInvitation`, `SoftwareNotice` and `BriefCopy`, each failing with a named error; `RateLimitStoreFailed` carries what it raised. Tagged errors name that field `raised`, because `tests/architecture/tagged-errors.test.ts` keeps `cause` free.
+- Services added: `Background.defer`, `OwnerNotice`, `ProjectInvitation`, `SoftwareNotice` and `BriefCopy`, each failing with a named error; a failure that is logged carries one field named `failure` (not `cause`, which `tests/architecture/tagged-errors.test.ts` keeps free).
 - Deleted: the route's own look-up helper, the read-back after the insert (on A), the Zod schemas of the four routes, and the inline Turnstile, alert and give-back code. Nothing in `src/lib/` became unused.
 
 One path the corpus cannot reach: when the insert meets the unique index and the look-up that follows then fails, the old route logged the look-up failure and then the insert failure; B logs them in the same order (the flow keeps the insert failure for that), and an existing route test asserts the two lines.
+
+## Commits that do not build alone
+
+Two commits on B do not build on their own, and history is not rewritten: `d56399f7` holds only the rename of the shared rule file and its test (the files that import them were updated in the next code commit), and `dc8d1119` re-records the `software-inquiry` fixture before the code commit `c6cf19c2` that produces it. Build, test and neutrality are stated for the heads listed here, not for every commit.
+
+## Review of branch B
+
+Fixed after the review of `ad2cdfd9`, each with a test or corpus case first where it changes behavior: an array model reply answers an empty 200 with no log, as on A (a corpus case on A, and `isObjectOrArray`); an insert refused by the unique index with no other brief found is made once and takes the lost-brief path (it was retried up to three times); the inquiry model keeps the key's read and write as separate steps, states `keptForStored` and adds two mutants; the suggest and pass routes have no route-level catch and the cleanup task has no try and catch; a failure that is logged carries one field named `failure`; the comments on the live services say why they cannot reject and why `Background` has two forms; the two intake store functions are one (`insertRequest`), the two inserts moved into the store as one function per statement, and `saveOwnerRequest` and its error class are deleted (the owner tests create requests through a helper built on the store).
 
 ## Models
 
@@ -91,12 +99,12 @@ One path the corpus cannot reach: when the insert meets the unique index and the
 
 | Statement | Where | Class |
 | --- | --- | --- |
-| `SELECT ... FROM owner_requests WHERE submission_id=?` (one statement; at most two per request) | `getOwnerRequestBySubmission` | (a) |
-| `INSERT INTO owner_requests ...` and `INSERT INTO owner_request_audit ...` in one batch | `saveOwnerRequest`, for audio and software | (b): a new random primary key; for software the unique index on the submission id is the guard |
+| `SELECT ... FROM owner_requests WHERE submission_id=?` (one statement; one before the insert and one after a failed or lost insert, so at most two per request) | `getOwnerRequestBySubmission` | (a) |
+| `INSERT INTO owner_requests ...` and `INSERT INTO owner_request_audit ...` in one batch | `insertRequest` (`src/server/intake-store.ts`), for audio and software | (b): a new random primary key; for software the unique index on the submission id is the guard |
 | the trigger `audio_project_after_service_request` (inserts `audio_projects` and its audit row for a `service` request) | `db/music.sql` | trigger; see STOP item 2 |
 | `SELECT count FROM brief_suggestion_budget WHERE day = ? AND scope = ?` | `readSiteCount` | (a) |
 | `INSERT INTO brief_suggestion_budget ... ON CONFLICT ... DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count` (visitor, then site) | `reserve` | (c): the cap is the compare-and-set guard |
-| `DELETE FROM brief_suggestion_budget WHERE rowid IN (SELECT rowid ... WHERE day < ? LIMIT 1000)` | `clearOldDays` | (d), kept: the retention horizon is in SQL. Moving it to a rule (read the days, delete the ones a rule names) adds a read before the delete and moves the delete across the response snapshot: `golden:neutral` reported NOT neutral for three cases (the first suggestion of the day clears old days, the same with no context, the cleanup throws). Not changed; the coordinator or owner decides. |
+| `DELETE FROM brief_suggestion_budget WHERE rowid IN (SELECT rowid ... WHERE day < ? LIMIT 1000)` | `clearOldDays` | A bounded mechanical cleanup that decides no answer: the cutoff (`previousDay`, yesterday) is computed in TypeScript and bound as `day < ?`, and SQL only applies it with a fixed `LIMIT 1000`; it runs in the background after the response. Not classed (d). Reading the days and deleting the ones a rule names was tried and is not neutral under the corpus (it adds a read before the delete and moves the delete across the response snapshot: three cases, "the first suggestion of the day clears old days", the same with no context, and "the cleanup of old days throws"), so the statement is kept. |
 | the invitation claim `UPDATE audio_projects SET invitation_status='sending' ... WHERE ... invitation_status='pending' AND revoked_at IS NULL AND EXISTS(... status<>'withdrawn' ...)`, the recipient read with the same filters, and two guarded updates | `deliverProjectInvitation` (shared with the owner invitation route), only when the client portal is on | (d) for the claim and the read; (c) for the two later updates. Outside this area. |
 | `UPDATE owner_requests SET details_json=json_set(... 'uncertain' ...) WHERE id=? AND kind='software' AND status NOT IN ('resolved','withdrawn') AND email<>'' AND clientCopyStatus IS NULL RETURNING id`, and the final `UPDATE ... WHERE ... clientCopyAttemptedAt=?` | `deliverSoftwareBriefCopy` (shared with the owner brief copy route) | (d) for the claim's status filters; (c) for the final update. Outside this area. |
 
@@ -137,8 +145,9 @@ Limits: no browser run of any form; no real email was sent, so the client copy, 
 2. Project creation for an audio request depends on the database trigger `audio_project_after_service_request` (it inserts the project and its audit row when a `service` request is inserted). The converted code relies on it, as the old code did. Moving that to code needs a migration and is not done.
 3. The `pass` route has no bound on captcha attempts: an address may ask for a pass as often as it likes (the audio and software routes count attempts; this one never has). A bound is a product decision.
 4. Whether the attempt counter is given back when the captcha service is down. Now it is not: the attempt is counted before the captcha is asked and stays counted, so ten outage answers lock an address out for the window. Giving it back is a choice for the owner.
+5. Two simultaneous identical submissions from one address can leave that address's allowance unused: the counter is read and then written, both submissions read it as unset, and the one that loses the insert deletes the key the other set. This exists before the conversion and is not changed; `verification/software-inquiry.qnt` shows it (see `docs/verification.md`).
 
-Also for the coordinator: the cleanup of old suggestion budget rows keeps its retention horizon in SQL (class (d) above), because the way to move it is not neutral under the corpus.
+Also: the cleanup of old suggestion budget rows binds its cutoff from TypeScript and decides no answer (see the statement table).
 
 ## Checklist
 
@@ -188,7 +197,7 @@ Also for the coordinator: the cleanup of old suggestion budget rows keeps its re
 ## Delivery status and remaining gates
 
 - Branch A: implemented yes, deployed no, verified live no. Branch B: implemented yes, deployed no, verified live no.
-- Independent review of B: not yet made (UNVERIFIED). Findings that need a product or design decision (the four STOP items and the cleanup note) go to the owner.
+- Independent review of B: made at `ad2cdfd9` (see "Review of branch B"); not repeated on the later heads (UNVERIFIED). The five STOP items need a product decision or a migration and go to the owner.
 - UNVERIFIED: live checks after merge: a software brief and an audio request from the live forms (the client copy, the owner notice, the invitation when the portal is on), a captcha outage, a brief suggestion and a pass.
 
 Deployment: the owner's standing instruction is that a complete pull request (CI green, review bots clean, every comment addressed, no new visual or product decision) is merged by the operator, and merging to `main` deploys production. This record authorizes nothing beyond that. It does not certify the checks listed as UNVERIFIED (live verification, the browser check and the delivery of the emails).
