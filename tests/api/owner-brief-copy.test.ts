@@ -124,6 +124,7 @@ afterEach(() => {
 describe("a database failure answers 500 with the route's sentence", () => {
 	it("when the request cannot be read", async () => {
 		seed();
+
 		const response = await call(failing(/FROM owner_requests WHERE id=\?/));
 
 		expect(response.status).toBe(500);
@@ -133,6 +134,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when the stored details are not JSON", async () => {
 		seed("not json");
+
 		const response = await call(world.db);
 
 		expect(response.status).toBe(500);
@@ -142,6 +144,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when the stored details are not an object, and no email is sent for a copy that cannot be recorded", async () => {
 		seed("[]");
+
 		const response = await call(world.db);
 
 		expect(response.status).toBe(500);
@@ -151,6 +154,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when the claim cannot be written", async () => {
 		seed();
+
 		const response = await call(failing(/clientCopyStatus','uncertain'/));
 
 		expect(response.status).toBe(500);
@@ -160,6 +164,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when the status cannot be written after the provider sent the copy", async () => {
 		seed();
+
 		const response = await call(
 			failing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
 		);
@@ -173,9 +178,11 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when the status cannot be written after the provider refused the copy", async () => {
 		seed();
+
 		vi.mocked(fetch).mockImplementation(
 			async () => new Response("{}", { status: 422 }),
 		);
+
 		const response = await call(
 			failing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
 		);
@@ -186,6 +193,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 
 	it("when no mail key is set and the status cannot be written", async () => {
 		seed();
+
 		const response = await call(
 			failing(/json_set\(details_json,'\$\.clientCopyStatus',\?\)/),
 			{ RESEND_API_KEY: undefined },
@@ -200,6 +208,7 @@ describe("a database failure answers 500 with the route's sentence", () => {
 describe("a request that changes between the lookup and the claim", () => {
 	it("is not sent to the address that was read when the address has changed since", async () => {
 		seed();
+
 		// Another request changes the address just before the claim is written.
 		const beforeClaim = double<D1Database>({
 			prepare: (query: string) => {
@@ -208,7 +217,8 @@ describe("a request that changes between the lookup and the claim", () => {
 
 				return world.db.prepare(query);
 			},
-			batch: async <T>(items: D1PreparedStatement[]) => world.db.batch<T>(items),
+			batch: async <T>(items: D1PreparedStatement[]) =>
+				world.db.batch<T>(items),
 		});
 
 		const response = await call(beforeClaim);
@@ -222,6 +232,7 @@ describe("a request that changes between the lookup and the claim", () => {
 describe("answers that stay as they were", () => {
 	it("answers 503 when no mail key is set", async () => {
 		seed();
+
 		const response = await call(world.db, { RESEND_API_KEY: undefined });
 
 		expect(response.status).toBe(503);
@@ -230,6 +241,7 @@ describe("answers that stay as they were", () => {
 
 	it("answers ok when the copy was sent, and records it", async () => {
 		seed();
+
 		const response = await call(world.db);
 
 		expect(response.status).toBe(200);
@@ -241,6 +253,7 @@ describe("answers that stay as they were", () => {
 describe("a failure of the mail provider answers 500 with the route's sentence", () => {
 	it("when the provider refuses the copy, and the copy is recorded as failed", async () => {
 		seed();
+
 		vi.mocked(fetch).mockImplementation(
 			async () => new Response("{}", { status: 422 }),
 		);

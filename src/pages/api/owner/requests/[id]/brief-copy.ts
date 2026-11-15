@@ -3,6 +3,7 @@ import { z } from "zod";
 import { musicRequest } from "~/lib/music-request";
 import { getOwnerRequest } from "~/lib/owner-requests";
 import { deliverSoftwareBriefCopyDetailed } from "~/lib/software-brief-copy";
+import { isObject } from "~/lib/type-guards";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
@@ -44,11 +45,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			return Response.json({ ok: false }, { status: 404 });
 
 		// Stored details are a JSON object. Anything else cannot record that a copy was claimed, so no email is sent for it.
-		if (
-			saved.details === null ||
-			typeof saved.details !== "object" ||
-			Array.isArray(saved.details)
-		) {
+		if (!isObject(saved.details) || Array.isArray(saved.details)) {
 			logUnexpected(ROUTE, new Error("Stored details are not a JSON object."));
 
 			return failed();
