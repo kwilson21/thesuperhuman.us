@@ -480,10 +480,17 @@ export const offersUnavailable = () =>
 export const offersFailed = () =>
 	offersAnswer("The change could not be saved. Please try again.", 500);
 
-/** A store that failed after the client email (a question's record, a decline's resolve, a send's live-link check). */
+/** A store that failed after the client email went out (a question's record, a decline's resolve). */
 export const offersFailedAfterEmail = () =>
 	offersAnswer(
 		"The email was sent, but saving failed. Reload before you try again.",
+		500,
+	);
+
+/** A send's live-link check that failed after the client email was accepted: the offer was saved, and only the read failed. */
+export const offersCheckFailedAfterEmail = () =>
+	offersAnswer(
+		"The email was sent, but the link could not be checked. Reload before you try again.",
 		500,
 	);
 

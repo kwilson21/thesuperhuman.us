@@ -39,6 +39,9 @@ const UNAVAILABLE = "Software offers are temporarily unavailable.";
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
 
+const CHECK_AFTER_EMAIL =
+	"The email was sent, but the link could not be checked. Reload before you try again.";
+
 const AFTER_FAILED_EMAIL =
 	"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.";
 
@@ -465,7 +468,9 @@ describe("after the client email went out, a failure says so", () => {
 			faults: [{ on: /WHERE request_id=\? AND token_hash=\?/ }],
 		});
 
-		expect(await read(await call(send))).toEqual(answer(500, AFTER_EMAIL));
+		expect(await read(await call(send))).toEqual(
+			answer(500, CHECK_AFTER_EMAIL),
+		);
 		expect(emails()).toHaveLength(2);
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",

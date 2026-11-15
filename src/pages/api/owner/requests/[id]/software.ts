@@ -26,6 +26,7 @@ import {
 	offerSendingGuard,
 	offerIsSending,
 	offerSendingMessage,
+	offersCheckFailedAfterEmail,
 	offersCheckFailedAfterFailedEmail,
 	offersFailed,
 	offersFailedAfterDraft,
@@ -955,7 +956,7 @@ const answer = async ({
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`)
 				.bind(record.id, tokenHash, offer.id, record.id)
 				.first(),
-			sent.ok ? offersFailedAfterEmail : offersCheckFailedAfterFailedEmail,
+			sent.ok ? offersCheckFailedAfterEmail : offersCheckFailedAfterFailedEmail,
 		);
 
 		if (sent.ok && !live)

@@ -77,8 +77,8 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
 //            first read, the project pre-check, the offers, sending, deposit or signing setting read, the batch (an outage,
 //            not a guard), or a lookup after a refused batch. Nothing is emailed
-//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the check after an
-//            accepted email throws (the offer is already saved as sent)
+//   500 {ok:false,message:"The email was sent, but the link could not be checked. Reload before you try again."}  the
+//            check after an accepted email throws (the offer is already saved as sent; only the read failed)
 //   500 {ok:false,message:"The offer was saved, but the email may not have been sent and the link could not be
 //            checked. Reload before you try again."}  the check throws after a client email that was refused or lost
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
