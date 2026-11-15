@@ -20,11 +20,14 @@ const turnstileSiteKey =
   <p class="form-hint">Looking for my resume? <a href="/about#resumes">Request a copy.</a></p>
 <p class="form-hint">Read how your information is handled in the <a href="https://thesuperhuman.us/privacy">privacy notice</a>.</p>
 </form>
-<div id="contact-hold" class="form-hold" role="group" aria-labelledby="contact-hold-count" tabindex="-1" hidden>
-  <h3 id="contact-hold-count" data-hold-count>Sending in 15 seconds.</h3>
-  <p class="max-w-measure wrap-anywhere">I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Stay on this page until it sends.</p>
+<div id="contact-hold" class="form-hold" role="group" aria-labelledby="contact-hold-title" aria-describedby="contact-hold-about" tabindex="-1" hidden>
+  <h3 id="contact-hold-title">Check it before it sends.</h3>
+  <p class="contact-hold-count" role="timer" data-hold-count>Sending in 15 seconds.</p>
+  <p id="contact-hold-about" class="mt-3 max-w-measure wrap-anywhere">I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving this page sends it right away.</p>
   <div class="mt-4 flex flex-wrap gap-3"><button type="button" class="site-button" data-hold-undo>Undo and edit</button><button type="button" class="site-button site-button-outline" data-hold-send>Send now</button></div>
-  <p class="text-sm text-muted mt-6">Your message</p>
+  <p class="text-sm text-muted mt-6">From</p>
+  <p class="mt-1 max-w-measure wrap-anywhere" data-hold-from></p>
+  <p class="text-sm text-muted mt-4">Your message</p>
   <p class="mt-1 max-w-measure whitespace-pre-wrap wrap-anywhere" data-hold-message></p>
 </div>
 <div id="contact-success" class="form-success" role="status" tabindex="-1" hidden>

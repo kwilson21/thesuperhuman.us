@@ -328,4 +328,6 @@
 .site-form[hidden], .form-success[hidden], .form-hold[hidden], .site-form [hidden] { display: none; }
 .form-success h3, .form-hold h3 { font-size: 2rem; margin-bottom: .75rem; }
 .form-success, .form-hold { padding-block: 1rem; }
+/* The count has its own line at body size, so the buttons below it never move as it runs down. */
+.form-hold .contact-hold-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media(max-width: 600px) { .site-form .form-pair { grid-template-columns: 1fr; } }

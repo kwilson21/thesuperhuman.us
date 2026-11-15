@@ -20,6 +20,7 @@ export function setupFormSubmission<Payload, Result>({
 	onConflict,
 	onSendingChange,
 	hold,
+	keepalive = false,
 }: {
 	form: HTMLFormElement;
 	endpoint: string;
@@ -30,6 +31,8 @@ export function setupFormSubmission<Payload, Result>({
 	onSendingChange?: (sending: boolean) => void;
 	/** Runs before anything is sent. Resolving false sends nothing and leaves the form as it was, to be sent again. */
 	hold?: () => Promise<boolean>;
+	/** Lets the request finish after the page is left, for a send that starts as the visitor leaves. */
+	keepalive?: boolean;
 }) {
 	const button = form.querySelector<HTMLButtonElement>(
 		'button[type="submit"]',
@@ -106,6 +109,7 @@ export function setupFormSubmission<Payload, Result>({
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body,
+				keepalive,
 				signal: AbortSignal.timeout(30_000),
 			});
 
@@ -166,6 +170,8 @@ export function setupFormSubmission<Payload, Result>({
 				(firstInvalid ?? status).focus();
 			});
 		} catch {
+			// As after an answer: the form is restored before its message shows, so the message can take focus.
+			onSendingChange?.(false);
 			openMessages(form, button, () => {
 				status.textContent =
 					"We couldn’t confirm your message was sent. Your text is still here. Try again or use email.";

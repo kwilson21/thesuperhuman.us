@@ -1,9 +1,10 @@
-// The homepage contact form while a message is held before sending, and after it is sent, at both widths. The
-// capture clock is pinned, so the hold's count stays at its start; the sent images use Send now. The send is answered
-// locally, as the route answers once the owner's copy is accepted; no email is sent and the visitor is fictional.
+// The homepage contact form while a message is held before sending, after Undo and edit, and after it is sent, at
+// both widths. The capture clock is pinned, so the hold's count stays at its start; the sent images use Send now. The
+// send is answered locally, as the route answers once the owner's copy is accepted; no email is sent and the visitor
+// is fictional.
 import { stubTurnstile } from "../turnstile-stub.mjs";
 
-const holdAndSend = (sendNow) => async (page) => {
+const holdAnd = (then) => async (page) => {
 	await stubTurnstile(page);
 	await page.route("**/api/contact", (route) =>
 		route.fulfill({ json: { ok: true } }),
@@ -22,9 +23,18 @@ const holdAndSend = (sendNow) => async (page) => {
 	await page.click('#contact-form button[type="submit"]');
 	await page.locator("#contact-hold").waitFor();
 
-	if (sendNow) {
+	if (then === "send") {
 		await page.click("[data-hold-send]");
 		await page.locator("#contact-success").waitFor();
+	}
+
+	if (then === "undo") {
+		await page.click("[data-hold-undo]");
+		await page.waitForFunction(() =>
+			document
+				.querySelector("#cf-status")
+				?.textContent?.startsWith("Not sent."),
+		);
 	}
 
 	// Show the buttons at rest, not in their hover colours.
@@ -36,9 +46,10 @@ export default {
 	async run({ capture }) {
 		const steps = [];
 
-		for (const [title, name, sendNow] of [
-			["Held before sending, with Undo and edit", "hold", false],
-			["Message sent", "sent", true],
+		for (const [title, name, then] of [
+			["Held before sending, with Undo and edit", "hold", "wait"],
+			["Undo and edit: back to the form, not sent", "undo", "undo"],
+			["Message sent", "sent", "send"],
 		]) {
 			const images = [];
 
@@ -48,7 +59,7 @@ export default {
 					path: "/",
 					viewport,
 					selector: "#contact",
-					prepare: holdAndSend(sendNow),
+					prepare: holdAnd(then),
 				});
 
 				images.push({ file, caption: `${title} (${viewport})` });
