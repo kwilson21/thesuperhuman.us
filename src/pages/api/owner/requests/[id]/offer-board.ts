@@ -55,10 +55,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				Response.json({ ok: true, ...answer }, { headers: noStore }),
 			),
 			Effect.catchTags({
-				OfferRequestMissing: () =>
-					Effect.succeed(
-						Response.json({ ok: false }, { status: 404, headers: noStore }),
-					),
+				OfferRequestMissing: (refusal) => Effect.succeed(say(404, refusal.say)),
 				OfferNotOfferable: (refusal) => Effect.succeed(say(409, refusal.say)),
 				OfferDailyLimit: (refusal) => Effect.succeed(say(429, refusal.say)),
 				SaveKeptChanging: () =>

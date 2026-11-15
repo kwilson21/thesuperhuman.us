@@ -296,8 +296,71 @@ function check(name, ok, detail = "") {
 			(await page.locator("[data-pricing-market]").inputValue()) === "" &&
 				((await research.count()) === 0 || (await research.isHidden())),
 		);
+		check(
+			"a clear without a reload leaves focus on Save research and says there is no research",
+			(await page.evaluate(() => document.activeElement?.textContent)) ===
+				"Save research" &&
+				(await page.locator("[data-pricing-empty]").isVisible()),
+		);
+
+		// Research saved without a reload: the empty line goes and Clear research is offered again.
+		await page
+			.locator("[data-pricing-market]")
+			.fill(JSON.stringify({ researchedOn: "2026-11-01", ranges: [] }));
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Save research" })
+			.click();
+		await page.waitForFunction(() =>
+			/^Saved\./.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"research saved without a reload hides the empty line and offers Clear research",
+			(await page.locator("[data-pricing-empty]").isHidden()) &&
+				(await page
+					.locator('[data-part="market"]')
+					.getByRole("button", { name: "Clear research" })
+					.isVisible()),
+		);
 		// Put the field back, so leaving the page raises no unsaved-changes warning.
 		await contingency.fill(contingencyBefore);
+		await page.unroute("**/api/owner/pricing");
+
+		// The values form checks its two numbers itself: nothing is sent, the field is marked and named, and focus goes to it.
+		await page.reload();
+		let valuePosts = 0;
+
+		await page.route("**/api/owner/pricing", (route) => {
+			valuePosts += 1;
+
+			return route.abort();
+		});
+		await contingency.fill("150");
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		check(
+			"an out-of-range contingency is refused on the page, marked, described and focused",
+			valuePosts === 0 &&
+				(await contingency.getAttribute("aria-invalid")) === "true" &&
+				/pricing-values-status/.test(
+					(await contingency.getAttribute("aria-describedby")) ?? "",
+				) &&
+				(await page.evaluate(
+					() => document.activeElement?.getAttribute("name"),
+				)) === "contingencyPercent" &&
+				/whole number from 0 to 100/.test(
+					await values.locator("[data-pricing-status]").textContent(),
+				),
+		);
+		await contingency.fill(contingencyBefore);
+		check(
+			"typing in a refused value field clears its mark",
+			(await contingency.getAttribute("aria-invalid")) === null &&
+				(await contingency.getAttribute("aria-describedby")) ===
+					"pricing-contingency-hint",
+		);
 		await page.unroute("**/api/owner/pricing");
 
 		const queue = [];

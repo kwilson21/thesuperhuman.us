@@ -57,12 +57,12 @@ const updated = pricing.updatedAt
   <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone. The offer board shows the AI your research for a brief’s kind of work so its figure stays in range; it never sees your day value or contingency.</p></div></header>
   {!kv && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
   {readFailed ? <p class="rail-muted" role="alert">Your pricing could not be read just now. Reload the page to try again; nothing has changed.</p> : <div class="software-rail pricing-settings">
-    <section class="rail-section" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
-      <form data-pricing-form data-part="values" data-version={pricing.version}>
+    <section class="rail-section wide" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
+      <form data-pricing-form data-part="values" data-version={pricing.version} novalidate>
         <div class="software-field"><label>Day value (USD)<input class="studio-input" type="number" name="dayValue" min="1" max="10000" step="1" inputmode="numeric" value={pricing.dayValueCents === null ? '' : pricing.dayValueCents / 100} aria-describedby="pricing-day-hint" /></label><p id="pricing-day-hint" class="rail-muted rail-caption">What a working day is worth to you, in whole dollars. The board multiplies the AI’s day estimates by it to suggest a range. Leave it empty to hide that suggestion.</p></div>
         <div class="software-field"><label>Contingency (%)<input class="studio-input" type="number" name="contingencyPercent" min="0" max="100" step="1" inputmode="numeric" required value={pricing.contingencyPercent} aria-describedby="pricing-contingency-hint" /></label><p id="pricing-contingency-hint" class="rail-muted rail-caption">Added to the high end of that range, for what the brief leaves unknown.</p></div>
         <button class="studio-button" type="submit">Save</button>
-        <p class="studio-status" data-pricing-status role="status" aria-live="polite"></p>
+        <p class="studio-status" id="pricing-values-status" data-pricing-status role="status" aria-live="polite"></p>
       </form>
     </section>
     <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading" tabindex="-1">Market research</h2>
@@ -125,7 +125,7 @@ const updated = pricing.updatedAt
   .pricing-sources { list-style: decimal; padding-left: 2rem; }
   .pricing-sources a { display: block; width: fit-content; min-height: 44px; padding-block: .75rem .2rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
   .pricing-source-meta { display: block; color: var(--studio-muted); font-size: .82rem; padding-bottom: .35rem; }
-  .pricing-settings textarea[aria-invalid="true"] { border-color: var(--accent); }
+  .pricing-settings textarea[aria-invalid="true"], .pricing-settings input[aria-invalid="true"] { border-color: var(--accent); }
   .pricing-settings .studio-quiet { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; }
   /* While a save is on its way: marked rather than disabled, so focus stays where it was. */
   .pricing-settings [aria-disabled="true"] { opacity: .5; cursor: wait; }

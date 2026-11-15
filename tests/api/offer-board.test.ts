@@ -466,7 +466,14 @@ describe("the offer board's route", () => {
 		db.prepare(
 			"UPDATE owner_requests SET kind = 'service' WHERE id = 'r1'",
 		).run();
-		expect((await POST(context())).status).toBe(404);
+		const response = await POST(context());
+
+		expect(response.status).toBe(404);
+		// The rule's own sentence, which the board shows as it does every other refusal.
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "There is no software request with this id.",
+		});
 		expect(run).not.toHaveBeenCalled();
 		expect(count()).toBe(0);
 	});

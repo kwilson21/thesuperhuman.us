@@ -19,10 +19,21 @@ interface Props {
 	contingencyPercent: number;
 	market: MarketReference | null;
 	past: readonly PastOffer[];
+	/** The owner's pricing could not be read just now (the store failed), which is not the same as nothing saved. */
+	pricingUnreadable?: boolean;
 }
 
-const { requestId, kind, dayValueCents, contingencyPercent, market, past } =
-	Astro.props;
+const {
+	requestId,
+	kind,
+	dayValueCents,
+	contingencyPercent,
+	market,
+	past,
+	pricingUnreadable = false,
+} = Astro.props;
+
+const UNREADABLE = "Your pricing could not be read just now. Reload the page to try again.";
 
 const kindNames: Record<PricingKind, string> = {
 	website: "website",
@@ -100,9 +111,9 @@ const useLabels: Record<OfferLane, string> = {
   <section class="offer-pricing" aria-labelledby="offer-pricing-title">
     <h3 id="offer-pricing-title" tabindex="-1">What to charge</h3>
     <dl class="offer-prices">
-      <div><dt>From your day value</dt><dd data-price-day>{dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
+      <div><dt>From your day value</dt><dd data-price-day>{pricingUnreadable ? UNREADABLE : dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
       <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{past.length === 1 ? `${dollars(pastSpread.low)}, from your one sent ${kindNames[kind]} offer. ` : `${dollars(pastSpread.low)} to ${dollars(pastSpread.high)}, middle ${dollars(pastSpread.middle)}, from your last ${past.length} sent ${kindNames[kind]} offers. `}<button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the whole-project range: your past offers">Use as the whole-project range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Sent offer'}</a><span class="offer-past-figures">{dollars(offer.totalCents)} · sent {offer.sentAt.slice(0, 10).replace(/-/g, '\u2011')}</span></li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
-      <div><dt>From the market</dt><dd data-price-market>{market && kindRanges.length > 0 ? 'Suggest an offer to see where this brief sits in your research.' : market ? <>Your research has no ranges for {kindNames[kind]} work. Add them on the <a href="/owner/pricing">pricing page</a>.</> : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
+      <div><dt>From the market</dt><dd data-price-market>{pricingUnreadable ? UNREADABLE : market && kindRanges.length > 0 ? 'Suggest an offer to see where this brief sits in your research.' : market ? <>Your research has no ranges for {kindNames[kind]} work. Add them on the <a href="/owner/pricing">pricing page</a>.</> : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
     </dl>
     <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && market.sources.length > 0 && <>{` The research’s ${market.sources.length} ${market.sources.length === 1 ? 'source is' : 'sources are'} on the `}<a href="/owner/pricing">pricing page</a>.</>}</p>
   </section>

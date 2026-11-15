@@ -36,6 +36,26 @@ const unsaved = (form: HTMLFormElement) =>
 		),
 	].some((input) => input.value !== input.defaultValue);
 
+/** Marks a value field as refused, described by its hint and the form's status line, or clears the mark. */
+function markValue(input: HTMLInputElement | null, invalid: boolean) {
+	if (!input) return;
+
+	const hint =
+		input.dataset.hint ??
+		input.getAttribute("aria-describedby")?.split(" ")[0] ??
+		"";
+
+	input.dataset.hint = hint;
+
+	if (invalid) {
+		input.setAttribute("aria-invalid", "true");
+		input.setAttribute("aria-describedby", `${hint} pricing-values-status`);
+	} else {
+		input.removeAttribute("aria-invalid");
+		input.setAttribute("aria-describedby", hint);
+	}
+}
+
 /** Marks the research box as refused, described by its form's status line, or clears the mark. */
 function markResearch(invalid: boolean) {
 	const box = document.querySelector<HTMLTextAreaElement>(
@@ -231,7 +251,13 @@ async function save(
 
 				const clear = form.querySelector<HTMLElement>("[data-pricing-clear]");
 
-				if (clear) clear.hidden = true;
+				// Focus leaves the button about to hide for Save research, so it never falls to the page.
+				if (clear) {
+					form
+						.querySelector<HTMLElement>('button[type="submit"]')
+						?.focus({ preventScroll: true });
+					clear.hidden = true;
+				}
 
 				const editCopy = document.querySelector<HTMLElement>(
 					"[data-pricing-edit-copy]",
@@ -240,10 +266,23 @@ async function save(
 				if (editCopy) editCopy.hidden = true;
 			}
 
+			// Saved without a reload: research is stored now, so the empty line goes and Clear research is offered.
+			if (body.action === "market" && body.market !== null) {
+				const empty = document.querySelector<HTMLElement>(
+					"[data-pricing-empty]",
+				);
+
+				if (empty) empty.hidden = true;
+
+				const clear = form.querySelector<HTMLElement>("[data-pricing-clear]");
+
+				if (clear) clear.hidden = false;
+			}
+
 			if (status)
 				status.textContent =
 					body.action === "market" && body.market === null
-						? "Research cleared. Save or undo your day value and contingency changes, then reload the page."
+						? "Research cleared."
 						: body.action === "market"
 							? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
 							: "Saved.";
@@ -317,6 +356,11 @@ export function setupOwnerPricing() {
 		const status = form.querySelector<HTMLElement>("[data-pricing-status]");
 		const expectedVersion = () => Number(form.dataset.version ?? "0");
 
+		for (const input of form.querySelectorAll<HTMLInputElement>(
+			'input[type="number"]',
+		))
+			input.addEventListener("input", () => markValue(input, false));
+
 		// Typing in a refused research box clears its mark.
 		form
 			.querySelector("[data-pricing-market]")
@@ -328,12 +372,52 @@ export function setupOwnerPricing() {
 
 			if (form.dataset.part === "values") {
 				const day = String(data.get("dayValue") ?? "").trim();
+				const contingency = String(data.get("contingencyPercent") ?? "").trim();
+
+				const dayInput =
+					form.querySelector<HTMLInputElement>('[name="dayValue"]');
+
+				const contingencyInput = form.querySelector<HTMLInputElement>(
+					'[name="contingencyPercent"]',
+				);
+
+				const problems: [HTMLInputElement | null, string][] = [];
+
+				if (
+					dayInput?.validity.badInput ||
+					(day !== "" &&
+						!(/^\d+$/.test(day) && Number(day) >= 1 && Number(day) <= 10000))
+				)
+					problems.push([
+						dayInput,
+						"The day value must be whole dollars from 1 to 10,000, or empty.",
+					]);
+
+				if (!/^\d+$/.test(contingency) || Number(contingency) > 100)
+					problems.push([
+						contingencyInput,
+						"The contingency must be a whole number from 0 to 100.",
+					]);
+
+				for (const input of [dayInput, contingencyInput])
+					markValue(
+						input,
+						problems.some(([field]) => field === input),
+					);
+
+				if (problems.length > 0) {
+					if (status)
+						status.textContent = problems.map(([, say]) => say).join(" ");
+					problems[0]?.[0]?.focus();
+
+					return;
+				}
 
 				void send(
 					{
 						action: "values",
 						dayValue: day === "" ? null : Number(day),
-						contingencyPercent: Number(data.get("contingencyPercent")),
+						contingencyPercent: Number(contingency),
 						expectedVersion: expectedVersion(),
 					},
 					form,

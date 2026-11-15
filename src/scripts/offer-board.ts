@@ -215,7 +215,7 @@ export function setupOfferBoard() {
 		live.textContent = text;
 	};
 
-	/** The offer editor's largest fee or estimate, $1,000,000 (its fields' max and the server's check). */
+	/** The offer editor's largest milestone fee, $1,000,000 (the fee field's max and the server's check). */
 	const EDITOR_MAX_CENTS = 100_000_000;
 
 	/** A date that never splits across lines at its hyphens. */
@@ -293,11 +293,18 @@ export function setupOfferBoard() {
 		element: HTMLTextAreaElement | null,
 		line: string,
 		restore: (() => void)[],
-	) {
-		if (!element) return;
+	): boolean {
+		if (!element) return true;
 
-		if (element.value.split("\n").some((item) => item.trim() === line)) return;
-		element.value = [element.value.trimEnd(), line].filter(Boolean).join("\n");
+		if (element.value.split("\n").some((item) => item.trim() === line))
+			return true;
+
+		const joined = [element.value.trimEnd(), line].filter(Boolean).join("\n");
+
+		// Setting the value from script skips the field's maxlength, and the editor refuses to save past it.
+		if (element.maxLength > 0 && joined.length > element.maxLength)
+			return false;
+		element.value = joined;
 		changed(element);
 		restore.push(() => {
 			const kept = element.value.split("\n");
@@ -308,7 +315,15 @@ export function setupOfferBoard() {
 			element.value = kept.join("\n");
 			changed(element);
 		});
+
+		return true;
 	}
+
+	/** Says that a line was not added because its field would pass its own character limit. */
+	const tooLong = (field: HTMLTextAreaElement | null, name: string) =>
+		say(
+			`This would make “${name}” longer than its ${field?.maxLength ?? 0}-character limit, so it was not added. Shorten that field first.`,
+		);
 
 	const milestones = () => [
 		...form.querySelectorAll<HTMLElement>("[data-milestone]"),
@@ -483,34 +498,50 @@ export function setupOfferBoard() {
 				break;
 			}
 
-			case "inputs":
-				addLine(
-					named<HTMLTextAreaElement>(form!, "clientInputs"),
-					card.text,
-					restore,
-				);
+			case "inputs": {
+				const field = named<HTMLTextAreaElement>(form!, "clientInputs");
+
+				if (!addLine(field, card.text, restore)) {
+					tooLong(field, "What you need from them");
+
+					return;
+				}
+
 				said = "Added to what you need from them.";
 
 				break;
-			case "exclusions":
-				addLine(
-					named<HTMLTextAreaElement>(form!, "exclusions"),
-					card.text,
-					restore,
-				);
+			}
+
+			case "exclusions": {
+				const field = named<HTMLTextAreaElement>(form!, "exclusions");
+
+				if (!addLine(field, card.text, restore)) {
+					tooLong(field, "Outside this offer");
+
+					return;
+				}
+
 				said = "Added to what is outside this offer.";
 
 				break;
-			case "questions":
-				addLine(
-					document.querySelector<HTMLTextAreaElement>("#software-question"),
-					card.text,
-					restore,
-				);
+			}
+
+			case "questions": {
+				const field =
+					document.querySelector<HTMLTextAreaElement>("#software-question");
+
+				if (!addLine(field, card.text, restore)) {
+					tooLong(field, "Ask a question");
+
+					return;
+				}
+
 				said =
 					"Copied to Ask a question. It is not sent until you press Send question.";
 
 				break;
+			}
+
 			case "milestones": {
 				const detail = details.get(card.id);
 				const target = detail ? milestoneFor(card) : null;
@@ -661,14 +692,6 @@ export function setupOfferBoard() {
 	function useRange(lowCents: number, highCents: number) {
 		const low = Math.max(100, lowCents);
 		const high = Math.max(low, highCents);
-
-		if (high > EDITOR_MAX_CENTS) {
-			say(
-				"This range runs past the offer editor’s limit of $1,000,000, so it was not filled. Type a range in the offer.",
-			);
-
-			return;
-		}
 
 		// The editor refuses a whole-project range whose low end is under the offer's total, so this never fills one.
 		const total = milestones().reduce((sum, fieldset) => {
@@ -1434,9 +1457,11 @@ export function setupOfferBoard() {
 				render();
 				(near?.querySelector<HTMLElement>("button") ?? asideSummary).focus();
 				say(
-					wasUsed
-						? `Set aside “${card.text}”${endAfter(card.text)} It stays in the offer; remove it there if you don’t want it. Undo or Bring back restores the card.`
-						: `Set aside “${card.text}”${endAfter(card.text)} Undo or Bring back restores it.`,
+					wasUsed && card.lane === "questions"
+						? `Set aside “${card.text}”${endAfter(card.text)} It stays in Ask a question; remove it there if you don’t want to ask it. Undo or Bring back restores the card.`
+						: wasUsed && card.lane !== "drivers"
+							? `Set aside “${card.text}”${endAfter(card.text)} It stays in the offer; remove it there if you don’t want it. Undo or Bring back restores the card.`
+							: `Set aside “${card.text}”${endAfter(card.text)} Undo or Bring back restores it.`,
 				);
 				schedule();
 
