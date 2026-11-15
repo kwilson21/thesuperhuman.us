@@ -483,7 +483,10 @@ export const offersStorageNotConfigured = () =>
 		503,
 	);
 
-/** A store that failed unexpectedly, or a defect: 500, because nothing is known to be unavailable. */
+/**
+ * A store that failed unexpectedly: 500, because nothing is known to be unavailable. A defect never gets this answer in
+ * that route: it rejects, and the runtime answers it.
+ */
 export const offersFailed = () =>
 	offersAnswer("The change could not be saved. Please try again.", 500);
 

@@ -318,7 +318,20 @@ const reusing = (over: Partial<World> = {}): World => ({
 	...over,
 });
 
-describe("a store that fails answers 500 with the fixed sentence, and nothing is emailed", () => {
+/** Every table an action of this route writes, row by row. */
+const written = (sql: SqliteDatabase) =>
+	Object.fromEntries(
+		[
+			"owner_requests",
+			"owner_request_audit",
+			"software_fit_reviews",
+			"software_offers",
+			"software_offer_links",
+			"software_agreement_attachments",
+		].map((table) => [table, sql.prepare(`SELECT * FROM ${table}`).all()]),
+	);
+
+describe("a store that fails answers 500 with the fixed sentence, and nothing is written or emailed", () => {
 	it.each<[string, JsonObject, Seed, RegExp]>([
 		["fit: the first read", fit, plain, /FROM owner_requests WHERE id=\?/],
 		["fit: the batch", fit, plain, /INSERT INTO software_fit_reviews/],
@@ -363,7 +376,8 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 		],
 		["send: the batch", send, withDraft, /INSERT INTO software_offer_links/],
 	])("%s", async (_name, body, rows, on) => {
-		const { call } = setUp({ seed: rows, faults: [{ on }] });
+		const { sql, call } = setUp({ seed: rows, faults: [{ on }] });
+		const before = written(sql);
 
 		const response = await call(body);
 		const text = await response.clone().text();
@@ -371,18 +385,23 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 		expect(await read(response)).toEqual(answer(500, FAILED));
 		expect(text).not.toContain("D1_ERROR");
 		expect(emails()).toEqual([]);
+		expect(written(sql)).toEqual(before);
+		expect(logs()).toEqual([LOGGED]);
 	});
 
 	it("a request whose stored details are not JSON answers 500 too", async () => {
-		const { call } = setUp({
+		const { sql, call } = setUp({
 			seed: { owner_requests: [request({ details_json: "{bad" })] },
 		});
 
+		const before = written(sql);
+
 		expect(await read(await call(fit))).toEqual(answer(500, FAILED));
+		expect(written(sql)).toEqual(before);
 	});
 
 	it("a lookup that fails after a refused batch answers 500", async () => {
-		const { call } = setUp({
+		const { sql, call } = setUp({
 			seed: plain,
 			race: {
 				on: /UPDATE owner_requests SET updated_at/,
@@ -391,8 +410,20 @@ describe("a store that fails answers 500 with the fixed sentence, and nothing is
 			faults: [{ on: /^SELECT 1 FROM software_projects/, nth: 2 }],
 		});
 
+		const before = written(sql);
+
 		expect(await read(await call(question))).toEqual(answer(500, FAILED));
 		expect(emails()).toEqual([]);
+		// The race's own change is the only one: the refused batch wrote nothing.
+		expect(written(sql)).toEqual({
+			...before,
+			owner_requests: [
+				{
+					...before.owner_requests[0],
+					updated_at: "2026-11-13T11:30:00.000Z",
+				},
+			],
+		});
 	});
 });
 
@@ -423,10 +454,11 @@ describe("a refused guard still answers 409", () => {
 			},
 		});
 
-		const { status, body } = await read(await call(draft));
-
-		expect(status).toBe(409);
-		expect(body).toMatchObject({ updatedAt: "2026-11-13T11:45:00.000Z" });
+		expect(await read(await call(draft))).toMatchObject({
+			status: 409,
+			body: { ok: false, updatedAt: "2026-11-13T11:45:00.000Z" },
+			private: true,
+		});
 	});
 
 	it("draft: the reused MSA was deleted before the batch (a foreign key, with the MSA gone)", async () => {
@@ -442,12 +474,15 @@ describe("a refused guard still answers 409", () => {
 			},
 		});
 
-		const { status, body } = await read(
-			await call({ ...draft, reusedMsaId: MSA_ID, confirmMsaReuse: true }),
-		);
-
-		expect(status).toBe(409);
-		expect(body).toMatchObject({ updatedAt: null });
+		expect(
+			await read(
+				await call({ ...draft, reusedMsaId: MSA_ID, confirmMsaReuse: true }),
+			),
+		).toMatchObject({
+			status: 409,
+			body: { ok: false, updatedAt: null },
+			private: true,
+		});
 	});
 
 	it("revoke: the link changed (the lookups after the batch answer)", async () => {
@@ -489,6 +524,7 @@ describe("after the client email went out, a failure says so", () => {
 		});
 
 		expect(await read(await call(question))).toEqual(answer(500, AFTER_EMAIL));
+		expect(emails()).toHaveLength(2);
 	});
 
 	it("decline: the second batch fails", async () => {
@@ -532,6 +568,8 @@ describe("after the client email went out, a failure says so", () => {
 		expect(await read(await call(send))).toEqual(
 			answer(500, AFTER_FAILED_EMAIL),
 		);
+		// The client email was refused, so no copy was sent.
+		expect(emails()).toHaveLength(1);
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",
 		});
@@ -620,7 +658,11 @@ describe("signing: preparing the agreement", () => {
 	it("a reused MSA with its signed copy in R2 is sent", async () => {
 		const { sql, call } = setUp(reusing());
 
-		expect((await read(await call(send))).status).toBe(200);
+		expect(await read(await call(send))).toMatchObject({
+			status: 200,
+			body: { ok: true, emailSent: true },
+			private: true,
+		});
 		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
 			status: "sent",
 		});
@@ -790,7 +832,11 @@ describe("what failed is logged once, and never answered", () => {
 	])("%s logs nothing", async (_name, world, body, status) => {
 		const { call } = setUp(world);
 
-		expect((await read(await call(body))).status).toBe(status);
+		expect(await read(await call(body))).toMatchObject({
+			status,
+			body: { ok: false },
+			private: true,
+		});
 		expect(logs()).toEqual([]);
 	});
 });
