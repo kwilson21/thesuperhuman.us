@@ -4,13 +4,13 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 
 Date: November 15, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, and again at `fbfc3e05` (the media conversion, PRs 309 to 311) after the review.
+Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, at `fbfc3e05` (the media conversion, PRs 309 to 311), at `7beca022`, at `f23d6d01` and at `59573d70` (the last merge; offers files only changed on `origin/main` since the previous one, apart from a dependency).
 Tips: A is `1dc7943d` (the review fixes, merged with `origin/main` at `f23d6d01`). B's code is at `fc0d86ff` (A merged in, then the conversion and the record and note fixes of the review items below); the merge conflicts with the media conversion are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
 Pull requests: #321 (A) and #322 (B).
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
 Reviews: what independent reviews found, and what was fixed, is under "Review findings".
-Rollback revision: for A, `fbfc3e05`; for B, A's tip `1dc7943d`. No deployed revision was observed.
+Rollback revision: for A, `59573d70` (`origin/main` when it was last merged). Re-check `origin/main` with `git fetch` before merge; for B, A's tip `1dc7943d`. No deployed revision was observed.
 
 ## Scope
 
@@ -38,7 +38,7 @@ The sentence of every answer is unchanged; only the status and what the server d
 | No mail key, sender or owner address | 503 | 503 (unchanged) |
 | The owner's page after a 500 from this route (`src/scripts/project-invitation.ts`) | the same button stayed on the page and was enabled again; a click answered 409 for 60 seconds, after which the "I checked Resend; retry" button, still on the page, could claim again and send a second copy while the owner had been told the copy was not sent | the page reloads, as after a success, and also when the request gives no readable answer (the fetch fails, or an edge page that is not JSON comes back), so the owner sees the recorded status and only the buttons that status allows; the 500 is unchanged and no wording changed |
 
-Changed corpus cases, from `golden:neutral --all origin/main` against A: `owner-request-brief-copy` has 15 changed cases (the two no-id cases; the provider refusing with 422 and 429; the lookup, the claim and the status writes failing, six cases; stored details not JSON and an array; and three sequences whose first step changed from 503 to 500), 2 removed and 2 added (the two uncertain-provider cases, renamed because they said the route answers ok). Every other fixture of the 77 is identical.
+Changed corpus cases, from `golden:neutral --all origin/main` against A: `owner-request-brief-copy` has 15 changed cases (the two no-id cases; the provider refusing with 422 and 429; the lookup, the claim and the status writes failing, six cases; stored details not JSON and an array; and three sequences whose first step changed from 503 to 500), 2 removed and 2 added (the two uncertain-provider cases, renamed because they said the route answers ok). Every other fixture of the 80 is identical.
 
 A fix tried and taken back: a guard that refused the claim when the address had changed since the lookup. Nothing changes a request's address except retention, which blanks it, and the claim already refused a blank address, so no state exists that the guard would catch; the two commits that added it and the two that took it back are in the history.
 
@@ -56,7 +56,7 @@ The reload after a 500 is limited to the brief copy buttons. The invitation butt
 - Fixed answers: `briefCopyNotSent`, `briefCopyFailed` and `briefCopyUnavailable` in `src/lib/music-request.ts`.
 - Model: `verification/brief-copy.qnt`, written before the code (see "Model"). The copy status moves are drawn in `docs/verification.md`.
 
-Shared files changed: `src/server/services.ts` (`BriefCopy`, `BriefCopyFailed` and `liveBriefCopy` removed; `ClientCopyMail` and `liveClientCopyMail` added), `src/server/intake-store.ts` (six functions added), `src/lib/music-request.ts` (three answers), `src/lib/client-emails.ts` (`briefCopyMessage`), `src/lib/owner-model.ts` (a comment edit), `src/server/guarded-save.ts` (`alwaysDecideAndSave` added; `decideAndSave` unchanged and tested as before), `scripts/lib/quint-mutants.mjs` and `tests/scripts/quint-run.test.ts` (a model added), `tests/architecture/legacy-validators.test.ts` (one name). Nothing else in `terms.ts`, `run.ts`, `guarded-save.ts` or `failure.ts` changed.
+Shared files changed: `src/server/services.ts` (`BriefCopy`, `BriefCopyFailed` and `liveBriefCopy` removed; `ClientCopyMail` and `liveClientCopyMail` added), `src/server/intake-store.ts` (six functions added), `src/lib/music-request.ts` (three answers), `src/lib/client-emails.ts` (`briefCopyMessage`), `src/lib/owner-model.ts` (a comment edit), `src/server/guarded-save.ts` (`alwaysDecideAndSave` added; `decideAndSave` unchanged and tested as before), `src/server/flows/agreement-link.ts` (the cooldown's rule `takeCooldown` is built with `alwaysWrites`, so it is now saved through `alwaysDecideAndSave` instead of `decideAndSave` wrapped in `Option.some`: one way to save an `alwaysWrites` rule, as `AGENTS.md` and `CLAUDE.md` now say; its corpus fixture `agreements-link` is identical and its tests did not change), `verification/software-inquiry.qnt` (a header comment that names the new flow), `scripts/lib/quint-mutants.mjs` and `tests/scripts/quint-run.test.ts` (a model added), `tests/architecture/legacy-validators.test.ts` (one name). Nothing else in `terms.ts`, `run.ts`, `guarded-save.ts` or `failure.ts` changed.
 
 ### SQL statements
 
@@ -93,7 +93,7 @@ The re-record of these two fixtures (a commit of fixture files only) changed the
 - A claim whose write committed but reported an error stays recorded as uncertain; before, the failure record matched that attempt's instant and wrote failed.
 - An attempt time that is not text holds an uncertain copy (the old comparison would have let a number through); only this site writes that key, as text.
 - A failed read for the public form's copy answers `failed` and records a failure over a copy with no status, as a claim that cannot be written does on A (before, no read happened). The write holds only while no status is recorded.
-- On A the public form's helper had no check on the stored details, so a request with `[]` details was claimed and the copy sent; on B the rule refuses it, the copy records "failed" and nothing is sent. No visitor can reach this: the form always stores an object.
+- On A the public form's helper had no check on the stored details, so a request with `[]` details was claimed and the copy sent; on B the rule refuses it, nothing is sent and nothing is written (the flow logs "Client brief copy state is failed." and the form answers "failed"; the copy keeps the status it had, which is none). No visitor can reach this: the form always stores an object.
 - A claim that was lost three times in a row to unrelated edits of the details now answers 409 to the owner ("cannot be sent again here"), or nothing sent (null) to the public form; the old single statement judged the current row at the same moment and would have claimed.
 - The public route's end-to-end "copy cannot be built" case was dropped; the flow tests (`tests/flows/brief-copy-stories.test.ts`, `tests/flows/software-inquiry-stories.test.ts`) cover it.
 - A brief whose copy cannot be built is a named failure after a failure is recorded over the attempt, as before; a test pins it on both branches.
