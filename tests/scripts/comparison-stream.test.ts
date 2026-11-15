@@ -241,6 +241,8 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 		addEventListener() {},
 	});
 	vi.stubGlobal("navigator", {});
+	// The full player's loop Length menu is read with instanceof; this comparison has no loop desk.
+	vi.stubGlobal("HTMLSelectElement", class {});
 	vi.stubGlobal("requestAnimationFrame", () => 0);
 	vi.stubGlobal("cancelAnimationFrame", () => {});
 	vi.stubGlobal("fetch", () =>
