@@ -11,15 +11,28 @@ export const PREFETCH_PATHS = new Set([
 
 export const PREFETCH_LIMIT = 3;
 
+/** Only the main site and explicit local QA hosts share these route semantics. */
+const PREFETCH_HOSTS = new Set([
+	"thesuperhuman.us",
+	"www.thesuperhuman.us",
+	"localhost",
+	"127.0.0.1",
+	"[::1]",
+]);
+
 /** Set false and redeploy to stop default prediction without changing diagnostics. */
 export const DEFAULT_PREFETCH_ENABLED = true;
 
 /** No prediction package is loaded on private, intake, API, or unreviewed pages. */
 export function isPublicPrefetchSource(href: string): boolean {
 	try {
-		const path = new URL(href).pathname;
+		const source = new URL(href);
 
-		return path === "/" || PREFETCH_PATHS.has(path);
+		return (
+			(source.protocol === "https:" || source.protocol === "http:") &&
+			PREFETCH_HOSTS.has(source.hostname) &&
+			(source.pathname === "/" || PREFETCH_PATHS.has(source.pathname))
+		);
 	} catch {
 		return false;
 	}

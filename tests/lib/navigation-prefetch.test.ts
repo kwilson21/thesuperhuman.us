@@ -28,6 +28,28 @@ describe("public navigation trial", () => {
 			);
 		}
 	});
+	it("excludes rewritten audio and unreviewed hosts while supporting local QA", () => {
+		for (const host of [
+			"thesuperhuman.us",
+			"www.thesuperhuman.us",
+			"localhost:5186",
+			"127.0.0.1:5186",
+			"[::1]:5186",
+		]) {
+			expect(isPublicPrefetchSource(`http://${host}/`)).toBe(true);
+		}
+
+		for (const source of [
+			"https://audio.thesuperhuman.us/",
+			"https://audio.thesuperhuman.us/services",
+			"https://other.thesuperhuman.us/work",
+			"https://unreviewed.example/",
+			"file:///work",
+		]) {
+			expect(isPublicPrefetchSource(source)).toBe(false);
+		}
+	});
+
 	it("accepts only reviewed same-origin static URLs", () => {
 		expect(prefetchTarget("/work", current)).toBe(
 			"https://thesuperhuman.us/work",

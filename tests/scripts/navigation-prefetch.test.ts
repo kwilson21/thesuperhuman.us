@@ -145,6 +145,19 @@ describe("prefetch trial runtime boundaries", () => {
 		callbacks[0]();
 		expect(f.appendChild).not.toHaveBeenCalled();
 	});
+	it.each([
+		"https://audio.thesuperhuman.us/",
+		"https://audio.thesuperhuman.us/services",
+		"https://other.thesuperhuman.us/",
+	])("never loads the manager on unreviewed host %s", async (href) => {
+		const f = fixture();
+		vi.stubGlobal("location", { href: `${href}?prefetch=foresight` });
+		await setupPrefetchTrial(loadManager);
+		expect(loadManager).not.toHaveBeenCalled();
+		expect(f.panel.hidden).toBe(true);
+		expect(f.appendChild).not.toHaveBeenCalled();
+	});
+
 	it.each(["", "unexpected"])(
 		"does nothing for inactive mode %s",
 		async (mode) => {
