@@ -814,3 +814,39 @@ it("flips at a loop's end that the handover lands on", async () => {
 	expect(ab.levelsNow()).toEqual([0, 1]);
 	expect(ab.startedAt()).toBeCloseTo(0.017);
 });
+
+it("keeps a loop that ends with the song when Play follows a pause in its last moment", async () => {
+	const ab = mount({ desk: true });
+
+	ab.seek.value = "156";
+	ab.seek.dispatchEvent(new Event("input"));
+	ab.loop.toggle.click();
+	ab.play.click();
+	await tick();
+	ab.mix.currentTime = 159.97;
+	ab.play.click();
+	await tick();
+	ab.play.click();
+	await tick();
+	expect(ab.mix.paused).toBe(false);
+	expect(ab.mix.currentTime).toBeCloseTo(159.97);
+});
+
+it("weighs an A/B press after the stream has gone round its loop and flipped", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.loop.flip.checked = true;
+	ab.loop.flip.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	// Past the 0:08 end, before a frame or a media time event has taken the stream round.
+	ab.mix.currentTime = 8.2;
+	ab.choose("after");
+	ab.master.dispatchEvent(new Event("timeupdate"));
+	await tick();
+	expect(ab.master.paused).toBe(false);
+	expect(ab.master.currentTime).toBeLessThan(1);
+	expect(ab.mix.paused).toBe(true);
+	expect(ab.label()).toMatch(/Master$/);
+});

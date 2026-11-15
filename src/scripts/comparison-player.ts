@@ -442,8 +442,13 @@ export function setupComparisonPlayers() {
 					status.textContent = "";
 				}
 
-				// Play at the end starts the song again, as the transport does.
-				if (!transport && position >= Number(root.dataset.duration) - 0.05)
+				// Play at the end starts the song again, as the transport does; a loop that ends with the song goes round
+				// on its own.
+				if (
+					!transport &&
+					!loop &&
+					position >= Number(root.dataset.duration) - 0.05
+				)
 					position = 0;
 				media.forEach((audio) => {
 					audio.pause();
@@ -560,6 +565,9 @@ export function setupComparisonPlayers() {
 						(audio) => audio.dataset.version === button.dataset.selectVersion,
 					);
 
+					// A stream that has just crossed the loop's end goes round, and flips, before the press is weighed, as the
+					// transport's flip is.
+					followLoop();
 					followFlip();
 
 					if (chosen === selected) return;
