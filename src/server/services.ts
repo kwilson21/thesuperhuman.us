@@ -568,7 +568,11 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 	});
 
 /** What the provider did with the client's copy: sent it, refused it, did not answer (it may or may not have gone out), or was never asked. */
-export type ClientCopyOutcome = "sent" | "refused" | "uncertain" | "unconfigured";
+export type ClientCopyOutcome =
+	| "sent"
+	| "refused"
+	| "uncertain"
+	| "unconfigured";
 
 /** The client's copy of their brief: where it goes, its subject and its two bodies. */
 export type ClientCopy = {
