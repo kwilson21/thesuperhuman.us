@@ -640,3 +640,108 @@ export const liveSoftwareNotice = (env: Env) =>
 				catch: () => new SoftwareNoticeFailed(),
 			}),
 	});
+
+// Media: the public routes that stream a file (src/pages/music/file, src/pages/audio/file and src/pages/og). The bucket and
+// the assets binding are services of their own, not `AudioBucket`, because these routes answer a missing binding only after
+// they have judged the request: an unknown recording is a 404 whether or not the bucket is bound.
+
+/** The audio bucket is not bound. The route answers 503. */
+export class MediaBucketNotBound extends Data.TaggedError(
+	"MediaBucketNotBound",
+) {}
+
+/** A bucket read failed (it threw). The route logs the failure once and answers its fixed 500. */
+export class MediaObjectFailed extends Data.TaggedError("MediaObjectFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** A byte range of an object, as R2 takes it. */
+export type MediaRange = { readonly offset: number; readonly length: number };
+
+/** The audio bucket's reads. An object that is not there is `null`. */
+export class MediaObjects extends Context.Service<
+	MediaObjects,
+	{
+		readonly head: (
+			key: string,
+		) => Effect.Effect<
+			R2Object | null,
+			MediaBucketNotBound | MediaObjectFailed
+		>;
+		readonly get: (
+			key: string,
+			range?: MediaRange,
+		) => Effect.Effect<
+			R2ObjectBody | null,
+			MediaBucketNotBound | MediaObjectFailed
+		>;
+	}
+>()("site/MediaObjects") {}
+
+/** The bucket's reads, or reads that answer `MediaBucketNotBound` when the request has no bucket (env.AUDIO). */
+export const liveMediaObjects = (bucket: R2Bucket | undefined) =>
+	Context.make(MediaObjects, {
+		head: (key) =>
+			bucket
+				? Effect.tryPromise({
+						try: () => bucket.head(key),
+						catch: (failure) => new MediaObjectFailed({ failure }),
+					})
+				: Effect.fail(new MediaBucketNotBound()),
+		get: (key, range) =>
+			bucket
+				? Effect.tryPromise({
+						try: () => bucket.get(key, range ? { range } : undefined),
+						catch: (failure) => new MediaObjectFailed({ failure }),
+					})
+				: Effect.fail(new MediaBucketNotBound()),
+	});
+
+/** The static assets source is not available: production has no ASSETS binding. The route answers 503. */
+export class AssetsNotBound extends Data.TaggedError("AssetsNotBound") {}
+
+/** The static assets did not answer, or their bytes could not be read (it threw). The route logs it once and answers its fixed 500. */
+export class AssetsFailed extends Data.TaggedError("AssetsFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** What the static assets answered for a file: its status and, once read, its bytes. */
+export type AssetAnswer = {
+	readonly status: number;
+	readonly ok: boolean;
+	readonly bytes: () => Effect.Effect<ArrayBuffer, AssetsFailed>;
+};
+
+/** The static assets (the ASSETS binding in production, the global fetch in a development server). */
+export class OgAssets extends Context.Service<
+	OgAssets,
+	{
+		readonly fetch: (
+			url: URL,
+		) => Effect.Effect<AssetAnswer, AssetsNotBound | AssetsFailed>;
+	}
+>()("site/OgAssets") {}
+
+/** The assets' fetch of `source`, or a fetch that answers `AssetsNotBound` when there is none. */
+export const liveOgAssets = (source: Pick<Fetcher, "fetch"> | undefined) =>
+	Context.make(OgAssets, {
+		fetch: (url) =>
+			source
+				? Effect.tryPromise({
+						try: () => source.fetch(url),
+						catch: (failure) => new AssetsFailed({ failure }),
+					}).pipe(
+						Effect.map(
+							(response): AssetAnswer => ({
+								status: response.status,
+								ok: response.ok,
+								bytes: () =>
+									Effect.tryPromise({
+										try: () => response.arrayBuffer(),
+										catch: (failure) => new AssetsFailed({ failure }),
+									}),
+							}),
+						),
+					)
+				: Effect.fail(new AssetsNotBound()),
+	});
