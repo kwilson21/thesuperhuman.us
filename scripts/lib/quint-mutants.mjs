@@ -169,8 +169,8 @@ export const models = [
 		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
 		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
 		// about 25. At 50 steps, seed 0x1, the mutant is found in about 1,300 runs and the witness's state is reached in
-		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check allows 20,000 and each run that
-		// must pass makes 10,000.
+		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check
+		// allows 20,000 and each run that must pass makes 10,000.
 		steps: "50",
 		samples: "20000",
 		passSamples: "10000",

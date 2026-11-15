@@ -760,9 +760,9 @@ Properties, each with a mutant that breaks it (the driver fails a property witho
   that mutant is equivalent (a live link always has a sent offer, which the fix refuses), and the fix's PR moved it to
   the equivalents and removed the weakened form.
 - `sendLinkLive` (first `acceptedSendLinkLive`): a send that answers 200 had its link live at the check, whatever became
-  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so the
-  property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is equivalent in
-  the model, which never closes a link during a failed email (docs/verification.md).
+  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so
+  the property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is
+  equivalent in the model, which never closes a link during a failed email (docs/verification.md).
 
 **The deposit decision, a LemmaScript contract (decided).** `depositOfferBlock`'s decision (software-invoices.ts:365-397)
 becomes a pure function with no imports, in its own module listed in `LemmaScript-files.txt`, in the style of

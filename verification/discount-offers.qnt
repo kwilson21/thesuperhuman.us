@@ -47,6 +47,9 @@ module discountOffers {
   //                            a draft saved, or saved and sent, during the decline's email was left on the resolved request
   //                            (F10: found by reading, reproduced by this model, fixed in the code)
   //   "no-live-check"          the send answers 200 without the live-link check after the email
+  //   "accepted-only-check"    the live-link check as it was before F9's fix, which counted only for an accepted
+  //                            email. An equivalent mutant: the model never closes a link during a failed email (see
+  //                            sendCheck)
   //   "first-batch-keeps-link" the decline's first batch withdraws the offers but leaves a live link as it is
   const MUTANT: str
   // Offer versions the owner can create. Two are enough for every path the properties need (a revision, a decline then
@@ -91,7 +94,7 @@ module discountOffers {
   type Ghost = {
     badSign: bool,         // a sign batch wrote while its offer was not sent
     badInvoice: bool,      // an invoice was written for an offer that was neither sent nor the project's
-    badSend: bool, // a send answered 200 while its link was not live at the check
+    badSend: bool,         // a send answered 200 while its link was not live at the check
     declined: bool,        // a decline's second batch resolved the request, and it was not reopened since
   }
 
@@ -547,7 +550,8 @@ module discountOffers {
 module discount { import discountOffers(MUTANT = "none", VERSIONS = 2).* }
 
 // Mutants. Each must produce a counterexample to the property named in scripts/lib/quint-mutants.mjs, except the
-// equivalent mutant there (discountSecondBatchNoSendingGuard), which must keep every property.
+// equivalent mutants there (discountSecondBatchNoSendingGuard and discountAcceptedOnlyCheck), which must keep every
+// property.
 module discountEditSent { import discountOffers(MUTANT = "edit-sent", VERSIONS = 2).* }
 module discountLatestTerms { import discountOffers(MUTANT = "latest-terms", VERSIONS = 2).* }
 module discountDepositFromUsual { import discountOffers(MUTANT = "deposit-from-usual", VERSIONS = 2).* }
