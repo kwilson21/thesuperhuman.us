@@ -51,12 +51,17 @@ import type { JsonValue } from "../helpers/json";
 //   fit
 //   409 stale ("The request changed or could not be saved...")  expectedRequestUpdatedAt that is stale, empty, the wrong
 //                                         time format; the batch guard fails (updated_at, status or email moved in a race);
-//                                         the batch throws (outage); a stale second fit in a sequence
-//   (a request whose stored details_json is not JSON, an array or null is read before any try block: see the cases)
+//                                         a stale second fit in a sequence
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read throws,
+//                                         or reads stored details_json that is not JSON; the batch throws (an outage, not a
+//                                         guard), alone or after an earlier fit. Never the error's own text
+//   (stored details_json that is an array or null reads as a request: see the cases)
 //   200 {ok:true,updatedAt}               every label on a new and a reviewed request, an empty note, a note trimmed, a
 //                                         note of 500 characters, unicode and markup stored as written, a request with a
 //                                         started project, a request whose updated_at is ahead of the clock (the new
 //                                         time is one millisecond later), a repeat that updates the same review row
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: one batch of four statements (guard, upsert review, update owner_requests.updated_at, audit "fit-reviewed")
 //   or one rolled-back batch; no email, no R2, no outgoing fetch.
 

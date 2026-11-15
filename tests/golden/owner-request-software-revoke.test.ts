@@ -47,10 +47,14 @@ import type { JsonValue } from "../helpers/json";
 //   409 "The client link changed since this page loaded..."  the link's created_at differs, the link is already revoked, there
 //                    is no link, or another writer replaced or revoked it during the batch
 //   409 "An offer is still being sent..."  the matching link is under 20 seconds old
-//   409 generic "...changed or could not be saved..."  updated_at, status or email moved during the batch; the batch throws
-//   rejected         the batch throws and the lookup in the catch block throws too
+//   409 generic "...changed or could not be saved..."  updated_at, status or email moved during the batch
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read, the
+//                    batch (an outage, not a guard), or a lookup after a refused batch
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: one batch (request guard, four signing-retirement statements, sending guard, link guard, revoke, audit), then,
-//   when it rolls back, one or two lookups to decide which 409 to answer.
+//   when a guard refuses it, one or two lookups to decide which 409 to answer (none when the batch throws for another
+//   reason).
 
 const revoke = (at: JsonValue = EARLIER): JsonValue => ({
 	action: "revoke",
@@ -364,6 +368,25 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_offer_links/,
 					message: "D1 is down again",
 				},
+			],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /^SELECT 1 FROM software_offer_links/",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the link lookup after it is never made",
+				},
+			],
+		},
+	),
+	revokeCase(
+		"the batch is refused by a race and the link lookup after it fails",
+		seedWith(),
+		{
+			interleave: [
+				{ on: onBatch, label: "another change moves updated_at", run: moved },
+			],
+			failures: [
+				{ on: /^SELECT 1 FROM software_offer_links/, message: "D1 is down" },
 			],
 		},
 	),

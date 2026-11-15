@@ -1,6 +1,6 @@
 import { siteOrigin } from "../../../../../lib/site-origin.mjs";
 import { retireRequestSigning } from "~/lib/software-agreements";
-import type { APIRoute } from "astro";
+import type { APIContext, APIRoute } from "astro";
 import { hashBytes } from "~/lib/agreement-artifacts";
 import { signingEnabled } from "~/lib/agreement-access";
 import { currentTemplate } from "~/lib/agreement-templates";
@@ -26,10 +26,20 @@ import {
 	offerSendingGuard,
 	offerIsSending,
 	offerSendingMessage,
+	offersCheckFailedAfterEmail,
+	offersCheckFailedAfterFailedEmail,
+	offersFailed,
+	offersFailedAfterDraft,
+	offersFailedAfterEmail,
+	offersStorageNotConfigured,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
+import { logUnexpected } from "~/server/failure";
+import { isUniqueViolation, raisedByJsonGuard } from "~/server/guarded-save";
 
 export const prerender = false;
+
+const ROUTE = "/api/owner/requests/[id]/software";
 
 const schema = z.discriminatedUnion("action", [
 	z.object({
@@ -89,7 +99,62 @@ function isRemovedKeyRow(row: unknown): row is { object_key: string } {
 const json = <T>(body: T, status = 200) =>
 	Response.json(body, { status, headers });
 
-export const POST: APIRoute = async ({ params, request, locals }) => {
+/**
+ * A failure the route answers with one of its fixed answers wherever it happens: a dependency this deployment does not
+ * have (503), or, as StoreFailed, a read or a write that the database or R2 failed for no reason a request explains
+ * (500), or that failed after the client email went out or the draft was saved (500, with a sentence that says so).
+ * Never a refused guard: that is another request's change, and the lookups after a refused batch answer it with a 409.
+ */
+class FixedAnswer extends Error {
+	readonly respond: () => Response;
+
+	constructor(respond: () => Response) {
+		super("A software request action failed.");
+		this.respond = respond;
+	}
+}
+
+/** A store that failed: `failure` is what the database or R2 gave, logged once and never answered. */
+class StoreFailed<Failure> extends FixedAnswer {
+	readonly failure: Failure;
+
+	constructor(respond: () => Response, failure: Failure) {
+		super(respond);
+		this.failure = failure;
+	}
+}
+
+/** The fixed answer; for a failed store, its failure is logged first, through logUnexpected, once per request. */
+const fixedAnswer = (fixed: FixedAnswer) => {
+	if (fixed instanceof StoreFailed) logUnexpected(ROUTE, fixed.failure);
+
+	return fixed.respond();
+};
+
+/** The work's result; when it rejects, a StoreFailed with `respond` and the rejection. */
+const stored = <T>(work: Promise<T>, respond = offersFailed) =>
+	work.catch((failure) => {
+		throw new StoreFailed(respond, failure);
+	});
+
+/** Whether a failed batch was refused by one of its guards: something this request read has changed since. */
+const refusedByGuard = <T>(error: T) =>
+	error instanceof Error && raisedByJsonGuard(error);
+
+export const POST: APIRoute = async (context) => {
+	try {
+		return await answer(context);
+	} catch (error) {
+		if (error instanceof FixedAnswer) return fixedAnswer(error);
+		throw error;
+	}
+};
+
+const answer = async ({
+	params,
+	request,
+	locals,
+}: APIContext): Promise<Response> => {
 	if (!locals.owner) return json({ ok: false }, 403);
 
 	const env = locals.runtime.env,
@@ -108,16 +173,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			400,
 		);
 	const command = parsed.data;
-	const record = await getOwnerRequest(db, params.id);
+	// A request whose stored details are not JSON makes this read reject too; it answers as a failed store.
+	const record = await stored(getOwnerRequest(db, params.id));
 
 	if (!record || record.kind !== "software") return json({ ok: false }, 404);
 
 	if (
 		["draft", "send", "question", "decline"].includes(command.action) &&
-		(await db
-			.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
-			.bind(record.id)
-			.first())
+		(await stored(
+			db
+				.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
+				.bind(record.id)
+				.first(),
+		))
 	)
 		return json(
 			{
@@ -217,6 +285,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			[record.id, updatedAt, record.status, record.email],
 		);
 
+	// Runs a batch. A guard that refused it is rethrown, for the lookups after a refused batch to answer; any other failure
+	// is a failed store.
+	const save = <T>(statements: D1PreparedStatement[]) =>
+		db.batch<T>(statements).catch((error) => {
+			throw refusedByGuard(error)
+				? error
+				: new StoreFailed(offersFailed, error);
+		});
+
 	try {
 		if (command.action === "fit") {
 			if (
@@ -234,7 +311,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
-			await db.batch([
+			await save([
 				requestGuard(),
 				db
 					.prepare(`INSERT INTO software_fit_reviews(request_id,label,note,updated_at,updated_by) VALUES (?,?,?,?,?)
@@ -251,7 +328,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		if (command.action === "question" || command.action === "decline") {
 			if (command.action === "decline") {
-				const block = await depositOfferBlock(db, record.id, true);
+				const block = await stored(depositOfferBlock(db, record.id, true));
 
 				if (block)
 					return json(
@@ -270,14 +347,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					409,
 				);
 
-			if (command.action === "decline" && (await offerIsSending(db, record.id)))
+			if (
+				command.action === "decline" &&
+				(await stored(offerIsSending(db, record.id)))
+			)
 				return json({ ok: false, message: offerSendingMessage }, 409);
 
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
 
 			if (command.action === "question")
-				await db.batch([
+				await save([
 					requestGuard(),
 					guard(
 						"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",
@@ -289,7 +369,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				]);
 
 			if (command.action === "decline")
-				await db.batch([
+				await save([
 					softwareGuard(
 						db,
 						"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements WHERE request_id=? AND status IN ('client_signed','executed'))",
@@ -373,12 +453,19 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 						: []),
 					audit(command.action === "question" ? "question-sent" : "declined"),
 				]);
-			} catch {
+			} catch (error) {
+				// The email has gone out, so a failed store from here on says so.
+				if (!refusedByGuard(error))
+					throw new StoreFailed(offersFailedAfterEmail, error);
+
 				if (
-					await db
-						.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
-						.bind(record.id)
-						.first()
+					await stored(
+						db
+							.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
+							.bind(record.id)
+							.first(),
+						offersFailedAfterEmail,
+					)
 				)
 					return json(
 						{
@@ -390,7 +477,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 				if (
 					command.action === "decline" &&
-					(await offerIsSending(db, record.id))
+					(await stored(offerIsSending(db, record.id), offersFailedAfterEmail))
 				)
 					return json({ ok: false, message: offerSendingMessage }, 409);
 
@@ -408,7 +495,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		}
 
 		if (command.action === "revoke") {
-			await db.batch([
+			await save([
 				requestGuard(),
 				...retireRequestSigning(db, record.id, now),
 				offerSendingGuard(db, record.id),
@@ -427,7 +514,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			return json({ ok: true });
 		}
 
-		const offers = await listSoftwareOffers(db, record.id),
+		const offers = await stored(listSoftwareOffers(db, record.id)),
 			draft = offers.find((offer) => offer.status === "draft");
 
 		if (draft && Date.parse(draft.updated_at) >= Date.parse(now))
@@ -454,27 +541,47 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 			const removedMetadata = command.removedAttachmentKeys.length
 				? (
-						await db
-							.prepare(
-								"SELECT * FROM software_agreement_attachments WHERE request_id=? AND object_key IN (SELECT value FROM json_each(?))",
-							)
-							.bind(record.id, JSON.stringify(command.removedAttachmentKeys))
-							.all<{
-								id: string;
-								request_id: string;
-								filename: string;
-								version: string;
-								document_date: string;
-								object_key: string;
-								sha256: string;
-								bytes: number;
-								created_at: string;
-								created_by: string;
-							}>()
+						await stored(
+							db
+								.prepare(
+									"SELECT * FROM software_agreement_attachments WHERE request_id=? AND object_key IN (SELECT value FROM json_each(?))",
+								)
+								.bind(record.id, JSON.stringify(command.removedAttachmentKeys))
+								.all<{
+									id: string;
+									request_id: string;
+									filename: string;
+									version: string;
+									document_date: string;
+									object_key: string;
+									sha256: string;
+									bytes: number;
+									created_at: string;
+									created_by: string;
+								}>(),
+						)
 					).results
 				: [];
 
-			const saved = await db.batch([
+			const reusedMsaId = command.confirmMsaReuse
+				? (command.reusedMsaId ?? null)
+				: null;
+
+			// A foreign key failure is a lost race only with evidence of one: the MSA this draft reuses is gone.
+			const reusedMsaGone = async <T>(error: T) =>
+				error instanceof Error &&
+				/FOREIGN KEY/.test(error.message) &&
+				reusedMsaId !== null &&
+				!(await stored(
+					db
+						.prepare("SELECT 1 FROM software_agreements WHERE id=?")
+						.bind(reusedMsaId)
+						.first(),
+				));
+
+			// Built before the batch runs: attachments in the details that cannot be read throw here, and are answered as a
+			// changed draft by the lookups after a refused batch, as before.
+			const statements = [
 				requestGuard(),
 				guard(
 					"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",
@@ -545,7 +652,20 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
           AND NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) item WHERE json_extract(item.value,'$.key')=software_agreement_attachments.object_key) RETURNING object_key`)
 						.bind(attachment.id, record.id),
 				),
-			]);
+			];
+
+			// Besides a guard, two failures of this batch are another request's change: a unique index (another tab saved a
+			// draft, or took the version, first) and the reused MSA's foreign key once that MSA is gone. Anything else is a
+			// failed store.
+			const saved = await db.batch(statements).catch(async (error) => {
+				if (
+					refusedByGuard(error) ||
+					isUniqueViolation(error) ||
+					(await reusedMsaGone(error))
+				)
+					throw error;
+				throw new StoreFailed(offersFailed, error);
+			});
 
 			let attachmentCleanupPending = false;
 
@@ -560,23 +680,27 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				try {
 					await env.AUDIO.delete(attachment.object_key);
 				} catch {
-					await db
-						.prepare(
-							"INSERT OR IGNORE INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)",
-						)
-						.bind(
-							attachment.id,
-							attachment.request_id,
-							attachment.filename,
-							attachment.version,
-							attachment.document_date,
-							attachment.object_key,
-							attachment.sha256,
-							attachment.bytes,
-							attachment.created_at,
-							attachment.created_by,
-						)
-						.run();
+					// The draft is saved; a failed store here says so.
+					await stored(
+						db
+							.prepare(
+								"INSERT OR IGNORE INTO software_agreement_attachments VALUES(?,?,?,?,?,?,?,?,?,?)",
+							)
+							.bind(
+								attachment.id,
+								attachment.request_id,
+								attachment.filename,
+								attachment.version,
+								attachment.document_date,
+								attachment.object_key,
+								attachment.sha256,
+								attachment.bytes,
+								attachment.created_at,
+								attachment.created_by,
+							)
+							.run(),
+						offersFailedAfterDraft,
+					);
 					attachmentCleanupPending = true;
 				}
 			}
@@ -591,7 +715,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		if (command.action !== "send") return json({ ok: false }, 400);
 
-		if (await offerIsSending(db, record.id))
+		if (await stored(offerIsSending(db, record.id)))
 			return json({ ok: false, message: offerSendingMessage }, 409);
 		// A revoked link can be reissued for the current sent version without changing its terms.
 		const offer = draft ?? offers.find((value) => value.status === "sent");
@@ -610,12 +734,12 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		if (!terms.ok) return json({ ok: false, errors: terms.errors }, 400);
 
 		if (draft) {
-			const block = await depositOfferBlock(db, record.id);
+			const block = await stored(depositOfferBlock(db, record.id));
 
 			if (block) return json({ ok: false, message: block }, 409);
 		}
 
-		const enabled = await signingEnabled(db);
+		const enabled = await stored(signingEnabled(db));
 
 		let pin: {
 			details: string;
@@ -632,14 +756,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					terms.value,
 				);
 
-				const msa = await currentTemplate(db, "msa"),
-					sow = await currentTemplate(db, "sow");
+				// A failed read or R2 call in here is a failed store, not incomplete details: it answers as one.
+				const msa = await stored(currentTemplate(db, "msa")),
+					sow = await stored(currentTemplate(db, "sow"));
 
-				const config = await db
-					.prepare(
-						"SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1",
-					)
-					.first<{ version: number; values_json: string }>();
+				const config = await stored(
+					db
+						.prepare(
+							"SELECT version,values_json FROM software_contractor_config ORDER BY version DESC LIMIT 1",
+						)
+						.first<{ version: number; values_json: string }>(),
+				);
 
 				if (!msa || !sow || !config)
 					return json(
@@ -655,12 +782,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 				if (
 					offer.reused_msa_id &&
-					!(await db
-						.prepare(
-							"SELECT 1 FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL AND a.archive_closed_at IS NULL AND EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='ready') AND c.recipient_email=?",
-						)
-						.bind(offer.reused_msa_id, record.email.trim().toLowerCase())
-						.first())
+					!(await stored(
+						db
+							.prepare(
+								"SELECT 1 FROM software_agreements a JOIN software_agreement_clients c ON c.id=a.client_id WHERE a.id=? AND a.kind='msa' AND a.status='executed' AND a.terminated_at IS NULL AND a.archive_closed_at IS NULL AND EXISTS(SELECT 1 FROM software_agreement_artifacts f WHERE f.agreement_id=a.id AND f.status='ready') AND c.recipient_email=?",
+							)
+							.bind(offer.reused_msa_id, record.email.trim().toLowerCase())
+							.first(),
+					))
 				)
 					return json(
 						{
@@ -672,44 +801,59 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 				for (const attachment of details.attachments) {
 					if (
-						!(await db
-							.prepare(
-								"SELECT 1 FROM software_agreement_attachments WHERE request_id=? AND object_key=? AND sha256=? AND bytes=? AND filename=? AND version=? AND document_date=?",
-							)
-							.bind(
-								record.id,
-								attachment.key,
-								attachment.sha256,
-								attachment.bytes,
-								attachment.filename,
-								attachment.version,
-								attachment.date,
-							)
-							.first())
+						!(await stored(
+							db
+								.prepare(
+									"SELECT 1 FROM software_agreement_attachments WHERE request_id=? AND object_key=? AND sha256=? AND bytes=? AND filename=? AND version=? AND document_date=?",
+								)
+								.bind(
+									record.id,
+									attachment.key,
+									attachment.sha256,
+									attachment.bytes,
+									attachment.filename,
+									attachment.version,
+									attachment.date,
+								)
+								.first(),
+						))
 					)
 						throw new Error("Attachment ownership mismatch.");
-					const object = await env.AUDIO?.get(attachment.key);
+
+					// Without the bucket the attachments cannot be read: a dependency this deployment does not have, answered
+					// before anything is written.
+					if (!env.AUDIO) throw new FixedAnswer(offersStorageNotConfigured);
+					const object = await stored(env.AUDIO.get(attachment.key));
 
 					if (
 						!object ||
 						object.size !== attachment.bytes ||
-						(await hashBytes(await object.arrayBuffer())) !== attachment.sha256
+						(await hashBytes(await stored(object.arrayBuffer()))) !==
+							attachment.sha256
 					)
 						throw new Error("Attachment unavailable.");
 				}
 
-				const { preflightAgreementPacket } = await import(
-					"~/lib/agreement-pdf"
-				);
+				// The packet imports the reused MSA's signed copy from R2, so without the bucket it cannot be rendered either.
+				if (offer.reused_msa_id && !env.AUDIO)
+					throw new FixedAnswer(offersStorageNotConfigured);
 
-				await preflightAgreementPacket(
-					env,
-					terms.value,
-					details,
-					contractor,
-					[msa, sow],
-					offer.reused_msa_id ?? null,
-				);
+				const pdf = await import("~/lib/agreement-pdf");
+
+				await pdf
+					.preflightAgreementPacket(
+						env,
+						terms.value,
+						details,
+						contractor,
+						[msa, sow],
+						offer.reused_msa_id ?? null,
+					)
+					.catch((error) => {
+						throw error instanceof pdf.PreflightReadFailed
+							? new StoreFailed(offersFailed, error.failure)
+							: error;
+					});
 				pin = {
 					details: JSON.stringify(details),
 					msa: msa.id,
@@ -721,6 +865,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 					email: record.email.trim().toLowerCase(),
 				};
 			} catch (error) {
+				if (error instanceof FixedAnswer) throw error;
+
 				const failure: AgreementDetailsFailure = {
 					ok: false,
 					message: "Complete and validate Agreement details before sending.",
@@ -763,7 +909,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			);
 		}
 
-		await db.batch([
+		await save([
 			requestGuard(),
 			offerSendingGuard(db, record.id),
 			signingChangeGuard,
@@ -828,12 +974,16 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			`Hi ${record.name.trim().split(/\s+/)[0] || "there"},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\n${enabled && (pin || offer.msa_template_id) ? "Review and sign on the website." : "We will arrange for you to sign outside the website."}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`,
 		);
 
-		const live = await db
-			.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
+		// The offer is saved as sent and the email has been tried, so a failed check says what happened to the email.
+		const live = await stored(
+			db
+				.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
       AND EXISTS(SELECT 1 FROM software_offers WHERE id=? AND status='sent')
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`)
-			.bind(record.id, tokenHash, offer.id, record.id)
-			.first();
+				.bind(record.id, tokenHash, offer.id, record.id)
+				.first(),
+			sent.ok ? offersCheckFailedAfterEmail : offersCheckFailedAfterFailedEmail,
+		);
 
 		if (sent.ok && !live)
 			return json(
@@ -856,15 +1006,21 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			uncertain: sent.uncertain,
 			copySent: sent.copySent,
 		});
-	} catch {
+	} catch (error) {
+		if (error instanceof FixedAnswer) return fixedAnswer(error);
+
+		// A refused batch (or details that cannot be read): the lookups below choose the 409. One that fails is a failed
+		// store, and answers as one.
 		if (
 			command.action === "revoke" &&
-			!(await db
-				.prepare(
-					"SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL",
-				)
-				.bind(record.id, command.expectedLinkCreatedAt)
-				.first())
+			!(await stored(
+				db
+					.prepare(
+						"SELECT 1 FROM software_offer_links WHERE request_id=? AND created_at=? AND revoked_at IS NULL",
+					)
+					.bind(record.id, command.expectedLinkCreatedAt)
+					.first(),
+			))
 		)
 			return json(
 				{
@@ -877,16 +1033,18 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		if (
 			["send", "revoke", "decline"].includes(command.action) &&
-			(await offerIsSending(db, record.id))
+			(await stored(offerIsSending(db, record.id)))
 		)
 			return json({ ok: false, message: offerSendingMessage }, 409);
 
 		if (
 			["draft", "send", "question", "decline"].includes(command.action) &&
-			(await db
-				.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
-				.bind(record.id)
-				.first())
+			(await stored(
+				db
+					.prepare("SELECT 1 FROM software_projects WHERE request_id=?")
+					.bind(record.id)
+					.first(),
+			))
 		)
 			return json(
 				{
@@ -897,7 +1055,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			);
 
 		if (command.action === "draft") {
-			const draft = (await listSoftwareOffers(db, record.id)).find(
+			const draft = (await stored(listSoftwareOffers(db, record.id))).find(
 				(offer) => offer.status === "draft",
 			);
 
