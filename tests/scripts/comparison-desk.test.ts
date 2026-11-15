@@ -250,6 +250,7 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 	return {
 		root,
 		mix,
+		master,
 		/** Puts keyboard focus on a control, as Tab does. */
 		focusOn: (control: StandInControl) => {
 			page.activeElement = control;
@@ -571,4 +572,19 @@ it("shows no loop line after a quick retry that works, once the failure turned L
 	expect(ab.synced()).toBe(true);
 	await new Promise((resolve) => setTimeout(resolve, 750));
 	expect(ab.status.textContent).toBe("");
+});
+
+it("moves focus off Flip too, to the chosen version's native player, when a load failure turns the desk off", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.choose("after");
+	ab.play.click();
+	await tick();
+	ab.loop.toggle.click();
+	ab.flipOn();
+	ab.focusOn(ab.loop.flip);
+	await ab.decode();
+	expect(ab.loop.flip.disabled).toBe(true);
+	expect(ab.master.focused).toBe(true);
+	expect(ab.mix.focused).toBe(false);
 });

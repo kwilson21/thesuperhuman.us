@@ -475,12 +475,18 @@ export function setupComparisonPlayers() {
 					// A loop line still waiting would describe a loop that is gone.
 					clearTimeout(loopNote);
 
-					// Focus on a control about to be disabled moves to the first native player rather than to the page.
+					// Focus on a control about to be disabled (Flip goes with the loop) moves to the native player of the version
+					// chosen, rather than to the page.
 					const focused = document.activeElement;
 
 					// The length menu is compared as the node it was found as, which the DOM typing in use accepts.
-					if (focused && (focused === loopToggle || focused === loopLengthNode))
-						media[0].focus();
+					if (
+						focused &&
+						(focused === loopToggle ||
+							focused === loopLengthNode ||
+							focused === loopFlip)
+					)
+						media[selected].focus();
 				}
 
 				if (!offered && loop) {
