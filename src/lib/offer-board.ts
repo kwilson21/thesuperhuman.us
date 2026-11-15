@@ -239,16 +239,32 @@ const own = (raw: RawValue, name: string): RawValue =>
 		? raw[name]
 		: undefined;
 
+/** A line as the offer editor compares lines for repeats (src/lib/software-offers.ts). */
+const sameLine = (line: string) =>
+	line.normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
+
 /**
- * A list of short lines, each cleaned. A line that is empty, too long, or names money or a link is left out on its own;
- * null when it is not a list, is too long, or no line is left.
+ * A list of short lines, each cleaned. A line that is empty, too long, names money or a link, or repeats an earlier one
+ * (the offer editor refuses a milestone whose deliverables repeat) is left out on its own; null when it is not a list,
+ * is too long, or no line is left.
  */
 function lines(raw: RawValue, max: number): string[] | null {
 	if (!Array.isArray(raw) || raw.length > max) return null;
 
+	const seen = new Set<string>();
+
 	const read = raw
 		.map((item) => (Predicate.isString(item) ? oneLine(item) : ""))
-		.filter((item) => item && item.length <= ITEM_MAX && !pricesOrLinks(item));
+		.filter((item) => {
+			if (!item || item.length > ITEM_MAX || pricesOrLinks(item)) return false;
+
+			const key = sameLine(item);
+
+			if (seen.has(key)) return false;
+			seen.add(key);
+
+			return true;
+		});
 
 	return read.length > 0 ? read : null;
 }

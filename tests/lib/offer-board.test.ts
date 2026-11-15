@@ -499,3 +499,50 @@ describe("found in the offer board's ninth review", () => {
 		expect(pricesOrLinks("Estimated 1,500 rows of history")).toBe(false);
 	});
 });
+
+describe("found in the offer board's fourteenth review", () => {
+	it.each([
+		"The budget is about 5,000",
+		"A fee of around 4,800",
+		"Quote of about 2,500",
+		"Estimate is approximately 6,000",
+		"Price: about 4,800",
+		"Budget: roughly 5,000",
+		"Budget is about 5k",
+		"Kosten von ca. 2.000",
+		"Presupuesto de aproximadamente 3.000",
+		"The fee is about 50.",
+		"A fee of about 25/month",
+	])(
+		"drops %s: two connectors, or a colon then a connector, before the amount",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Estimate is about 6 weeks",
+		"Fee is about 120 hours of work",
+		"Estimated about 1,500 pages",
+		"Estimated: 4, possibly 5 weeks",
+		"Cost of about 3 days per integration",
+	])("keeps %s: a duration or a count after the connectors", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+
+	it("leaves out a deliverable that repeats an earlier one, as the offer editor compares them", () => {
+		const reply = readOfferReply({
+			cards: [
+				{
+					...milestone,
+					deliverables: ["Homepage design", "homepage  design", "Page list"],
+				},
+			],
+		});
+
+		expect(reply?.cards[0].detail?.deliverables).toEqual([
+			"Homepage design",
+			"Page list",
+		]);
+	});
+});

@@ -525,9 +525,12 @@ const MONEY = new RegExp(
 const OFFER_MONEY_WORD =
 	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
 
-/** What may stand between a money word and its amount ("of", "is", "de", ":"). */
+/**
+ * What may stand between a money word and its amount: a colon, then up to two of these words, each perhaps followed by
+ * a colon ("of", "is about", "of around", ": roughly", "von ca.").
+ */
 const OFFER_CONNECTOR =
-	"\\s*(?:(?:of|is|at|around|about|under|over|roughly|approximately|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*)?[:：]?\\s*";
+	"\\s*(?:[:：]\\s*)?(?:(?:of|is|at|around|about|under|over|roughly|approximately|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,2}";
 
 /** A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k"). */
 const LARGE_AMOUNT =
