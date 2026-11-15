@@ -138,6 +138,8 @@ export const agreementLinkMutants = {
 export const briefCopyMutants = {
 	briefCopyNoCas: { property: "claimsEligible" },
 	briefCopyCasSkipsOpen: { property: "closedNeverClaimed" },
+	briefCopyCasSkipsAttempt: { property: "uncertainHeld" },
+	briefCopyCasSkipsAddress: { property: "claimsEligible" },
 	briefCopyNoHold: { property: "uncertainHeld" },
 	briefCopyNoConfirm: { property: "uncertainHeld" },
 	briefCopyResendSent: { property: "sentNeverResent" },
@@ -226,6 +228,6 @@ export const models = [
 		mutants: briefCopyMutants,
 		equivalents: [],
 		exhaustive: [],
-		samples: "20000",
+		samples: "100000",
 	},
 ];
