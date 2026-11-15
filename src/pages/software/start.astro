@@ -45,7 +45,7 @@ const href = (path: string) =>
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Work with me <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted" data-brief-kicker>{selected ? softwareBriefKickers[selected] : 'Project brief'}</p>
     <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i === 7 && selected !== 'website'}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
-    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} novalidate>
+    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} data-linked-path={selected ?? undefined} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
         <h1 tabindex="-1">What are you working on?</h1>

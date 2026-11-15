@@ -104,6 +104,10 @@ export function setupSoftwareInquiry(
 	const storageKey = "software-brief-draft";
 	const sentKey = "software-brief-sent";
 	const requestedPath = new FormData(form).get("path");
+
+	// The path the link named, from the server. A browser that restores form state on reload can check
+	// a radio the link did not name, so the checked radio alone cannot tell a path link from a reload.
+	const linkedPath = form.dataset.linkedPath;
 	const answers: Record<string, string> = {};
 	let sentElsewhere = false;
 
@@ -334,7 +338,7 @@ export function setupSoftwareInquiry(
 				validPath &&
 				(!requestedPath || requestedPath === stored.path) &&
 				Number.isInteger(saved.step) &&
-				saved.step >= (requestedPath ? 1 : 0) &&
+				saved.step >= (isSoftwarePath(linkedPath) ? 1 : 0) &&
 				saved.step <= last()
 			)
 				step = saved.step;

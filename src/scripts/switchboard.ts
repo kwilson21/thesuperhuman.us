@@ -80,6 +80,7 @@ export function setupSwitchboard(
 
 	let target: Target = { kind: "rest" };
 	let connecting = false;
+	let putThrough = 0;
 	let frame = 0;
 	let last = 0;
 	let boardBox = board.getBoundingClientRect();
@@ -258,10 +259,21 @@ export function setupSwitchboard(
 
 		connecting = true;
 		root.setAttribute("aria-busy", "true");
-		window.setTimeout(
-			() => window.location.assign(link.href),
+		putThrough = window.setTimeout(
+			() => {
+				// The board stays usable after this, so a stopped or failed load can be tried again.
+				standDown();
+				window.location.assign(link.href);
+			},
 			reduced.matches ? 0 : PUT_THROUGH_MS,
 		);
+	}
+
+	function standDown() {
+		window.clearTimeout(putThrough);
+		putThrough = 0;
+		connecting = false;
+		root.removeAttribute("aria-busy");
 	}
 
 	function seatedLink() {
@@ -269,8 +281,7 @@ export function setupSwitchboard(
 	}
 
 	function reset() {
-		connecting = false;
-		root.removeAttribute("aria-busy");
+		standDown();
 		lightOnly(null);
 		target = { kind: "rest" };
 
@@ -344,13 +355,19 @@ export function setupSwitchboard(
 		return best;
 	}
 
+	// The handle covers the jack the plug is over, so a press there that never moves still counts
+	// as a press on that jack: the drop seats the plug in it.
 	handle.addEventListener("pointerdown", (event) => {
 		if (connecting || event.button !== 0) return;
 		event.preventDefault();
 		handle.setPointerCapture(event.pointerId);
 		root.classList.add("is-dragging");
 		lightOnly(null);
-		setTarget({ kind: "drag", point: local(event), near: null });
+		const point = local(event);
+		const near = nearest(point);
+
+		for (const link of links) link.classList.toggle("is-near", link === near);
+		setTarget({ kind: "drag", point, near });
 	});
 	handle.addEventListener("pointermove", (event) => {
 		if (target.kind !== "drag") return;
@@ -404,10 +421,29 @@ export function setupSwitchboard(
 	finePointer.addEventListener("change", () => {
 		if (!connecting && hint && !seatedLink()) hint.textContent = restingHint();
 	});
-	// Back and forward restore the page as it was left; put the plug back and the lamps out.
+	// Back and forward restore the page as it was left; put the plug back and the lamps out. Leaving
+	// first (Back during the pause, or another link) cancels the pending put-through.
+	window.addEventListener("pagehide", standDown);
 	window.addEventListener("pageshow", (event) => {
 		if (event.persisted) reset();
 	});
+	document.addEventListener(
+		"click",
+		(event) => {
+			const other =
+				event.target instanceof Element
+					? event.target.closest("a[href]")
+					: null;
+
+			if (
+				putThrough &&
+				other instanceof HTMLAnchorElement &&
+				!links.includes(other)
+			)
+				standDown();
+		},
+		true,
+	);
 
 	return {
 		connect(id: string) {

@@ -13,7 +13,9 @@ import Switchboard from "~/components/Switchboard.astro";
       <p class="page-lede">Pick a line and I’ll put you through to the right form.</p>
     </header>
     <Switchboard />
-    <section id="message" class="message-panel" aria-labelledby="message-title" data-message-panel hidden>
+    {/* The script opens this for the #message address; no element carries that id, so the browser's own
+        jump to a fragment cannot take focus away from the heading. */}
+    <section class="message-panel" aria-labelledby="message-title" data-message-panel hidden>
       <h2 id="message-title" data-message-heading tabindex="-1">Send a message</h2>
       <ContactForm />
     </section>

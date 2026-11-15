@@ -163,12 +163,17 @@ const visibleDots = () => dots.map((item) => item.hidden);
 /** The silent pass, granted at once unless a test supplies its own. */
 const grantedPass: typeof setupSuggestionPass = () => async () => true;
 
+// requestedPath is the radio checked when the script starts; linkedPath is the path the link named,
+// which the page renders as data-linked-path. They differ when a browser restores a radio on reload.
 async function setup(
 	requestedPath?: string,
 	startSuggestionPass = grantedPass,
+	linkedPath: string | null | undefined = requestedPath,
 ) {
 	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
+
+	if (linkedPath) form.dataset.linkedPath = linkedPath;
 	steps = Array.from({ length: 9 }, () => new Node());
 	controls = [];
 
@@ -976,6 +981,13 @@ it("resumes on the choice screen when the draft was left there and the link name
 	choose("path", "workflow");
 	click("[data-back]");
 	await setup();
+	expect(current()).toBe(0);
+});
+
+it("resumes on the choice screen after a reload that restored the chosen radio without a path link", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup("workflow", grantedPass, null);
 	expect(current()).toBe(0);
 });
 

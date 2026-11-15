@@ -23,7 +23,7 @@ it("loads the Contact Turnstile SDK only when the message line opens the form", 
 	);
 	expect(page).not.toContain("challenges.cloudflare.com");
 	expect(page).toContain(
-		'<section id="message" class="message-panel" aria-labelledby="message-title" data-message-panel hidden>',
+		'<section class="message-panel" aria-labelledby="message-title" data-message-panel hidden>',
 	);
 	expectSource(message).toContain(
 		"function open() { const wasHidden = panel.hidden; panel.hidden = false; void loadContactTurnstile()",
