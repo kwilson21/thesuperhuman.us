@@ -1036,6 +1036,29 @@ const raceCases: Case[] = [
 		},
 	),
 	draftCase(
+		"the draft batch is refused by a race and the project lookup after it fails",
+		d(),
+		withOffers([]),
+		{
+			interleave: [
+				{
+					on: /INSERT INTO software_offers/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	draftCase(
 		"the request's updated_at moves before the batch",
 		d(),
 		withOffers([]),

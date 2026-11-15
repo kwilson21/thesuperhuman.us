@@ -377,6 +377,18 @@ const cases: Case[] = [
 		},
 	),
 	revokeCase(
+		"the batch is refused by a race and the link lookup after it fails",
+		seedWith(),
+		{
+			interleave: [
+				{ on: onBatch, label: "another change moves updated_at", run: moved },
+			],
+			failures: [
+				{ on: /^SELECT 1 FROM software_offer_links/, message: "D1 is down" },
+			],
+		},
+	),
+	revokeCase(
 		"a link made 10 seconds ago and the lookups after the batch fail",
 		seedWith({}, {}, [offer("sent")], linkAgo(10)),
 		{

@@ -835,6 +835,28 @@ const cases: Case[] = [
 			],
 		},
 	),
+	sendCase(
+		"the send batch is refused by a race and the sending lookup after it fails",
+		draftSeed(),
+		{
+			interleave: [
+				{
+					on: onBatch,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
 	sendCase("the check after the email fails", draftSeed(), {
 		failures: [{ on: liveCheck, message: "D1 is down" }],
 	}),

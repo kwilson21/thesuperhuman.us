@@ -548,6 +548,46 @@ const cases: Case[] = [
 			],
 		},
 	),
+	declineCase(
+		"the first batch is refused by a race and the sending lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE software_offers SET status='withdrawn'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	declineCase(
+		"the second batch is refused by a race and the project lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE owner_requests SET status='resolved'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
 	// sequences
 	{
 		name: "decline, then decline again",

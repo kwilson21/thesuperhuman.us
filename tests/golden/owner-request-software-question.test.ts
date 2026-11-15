@@ -328,6 +328,50 @@ const cases: Case[] = [
 			],
 		},
 	),
+	askCase(
+		"the reservation batch is refused by a race and the project lookup after it fails",
+		ask(),
+		{
+			interleave: [
+				{
+					on: /UPDATE owner_requests SET updated_at/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	askCase(
+		"the recording batch is refused by a race and the project lookup after it fails",
+		ask(),
+		{
+			interleave: [
+				{
+					on: /INSERT INTO owner_request_audit/,
+					label: "another change moves updated_at",
+					run: running(
+						"UPDATE owner_requests SET updated_at='2026-11-13T12:00:30.000Z'",
+					),
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
 	// sequences
 	{
 		name: "two questions in a row",
