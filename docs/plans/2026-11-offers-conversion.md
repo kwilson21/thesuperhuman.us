@@ -671,13 +671,15 @@ dependency in the owner's decision, with nothing written, and a sentence the fix
 the accepted-email case does when the link closed, 409, with a sentence that does not say the email went out (today's
 says it did), proposed in the fix PR.
 
-**F10, a draft saved during a decline's email (candidate).** The draft and send batches never touch
-`owner_requests.updated_at` (software.ts:474-545, 763-821), so a draft saved while the decline's email is in flight passes
-its own G1, and the decline's second batch (G1 at the write time, 351-352) passes too: the request is resolved with a
-draft. A send of that draft is caught only by G5 in the second batch (359), and only within its 20 seconds. Recommended,
-if the model confirms it: the second batch also requires that no offer of the request is draft or sent, read after the
-email and refused by name (section 2), with the guard as its re-check; refused, it answers EmailSentButChanged as the
-second batch does today (373-402).
+**F10, a draft saved during a decline's email (confirmed by the model; decided).** The owner accepted the
+recommendation below on 2026-11-15 ("Do the fixes"), and the extended `verification/discount-offers.qnt` confirms the
+bug (docs/verification.md, "F10, reproduced"), so the fix is its own PR before the conversion. The draft and send
+batches never touch `owner_requests.updated_at` (software.ts:474-545, 763-821), so a draft saved while the decline's
+email is in flight passes its own G1, and the decline's second batch (G1 at the write time, 351-352) passes too: the
+request is resolved with a draft. A send of that draft is caught only by G5 in the second batch (359), and only within
+its 20 seconds. Recommended, if the model confirms it: the second batch also requires that no offer of the request is
+draft or sent, read after the email and refused by name (section 2), with the guard as its re-check; refused, it
+answers EmailSentButChanged as the second batch does today (373-402).
 
 **Kept as they are.** LinkNotBuilt is a configuration error, not a store failure or a missing binding: 500 with its own
 sentence, nothing written (golden send "SITE_ORIGIN that is not a URL", "an empty SITE_ORIGIN"). A draft's removed
