@@ -4,7 +4,8 @@
  * toward a line on a fine pointer's hover or on keyboard focus, seats in the jack on a click or
  * tap, and can be picked up and dropped on a jack. A seated line lights its lamp, and the board
  * says where it is putting the visitor through before the page changes. With reduced motion the
- * plug moves without animating and the page changes at once. Every motion settles within a second.
+ * plug moves without animating and the page changes at once. The plug settles in about half a
+ * second and the cable within three.
  */
 
 type Point = { x: number; y: number };
@@ -46,7 +47,7 @@ const SNAP = 44;
 // moves. Friction settles it within a couple of seconds.
 const LINKS = 16;
 const ROPE_STEP = 1 / 120;
-const ROPE_FRICTION = 0.985;
+const ROPE_FRICTION = 0.98;
 const ROPE_PASSES = 12;
 
 function clamp(value: number, min: number, max: number) {
@@ -171,26 +172,72 @@ export function setupSwitchboard(
 
 	// The cable leaves each plug toward the viewer and falls: on a wide board it hangs in a curve
 	// below the jacks; on a narrow one it runs down the left of the jacks, bowed outward.
-	function cableCurve(from: Point, to: Point): [Point, Point] {
+	function sagCurve(from: Point, to: Point): [Point, Point] {
 		const dx = to.x - from.x;
+		const sag = clamp(Math.hypot(dx, to.y - from.y) * 0.22, 30, 112);
+
+		return [
+			{ x: from.x + dx * 0.12, y: from.y + sag },
+			{ x: to.x - dx * 0.12, y: to.y + sag },
+		];
+	}
+
+	// It may swing past the board's left edge into the page gutter; content past a left edge never scrolls.
+	function bowCurve(from: Point, to: Point): [Point, Point] {
 		const dy = to.y - from.y;
-
-		if (layout() === "row" || Math.abs(dy) < 36) {
-			const sag = clamp(Math.hypot(dx, dy) * 0.22, 30, 112);
-
-			return [
-				{ x: from.x + dx * 0.12, y: from.y + sag },
-				{ x: to.x - dx * 0.12, y: to.y + sag },
-			];
-		}
-
-		// It may swing past the board's left edge into the page gutter; content past a left edge never scrolls.
 		const bow = Math.max(0, Math.min(Math.abs(dy) * 0.12, from.x + 12));
 
 		return [
 			{ x: from.x - bow, y: from.y + dy * 0.35 },
 			{ x: to.x - bow, y: to.y - dy * 0.35 },
 		];
+	}
+
+	function cableCurve(from: Point, to: Point): [Point, Point] {
+		return layout() === "row" || Math.abs(to.y - from.y) < 36
+			? sagCurve(from, to)
+			: bowCurve(from, to);
+	}
+
+	function curveLength(from: Point, to: Point, [a, b]: [Point, Point]) {
+		let length = 0;
+		let previous = from;
+
+		for (let index = 1; index <= LINKS; index++) {
+			const t = index / LINKS;
+			const u = 1 - t;
+
+			const point = {
+				x:
+					u * u * u * from.x +
+					3 * u * u * t * a.x +
+					3 * u * t * t * b.x +
+					t * t * t * to.x,
+				y:
+					u * u * u * from.y +
+					3 * u * u * t * a.y +
+					3 * u * t * t * b.y +
+					t * t * t * to.y,
+			};
+
+			length += Math.hypot(point.x - previous.x, point.y - previous.y);
+			previous = point;
+		}
+
+		return length;
+	}
+
+	// The cable's length for these two ends. On a narrow board it eases between the two resting shapes'
+	// lengths as the plug moves away from your jack's row, so the cable never shortens with a jerk.
+	function ropeLength(from: Point, to: Point) {
+		const sagged = curveLength(from, to, sagCurve(from, to));
+
+		if (layout() === "row") return sagged;
+		const blend = clamp((Math.abs(to.y - from.y) - 16) / 48, 0, 1);
+
+		return (
+			sagged + (curveLength(from, to, bowCurve(from, to)) - sagged) * blend
+		);
 	}
 
 	// The resting curve, as points along it.
@@ -232,16 +279,7 @@ export function setupSwitchboard(
 
 	function swing(dt: number) {
 		const from = youPoint;
-		const hang = restingRope(from, position);
-		let length = 0;
-
-		for (let index = 0; index < LINKS; index++)
-			length += Math.hypot(
-				hang[index + 1].x - hang[index].x,
-				hang[index + 1].y - hang[index].y,
-			);
-
-		const link = length / LINKS;
+		const link = ropeLength(from, position) / LINKS;
 		const pull = gravity();
 		ropeClock = Math.min(ropeClock + dt, ROPE_STEP * 8);
 
@@ -338,13 +376,31 @@ export function setupSwitchboard(
 		handle!.style.translate = `${position.x}px ${position.y}px`;
 	}
 
-	function settle() {
+	// Until the board has been seen, the cable waits straight, ready to drop into its hang.
+	let dropPending =
+		!reduced.matches && typeof IntersectionObserver !== "undefined";
+
+	function waitingRope(): Point[] {
+		return Array.from({ length: LINKS + 1 }, (_, index) => ({
+			x: youPoint.x + ((position.x - youPoint.x) * index) / LINKS,
+			y:
+				youPoint.y +
+				((position.y - youPoint.y) * index) / LINKS -
+				18 * Math.sin((Math.PI * index) / LINKS),
+		}));
+	}
+
+	// Puts the plug where it belongs at once. The cable is laid afresh only when asked (or when there
+	// is none yet); otherwise it keeps its shape and swings to its new ends.
+	function settle(relay = true) {
 		const { point, scale: goalScale } = goal();
 		position.x = point.x;
 		position.y = point.y;
 		velocity.x = velocity.y = scaleVelocity = 0;
 		scale = goalScale;
-		layRope(restingRope(youPoint, position));
+
+		if (relay || !rope.length)
+			layRope(dropPending ? waitingRope() : restingRope(youPoint, position));
 		draw();
 	}
 
@@ -382,7 +438,7 @@ export function setupSwitchboard(
 			Math.hypot(velocity.x, velocity.y) < 2 &&
 			Math.abs(goalScale - scale) < 0.002 &&
 			Math.abs(scaleVelocity) < 0.02 &&
-			ropeStirring < 0.02;
+			ropeStirring < 0.03;
 
 		if (resting) {
 			// The plug lands exactly; the cable keeps the shape it came to rest in.
@@ -418,6 +474,7 @@ export function setupSwitchboard(
 	// click opens the line in a new tab, as a link would.
 	function setTarget(next: Target) {
 		target = next;
+		dropPending = false;
 		root.classList.toggle("is-reaching", next.kind === "reach");
 		move();
 	}
@@ -615,7 +672,15 @@ export function setupSwitchboard(
 			`0 0 ${Math.max(1, boardBox.width)} ${Math.max(1, boardBox.height)}`,
 		);
 
-		if (target.kind !== "drag") settle();
+		if (target.kind === "drag") return;
+		const still = reduced.matches || dropPending || !rope.length;
+		settle(still);
+
+		// A change of layout moves the cable's ends; it swings to them rather than jumping.
+		if (!still) {
+			ropeStirring = 1;
+			move();
+		}
 	}
 
 	// A modifier key held over a reaching plug lets the click through to the link underneath.
@@ -641,26 +706,22 @@ export function setupSwitchboard(
 
 	// The first time the board comes into view the cable drops from straight into its hang and sways
 	// to rest, so it reads as a cable before anyone touches it.
-	if (typeof IntersectionObserver !== "undefined") {
-		const arrival = new IntersectionObserver((entries) => {
-			if (!entries.some((entry) => entry.isIntersecting)) return;
-			arrival.disconnect();
+	// It drops when your jack, not just the board's top edge, is well inside the window.
+	if (dropPending) {
+		const arrival = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				arrival.disconnect();
 
-			if (reduced.matches || target.kind !== "rest") return;
-			const from = youPoint;
-			layRope(
-				Array.from({ length: LINKS + 1 }, (_, index) => ({
-					x: from.x + ((position.x - from.x) * index) / LINKS,
-					y:
-						from.y +
-						((position.y - from.y) * index) / LINKS -
-						18 * Math.sin((Math.PI * index) / LINKS),
-				})),
-			);
-			move();
-		});
+				if (!dropPending) return;
+				dropPending = false;
+				ropeStirring = 1;
+				move();
+			},
+			{ rootMargin: "0px 0px -12% 0px", threshold: 1 },
+		);
 
-		arrival.observe(board);
+		arrival.observe(youJack);
 	}
 
 	// Back and forward restore the page as it was left; put the plug back and the lamps out. Leaving
@@ -679,7 +740,8 @@ export function setupSwitchboard(
 			!putThrough ||
 			!(other instanceof HTMLAnchorElement) ||
 			links.includes(other) ||
-			other.href.split("#")[0] === window.location.href.split("#")[0] ||
+			(other.hash !== "" &&
+				other.href.split("#")[0] === window.location.href.split("#")[0]) ||
 			event.defaultPrevented ||
 			event.button !== 0 ||
 			event.metaKey ||

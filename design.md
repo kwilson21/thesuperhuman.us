@@ -176,8 +176,8 @@ files; a test checks those literals against `global.css`.
   like a plug clicking home, and settles in about half a second. A carried plug stays
   under the pointer. Its lamp strikes twice in 420ms. The cable is a chain under gravity
   pinned at both plugs, so it whips and sways as the plug moves; the first time the
-  board comes into view it drops from straight into its hang. Each settles within three
-  seconds. With reduced motion the cable is drawn at rest and never swings. A chosen line navigates 560ms after the click so the lamp can
+  board's "You" jack comes into view it drops from straight into its hang. Each settles
+  within three seconds; a change of layout lets the cable swing to its new ends. With reduced motion the cable is drawn at rest and never swings. A chosen line navigates 560ms after the click so the lamp can
   be seen; with reduced motion the plug moves without animating and the page changes at
   once.
 
