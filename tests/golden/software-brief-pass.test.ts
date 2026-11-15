@@ -144,6 +144,16 @@ const cases: Case[] = [
 	single("Turnstile says no", good, {
 		fetches: outside(json(200, { success: false })),
 	}),
+	single("Turnstile reports a malformed request", good, {
+		fetches: outside(
+			json(200, { success: false, "error-codes": ["bad-request"] }),
+		),
+	}),
+	single("Turnstile refuses the token with a visitor code", good, {
+		fetches: outside(
+			json(200, { success: false, "error-codes": ["invalid-input-response"] }),
+		),
+	}),
 	single("Turnstile answers success as text", good, {
 		fetches: outside(json(200, { success: "true" })),
 	}),

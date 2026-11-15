@@ -76,6 +76,43 @@ it.each([false, true])(
 	},
 );
 
+it("answers 503 without a pass when the captcha service cannot be reached", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => {
+			throw new Error("network down");
+		}),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(503);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("set-cookie")).toBeNull();
+});
+
+it("answers 200 without a pass when the captcha check refuses the token", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: false })),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ ok: false });
+});
+
+it("answers 500 without a pass when the pass cannot be signed", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: true })),
+	);
+	vi.spyOn(crypto.subtle, "sign").mockRejectedValueOnce(
+		new Error("signing down"),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("set-cookie")).toBeNull();
+});
+
 it("rejects invalid payloads and cross-origin issuance", async () => {
 	vi.stubGlobal("fetch", vi.fn());
 	await POST(context(""));
@@ -126,4 +163,40 @@ it("keys visitor identities with a labelled HMAC over the IP and UTC day", async
 	expect((await createSuggestionPass(secret, "test", now)).split(".")[1]).toBe(
 		expected,
 	);
+});
+
+it("logs a body that fails while it is read once, answers 500 with the fixed body and never asks the captcha", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	vi.stubGlobal("fetch", vi.fn());
+
+	const ctx = context();
+
+	const init: RequestInit & { duplex: "half" } = {
+		method: "POST",
+		headers: {
+			origin: "https://example.com",
+			"content-type": "application/json",
+			"cf-connecting-ip": "test",
+		},
+		body: new ReadableStream({
+			start(controller) {
+				controller.error(new Error("client went away"));
+			},
+		}),
+		duplex: "half",
+	};
+
+	ctx.request = new Request(
+		"https://example.com/api/software/brief/pass",
+		init,
+	);
+
+	const response = await POST(ctx);
+
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("cache-control")).toBe("no-store");
+	expect(fetch).not.toHaveBeenCalled();
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
 });

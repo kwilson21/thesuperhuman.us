@@ -36,7 +36,8 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //     budget             site already at 10000, visitor at 300, the site row filling after the visitor row, the reads or
 //                        writes throw, the rate-limit binding throws
 //     model              answers with a newline, a quote, a control character, over 100 characters, nothing, only
-//                        whitespace, no response string, null, throws
+//                        whitespace, no response string, null, a bare string (500, a fixed line that does not quote the reply); throws (503, the error is not logged, a fixed line is)
+//   500 { suggestion: "" }  the store, the limiter or any other unexpected failure (logged through logUnexpected)
 //   200 { suggestion: " words" }  the model's reply trimmed, cut to six words, a leading space only when the text does not
 //                        end in whitespace; every question; every earlier path; straight apostrophes
 //   200 { suggestion: "", passRequired: true }   no cookie, malformed, expired, too far in the future, another address,
@@ -632,6 +633,9 @@ const cases: Case[] = [
 		},
 	),
 	single("the model answers with null itself", good, { ai: [aiValue(null)] }),
+	single("the model answers with an array itself", good, {
+		ai: [aiValue([])],
+	}),
 	single("the model answers with a string itself", good, {
 		ai: [aiValue("and send them")],
 	}),

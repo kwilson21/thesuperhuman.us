@@ -275,9 +275,45 @@ it("cleans expired rows in bounded batches and retains the previous UTC day", as
 	).toBe(1);
 });
 
-it("returns no suggestion on error, empty model output or timeout", async () => {
-	run.mockRejectedValueOnce(new Error("unavailable"));
-	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
+it("logs one line when the cleanup of old budget rows fails, and still answers", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	const failingCleanup = double<D1Database>({
+		prepare: (sql: string) =>
+			sql.startsWith("DELETE")
+				? double<D1PreparedStatement>({
+						bind: () =>
+							double<D1PreparedStatement>({
+								run: async () => {
+									throw new Error("cleanup refused");
+								},
+							}),
+					})
+				: database.prepare(sql),
+	});
+
+	const waitUntil = vi.fn();
+	const ctx = context(input, { MUSIC_DB: failingCleanup });
+	ctx.locals.runtime.ctx = double<ExecutionContext>({ waitUntil });
+	const response = await POST(ctx);
+	expect(response.status).toBe(200);
+	await waitUntil.mock.calls[0][0];
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
+});
+
+it("answers 503 with no suggestion when the model fails, and logs no text of the model's error", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	run.mockRejectedValueOnce(new Error("model quoted MARKER-VISITOR-TEXT"));
+	const failed = await POST(context());
+	expect(failed.status).toBe(503);
+	expect(await failed.json()).toEqual({ suggestion: "" });
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(JSON.stringify(log.mock.calls)).not.toContain("MARKER-VISITOR-TEXT");
+	log.mockRestore();
+});
+
+it("returns no suggestion on empty model output or timeout", async () => {
 	run.mockResolvedValueOnce({ response: "" });
 	expect(await (await POST(context())).json()).toEqual({ suggestion: "" });
 	run.mockImplementationOnce(() => new Promise(() => {}));
@@ -426,9 +462,11 @@ it.each(["pending", "rejected", "unsuccessful", "throws"])(
 	},
 );
 
-it("fails closed when the minute binding throws", async () => {
+it("fails closed with a 500 when the minute binding throws", async () => {
 	limiter.limit.mockRejectedValueOnce(new Error("unavailable"));
-	await POST(context());
+	const response = await POST(context());
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ suggestion: "" });
 	expect(run).not.toHaveBeenCalled();
 	expect(database.prepare).not.toHaveBeenCalled();
 });
@@ -552,4 +590,38 @@ it("uses the keyed visitor identity for both the limiter and persisted daily bud
 			.prepare("SELECT scope FROM brief_suggestion_budget WHERE scope != ?")
 			.get("site")?.scope,
 	).toBe(key);
+});
+
+it("logs a body that fails while it is read once and answers 500 with the fixed body, asking nothing", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const ctx = context();
+
+	const init: RequestInit & { duplex: "half" } = {
+		method: "POST",
+		headers: {
+			origin: "https://example.com",
+			"content-type": "application/json",
+			"cf-connecting-ip": "test",
+			cookie,
+		},
+		body: new ReadableStream({
+			start(controller) {
+				controller.error(new Error("client went away"));
+			},
+		}),
+		duplex: "half",
+	};
+
+	ctx.request = new Request(
+		"https://example.com/api/software/brief/suggest",
+		init,
+	);
+
+	const response = await POST(ctx);
+
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ suggestion: "" });
+	expect(run).not.toHaveBeenCalled();
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
 });

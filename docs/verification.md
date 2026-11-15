@@ -358,6 +358,54 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The software-inquiry model
+
+File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, made once however many passes there are, in two steps as the code makes them: the key is read, and a later step writes it; a delivery that read the key as set is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`): it finds the other brief and answers with it, and keeps the allowance it spent (the key is not deleted); when the look-up finds nothing, the try ends on the lost-brief path (no second insert, the key is given back, the visitor is told the brief was not stored).
+
+**State.** The stored briefs (submission id, email, the delivery that stored it), three deliveries (phase, id, email, address, tries, whether it read the key as unset, how it ended), the set of addresses whose key is set, and the client copies sent. Two ids, two emails, two addresses, three deliveries. The allowance is the set of keys, not a flag on a delivery: a refusal reads the set, and the property reads it too.
+
+**Properties** (`allProperties`):
+1. `oneBriefPerId`: no two stored briefs share a submission id.
+2. `oneCopyPerId`: one client copy per id, sent by the delivery that stored the brief.
+3. `loserNeverFailed`: a delivery is never told its brief was lost while a brief for its id is stored.
+4. `loserKeepsAllowance`: a delivery that counted and was then answered with the stored brief leaves its address's key set.
+5. `keptForStored`: a stored brief keeps its address's key, whatever other deliveries from the same address do. It holds with no exception in the model because no modelled step deletes a key after a stored brief (the model's lost-brief step cannot happen, since stored rows only grow, and a delivery that finds a brief stored keeps its key). The code has one unmodelled deletion that predates the conversion: after a failed insert (the database failing, not the index), the flow gives back the whole address-wide key, so a request from the same address that stored at the same moment loses its count. That is left as it was. Checked by simulation, and `RetryGivesBack` and `NeverCounts` break it.
+6. `strangerNeverSeesBrief`: a stored brief is answered only to the email that sent it.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoIndex` | The submission id is not unique | `oneBriefPerId` |
+| `NoRetry` | A lost race answers a failure at once, without looking up again | `loserNeverFailed` |
+| `LoserGivesBack` | The loser of a race, answered with the stored brief, deletes its address's key (the earlier behaviour) | `loserKeepsAllowance` |
+| `RetryGivesBack` | A plain retry (a brief already stored, nothing counted) deletes its address's key | `keptForStored` |
+| `NeverCounts` | The count never sets the key | `keptForStored` |
+| `AnyAddress` | A stored brief is answered to any email | `strangerNeverSeesBrief` |
+| `CopyForAll` | The client copy goes out for every delivery answered with a stored brief | `oneCopyPerId` |
+
+No property is a flag set by the guard it checks: each reads the stored rows and the deliveries' own fields. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored a brief and another, from another address, which had been counted, was answered with it. Each mutant is found in under 2 s in the pooled driver (2026-11-15).
+
+**What it does not cover.** The attempt limit and the captcha (they come before the look-up and decide nothing about the brief), the owner notice, the alert on a failed insert, and the key a failed insert gives back, and an insert that fails for a reason other than the index (a defect in this model's terms: the flow answers it with the fixed sentence and gives the count back, which `tests/flows/software-inquiry-stories.test.ts` checks). No Apalache run.
+
+## The suggestion-budget model
+
+File: `verification/suggestion-budget.qnt`, written for the conversion of the public intake routes (module `budget`). A visitor may take 300 suggestions a day and the site 10,000 (`brief_suggestion_budget`). The flow reads the site's count first (a plain read, which only decides the early answer), then reserves for the visitor and then for the site. Each reservation is ONE statement: an upsert that adds one only while the stored count is under the cap, so the table cannot pass a cap however many requests read the same count (a compare-and-set write). The model scales the caps to 2 for a visitor and 3 for the site, with two visitors and four requests.
+
+**Properties** (`allProperties`):
+1. `visitorWithinCap` and 2. `siteWithinCap`: a count never passes its daily cap.
+3. `countsAreReservations`: each count is exactly the reservations made: none lost, none counted twice.
+4. `modelOnlyForReserved`: the model is called only for a request that holds both of its reservations.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `UnguardedVisitor` | A visitor's reservation adds one without the `count < cap` guard (nothing else reads a visitor's count) | `visitorWithinCap` |
+| `UnguardedSite` | The site's reservation adds one without the guard, so only the early read protects the site | `siteWithinCap` |
+| `ReadThenWrite` | The reservation reads the count in one step and writes it plus one in another | `countsAreReservations` |
+| `IgnoreRefusal` | A refused reservation does not stop the request | `modelOnlyForReserved` |
+
+**Found by writing it.** The early read of the site's count is not what protects the cap: with the guard removed, two requests that both read "under the cap" both reserve the last unit (`UnguardedSite`). The guard on the write is the protection, and the early read is only a shortcut. A visitor's count has no early read at all.
+
+**What it does not cover.** The per-minute limits (Cloudflare's own counters), the pass and the captcha, the model's answer, the cleanup of old days. A visitor's reservation that succeeds when the site's is then refused is not given back (the visitor's day count stays used): the model treats this as the design, and it is not a property. No Apalache run.
+
 ## The publication-journal model
 
 File: `verification/publication-journal.qnt`, written for the conversion of the publication routes (module `publication`). An agent delivers envelopes (publish, correct, withdraw) to one project's journal and retries on a failure; the Worker serves several deliveries at once. A delivery reads (the project's latest revision, the event under its event id and the operations of its entry, as ONE batch), judges by the commit rule and inserts; the table's constraints (the primary key on project and event id, and `UNIQUE (project_id, revision)`) refuse an insert another delivery got to first, and the delivery then reads and judges again, three tries in all (`src/server/flows/publication-commit.ts`). Every accepted write takes the next revision, so the revision key is the compare-and-set for everything the rule read.
