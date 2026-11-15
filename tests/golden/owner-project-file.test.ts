@@ -997,6 +997,25 @@ const cases: Case[] = [
 	pub("a final revokes the live review", "review_ready", FINAL, {
 		files: [published("f2", { object_key: keyOf("f2") })],
 	}),
+	race(
+		"revoke with a note after the draft was published and the stage moved",
+		REVOKE,
+		`UPDATE audio_project_files SET status='published',published_at='2026-11-13T11:30:00.000Z'; UPDATE audio_projects SET stage='review_ready'`,
+		draft("in_progress"),
+		revoke("a note for a draft"),
+	),
+	{
+		name: "revoke: a bad publish body with no R2 bucket answers 400",
+		...draft("in_progress"),
+		r2: { missing: true },
+		steps: [act({ action: "publish", downloadable: true })],
+	},
+	outage(
+		"the revocation notice's claim fails after the revoke",
+		/UPDATE audio_project_updates SET notification_status='sending'/,
+		live("in_progress"),
+		revoke(),
+	),
 ];
 
 defineCorpus("owner-project-file", POST, cases);
