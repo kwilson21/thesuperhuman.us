@@ -900,6 +900,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	/** Says `text` once four seconds have passed since the last thing said, after any arrival message still waiting. */
 	function sayWhenFree(text: string) {
 		clearTimeout(laterTimer);
+
+		// Nothing is said about a board that is paused, hidden or set aside for the plain form.
+		if (paused || plain || !visible) return;
 		const wait = lastAnnounced + 4050 - Date.now();
 
 		if (wait <= 0 && pendingNews <= 0 && announce(text)) return;
