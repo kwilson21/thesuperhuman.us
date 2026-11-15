@@ -21,6 +21,8 @@ import type { OwnerRequest } from "../../src/lib/owner-model";
 import {
 	clientOffer,
 	type OfferTerms,
+	parseOfferTerms,
+	readOfferTerms,
 	type SoftwareOffer,
 	validateOfferTerms,
 } from "../../src/lib/software-offers";
@@ -2389,6 +2391,72 @@ describe("the offer terms against the frozen Zod 3 validator", () => {
 		expect(take(found)).toEqual(noMismatch(found));
 		console.info(
 			`clientOffer differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("finds every issue the Zod schema found under validateOfferTerms' error map, path and sentence, in order", () => {
+		// Each issue is its own entry, so two issues on one path (which validateOfferTerms folds into the last) both show.
+		// A path is compared joined with ".", as every reader of it joins it: the check across fields names
+		// "projectRange.highCents" as one step where Zod named two.
+		const listed = (issues: Issues) =>
+			Object.fromEntries(
+				issues.map((issue, index) => [
+					String(index),
+					JSON.stringify([issue.path.join("."), issue.message]),
+				]),
+			);
+
+		const found = differential(
+			(input: RawValue): Answer => {
+				const read = legacyOfferTermsSchema.safeParse(input, {
+					errorMap: (issue) => ({
+						message:
+							issue.path[0] === "paymentMode"
+								? "Choose a payment mode."
+								: "This answer is required.",
+					}),
+				});
+
+				return read.success
+					? { ok: true, value: read.data }
+					: { ok: false, errors: listed(read.error.issues) };
+			},
+			(input: RawValue): Answer => {
+				const read = readOfferTerms(input);
+
+				return read.ok
+					? { ok: true, value: read.value }
+					: { ok: false, errors: listed(read.issues) };
+			},
+			said,
+		);
+
+		for (const input of inputs) found.run(input);
+
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`offer terms issues differential: ${found.count} inputs, ${found.mismatches.length} differences`,
+		);
+	}, 120_000);
+
+	it("parses any value, not only stored JSON, as Zod's parse did: the same value, or a throw treated the same", () => {
+		const found = differential(
+			(input: RawValue) =>
+				storedRead(() => legacyOfferTermsSchema.parse(input)),
+			(input: RawValue) => storedRead(() => parseOfferTerms(input)),
+			(answer) =>
+				answer.ok
+					? `ok ${exactly(answer.value)}`
+					: `threw ${JSON.stringify(answer.failed)}`,
+		);
+
+		for (const input of inputs) found.run(input);
+
+		expect(found.count).toBeGreaterThan(18000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`parseOfferTerms differential: ${found.count} inputs, ${found.mismatches.length} differences`,
 		);
 	}, 120_000);
 });
