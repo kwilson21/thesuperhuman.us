@@ -1750,7 +1750,7 @@ it("sends each website review Edit button to its plan position", () => {
 		["What you already have", 2],
 		["Who will keep it up to date?", 3],
 		["Timing", 4],
-		["Budget", 5],
+		["Budget (USD)", 5],
 		["Your name", 6],
 		["Email", 6],
 		["Company, if you have one", 6],

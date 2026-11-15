@@ -420,7 +420,7 @@ export function setupSoftwareInquiry(
 		const values = payload();
 
 		const labels = {
-			budgetNote: "Budget",
+			budgetNote: "Budget (USD)",
 			firstResult: "First result",
 			firstVersion: "First version",
 		};

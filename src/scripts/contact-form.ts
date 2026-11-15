@@ -18,25 +18,28 @@ export function setupContactForm() {
 	// ContactForm.astro, which loads this script, always renders #contact-form; a missing form still fails later, as before.
 	const form = document.querySelector<HTMLFormElement>("#contact-form")!;
 	const success = document.getElementById("contact-success")!;
+	// The fields stay editable while a send is in flight, so the confirmation names what was sent, not what the fields hold now.
+	let sent = { name: "", email: "" };
 
 	setupFormSubmission({
 		form,
 		endpoint: "/api/contact",
 		success,
-		payload: (data) => ({
-			name: String(data.get("name") ?? ""),
-			email: String(data.get("email") ?? ""),
-			company: String(data.get("company") ?? ""),
-			description: String(data.get("description") ?? ""),
-		}),
-		onSuccess: () => {
-			const data = new FormData(form);
-			const reply = success.querySelector("[data-contact-reply]");
+		payload: (data) => {
+			const body = {
+				name: String(data.get("name") ?? ""),
+				email: String(data.get("email") ?? ""),
+				company: String(data.get("company") ?? ""),
+				description: String(data.get("description") ?? ""),
+			};
 
-			const [before, email, after] = contactReplyLine(
-				String(data.get("name") ?? ""),
-				String(data.get("email") ?? ""),
-			);
+			sent = body;
+
+			return body;
+		},
+		onSuccess: () => {
+			const reply = success.querySelector("[data-contact-reply]");
+			const [before, email, after] = contactReplyLine(sent.name, sent.email);
 
 			// Without an address the page keeps its general sentence.
 			if (!reply || !email) return;

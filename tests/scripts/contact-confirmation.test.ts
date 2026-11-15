@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
-import { contactReplyLine } from "~/scripts/contact-form";
+import { afterEach, expect, it, vi } from "vitest";
+import { contactReplyLine, setupContactForm } from "~/scripts/contact-form";
 import { contactOwnerMessage, contactReplyMessage } from "~/lib/resend";
 import type { ContactInput } from "~/server/contact-input";
 
 const form = readFileSync("src/components/ContactForm.astro", "utf8");
 const success = form.slice(form.indexOf('<div id="contact-success"'));
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 it("names the visitor and the address the reply goes to", () => {
 	expect(contactReplyLine("  Alex  Example ", " alex@example.com ")).toEqual([
@@ -15,6 +19,89 @@ it("names the visitor and the address the reply goes to", () => {
 	]);
 	expect(contactReplyLine("   ", "alex@example.com")[0]).toBe(
 		"Thanks, there. I’ll read it myself and reply by email to ",
+	);
+});
+
+it("names the address that was sent, even when the field changes while sending", async () => {
+	const values = new Map([
+		["name", "Alex Example"],
+		["email", "alex@example.com"],
+		["company", ""],
+		["description", "Hello"],
+	]);
+
+	const element = () => ({
+		textContent: "",
+		hidden: false,
+		disabled: false,
+		focus: vi.fn(),
+		setAttribute: vi.fn(),
+		removeAttribute: vi.fn(),
+	});
+
+	const button = { ...element(), textContent: "Send message" };
+	const status = element();
+	const reply = { replaceChildren: vi.fn() };
+	const page = { ...element(), querySelector: () => reply };
+
+	let submit:
+		| ((event: { preventDefault(): void }) => Promise<void>)
+		| undefined;
+
+	const contactForm = {
+		...element(),
+		id: "contact-form",
+		dataset: { available: "true" },
+		elements: [],
+		querySelector: (selector: string) =>
+			selector === 'button[type="submit"]'
+				? button
+				: selector === "[data-form-status]"
+					? status
+					: null,
+		querySelectorAll: () => [],
+		addEventListener: (type: string, listener: typeof submit) => {
+			if (type === "submit") submit = listener;
+		},
+	};
+
+	let respond: (response: Response) => void = () => {};
+
+	vi.stubGlobal("window", {});
+	vi.stubGlobal("document", {
+		querySelector: () => contactForm,
+		getElementById: () => page,
+		createElement: () => ({ textContent: "" }),
+	});
+	vi.stubGlobal(
+		"FormData",
+		class {
+			get(key: string) {
+				return values.get(key) ?? null;
+			}
+		},
+	);
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(
+			() =>
+				new Promise<Response>((resolve) => {
+					respond = resolve;
+				}),
+		),
+	);
+
+	setupContactForm();
+	const sending = submit!({ preventDefault: () => {} });
+	values.set("name", "Sam Other");
+	values.set("email", "changed@example.com");
+	respond(Response.json({ ok: true }));
+	await sending;
+
+	expect(reply.replaceChildren).toHaveBeenCalledWith(
+		"Thanks, Alex. I’ll read it myself and reply by email to ",
+		{ textContent: "alex@example.com" },
+		".",
 	);
 });
 
