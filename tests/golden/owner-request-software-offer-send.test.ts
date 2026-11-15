@@ -1,3 +1,4 @@
+import { POST as changeRequest } from "~/pages/api/owner/requests/[id]";
 import { POST } from "~/pages/api/owner/requests/[id]/software";
 import {
 	act,
@@ -343,6 +344,37 @@ const cases: Case[] = [
 			software_invoices: [deposit("open")],
 		}),
 	),
+	{
+		// A decline does not wait for a paid deposit (only an open one blocks it), and it withdraws the sent offer. After a
+		// reopen, the send guard looks only at a sent offer's deposit, so new terms can go out over money already paid.
+		name: "a deposit paid, then the request declined, reopened, redrafted and sent",
+		music: {
+			seed: withOffers([offer("sent")], {
+				software_offer_links: [liveLink()],
+				software_invoices: [deposit("paid")],
+			}),
+		},
+		fetches: mail(),
+		steps: [
+			step({ action: "decline", text: "Not a fit right now." }),
+			step(
+				{ action: "reopen" },
+				{
+					handler: changeRequest,
+					path: "/api/owner/requests/r1",
+					advanceMs: 1000,
+				},
+			),
+			step(
+				{ action: "draft", terms: terms(), expectedUpdatedAt: null },
+				{ advanceMs: 1000 },
+			),
+			step(undefined, {
+				json: (prior) => sendBody(2, prior.answerJson(2).updatedAt ?? null),
+				advanceMs: 1000,
+			}),
+		],
+	},
 	// the sending window
 	sendCase(
 		"a draft sent over a link made 10 seconds ago",
