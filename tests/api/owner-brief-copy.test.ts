@@ -220,6 +220,19 @@ describe("a request with no id", () => {
 	);
 });
 
+describe("a request that is not a software request", () => {
+	it("is no such request, whatever its stored details are", async () => {
+		seed("[]");
+		world.sql.prepare("UPDATE owner_requests SET kind='service'").run();
+
+		const response = await call(world.db);
+
+		expect(response.status).toBe(404);
+		expect(await readJson(response)).toEqual({ ok: false });
+		expect(sent()).toHaveLength(0);
+	});
+});
+
 describe("a brief whose copy cannot be built", () => {
 	it("records a failure over this attempt, sends nothing and answers 500 with the route's sentence", async () => {
 		// A stored answer that is an object with a text toString cannot be turned into a label.

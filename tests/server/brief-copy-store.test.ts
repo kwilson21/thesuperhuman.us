@@ -96,6 +96,17 @@ describe("readCopyFacts", () => {
 		},
 	);
 
+	it("answers a request of another kind as stored, whatever its details are", async () => {
+		const world = musicWorld();
+
+		seed(world, "[]");
+		world.sql.prepare("UPDATE owner_requests SET kind='service'").run();
+
+		expect(await run(world, readCopyFacts("r1"))).toMatchObject({
+			done: { request: { id: "r1", kind: "service" }, detailsJson: "[]" },
+		});
+	});
+
 	it("fails with the database's failure when the read throws", async () => {
 		const world = throwing(/FROM owner_requests WHERE id=\?/);
 

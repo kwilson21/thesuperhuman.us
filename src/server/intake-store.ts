@@ -178,8 +178,11 @@ export const readCopyFacts = (id: string) =>
 			catch: (failure) => new IntakeReadFailed({ failure }),
 		});
 
-		// Details are a JSON object: anything else cannot record that a copy was claimed, so no email is sent for it.
-		if (!isObject(request.details) || Array.isArray(request.details))
+		// A software request's details are a JSON object: anything else cannot record that a copy was claimed, so no email is sent for it. A request of another kind is left to the rule's kind check.
+		if (
+			request.kind === "software" &&
+			(!isObject(request.details) || Array.isArray(request.details))
+		)
 			return yield* Effect.fail(
 				new IntakeReadFailed({
 					failure: new Error("Stored details are not a JSON object."),
