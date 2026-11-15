@@ -506,6 +506,13 @@ const plainText = (text: string) =>
 		.replace(/[‘’`´′]/g, "'")
 		.replace(/\s+/g, " ");
 
+/**
+ * Whether text names a price, a cost or a link: the offer board's filter, where durations and promises belong to the
+ * offer the owner writes, but money belongs to the pricing panel and links to nobody.
+ */
+export const pricesOrLinks = (text: string) =>
+	[MONEY, COST, LINK].some((pattern) => pattern.test(plainText(text)));
+
 const WORDLIKE = /[\p{L}\p{N}]/u;
 
 /** Whether `phrase` is in `said` as a whole: not inside a longer number or word ("2 weeks" is not in "12 weeks"). */
