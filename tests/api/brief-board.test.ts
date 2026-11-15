@@ -536,8 +536,8 @@ describe("the model", () => {
 					reason: "x",
 				},
 			],
-			// The shown cards the reply named; c9 was never shown, so it names nothing.
-			refs: ["c1"],
+			// c1's own card was kept, so it names itself; c9 was never shown, so it names nothing.
+			refs: [],
 		});
 	});
 
@@ -572,6 +572,28 @@ describe("the model", () => {
 					reason: "Dates change",
 				},
 			],
+			refs: [],
+		});
+	});
+
+	it("passes on a shown card the reply named in a card it left out, so the page does not withdraw it", async () => {
+		run.mockResolvedValueOnce({
+			response: {
+				cards: [
+					{
+						ref: "c1",
+						lane: "parts",
+						text: "Shows in 2 weeks",
+						basis: "suggested",
+						reason: "x",
+					},
+				],
+			},
+		});
+
+		expect(await readJson(await POST(context()))).toEqual({
+			ok: true,
+			cards: [],
 			refs: ["c1"],
 		});
 	});

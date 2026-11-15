@@ -1717,8 +1717,8 @@ describe("the living brief's outline", () => {
 			[{ lane: "parts", text: "Classes", origin: "answers" }],
 		],
 		[
-			"a suggestion carrying a price",
-			[{ lane: "parts", text: "Classes from $40", origin: "kept" }],
+			"an item from the answers carrying a price the visitor did not write",
+			[{ ...outline[1], text: "Classes from $40" }],
 		],
 		["an answer outside a question", [{ ...outline[2], answer: "Yes" }]],
 		["something that is not a list", { lane: "parts" }],

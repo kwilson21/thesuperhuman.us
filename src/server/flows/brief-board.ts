@@ -111,7 +111,10 @@ export const interpretBrief = (asked: Interpretation) =>
 				(card): ReplyCard =>
 					shown.has(card.ref) ? card : { ...card, ref: "" },
 			),
-			// Every shown card the reply named, so one whose new version was left out above is not withdrawn.
-			refs: [...new Set(replyRefs(raw))].filter((ref) => shown.has(ref)),
+			// The shown cards the reply named in a card left out above, so they are not withdrawn. A card the reply kept is
+			// named by that card itself (in its own lane: a card moved to another lane is moved, not copied).
+			refs: [...new Set(replyRefs(raw))].filter(
+				(ref) => shown.has(ref) && !cards.some((card) => card.ref === ref),
+			),
 		};
 	});
