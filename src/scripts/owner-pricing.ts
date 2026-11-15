@@ -61,6 +61,13 @@ const BUSY = "A save is on its way. Try again when it answers.";
 /** Where the page notes, across the reload new research triggers, that it was saved. */
 const SAVED_KEY = "owner-pricing-saved";
 
+/** Whether Clear research is offered in this form (only while research is saved). */
+const clearOffered = (form: HTMLFormElement) =>
+	form.querySelector<HTMLElement>("[data-pricing-clear]")?.hidden === false;
+
+/** Set just before the page reloads itself after a save, so the unsaved-changes warning stays quiet. */
+let reloading = false;
+
 /** Whether a save from this page is on its way. */
 let saving = false;
 
@@ -192,6 +199,7 @@ async function save(
 					// Without storage the reloaded table is the confirmation.
 				}
 
+				reloading = true;
 				location.reload();
 
 				return;
@@ -224,6 +232,12 @@ async function save(
 				const clear = form.querySelector<HTMLElement>("[data-pricing-clear]");
 
 				if (clear) clear.hidden = true;
+
+				const editCopy = document.querySelector<HTMLElement>(
+					"[data-pricing-edit-copy]",
+				);
+
+				if (editCopy) editCopy.hidden = true;
 			}
 
 			if (status)
@@ -260,6 +274,15 @@ async function save(
 }
 
 export function setupOwnerPricing() {
+	// The page asks for a reload after a refusal or a lost answer: unsaved changes are not lost without a warning.
+	window.addEventListener("beforeunload", (event) => {
+		const forms = [
+			...document.querySelectorAll<HTMLFormElement>("[data-pricing-form]"),
+		];
+
+		if (!reloading && forms.some(unsaved)) event.preventDefault();
+	});
+
 	let reloaded: string | null = null;
 
 	try {
@@ -324,8 +347,9 @@ export function setupOwnerPricing() {
 
 			if (text === "") {
 				if (status)
-					status.textContent =
-						"Paste the research file, or use Clear research to remove it.";
+					status.textContent = clearOffered(form)
+						? "Paste the research file, or use Clear research to remove it."
+						: "Paste the research file to save it.";
 				markResearch(true);
 
 				return;
@@ -347,8 +371,9 @@ export function setupOwnerPricing() {
 			// A pasted null is not a research file: clearing goes through Clear research and its question.
 			if (!Predicate.isObject(market) || Array.isArray(market)) {
 				if (status)
-					status.textContent =
-						"That is not a research file. To remove the saved research, use Clear research.";
+					status.textContent = clearOffered(form)
+						? "That is not a research file. To remove the saved research, use Clear research."
+						: "That is not a research file. Paste the file the research produced.";
 				markResearch(true);
 
 				return;

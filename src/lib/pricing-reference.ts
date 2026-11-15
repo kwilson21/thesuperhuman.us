@@ -164,7 +164,8 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	if (rangeItems.length === 0)
 		return {
 			ok: false,
-			error: "The research has no ranges. Use Clear research to remove it.",
+			error:
+				"The research has no ranges. Add at least one range, then save again.",
 		};
 
 	const ranges: MarketRange[] = [];

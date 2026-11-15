@@ -169,10 +169,11 @@ describe("found in the offer board's first review", () => {
 });
 
 describe("found in the offer board's fourth review", () => {
-	it("refuses research with no ranges, and says to clear it instead", () => {
+	it("refuses research with no ranges, and says what to add", () => {
 		expect(readMarketReference({ ...research, ranges: [] })).toEqual({
 			ok: false,
-			error: "The research has no ranges. Use Clear research to remove it.",
+			error:
+				"The research has no ranges. Add at least one range, then save again.",
 		});
 	});
 });

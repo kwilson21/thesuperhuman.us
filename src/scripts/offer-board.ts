@@ -235,8 +235,15 @@ export function setupOfferBoard() {
 
 	/** A message the owner both sees in the status line and hears. */
 	const say = (text: string) => {
+		status.style.minHeight = "";
 		status.textContent = text;
 		announce(text);
+	};
+
+	/** Words the board writes on its own, while the owner may be among the cards: the line keeps its height. */
+	const quietly = (text: string) => {
+		status.style.minHeight = `${status.offsetHeight}px`;
+		status.textContent = text;
 	};
 
 	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply. The
@@ -741,7 +748,7 @@ export function setupOfferBoard() {
 					"the day-value estimate",
 				),
 			);
-		} else if (pricing.dayValueCents !== null && sizing)
+		} else if (pricing.dayValueCents !== null && (sizing || replied))
 			dayParts.push("No milestones with days on the board to estimate from.");
 		else dayParts.push(...dayDefault.map((node) => node.cloneNode(true)));
 
@@ -783,6 +790,10 @@ export function setupOfferBoard() {
 		} else if (pricing.market && sizing?.size)
 			marketParts.push(
 				`The AI reads this as a ${sizing.size} ${kindNoun}, and your research has no figure for that size.`,
+			);
+		else if (pricing.market && replied)
+			marketParts.push(
+				"The AI did not size this brief, so there is no market range to show. Press Suggest again to ask.",
 			);
 		else marketParts.push(...marketDefault.map((node) => node.cloneNode(true)));
 
@@ -1003,7 +1014,9 @@ export function setupOfferBoard() {
 				(card) => card.lane === lane && card.status === "dismissed",
 			)
 				? "Nothing here now. The ones you set aside are under Set aside."
-				: "No suggestions yet.";
+				: replied
+					? "No suggestions for this part."
+					: "No suggestions yet.";
 		}
 
 		const dismissed = board.cards.filter((card) => card.status === "dismissed");
@@ -1046,7 +1059,7 @@ export function setupOfferBoard() {
 		heldButton.toggleAttribute("data-idle", !held);
 		heldButton.textContent = held
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
-			: "Show 1 update";
+			: "Show 88 updates";
 		askButton.textContent = replied
 			? "Suggest again"
 			: "Suggest an offer with AI";
@@ -1146,8 +1159,13 @@ export function setupOfferBoard() {
 			const first = !held;
 
 			if (!held || reply.n > held.n) held = { ...reply, changes };
-			// The status line keeps its words, so its height and the cards below it stay; the arrival is only announced.
+			// The status line says so without changing its height, so the cards below it stay.
 			render();
+			quietly(
+				held.changes === 1
+					? "An update is waiting."
+					: `${held.changes} updates are waiting.`,
+			);
 
 			if (first)
 				announce(
@@ -1203,7 +1221,7 @@ export function setupOfferBoard() {
 		requests++;
 
 		if (pressed) say("Reading the brief and your draft…");
-		else status.textContent = "Reading the brief and your draft…";
+		else quietly("Reading the brief and your draft…");
 		render();
 		const shown = draft();
 

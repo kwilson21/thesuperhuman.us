@@ -274,7 +274,10 @@ function check(name, ok, detail = "") {
 			route.fulfill({ json: { ok: true, version: clearVersion + 1 } }),
 		);
 		page.once("dialog", (dialog) => dialog.accept());
-		await values.locator('[name="contingencyPercent"]').fill("12");
+		const contingency = values.locator('[name="contingencyPercent"]');
+		const contingencyBefore = await contingency.inputValue();
+
+		await contingency.fill(contingencyBefore === "12" ? "13" : "12");
 		await page
 			.locator('[data-part="market"]')
 			.getByRole("button", { name: "Clear research" })
@@ -293,6 +296,8 @@ function check(name, ok, detail = "") {
 			(await page.locator("[data-pricing-market]").inputValue()) === "" &&
 				((await research.count()) === 0 || (await research.isHidden())),
 		);
+		// Put the field back, so leaving the page raises no unsaved-changes warning.
+		await contingency.fill(contingencyBefore);
 		await page.unroute("**/api/owner/pricing");
 
 		const queue = [];
