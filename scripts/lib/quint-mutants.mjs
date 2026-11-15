@@ -51,6 +51,30 @@ export const discountMutants = {
 	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
 };
 
+// verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can
+// arrive in any order. Module name -> the property its change must break.
+export const signinMutants = {
+	signinSingleRow: { property: "clientNeverLockedOut" },
+	signinEvictOldest: { property: "clientNeverLockedOut" },
+	signinCookieNotRequired: { property: "cookieRequired" },
+	signinAddressAttempts: { property: "othersUntouched" },
+	signinReplaceLive: { property: "othersUntouched" },
+	signinNoAttemptCap: { property: "attemptsBounded" },
+	signinNoAllowance: { property: "emailsBounded" },
+	signinIgnoreExpiry: { property: "deadCodeNeverSignsIn" },
+	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
+	signinNoRowCap: { property: "liveRowsBounded" },
+	signinFreshCookie: { property: "cookieOpensEmailedCode" },
+	signinChargeAnyVersion: { property: "chargeOnlyTheCodeRead" },
+	signinNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinNoCapGuard: { property: "liveRowsBounded" },
+	signinNoReplace: { property: "outcomeIndependentOfAddress" },
+	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
+	signinDeleteByCookie: { property: "noCrossAddressEffect" },
+	signinEntryByCookie: { property: "noCrossAddressEffect" },
+};
+
 // verification/music-playback.qnt: one playthrough's playback events delivered by a retrying player to concurrent handlers
 // (src/server/flows/music-event.ts). Module name -> the property its change must break.
 export const musicMutants = {
@@ -81,6 +105,17 @@ export const models = [
 		equivalents: [],
 		exhaustive: ["discount"],
 		samples: "10000",
+	},
+	{
+		file: "verification/signin-codes.qnt",
+		current: ["signin"],
+		mutants: signinMutants,
+		equivalents: [],
+		exhaustive: [],
+		// Its rarest mutant takes about 6,000 random runs to find (the rest a few hundred), so each mutant check allows 12,000; the
+		// run that must pass makes 8,000, which costs about 8 s of one core.
+		samples: "12000",
+		passSamples: "8000",
 	},
 	{
 		file: "verification/music-playback.qnt",
