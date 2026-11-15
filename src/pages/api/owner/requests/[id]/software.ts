@@ -10,13 +10,7 @@ import {
 	parseContractor,
 } from "~/lib/agreement-fields";
 import { FieldsRefused } from "~/lib/fields";
-import {
-	musicRequest,
-	offersFailed,
-	offersFailedAfterDraft,
-	offersFailedAfterEmail,
-	offersUnavailable,
-} from "~/lib/music-request";
+import { musicRequest } from "~/lib/music-request";
 import { softwareGuard } from "~/lib/software-guard";
 import {
 	depositOfferBlock,
@@ -33,6 +27,11 @@ import {
 	offerIsSending,
 	offerSendingMessage,
 	offerSendingSince,
+	offersCheckFailedAfterFailedEmail,
+	offersFailed,
+	offersFailedAfterDraft,
+	offersFailedAfterEmail,
+	offersUnavailable,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { isUniqueViolation, raisedByJsonGuard } from "~/server/guarded-save";
@@ -1011,7 +1010,7 @@ const act = async (
 			`Hi ${record.name.trim().split(/\s+/)[0] || "there"},\n\nHere’s the offer for ${terms.value.outcome}: ${link}\n\n${enabled && (pin || offer.msa_template_id) ? "Review and sign on the website." : "We will arrange for you to sign outside the website."}\n\nThe link is private to you. You can forward it to whoever approves the budget. Reply to this email with any questions.\n\nKazon`,
 		);
 
-		// The offer is saved as sent and the email has been tried, so a failed check gets the after-email answer.
+		// The offer is saved as sent and the email has been tried, so a failed check says what happened to the email.
 		const live = await stored(
 			db
 				.prepare(`SELECT 1 FROM software_offer_links WHERE request_id=? AND token_hash=? AND revoked_at IS NULL
@@ -1019,7 +1018,7 @@ const act = async (
       AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn' AND email<>'')`)
 				.bind(record.id, tokenHash, offer.id, record.id)
 				.first(),
-			offersFailedAfterEmail,
+			sent.ok ? offersFailedAfterEmail : offersCheckFailedAfterFailedEmail,
 		);
 
 		// A closed link is refused whatever became of the email; only an accepted email is said to have gone out.
