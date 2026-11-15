@@ -1,6 +1,10 @@
 import * as Effect from "effect/Effect";
 import { describe, expect, it } from "vitest";
-import { tokenGiven } from "../../src/server/rules/publication-login";
+import {
+	namesResource,
+	resourceOf,
+	tokenGiven,
+} from "../../src/server/rules/publication-login";
 
 const refused = <A, E>(answer: Effect.Effect<A, E>) =>
 	Effect.runSync(
@@ -44,5 +48,27 @@ describe("GitHub's answer to the code exchange", () => {
 				tokenGiven.decide({ ok: true, error: undefined, token: undefined }, {}),
 			)?._tag,
 		).toBe("LoginRefused");
+	});
+});
+
+describe("the resource an authorization request names", () => {
+	const resource = "https://example.test/mcp";
+
+	it.each<[string, string | readonly string[] | undefined, boolean]>([
+		["the string itself", resource, true],
+		["a one-element array holding it", [resource], true],
+		["a two-element array", [resource, resource], false],
+		["a one-element array holding another value", ["other"], false],
+		["an empty array", [], false],
+		["another string", "other", false],
+		["nothing", undefined, false],
+	])("%s", (_name, asked, wanted) => {
+		expect(namesResource(asked, resource)).toBe(wanted);
+	});
+
+	it("reads the one resource of a string or a one-element array", () => {
+		expect(resourceOf(resource)).toBe(resource);
+		expect(resourceOf([resource])).toBe(resource);
+		expect(resourceOf(undefined)).toBeUndefined();
 	});
 });

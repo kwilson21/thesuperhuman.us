@@ -18,7 +18,7 @@ import {
 } from "../../lib/publication/oauth-login";
 import { sha256 } from "../digest";
 import { BodyUnreadable } from "../bounded-body";
-import { LoginRefused } from "../rules/publication-login";
+import { LoginRefused, resourceOf } from "../rules/publication-login";
 import { encode, seal, unseal, type LoginState } from "../publication-cookie";
 import { GithubSignIn, OAuthGrants } from "../publication-services";
 import { listedProjects, scopeFor } from "../rules/publication-access";
@@ -221,7 +221,10 @@ export const finishSignIn = (
 		const grants = yield* OAuthGrants;
 
 		const granted = yield* grants.complete({
-			request: state.request,
+			request: {
+				...state.request,
+				resource: resourceOf(state.request.resource),
+			},
 			userId: ownerId,
 			scope: state.request.scope,
 			metadata: {},

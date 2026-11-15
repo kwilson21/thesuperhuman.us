@@ -23,7 +23,9 @@ const loginState = Schema.Struct({
 		state: Schema.String,
 		codeChallenge: Schema.optional(Schema.String),
 		codeChallengeMethod: Schema.optional(Schema.String),
-		resource: Schema.optional(Schema.String),
+		resource: Schema.optional(
+			Schema.Union([Schema.String, Schema.Tuple([Schema.String])]),
+		),
 		issuer: Schema.optional(Schema.String),
 	}),
 	nonce: Schema.String,

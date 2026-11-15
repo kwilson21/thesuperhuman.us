@@ -41,8 +41,21 @@ export type AuthorizationAsked = {
 	readonly codeChallengeMethod?: string | undefined;
 	readonly codeChallenge?: string | undefined;
 	readonly scope: readonly string[];
-	readonly resource?: string | undefined;
+	/** The library gives the one configured resource as a string; a one-element array holding it is read as the same. */
+	readonly resource?: string | readonly string[] | undefined;
 };
+
+/** Whether a request's resource is this site's: the resource itself, or an array of exactly that one. */
+export const namesResource = (
+	asked: string | readonly string[] | undefined,
+	resource: string,
+) =>
+	asked === resource ||
+	(Array.isArray(asked) && asked.length === 1 && asked[0] === resource);
+
+/** The one resource a request names, as the OAuth library's own type has it (a string): the value itself, or the one member of the array that `namesResource` accepted. */
+export const resourceOf = (asked: string | readonly string[] | undefined) =>
+	[asked].flat().at(0);
 
 type ShowConsentRequest = {
 	readonly auth: AuthorizationAsked;
@@ -64,7 +77,7 @@ export const showConsent = alwaysWrites({
 					Boolean(g.auth.codeChallenge) &&
 					g.auth.scope.length > 0 &&
 					g.auth.scope.every((s) => g.supported.includes(s)) &&
-					g.auth.resource === g.resource,
+					namesResource(g.auth.resource, g.resource),
 			),
 			refuse,
 		),
