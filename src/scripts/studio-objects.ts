@@ -1,4 +1,4 @@
-// The objects on the hero's desk are links into the site (Hero.astro). Pointing at one with a mouse, or reaching it
+// The objects on the hero's desk are links (Hero.astro): three into the site, the controller to the game itself. Pointing at one with a mouse, or reaching it
 // with the keyboard, plays that object's own scene (StudioLife.astro reads [data-play]); with reduced motion the scene
 // shows its finished frame instead. The object pointed at leads; with none, the one with keyboard focus (:focus-visible)
 // plays. A mouse press also focuses a link, and a touch screen sends pointer events for a tap, but neither plays a scene
