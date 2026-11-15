@@ -182,6 +182,7 @@ const own = (raw: RawValue, name: string): RawValue =>
 /** A list of short lines, each cleaned, none with a price or link; null when it is not one or holds none. */
 function lines(raw: RawValue, max: number): string[] | null {
 	if (!Array.isArray(raw) || raw.length === 0 || raw.length > max) return null;
+
 	const read = raw.map((item) =>
 		Predicate.isString(item) ? oneLine(item) : "",
 	);
