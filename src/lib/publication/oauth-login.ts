@@ -148,6 +148,19 @@ async function library<T>(call: () => Promise<T>): Promise<T> {
 	}
 }
 
+/**
+ * Token errors GitHub documents ("Troubleshooting OAuth app access token request errors") that say the OAuth app is set up
+ * wrong, so they are this site's fault (500): incorrect_client_credentials (the client id or secret is wrong),
+ * redirect_uri_mismatch (the callback URL does not match the app's) and application_suspended (the app is suspended).
+ * Not listed: bad_verification_code (the visitor's code is bad or expired), unverified_user_email (about the visitor's
+ * account, not the app) and any code GitHub does not document, which all stay the visitor's 400.
+ */
+const appConfigurationErrors = [
+	"incorrect_client_credentials",
+	"redirect_uri_mismatch",
+	"application_suspended",
+];
+
 /** Calls GitHub; a call that cannot be made, or a 5xx answer, or an answer that is not JSON, is GitHub being unavailable (503). */
 async function github(url: string, init: RequestInit) {
 	let response: Response;
@@ -158,9 +171,15 @@ async function github(url: string, init: RequestInit) {
 		throw new Unavailable(503);
 	}
 
-	// GitHub is unavailable when it is unreachable, answers 5xx, is rate limiting (429), or answers a success that is not JSON.
-	if (response.status >= 500 || response.status === 429)
-		throw new Unavailable(503);
+	// GitHub is unavailable when it is unreachable, answers 5xx, is rate limiting (429, or a 403 that carries a rate-limit
+	// header: x-ratelimit-remaining of 0, or retry-after), or answers a success that is not JSON.
+	const rateLimited =
+		response.status === 429 ||
+		(response.status === 403 &&
+			(response.headers.get("x-ratelimit-remaining") === "0" ||
+				response.headers.has("retry-after")));
+
+	if (response.status >= 500 || rateLimited) throw new Unavailable(503);
 
 	const read = await response.json().then(
 		(json) => ({ body: json }),
@@ -359,6 +378,13 @@ export async function publicationLogin(
 				access_token?: string;
 				error?: string;
 			};
+
+			// GitHub's documented access token errors that are about this site's own OAuth app, not about the visitor's code.
+			if (
+				typeof token.error === "string" &&
+				appConfigurationErrors.includes(token.error)
+			)
+				throw new Unavailable(500);
 
 			if (!exchange.response.ok || token.error || !token.access_token)
 				return fail();

@@ -713,6 +713,59 @@ describe("publication sign-in when something other than the visitor's request fa
 		},
 	);
 
+	it.each<[string, { [name: string]: string }, number]>([
+		["x-ratelimit-remaining 0", { "x-ratelimit-remaining": "0" }, 503],
+		["retry-after", { "retry-after": "60" }, 503],
+		["x-ratelimit-remaining above 0", { "x-ratelimit-remaining": "12" }, 400],
+		["no rate-limit header", {}, 400],
+	])(
+		"answers a JSON 403 with %s from GitHub as wanted, for the code exchange and the user lookup",
+		async (_name, headers, wanted) => {
+			for (const lookup of [false, true]) {
+				const { env } = fixture();
+				const { response, nonce } = await start(env);
+				const refused = () =>
+					Response.json({ message: "rate limit" }, { status: 403, headers });
+
+				vi.stubGlobal(
+					"fetch",
+					lookup
+						? vi
+								.fn()
+								.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+								.mockResolvedValueOnce(refused())
+						: vi.fn(async () => refused()),
+				);
+				expect(
+					(await publicationLogin(callback(nonce, response), env)).status,
+				).toBe(wanted);
+			}
+		},
+	);
+
+	it.each<[string, number]>([
+		["incorrect_client_credentials", 500],
+		["redirect_uri_mismatch", 500],
+		["application_suspended", 500],
+		["bad_verification_code", 400],
+		["unverified_user_email", 400],
+		["some_code_nobody_documented", 400],
+	])("answers GitHub's token error %s as %s", async (code, wanted) => {
+		const { env, complete } = fixture();
+		const { response, nonce } = await start(env);
+
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ error: code })),
+		);
+		const result = await publicationLogin(callback(nonce, response), env);
+
+		expect(result.status).toBe(wanted);
+
+		if (wanted === 500) expect(await result.text()).toBe(SENTENCE);
+		expect(complete).not.toHaveBeenCalled();
+	});
+
 	it("answers a non-JSON 4xx from GitHub's user lookup as a refusal, and a 429 as unavailable", async () => {
 		for (const [answered, wanted] of [
 			[403, 400],
