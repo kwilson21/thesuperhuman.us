@@ -5,7 +5,7 @@ Two branches are gated: branch A (behavior fixes to the four public form routes)
 Date: November 15, 2026
 Repository: the personal website repository
 Branches: A is `claude/effect-11-intake-fixes`, B is `claude/effect-11-intake`, cut from A. Both were merged with `origin/main` at `8b5b4efd` (the merge of #283), the revision this record was written against. Re-check `origin/main` with `git fetch` before merge.
-Tips: A is `c2049762` (`5905c1e4` plus the array reply corpus case and its fixture). B's code is at `efd353e4`; this record is committed after it, in a commit that changes documentation only.
+Tips: A is `c2049762` (`5905c1e4` plus the array reply corpus case and its fixture). B's code is at `1f4cb680`; this record is committed after it, in a commit that changes documentation only.
 Pull requests: A is #300 and B is #301.
 Decisions: Kazon Wilson. Implementation and independent review were done with Claude Code.
 Target: production
@@ -136,10 +136,10 @@ Branch A at `c2049762`:
 - `pnpm run lint`: no findings (exit 0).
 - `pnpm run check`: `Result (808 files):`, `0 errors`, `0 warnings`, `17 hints`.
 
-Branch B at `efd353e4` (A's tip `c2049762` merged in, then the conversion and the fixes after review; the checks that read documentation are repeated on the commit that holds this record):
+Branch B at `1f4cb680` (A's tip `c2049762` merged in, then the conversion and the fixes after review; the checks that read documentation are repeated on the commit that holds this record):
 
-- `pnpm run format:check`: `Checked 803 files in 125ms. No fixes applied.`; `pnpm run build`: completed; the client bundle test: 27 passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  314 passed (314)`, `Tests  13150 passed | 1 skipped (13151)`; `git status` clean. (An earlier head, `dc8ca827`, had one failing architecture test, the tagged-error field name, fixed there.)
+- `pnpm run format:check`: `Checked 804 files in 157ms. No fixes applied.`; `pnpm run build`: completed; the client bundle test: 27 passed.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  315 passed (315)`, `Tests  13156 passed | 1 skipped (13157)`; `git status` clean. (An earlier head, `dc8ca827`, had one failing architecture test, the tagged-error field name, fixed there.)
 - `pnpm run golden:neutral --all refs/heads/claude/effect-11-intake-fixes HEAD` (exit 0): `audio-intake: 77 identical, 52 neutral with D1 changes, 0 NOT neutral`; `software-inquiry: 113 identical, 93 neutral with D1 changes, 0 NOT neutral`; `compared 77 fixtures and 9038 cases; 2 of 77 fixtures differ`; `golden:neutral: NEUTRAL`. `software-brief-pass` and `software-brief-suggest` are byte-identical to A's. The two fixtures are re-recorded in their own commits (`dc8d1119`, and `29dd6530` for the intake store's statements).
 - `pnpm run verify:quint:all`: 77 lines, every one `ok`. The inquiry model's run that must pass took 3.7 s alone and 11.1 s inside the pooled driver on a loaded machine (2026-11-15); the budget model's took 7.0 s in the same pooled run; each mutant under 2 s.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
@@ -214,4 +214,4 @@ Deployment: the owner's standing instruction is that a complete pull request (CI
 
 ## Final lines
 
-On the commit that holds this record: `pnpm run format:check`: `Checked 803 files in 96ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (829 files):  - 0 errors - 0 warnings - 17 hints`.
+On the commit that holds this record: `pnpm run format:check`: `Checked 804 files in 154ms. No fixes applied.`; `pnpm run lint`: no findings (exit 0); `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`; `pnpm run check` (last): `Result (830 files):  - 0 errors - 0 warnings - 17 hints`.
