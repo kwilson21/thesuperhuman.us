@@ -428,9 +428,16 @@ checked. Every write takes the next stamp of one counter (the order D1 serialize
 no message is stamped after the close, no revision round began between the review a decision names and the decision, and
 so on. The one exception is the world in the notices model (the emails that went out), which is not a row.
 
-The models are written before any code and run in the pooled driver (`verify:quint:all`). The whole driver exits 0 in about
-64 seconds of wall time and 398 seconds of CPU time with the three models in the pool, a figure the stamped properties and the retries did not move. The plan's budget is
-2 minutes 30 seconds on a 4-core CI runner, which this has not been measured on (UNVERIFIED until CI reports it).
+The models are written before any code and run in the pooled driver (`verify:quint:all`). Locally the whole driver exits 0 in
+about 55 to 62 seconds of wall time, and the three models add about 50 to 80 CPU-seconds to the pool (the driver's user time
+is about 416 to 431 s without them and 475 to 512 s with them). 34 checks at about 1.5 CPU-seconds of startup each are about
+50 CPU-seconds before any random run, so that is the floor while each property keeps a mutant and each pass run stays. The
+mutants whose race needs one particular starting point (`PublishNoStage`, `PublishStaleSupersede`, `CompleteNoStage`) begin
+from it alone and are found within a few thousand runs; the run that must pass takes all nine starting points and makes 8,000
+runs, which exercises every property, including the ones that need a published final, a paid balance or two uploaded reviews.
+The longest audio check is under 5 seconds. The plan's budget is 2 minutes 30 seconds on a 4-core CI runner, which these
+models have not been measured on there (UNVERIFIED until CI reports it); `docs/verification.md` ("Why one pool") has the
+measured figures of the step.
 
 **Messages and review decisions** (`verification/audio-project-messages.qnt`, module `projectMessages`). Three requests,
 a client session, the owner's publishing, beginning a revision and closing access between a request's read and its write,

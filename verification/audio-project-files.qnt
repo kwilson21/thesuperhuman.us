@@ -146,15 +146,26 @@ module audioProjectFiles {
   }
 
   // ---- Start ------------------------------------------------------------------------------------------------------
+  // The starting points. The run that must pass takes all of them; a mutant whose race needs one particular start takes only
+  // that one (found in a few random runs instead of many), which narrows where the search begins and not what the properties say.
+  val allStarts = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth", "twoReviews", "reviewFinal", "finalAndReview")
+  val starts =
+    if (MUTANT == "publish-no-stage") Set("finalAndReview")        // a review publish read at in_progress, a final publish lands first
+    else if (MUTANT == "publish-stale-supersede") Set("twoReviews")  // two uploaded reviews published at once
+    else if (MUTANT == "complete-no-stage") Set("final", "finalPlus") // the last final is revoked between the read and the write
+    else allStarts
+
   action init = {
-    nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth", "twoReviews", "reviewFinal").oneOf()
-    val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "reviewFinal"
+    nondet scenario = starts.oneOf()
+    val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "reviewFinal" or scenario == "finalAndReview"
     all {
       w' = {
         files: IDS.mapBy(i =>
           if (i == 1 and (scenario == "review" or scenario == "reviewPlus")) { ...noFile, version: "review", status: "published" }
           else if (i == 1 and (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth")) { ...noFile, version: "final", status: "published" }
           else if (i == 2 and scenario == "finalBoth") { ...noFile, version: "final", status: "published" }
+          else if (i == 1 and scenario == "finalAndReview") { ...noFile, version: "final", status: "uploaded" }
+          else if (i == 2 and scenario == "finalAndReview") { ...noFile, version: "review", status: "uploaded" }
           else if (i == 2 and scenario == "reviewFinal") { ...noFile, version: "final", status: "uploaded" }
           else if (i == 1 and scenario == "reviewFinal") { ...noFile, version: "review", status: "published" }
           else if (scenario == "twoReviews") { ...noFile, version: "review", status: "uploaded" }
@@ -165,9 +176,10 @@ module audioProjectFiles {
         upVersion: IDS.mapBy(i => "review"),
         upAt: IDS.mapBy(i => 0),
         mp: IDS.mapBy(i => false),
-        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews" or scenario == "reviewFinal")),
+        obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews" or scenario == "reviewFinal" or scenario == "finalAndReview")),
         seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
         stage: if (scenario == "review" or scenario == "reviewPlus" or scenario == "reviewFinal") "review_ready"
+               else if (scenario == "finalAndReview") "in_progress"
                else if (paidBalance) "final_files_ready" else "in_progress",
         completedAt: 0,
       },

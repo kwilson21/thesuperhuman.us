@@ -283,9 +283,10 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
-		// The rarest mutant (PublishNoStage) takes about 100,000 random runs to find with the fixed seed, since eight starting
-		// points share them; the run that must pass makes 8,000.
-		samples: "150000",
+		// The mutants whose race needs one particular starting point (PublishNoStage, PublishStaleSupersede, CompleteNoStage)
+		// begin from that point only, and are found within a few thousand random runs; the run that must pass takes every
+		// starting point and makes 8,000.
+		samples: "20000",
 		passSamples: "8000",
 	},
 	{
