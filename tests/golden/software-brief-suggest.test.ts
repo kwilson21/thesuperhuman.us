@@ -633,6 +633,9 @@ const cases: Case[] = [
 		},
 	),
 	single("the model answers with null itself", good, { ai: [aiValue(null)] }),
+	single("the model answers with an array itself", good, {
+		ai: [aiValue([])],
+	}),
 	single("the model answers with a string itself", good, {
 		ai: [aiValue("and send them")],
 	}),
