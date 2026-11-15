@@ -279,6 +279,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		lastAnnounced = 0,
 		boardChangedAt = 0,
 		unsaid = "",
+		laterText = "",
 		laterTimer: ReturnType<typeof setTimeout> | undefined,
 		pendingNews = 0,
 		newsTimer: ReturnType<typeof setTimeout> | undefined,
@@ -894,13 +895,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	function stop(why: string, later = false) {
 		stopped = why;
 
-		if (later) sayWhenFree(why);
+		// A board that is paused, hidden, plain or off hears it when it is back (sayUnsaid).
+		if (paused || plain || !visible || !options.aiEnabled()) unsaid = why;
+		else if (later) sayWhenFree(why);
 		else announce(why, true);
 	}
 
 	/** Says `text` once four seconds have passed since the last thing said, after any arrival message still waiting. */
 	function sayWhenFree(text: string) {
 		clearTimeout(laterTimer);
+		laterText = "";
 
 		// Nothing is said about a board that is paused, hidden, set aside for the plain form or off; it is said when the
 		// board is back (sayUnsaid).
@@ -913,6 +917,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		const wait = lastAnnounced + 4050 - Date.now();
 
 		if (wait <= 0 && pendingNews <= 0 && announce(text)) return;
+		laterText = text;
 		laterTimer = setTimeout(() => sayWhenFree(text), Math.max(wait, 200));
 	}
 
@@ -929,6 +934,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		clearTimeout(newsTimer);
 		clearTimeout(laterTimer);
 		pendingNews = 0;
+
+		// A stop still waiting to be said is said when the board is back.
+		if (laterText) unsaid = laterText;
+		laterText = "";
 	}
 
 	function stopAsking() {
@@ -1139,6 +1148,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		);
 	}
 
+	/** Brings an element into view on a touch screen only, where nothing sits under a pointer to be moved. */
+	const revealOnTouch = (element: HTMLElement) => {
+		if (matchMedia("(pointer: coarse)").matches)
+			element.scrollIntoView({ block: "nearest" });
+	};
+
 	for (const lane of LANES) {
 		const parts = lanes[lane];
 
@@ -1152,8 +1167,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					render();
 					announce(laneFull(laneLabels[options.path()][lane]), true);
 					parts.input.focus();
-					// In a phone's scrolling box the reason below the editor can be out of sight.
-					parts.full.scrollIntoView({ block: "nearest" });
+					// On a touch screen the reason below the editor can be out of sight in the scrolling box.
+					revealOnTouch(parts.full);
 
 					return;
 				}
@@ -1173,6 +1188,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				fullTried.add(tried(lane));
 				render();
 				announce(laneFull(laneLabels[options.path()][lane]), true);
+				// On a touch screen the reason below Add can be out of sight in the scrolling box. A mouse keeps Add still.
+				revealOnTouch(parts.full);
 
 				return;
 			}

@@ -1334,7 +1334,6 @@ describe("found in the sixth review", () => {
 		"2주일만에 완성",
 		"3주간의 개발",
 		"3주가 걸려요",
-		"3주차",
 		"10만원은",
 		"100만원의 예산",
 		"5만원도",
@@ -1395,5 +1394,22 @@ describe("found in the sixth review", () => {
 			["c2", ""],
 			["c3", ""],
 		]);
+	});
+});
+
+describe("found in the seventh review", () => {
+	it.each(["100块钱", "大概500块钱", "3時間目安"])("refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each([
+		"1일차 코스",
+		"여행 2일차 일정",
+		"1주차 강의 자료",
+		"3년차 이상 마케터",
+		"B2 주차장 안내",
+		"支持4块硬盘",
+	])("accepts %s", (text) => {
+		expect(commits(text)).toBe(false);
 	});
 });
