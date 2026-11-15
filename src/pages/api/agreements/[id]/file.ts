@@ -52,8 +52,8 @@ export const GET: APIRoute = async ({ locals, request, params }) => {
 				CopyMissing: () => Effect.succeed(agreementText("Not found", 404)),
 				CopyIntegrity: (refusal) =>
 					Effect.succeed(agreementText(refusal.say, 503)),
-				// The bucket read failing answers the fixed 500 without a log line, as the route has always done.
-				CopyReadFailed: () => Effect.succeed(unavailable()),
+				// The bucket read failing is logged once, like the bytes, the store and the digest failing, and answers the same fixed 500.
+				CopyReadFailed: (failure) => failed(failure.failure),
 				// Reading the bytes, the store and the digest failing are logged and answer the same fixed 500.
 				CopyBytesFailed: (failure) => failed(failure.failure),
 				AgreementStoreFailed: (failure) => failed(failure.failure),

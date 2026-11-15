@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { GET as fileGET } from "~/pages/api/agreements/[id]/file";
 import { GET as attachmentGET } from "~/pages/api/agreements/attachments/[id]";
 import { boundStatement, preparedStatement } from "../helpers/d1";
@@ -34,6 +34,7 @@ async function serve(input: {
 	readonly artifact?: Row | null;
 	readonly projects?: Row[];
 	readonly studioEmail?: string;
+	readonly bucketThrows?: boolean;
 }): Promise<{
 	readonly status: number;
 	readonly headers: [string, string][];
@@ -133,6 +134,8 @@ async function serve(input: {
 	const bucket = double<R2Bucket>({
 		get: async (key: string) => {
 			seen.buckets.push(key);
+
+			if (input.bucketThrows) throw new Error("the bucket is unreachable");
 
 			return null;
 		},
@@ -347,6 +350,31 @@ describe("the file route for a verified visitor", () => {
 		// Not the 401 a visitor with no session gets: the session exists, and the agreement is not theirs.
 		expect(empty.status).toBe(404);
 		expect(empty.body).toBe("Not found");
+	});
+
+	it("logs a throwing bucket read once through logUnexpected and answers the fixed 500", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const answer = await serve({
+			path: "file",
+			id: "a-mine",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: mine,
+			projects: [project()],
+			artifact: { status: "ready", pdf_key: "k", pdf_sha256: "d" },
+			bucketThrows: true,
+		});
+
+		expect(answer.status).toBe(500);
+		expect(answer.body).toBe("Signed copy unavailable. Contact Kazon.");
+		expect(logged).toHaveBeenCalledOnce();
+
+		const line = JSON.stringify(logged.mock.calls[0]);
+
+		expect(line).toContain("/api/agreements/[id]/file failed unexpectedly:");
+		expect(line).not.toContain("a-mine");
+		expect(line).not.toContain("me@example.test");
+		logged.mockRestore();
 	});
 
 	it("reads no bucket object for anything it refuses", async () => {
