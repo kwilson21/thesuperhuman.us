@@ -449,6 +449,26 @@ const cases: Case[] = [
 		[text("The thirteenth")],
 	),
 	audioCase(
+		"send with 12 client messages in the window and a revoked session",
+		{
+			extra: {
+				audio_client_sessions: [
+					session(GRACE_TOKEN, GRACE, { revoked_at: EARLIER }),
+				],
+				audio_project_messages: clientMessages("r1", 12),
+			},
+		},
+		[text("The lookup answers first")],
+	),
+	audioCase(
+		"send with 12 client messages in the window and a closed project",
+		{
+			revoked: EARLIER,
+			extra: { audio_project_messages: clientMessages("r1", 12) },
+		},
+		[text("The lookup answers first")],
+	),
+	audioCase(
 		"send with 12 client messages, all older than five minutes",
 		{
 			extra: { audio_project_messages: clientMessages("r1", 12, 400_000) },
