@@ -48,6 +48,13 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 			download,
 		);
 
+		// The only 500 the stream answers is an object whose size differs from the row: a stored state that disagrees with R2.
+		if (response.status === 500)
+			logUnexpected(
+				"studio/projects/file",
+				new Error("The stored object has another size than the file row."),
+			);
+
 		if (
 			request.method === "GET" &&
 			(response.status === 200 || response.status === 206)
