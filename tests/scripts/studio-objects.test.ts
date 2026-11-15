@@ -165,11 +165,18 @@ function mount({
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
 		/** The desk scrolls under a pointer resting at (x, y), which arrives over an object without moving. */
-		scrollUnder: (x: number, y: number) =>
-			scene.dispatchEvent(new Pointer("pointerover", "mouse", x, y)),
-		/** The pointer moves to (x, y) over the desk. */
-		move: (x: number, y: number) =>
-			scene.dispatchEvent(new Pointer("pointermove", "mouse", x, y)),
+		scrollUnder: (x: number, y: number) => {
+			scene.dispatchEvent(new Pointer("pointerover", "mouse", x, y));
+			page.dispatchEvent(new Pointer("pointerover", "mouse", x, y));
+		},
+		/** The pointer moves to (x, y) over the desk; the event reaches the desk, then the document. */
+		move: (x: number, y: number) => {
+			scene.dispatchEvent(new Pointer("pointermove", "mouse", x, y));
+			page.dispatchEvent(new Pointer("pointermove", "mouse", x, y));
+		},
+		/** The pointer moves to (x, y) elsewhere on the page. */
+		moveOff: (x: number, y: number) =>
+			page.dispatchEvent(new Pointer("pointermove", "mouse", x, y)),
 		/** Any other key, which makes a link a mouse press focused match :focus-visible, as Chromium does. */
 		press: (key: string) => {
 			if (page.activeElement) page.activeElement.keyboardFocus = true;
@@ -327,6 +334,29 @@ it("keeps labels hidden after Escape when a scroll brought the desk under a rest
 	expect(studio.scene.dataset.labelsDismissed).toBe("true");
 	studio.move(310, 200);
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+});
+
+it("keeps labels hidden after Escape when a scroll then brings the desk under a pointer resting off it", () => {
+	const studio = mount();
+
+	studio.moveOff(900, 120);
+	studio.focus("monitor");
+	studio.escape();
+	studio.scrollUnder(900, 120);
+	studio.point("monitor");
+	studio.move(901, 120);
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+	studio.move(910, 120);
+	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+});
+
+it("gives a label keyboard focus shows no pointer of its own, so it cannot take a resting mouse's hover", () => {
+	expect(hero).toContain(
+		".studio-object:focus-visible .studio-object-label { opacity: 1; }",
+	);
+	expect(hero).toContain(
+		".studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }",
+	);
 });
 
 it("rests the scene when the page comes back from the back-forward cache", () => {

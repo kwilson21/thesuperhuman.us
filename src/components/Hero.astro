@@ -112,7 +112,9 @@ const percent = (value: number, of: number) =>
   .studio-object-label::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(.35rem + 1px); }
   .studio-object[data-studio-object="headphones"] .studio-object-label { left: auto; right: 0; }
   .studio-object-label span { color: var(--accent); }
-  .studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }
+  /* A label keyboard focus shows takes no pointer: one that appears under a resting mouse would otherwise take the
+     hover, and keep its object's label and scene while focus moves on. Hovering its object makes it take the pointer. */
+  .studio-object:focus-visible .studio-object-label { opacity: 1; }
   @media (hover: hover) and (pointer: fine) {
     .studio-object:hover { z-index: 3; }
     .studio-object:hover .studio-object-label { opacity: 1; pointer-events: auto; }

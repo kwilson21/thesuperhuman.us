@@ -74,18 +74,19 @@ export function setupStudioObjects() {
 	let pointer: { x: number; y: number } | undefined,
 		dismissedAt: { x: number; y: number } | undefined;
 
-	// A scroll can bring an object under a pointer that is not moving: that sends pointerover, with the pointer's place,
-	// and no pointermove.
-	scene.addEventListener("pointerover", (event) => {
+	// The pointer's place is followed over the whole page, so Escape knows it even off the desk. A scroll can bring an
+	// object under a pointer that is not moving: that sends pointerover, with the pointer's place, and no pointermove.
+	const follow = (event: PointerEvent) => {
 		pointer = { x: event.clientX, y: event.clientY };
-	});
-	scene.addEventListener("pointermove", (event) => {
-		pointer = { x: event.clientX, y: event.clientY };
+	};
 
+	document.addEventListener("pointermove", follow);
+	document.addEventListener("pointerover", follow);
+	scene.addEventListener("pointermove", (event) => {
 		const moved =
 			!dismissedAt ||
-			Math.abs(pointer.x - dismissedAt.x) +
-				Math.abs(pointer.y - dismissedAt.y) >
+			Math.abs(event.clientX - dismissedAt.x) +
+				Math.abs(event.clientY - dismissedAt.y) >
 				2;
 
 		if (scene.dataset.labelsDismissed && moved) {
