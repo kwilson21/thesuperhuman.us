@@ -38,8 +38,8 @@ Every item on the board is a card with a visible origin, in words and in outline
 
 Actions on a card: Keep, Edit, Not this (sets it aside), and on a question, Answer. Set-aside cards go to a closed
 "Set aside" list with Bring back (an edited card comes back as edited). Each lane has "Add" for the visitor's own note.
-Add and Bring back are never disabled: on a full list they say why ("This list is full. Set a card aside or remove a
-note, then try again.") beside the control and to screen readers. A short explanation at the top of the cards says what
+Add and Bring back are never disabled: on a full list they say why ("“Pages” is full. Use Not this on one of its cards,
+or remove a note, then try again.") after the control and to screen readers. A short explanation at the top of the cards says what
 the labels mean and is true whether the outline is on, paused or stopped, so it never changes.
 The board header holds a status line (readable by screen readers; changes that matter are also announced), "Pause the
 outline" (one toggle, `aria-pressed`), and Undo, whose accessible name and tooltip say what it will undo; Ctrl or Cmd+Z
@@ -64,15 +64,16 @@ then works by hand.
    other), and a reply never rewords an open card into the idea of another card (set aside, owned or a duplicate). The
    set-aside list is also sent so the model can avoid paraphrases. Removing one of the visitor's own notes deletes it
    (Undo brings it back); its words are remembered in the page's memory only, never saved or sent, so a reply does not
-   offer the idea back during the visit. A saved board keeps the newest 200 set-aside cards.
+   offer the idea back in that lane during the visit, as a new card or by rewording another. A saved board keeps the newest 200 set-aside cards.
 4. **A reply only changes what it could have seen.** Each card records how many requests had been sent when it last
    became unowned (`since`). A reply may update an unowned card, or withdraw it by leaving it out, only if its request
    was sent after that. A card that became unowned after the request was sent (an Undo) is left alone until a later
    reply. (The first design compared against the ids each request showed; the Quint model found it let an Undo made
    while a request was in flight be reverted, and keeps it as the `SeenOnly` mutant.) A card the reply names but whose
-   new version is dropped (a misquoted passage, a commitment) is not left out, so it stays, while it still stands on the
-   answers (its passage is there and its words commit to nothing the visitor has not written); the server passes those
-   names on as `refs`. A card the reply moves to another lane is moved, not copied. The reply's withdrawals happen before its new cards
+   new version is dropped (a misquoted passage, a commitment) is not left out, so it stays, while it still stands (its
+   words commit to nothing and, if read from the answers, its passage is there); the server passes those names on as
+   `refs`, and the page adds the cards it drops itself. A card the reply moves to another lane is moved, not copied, and
+   stays where it was when the other lane is full. The reply's withdrawals happen before its new cards
    are added, so a reply that rewords a full lane's open cards replaces them rather than emptying the lane, and an Undo
    that brings a kept card back to a lane a reply has since filled withdraws the lane's newest open card (suggestions
    before cards read from the answers) and says so.
@@ -89,12 +90,12 @@ then works by hand.
    words ("costs about", "affordable", "fixed price"), a date or deadline ("by March", "next month", "2027-01-15"), a time
    estimate, a promise, Kazon's name, or a link is dropped; so is an amount after a money word ("budget around 5000"),
    a quarter or a year, "tomorrow", and the common duration and currency forms in Spanish, German, French, Italian,
-   Chinese, Japanese and Korean. A phrase the visitor wrote themselves ("classes run for 4 weeks", "24 hours support")
-   stays, when the visitor wrote it as a whole ("2 weeks" is not in "12 weeks", nor "$50k" in "$5"). A card sent as read
-   from the answers is checked again against the answers as they are when the brief is sent, so the board stops marking
-   it "From your answers" once the visitor changes the words it repeated; a card the visitor kept, edited or wrote is
-   theirs and is not checked. A page named "Pricing" or "Request a quote" is the visitor's own business and stays. These
-   checks are a net under the model's instructions, not a proof.
+   Chinese, Japanese and Korean. The filter is the same whatever the answers say: a card repeating the visitor's own
+   "classes run for 4 weeks" is dropped too, and the words stay in their answers. (Allowing a phrase the visitor wrote was tried and reviewed twice: every way of matching
+   "their phrase" let a different amount or duration through, and an allowance that lapsed when the visitor edited their
+   answers left cards on the board the server then refused.) The server checks every item that is the model's words,
+   read from the answers or kept; edited and written items are the visitor's. A page named "Pricing" or "Request a
+   quote" is the visitor's own business and stays. These checks are a net under the model's instructions, not a proof.
 
 ## 3. Card states
 

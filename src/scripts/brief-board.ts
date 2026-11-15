@@ -13,7 +13,6 @@ import {
 	LANES,
 	type Lane,
 	type OutlineItem,
-	LANE_FULL,
 	REQUESTS_PER_PAGE,
 	type ReplyCard,
 	addLabels,
@@ -30,6 +29,7 @@ import {
 	fitContext,
 	keepCard,
 	laneCount,
+	laneFull,
 	laneLabels,
 	laneLimits,
 	lastAction,
@@ -37,6 +37,7 @@ import {
 	readReply,
 	readSavedBoards,
 	removeNote,
+	replyRefs,
 	savedBoards,
 	sendRequest,
 	setAside,
@@ -276,14 +277,17 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			changes: number;
 		} | null = null,
 		lastAnnounced = 0,
+		boardChangedAt = 0,
+		laterTimer: ReturnType<typeof setTimeout> | undefined,
 		pendingNews = 0,
 		newsTimer: ReturnType<typeof setTimeout> | undefined,
 		phase: "idle" | "reading" = "idle";
 
 	const lastSent: Partial<Record<SoftwarePath, string>> = {};
 	// Lists the visitor tried to add to, and set-aside cards they tried to bring back, while the list was full: each says
-	// why (LANE_FULL) until there is room. Add and Bring back are never disabled, so the reason comes with the press.
+	// why (laneFull) until there is room. Add and Bring back are never disabled, so the reason comes with the press.
 	const fullTried = new Set<string>();
+	const tried = (key: string) => `${options.path()}:${key}`;
 	const nodes = new Map<string, HTMLLIElement>();
 
 	const board = (): Board => (boards[options.path()] ??= emptyBoard());
@@ -520,9 +524,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			parts.editorLabel.textContent = addLabels[path][lane];
 			parts.input.maxLength = textLimits[lane];
 
-			if (!full) fullTried.delete(lane);
+			if (!full) fullTried.delete(tried(lane));
 			// Says why a note cannot be added, once the visitor has tried.
-			parts.full.hidden = !fullTried.has(lane);
+			parts.full.hidden = !fullTried.has(tried(lane));
+			parts.full.textContent = laneFull(laneLabels[path][lane]);
 
 			const cards = current.cards.filter(
 				(card) => card.lane === lane && card.status !== "dismissed",
@@ -586,11 +591,11 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				item.appendChild(back);
 
 				if (laneCount(current, card.lane) < laneLimits[card.lane])
-					fullTried.delete(card.id);
-				else if (fullTried.has(card.id)) {
+					fullTried.delete(tried(card.id));
+				else if (fullTried.has(tried(card.id))) {
 					const why = document.createElement("span");
 					why.className = "board-why";
-					why.textContent = ` ${LANE_FULL}`;
+					why.textContent = ` ${laneFull(laneLabels[path][card.lane])}`;
 					item.appendChild(why);
 				}
 
@@ -612,7 +617,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		focusAfter?.()?.focus();
 		options.onChange?.();
 		// The visitor's choices go with the next request (plan, section 4), after a longer pause than writing.
-		schedule(BOARD_IDLE);
+		boardChangedAt = Date.now();
+		schedule();
 	}
 
 	function applyHeld(moveFocus: boolean) {
@@ -755,7 +761,13 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (!canAsk() || lastSent[options.path()] === answersKey()) return;
 		timer = setTimeout(
 			ask,
-			Math.max(delay, lastSendAt + GAP - Date.now(), retryAt - Date.now()),
+			Math.max(
+				delay,
+				lastSendAt + GAP - Date.now(),
+				retryAt - Date.now(),
+				// The visitor may still be making choices on the board.
+				boardChangedAt + BOARD_IDLE - Date.now(),
+			),
 		);
 	}
 
@@ -833,7 +845,16 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			if (cards) {
 				failures = 0;
-				deliver(path, n, cards, read.refs);
+
+				// The route named these cards; the ones this page then leaves out (their passage edited meanwhile) still do.
+				const refs = [
+					...read.refs,
+					...replyRefs(read.cards).filter(
+						(ref) => !cards.some((card) => card.ref === ref),
+					),
+				];
+
+				deliver(path, n, cards, refs);
 			} else if (read.reason === "limit") {
 				stop(LIMIT);
 			} else if (answer.status === 403 || read.reason === "off") {
@@ -872,13 +893,23 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	function stop(why: string, later = false) {
 		stopped = why;
 
-		if (later) setTimeout(() => announce(why, true), 4100);
+		if (later) sayWhenFree(why);
 		else announce(why, true);
 	}
 
-	/** Drops an arrival message still waiting for the throttle: the board it was about is paused, hidden or plain. */
+	/** Says `text` once four seconds have passed since the last thing said, after any arrival message still waiting. */
+	function sayWhenFree(text: string) {
+		clearTimeout(laterTimer);
+		const wait = lastAnnounced + 4050 - Date.now();
+
+		if (wait <= 0 && pendingNews <= 0 && announce(text)) return;
+		laterTimer = setTimeout(() => sayWhenFree(text), Math.max(wait, 200));
+	}
+
+	/** Drops messages still waiting for the throttle: the board they were about is paused, hidden or plain. */
 	function quietNews() {
 		clearTimeout(newsTimer);
+		clearTimeout(laterTimer);
 		pendingNews = 0;
 	}
 
@@ -1004,12 +1035,14 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 			// The card's list is full: say so beside the button and to screen readers; focus stays on the button.
 			if (next === board()) {
-				fullTried.add(backId);
+				fullTried.add(tried(backId));
 				render();
 				asideList
 					.querySelector<HTMLElement>(`[data-bring-back="${backId}"]`)
 					?.focus();
-				announce(LANE_FULL, true);
+
+				if (back)
+					announce(laneFull(laneLabels[options.path()][back.lane]), true);
 
 				return;
 			}
@@ -1097,9 +1130,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 				// The list filled while the visitor typed: keep their words, and say what to do.
 				if (next === board()) {
-					fullTried.add(lane);
+					fullTried.add(tried(lane));
 					render();
-					announce(LANE_FULL, true);
+					announce(laneFull(laneLabels[options.path()][lane]), true);
 					parts.input.focus();
 
 					return;
@@ -1117,9 +1150,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		parts.add.addEventListener("click", () => {
 			// A full list says why instead of opening the box; focus stays on Add.
 			if (laneCount(board(), lane) >= laneLimits[lane]) {
-				fullTried.add(lane);
+				fullTried.add(tried(lane));
 				render();
-				announce(LANE_FULL, true);
+				announce(laneFull(laneLabels[options.path()][lane]), true);
 
 				return;
 			}
@@ -1167,17 +1200,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	);
 
 	// Held replies apply once the visitor is out of the board.
-	root.addEventListener("focusout", (event) => {
-		const to = event.relatedTarget;
-
-		if (
-			held &&
-			!(to instanceof Node && root.contains(to)) &&
-			!hovering &&
-			!touched() &&
-			!editing()
-		)
-			applyHeld(false);
+	root.addEventListener("focusout", () => {
+		// Decided on the next tick, from where focus is then: drawing the board can remove the focused button and move
+		// focus to its neighbour, which fires focusout with no target although the visitor never left.
+		setTimeout(() => {
+			if (held && !interacting()) applyHeld(false);
+		}, 0);
 	});
 
 	// A finger on the board, or the board's cards scrolling, holds replies until the board has been still for a moment.
