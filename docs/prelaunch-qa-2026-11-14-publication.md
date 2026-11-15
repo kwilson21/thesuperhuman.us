@@ -4,7 +4,7 @@ Two things are gated: branch A (behavior fixes to the publication routes) and br
 
 Date: November 14, 2026
 Repository: the personal website repository
-Branches: A is `claude/effect-12-publication-fixes`, first cut from `origin/main` at `3561a541` (the merge of #273) and since merged with `origin/main` at `8b5b4efd`; its tip is `ae6e86d7`. B is `claude/effect-12-publication`, cut from A, which merges A's tip (merge `f3f0b50a`) and has its evidence head at `2864d67e`.
+Branches: A is `claude/effect-12-publication-fixes`, first cut from `origin/main` at `3561a541` (the merge of #273) and since merged with `origin/main` at `8b5b4efd`; its tip is `ae6e86d7`. B is `claude/effect-12-publication`, cut from A, which merges A's tip (merge `f3f0b50a`) and has its evidence head at `066b087e`.
 Pull requests: not yet opened.
 Target: production
 Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. This record does not certify the checks listed as UNVERIFIED. UNVERIFIED: Codex and Greptile review of these heads.
