@@ -364,13 +364,14 @@ After the extension (2026-11-15, Apalache 0.62.4, a 4-core cloud container, one 
 | `discount` | 7 | no violation | 76 s |
 | `discount` | 9 | no violation | 7 minutes |
 | `discount` | 10 | no violation | 13 minutes |
+| `discount` | 11 | no violation | 23 minutes |
 | `discountF10Fix` | 7 | no violation | 95 s |
 | `discountF10Fix` | 9 | no violation | 6 minutes |
 | `discountTodaySecondBatch` | 3, 4 | none at 3; violation at 4 | 23 s each |
 | `discountSecondBatchNoSendingGuard` | 4, 5 | none at 4; violation at 5 | 27 s, 32 s |
 | `discountNoLiveCheck` | 6, 7 | none at 6; violation at 7 | 48 s, 79 s |
 
-So the search reaches each new mutant's depth, and the F10 witnesses above (4 and 7 steps). Each further step costs about twice the one before. The extension made the old deposit-guard path at least 17 steps long, beyond any bound Apalache finishes here, so that mutant is now found by the random runs only. Run it again before changing a modelled rule of the offer flow.
+So the search reaches each new mutant's depth, and the F10 witnesses above (4 and 7 steps). Each further step costs about twice the one before, so 12 steps (about 45 minutes) was not run. `pnpm run verify:quint:exhaustive` (7 steps, all seven exhaustive modules) passed on the same machine in 584 s, with other checks running alongside. The extension made the old deposit-guard path at least 17 steps long, beyond any bound Apalache finishes here, so that mutant is now found by the random runs only. Run it again before changing a modelled rule of the offer flow.
 
 ## The music-playback model
 
