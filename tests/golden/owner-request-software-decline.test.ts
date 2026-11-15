@@ -58,9 +58,11 @@ import type { JsonValue } from "../helpers/json";
 //            guard), or a lookup after a refused first batch. Nothing is emailed
 //   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the second batch throws
 //            (an outage, not a guard) after the email, or a lookup after a refused second batch fails
-//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain), or not
-//            configured (no key, sender or owner address). The first batch has already run: offers withdrawn, link
-//            revoked, signing retired, updated_at moved; the request is not resolved and no audit row says "declined"
+//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
+//            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
+//            not resolved and no audit row says "declined"
+//   503 {ok:false,message:"Software offers are temporarily unavailable."}  mail not configured (no Resend key, sender or
+//            owner address), checked after the refusals and before the first batch: nothing withdrawn or emailed
 //   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement

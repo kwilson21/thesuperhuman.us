@@ -27,11 +27,13 @@ import type { JsonObject } from "../helpers/json";
 import { testRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 
-// How POST /api/owner/requests/[id]/software answers when its database or R2 fails. The owner's decisions (2026-11-14
-// and 2026-11-15, F1 to F4 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the
-// route's fixed sentence and never the error's own text; after the client email went out (or the draft was saved), it
-// says so; a missing R2 binding while a send reads its attachments is a known unavailable dependency, 503; a guard that
-// refuses a batch (a lost race or a stale page) still answers 409. Real SQLite with the music schema; nothing is mocked.
+// How POST /api/owner/requests/[id]/software answers when its database, R2 or mail settings fail it, when the id is
+// missing, and when a send's link closes while its email fails. The owner's decisions (2026-11-14 and 2026-11-15, F1 to
+// F4, F6, F8 and F9 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the route's
+// fixed sentence and never the error's own text; after the client email went out (or the draft was saved), it says so; a
+// missing R2 binding while a send reads its attachments, or mail that is not configured for a question or a decline, is
+// a known unavailable dependency, 503, with nothing written; a guard that refuses a batch (a lost race or a stale page)
+// still answers 409. Real SQLite with the music schema; nothing is mocked.
 
 const FAILED = "The change could not be saved. Please try again.";
 const UNAVAILABLE = "Software offers are temporarily unavailable.";
@@ -63,6 +65,16 @@ type World = {
 	readonly signing?: boolean;
 	/** Leave out to give the route no R2 binding. */
 	readonly bucket?: Bucket;
+	/** The route's params; { id: "r1" } unless given. */
+	readonly params?: Readonly<Record<string, string>>;
+	/** Mail settings to leave out. */
+	readonly omit?: readonly (
+		| "RESEND_API_KEY"
+		| "CONTACT_FROM_EMAIL"
+		| "OWNER_EMAIL"
+	)[];
+	/** The status Resend answers each email with, in order; 200 past the end. */
+	readonly mail?: readonly number[];
 };
 
 /** Counts each fault's matches and says whether one of them is due on these statements. */
@@ -179,10 +191,18 @@ function setUp(world: World) {
 		OWNER_EMAIL: "owner@example.test",
 	};
 
+	for (const name of world.omit ?? []) Reflect.deleteProperty(env, name);
+
+	const answers = [...(world.mail ?? [])];
+
+	vi.mocked(fetch).mockImplementation(async () =>
+		Response.json({ id: "em_1" }, { status: answers.shift() ?? 200 }),
+	);
+
 	const call = (body: JsonObject) =>
 		POST(
 			partial<APIContext>({
-				params: { id: "r1" },
+				params: world.params ?? { id: "r1" },
 				request: new Request(
 					"https://thesuperhuman.us/api/owner/requests/r1/software",
 					{
@@ -607,6 +627,91 @@ describe("a link made in the last 20 seconds", () => {
 			),
 		).toEqual(
 			answer(409, "An offer is still being sent. Try again in a moment."),
+		);
+	});
+});
+
+describe("a missing or empty id answers as an unknown id does", () => {
+	it.each<[string, Readonly<Record<string, string>>]>([
+		["no id", {}],
+		["an empty id", { id: "" }],
+		["an unknown id", { id: "nope" }],
+	])("%s: 404", async (_name, params) => {
+		const { call } = setUp({ seed: plain, params });
+
+		expect(await read(await call(fit))).toEqual({
+			status: 404,
+			body: { ok: false },
+			private: true,
+		});
+	});
+});
+
+describe("a question or a decline with mail not configured answers 503 and writes nothing", () => {
+	it.each<
+		[
+			string,
+			JsonObject,
+			"RESEND_API_KEY" | "CONTACT_FROM_EMAIL" | "OWNER_EMAIL",
+		]
+	>([
+		["question, no Resend key", question, "RESEND_API_KEY"],
+		["question, no sender address", question, "CONTACT_FROM_EMAIL"],
+		["question, no owner address", question, "OWNER_EMAIL"],
+		["decline, no Resend key", decline, "RESEND_API_KEY"],
+		["decline, no sender address", decline, "CONTACT_FROM_EMAIL"],
+		["decline, no owner address", decline, "OWNER_EMAIL"],
+	])("%s", async (_name, body, setting) => {
+		const { sql, call } = setUp({ seed: withSent, omit: [setting] });
+
+		expect(await read(await call(body))).toEqual(answer(503, UNAVAILABLE));
+		expect(sql.prepare("SELECT updated_at FROM owner_requests").get()).toEqual({
+			updated_at: EARLIER,
+		});
+		expect(
+			sql.prepare("SELECT count(*) AS rows FROM owner_request_audit").get(),
+		).toEqual({ rows: 0 });
+		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
+			status: "sent",
+		});
+		expect(
+			sql.prepare("SELECT revoked_at FROM software_offer_links").get(),
+		).toEqual({ revoked_at: null });
+		expect(emails()).toEqual([]);
+	});
+});
+
+describe("a send whose link closes while its email is sent", () => {
+	const closing: Race = {
+		on: /WHERE request_id=\? AND token_hash=\?/,
+		sql: `UPDATE software_offer_links SET revoked_at='${START}'`,
+	};
+
+	it.each<[string, readonly number[]]>([
+		["the client email is refused", [422]],
+		["Resend fails on the client email", [503]],
+	])(
+		"%s: 409, and the answer does not say the email went out",
+		async (_name, mail) => {
+			const { call } = setUp({ seed: withDraft, mail, race: closing });
+
+			expect(await read(await call(send))).toEqual(
+				answer(
+					409,
+					"The link was closed while the offer was being sent. Send the offer again for a working link.",
+				),
+			);
+		},
+	);
+
+	it("an accepted email keeps its own sentence", async () => {
+		const { call } = setUp({ seed: withDraft, race: closing });
+
+		expect(await read(await call(send))).toEqual(
+			answer(
+				409,
+				"The email went out, but the link was closed while it was sending. Send the offer again for a working link.",
+			),
 		);
 	});
 });

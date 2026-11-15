@@ -36,7 +36,7 @@ import type { JsonValue } from "../helpers/json";
 //
 //   guards before the action (cache-control private, no-store, unless the answer comes from musicRequest)
 //   403 {ok:false}                        a visitor, a forged studio cookie, a signed-in studio client
-//   503 {ok:false}                        no MUSIC_DB, no id param, an empty id param
+//   503 {ok:false}                        no MUSIC_DB
 //   403 {ok:false,error:"Forbidden"}      musicRequest: no Origin header, another origin (no cache-control header)
 //   415 {ok:false,error:"JSON required"}  musicRequest: no content type, text/plain, form content type
 //   400 {ok:false,error:"Missing request"}  musicRequest: a JSON content type and no body at all
@@ -44,7 +44,8 @@ import type { JsonValue } from "../helpers/json";
 //   400 {ok:false,error:"Invalid JSON"}   musicRequest: bad JSON, an empty body
 //   400 {ok:false,message:"Check the required fields..."}  schema: null, array, string, number, unknown or missing action,
 //                                         upper-case action, bad label, missing or over-long note, wrong types
-//   404 {ok:false}                        an unknown id, a request of another kind
+//   404 {ok:false}                        an unknown id, a request of another kind, no id param, an empty id param (a
+//                                         missing id matches no request, after the body and the command are read)
 //   409 closed ("This request is closed.")   a withdrawn request, a request with an empty email
 //   409 resolved ("...Reopen it to make a new offer.")  a resolved request
 //   (the project-started 409 does not apply to fit: a started project still takes a fit note)

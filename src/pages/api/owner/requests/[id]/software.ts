@@ -137,7 +137,7 @@ const answer = async ({
 	const env = locals.runtime.env,
 		db = env.MUSIC_DB;
 
-	if (!db || !params.id) return json({ ok: false }, 503);
+	if (!db) return json({ ok: false }, 503);
 	let body: unknown;
 	body = await musicRequest(request, 80 * 1024);
 
@@ -150,8 +150,12 @@ const answer = async ({
 			400,
 		);
 	const command = parsed.data;
-	// A request whose stored details are not JSON makes this read reject too; it answers as a failed store.
-	const record = await stored(getOwnerRequest(db, params.id));
+
+	// A missing or empty id matches no request, as an unknown one does. A request whose stored details are not JSON makes
+	// the read reject; it answers as a failed store.
+	const record = params.id
+		? await stored(getOwnerRequest(db, params.id))
+		: null;
 
 	if (!record || record.kind !== "software") return json({ ok: false }, 404);
 
@@ -327,6 +331,11 @@ const answer = async ({
 				(await stored(offerIsSending(db, record.id)))
 			)
 				return json({ ok: false, message: offerSendingMessage }, 409);
+
+			// Both actions write before the email. Without the mail settings the email cannot be sent, so nothing is
+			// written: a dependency this deployment does not have.
+			if (!env.RESEND_API_KEY || !env.CONTACT_FROM_EMAIL || !env.OWNER_EMAIL)
+				return offersUnavailable();
 
 			if (Date.parse(record.updatedAt) >= Date.parse(now))
 				now = new Date(Date.parse(record.updatedAt) + 1).toISOString();
@@ -956,12 +965,14 @@ const answer = async ({
 			offersFailedAfterEmail,
 		);
 
-		if (sent.ok && !live)
+		// A closed link is refused whatever became of the email; only an accepted email is said to have gone out.
+		if (!live)
 			return json(
 				{
 					ok: false,
-					message:
-						"The email went out, but the link was closed while it was sending. Send the offer again for a working link.",
+					message: sent.ok
+						? "The email went out, but the link was closed while it was sending. Send the offer again for a working link."
+						: "The link was closed while the offer was being sent. Send the offer again for a working link.",
 				},
 				409,
 			);

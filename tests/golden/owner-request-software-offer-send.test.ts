@@ -64,11 +64,12 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //   500 "The offer link couldn't be built. Check SITE_ORIGIN."  SITE_ORIGIN that is not a URL (nothing written)
 //   200 {ok:true,version,link,linkCreatedAt,sentAt,updatedAt,emailSent,uncertain,copySent}  a draft sent (the sent offer
 //            superseded), a sent offer reissued after its link was revoked (sentAt and updatedAt kept), each Resend outcome
-//            (a refused or lost client email still answers 200 with emailSent false and the link, since the offer is sent;
-//            the check after the email counts only for an accepted email, so this answer is given even when the check
-//            finds the link closed: "the link is revoked while an email that fails is sent")
+//            (a refused or lost client email, or mail not configured, still answers 200 with emailSent false and the
+//            link, since the offer is sent, as long as the check after the email finds the link live)
 //   409 "The email went out, but the link was closed while it was sending..."  the email was accepted and the link was
 //            revoked, the offer superseded or the request withdrawn before the check
+//   409 "The link was closed while the offer was being sent..."  the same check finds the link closed after a client
+//            email that was not accepted ("the link is revoked while an email that fails is sent")
 //   409 generic "...changed or could not be saved..."  a guard of the batch fails (updated_at, status or email moved; the
 //            link is live when a reissue needs a revoked one; there is no link; a signed agreement exists; a first
 //            deposit of any offer version opened or was paid; the draft changed), stored terms that are not JSON or are
