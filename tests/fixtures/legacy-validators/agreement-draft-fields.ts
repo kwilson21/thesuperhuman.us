@@ -3,6 +3,7 @@
 // every input as this one does. It is not product code: nothing under src/ may import it
 // (tests/architecture/legacy-validators.test.ts), and the Effect stack's final layer deletes this directory.
 // Live imports from src: `businessTypes`, `states` and `fieldMessages` (lists and sentences, data) and the type `RawValue`.
+// `fieldMessages` is read through a local binding widened to `Record<string, string>` because the source now keeps its keys; the lookup is unchanged.
 // A later edit to those moves both sides of the differential together. The validators themselves are frozen here.
 import { z } from "astro/zod";
 import type { RawValue } from "../../../src/lib/fields";
@@ -79,6 +80,8 @@ export function legacyResolveClientDetails(input: RawValue, email: string) {
 
 	const errors: Record<string, string> = {};
 
+	const messages: Record<string, string> = fieldMessages;
+
 	if (!client.success)
 		for (const issue of client.error.issues) {
 			const field =
@@ -93,7 +96,7 @@ export function legacyResolveClientDetails(input: RawValue, email: string) {
 					? "Remove unusual characters from this field."
 					: issue.message === "This answer is required." ||
 							issue.code === "invalid_string"
-						? (fieldMessages[field] ?? "Check this field.")
+						? (messages[field] ?? "Check this field.")
 						: "Check this field.";
 		}
 

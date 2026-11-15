@@ -1,3 +1,4 @@
+import { deleteRetiredCodes } from "~/lib/audio-client-access";
 import { agreementEvent } from "~/lib/agreement-events";
 import type { APIRoute } from "astro";
 import { z } from "astro/zod";
@@ -373,6 +374,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				openSoftwareGuard(db, id),
 				...softwareAccessRevocation(db, id, actor, at),
 			]);
+			await deleteRetiredCodes(db, id);
 
 			return json({ ok: true });
 		}

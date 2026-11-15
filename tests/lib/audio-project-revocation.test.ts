@@ -1,11 +1,16 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
 	revokeProjectAccess,
 	revokeProjectFile,
 } from "~/lib/audio-project-revocation";
+import { double } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
+import {
+	failingRetiredCleanup,
+	retiredCleanupLogLine,
+} from "../helpers/retired-codes-failure";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -42,9 +47,17 @@ function fixture() {
     VALUES ('session-hash','artist@example.com',?,?,?)`)
 		.run(now.toISOString(), "2026-10-01T12:00:00Z", now.toISOString());
 	sql
-		.prepare(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at)
-    VALUES ('artist@example.com','code-hash',?,?)`)
-		.run(now.toISOString(), "2026-10-01T12:00:00Z");
+		.prepare(`INSERT INTO audio_client_signin_codes(nonce_hash,email,code_hash,created_at,expires_at)
+    VALUES ('nonce-1','artist@example.com','code-hash',?,?),('nonce-2','artist@example.com','code-hash-2',?,?),
+      ('nonce-3','other@example.com','code-hash-3',?,?)`)
+		.run(
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+			now.toISOString(),
+			"2026-10-01T12:00:00Z",
+		);
 
 	return { sql, db };
 }
@@ -126,7 +139,10 @@ it("closes project access, invalidates sessions and codes, and writes one audit 
 			)
 			.get(),
 	).toEqual({ revoked_at: now.toISOString() });
-	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([]);
+	// Every code for the closed address goes, whichever browser asked for it; another address keeps its code.
+	expect(
+		sql.prepare("SELECT email FROM audio_client_signin_codes").all(),
+	).toEqual([{ email: "other@example.com" }]);
 	expect(
 		sql
 			.prepare(
@@ -244,5 +260,82 @@ it("reopens a completed project when its only final is revoked, so a replacement
 			)
 			.get(),
 	).toEqual({ action: "stage-changed", actor: "owner@example.com" });
+	sql.close();
+});
+
+// audio_client_codes is the retired sign-in codes table; closing a client's access still clears the address from it, and
+// works once a later migration has dropped it.
+it("clears the closed address from the retired sign-in codes table too", async () => {
+	const { sql, db } = fixture();
+	sql.exec(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at) VALUES
+    ('artist@example.com','old','2026-01-01','2026-01-01'),('other@example.com','old','2026-01-01','2026-01-01')`);
+	expect(
+		await revokeProjectAccess(db, "song-1", "owner@example.com", now),
+	).toBe(true);
+	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([
+		{ email: "other@example.com" },
+	]);
+	sql.close();
+});
+
+it("still closes access when the retired sign-in codes table has been dropped", async () => {
+	const { sql, db } = fixture();
+	sql.exec("DROP TABLE audio_client_codes");
+	expect(
+		await revokeProjectAccess(db, "song-1", "owner@example.com", now),
+	).toBe(true);
+	expect(
+		sql
+			.prepare(
+				"SELECT revoked_at FROM audio_projects WHERE request_id='song-1'",
+			)
+			.get(),
+	).toEqual({ revoked_at: now.toISOString() });
+	sql.close();
+});
+
+// The cleanup of the retired table is best effort: the revocation has committed, so a failure there must not be reported
+// as a failed revocation.
+it("closes access and answers true when the retired-table cleanup fails, and logs a fixed line", async () => {
+	const { sql, db } = fixture();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	expect(
+		await revokeProjectAccess(
+			failingRetiredCleanup(db),
+			"song-1",
+			"owner@example.com",
+			now,
+		),
+	).toBe(true);
+	expect(
+		sql
+			.prepare(
+				"SELECT revoked_at FROM audio_projects WHERE request_id='song-1'",
+			)
+			.get(),
+	).toEqual({ revoked_at: now.toISOString() });
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	expect(JSON.stringify(log.mock.calls)).not.toContain("example.com");
+	log.mockRestore();
+	sql.close();
+});
+
+it("still fails as before when the revocation batch itself fails", async () => {
+	const { sql, db } = fixture();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	const broken = double<D1Database>({
+		prepare: (query: string) => db.prepare(query),
+		batch: async () => {
+			throw new Error("d1 down");
+		},
+	});
+
+	await expect(
+		revokeProjectAccess(broken, "song-1", "owner@example.com", now),
+	).rejects.toThrow("d1 down");
+	expect(log).not.toHaveBeenCalled();
+	log.mockRestore();
 	sql.close();
 });

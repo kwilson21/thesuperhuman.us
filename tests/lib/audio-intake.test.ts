@@ -136,3 +136,10 @@ describe("audio intake", () => {
 		);
 	});
 });
+
+it.each([null, 42, "text", []])(
+	"refuses input that is not an intake object (%j)",
+	(input) => {
+		expect(validateIntake(input).ok).toBe(false);
+	},
+);

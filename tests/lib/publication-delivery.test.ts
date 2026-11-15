@@ -172,3 +172,12 @@ describe("protocol-boundary delivery", () => {
 		expect(p.outbox.prepare).not.toHaveBeenCalled();
 	});
 });
+
+it.each([null, "text", 42, []])(
+	"reports a publication that is not an object (%j) as invalid, with no external calls",
+	async (input) => {
+		const p = fixture();
+		expect(await deliver(input, p)).toEqual({ status: "invalid" });
+		expect(p.outbox.prepare).not.toHaveBeenCalled();
+	},
+);

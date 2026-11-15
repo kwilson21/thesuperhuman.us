@@ -244,3 +244,10 @@ it.each([
 
 	expect(projection?.path).toBe(path);
 });
+
+it.each([null, "text", 42, []])(
+	"reports terms that are not an object (%j) as not ok",
+	(input) => {
+		expect(validateOfferTerms(input).ok).toBe(false);
+	},
+);

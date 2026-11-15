@@ -1,8 +1,35 @@
 import { expect, it } from "vitest";
 import {
 	changedRows,
+	reconciliationArgs,
 	reconciliationStatements,
 } from "../../scripts/stripe-reconciliation.mjs";
+
+it("keeps the action and its values, and drops only --remote and --config with its path", () => {
+	const refund = ["--software-deposit-refunded", "inv_1", "Confirmed"];
+
+	expect(reconciliationArgs(refund)).toEqual(refund);
+	expect(reconciliationArgs([...refund, "--remote"])).toEqual(refund);
+	expect(reconciliationArgs(["--remote", ...refund])).toEqual(refund);
+	expect(
+		reconciliationArgs([
+			"--remote",
+			"--config",
+			"wrangler.production.jsonc",
+			...refund,
+		]),
+	).toEqual(refund);
+	expect(
+		reconciliationArgs([
+			...refund,
+			"--remote",
+			"--config",
+			"wrangler.production.jsonc",
+		]),
+	).toEqual(refund);
+	expect(reconciliationArgs(["--remote"])).toEqual([]);
+	expect(reconciliationArgs([])).toEqual([]);
+});
 
 it("builds bounded reconciliation statements for exact event and reservation identities", () => {
 	const now = new Date("2026-09-20T16:00:00.000Z");
