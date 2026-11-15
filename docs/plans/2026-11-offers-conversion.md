@@ -12,14 +12,20 @@ today `src/lib/software-invoices.ts:365-412`; after the split they are `src/lib/
 
 ## What the owner is asked
 
-1. Each candidate behaviour fix in section 5 (F1 to F5, F8, F9, F10): yes, no, or a different answer. F6 and F7 are
-   decided.
-2. The sentence proposed for F3: "The email was sent, but saving failed. Reload before you try again."
+1. Each candidate behaviour fix in section 5 (F1, F3 to F5, F8, F9, F10): yes, no, or a different answer. F2, F6 and
+   F7 are decided. F5's stored-details case (StoredRequestInvalid) needs an answer either way, because a converted route
+   cannot reject: recommended, 500 with the fixed sentence, in the F2 PR.
+2. The sentences proposed for F3: "The email was sent, but saving failed. Reload before you try again." and, for the
+   draft's failed restore, "The draft was saved, but an attachment could not be cleaned up. Reload before you try
+   again."
 
 Decided in the review of #306, and not asked again: the Quint extension is a prerequisite (section 7); every condition
-that only a guard checks today is read first and refused by name (section 2); a refused guard is not retried, and a
-UNIQUE failure that backs a rule's fact is (section 2); question and decline save their after-email moves through the
-`@xstate/effect` bridge (section 3); the deposit decision gets a LemmaScript contract (section 7).
+that only a guard checks today is read first and refused by name (section 2; the four conditions there, before the
+batch that checks them today. The decline's second batch keeps G5 and G6 as guard-only conditions, answered by the reads
+after a refused batch, as today); a refused guard is not retried, and a UNIQUE failure that backs a rule's fact is
+(section 2); question and decline save their after-email moves through the `@xstate/effect` bridge (section 3); the
+deposit decision gets a LemmaScript contract (section 7). F2 follows from the owner's decision of 2026-11-14 and from
+`runRoute` (section 5).
 
 ## The area today
 
@@ -77,12 +83,12 @@ are drawn for context; they join the machine when that route converts (step 12).
 stateDiagram-v2
     [*] --> New: a software brief arrives
     New --> New: fit, G1
-    New --> New: question, G1 G2 in both batches
+    New --> New: question through Asking, G1 G2 in both batches
     New --> New: draft or send, G1 G2 and the offer guards
     New --> New: revoke, G1 G5 G10
-    Reviewed --> Reviewed: fit, question, draft, send or revoke, guarded as from New
-    New --> Resolved: decline, first batch G1 to G6, second batch G1 G2 G5 G6
-    Reviewed --> Resolved: decline, guarded as from New
+    Reviewed --> Reviewed: fit, question through Asking, draft, send or revoke, guarded as from New
+    New --> Resolved: decline through Declining, first batch G1 to G6, second batch G1 G2 G5 G6
+    Reviewed --> Resolved: decline through Declining, guarded as from New
     Resolved --> Resolved: revoke, G1 G5 G10
     Withdrawn --> Withdrawn: revoke, G1 G5 G10
     New --> Reviewed: review, status route
@@ -104,10 +110,15 @@ What each state refuses:
 | decline | AlreadyResolved, after the deposit check | RequestClosed | ProjectStarted first, then RequestClosed when the email is empty |
 | revoke | allowed | allowed | RequestClosed when the email is empty |
 
-In code: `softwareRequest` with the four stored states and the events FIT, QUESTION, DRAFT, SEND (from new and reviewed, to
-the same state), DECLINE (from new and reviewed, to resolved) and REVOKE (from all four), plus two states that invoke the
-client email and are never saved, `asking` and `declining` (section 3). The empty email and the started project are not
-states; they are terms of the rules (section 2).
+The diagram draws the moves a row is saved with. In code: `softwareRequest` with the four stored states, two states that
+invoke the client email and are never saved, `asking` and `declining` (section 3), and the events FIT, DRAFT, SEND (from
+new and reviewed, to the same state), QUESTION (from new and reviewed, to `asking`), DECLINE (from new and reviewed, to
+`declining`) and REVOKE (from all four). So `next()` answers `asking` or `declining` for QUESTION or DECLINE, never the
+state the row is saved with. That state is where the invoked work lands: `declining`'s onDone is resolved, `asking`'s
+onDone is the state it came from, and both onError targets are the state it came from. One invoking state serves both
+new and reviewed, so the QUESTION and DECLINE transitions keep the origin (new or reviewed) in the machine's context, and
+each landing on the origin is a pair of guarded targets that read it (new when the origin is new, otherwise reviewed).
+The empty email and the started project are not states; they are terms of the rules (section 2).
 
 ### The offer version
 
@@ -169,11 +180,12 @@ writes even when repeated (a second fit or revoke writes or refuses; nothing ans
 time it read where the code reads it today (software.ts:145, and each sending check, software-offers.ts:473, 480), the new
 draft id (software.ts:450) and the new link token (745).
 
-**XState and Effect.** `next()` answers whether the request's status allows the action and, for decline, its target; it
-also gives the offer version's moves. Everything that reads another row or the page's expectations is an Effect rule term:
-the started project, the empty email, the sending window, deposits, signed agreements, the audio project, the link,
-attachments, every expected version, version numbering, the write time, the email texts, and which 409 to give after a
-refused batch.
+**XState and Effect.** `next()` answers whether the request's status allows the action and, for question and decline,
+the invoking state it moves to (`asking`, `declining`); the state then saved (resolved, or the origin) is the invoked
+work's landing, read from the settled actor (section 3), not from `next()`. It also gives the offer version's moves.
+Everything that reads another row or the page's expectations is an Effect rule term: the started project, the empty
+email, the sending window, deposits, signed agreements, the audio project, the link, attachments, every expected version,
+version numbering, the write time, the email texts, and which 409 to give after a refused batch.
 
 **Write time.** `now`, or one millisecond after the version read when that is not earlier than `now`: the request's
 `updated_at` for fit, question and decline (software.ts:232-233, 273-274), the open draft's `updated_at` for draft and send
@@ -209,7 +221,10 @@ Each is a `Data.TaggedError` with a `say` sentence (no field named `message`, `n
 | LinkClosedWhileSending | 409 | The email went out, but the link was closed while it was sending. Send the offer again for a working link. | software.ts:835-843 |
 
 The refusals this design adds name conditions that a guard or a throw decides today. Each answers exactly what that path
-answers today, so no recorded answer changes except those listed under F7:
+answers today, so no recorded answer changes except those listed under F7 and F5's stored-details case: today
+StoredRequestInvalid's path rejects (fit "a request whose stored details are not JSON"), which a converted route cannot
+do, so it needs a decided answer before the conversion (recommended: 500 with the fixed sentence, in the F2 PR, section
+5):
 
 | Tag | Actions | Answers as | Today |
 |---|---|---|---|
@@ -220,7 +235,7 @@ answers today, so no recorded answer changes except those listed under F7:
 | AttachmentsUnreadable | draft | DraftChanged with `updatedAt` | `parseAgreementAttachments` throws while the batch is built (194-195), F5 |
 | MsaNotFound | draft | DraftChanged with `updatedAt` | the reused MSA's FOREIGN KEY fails in the batch (523-536), F5 |
 | StoredTermsUnreadable | send | RequestChanged | `JSON.parse` of the stored terms throws (605), F5 |
-| StoredRequestInvalid | every action | see F5 | `getOwnerRequest` parses `details_json` and rejects (src/lib/owner-model.ts:74), F5 |
+| StoredRequestInvalid | every action | see F5 | `getOwnerRequest` parses `details_json` and rejects (src/lib/owner-model.ts:73), F5 |
 
 The client email's failures are service failures, not refusals (section 3); their 502 sentences are in section 5.
 
@@ -229,8 +244,11 @@ The client email's failures are service failures, not refusals (section 3); thei
 attachment's metadata row, unchanged and in no closed archive (G11, draft and send; send's pin reads the row,
 software.ts:670-687, but not the archives). Each becomes a fact the flow reads before the batch and a named refusal in the
 rule: AgreementSigned, AudioProjectExists, LinkNotRevoked, AttachmentNotUsable. The guard stays as the compare-and-set
-re-check. Each refusal is decided where the batch decides it today, so the order of answers does not move: last in
-decline; last in the draft, after DraftChanged; in send, after `pinAgreement` and the link (see "send" below). Golden
+re-check. The decision covers these four before the batch that checks them today, not the decline's second batch: there
+G5 and G6 stay guard-only conditions, not read after the email, and a refusal is answered by the reads after a refused
+batch (ProjectStarted, OfferStillSending, EmailSentButChanged; software.ts:359-363, 373-402), as today. Each refusal is
+decided where the batch decides it today, so the order of answers does not move: last in decline; last in the draft,
+after DraftChanged; in send, after `pinAgreement` and the link (see "send" below). Golden
 cases these refusals answer, each with today's answer: decline "a client-signed agreement blocks the decline", "an
 executed agreement blocks the decline", "an audio project for the request blocks the decline"; send "a signed agreement
 stops the send", "an executed agreement stops the send", "a client-signed agreement stops the reissue of the sent offer",
@@ -240,8 +258,9 @@ row", "an attachment whose hash differs from the metadata row", "an attachment w
 "an attachment whose filename differs from the metadata row", "an attachment of another request", "an attachment already
 in a closed archive", "two attachments, one with a metadata row and one without". The races change the row in an
 `interleave` hook, which runs just before the matching batch (tests/golden/README.md:423-424), so the new read sees the
-old row and the guard still refuses, as today: send "the attachment is named in a closed archive before the batch", "the
-attachment's metadata row is deleted before the batch", "a client signs before the batch"; decline "a signed agreement
+old row and the guard still refuses, as today: signing "the attachment's metadata row is deleted before the batch", "the
+attachment is named in a closed archive before the batch" (tests/golden/owner-request-software-offer-signing.test.ts:854,
+869); send "a client signs before the batch"; decline "a signed agreement
 appears before the first batch", "an audio project appears before the first batch"; draft "the metadata row is removed
 before an attachment is pinned". The closed-archive read uses the guard's own predicate (software.ts:197-198), so an
 agreement whose archive is open is never parsed (draft "an agreement with a malformed manifest does not break the
@@ -389,9 +408,10 @@ effects; no read moves ahead of a decision that comes before it today. Each buil
   draft and `read(key)` (size and SHA-256, with `hashBytes`) for the send. The route asks `bindingsOrUnavailable` only for
   `MUSIC_DB`, and `boundServices` adds `AudioBucket` only when `env.AUDIO` is set (services.ts:105-125), so a missing
   binding is an absent service. The store reads it with `Effect.serviceOption(AudioBucket)`: with none, `remove` fails as
-  a failed delete does today (golden draft "a removed attachment with no R2 binding": cleanup pending), and `read` answers
-  that there is no object (golden signing "an attachment with no R2 binding": DetailsIncomplete). The route never answers
-  503 for it.
+  a failed delete does today (golden draft "a removed attachment with no R2 binding": cleanup pending). `read` with none
+  is a known unavailable dependency: if the owner accepts F4's case for it, `read` fails with the store's own named error
+  and the send answers 503 at the point where the first attachment is read today; if not, `read` answers that there is no
+  object, and the send answers DetailsIncomplete as today (golden signing "an attachment with no R2 binding").
 - **AgreementPreflight** wraps `preflightAgreementPacket` (src/lib/agreement-pdf.ts:379-464), loaded with the same dynamic
   import (software.ts:698-700). It reads D1 and R2 itself (agreement-pdf.ts:147-161, 344-350, 431-438), so its live
   implementation takes `env`; converting its insides is the signing area's work. Any rejection is PacketNotReady, which
@@ -403,34 +423,45 @@ effects; no read moves ahead of a decision that comes before it today. Each buil
 **draft.** `decideAndSave` over read, decide and the batch (section 2). Its `facts` step reads in today's order and
 fails with the first refusal it meets (a `facts` step may fail with a named error), so on every try the refusals come in
 the order of section 2 and no read runs ahead of one. Then `AttachmentStore.remove` for each row the delete returned, and
-`restoreAttachment` after a failed one. A failed restore is `OffersStoreFailed` (F3).
+`restoreAttachment` after a failed one. A failed restore is `OffersStoreFailed` from the store, which the flow turns into
+a tag of its own (the draft is already saved), so that the route can answer it with its own proposed sentence (F3).
 
 **question and decline: the `@xstate/effect` bridge (decided).** Each saves a move only after the client email: decline's
 resolve in its second batch (software.ts:350-372) and question's record of `question-sent` (the same batch, 371). A move
 that waits on outside work goes through the bridge (CLAUDE.md, Back-end rules), so `softwareRequest` gets two states that
 invoke the email, `declining` and `asking`, built with `createEffectLogic` as in
 tests/server/effect-bridge-proof.test.ts:31-61. The flow reads, decides and writes the first batch (decline's withdraw,
-question's reservation); restores the
-machine at the stored status and sends DECLINE or QUESTION; the invoked work sends the client email, then the copy (a
-copy failure only sets `copySent` false); `onError` reads MailRefused, MailUncertain or MailNotConfigured with
-`failureOf` (src/server/machines/failure.ts:32) and lands back on the status it came from, with the failure in the
-context; and the program waits with `settled` (src/server/machines/settled.ts:21). Only then is the landing state saved:
-resolved by the second batch, the question's record by its batch, each guarded as today; on GuardRefused, the
-after-refusal reads. After an email failure nothing more is saved, and the route answers 502. An invoking state is never
-saved (src/server/machines/next.ts:22-26): while the email is in flight the stored status stays new or reviewed, with the
-decline's offers already withdrawn, as today, so a retry repeats both batches (golden "a decline whose email is refused,
-then the same decline").
+question's reservation); restores the machine at the stored status and sends DECLINE or QUESTION, which moves it to
+`declining` or `asking` (the state `next()` answers for the event) and keeps the origin, new or reviewed, in the context.
+The invoked work sends the client email, then the copy (a copy failure only sets `copySent` false). Its onDone lands on
+resolved from `declining` and on the origin from `asking`; its onError reads MailRefused, MailUncertain or
+MailNotConfigured with `failureOf` (src/server/machines/failure.ts:32) and lands on the origin, with the failure in the
+context. Every landing on the origin is a pair of guarded targets that read the origin from the context (section 1).
 
-Drawn from Reviewed; New is the same, landing on New:
+The program waits with `settled` (src/server/machines/settled.ts:21-35), whose options carry a timeout: 30 seconds,
+longer than the two emails in a row at their own 10-second timeouts (the client email, then the copy, each with
+`AbortSignal.timeout(10_000)`, src/lib/audio-resend.ts:61). `settled` fails with the typed `TimeoutError` when the
+timeout passes first, and with the typed `ActorStoppedError` when the actor stops without erroring (an errored actor dies
+with its original error instead, settled.ts:26-35). The route maps both tags with `catchTags` to its fixed 500 sentence,
+the one it answers a defect with (F2).
+
+Only then is the landing state saved: resolved by the second batch, the question's record by its batch, each guarded as
+today; on GuardRefused, the after-refusal reads. After an email failure nothing more is saved, and the route answers
+502. An invoking state is never saved (src/server/machines/next.ts:22-26): while the email is in flight the stored
+status stays new or reviewed, with the decline's offers already withdrawn, as today, so a retry repeats both batches
+(golden "a decline whose email is refused, then the same decline").
 
 ```mermaid
 stateDiagram-v2
-    Reviewed --> Declining: DECLINE, after the first batch withdrew the offers
-    Declining --> Resolved: the client email was accepted, then the copy, then the second batch
-    Declining --> Reviewed: MailRefused, MailUncertain or MailNotConfigured, nothing more saved
-    Reviewed --> Asking: QUESTION, after the reservation batch
-    Asking --> Reviewed: the client email was accepted, then the copy, then the record batch
-    Asking --> Reviewed: MailRefused, MailUncertain or MailNotConfigured, nothing more saved
+    New --> Declining: DECLINE after the first batch, origin new kept in the context
+    Reviewed --> Declining: DECLINE after the first batch, origin reviewed kept in the context
+    Declining --> Resolved: onDone, the client email accepted, then the copy, then the second batch
+    Declining --> New: onError when the origin is new, nothing more saved
+    Declining --> Reviewed: onError when the origin is reviewed, nothing more saved
+    New --> Asking: QUESTION after the reservation batch, origin new kept in the context
+    Reviewed --> Asking: QUESTION after the reservation batch, origin reviewed kept in the context
+    Asking --> New: onDone then the record batch, or onError, when the origin is new
+    Asking --> Reviewed: onDone then the record batch, or onError, when the origin is reviewed
 ```
 
 **send.** A sketch, in today's order exactly (software.ts:427-843):
@@ -493,7 +524,7 @@ archive read must not start `SELECT 1 FROM software_agreement_attachments` (sign
 fails").
 
 **Shared reads.** `readRequest` (src/lib/owner-requests.ts:121-131, which also parses `details_json`,
-src/lib/owner-model.ts:74), `readProjectStarted` (software.ts:114-117), `readOffers` (software-offers.ts:385-394),
+src/lib/owner-model.ts:73), `readProjectStarted` (software.ts:114-117), `readOffers` (software-offers.ts:385-394),
 `readFreshLiveLink(requestId, since)` (software-offers.ts:465-466, 476-483), `readDepositInvoices`
 (software-invoices.ts:370-375, widened as section 7 says), and the new `readSignedAgreement` (G3), `readAudioProject`
 (G6), `readLinkRow` (revoke, and G9 for a reissue), `readAttachmentRows` and `readClosedArchives` (G11, the latter with
@@ -539,14 +570,17 @@ DetailsIncomplete `{ok:false,message}` plus `errors` when present.
 | send | 200 `{ok:true,version,link,linkCreatedAt,sentAt,updatedAt,emailSent,uncertain,copySent}`; a reissue keeps the offer's `sent_at` and `updated_at` (845-855). `uncertain` is absent when the client email was accepted or mail is not configured (`email` returns no such key then, 155-156, 182), and present, true or false, when it failed (171) | none: a failed email still answers 200 with `emailSent:false` |
 
 Each tag maps with `Effect.catchTags` in the route; MailRefused, MailUncertain and MailNotConfigured map to the 502s above
-for question and decline; `SaveKeptChanging` (draft) maps to the after-refusal answer. `OffersStoreFailed` and a defect
-have no answer today that the owner's decision allows; see the fixes below.
+for question and decline; `SaveKeptChanging` (draft) maps to the after-refusal answer; `settled`'s `TimeoutError` and
+`ActorStoppedError` (question and decline, section 3) map to the fixed 500 sentence. A defect answers the same fixed 500
+sentence through the `DefectAnswer` the route passes to `runRoute` (src/server/run.ts:28-46). `OffersStoreFailed` maps to
+the fixed 500 sentence where today's code rejects (F2, decided); where today answers 409 or 400 instead, its answer waits
+on F1, F3 and F4 below.
 
 ### Behaviour fixes
 
 The owner's decision of 2026-11-14: an unexpected store failure answers 500 with a fixed sentence, a lost race or a stale
 version 409, and 503 only for a missing binding or a known unavailable dependency. Each fix below is its own PR before the
-conversion, with no `conversion` label, re-recording its corpora and explaining every changed case. F6 and F7 are
+conversion, with no `conversion` label, re-recording its corpora and explaining every changed case. F2, F6 and F7 are
 decided; the others are candidates for the owner.
 
 | # | What happens today | Golden cases that pin it | Count |
@@ -554,7 +588,7 @@ decided; the others are candidates for the owner.
 | F1 | A store failure answers 409 RequestChanged or DraftChanged, as if the request had changed | fit: "the fit batch fails", "the fit batch fails after an earlier fit". question: "the reservation batch fails". decline: "the deposit read fails", "the sending read fails", "the first batch fails". revoke: "the batch fails". offer-draft: "the offers read fails", "the removed attachment lookup fails", "the draft batch fails on a new draft", "the draft batch fails on an update". offer-send: "the offers read fails", "the sending read fails", "the deposit read fails", "the signing setting read fails", "the send batch fails". offer-signing: "the signing setting read fails", "the send batch fails" | 18 |
 | F2 | A store failure rejects (a bare 500 from Astro, no body): a read outside the `try`, or a lookup inside the catch | fit, question, decline, revoke, offer-draft, offer-send: "the first read fails"; question, decline, offer-draft, offer-send: "the project pre-check fails"; question: "the reservation batch fails and the project lookup after it also fails"; decline: "the first batch fails and the lookups after it also fail"; revoke: "the batch fails and the link lookup after it also fails"; offer-draft: "the offers read fails twice", "the draft batch fails and the offers read after it fails too"; offer-send: "the send batch fails and the sending lookup after it fails" | 16 |
 | F3 | After an outside effect, a store failure is answered as a change, or with a sentence that hides what happened | question: "the recording batch fails" (EmailSentButChanged), "the recording batch fails and so does the project lookup after it" (RequestChanged). decline: "the second batch fails", "the second batch fails and so does the project lookup after it". offer-send: "the check after the email fails", "the check after the email fails when the email failed too" (both OfferStillSending, though the offer was sent). offer-draft: "a failed R2 delete and the metadata put back also fails" (DraftChanged, after the draft was saved) | 7 |
-| F4 | A store or R2 failure while preparing the agreement answers 400 DetailsIncomplete | offer-signing: "the template read fails", "the second template read fails", "the contractor read fails", "the reused MSA read fails", "the attachment metadata read fails", "the original MSA read fails in the preflight", "an attachment whose R2 read throws" | 7 |
+| F4 | A store or R2 failure while preparing the agreement, or a missing R2 binding, answers 400 DetailsIncomplete | offer-signing: "the template read fails", "the second template read fails", "the contractor read fails", "the reused MSA read fails", "the attachment metadata read fails", "the original MSA read fails in the preflight", "an attachment whose R2 read throws", "an attachment with no R2 binding" | 8 |
 | F5 | Bad input or bad stored data answers 409 as a race, or rejects | offer-draft: "agreement details with attachments that are not a list", "agreement details with a malformed attachment", "agreement details with six attachments", "an MSA reuse confirmed with an MSA that does not exist" (DraftChanged). offer-send: "stored terms that are not JSON", "stored terms that are empty text" (RequestChanged, where other bad stored terms answer 400 with errors). fit: "a request whose stored details are not JSON" (rejected) | 7 |
 | F6 | A missing or empty `id` answers 503, which the decision keeps for a missing binding | fit: "no id param", "an empty id param" | 2 |
 | F7 | A decision that SQL makes today, moved into the rule, answers otherwise | revoke: "a link made 10 seconds ago and the lookups after the batch fail" (rejected today). offer-draft: "another writer takes the version before the batch inserts it" (409 today) | 2 |
@@ -562,25 +596,39 @@ decided; the others are candidates for the owner.
 | F9 | A send whose client email failed answers 200 with the link even when the live-link check found the link closed | offer-send: "the link is revoked while an email that fails is sent" | 1 |
 | F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft | none: found by reading, to be reproduced by the model first (section 7) | 0 |
 
-**F1 to F4, store failures (candidates).** CLAUDE.md has a converted route map its store failure tag to 500 with a fixed
-sentence, so converting these as they are changes their answers, and keeping today's answers would mean mapping that tag
-to 409 or 400 against the rule. Each needs the owner's answer before the conversion: the fix, or an exception the
-conversion then reproduces. The fix PR proposes the fixed 500 sentence; the helpers `offersUnavailable` and `offersFailed`
-then sit next to `offerSendingMessage` in `src/lib/software-offers.ts`, as `musicUnavailable` and `musicFailed` sit next to
-`musicRequest`. For F3, the email (or, for the draft, the save) has already happened, so the sentence should say so.
-Proposed, awaiting the owner: "The email was sent, but saving failed. Reload before you try again." For the draft's failed
-restore, the fixed 500 sentence. F4's preflight case needs the signing area's help: `preflightAgreementPacket` throws a
-plain `Error` for missing data (src/lib/agreement-pdf.ts:154, 157, 161, 346, 350, 438, 463) and lets a D1 or R2 rejection
-through as it comes (148-152, 155, 344, 432-437), so its caller cannot tell an outage from missing data. Fixing that case
-means the preflight raising a named error for one of them, which is signing's code.
+**F2, a store failure that rejects (decided).** A converted route passes `{ route, answer }` to `runRoute`
+(src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the route
+maps `OffersStoreFailed` to a Response too (its program's error type is `never`, run.ts:9-10): a converted route cannot
+answer a bare 500 with no body. Under the owner's decision of 2026-11-14 an unexpected store failure answers 500 with a
+fixed sentence, so that is F2's answer, and keeping today's answer is not an option: its 16 cases change from a bare 500
+to 500 with the fixed sentence. Its own PR changes the old route to answer so, which keeps the conversion neutral for
+them. That PR proposes the fixed sentence, and adds the helpers `offersUnavailable` and `offersFailed` next to
+`offerSendingMessage` in `src/lib/software-offers.ts`, as `musicUnavailable` and `musicFailed` sit next to
+`musicRequest`. It also carries F5's stored-details case if the owner takes the recommendation there.
+
+**F1, F3 and F4, store failures (candidates).** CLAUDE.md has a converted route map its store failure tag to 500 with a
+fixed sentence, so converting these as they are changes their answers, and keeping today's answers would mean mapping
+that tag to 409 or 400 against the rule. Each needs the owner's answer before the conversion: the fix, or an exception
+the conversion then reproduces. F1 and F4 answer with `offersFailed`, F2's sentence. For F3, the email (or, for the
+draft, the save) has already happened, so the sentence says so. Proposed, awaiting the owner: "The email was sent, but
+saving failed. Reload before you try again." The draft's failed restore comes after the draft was saved, so "saving
+failed" would be wrong there; it gets its own sentence, also proposed and awaiting the owner: "The draft was saved, but
+an attachment could not be cleaned up. Reload before you try again." F4 also covers a missing R2 binding in a send
+(golden signing "an attachment with no R2 binding", 400 DetailsIncomplete today, software.ts:688-695): it is a known
+unavailable dependency, which the owner's decision answers 503. Recommended: 503 with `offersUnavailable`'s sentence, at
+the point where the first attachment is read today, with nothing written. F4's preflight case needs the signing area's
+help: `preflightAgreementPacket` throws a plain `Error` for missing data (src/lib/agreement-pdf.ts:102, 154, 157, 161,
+346, 350, 438, 463; 102 is "Unsupported character", thrown while the preflight renders its sample packet, 443-460) and
+lets a D1 or R2 rejection through as it comes (148-152, 155, 344, 432-437), so its caller cannot tell an outage from
+missing data. Fixing that case means the preflight raising a named error for one of them, which is signing's code.
 
 **F5, bad input and bad stored data (candidates).** Not store failures: the conversion keeps them through the named
 refusals of section 2 (AttachmentsUnreadable, MsaNotFound, StoredTermsUnreadable), so they are listed because they look
 wrong, not because they block. MsaNotFound needs the reused MSA read before the batch, which answers as the FOREIGN KEY
 failure does today. One case cannot be kept: fit "a request whose stored details are not JSON" rejects today, and a
 refusal answers a Response, never a rejection (a converted route passes a `DefectAnswer`, so even a defect is answered,
-src/server/run.ts:28-46). It goes through StoredRequestInvalid, and its answer has to be chosen in a fix PR before the
-conversion. Recommended: 500 with the fixed sentence, in the F2 PR.
+src/server/run.ts:28-46). It goes through StoredRequestInvalid, and its answer has to be decided in a fix PR before the
+conversion, since it cannot stay a rejection. Recommended: 500 with the fixed sentence, in the F2 PR.
 
 **F6, a missing id (decided).** It answers what an unknown id answers today: 404 `{ok:false}` with the private header
 (software.ts:108-110; golden fit "an unknown request id"). A missing or empty id is treated as an id that matches no
@@ -596,6 +644,22 @@ lists the trigger as must-not-fire with its reason. The draft insert reads
 and decides again after a UNIQUE violation, up to three tries in all, so "another writer takes the version before the
 batch inserts it" saves version 2 and answers 200 (section 2). Every other read this design adds answers as today
 (section 2, "Conditions only a guard checks today").
+
+**Second triggers that stop firing (F1 to F3).** A declared trigger that never fires fails its case, unless the case
+lists it as optional or must-not-fire with a reason (tests/golden/README.md:429-438). This hits the F1 to F3 fix PRs as it
+hits F7's revoke case: once a store failure answers directly, the lookups after it never run, so a second failure
+injected on one of them never fires. The known cases, each declaring its second failure with `nth: 2` on the lookup
+(except revoke's, the first match of its pattern): draft "the offers read fails twice", "the draft batch fails and the
+offers read after it fails too" (tests/golden/owner-request-software-offer-draft.test.ts:962-974, 1003-1017); question
+"the reservation batch fails and the project lookup after it also fails" (owner-request-software-question.test.ts:298-311);
+decline "the first batch fails and the lookups after it also fail" (owner-request-software-decline.test.ts:513-529);
+revoke "the batch fails and the link lookup after it also fails" (owner-request-software-revoke.test.ts:357-369); send
+"the send batch fails and the sending lookup after it fails" (owner-request-software-offer-send.test.ts:810-823). Today
+these reject on the second failure (F2's list); the first failure answering directly is F1's fix. The same holds for two
+F3 cases, whose first failure comes after the email: question "the recording batch fails and so does the project lookup
+after it" (owner-request-software-question.test.ts:284-297) and decline "the second batch fails and so does the project
+lookup after it" (owner-request-software-decline.test.ts:496-512). The fix PR that makes the first failure answer directly
+rewrites each of these cases, its second trigger marked optional or removed, with the reason.
 
 **F8, mail not configured (candidate).** The check runs inside `email`, after the batches (software.ts:155-156, called at
 326 after 276-324). Recommended: check the three settings before any write and answer 503, a known unavailable
@@ -616,10 +680,10 @@ email and refused by name (section 2), with the guard as its re-check; refused, 
 second batch does today (373-402).
 
 **Kept as they are.** LinkNotBuilt is a configuration error, not a store failure or a missing binding: 500 with its own
-sentence, nothing written (golden send "SITE_ORIGIN that is not a URL", "an empty SITE_ORIGIN"). A missing R2 binding in a
-send answers DetailsIncomplete (golden signing "an attachment with no R2 binding", a known unavailable dependency). Draft
-"an MSA that a draft reuses is deleted before the batch" is a lost race: 409 is the decided answer, and the store
-recognises it on evidence (section 4) rather than needing a fix.
+sentence, nothing written (golden send "SITE_ORIGIN that is not a URL", "an empty SITE_ORIGIN"). A draft's removed
+attachment with no R2 binding keeps today's cleanup-pending 200 (golden draft "a removed attachment with no R2 binding");
+the send's missing binding is F4's case. Draft "an MSA that a draft reuses is deleted before the batch" is a lost race:
+409 is the decided answer, and the store recognises it on evidence (section 4) rather than needing a fix.
 
 ## 6. What depends on what
 
@@ -653,15 +717,21 @@ bound and its result recorded in that PR and in docs/verification.md, "The disco
 - send as three steps: the batch, the client email, the live-link check (software.ts:763-843);
 - decline as three: the first batch, the client email and its copy, the second batch (288-372);
 - drafts saved, and drafts saved and sent, while a decline's email is in flight (F10);
-- revoke and reissue, and a clock for the 20-second window and the email timeouts (10 seconds each,
-  src/lib/audio-resend.ts:61).
+- revoke and reissue, and a clock for the 20-second window and the email timeouts (10 seconds each, and the decline's
+  client email and copy can take both in a row, src/lib/audio-resend.ts:61).
 
 Properties, each with a mutant that breaks it (the driver fails a property without one):
 
 - `declinedHasNoOffer`: a request a decline resolved has no draft or sent offer and no live link. Today's code breaks it
   by reading (F10). If the owner accepts F10, the model carries the fix and today's second batch is the mutant, as
-  `discountTodayDepositGuard` keeps the old deposit guard. If not, the property allows a draft, the finding is recorded in
-  docs/verification.md, and its mutant is G5 left out of the second batch.
+  `discountTodayDepositGuard` keeps the old deposit guard. If not, the finding is recorded in docs/verification.md and the
+  property allows what today's second batch lets through: a draft saved during the decline's email, or a sent offer and
+  its live link made during the decline's email at least 20 seconds before the second batch. The second is reachable
+  today: G5 refuses only a link whose `created_at` is later than the second batch's time less 20 seconds, compared
+  strictly (`created_at>?`, src/lib/software-offers.ts:466, 473), and the email step can run its two 10-second timeouts in
+  a row (the client email, then the copy, src/lib/audio-resend.ts:61; software.ts:165-180), so a link made as the email
+  starts can be 20 seconds old when the second batch runs, and passes. Its mutant stays G5 left out of the second batch:
+  a link made less than 20 seconds before the second batch then passes too, which breaks the weakened property.
 - `acceptedSendLinkLive`: a send that answers 200 with its client email accepted had its link live at the check. Mutant:
   the check left out. If the owner accepts F9, the property drops "with its client email accepted", and today's condition
   (835) is a second mutant.
@@ -692,8 +762,10 @@ conversion's bottom PR, with the rules.
 ## 8. The PR stack
 
 Before the stack, each its own PR to `main`, in this order: this design; `claude/offers-prep-split` (#305); the Quint
-extension (section 7); then F6, F7 and each candidate fix the owner accepts (each re-records its corpora and explains
-every changed case, as the music area's branch A did, docs/prelaunch-qa-2026-11-14-music-area.md:87-100). A small
+extension (section 7); then F2, F6, F7 and each candidate fix the owner accepts (each re-records its corpora and explains
+every changed case, as the music area's branch A did, docs/prelaunch-qa-2026-11-14-music-area.md:87-100; a fix that makes
+a store failure answer directly also rewrites the cases whose second trigger then never fires, section 5, "Second
+triggers that stop firing"). A small
 test-comment PR, also to do and not part of this one, corrects the stale golden header comments found while reading:
 tests/golden/owner-request-software-offer-send.test.ts:67-68 (a failed email's link is not always live, F9) and 74-75
 (the check after the email throws answers OfferStillSending, not the generic 409), and
