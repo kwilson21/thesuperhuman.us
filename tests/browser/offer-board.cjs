@@ -263,6 +263,21 @@ function check(name, ok, detail = "") {
 				),
 			`${pricingPosts} sent`,
 		);
+
+		// After a lost answer, a press with a refused value asks for the reload before any field is checked or marked.
+		const lostContingency = values.locator('[name="contingencyPercent"]');
+		const lostBefore = await lostContingency.inputValue();
+
+		await lostContingency.fill("150");
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		check(
+			"after a lost answer, a press asks for the reload and marks no field",
+			(await lostContingency.getAttribute("aria-invalid")) === null &&
+				/Reload the page before saving again/.test(
+					await values.locator("[data-pricing-status]").textContent(),
+				),
+		);
+		await lostContingency.fill(lostBefore);
 		await page.unroute("**/api/owner/pricing");
 
 		// Clear research while the other form has unsaved changes: no reload, so the box and the research it showed go.
@@ -514,6 +529,42 @@ function check(name, ok, detail = "") {
 		await contingency.fill(contingencyBefore);
 		await page.unroute("**/api/owner/pricing");
 
+		// A box emptied while a clear was on its way holds nothing unsaved, and the message says only that it cleared.
+		await page.reload();
+
+		const emptiedVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({
+				json: { ok: true, version: emptiedVersion + 1 },
+			});
+		});
+		await contingency.fill(contingencyBefore === "12" ? "13" : "12");
+		page.once("dialog", (dialog) => dialog.accept());
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+		await box.focus();
+		await page.keyboard.press("Control+a");
+		await page.keyboard.press("Delete");
+		await page.waitForFunction(() =>
+			/Research cleared/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a box emptied while a clear was on its way gets only \"Research cleared.\"",
+			(await page
+				.locator('[data-part="market"] [data-pricing-status]')
+				.textContent()) === "Research cleared.",
+		);
+		await contingency.fill(contingencyBefore);
+		await page.unroute("**/api/owner/pricing");
+
 		// A research save with the other form clean, and text typed in the box while it is on its way, does not reload over
 		// that text (a reload would bring back the stored research without it), and still says to reload for the ranges.
 		await page.reload();
@@ -617,9 +668,11 @@ function check(name, ok, detail = "") {
 					?.textContent ?? "",
 			),
 		);
+		const refusedSince = (await box.getAttribute("aria-invalid")) !== "true";
+
 		check(
 			"a research refusal answered after the box changed leaves the box unmarked and says why",
-			(await box.getAttribute("aria-invalid")) !== "true" &&
+			refusedSince &&
 				/you changed the box since/.test(
 					await page
 						.locator('[data-part="market"] [data-pricing-status]')
@@ -629,6 +682,76 @@ function check(name, ok, detail = "") {
 		await box.evaluate((element) => {
 			element.value = element.defaultValue;
 		});
+		await page.unroute("**/api/owner/pricing");
+
+		// The same refusal for the box as it was sent marks the box, with the reason beside it.
+		await page.reload();
+		await page.route("**/api/owner/pricing", (route) =>
+			route.fulfill({
+				status: 400,
+				json: { ok: false, error: "The research file is missing its ranges." },
+			}),
+		);
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Save research" })
+			.click();
+		await page.waitForFunction(() =>
+			/missing its ranges/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a research refusal for the box as sent marks the box",
+			(await box.getAttribute("aria-invalid")) === "true",
+		);
+		await page.unroute("**/api/owner/pricing");
+
+		// A press during a save does not erase a refusal: the refusal comes back when the save answers, so a marked field
+		// never points at an empty line.
+		await page.reload();
+
+		const keptVersion = Number(await values.getAttribute("data-version"));
+		const keptDay = values.locator('[name="dayValue"]');
+		const keptDayBefore = await keptDay.inputValue();
+
+		await keptDay.fill("12.5");
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+
+		const refusal = await values.locator("[data-pricing-status]").textContent();
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({ json: { ok: true, version: keptVersion + 1 } });
+		});
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Save research" })
+			.click();
+		await values.getByRole("button", { name: "Save", exact: true }).click({
+			force: true,
+		});
+
+		const busyLine = await values.locator("[data-pricing-status]").textContent();
+
+		await page.waitForFunction(() =>
+			/^Saved/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a press during a save keeps the refusal it covered, and brings it back when the save answers",
+			/whole dollars/.test(refusal) &&
+				/on its way/.test(busyLine) &&
+				(await values.locator("[data-pricing-status]").textContent()) ===
+					refusal &&
+				(await keptDay.getAttribute("aria-invalid")) === "true",
+			await values.locator("[data-pricing-status]").textContent(),
+		);
+		await keptDay.fill(keptDayBefore);
 		await page.unroute("**/api/owner/pricing");
 
 		const queue = [];

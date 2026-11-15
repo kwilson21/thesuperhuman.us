@@ -79,15 +79,24 @@ function markResearch(invalid: boolean) {
 
 const BUSY = "A save is on its way. Try again when it answers.";
 
+/**
+ * Says that a save is on its way, keeping what the line said before: a refusal there (its field still marked) comes back
+ * when the save answers, so a marked field never points at an empty line.
+ */
+function sayBusy(status: Status) {
+	if (!status) return;
+
+	if (status.textContent !== BUSY)
+		status.dataset.before = status.textContent ?? "";
+	status.textContent = BUSY;
+}
+
 /** Where the page notes, across the reload new research triggers, that it was saved. */
 const SAVED_KEY = "owner-pricing-saved";
 
 /** Whether Clear research is offered in this form (only while research is saved). */
 const clearOffered = (form: HTMLFormElement) =>
 	form.querySelector<HTMLElement>("[data-pricing-clear]")?.hidden === false;
-
-/** Set just before the page reloads itself after a save, so the unsaved-changes warning stays quiet. */
-let reloading = false;
 
 /** Whether a save from this page is on its way. */
 let saving = false;
@@ -115,7 +124,7 @@ async function send(
 	status: Status,
 ) {
 	if (saving) {
-		if (status) status.textContent = BUSY;
+		sayBusy(status);
 
 		return;
 	}
@@ -159,7 +168,12 @@ async function send(
 		for (const line of document.querySelectorAll<HTMLElement>(
 			"[data-pricing-status]",
 		))
-			if (line.textContent === BUSY) line.textContent = "";
+			if (line.textContent === BUSY)
+				line.textContent = line
+					.closest("form")
+					?.querySelector('[aria-invalid="true"]')
+					? (line.dataset.before ?? "")
+					: "";
 	}
 }
 
@@ -232,7 +246,12 @@ async function save(
 					// Without storage the reloaded table is the confirmation.
 				}
 
-				reloading = true;
+				// The page goes with the reload; until then it says so, and the leave-page warning still guards anything
+				// typed in the moment before it goes.
+				if (status)
+					status.textContent = clearing
+						? "Research cleared. Reloading the page…"
+						: "Saved. Reloading the page to show the new ranges…";
 				location.reload();
 
 				return;
@@ -301,7 +320,7 @@ async function save(
 
 			if (status)
 				status.textContent =
-					clearing && changedSince
+					clearing && unsaved(form)
 						? "Research cleared. What you typed in the box since is not saved."
 						: clearing
 							? "Research cleared."
@@ -357,7 +376,7 @@ export function setupOwnerPricing() {
 			...document.querySelectorAll<HTMLFormElement>("[data-pricing-form]"),
 		];
 
-		if (!reloading && forms.some(unsaved)) event.preventDefault();
+		if (forms.some(unsaved)) event.preventDefault();
 	});
 
 	let reloaded: string | null = null;
@@ -409,7 +428,9 @@ export function setupOwnerPricing() {
 
 			// Answered before the fields are checked, so a refusal said now is not replaced by the earlier save's answer.
 			if (saving || needsReload) {
-				if (status) status.textContent = needsReload ? RELOAD_FIRST : BUSY;
+				if (needsReload) {
+					if (status) status.textContent = RELOAD_FIRST;
+				} else sayBusy(status);
 
 				return;
 			}
@@ -520,7 +541,9 @@ export function setupOwnerPricing() {
 			.querySelector<HTMLButtonElement>("[data-pricing-clear]")
 			?.addEventListener("click", () => {
 				if (saving || needsReload) {
-					if (status) status.textContent = needsReload ? RELOAD_FIRST : BUSY;
+					if (needsReload) {
+						if (status) status.textContent = RELOAD_FIRST;
+					} else sayBusy(status);
 
 					return;
 				}
