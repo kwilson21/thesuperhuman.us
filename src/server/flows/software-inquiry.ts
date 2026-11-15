@@ -121,12 +121,12 @@ export const submitInquiry = (submission: InquirySubmission) =>
 		});
 
 		// What the database said when the unique index refused the brief, kept for the log if the brief is then found lost.
-		const clash = yield* Ref.make<{ readonly raised: unknown } | null>(null);
+		const clash = yield* Ref.make<{ readonly failure: unknown } | null>(null);
 
 		/** Giving the allowance back is best effort: the visitor is answered whether or not the counter can be cleared. */
 		const release = giveBack(ip, REQUEST_PREFIX).pipe(
 			Effect.catchTag("RateLimitStoreFailed", (failure) =>
-				Effect.sync(() => logUnexpected(ROUTE, failure.raised)),
+				Effect.sync(() => logUnexpected(ROUTE, failure.failure)),
 			),
 		);
 
@@ -166,7 +166,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				const rival = yield* Effect.result(findStoredBrief(input.submissionId));
 
 				if (Result.isFailure(rival))
-					yield* Effect.sync(() => logUnexpected(ROUTE, rival.failure.raised));
+					yield* Effect.sync(() => logUnexpected(ROUTE, rival.failure.failure));
 
 				if (Result.isSuccess(rival) && rival.success) {
 					// This request stored nothing and sent nothing, so its allowance is given back.
@@ -182,7 +182,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				}
 
 				if (failure instanceof IntakeStoreFailed)
-					yield* Effect.sync(() => logUnexpected(ROUTE, failure.raised));
+					yield* Effect.sync(() => logUnexpected(ROUTE, failure.failure));
 
 				yield* release;
 				yield* alertLost("d1-write-failed");
@@ -195,7 +195,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 			const clashed = yield* Ref.get(clash);
 
 			if (clashed)
-				yield* Effect.sync(() => logUnexpected(ROUTE, clashed.raised));
+				yield* Effect.sync(() => logUnexpected(ROUTE, clashed.failure));
 
 			yield* release;
 			yield* alertLost("d1-write-failed");
@@ -226,7 +226,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				insertBrief(softwareRequest(input)).pipe(
 					Effect.tapError((failure) =>
 						failure instanceof SubmissionIdClash
-							? Ref.set(clash, { raised: failure.clash })
+							? Ref.set(clash, { failure: failure.clash })
 							: Effect.void,
 					),
 				),
@@ -240,7 +240,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 					} as const),
 				IntakeReadFailed: (failure: IntakeReadFailed) =>
 					Effect.gen(function* () {
-						yield* Effect.sync(() => logUnexpected(ROUTE, failure.raised));
+						yield* Effect.sync(() => logUnexpected(ROUTE, failure.failure));
 
 						// Before anything was counted nothing is lost; after a lost race the look-up that failed was the rival check.
 						if ((yield* Ref.get(counted)) === null) {
@@ -256,7 +256,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 						const clashed = yield* Ref.get(clash);
 
 						if (clashed)
-							yield* Effect.sync(() => logUnexpected(ROUTE, clashed.raised));
+							yield* Effect.sync(() => logUnexpected(ROUTE, clashed.failure));
 
 						yield* release;
 						yield* alertLost("d1-write-failed");

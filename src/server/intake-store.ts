@@ -18,12 +18,12 @@ import { MusicDb } from "./services";
 
 /** The database refused the write. */
 export class IntakeStoreFailed extends Data.TaggedError("IntakeStoreFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /** The database could not be read. */
 export class IntakeReadFailed extends Data.TaggedError("IntakeReadFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /** The brief's details are larger than a request may store. Nothing was written. */
@@ -43,7 +43,7 @@ export const storeRequest = (request: NewOwnerRequest) =>
 
 		return yield* Effect.tryPromise({
 			try: () => saveOwnerRequest(db, request),
-			catch: (cause) => new IntakeStoreFailed({ raised: cause }),
+			catch: (cause) => new IntakeStoreFailed({ failure: cause }),
 		});
 	});
 
@@ -55,7 +55,7 @@ export const findStoredBrief = (submissionId: string) =>
 		return yield* Effect.tryPromise({
 			try: (): Promise<OwnerRequest | null> =>
 				getOwnerRequestBySubmission(db, submissionId),
-			catch: (cause) => new IntakeReadFailed({ raised: cause }),
+			catch: (cause) => new IntakeReadFailed({ failure: cause }),
 		});
 	});
 
@@ -76,7 +76,7 @@ export const insertBrief = (request: NewOwnerRequest) =>
 
 				return isUniqueViolation(cause) && cause instanceof Error
 					? new SubmissionIdClash(cause)
-					: new IntakeStoreFailed({ raised: cause });
+					: new IntakeStoreFailed({ failure: cause });
 			},
 		});
 	});

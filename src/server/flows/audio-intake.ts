@@ -101,9 +101,11 @@ export const submitIntake = (submission: IntakeSubmission) =>
 			);
 
 			if (Result.isFailure(released))
-				yield* Effect.sync(() => logUnexpected(ROUTE, released.failure.raised));
+				yield* Effect.sync(() =>
+					logUnexpected(ROUTE, released.failure.failure),
+				);
 
-			yield* Effect.sync(() => logUnexpected(ROUTE, stored.failure.raised));
+			yield* Effect.sync(() => logUnexpected(ROUTE, stored.failure.failure));
 
 			const alert = yield* OwnerAlert;
 

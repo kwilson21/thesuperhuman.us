@@ -325,7 +325,7 @@ export const liveOwnerAlert = (env: Env) =>
 
 /** A suggestion limiter could not answer. */
 export class SuggestLimitFailed extends Data.TaggedError("SuggestLimitFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 export class SuggestLimits extends Context.Service<
@@ -341,9 +341,7 @@ export class SuggestLimits extends Context.Service<
 >()("site/SuggestLimits") {}
 
 /** The model (Workers AI) failed or threw. The route answers 503 and logs a fixed line. */
-export class ModelFailed extends Data.TaggedError("ModelFailed")<{
-	readonly raised: unknown;
-}> {}
+export class ModelFailed extends Data.TaggedError("ModelFailed") {}
 
 export class Assistant extends Context.Service<
 	Assistant,
@@ -405,12 +403,12 @@ export const liveSuggestLimits = (limiters: {
 		visitor: (key) =>
 			Effect.tryPromise({
 				try: () => limiters.visitor.limit({ key }),
-				catch: (cause) => new SuggestLimitFailed({ raised: cause }),
+				catch: (cause) => new SuggestLimitFailed({ failure: cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 		site: (key) =>
 			Effect.tryPromise({
 				try: () => limiters.site.limit({ key }),
-				catch: (cause) => new SuggestLimitFailed({ raised: cause }),
+				catch: (cause) => new SuggestLimitFailed({ failure: cause }),
 			}).pipe(Effect.map((answer) => answer.success)),
 	});
 
@@ -462,7 +460,7 @@ export const liveAssistant = (ai: Ai) =>
 					Effect.flatMap(
 						(outcome): Effect.Effect<AssistantReply, ModelFailed> =>
 							outcome.kind === "failed"
-								? Effect.fail(new ModelFailed({ raised: undefined }))
+								? Effect.fail(new ModelFailed())
 								: Effect.succeed(outcome),
 					),
 				);
@@ -564,7 +562,7 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 
 /** The client's copy of their software brief could not be delivered at all (a database or provider failure the copy does not record). */
 export class BriefCopyFailed extends Data.TaggedError("BriefCopyFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /**
@@ -587,7 +585,7 @@ export const liveBriefCopy = (db: D1Database, env: Env) =>
 		deliver: (request) =>
 			Effect.tryPromise({
 				try: () => deliverSoftwareBriefCopy(db, request, env),
-				catch: (cause) => new BriefCopyFailed({ raised: cause }),
+				catch: (cause) => new BriefCopyFailed({ failure: cause }),
 			}),
 	});
 

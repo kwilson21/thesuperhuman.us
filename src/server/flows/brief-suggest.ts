@@ -40,12 +40,12 @@ const MODEL_TIMEOUT_MS = 1200;
 export class SuggestSigningFailed extends Data.TaggedError(
 	"SuggestSigningFailed",
 )<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /** The model answered with something that is not a reply object (the route logs the cause and answers 500). */
 export class ReplyUnreadable extends Data.TaggedError("ReplyUnreadable")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 export type SuggestAnswer =
@@ -78,7 +78,7 @@ const replyText = <Reply>(reply: Reply) => {
 	if (!Predicate.isObjectOrArray(reply))
 		return Effect.fail(
 			new ReplyUnreadable({
-				raised: new TypeError("The model reply is not an object"),
+				failure: new TypeError("The model reply is not an object"),
 			}),
 		);
 
@@ -93,10 +93,10 @@ const cleanup = (previousDay: string, db: D1Database) => () =>
 		Effect.tryPromise({
 			// `async` turns a throw before the statement is sent into a rejection, as the log below expects.
 			try: async () => clearOldDays(db, previousDay),
-			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
+			catch: (cause) => new BudgetStoreFailed({ failure: cause }),
 		}).pipe(
 			Effect.catchTag("BudgetStoreFailed", (failure) =>
-				Effect.sync(() => logUnexpected(ROUTE, failure.raised)),
+				Effect.sync(() => logUnexpected(ROUTE, failure.failure)),
 			),
 			Effect.asVoid,
 		),
@@ -124,7 +124,7 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const valid = yield* Effect.tryPromise({
 			try: () => validSuggestionPass(submission.cookie, submission.secret, ip),
-			catch: (cause) => new SuggestSigningFailed({ raised: cause }),
+			catch: (cause) => new SuggestSigningFailed({ failure: cause }),
 		});
 
 		if (!(yield* allowed(requirePass.decide({ valid }, {}))))
@@ -132,7 +132,7 @@ export const suggest = (submission: SuggestSubmission) =>
 
 		const hash = yield* Effect.tryPromise({
 			try: () => suggestionVisitorHash(submission.secret, ip, now),
-			catch: (cause) => new SuggestSigningFailed({ raised: cause }),
+			catch: (cause) => new SuggestSigningFailed({ failure: cause }),
 		});
 
 		const limits = yield* SuggestLimits;

@@ -11,7 +11,7 @@ import { TurnstileCheck } from "../services";
 
 /** Signing the pass failed (the HMAC could not be made). */
 export class PassSigningFailed extends Data.TaggedError("PassSigningFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 export type PassAnswer =
@@ -40,7 +40,7 @@ export const issuePass = (submission: {
 
 		const cookie = yield* Effect.tryPromise({
 			try: () => createSuggestionPass(submission.secret, submission.ip),
-			catch: (cause) => new PassSigningFailed({ raised: cause }),
+			catch: (cause) => new PassSigningFailed({ failure: cause }),
 		});
 
 		return { kind: "issued", cookie } as const;

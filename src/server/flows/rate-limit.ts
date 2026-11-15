@@ -10,7 +10,7 @@ import { RateLimit } from "../services";
 export class RateLimitStoreFailed extends Data.TaggedError(
 	"RateLimitStoreFailed",
 )<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /** Counts one request from `ip` under `prefix`; true when it is within `max` in the window (one when `max` is left out). */
@@ -20,7 +20,7 @@ export const countRequest = (ip: string, prefix: string, max?: number) =>
 
 		const counted = yield* Effect.tryPromise({
 			try: () => checkRateLimit(rateLimit, ip, prefix, max),
-			catch: (cause) => new RateLimitStoreFailed({ raised: cause }),
+			catch: (cause) => new RateLimitStoreFailed({ failure: cause }),
 		});
 
 		return counted.allowed;
@@ -33,6 +33,6 @@ export const giveBack = (ip: string, prefix: string) =>
 
 		yield* Effect.tryPromise({
 			try: () => rateLimit.delete(`${prefix}${ip}`),
-			catch: (cause) => new RateLimitStoreFailed({ raised: cause }),
+			catch: (cause) => new RateLimitStoreFailed({ failure: cause }),
 		});
 	});

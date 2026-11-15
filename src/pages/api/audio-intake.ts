@@ -106,7 +106,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			Effect.map(answerResponse),
 			Effect.catchTag("RateLimitStoreFailed", (failure) =>
 				Effect.sync(() => {
-					logUnexpected(ROUTE, failure.raised);
+					logUnexpected(ROUTE, failure.failure);
 
 					return temporarilyUnavailable(500);
 				}),

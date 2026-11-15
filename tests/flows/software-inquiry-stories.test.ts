@@ -99,7 +99,7 @@ const send = async (
 					Context.add(BriefCopy, {
 						deliver: (request: OwnerRequest) =>
 							options.copyFails
-								? Effect.fail(new BriefCopyFailed({ raised: "down" }))
+								? Effect.fail(new BriefCopyFailed({ failure: "down" }))
 								: Effect.sync(() => {
 										told.copies.push(request.id);
 

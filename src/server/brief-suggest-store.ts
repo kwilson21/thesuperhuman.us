@@ -8,7 +8,7 @@ import { MusicDb } from "./services";
 
 /** The budget table failed (a read, a reservation or the cleanup). */
 export class BudgetStoreFailed extends Data.TaggedError("BudgetStoreFailed")<{
-	readonly raised: unknown;
+	readonly failure: unknown;
 }> {}
 
 /** The stored count of the site for `day`, or null when no row has been written that day. */
@@ -24,7 +24,7 @@ export const readSiteCount = (day: string) =>
 					)
 					.bind(day, "site")
 					.first<{ count: number }>(),
-			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
+			catch: (cause) => new BudgetStoreFailed({ failure: cause }),
 		}).pipe(Effect.map((row) => row?.count ?? null));
 	});
 
@@ -43,7 +43,7 @@ export const reserve = (day: string, scope: string, cap: number) =>
         ON CONFLICT (day, scope) DO UPDATE SET count = count + 1 WHERE count < ? RETURNING count`)
 					.bind(day, scope, cap)
 					.first<{ count: number }>(),
-			catch: (cause) => new BudgetStoreFailed({ raised: cause }),
+			catch: (cause) => new BudgetStoreFailed({ failure: cause }),
 		}).pipe(Effect.map((row) => row?.count ?? null));
 	});
 

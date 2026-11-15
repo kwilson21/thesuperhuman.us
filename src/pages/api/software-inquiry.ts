@@ -115,9 +115,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	if (!bindings.ok || !db) return notAvailable();
 
 	/** A failure the form answers with the temporary sentence, logged as it always was. */
-	const failed = (failure: { readonly raised: unknown }) =>
+	const failed = (failure: { readonly failure: unknown }) =>
 		Effect.sync(() => {
-			logUnexpected(ROUTE, failure.raised);
+			logUnexpected(ROUTE, failure.failure);
 
 			return temporarilyUnavailable(500);
 		});
