@@ -21,6 +21,8 @@ const SIZE = 64;
 
 type Calls = string[];
 
+const live = (bucket: R2Bucket | undefined) => liveMediaObjects(() => bucket);
+
 /** A bucket holding `held` keys of SIZE bytes; each call is noted as `head KEY` or `get KEY offset-length`. */
 const bucket = (
 	held: readonly string[],
@@ -104,7 +106,7 @@ describe("a listener reads a recording's file", () => {
 	it("reads the object whole: its size first, then its bytes", async () => {
 		const calls: Calls = [];
 
-		expect(await music({}, liveMediaObjects(bucket([KEY], calls)))).toEqual({
+		expect(await music({}, live(bucket([KEY], calls)))).toEqual({
 			read: { type: "audio/mpeg", size: SIZE, slice: null, body: "bytes" },
 		});
 
@@ -116,7 +118,7 @@ describe("a listener reads a recording's file", () => {
 
 		const answer = await music(
 			{ range: "bytes=16-31" },
-			liveMediaObjects(bucket([KEY], calls)),
+			live(bucket([KEY], calls)),
 		);
 
 		expect(answer).toMatchObject({
@@ -131,7 +133,7 @@ describe("a listener reads a recording's file", () => {
 		expect(
 			await music(
 				{ method: "HEAD", range: "bytes=500-" },
-				liveMediaObjects(bucket([KEY], calls)),
+				live(bucket([KEY], calls)),
 			),
 		).toEqual({
 			read: { type: "audio/mpeg", size: SIZE, slice: null, body: null },
@@ -145,7 +147,7 @@ describe("a listener reads a recording's file", () => {
 
 		const answer = await music(
 			{ range: "bytes=64-" },
-			liveMediaObjects(bucket([KEY], calls)),
+			live(bucket([KEY], calls)),
 		);
 
 		expect(answer).toEqual({ failed: "RangeOutsideFile", size: SIZE });
@@ -160,7 +162,7 @@ describe("a listener reads a recording's file", () => {
 			bucket([KEY], [], { vanishes: true }),
 		],
 	])("answers a missing file for %s", async (_name, held) => {
-		expect(await music({}, liveMediaObjects(held))).toEqual({
+		expect(await music({}, live(held))).toEqual({
 			failed: "MusicObjectMissing",
 		});
 	});
@@ -168,11 +170,11 @@ describe("a listener reads a recording's file", () => {
 	it("refuses what the catalog does not name before the bucket is asked, bound or not", async () => {
 		const calls: Calls = [];
 
-		const unbound = await music({ id: "nothing" }, liveMediaObjects(undefined));
+		const unbound = await music({ id: "nothing" }, live(undefined));
 
 		const bound = await music(
 			{ version: "unmixed" },
-			liveMediaObjects(bucket([KEY], calls)),
+			live(bucket([KEY], calls)),
 		);
 
 		expect(unbound).toEqual({ failed: "MusicFileNotFound" });
@@ -181,19 +183,13 @@ describe("a listener reads a recording's file", () => {
 	});
 
 	it("names a missing bucket, and a failing one with its cause", async () => {
-		expect(await music({}, liveMediaObjects(undefined))).toEqual({
+		expect(await music({}, live(undefined))).toEqual({
 			failed: "MediaBucketNotBound",
 		});
 
-		const head = await music(
-			{},
-			liveMediaObjects(bucket([KEY], [], { throws: "head" })),
-		);
+		const head = await music({}, live(bucket([KEY], [], { throws: "head" })));
 
-		const get = await music(
-			{},
-			liveMediaObjects(bucket([KEY], [], { throws: "get" })),
-		);
+		const get = await music({}, live(bucket([KEY], [], { throws: "get" })));
 
 		expect(head).toEqual({ failed: "MediaObjectFailed" });
 		expect(get).toEqual({ failed: "MediaObjectFailed" });
@@ -226,11 +222,9 @@ describe("a visitor reads a portfolio track's file", () => {
 		withTracks();
 		const calls: Calls = [];
 
-		expect(await audio(null, liveMediaObjects(bucket([TRACK], calls)))).toEqual(
-			{
-				read: { size: SIZE, slice: null, body: "bytes" },
-			},
-		);
+		expect(await audio(null, live(bucket([TRACK], calls)))).toEqual({
+			read: { size: SIZE, slice: null, body: "bytes" },
+		});
 
 		expect(calls).toEqual([`get ${TRACK}`]);
 	});
@@ -239,7 +233,7 @@ describe("a visitor reads a portfolio track's file", () => {
 		withTracks();
 		const calls: Calls = [];
 
-		await audio("bytes=-8", liveMediaObjects(bucket([TRACK], calls)));
+		await audio("bytes=-8", live(bucket([TRACK], calls)));
 		expect(calls).toEqual([`get ${TRACK}`]);
 	});
 
@@ -247,10 +241,7 @@ describe("a visitor reads a portfolio track's file", () => {
 		withTracks();
 		const calls: Calls = [];
 
-		const answer = await audio(
-			"bytes=60-99",
-			liveMediaObjects(bucket([TRACK], calls)),
-		);
+		const answer = await audio("bytes=60-99", live(bucket([TRACK], calls)));
 
 		expect(answer).toMatchObject({
 			read: { slice: { offset: 60, length: 4 } },
@@ -261,9 +252,10 @@ describe("a visitor reads a portfolio track's file", () => {
 	it("names the size when the range starts past the end", async () => {
 		withTracks();
 
-		expect(
-			await audio("bytes=64-", liveMediaObjects(bucket([TRACK], []))),
-		).toEqual({ failed: "AudioRangeOutsideFile", size: SIZE });
+		expect(await audio("bytes=64-", live(bucket([TRACK], [])))).toEqual({
+			failed: "AudioRangeOutsideFile",
+			size: SIZE,
+		});
 	});
 
 	it("answers one 404 for an unknown slug and a private file, and never asks the bucket", async () => {
@@ -271,9 +263,9 @@ describe("a visitor reads a portfolio track's file", () => {
 		const calls: Calls = [];
 
 		for (const slug of ["unknown", "inside"])
-			expect(
-				await audio(null, liveMediaObjects(bucket([TRACK], calls)), slug),
-			).toEqual({ failed: "AudioFileNotFound" });
+			expect(await audio(null, live(bucket([TRACK], calls)), slug)).toEqual({
+				failed: "AudioFileNotFound",
+			});
 
 		expect(calls).toEqual([]);
 	});
@@ -281,38 +273,32 @@ describe("a visitor reads a portfolio track's file", () => {
 	it("answers a missing file whether the size or the bytes come back empty", async () => {
 		withTracks();
 
-		expect(await audio(null, liveMediaObjects(bucket([], [])))).toEqual({
+		expect(await audio(null, live(bucket([], [])))).toEqual({
 			failed: "AudioObjectMissing",
 		});
 
-		expect(await audio("bytes=0-9", liveMediaObjects(bucket([], [])))).toEqual({
+		expect(await audio("bytes=0-9", live(bucket([], [])))).toEqual({
 			failed: "AudioObjectMissing",
 		});
 
 		expect(
-			await audio(
-				"bytes=0-9",
-				liveMediaObjects(bucket([TRACK], [], { vanishes: true })),
-			),
+			await audio("bytes=0-9", live(bucket([TRACK], [], { vanishes: true }))),
 		).toEqual({ failed: "AudioObjectMissing" });
 	});
 
 	it("names a missing bucket after the request is judged, and a failing one", async () => {
 		withTracks();
 
-		expect(await audio(null, liveMediaObjects(undefined))).toEqual({
+		expect(await audio(null, live(undefined))).toEqual({
 			failed: "MediaBucketNotBound",
 		});
 
-		expect(await audio(null, liveMediaObjects(undefined), "unknown")).toEqual({
+		expect(await audio(null, live(undefined), "unknown")).toEqual({
 			failed: "AudioFileNotFound",
 		});
 
 		expect(
-			await audio(
-				null,
-				liveMediaObjects(bucket([TRACK], [], { throws: "get" })),
-			),
+			await audio(null, live(bucket([TRACK], [], { throws: "get" }))),
 		).toEqual({ failed: "MediaObjectFailed" });
 	});
 });

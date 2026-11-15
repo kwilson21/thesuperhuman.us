@@ -36,7 +36,8 @@ export const readAudioFile = (input: {
 	readonly range: string | null;
 }) =>
 	Effect.gen(function* () {
-		const tracks = yield* readAudioTracks();
+		// A slug that is not well formed names no track, so the collection is not read for it.
+		const tracks = input.slug === null ? [] : yield* readAudioTracks();
 		const key = yield* decideAudioFile.decide({ slug: input.slug }, tracks);
 		const objects = yield* MediaObjects;
 		const plan = readAudioRange(input.range);
