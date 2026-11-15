@@ -246,17 +246,34 @@ function mount({
 
 	const sources: Source[] = [];
 
+	const contexts: StandInContext[] = [];
+	const gains: [number, number][][] = [];
+
 	class StandInContext {
 		currentTime = 0;
 		destination = {};
+
+		constructor() {
+			contexts.push(this);
+		}
 
 		resume() {
 			return Promise.resolve();
 		}
 
 		createGain() {
+			// Each level a gain is set to, with the clock time it is set for.
+			const levels: [number, number][] = [];
+
+			gains.push(levels);
+
 			return {
-				gain: { value: 0, cancelScheduledValues() {}, setTargetAtTime() {} },
+				gain: {
+					value: 0,
+					cancelScheduledValues() {},
+					setTargetAtTime: (level: number, time: number) =>
+						levels.push([level, time]),
+				},
 				connect() {},
 			};
 		}
@@ -342,6 +359,18 @@ function mount({
 		synced: () => sources.some((source) => source.started && !source.stopped),
 		/** How many synced sources have started, so a test can tell whether playback restarted. */
 		starts: () => sources.filter((source) => source.started).length,
+		/** The level each version is set to now, on the audio clock (the last level set for the current time). */
+		levelsNow: () =>
+			gains.map(
+				(levels) =>
+					levels
+						.filter(([, time]) => time === contexts[0].currentTime)
+						.at(-1)?.[0],
+			),
+		/** Moves the audio clock on, as playback does. */
+		advance: (seconds: number) => {
+			contexts.forEach((context) => (context.currentTime += seconds));
+		},
 		/** Where the synced sources last started, in the song. */
 		startedAt: () => sources.at(-1)?.offset,
 		label: () => controls.play.getAttribute("aria-label") ?? "",
@@ -541,8 +570,11 @@ it("moves synced playback to a seek inside the loop, even one that lands inside 
 	ab.seek.dispatchEvent(new Event("input"));
 	expect(ab.startedAt()).toBe(43);
 	expect(ab.styles.get("--loop-start")).toBe(`${(43 / 160) * 100}%`);
-	// The slider says where it is; the loop's status line is left as it was, so a drag is not read out at every step.
+	// The slider says where it is; the loop's status line waits until the seeking settles, so a drag is not read out
+	// at every step.
 	expect(ab.status.textContent).toBe("Looping 0:00 to 0:08.");
+	await new Promise((resolve) => setTimeout(resolve, 750));
+	expect(ab.status.textContent).toBe("Looping 0:43 to 0:51.");
 });
 
 it("fits the loop to the decoded versions when they end before the catalog's duration", async () => {
@@ -657,4 +689,21 @@ it("streams again on iOS when the version chosen can play at full level after on
 	expect(ab.mix.paused).toBe(false);
 	expect(ab.play.getAttribute("aria-busy")).toBe("false");
 	expect(ab.status.textContent).toBe("");
+});
+
+it("keeps the version a flip has just switched to when the volume changes before the next frame", async () => {
+	const ab = mount({ desk: true });
+
+	ab.loop.toggle.click();
+	ab.loop.flip.checked = true;
+	ab.loop.flip.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.synced()).toBe(true);
+	// Past the first wrap of the 0:00 to 0:08 loop: the master sounds now, and no frame has drawn it yet.
+	ab.advance(9);
+	ab.volume.value = "0.8";
+	ab.volume.dispatchEvent(new Event("input"));
+	expect(ab.levelsNow()).toEqual([0, 0.8]);
 });

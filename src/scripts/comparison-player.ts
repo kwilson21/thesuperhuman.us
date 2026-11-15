@@ -166,7 +166,22 @@ export function setupComparisonPlayers() {
 				);
 			}
 
+			/**
+			 * While flipping, the selection is the version sounding, which the transport changes at each wrap on the audio
+			 * clock. Frames can lag a wrap (an input event comes first), so anything that sets levels, pauses or switches
+			 * reads it from the transport first.
+			 */
+			function followFlip() {
+				const sounding = transport?.flipped;
+
+				if (sounding === undefined || sounding === selected) return;
+				selected = sounding;
+				updateCompactWaveform();
+			}
+
 			function applyVolume() {
+				followFlip();
+
 				// The gains with each version selected.
 				const levels = media.map((_, version) =>
 					media.map((audio, index) => (index === version ? levelOf(audio) : 0)),
@@ -301,13 +316,7 @@ export function setupComparisonPlayers() {
 
 				if (!transport?.playing) return;
 				transport.keepFlipping();
-
-				const sounding = transport.flipped;
-
-				if (sounding !== undefined && sounding !== selected) {
-					selected = sounding;
-					updateCompactWaveform();
-				}
+				followFlip();
 			}
 
 			// A hidden page draws no frames, so a slow timer keeps the stream inside its loop and the flips scheduled.
@@ -377,6 +386,7 @@ export function setupComparisonPlayers() {
 				const streamed = Boolean(streaming);
 				stopStream();
 				transport?.pause();
+				followFlip();
 
 				// A stream stopped after the transport was made but before it took over: the transport waits at its place.
 				if (streamed) transport?.seek(position);
@@ -522,6 +532,8 @@ export function setupComparisonPlayers() {
 						(audio) => audio.dataset.version === button.dataset.selectVersion,
 					);
 
+					followFlip();
+
 					if (chosen === selected) return;
 					selected = chosen;
 
@@ -585,10 +597,13 @@ export function setupComparisonPlayers() {
 					.forEach((region) => (region.hidden = !loop));
 			}
 
+			// The status line a seek that moved the loop is waiting to show.
+			let loopNote: ReturnType<typeof setTimeout> | undefined;
+
 			/**
 			 * Loops the chosen length from `from` (the playhead by default), or stops looping when Loop is off. Playback
 			 * stays where it is, moved to the loop's start if that is outside it; a seek (`seeking`) moves playback to `from`
-			 * and changes the loop without announcing it, since the slider already says where it is.
+			 * and says where the loop went once the seeking has settled.
 			 */
 			function setLoop(from?: number, seeking = false) {
 				const now = transport ? transport.position : streamPosition();
@@ -603,10 +618,16 @@ export function setupComparisonPlayers() {
 					streaming.currentTime = position + offsetOf(streaming);
 				drawLoop();
 
-				if (!seeking)
-					status.textContent = loop
-						? `Looping ${format(loop.start)} to ${format(loop.end)}.`
-						: "Loop off.";
+				const note = loop
+					? `Looping ${format(loop.start)} to ${format(loop.end)}.`
+					: "Loop off.";
+
+				// After a seek the line waits until the seeking settles, so a drag is not read out at every step.
+				clearTimeout(loopNote);
+
+				if (seeking)
+					loopNote = setTimeout(() => (status.textContent = note), 700);
+				else status.textContent = note;
 				render();
 			}
 

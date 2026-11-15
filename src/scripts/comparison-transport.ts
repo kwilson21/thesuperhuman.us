@@ -108,7 +108,13 @@ export class ComparisonTransport {
 			this.sources.forEach((source, index) => {
 				source.loop = Boolean(region);
 
-				if (!region) return;
+				// Looping sources were started without an end: out of the loop, each stops where the song ends.
+				if (!region) {
+					source.stop(this.startedAt + this.duration - now);
+
+					return;
+				}
+
 				source.loopStart = region.start + this.offsets[index];
 				source.loopEnd = region.end + this.offsets[index];
 			});

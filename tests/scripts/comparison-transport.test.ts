@@ -194,11 +194,13 @@ describe("looping a passage", () => {
 		expect(transport.playing).toBe(true);
 		expect(sources[2].start.mock.calls[0][1]).toBe(40.05);
 		context.currentTime += 2;
-		// Already looping and staying put, the playing sources simply stop looping: no restart, no gap.
+		// Already looping and staying put, the playing sources simply stop looping: no restart, no gap. Started without
+		// an end, each now stops where the song ends: 160 - 41.97 s from now.
 		transport.setLoop(undefined);
 		expect(sources).toHaveLength(4);
 		expect(sources[2].loop).toBe(false);
-		expect(sources[2].stop).not.toHaveBeenCalled();
+		expect(sources[2].stop).toHaveBeenCalledTimes(1);
+		expect(sources[2].stop.mock.calls[0][0]).toBeCloseTo(12 + 160 - 41.97);
 		expect(transport.playing).toBe(true);
 		expect(transport.position).toBeCloseTo(41.97);
 	});
