@@ -293,3 +293,9 @@ it("gives the full player a listening desk: Loop, its length and Flip A/B each p
 	);
 	expect(component).toContain("Loop repeats a few seconds from where you are.");
 });
+
+it("gives each version of the full player a loudness meter, drawn from the measured loudness before any script runs", () => {
+	expect(component).toContain(
+		'{!compact && example.loudness && <p class="lane-meter" data-lane-meter style={`--meter:${meterShare(example.loudness[side])}`}><span class="lane-meter-name">Loudness</span><span class="lane-meter-bar" aria-hidden="true"></span><span data-lane-meter-value>{meterLine(example.loudness[side])}</span></p>}',
+	);
+});

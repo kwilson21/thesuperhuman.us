@@ -1,4 +1,5 @@
 import { ComparisonTransport, type LoopRegion } from "./comparison-transport";
+import { meterLine, meterShare } from "./loudness-meter";
 import { registerMusicPlayer } from "./music-playback";
 import {
 	isWaveformScrub,
@@ -175,6 +176,32 @@ export function setupComparisonPlayers() {
 					transport?.setFlip(undefined);
 					transport?.setLevels(levels[selected]);
 				}
+			}
+
+			// The loudness meters, one per version in the same order, on the full player only.
+			const meters = [
+				...root.querySelectorAll<HTMLElement>("[data-lane-meter]"),
+			];
+
+			/** Shows the loudness each version plays at: with Match loudness on, the louder one comes down to the quieter. */
+			function drawMeters() {
+				if (meters.length !== media.length) return;
+
+				const loudness = media.map((audio) =>
+					Number(audio.dataset.loudness ?? 0),
+				);
+
+				const quietest = Math.min(...loudness);
+
+				meters.forEach((meter, index) => {
+					const played = match?.checked ? quietest : loudness[index];
+					const value = meter.querySelector("[data-lane-meter-value]");
+
+					meter.style.setProperty("--meter", String(meterShare(played)));
+
+					if (value)
+						value.textContent = meterLine(played, loudness[index] - played);
+				});
 			}
 
 			function updateCompactWaveform() {
@@ -569,7 +596,10 @@ export function setupComparisonPlayers() {
 				applyVolume();
 			});
 			showVolume();
-			match?.addEventListener("change", applyVolume);
+			match?.addEventListener("change", () => {
+				applyVolume();
+				drawMeters();
+			});
 			root.addEventListener("music-pause", pause);
 			window.addEventListener("pagehide", pause);
 
@@ -583,6 +613,8 @@ export function setupComparisonPlayers() {
 				.forEach((playhead) => (playhead.hidden = false));
 			updateCompactWaveform();
 			render();
+			// A reload can bring Match loudness back already checked.
+			drawMeters();
 			media.forEach((audio) => {
 				audio.pause();
 				audio.controls = false;

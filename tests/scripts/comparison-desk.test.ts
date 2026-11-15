@@ -50,6 +50,19 @@ class StandInControl extends EventTarget {
 	}
 }
 
+/** A loudness meter: its bar's share of the scale and the line beside it. */
+class StandInMeter {
+	share = "";
+	readonly value = new StandInControl();
+	readonly style = {
+		setProperty: (_name: string, share: string) => (this.share = share),
+	};
+
+	querySelector(selector: string) {
+		return selector === "[data-lane-meter-value]" ? this.value : null;
+	}
+}
+
 /** The desk's Loop length menu; the player checks it with instanceof HTMLSelectElement, which this stands in for. */
 class StandInSelect extends StandInControl {}
 
@@ -126,6 +139,9 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 		["[data-loop-flip]", loop.flip],
 	]);
 
+	// One loudness meter per version, as the full player renders them.
+	const meters = [new StandInMeter(), new StandInMeter()];
+
 	const dataset: RootData = { duration: "160", title: "Old News" };
 	const styles = new Map<string, string>();
 
@@ -140,7 +156,9 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 				? [mix, master]
 				: selector === "[data-select-version]"
 					? switches
-					: [],
+					: selector === "[data-lane-meter]"
+						? meters
+						: [],
 		contains: () => false,
 	});
 
@@ -245,6 +263,8 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 		},
 		loop,
 		styles,
+		/** Each meter's bar share and its line. */
+		meters: () => meters.map((meter) => [meter.share, meter.value.textContent]),
 		/** Turns Flip A/B on, as a visitor ticking it does. */
 		flipOn: () => {
 			loop.flip.checked = true;
@@ -432,4 +452,22 @@ it("keeps the load failure's note when a seek that moved the loop settles", asyn
 	expect(ab.root.dataset.audioFallback).toBe("true");
 	await new Promise((resolve) => setTimeout(resolve, 750));
 	expect(ab.status.textContent).toContain("couldn’t load");
+});
+
+it("brings the louder version's meter down to the quieter one's when Match loudness is on, and back when it is off", () => {
+	const ab = mount();
+
+	expect(ab.meters()).toEqual([
+		[String(6 / 14), "\u221214.0 LUFS"],
+		[String(8.5 / 14), "\u221211.5 LUFS"],
+	]);
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()).toEqual([
+		[String(6 / 14), "\u221214.0 LUFS"],
+		[String(6 / 14), "\u221214.0 LUFS, turned down 2.5 dB"],
+	]);
+	ab.match.checked = false;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()[1]).toEqual([String(8.5 / 14), "\u221211.5 LUFS"]);
 });

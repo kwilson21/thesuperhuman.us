@@ -1,5 +1,6 @@
 // The A/B comparison's listening desk on the audio portfolio, at both widths: Loop on with its passage shaded on the
-// waveforms, then Loop and Flip on with the shortest length. Nothing plays; the desk is set before Play.
+// waveforms, then Loop and Flip on with the shortest length, then Match loudness on with the loudness meters closing
+// the gap. Nothing plays; the desk is set before Play.
 const VIEWPORTS = ["desktop", "phone"];
 const PATH = "/audio/portfolio";
 
@@ -44,6 +45,14 @@ export default {
 			await page.locator("[data-loop-length]").first().selectOption("4");
 			await page.locator("[data-loop-flip]").first().check();
 		});
+
+		await shot(
+			"Match loudness on: the master's meter comes down to the mix's",
+			"matched",
+			async (page) => {
+				await page.locator("[data-match-level]").first().check();
+			},
+		);
 
 		return steps;
 	},

@@ -388,6 +388,7 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
 	"src/scripts/comparison-player.ts": ["loop-desk"],
 	"src/scripts/comparison-transport.ts": ["loop-desk"],
+	"src/scripts/loudness-meter.ts": ["loop-desk"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
 };
 
