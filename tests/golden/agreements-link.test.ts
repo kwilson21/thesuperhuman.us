@@ -53,18 +53,21 @@ import { allowanceRow } from "./areas/studio-access";
 //   400 "Complete the security check."  null, array, missing or non-text email, email over 320, missing/empty/over-long token
 //   issueAgreementLink
 //   404 {ok:false}                      request origin is not SITE_ORIGIN (another host, an invalid SITE_ORIGIN), host header differs
-//   503 unavailable                     no MUSIC_DB, code key, Resend key, from address, Turnstile secret (and the empty string)
+//   503 unavailable                     no MUSIC_DB, code key (or one under 32 characters), Resend key, from address, Turnstile secret
+//                                       (and the empty string)
 //   400 "Enter a valid email address."  after the schema: not an address, empty, spaces, markup, unicode
 //   403 security check again            Turnstile success false, HTTP 500, network down, answer not JSON (after the address allowance, before the email's)
 //   429 "wait a few minutes"            archive-link-ip at 20 uses (before the security check), archive-link-email at 3 uses (after it); 19 and 2 pass; windows five minutes old are pruned
 //   429 "wait at least 30 seconds"      the cooldown row is under 30 seconds old; a repeat; the guard SELECT in the link batch
-//                                       fails (a link issued under 30 seconds ago, or the batch throwing)
+//                                       fails (a link issued under 30 seconds ago; the guard raises, as the recogniser in src/server/guarded-save.ts names it)
 //   200 receipt, no mail                no executed agreement for the email (the cooldown is still taken and the allowances spent)
 //   200 receipt, mail                   an executed agreement: link row, event row, email with the greeting from the signature
 //   mail outcomes                       200 consumes the older unused links; 4xx (the link is marked used, the answer is still the
 //                                       receipt); 5xx and network down are "uncertain" (older links consumed, answer the receipt)
-//   503 catch                           every statement that is not the link batch throwing (allowances, cooldown, executed lookup,
-//                                       name lookup, the final used_at update, which can happen after the email was sent)
+//   500 "Agreement sign-in is temporarily unavailable."  the link batch throwing for any reason other than the guard (a lost
+//                                       guard is the 429 above), and every statement that is not the link batch throwing (allowances, cooldown,
+//                                       executed lookup, name lookup, the final used_at update, which can happen after the email was sent);
+//                                       logged through logUnexpected, without the error's text
 //   303 /agreements?email=sent          form success (with the 200 receipt or after the email)
 //   greeting                            the first word of the signature name, "there" with none, markup and unicode escaped in html
 //                                       and left raw in the text part
@@ -475,11 +478,11 @@ const cases: Case[] = [
 	...outage("the link batch fails", /INSERT INTO software_agreement_links/),
 	...outage(
 		"the name lookup fails after the link is stored",
-		/sig\.typed_name AS name/,
+		/FROM software_agreement_signatures sig/,
 	),
 	...outage(
 		"the used_at update after a sent email fails",
-		/UPDATE software_agreement_links SET used_at=\? WHERE purpose/,
+		/UPDATE software_agreement_links SET used_at=\? WHERE id IN/,
 	),
 	...outage(
 		"the used_at update after a refused email fails",
@@ -508,7 +511,7 @@ const cases: Case[] = [
 	...standard("the signature is removed just before the name lookup", {
 		interleave: [
 			{
-				on: /sig\.typed_name AS name/,
+				on: /FROM software_agreement_signatures sig/,
 				label: "the signature row is removed",
 				run: (sqlite) =>
 					sqlite.exec("DELETE FROM software_agreement_signatures"),
