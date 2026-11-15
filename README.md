@@ -21,6 +21,7 @@ pnpm install
 pnpm run dev       # local Astro dev server on http://localhost:4321
 pnpm test          # run Vitest unit tests
 pnpm run check     # Astro type-check
+pnpm run lint      # Oxlint with the anti-slop rules; must report no findings
 pnpm run build     # production build into dist/
 pnpm run preview   # serve the built Worker locally after pnpm run build
 ```

@@ -13,14 +13,15 @@
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module discountOffers {
-  // "none" is the design: today's code, with the one change the plan proposes to the deposit guard (see "today-deposit-
-  // guard"). Every other value changes one thing so a property must fail (the mutants):
+  // "none" is the design: the code as it is, including the deposit guard of decision 9 (see "today-deposit-guard").
+  // Every other value changes one thing so a property must fail (the mutants):
   //   "edit-sent"              the draft update does not require status draft, so a sent offer's terms can change
   //   "latest-terms"           an invoice amount is computed from the newest version's terms, not the invoice's own
   //   "deposit-from-usual"     the deposit is half the usual fee instead of half the discounted fee
   //   "no-deposit-guard"       a new version is sent while the old one has an open or paid deposit
-  //   "today-deposit-guard"    the deposit guard as it is today: it looks only at the sent offer, so a paid deposit on a
-  //                            withdrawn offer (decline, then reopen) does not stop the next version (found by this model)
+  //   "today-deposit-guard"    the deposit guard as it was before decision 9: it looked only at the sent offer, so a paid
+  //                            deposit on a withdrawn offer (decline, then reopen) did not stop the next version (found by
+  //                            this model, reproduced and fixed in the code; the name is kept for the CI driver)
   //   "no-write-status-guard"  the invoice batch does not re-check that its offer is still sent (a stale read is trusted)
   //   "no-sign-guards"         the sign batch checks neither that the offer is still sent nor that the review session
   //                            survived a resend (liveSigningGuard and retireRequestSigning gone)
@@ -104,8 +105,8 @@ module discountOffers {
   pure def live(b: Bill): bool = b.status == "open" or b.status == "paid"
   val liveSlots = slots.filter(k => live(bills.get(k)))
 
-  // The deposit guard of send (depositOfferGuard): no open or paid first deposit on another version. The design counts
-  // every other version; today's code ("today-deposit-guard") counts only the sent one.
+  // The deposit guard of send (depositOfferGuard): no open or paid first deposit on another version. The code counts
+  // every other version; the guard before decision 9 ("today-deposit-guard") counted only the sent one.
   def blocksSend(k: int, sendingV: int): bool =
     mOf(k) == 0 and kindOf(k) == "deposit" and vOf(k) != sendingV and
       (MUTANT != "today-deposit-guard" or offers.get(vOf(k)).status == "sent")

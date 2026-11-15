@@ -379,3 +379,10 @@ describe("studio song groups", () => {
 		]);
 	});
 });
+
+it.each(["", "not an email", "@example.com"])(
+	"returns null for a string that is not an email address (%j)",
+	(input) => {
+		expect(normalizeClientEmail(input)).toBeNull();
+	},
+);

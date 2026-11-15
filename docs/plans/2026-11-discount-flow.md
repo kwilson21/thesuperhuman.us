@@ -1,7 +1,8 @@
 # Discounts on software offers: design
 
-Status: decided (owner, 2026-11-13: "go with the discount recommendations"). Nothing under `src/` changes in this PR.
-It adds this plan, a Quint model (`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
+Status: decided (owner, 2026-11-13: "go with the discount recommendations"). The design PR changed nothing under `src/`;
+PR 2 (the deposit guard of decision 9) is the first change to the code.
+The design PR added this plan, a Quint model (`verification/discount-offers.qnt`), a reference money rule with LemmaScript contracts
 (`tests/fixtures/discount-installments.ts`) and the tests that tie them to today's code.
 
 Every engagement stays fixed price. The amounts in this document ($2,400 usual fee, $400 discount) are made up for the
@@ -34,11 +35,12 @@ mock-ups; $2,400 is the public placeholder of the fee field.
    Why: the Stripe total equals the SOW installment, so the payment check that compares them keeps working as is.
 9. **A paid deposit on a declined offer must stop the next offer: it is to be reproduced against the real code and fixed
    if real, in PR 2.** Owner instruction, 2026-11-13.
-   Why: one project, one set of terms, one deposit. Today a request can be declined after the client paid the first
+   Why: one project, one set of terms, one deposit. A request could be declined after the client paid the first
    deposit, reopened, and sent new terms. Found by reading the decline, reopen and send guards and confirmed in the
-   model (the mutant `discountTodayDepositGuard` is today's guard, and it fails); not yet reproduced against the real
-   handlers. The proposed refusal: "A deposit is paid on an earlier offer. Refund it in Stripe before sending new
-   terms."
+   model (the mutant `discountTodayDepositGuard` is the old guard, and it fails). Reproduced against the real handlers
+   and fixed in PR 2: the golden case "a deposit paid, then the request declined, reopened, redrafted and sent"
+   answered 200 with a new link before the fix and answers 409 after it, with the refusal "A deposit is paid on an
+   earlier offer. Refund it in Stripe before sending new terms."
 
 Two smaller rules follow from these: a checkpoint's cancellation amount is a share of the discounted price (what the
 client agreed to pay), and the non-binding project estimate must be at least the discounted total.
@@ -363,15 +365,14 @@ project page states installments from that copy, while each invoice is computed 
 `reserveSoftwareInvoice` and the invoice route read it, also after the project starts), so the model checks both against
 the signed terms.
 
-The module `discount` is the design: today's code plus decision 9 (the send guard counts a paid deposit on any other
-version). So the passing run includes a guard the code does not have yet; today's guard is the mutant
-`discountTodayDepositGuard`.
+The module `discount` is the design: the code with decision 9 (the send guard counts an open or paid first deposit on
+any other version), which PR 2 added to the code. The guard before PR 2 is the mutant `discountTodayDepositGuard`.
 
 | Property | Meaning | Mutant that breaks it |
 |---|---|---|
 | `invoicedMatchesSigned` | Every open or paid invoice of the signed version is the installment the signed terms give, so the invoices of a signed offer add up to what the client signed for; the project's own copy of the terms (what the client's project page states) is the signed terms | `discountLatestTerms`: the amount is computed from the newest version's terms; `discountStartCopiesNewest`: start copies the newest version's terms; `discountStartDropsDiscount`: start copies the terms without the discount |
 | `sentTermsFrozen` | A version keeps the terms (discount included) it was sent with; the signed terms are that version's | `discountEditSent`: the draft update does not require status draft |
-| `oneVersionInvoiced` | All open or paid invoices belong to one version | `discountNoDepositGuard`: send ignores a deposit; `discountTodayDepositGuard`: today's guard, see decision 9 |
+| `oneVersionInvoiced` | All open or paid invoices belong to one version | `discountNoDepositGuard`: send ignores a deposit; `discountTodayDepositGuard`: the guard before PR 2, see decision 9 |
 | `installmentsSum` | Every version's installments add up to its discounted total | `discountDepositFromUsual`: the deposit is half the usual fee |
 | `supersededInert` | No sign or invoice batch writes for an offer that is not sent at that moment, and a signed offer stays the sent one | `discountNoWriteStatusGuard` (the invoice batch trusts a stale read), `discountNoSignGuards` (no live-signing or session check), `discountSendAfterSign` (send after the client signed) |
 
@@ -387,8 +388,10 @@ then superseded. Command: `quint run verification/discount-offers.qnt --main dis
 Not covered: refunds; the order of milestones and delivery gating (any slot of the plan may be invoiced once the project
 starts); a third milestone; retention; Stripe event order (the invoice-events model covers it). The manual Apalache
 check (`pnpm run verify:quint:exhaustive`) includes this model's `discount` module. For this design it was run only to
-3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds); run it deeper
-before PR 2 or PR 3 changes a modelled rule.
+3 steps (`quint verify ... --main discount --step stepOrEnd --max-steps 3`: no violation, 15 seconds). For PR 2 it was
+run to 12 steps with no violation (36 minutes), and the old-guard mutant `discountTodayDepositGuard` was found at step
+11 of a 12-step run (19 minutes); see `docs/prelaunch-qa-2026-11-15-deposit-guard.md`. Run it again before PR 3 changes
+a modelled rule.
 
 Run counts and bounds: the pass run of `discount` and each mutant use 10,000 random executions of up to 20 steps, seed
 `0x1`; the pass run must finish all of them with no violation, and each mutant stops at its first violation. CI time
@@ -396,11 +399,12 @@ and how the two models share the runner's cores are in docs/verification.md ("CI
 
 ## 7. Build order (stacked PRs, tests first)
 
-Each PR stands alone and keeps every existing golden case and hash. "Effect" means the area named must have moved to
+Each PR stands alone and keeps every existing golden case and hash, except where a PR's behaviour fix changes a case on
+purpose and explains it (PR 2 changed one: an open deposit of a superseded offer now blocks a send). "Effect" means the area named must have moved to
 Effect (CLAUDE.md "Back-end rules") first, because the change touches its validator or route.
 
 1. **This PR: design and verification.** Plan, model, contract, tests. No dependency.
-2. **Send guard for paid deposits (decision 9).** Tests first, reproducing it against the real code: a golden case that declines with a
+2. **Send guard for paid deposits (decision 9).** Done. Tests first, reproducing it against the real code: a golden case that declines with a
    paid deposit, reopens and sends a new version, answered 409 with the new sentence. Then the guard in
    `depositOfferGuard` and `depositOfferBlock`. Can land before the payments conversion; it changes a guard, not a rule.
 3. **Read and show the discount.** Tests first: reader tests for every new sentence, golden draft cases with the new
