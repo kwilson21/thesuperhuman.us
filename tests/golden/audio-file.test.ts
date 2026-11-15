@@ -55,10 +55,7 @@ const entries =
 			})),
 		);
 
-const read = (
-	slug: string | undefined,
-	extra: Partial<Step> = {},
-): Step => ({
+const read = (slug: string | undefined, extra: Partial<Step> = {}): Step => ({
 	as: asVisitor(),
 	method: "GET",
 	path: `/audio/file/${slug ?? ""}`,
@@ -146,7 +143,9 @@ const cases: Case[] = [
 	}),
 	// the whole file
 	open("a whole read"),
-	open("a query string is ignored", [slow({ path: `/audio/file/${SLUG}?x=1` })]),
+	open("a query string is ignored", [
+		slow({ path: `/audio/file/${SLUG}?x=1` }),
+	]),
 	open("an owner's session is ignored", [slow({ as: asOwner() })]),
 	open("a second entry", [read("fast-lane")], {
 		setup: entries([SLUG, KEY], ["fast-lane", "tracks/fast-lane.mp3"]),
@@ -157,9 +156,13 @@ const cases: Case[] = [
 		r2: { seed: { ...SEED, "tracks/other.mp3": { body: BODY } } },
 	}),
 	open("the object is missing from R2", [slow()], { r2: { seed: {} } }),
-	open("the object is missing from R2, asked for a range", [ranged("bytes=0-9")], {
-		r2: { seed: {} },
-	}),
+	open(
+		"the object is missing from R2, asked for a range",
+		[ranged("bytes=0-9")],
+		{
+			r2: { seed: {} },
+		},
+	),
 	open("the object vanishes between head and get", [ranged("bytes=0-9")], {
 		r2: { seed: SEED, vanishAfterHead: [KEY] },
 	}),
@@ -198,19 +201,15 @@ const cases: Case[] = [
 	open("R2 get fails on a range", [ranged("bytes=0-9")], {
 		r2: { seed: SEED, fails: ["get"] },
 	}),
-	open(
-		"R2 head fails on a whole read, which never heads",
-		[slow()],
-		{
-			r2: { seed: SEED, fails: ["head"] },
-			mustNotFire: [
-				{
-					trigger: "r2 AUDIO fails head",
-					reason: "a whole read gets the object without a head",
-				},
-			],
-		},
-	),
+	open("R2 head fails on a whole read, which never heads", [slow()], {
+		r2: { seed: SEED, fails: ["head"] },
+		mustNotFire: [
+			{
+				trigger: "r2 AUDIO fails head",
+				reason: "a whole read gets the object without a head",
+			},
+		],
+	}),
 	open(
 		"R2 fails for an unknown slug, which never reaches it",
 		[read("unknown")],
