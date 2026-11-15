@@ -18,6 +18,7 @@ import kailleraLanding from "~/assets/projects/kaillera-next/landing-2026-09-26.
 import { tallyStory } from "~/data/project-stories/tally";
 import { kailleraStory } from "~/data/project-stories/kaillera-next";
 import { capacityCells, parseFigure, resamplePeaks } from "~/lib/home-motion";
+import { latestSongWaveform } from "~/lib/latest-song";
 import { loadMusicCatalog } from "~/lib/music-content";
 import { audioPath } from "~/lib/host-routing";
 
@@ -32,6 +33,9 @@ const oldNewsRecording =
 	musicCatalog.recordings.find(
 		(recording) => recording.id === oldNewsExample.recordingId,
 	);
+
+// The waveform edge draws the newest released song.
+const edgeWaveform = latestSongWaveform(musicCatalog);
 
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const essay = await getEntry("pages", "ai-gives-you-speed");
@@ -127,7 +131,7 @@ const jsonLd = {
           </div>
         </section>
       </div>
-      <SignalEdge peaks={oldNewsExample?.waveforms && resamplePeaks(oldNewsExample.waveforms.after, 110)} />
+      <SignalEdge peaks={edgeWaveform && resamplePeaks(edgeWaveform, 110)} />
     </div>
 
     <div class="site-shell">
