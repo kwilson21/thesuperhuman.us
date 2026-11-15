@@ -25,7 +25,8 @@ import type { SoftwareOffer } from "~/lib/software-offers";
 
 export const prerender = false;
 
-const depositBlockMessage = "Void or refund the deposit invoice first.";
+const depositBlockMessage =
+	"Void the deposit invoice first, or refund it in Stripe and record the refund with owner:stripe:reconcile --software-deposit-refunded.";
 
 const openMsaMessage =
 	"An open offer uses this agreement. Withdraw that offer first.";

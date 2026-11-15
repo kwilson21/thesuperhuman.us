@@ -292,7 +292,7 @@ export function list<T>(
 		raw.forEach((item: RawValue, index: number) => {
 			const read = element(item, [...path, index]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else values.push(read.value);
@@ -347,7 +347,7 @@ export function record<F extends Fields>(
 				name,
 			]);
 
-			issues.push(...read.issues);
+			for (const issue of read.issues) issues.push(issue);
 
 			if (read.stopped) stopped = true;
 			else if (read.value !== undefined) values.push([name, read.value]);

@@ -6,7 +6,7 @@ import { validateAgreementDetails } from "~/lib/agreement-fields";
 import AgreementLayout from "~/layouts/AgreementLayout.astro";
 import {
 	getLinkedOffer,
-	offerTermsSchema,
+	parseOfferTerms,
 	formatUSD,
 	offerTotal,
 } from "~/lib/software-offers";
@@ -46,9 +46,7 @@ const docs = session ? await offerAgreements(db!, offer!.id) : [];
 const sow = docs.find((d) => d.kind === "sow"),
 	signed = sow && sow.status !== "review";
 
-const terms = offer
-	? offerTermsSchema.parse(JSON.parse(offer.terms_json))
-	: null;
+const terms = offer ? parseOfferTerms(JSON.parse(offer.terms_json)) : null;
 
 const request = offer ? await getOwnerRequest(db!, offer.request_id) : null;
 
