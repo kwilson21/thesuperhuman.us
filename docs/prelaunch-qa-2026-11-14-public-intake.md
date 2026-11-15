@@ -44,7 +44,7 @@ The visitor-facing sentences are unchanged in every case; only the status and wh
 | Software: the insert fails (the same variants as audio) | 503 | 500 |
 | Audio and software: the captcha service reports a malformed verification request (`bad-request`) | 403 (the visitor told to redo the check) | 503, as for the other faults on our side |
 | Audio and software: the request is read back after the insert | a failing read made a stored request look unsaved, and a retry stored it twice | the stored request is built from the row the batch wrote; nothing is read back |
-| Pass: the captcha service cannot answer | 200 `{"ok":false}` | 503 `{"ok":false}` |
+| Pass: the captcha service cannot answer, or reports a malformed verification request (`bad-request`) | 200 `{"ok":false}` | 503 `{"ok":false}`; a visitor code such as `invalid-input-response` stays 200 `{"ok":false}` (two corpus cases) |
 | Pass: signing fails | not separate | 500 `{"ok":false}` |
 | Suggest: the budget store, a limiter or any other unexpected step fails | 200 with an empty suggestion | 500 with the same empty body, logged through `logUnexpected` |
 | Suggest: the model fails | 200 with an empty suggestion | 503 with the same empty body; a fixed line is logged, never the model's error |
@@ -103,12 +103,13 @@ A review bot left findings on both pull requests; each was checked against the c
 
 On branch A (fixed there, with a failing test first, the corpus case and the fixtures re-recorded in commits of their own):
 
-- A captcha answer of `bad-request` means our verification request was malformed, not that the visitor refused: it is now reported as unavailable, like the other faults on our side (a unit test and a corpus case in the audio and software routes).
-- The loser of a duplicate submission race gave its allowance back by deleting the address-wide key, which also erased the count of the request that won when both came from one address: the loser now keeps the allowance it spent, as before the first fix on A. The Quint model states `keptForStored` without an exception and checks that the loser keeps the key (`loserKeepsAllowance`); the owner item about two simultaneous submissions from one address is removed.
+- A captcha answer of `bad-request` means our verification request was malformed, not that the visitor refused: it is now reported as unavailable, like the other faults on our side (a unit test, and a corpus case in the audio, software and brief pass routes; the pass route answers 503 where it answered 200).
+- The loser of a duplicate submission race gave its allowance back by deleting the address-wide key, which also erased the count of the request that won when both came from one address: the loser now keeps the allowance it spent, as before the first fix on A. It keeps it whatever its address, so when one open form is sent from two addresses, or another visitor reuses a submission id, the request answered from the stored brief (or with the 409) also keeps its count; this fails closed (that address waits the usual few minutes) and it takes a race on one submission id to get there. The Quint model states `keptForStored` without an exception and checks that the loser keeps the key (`loserKeepsAllowance`); the owner item about two simultaneous submissions from one address is removed.
 
 On branch B (no answer or side effect changed; `golden:neutral` against A's tip is NEUTRAL):
 
 - The new refusals of the intake rule files were plain classes with hand-written tags: all are `Data.TaggedError` classes carrying a `say` sentence (the suggestion refusals carry an empty one, as they say nothing to the visitor).
+- The rules imported their sentences from `src/lib/music-request.ts` where the pilot keeps a refusal's `say` in its rule: each refusal's sentence is now in its rule, the routes answer refusals with `refusal.say`, and the library keeps only the answers that are no rule's refusal. A comment that said the suggestion refusals are told apart in the flow now says the route.
 - The four flows wrapped rule decisions and service calls in `Effect.result` and returned outcome objects: named refusals and failures now go to the routes, the side effects of a failure (the allowance given back, the owner alert, the log line) happen in the flow before the failure continues, and each route maps every tag with `catchTags`, so an unmapped tag no longer type checks. Only a stored brief or a sent request is a returned value.
 - The fixed sentences sat as constants in two routes: they are beside `musicRequest` in `src/lib/music-request.ts`, and the refusals use them.
 - The submission look-up statement sat in `src/lib/owner-requests.ts`, and the intake store only wrapped it: the statement is in `src/server/intake-store.ts`, and the lib helper is deleted.
@@ -174,6 +175,8 @@ Limits: no browser run of any form; no real email was sent, so the client copy, 
 2. Project creation for an audio request depends on the database trigger `audio_project_after_service_request` (it inserts the project and its audit row when a `service` request is inserted). The converted code relies on it, as the old code did. Moving that to code needs a migration and is not done.
 3. The `pass` route has no bound on captcha attempts: an address may ask for a pass as often as it likes (the audio and software routes count attempts; this one never has). A bound is a product decision.
 4. Whether the attempt counter is given back when the captcha service is down. Now it is not: the attempt is counted before the captcha is asked and stays counted, so ten outage answers lock an address out for the window. Giving it back is a choice for the owner.
+
+Existing limitation, not changed (it predates both branches): after a failed insert the audio flow and the software flow give back the whole address-wide counter key, so a request from the same address that stored at the same moment loses its count. `docs/verification.md` says so next to `keptForStored`.
 
 Also: the cleanup of old suggestion budget rows binds its cutoff from TypeScript and decides no answer (see the statement table).
 
