@@ -57,10 +57,10 @@ const StoredDetails = Schema.fromJsonString(Schema.Json);
  * writers store (`JSON.stringify` of details whose `attachments` `parseAgreementAttachments` checked): a plain object with
  * a list of attachment objects, written compactly. No details pins nothing. Text that is not JSON is unreadable: the
  * statement this replaces (`json_each` over the column) raised on it, and the route answered its fixed 500, so the rule
- * refuses it the same way. Anything that parses but is not that exact shape pins nothing and is refused as an unpinned
+ * refuses it the same way; a JSON5 spelling is not JSON to this reader and gets that same answer. Anything that parses but is not that exact shape pins nothing and is refused as an unpinned
  * attachment: details that are not a plain object, attachments that are not a list, an entry that is not an object with a
  * text key and a text digest, and text that is not what `JSON.stringify` writes for its own value (which is how a
- * duplicate key, JSON5 spelling or odd spacing shows itself; SQLite and JavaScript read those differently, so B refuses
+ * duplicate key or odd spacing shows itself; SQLite and JavaScript read those differently, so B refuses
  * where the SQL it replaces may have served). These inputs are unreachable through the writers.
  */
 export function readPinnedAttachments(
