@@ -464,6 +464,30 @@ File: `verification/agreement-link.qnt`, written for the conversion of the agree
 
 **What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
 
+## The audio project models
+
+Three files under `verification/`, written before the code of the audio projects conversion; the design is
+`docs/plans/2026-11-audio-projects-conversion.md` (section 6 has every property, its mutant and what is left out). After the
+conversion no single SQL statement holds a decision, so each write is a compare-and-set against the facts the rule read; the
+models check that each compare is enough and none is redundant. A step is one batch or one statement; R2 and the mail
+provider are separate steps. The owner's moves and the world's (access closing, a request withdrawn, a payment voided) are
+enabled only while a request is between its read and its write, which is the window the compares protect; without that
+bias the random runs rarely reach the races.
+
+- `audio-project-messages.qnt` (module `projectMessages`): a client's messages and review decisions, with the rate limit,
+  the review awaiting an answer, the revision rounds and the stop that closes access. 7 properties, 7 mutants.
+  `RuleNoRounds` changes the rule and the others remove one compare; the rarest mutant (`NoDecision`) needs about 26,000
+  random runs with the fixed seed, so the model makes 60,000 per mutant and 8,000 for the run that must pass.
+- `audio-project-files.qnt` (module `projectFiles`): an upload that starts, completes or is aborted, and the owner's
+  publish, revoke and completion, with R2 as separate steps. 8 properties, 11 mutants. It found that the stage compare
+  already protects the published final, so the conversion's completion compares the stage and not the file.
+- `audio-project-notices.qnt` (module `projectNotices`): the invitation and an update notice, which share four states and
+  three statements. 6 properties, 6 mutants. Its model of the owner's confirmation is truthful on purpose (the email did not
+  go out); the confirmation is the owner's judgment and not a property.
+
+None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
+run as `projectMessages` or `projectFiles`.
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart
