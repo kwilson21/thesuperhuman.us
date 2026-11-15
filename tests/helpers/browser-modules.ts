@@ -13,6 +13,7 @@ export const BROWSER_MODULES: readonly string[] = [
 	"src/lib/agreement-draft-fields.ts",
 	"src/lib/audio-intake.ts",
 	"src/lib/audio-peaks.ts",
+	"src/lib/brief-board.ts",
 	"src/lib/business-days.ts",
 	"src/lib/fields.ts",
 	"src/lib/home-motion.ts",

@@ -521,6 +521,9 @@ export const PREVIEW_OVERRIDES = {
 	AUDIO_CLIENT_CODE_KEY: "screenshots-only-code-key-0123456789abcdef",
 	// Gated pages stay reviewable in PRs before launch.
 	AUDIO_CLIENT_PORTAL_ENABLED: "true",
+	// The brief board too. The preview has no AI binding, so its route answers that interpretation is off; scenarios that
+	// show cards answer the route locally with tests/fixtures/brief-board-script.mjs.
+	SOFTWARE_BOARD_ENABLED: "true",
 };
 
 /** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */

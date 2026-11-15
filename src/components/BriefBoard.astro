@@ -1,0 +1,57 @@
+---
+// The living brief's board (docs/plans/2026-11-living-brief.md): the static frame of the outline beside the brief's
+// written answers. src/scripts/brief-board.ts fills it, from src/scripts/software-inquiry.ts. Lane headings are set by the
+// script for the chosen path; the defaults here are the website's.
+import { LANES, addLabels, laneLabels } from "~/lib/brief-board";
+
+interface Props {
+	privacyHref: string;
+}
+
+const { privacyHref } = Astro.props;
+---
+<aside class="brief-board" data-brief-board data-live="true" hidden aria-labelledby="brief-board-title">
+  <div class="board-head">
+    <h2 id="brief-board-title" tabindex="-1">Your brief so far</h2>
+    <p class="board-explain">As you write, Cloudflare’s AI sketches an outline here. Solid cards quote you or are yours; dashed cards are suggestions until you keep them. Keep writing while it works.</p>
+    <p class="board-status" data-board-status aria-hidden="true"></p>
+    <p class="sr-only" data-board-live role="status"></p>
+    <div class="board-controls">
+      <button type="button" data-board-pause aria-pressed="false">Pause suggestions</button>
+      <button type="button" data-board-undo disabled>Undo</button>
+      <button type="button" data-board-plain>Use the plain form</button>
+    </div>
+  </div>
+  {LANES.map((lane) => (
+    <section class="board-lane" data-lane={lane} aria-labelledby={`board-lane-${lane}`}>
+      <h3 id={`board-lane-${lane}`} data-lane-title>{laneLabels.website[lane]}</h3>
+      <ul class="board-cards" data-lane-cards></ul>
+      <p class="board-empty" data-lane-empty>Nothing here yet.</p>
+      <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
+      <div class="board-editor" data-lane-editor hidden>
+        <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
+        <div class="board-editor-actions"><button type="button" data-lane-save>Add</button><button type="button" data-lane-cancel>Cancel</button></div>
+      </div>
+    </section>
+  ))}
+  <details class="board-aside" data-board-aside hidden>
+    <summary data-board-aside-summary>Set aside</summary>
+    <ul data-board-aside-list></ul>
+  </details>
+  <button type="button" class="board-held site-button site-button-outline" data-board-held hidden></button>
+  <p class="board-foot">Only cards from your answers and cards you keep, edit or add go with your brief, and only after you review it. <a href={privacyHref}>Privacy</a></p>
+  <template data-card-template>
+    <li class="board-card">
+      <p class="board-card-origin" data-card-origin></p>
+      <p class="board-card-text" data-card-text></p>
+      <p class="board-card-quote" data-card-quote hidden></p>
+      <p class="board-card-reason" data-card-reason hidden></p>
+      <p class="board-card-answer" data-card-answer hidden></p>
+      <div class="board-card-actions" data-card-actions></div>
+      <div class="board-editor" data-card-editor hidden>
+        <label class="intake-field"><span data-card-editor-label></span><input type="text" data-card-input autocomplete="off" /></label>
+        <div class="board-editor-actions"><button type="button" data-card-save>Save</button><button type="button" data-card-cancel>Cancel</button></div>
+      </div>
+    </li>
+  </template>
+</aside>
