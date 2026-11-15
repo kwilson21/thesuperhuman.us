@@ -6,7 +6,7 @@ Date: November 15, 2026
 Repository: the personal website repository
 Routes: `POST /api/agreements/link` (a client asks for a link to their signed agreements by email), `GET /api/agreements/[id]/file` (download of a signed copy by a verified visitor), `GET /api/agreements/attachments/[id]` (download of an attachment of the offer a signing session is signing).
 Branches: A is `claude/effect-13-agreement-access-fixes`; B is `claude/effect-13-agreement-access`, cut from A and merged with A's tip (the merge commit is on B). Both have taken `origin/main` (the merge commits are on A and on B). Nothing is pushed.
-AI assistance: the code on both branches was written with AI assistance (Claude Code), tests first. Independent reviews were run on each round; their findings are listed below, and the owner reviews the pull request.
+AI assistance: the code on both branches was written with AI assistance (Claude Code), tests first. The owner reviews the pull request.
 Rollback revision: A's parent on `origin/main` before this merge was `3561a541`; for A, the `origin/main` revision it merged; for B, A's tip.
 
 ## Review findings fixed on B
@@ -22,9 +22,9 @@ An independent review of the first version of B found no authorization or non-di
 - A studio session with an empty email answered 401 where branch A went on; the rule now treats the session as present.
 - The Quint model took the redeem as one step and let no agreement change between the lookup and the batch; it now models both as reads followed by guarded writes.
 
-## Review round 1 (independent, on `6ff5830b`)
+## Further findings fixed on branch B
 
-The review found no authorization or non-disclosure regression and no decision left in SQL in the converted code. Each finding is fixed on B:
+Independent reviews found no authorization or non-disclosure regression and no decision left in SQL in the converted code. Each finding is fixed on B. First review:
 
 - The Quint model's flags were set from the same condition as the guards they checked, so the properties held by construction; they are now invariants over the stored links and the redeem record.
 - The model shared one try counter between the cooldown and link loops and let a cooldown retry take a new instant; each loop has its own counter and a retry keeps its first instant.
@@ -33,8 +33,17 @@ The review found no authorization or non-disclosure regression and no decision l
 - The attachment pin reader parsed stored details differently from SQLite in inputs no writer produces; it now serves only the exact stored shape (see Scope).
 - The offer link route did not answer a tokenless or empty-token request as branch A did; it does now.
 - Seven failures carried a field the pilot's has none of; the field is kept only on the six that the route logs once, and the rule is in the Back-end rules.
-- The two download routes copied their fixed answers; they share `src/server/agreement-answers.ts`.
+- The two download routes copied their fixed answers; the plain text answer is `agreementText` next to `agreementJson` in `src/lib/agreement-access.ts`, and the logged failure answer is `loggedAnswer` in `src/server/agreement-answers.ts`, used by all three routes.
 - This record: the branch A recogniser move, the head the figures belong to, the `issuedStillExecuted` reasoning, the allowance prune's class, and process wording.
+
+Second review:
+
+- The Back-end rules said a store failure has no fields and, in the next sentence, that a failure carries its cause in a field; the rule now reads: no fields unless the route must log the cause.
+- The link flow's header comment said the clock is read once per attempt; it reads it once and keeps it.
+- Replacing the cooldown's compare-and-set check, or either kept instant, with a fresh one left every model property passing; three properties (`oneCooldownPerWindow`, `cooldownInstantKept`, `linkInstantKept`) and three mutants now observe them.
+- The executed-agreement property copied the lookup's own flag; it now reads the real state (only an address with an executed agreement has a link).
+- The pin reader's comment said a JSON5 spelling is refused as unpinned; it gets the fixed 500 as text that is not JSON.
+- `agreementText` is a plain response factory and moved next to `agreementJson`; the record said the answers file was shared by the two download routes only.
 
 ## Scope
 
@@ -58,7 +67,7 @@ Branch B, the conversion:
 - Stores: `src/server/agreement-store.ts` (plain reads, read through Effect Schema readers; compare-and-set writes). Flows: `src/server/flows/agreement-link.ts`, `agreement-session.ts`, `agreement-download.ts`, `agreement-attachment.ts`. Routes are thin, on `runRoute(services, program, { route, answer })`, with every typed failure mapped by `catchTags`.
 - Services: `src/server/agreement-services.ts` (`AgreementMail`, `AgreementAllowance`), added to `src/server/services.ts`'s `Turnstile` and `MusicDb`/`AudioBucket` as before. Outside calls that reject are named failures (`AgreementStoreFailed`, `AgreementAllowanceFailed`, `AgreementMailFailed`, `HashFailed`); each route maps them with `catchTags`, logs the failure through `logUnexpected` and answers its fixed sentence. Six failures carry their cause in a field named `failure` (`AgreementStoreFailed`, `AgreementAllowanceFailed`, `AgreementMailFailed`, `HashFailed`, `CopyBytesFailed`, `AttachmentReadFailed`), unlike the pilot's field-less store failure, because branch A logged each of those failures and the corpus records the log line, which the conversion must not change; the route logs each once through `logUnexpected`. `CopyReadFailed` has no field because the route never logged it. The Back-end rules in `CLAUDE.md` and `AGENTS.md` say it in one sentence: a failure carries its cause only when the route must log it. The routes' fixed answers live in `src/server/agreement-answers.ts`.
 - The route-level non-interference test is `tests/server/agreement-download-routes.test.ts`. It checks the status, headers, body and the sequence of statements (query and arguments, with clock readings normalised) and bucket calls for an unknown id and for another client's agreement, a signing session's other offer, and a studio project's agreement; and for the attachment route, an unknown attachment and another request's.
-- The Quint model is `verification/agreement-link.qnt` (issue: the cooldown and the link batch as reads followed by guarded writes with a bounded retry; redeem: a read, then a guarded batch). Five mutants; each breaks the property named for it (`scripts/lib/quint-mutants.mjs`). `docs/verification.md` has its section, including the finding below.
+- The Quint model is `verification/agreement-link.qnt` (issue: the cooldown and the link batch as reads followed by guarded writes with a bounded retry; redeem: a read, then a guarded batch). Eight mutants; each breaks the property named for it (`scripts/lib/quint-mutants.mjs`). `docs/verification.md` has its section, including the finding below.
 - `src/lib/agreement-download.ts` keeps only the owner's download (the owner area's); `issueAgreementLink` in `src/lib/agreement-access.ts` keeps only the signing path (the offer area's). The shared `agreementSession` stays for the offer routes; the three routes use a plain-read variant (`visitorSession`) decided by rules. The studio list `clientSoftwareProjectsForSession` is no longer read by these routes: the file route reads the studio visitor's projects as plain columns and the rule filters them.
 - Real-SQLite cases in `tests/lib/software-agreements.test.ts` and `tests/security/rate-order.test.ts` that drove the deleted archive branches now drive the archive link and download flows against the real schema.
 
@@ -111,23 +120,21 @@ Oxlint reports no findings on either branch (`oxlint --deny-warnings`, zero). Re
 
 All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the agreement worktree. Logs are not retained.
 
-Branch A tip `8f482050` (it merges `origin/main` at `86773378`):
+Branch A tip `d40036e5` (it merges `origin/main` at `8b5b4efd`, golden format 5; the three area fixtures were re-recorded in a fixture-only commit):
 
-- `pnpm run format:check`: "Checked 768 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 298 files passed; 12759 tests passed, 1 skipped (12760); the tree is clean afterwards.
-- `golden:neutral --all origin/main HEAD`: "compared 77 fixtures and 9021 cases; 3 of 77 fixtures differ" (the file, attachment and link corpora) and "NOT NEUTRAL", as expected.
-- `verify:quint:all`: exit 0. `publicist:gate`: "publicist-gate passed: 84 entries checked."
-- `pnpm run lint`: no findings. `pnpm run check`: "Result (794 files)", 0 errors, 0 warnings, 17 hints.
+- `pnpm run format:check`: "Checked 783 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 308 files passed; 13074 tests passed, 1 skipped (13075); the tree is clean afterwards.
+- `golden:neutral --all origin/main HEAD`: "compared 77 fixtures and 9038 cases; 3 of 77 fixtures differ" (the file, attachment and link corpora) and "NOT NEUTRAL", as expected.
+- `verify:quint:all`: exit 0, no failed check. `publicist:gate`: "publicist-gate passed: 84 entries checked."
+- `pnpm run lint`: no findings. `pnpm run check`: "Result (809 files)", 0 errors, 0 warnings, 17 hints.
 
-Branch A tip `8f482050` is unchanged since the figures above; `origin/main` was not merged again.
+Branch B head `ce92dacb` (the figures below were measured on it; this record is the commit after it; it merges A's tip `d40036e5`):
 
-Branch B head `eadd93ef` (the figures below were measured on it; this record is the commit after it):
-
-- `pnpm run format:check`: "Checked 787 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 305 files passed; 12873 tests passed, 1 skipped (12874); the tree is clean afterwards.
-- `golden:neutral --all refs/heads/claude/effect-13-agreement-access-fixes HEAD`: "compared 77 fixtures and 9021 cases; 3 of 77 fixtures differ" and "golden:neutral: NEUTRAL" (agreement-file: 9 identical, 62 neutral with D1 changes; agreements-link: 80 identical, 111 neutral with D1 changes; the attachment fixture likewise; none NOT neutral). Statements changed; answers, stored rows and every other effect did not.
-- `verify:quint:all`: exit 0; 50 checks ok, including `agreementLink` (4.9 s) and its five mutants. `publicist:gate`: "publicist-gate passed: 84 entries checked." `publicist:sync --check`: "AGENTS.md publicist block already in sync."
-- `pnpm run lint`: no findings. `pnpm run check`: "Result (813 files)", 0 errors, 0 warnings, 16 hints.
+- `pnpm run format:check`: "Checked 802 files ... No fixes applied". `pnpm run build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 315 files passed; 13188 tests passed, 1 skipped (13189); the tree is clean afterwards.
+- `golden:neutral --all refs/heads/claude/effect-13-agreement-access-fixes HEAD`: "compared 77 fixtures and 9038 cases; 3 of 77 fixtures differ" and "golden:neutral: NEUTRAL". Statements changed; answers, stored rows and every other effect did not.
+- `verify:quint:all`: exit 0, 73 checks ok and none failed, including `agreementLink` (6.5 s) and its eight mutants, each found at 20,000 random runs on seeds 0x1 to 0x7. `publicist:gate`: "publicist-gate passed: 84 entries checked." `publicist:sync --check`: "AGENTS.md publicist block already in sync."
+- `pnpm run lint`: no findings. `pnpm run check`: "Result (828 files)", 0 errors, 0 warnings, 16 hints.
 
 The one skipped test is "renders the real v1 agreements and embeds exact signing evidence" in `tests/lib/agreement-pdf.test.ts`. It is gated on the private file `.private/signing/templates.json`, which is absent here. UNVERIFIED for the private templates. The template test in `tests/lib/software-agreements.test.ts` returns without checking when `AGREEMENT_PRIVATE_TEMPLATES` is unset, so it passes without checking anything. UNVERIFIED.
 
