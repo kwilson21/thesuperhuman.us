@@ -168,72 +168,13 @@ File: `verification/discount-offers.qnt`, written before the code from the desig
 **Actions**, each one step, in any order: a new draft with any discount; editing the draft (`UPDATE ... WHERE status='draft'`); sending (supersedes the sent offer, revokes the review session; refused after the client signed and while another version has an open or paid first deposit); declining (refused while a deposit is open, not while one is paid); reopening; opening review; signing (the batch's live-signing and session guards); starting the project (copies the signed offer's terms into the project, needs the first deposit paid on standard terms); the invoice reservation's read (amount from the offer's `terms_json`, which the code reads also after the project starts, not the project's copy) and its batch (re-checks that the offer is still sent, or the project's); Stripe paying or voiding an invoice.
 
 **Properties** (`allProperties`):
-1. `invoicedMatchesSigned`: every open or paid invoice of the signed version is the installment the signed terms give, so the invoices of a signed offer add up to what the client signed for; the project's copy of the terms is the signed terms, so the installments the project page states are the ones invoiced.
-2. `sentTermsFrozen`: a version keeps the terms it was sent with, discount included; the signed terms are that version's.
-3. `oneVersionInvoiced`: all open or paid invoices belong to one version.
-4. `installmentsSum`: every version's installments add up to its discounted total.
-5. `supersededInert`: no sign or invoice batch writes for an offer that is not sent at that moment, and a signed offer stays the sent one.
-
-| Mutant | The change | Breaks |
-|---|---|---|
-| `discountEditSent` | The draft update does not require status draft | `sentTermsFrozen` |
-| `discountLatestTerms` | The invoice amount comes from the newest version's terms | `invoicedMatchesSigned` |
-| `discountStartCopiesNewest` | Start copies the newest version's terms into the project, not the signed offer's | `invoicedMatchesSigned` |
-| `discountStartDropsDiscount` | Start copies the signed offer's terms without the discount fields | `invoicedMatchesSigned` |
-| `discountDepositFromUsual` | The deposit is half the usual fee | `installmentsSum` |
-| `discountNoDepositGuard` | Send ignores another version's deposit | `oneVersionInvoiced` |
-| `discountTodayDepositGuard` | The deposit guard as the code had it before the fix (only the sent offer counts) | `oneVersionInvoiced` |
-| `discountNoWriteStatusGuard` | The invoice batch trusts its stale read | `supersededInert` |
-| `discountNoSignGuards` | The sign batch has neither the live-signing nor the session check | `supersededInert` |
-| `discountSendAfterSign` | Send is allowed after the client signed | `supersededInert` |
-
-**Found by the model.** Send must refuse while any other version has an open or paid first deposit. The code's guard counted only the sent offer, so after a decline with a paid deposit and a reopen, new terms could be sent and a second deposit invoiced (`discountTodayDepositGuard`, the old guard). It was reproduced against the real handlers (the golden case "a deposit paid, then the request declined, reopened, redrafted and sent" in `owner-request-software-offer-send`) and fixed in `depositOfferBlock` and `depositOfferGuard` (PR 2 of the plan), so `discount` now describes the code on that path.
-
-**Witnesses.** The pass run alone does not show that deep states are reached, so two negated witnesses were run by hand (`quint run verification/discount-offers.qnt --main discount --invariant <witness> --max-steps 40 --max-samples 100000 --seed 0x1`): `neverFullyPaidAfterRevision` (a project from the second version, discounted, every installment paid, on invoice terms; found within 20 steps) and `neverStandardPaidAfterSentRevision` (the same on standard terms after the first version was sent and superseded; about 19 steps). Each is violated within a second, as it should be.
-
-**What it does not cover.** Refunds; the order of milestones and delivery gating (once the project starts, any installment of the plan may be invoiced); a third milestone; three or more offer versions; retention; Stripe event order and redelivery (the invoice-events model); the amounts and copy on pages and in the SOW (tests). An invoice slot holds one live row, which is what the reservation's guards give, not something this model checks.
-
-**Exhaustive.** `discount` is in the exhaustive list. Run once at 3 steps (2026-11-13, Apalache 0.62.4): no violation, 15 seconds. Before the deposit guard of decision 9 changed (2026-11-15): no violation at 3, 5, 7, 10 and 12 steps (12 took 36 minutes), and the old-guard mutant `discountTodayDepositGuard` violated a property at step 11 of a 12-step run, so the search reaches that bug's depth. Run it again before changing a modelled rule of the offer flow.
-
-## The music-playback model
-
-File: `verification/music-playback.qnt`, written for the conversion of the public music routes (module `music`). A player on a release page reports a playthrough's events (start, progress, listen30, complete, replay) one after another, and retries on a 5xx; the Worker serves several requests at once. Each delivery is three steps: deliver, read (the stored event with this id, and the playthrough's last event, as ONE step: the code reads them in a single D1 batch, one snapshot, which is what the model assumes), then judge and store in one step against the table as it is then, guarded by the table's two unique constraints (the event id; the session, playthrough and sequence). A delivery whose insert meets a constraint reads and judges again, three tries in all (`decideAndSave`).
-
-**State.** The stored events (id, playthrough, sequence, seconds, and the delivery that stored them), four deliveries (their event and what they read, tries and outcome) and one ghost flag. Three event ids, two playthroughs, three places and two values of seconds: enough for every race and ordering the properties need, and small enough for 20,000 random runs of up to 20 steps in about two seconds.
-
-**Properties** (`allProperties`):
-1. `oneRowPerId`: no two stored events share an event id.
-2. `oneRowPerPlace`: no two stored events share a place in a playthrough.
-3. `contiguousFromOne`: each playthrough's places are 1, 2, 3 and so on, with none missing.
-4. `secondsNeverFall`: seconds never fall along a playthrough.
-5. `sameEventNeverConflicts`: the same event delivered twice at once is never answered as a refusal or a conflict: a delivery that read its own event as stored (at any place in the playthrough, not only as its newest row), or whose insert meets it, answers duplicate (the loser reads again and finds it).
-
-| Mutant | The change | Breaks |
-|---|---|---|
-| `NoIdKey` | The event id is not unique (an id reused in another playthrough then stores twice) | `oneRowPerId` |
-| `NoPlaceKey` | The place in the playthrough is not unique (two events at the same place) | `oneRowPerPlace` |
-| `NoSequenceRule` | The rule accepts any sequence number whose place is free | `contiguousFromOne` |
-| `NoSecondsRule` | The rule accepts seconds that go backwards | `secondsNeverFall` |
-| `NoRetry` | A lost race answers 409 at once, without reading again | `sameEventNeverConflicts` |
-| `SplitRead` | The id and the last event are read in two separate steps (the code before the fix to PR 272: two D1 calls); another request stores this very event between them, so the second read shows its place taken and the rule refuses a duplicate as out of sequence | `sameEventNeverConflicts` |
-
-**Found by review.** Greptile found that the first version of the code read the two facts in two calls (the model read them in one step, so it could not see the bug); the model now has the `SplitRead` mutant, and the code reads both in one batch.
-
-**Found by writing it.** The event id key and the place key guard different things: within one playthrough the place key and the sequence rule already stop a repeated id, so the id key is only needed because an id can arrive in another playthrough (the first version of the model, with one playthrough, could not break `NoIdKey`).
-
-**What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
-
-## The agreement-link model
-
-File: `verification/agreement-link.qnt`, written for the conversion of the agreement access routes (module `agreementLink`). A client asks for a link to the signed agreements kept for their address (`POST /api/agreements/link`), and later redeems the link it was mailed (`completeAgreementLink`); the Worker serves several requests at once. The issue is: the cooldown (read the address's row, then a compare-and-set that re-checks it; a lost set reads again, three tries, and the retry keeps the request's first instant, as the code keeps `cooling`), the lookup (the address's agreements and links in ONE batch, one snapshot), then the link batch (its first statement is the guard "no link issued in the window before `at`"; a lost guard reads again, three tries of its own, and the retry keeps the first `at`). The redeem is two steps: a read of the link as unused and unexpired at the instant `at`, then a guarded batch that consumes it while it is still unused.
-
-**State.** The stored links (each with what was true when it was stored: whether the lookup had read an executed agreement, and whether the agreement was still executed at the store), the cooldown rows, how many times each link was consumed and the instant of the read of the redeem that consumed it, three issue requests (phase, the two kept instants, what the lookup read, the two try counters, outcome), two redeems (phase, link, instant of the read), and whether each address still has an executed agreement. There are no flags set by a step: each property is an invariant over this state. Two addresses, three requests and two redeemers cover every race the properties need; the pooled run adds about five seconds.
-
-**Properties** (`allProperties`):
 1. `oneIssuePerWindow`: no two stored links for one address were issued less than the window apart.
-2. `issuedOnlyWithAgreement`: every stored link was issued when the lookup had read an executed agreement.
+2. `issuedOnlyWithAgreement`: every stored link is for an address that has an executed agreement (a link for the address that has none would fail it).
 3. `redeemedOnce`: every link was consumed at most once.
 4. `redeemedUnexpired`: every consumed link was consumed by a redeem whose read was before its expiry.
+5. `oneCooldownPerWindow`: no two cooldowns for one address were taken less than the window apart.
+6. `cooldownInstantKept`: every cooldown was taken at its request's first read instant, whatever the retries.
+7. `linkInstantKept`: every link was issued at the instant its request first read the address, whatever the retries.
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -242,6 +183,9 @@ File: `verification/agreement-link.qnt`, written for the conversion of the agree
 | `NoLookup` | A link is issued without reading whether the address has an executed agreement | `issuedOnlyWithAgreement` |
 | `RedeemNoGuard` | The redeem's batch does not check the link is still unused: two redeems that both read it unused both consume it | `redeemedOnce` |
 | `RedeemNoExpiry` | Neither the redeem's read nor its batch checks the expiry | `redeemedUnexpired` |
+| `NoCas` | The cooldown's compare-and-set does not re-check the row: two requests that both read it free both take it | `oneCooldownPerWindow` |
+| `RetryNewCool` | A cooldown retry takes a new instant instead of keeping its first | `cooldownInstantKept` |
+| `RetryNewAt` | A link retry takes a new instant instead of keeping its first | `linkInstantKept` |
 
 **Finding.** `issuedStillExecuted` (not in `allProperties`; run it by hand with `quint run verification/agreement-link.qnt --main agreementLink --invariant issuedStillExecuted`) says every stored link was stored while the agreement was still executed. It fails: the lookup reads the status, and the batch's guard checks only the 30-second window, so a link can be issued for an agreement that stopped being executed after the lookup. Retention can delete an executed agreement (`src/lib/agreement-retention.ts`), and the lookup does not look at `archive_closed_at`. The effect is harmless and identical on branch A: the link is mailed and the session it opens finds no agreement to show. If an executed agreement can ever become non-executed in a way that matters, the batch needs a guard on the status as well.
 
