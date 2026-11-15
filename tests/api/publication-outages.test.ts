@@ -1,13 +1,13 @@
-import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
 import { publicationOAuthRoute } from "~/server/publication-oauth";
 import { GET, POST } from "~/pages/api/work-feed";
+import { freshPublicationDb } from "../golden/harness";
 import { boundStatement } from "../helpers/d1";
 import { double, fakeKv, partial } from "../helpers/doubles";
 import type { JsonObject } from "../helpers/json";
 import { testRuntime } from "../helpers/runtime";
-import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
+import { sqliteD1 } from "../helpers/sqlite-d1";
 
 // How the publication routes answer when storage fails. The owner's decisions (2026-11-14): an unexpected database or
 // KV failure answers 500 with the route's fixed sentence and never the error's own text; a lost race stays 409; a
@@ -36,18 +36,7 @@ const envelope: JsonObject = {
 };
 
 function world(failOn?: RegExp) {
-	const sql = new DatabaseSync(":memory:");
-
-	for (const file of [
-		"0001_publication_journal.sql",
-		"0002_publication_outbox.sql",
-	])
-		sql.exec(
-			readFileSync(
-				new URL(`../../migrations/publication/${file}`, import.meta.url),
-				"utf8",
-			),
-		);
+	const sql = freshPublicationDb();
 	const real = sqliteD1(sql);
 
 	const db = double<D1Database>({

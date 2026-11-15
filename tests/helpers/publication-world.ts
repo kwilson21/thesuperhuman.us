@@ -1,11 +1,11 @@
-import { readFileSync } from "node:fs";
 import * as Context from "effect/Context";
 import { PublicationDb } from "../../src/server/services";
+import { freshPublicationDb } from "../golden/harness";
 import { boundStatement } from "./d1";
 import { double } from "./doubles";
-import { DatabaseSync, sqliteD1, type SqliteDatabase } from "./sqlite-d1";
+import { sqliteD1, type SqliteDatabase } from "./sqlite-d1";
 
-/** The publication database with both migrations applied, and what a test may do to it: run SQL, fail a batch, run code before one. */
+/** The publication database with every migration applied, and what a test may do to it: run SQL, fail a batch, run code before one. */
 export type PublicationWorld = {
 	readonly sql: SqliteDatabase;
 	readonly db: D1Database;
@@ -19,18 +19,7 @@ export type PublicationWorld = {
 };
 
 export function publicationWorld(): PublicationWorld {
-	const sql = new DatabaseSync(":memory:");
-
-	for (const file of [
-		"0001_publication_journal.sql",
-		"0002_publication_outbox.sql",
-	])
-		sql.exec(
-			readFileSync(
-				new URL(`../../migrations/publication/${file}`, import.meta.url),
-				"utf8",
-			),
-		);
+	const sql = freshPublicationDb();
 	const real = sqliteD1(sql);
 	const hooks: { pattern: RegExp; act: () => void | Promise<void> }[] = [];
 	let failing: RegExp | null = null;
