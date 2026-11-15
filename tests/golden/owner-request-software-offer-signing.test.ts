@@ -82,7 +82,7 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //                           tests/api/software-offers-outages.test.ts, since an R2 failure here fails every get); and the
 //                           send batch (an outage). Nothing is written or emailed. A row or an object the preflight finds
 //                           missing is still incomplete details (400)
-//   503 {ok:false,message:"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent."}  no R2 binding
+//   503 {ok:false,message:"File storage isn’t configured. Check the AUDIO binding. Nothing was sent."}  no R2 binding
 //                           when the send needs it: attachments to read (answered where the first attachment's bytes are
 //                           read) or a reused MSA whose signed copy the packet imports (answered before the preflight);
 //                           nothing is written or emailed

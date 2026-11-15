@@ -41,7 +41,7 @@ const NO_MAIL =
 	"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.";
 
 const NO_STORAGE =
-	"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
+	"File storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
 
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
