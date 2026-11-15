@@ -311,6 +311,10 @@ const GONE = new Error(
 	"The specified multipart upload does not exist. (10024)",
 );
 
+const CONCURRENT = new Error(
+	"There was a conflict with a concurrent write to the same key. (10058)",
+);
+
 const BAD_PART = new Error(
 	"One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag. (10025)",
 );
@@ -399,6 +403,30 @@ describe("an upload that R2 no longer has, or a completion it refuses, is a lost
 
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ ok: true, fileId: UPLOAD });
+	});
+
+	it("a completion that loses a concurrent write to the same key answers 409 when no object is there", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(CONCURRENT, null),
+			}),
+		);
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error: "This upload cannot be finished now.",
+		});
+	});
+
+	it("a completion that loses a concurrent write to the same key finishes when the object is there", async () => {
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucketCompleting(CONCURRENT, { size: 10 }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
 	});
 
 	it("a completion R2 refuses for a missing part or a wrong entity tag answers 409", async () => {
