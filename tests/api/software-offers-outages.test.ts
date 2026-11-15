@@ -939,6 +939,22 @@ describe("revoke reads its link before the batch", () => {
 			await read(await call({ ...revoke, expectedLinkCreatedAt: at })),
 		).toEqual(answer(409, LINK_CHANGED));
 	});
+
+	it("a link read that fails answers 500, writes nothing and logs once", async () => {
+		const { sql, call } = setUp({
+			seed: withSent,
+			faults: [
+				{ on: /SELECT created_at,revoked_at FROM software_offer_links/ },
+				...unreachable,
+			],
+		});
+
+		const before = written(sql);
+
+		expect(await read(await call(revoke))).toEqual(answer(500, FAILED));
+		expect(written(sql)).toEqual(before);
+		expect(logs()).toEqual([LOGGED]);
+	});
 });
 
 describe("a draft whose version another writer takes is read and decided again", () => {

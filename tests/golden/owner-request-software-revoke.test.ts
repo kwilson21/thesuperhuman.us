@@ -357,6 +357,14 @@ const cases: Case[] = [
 			{ on: /FROM owner_requests WHERE id=\?/, message: "D1 is down" },
 		],
 	}),
+	revokeCase("the link read fails", seedWith(), {
+		failures: [
+			{
+				on: /SELECT created_at,revoked_at FROM software_offer_links/,
+				message: "D1 is down",
+			},
+		],
+	}),
 	revokeCase("the batch fails", seedWith(), {
 		failures: [{ on: onBatch, message: "D1 is down" }],
 	}),
