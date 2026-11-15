@@ -19,6 +19,7 @@ export function setupFormSubmission<Payload, Result>({
 	onSuccess,
 	onConflict,
 	onSendingChange,
+	hold,
 }: {
 	form: HTMLFormElement;
 	endpoint: string;
@@ -27,6 +28,8 @@ export function setupFormSubmission<Payload, Result>({
 	onSuccess?: (result: Result) => void;
 	onConflict?: () => void;
 	onSendingChange?: (sending: boolean) => void;
+	/** Runs before anything is sent. Resolving false sends nothing and leaves the form as it was, to be sent again. */
+	hold?: () => Promise<boolean>;
 }) {
 	const button = form.querySelector<HTMLButtonElement>(
 		'button[type="submit"]',
@@ -62,6 +65,19 @@ export function setupFormSubmission<Payload, Result>({
 
 		if (pending || button.disabled) return;
 		pending = true;
+
+		if (hold) {
+			let send = false;
+
+			try {
+				send = await hold();
+			} finally {
+				if (!send) pending = false;
+			}
+
+			if (!send) return;
+		}
+
 		button.disabled = true;
 		button.textContent = "Sending…";
 		form.setAttribute("aria-busy", "true");

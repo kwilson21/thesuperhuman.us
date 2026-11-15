@@ -325,7 +325,7 @@
 .site-form [data-form-status] { font-size: .9rem; margin-top: .75rem; }
 .site-form .form-hint { font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
 .site-form button:disabled { opacity: .5; cursor: not-allowed; }
-.site-form[hidden], .form-success[hidden], .site-form [hidden] { display: none; }
-.form-success h3 { font-size: 2rem; margin-bottom: .75rem; }
-.form-success { padding-block: 1rem; }
+.site-form[hidden], .form-success[hidden], .form-hold[hidden], .site-form [hidden] { display: none; }
+.form-success h3, .form-hold h3 { font-size: 2rem; margin-bottom: .75rem; }
+.form-success, .form-hold { padding-block: 1rem; }
 @media(max-width: 600px) { .site-form .form-pair { grid-template-columns: 1fr; } }
