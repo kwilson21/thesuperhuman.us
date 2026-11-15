@@ -306,7 +306,11 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief", "software-board"],
+	"src/pages/software/start.astro": [
+		"brief-examples",
+		"website-brief",
+		"software-board",
+	],
 	"src/components/BriefBoard.astro": ["software-board"],
 	"src/scripts/brief-board.ts": ["software-board"],
 	"src/lib/brief-board.ts": ["software-board"],
@@ -372,6 +376,7 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
 	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
 		"software-brief",
 		"website-brief",
 		"software-board",
@@ -382,6 +387,7 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-board",
 	],
 	"src/styles/software-intake.css": [
+		"brief-examples",
 		"software-brief",
 		"website-brief",
 		"software-board",

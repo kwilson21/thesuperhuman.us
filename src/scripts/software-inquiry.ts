@@ -12,7 +12,7 @@ import {
 	type SoftwarePath,
 } from "../lib/software-inquiry";
 import { ownLabel } from "../lib/type-guards";
-import { setupFormSubmission } from "./form-submission";
+import { greetingName, setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
@@ -28,14 +28,6 @@ const pathFields = {
 	workflow: ["today", "firstResult"],
 } as const;
 
-const questionLimits = {
-	today: 2000,
-	firstResult: 2000,
-	purpose: 2000,
-	appGoal: 1000,
-	firstVersion: 1000,
-};
-
 type BriefQuestion = {
 	key: string;
 	title: string;
@@ -43,7 +35,7 @@ type BriefQuestion = {
 	/** One example answer, shown in the empty box. */
 	placeholder: string;
 	max: number;
-	/** Further example answers from other situations, listed under "Not sure what to write?". */
+	/** Further example answers from other situations, shown under the footnote by its "See example answers" toggle. */
 	examples: readonly string[];
 };
 
@@ -151,7 +143,7 @@ export function renderSoftwareReceipt(
 ) {
 	const brief = isBriefRecord(result.brief) ? result.brief : {};
 
-	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
+	const firstName = greetingName(brief.name);
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
 		`Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
 	document.querySelector<HTMLElement>("[data-intake-progress]")!.hidden = true;
@@ -349,7 +341,8 @@ export function setupSoftwareInquiry(
 
 			const validPath = isSoftwarePath(stored.path);
 
-			for (const [key, max] of Object.entries(questionLimits)) {
+			// Every path's written answers, each cut to its question's limit.
+			for (const { key, max } of Object.values(briefQuestions).flat()) {
 				const value = stored[key];
 
 				if (isString(value)) answers[key] = value.slice(0, max);
@@ -403,6 +396,26 @@ export function setupSoftwareInquiry(
 	}
 
 	configureQuestions();
+
+	// Each written question's example answers open under its footnote and stay open through a path switch.
+	form
+		.querySelectorAll<HTMLButtonElement>("[data-examples-toggle]")
+		.forEach((toggle) =>
+			toggle.addEventListener("click", () => {
+				const list = toggle
+					.closest("[data-step]")
+					?.querySelector<HTMLElement>("[data-examples-list]");
+
+				if (!list) return;
+
+				const open = list.hidden;
+				list.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				toggle.textContent = open
+					? "Hide example answers"
+					: "See example answers";
+			}),
+		);
 
 	// One Turnstile pass serves the autocomplete and the brief board: the same cookie, sent to the same path.
 	const startPass = startSuggestionPass(form);
