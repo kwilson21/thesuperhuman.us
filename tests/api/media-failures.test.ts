@@ -344,3 +344,54 @@ describe("failures that are not the bucket", () => {
 		}
 	});
 });
+
+describe("requests that never reach the bucket", () => {
+	const noRuntime = (params: { [name: string]: string }) =>
+		partial<APIContext>({
+			params,
+			request: new Request("https://thesuperhuman.us/media"),
+			locals: partial<APIContext["locals"]>({}),
+		});
+
+	it("answers 404, not a logged 500, for an unknown recording with no runtime", async () => {
+		expect(
+			await answered(
+				await music(noRuntime({ id: "nothing", version: "master" })),
+			),
+		).toEqual({ status: 404, text: "Not found" });
+
+		expect(logged).toHaveLength(0);
+	});
+
+	it.each(["nothing", "Bad Slug"])(
+		"answers 404, not a logged 500, for the slug %s with no runtime",
+		async (slug) => {
+			expect(await answered(await audio(noRuntime({ slug })))).toEqual({
+				status: 404,
+				text: "not found",
+			});
+
+			expect(logged).toHaveLength(0);
+		},
+	);
+
+	it("answers 404 and logs nothing for a badly formed slug when the collection cannot be read", async () => {
+		supplyEntries("audio-tracks", [
+			{
+				id: "slow-burn",
+				collection: "audio-tracks",
+				get data(): never {
+					throw new Error(LEAK);
+				},
+			},
+		]);
+
+		expect(
+			await answered(
+				await audio(context({ slug: "Bad Slug" }, { AUDIO: good })),
+			),
+		).toEqual({ status: 404, text: "not found" });
+
+		expect(logged).toHaveLength(0);
+	});
+});
