@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keyBoundedKv } from "~/lib/publication/key-bounded-kv";
+import { keyBoundedKv } from "~/server/publication-kv";
 import { double, fakeKv } from "../helpers/doubles";
 
 // The OAuth library's KV namespace, held to Cloudflare's limit of 512 bytes on a key. The namespace underneath records the

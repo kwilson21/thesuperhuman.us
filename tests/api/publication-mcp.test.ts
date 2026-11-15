@@ -1,8 +1,10 @@
 import type { APIContext } from "astro";
 import { it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { publicationMcp, projectAccess } from "~/lib/publication/mcp";
-import { publicationOAuthRoute } from "~/lib/publication/oauth";
+import * as Effect from "effect/Effect";
+import { publicationMcp, type PublicationTools } from "~/lib/publication/mcp";
+import { allowConnection } from "~/server/rules/publication-access";
+import { publicationOAuthRoute } from "~/server/publication-oauth";
 import { double, partial } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { readJson } from "../helpers/json";
@@ -14,6 +16,36 @@ const env = partial<TestRuntime["env"]>({
 });
 
 const identity = { ownerId: "10987837", scopes: ["publication:threadline"] };
+
+/** Whether the connection may use the project, as the tools ask the access rule. */
+const projectAccess = (
+	setting: Partial<TestRuntime["env"]>,
+	connection: { ownerId: string; scopes: string[] },
+	project: string,
+) =>
+	Effect.runSync(
+		Effect.match(
+			allowConnection.decide(
+				{
+					ownerId: setting.PUBLICATION_OWNER_ID,
+					allowlist: setting.PUBLICATION_PROJECTS,
+					connection,
+					project,
+				},
+				{},
+			),
+			{ onFailure: () => false, onSuccess: () => true },
+		),
+	);
+
+/** The tools the route would hand the transport: these answer forbidden for any project but threadline and never reach storage. */
+const tools: PublicationTools = {
+	progress: async (projectId) => ({
+		value: { status: projectId === "threadline" ? "ok" : "forbidden" },
+		isError: projectId !== "threadline",
+	}),
+	publish: async () => ({ value: { status: "forbidden" }, isError: true }),
+};
 
 it("requires both current project allowlisting and a matching owner/project grant", () => {
 	expect(projectAccess(env, identity, "threadline")).toBe(true);
@@ -46,7 +78,7 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 			body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
 		});
 
-	const response = await publicationMcp(request("tools/list"), env, identity);
+	const response = await publicationMcp(request("tools/list"), identity, tools);
 
 	const list = await readJson<{
 		result: {
@@ -63,8 +95,8 @@ it("exposes tools with explicit mutating annotations and denies unauthorized pro
 	for (const name of ["get_project_progress"]) {
 		const reply = await publicationMcp(
 			request("tools/call", { name, arguments: { projectId: "private" } }),
-			env,
 			identity,
+			tools,
 		);
 
 		expect(

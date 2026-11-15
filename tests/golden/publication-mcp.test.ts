@@ -330,9 +330,7 @@ const mcpRead: Case[] = [
 		"mcp read: the read fails",
 		run((f, c) => [...connect(f, c), progress(f, "threadline")]),
 		{
-			failures: [
-				{ on: /SELECT COALESCE\(MAX\(revision\),0\)/, message: "d1 down" },
-			],
+			failures: [{ on: /SELECT MAX\(revision\)/, message: "d1 down" }],
 		},
 	),
 	oc(

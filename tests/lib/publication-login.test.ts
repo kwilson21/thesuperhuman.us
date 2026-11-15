@@ -3,10 +3,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 import { double, partial } from "../helpers/doubles";
 import {
-	publicationLogin,
 	publicationResource,
 	type LoginEnv,
 } from "~/lib/publication/oauth-login";
+import { publicationLogin } from "~/server/publication-login";
 
 const origin = "https://thesuperhuman.us";
 
@@ -186,6 +186,112 @@ describe("publication consent and GitHub identity", () => {
 				).status,
 			).toBe(400);
 		}
+	});
+	it.each<[string, string | string[], number]>([
+		["a string equal to the resource", publicationResource, 200],
+		["a one-element array holding the resource", [publicationResource], 200],
+		[
+			"a two-element array",
+			[publicationResource, "https://evil.example/mcp"],
+			400,
+		],
+		[
+			"a one-element array holding another value",
+			["https://evil.example/mcp"],
+			400,
+		],
+		["an empty array", [], 400],
+		["another string", "https://evil.example/mcp", 400],
+	])("takes the resource as %s", async (_name, resource, wanted) => {
+		const { env } = fixture({ resource });
+
+		expect(
+			(
+				await publicationLogin(
+					new Request(origin + "/api/publication/authorize"),
+					env,
+				)
+			).status,
+		).toBe(wanted);
+	});
+	it("carries a one-element resource array through consent and the callback to the grant", async () => {
+		const { env, complete } = fixture({ resource: [publicationResource] });
+		const { response, nonce } = await start(env);
+
+		expect(response.status).toBe(302);
+
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+				.mockResolvedValueOnce(Response.json({ id: 10987837 })),
+		);
+
+		const result = await publicationLogin(
+			new Request(origin + "/api/publication/callback?code=x&state=" + nonce, {
+				headers: { cookie: cookie(response) },
+			}),
+			env,
+		);
+
+		expect(result.status).toBe(302);
+		expect(complete).toHaveBeenCalledOnce();
+		// The grant is given the one resource, the same as when the library gives the string.
+		expect(complete.mock.calls[0][0].request.resource).toBe(
+			publicationResource,
+		);
+	});
+	it("gives the grant the same resource whether the library gave a string or a one-element array", async () => {
+		const given: (string | undefined)[] = [];
+
+		for (const resource of [publicationResource, [publicationResource]]) {
+			const { env, complete } = fixture({ resource });
+			const { response, nonce } = await start(env);
+
+			vi.stubGlobal(
+				"fetch",
+				vi
+					.fn()
+					.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+					.mockResolvedValueOnce(Response.json({ id: 10987837 })),
+			);
+			await publicationLogin(
+				new Request(
+					origin + "/api/publication/callback?code=x&state=" + nonce,
+					{ headers: { cookie: cookie(response) } },
+				),
+				env,
+			);
+			given.push(complete.mock.calls[0][0].request.resource);
+		}
+
+		expect(given).toEqual([publicationResource, publicationResource]);
+	});
+	it("carries a request that came with no state through consent and the callback", async () => {
+		// The library gives an empty string when the client sent no state.
+		const { env, complete } = fixture({ state: "" });
+		const { response, nonce } = await start(env);
+
+		expect(response.status).toBe(302);
+
+		vi.stubGlobal(
+			"fetch",
+			vi
+				.fn()
+				.mockResolvedValueOnce(Response.json({ access_token: "t" }))
+				.mockResolvedValueOnce(Response.json({ id: 10987837 })),
+		);
+
+		const result = await publicationLogin(
+			new Request(origin + "/api/publication/callback?code=x&state=" + nonce, {
+				headers: { cookie: cookie(response) },
+			}),
+			env,
+		);
+
+		expect(result.status).toBe(302);
+		expect(complete.mock.calls[0][0].request.state).toBe("");
 	});
 	it("rejects cross-site consent and callback state tampering before upstream calls", async () => {
 		const { env, complete } = fixture();
