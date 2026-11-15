@@ -374,7 +374,7 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 	).toHaveLength(0);
 });
 
-it("gives back the allowance when a rival stored the same submission first", async () => {
+it("keeps the allowance spent when a rival stored the same submission first", async () => {
 	const racing = fakeD1({
 		prepare: db.prepare.bind(db),
 		batch: async () => {
@@ -393,7 +393,9 @@ it("gives back the allowance when a rival stored the same submission first", asy
 			.mocked(fetch)
 			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
 	).toHaveLength(0);
-	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
+	// The rival's request is the same visitor's same submission, so the address-wide count is left as it is.
+	expect(kv.delete).not.toHaveBeenCalled();
+	expect(stored.get("rl:software:0.0.0.0")).toBe("1");
 	// Only the rival's request is stored: the loser stored nothing.
 	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
 		{

@@ -151,10 +151,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				logUnexpected(ROUTE, lookupError);
 			}
 
-			if (raced) {
-				// This request stored nothing and sent nothing, so its allowance is given back.
-				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
-
+			if (raced)
+				// The rival is the same visitor's same submission, already stored: the allowance stays spent, and the
+				// address-wide count (which the rival may share) is left alone.
 				return raced.email.toLowerCase() === input.email.toLowerCase()
 					? Response.json({
 							ok: true,
@@ -162,7 +161,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							clientCopyStatus: raced.details.clientCopyStatus ?? "failed",
 						})
 					: Response.json({ ok: false, error: preserved }, { status: 409 });
-			}
 
 			if (error instanceof RequestDetailsTooLargeError) {
 				await giveBack(env.RATE_LIMIT, `rl:software:${ip}`);
