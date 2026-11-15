@@ -25,6 +25,7 @@ describe("the frozen Zod validators", () => {
 			"music-demand.ts",
 			"publication-contract.ts",
 			"software-inquiry.ts",
+			"software-offers.ts",
 		]);
 	});
 
