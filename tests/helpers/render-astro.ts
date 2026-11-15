@@ -18,56 +18,63 @@ export async function bundleAstro(entries: Record<string, string>) {
 	await mkdir(resolve("node_modules/.cache"), { recursive: true });
 	const directory = await mkdtemp(resolve("node_modules/.cache/astro-render-"));
 
-	await build({
-		entryPoints: entries,
-		outdir: directory,
-		outExtension: { ".js": ".mjs" },
-		bundle: true,
-		format: "esm",
-		platform: "node",
-		packages: "external",
-		plugins: [
-			{
-				name: "astro-test-render",
-				setup(builder) {
-					builder.onResolve({ filter: /\.css(?:\?|$)|\?astro/ }, () => ({
-						path: "empty-style",
-						namespace: "empty",
-					}));
-					builder.onLoad({ filter: /.*/, namespace: "empty" }, () => ({
-						contents: "",
-						loader: "js",
-					}));
-					builder.onResolve({ filter: /^~\// }, (args) => ({
-						path:
-							resolve("src", args.path.slice(2)) +
-							(args.path.endsWith(".astro") ? "" : ".ts"),
-					}));
-					builder.onLoad({ filter: /\.astro$/ }, async (args) => ({
-						contents: (
-							await transform(await readFile(args.path, "utf8"), {
-								filename: args.path,
-								internalURL: "astro/compiler-runtime",
-								astroGlobalArgs: '"https://thesuperhuman.us"',
-								resolvePath: (specifier) => specifier,
-							})
-						).code,
-						loader: "ts",
-						resolveDir: dirname(args.path),
-					}));
-				},
-			},
-		],
-	});
-
 	const components = new Map<string, AstroComponent>();
 
-	for (const name of Object.keys(entries)) {
-		const module: { default: AstroComponent } = await import(
-			/* @vite-ignore */ pathToFileURL(resolve(directory, `${name}.mjs`)).href
-		);
+	// A failed build or import leaves no scratch directory behind.
+	try {
+		await build({
+			entryPoints: entries,
+			outdir: directory,
+			outExtension: { ".js": ".mjs" },
+			bundle: true,
+			format: "esm",
+			platform: "node",
+			packages: "external",
+			plugins: [
+				{
+					name: "astro-test-render",
+					setup(builder) {
+						builder.onResolve({ filter: /\.css(?:\?|$)|\?astro/ }, () => ({
+							path: "empty-style",
+							namespace: "empty",
+						}));
+						builder.onLoad({ filter: /.*/, namespace: "empty" }, () => ({
+							contents: "",
+							loader: "js",
+						}));
+						builder.onResolve({ filter: /^~\// }, (args) => ({
+							path:
+								resolve("src", args.path.slice(2)) +
+								(args.path.endsWith(".astro") ? "" : ".ts"),
+						}));
+						builder.onLoad({ filter: /\.astro$/ }, async (args) => ({
+							contents: (
+								await transform(await readFile(args.path, "utf8"), {
+									filename: args.path,
+									internalURL: "astro/compiler-runtime",
+									astroGlobalArgs: '"https://thesuperhuman.us"',
+									resolvePath: (specifier) => specifier,
+								})
+							).code,
+							loader: "ts",
+							resolveDir: dirname(args.path),
+						}));
+					},
+				},
+			],
+		});
 
-		components.set(name, module.default);
+		for (const name of Object.keys(entries)) {
+			const module: { default: AstroComponent } = await import(
+				/* @vite-ignore */ pathToFileURL(resolve(directory, `${name}.mjs`)).href
+			);
+
+			components.set(name, module.default);
+		}
+	} catch (error) {
+		await rm(directory, { recursive: true, force: true });
+
+		throw error;
 	}
 
 	return {
