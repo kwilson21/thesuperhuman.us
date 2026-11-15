@@ -317,18 +317,18 @@ File: `verification/discount-offers.qnt`, written before the code from the desig
 | `discountStartDropsDiscount` | Start copies the signed offer's terms without the discount fields | `invoicedMatchesSigned` |
 | `discountDepositFromUsual` | The deposit is half the usual fee | `installmentsSum` |
 | `discountNoDepositGuard` | Send ignores another version's deposit | `oneVersionInvoiced` |
-| `discountTodayDepositGuard` | The deposit guard as the code has it today (only the sent offer counts) | `oneVersionInvoiced` |
+| `discountTodayDepositGuard` | The deposit guard as the code had it before the fix (only the sent offer counts) | `oneVersionInvoiced` |
 | `discountNoWriteStatusGuard` | The invoice batch trusts its stale read | `supersededInert` |
 | `discountNoSignGuards` | The sign batch has neither the live-signing nor the session check | `supersededInert` |
 | `discountSendAfterSign` | Send is allowed after the client signed | `supersededInert` |
 
-**Found by the model.** `discount` includes a guard the code does not have yet: send refuses while any other version has an open or paid first deposit. Today's guard counts only the sent offer, so after a decline with a paid deposit and a reopen, new terms can be sent and a second deposit invoiced (`discountTodayDepositGuard`). It is to be reproduced against the real handlers and fixed if real (PR 2 of the plan); until then this model describes the intended code on that path.
+**Found by the model.** Send must refuse while any other version has an open or paid first deposit. The code's guard counted only the sent offer, so after a decline with a paid deposit and a reopen, new terms could be sent and a second deposit invoiced (`discountTodayDepositGuard`, the old guard). It was reproduced against the real handlers (the golden case "a deposit paid, then the request declined, reopened, redrafted and sent" in `owner-request-software-offer-send`) and fixed in `depositOfferBlock` and `depositOfferGuard` (PR 2 of the plan), so `discount` now describes the code on that path.
 
 **Witnesses.** The pass run alone does not show that deep states are reached, so two negated witnesses were run by hand (`quint run verification/discount-offers.qnt --main discount --invariant <witness> --max-steps 40 --max-samples 100000 --seed 0x1`): `neverFullyPaidAfterRevision` (a project from the second version, discounted, every installment paid, on invoice terms; found within 20 steps) and `neverStandardPaidAfterSentRevision` (the same on standard terms after the first version was sent and superseded; about 19 steps). Each is violated within a second, as it should be.
 
 **What it does not cover.** Refunds; the order of milestones and delivery gating (once the project starts, any installment of the plan may be invoiced); a third milestone; three or more offer versions; retention; Stripe event order and redelivery (the invoice-events model); the amounts and copy on pages and in the SOW (tests). An invoice slot holds one live row, which is what the reservation's guards give, not something this model checks.
 
-**Exhaustive.** `discount` is in the exhaustive list. Run once at 3 steps (2026-11-13, Apalache 0.62.4): no violation, 15 seconds. Run it deeper before changing a modelled rule of the offer flow.
+**Exhaustive.** `discount` is in the exhaustive list. Run once at 3 steps (2026-11-13, Apalache 0.62.4): no violation, 15 seconds. Before the deposit guard of decision 9 changed (2026-11-15): no violation at 3, 5, 7, 10 and 12 steps (12 took 36 minutes), and the old-guard mutant `discountTodayDepositGuard` violated a property at step 11 of a 12-step run, so the search reaches that bug's depth. Run it again before changing a modelled rule of the offer flow.
 
 ## The music-playback model
 
