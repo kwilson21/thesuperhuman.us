@@ -158,19 +158,19 @@ Branch A at `ae6e86d7` (the merge of `origin/main` at `8b5b4efd`, then the fixtu
 - `pnpm run lint`: `oxlint --deny-warnings` printed no finding.
 - `pnpm run check`: `Result (811 files): 0 errors, 0 warnings, 17 hints`.
 
-Branch B, evidence head `2864d67e` (A's tip `ae6e86d7` merged as `f3f0b50a`, then a lint fix and the fixture re-record); a documentation-only commit that holds this record follows it. Every step ran at the evidence head.
+Branch B, evidence head `066b087e` (A's tip `ae6e86d7` merged as `f3f0b50a`, then a lint fix, the fixture re-record, the restored receiver test, the shared test database helper and record corrections); a documentation-only commit that holds this record follows it. Every step ran at the evidence head.
 
 Conflicts in that merge and how they were resolved: `src/lib/publication/contract.ts` and `src/lib/publication/mcp.ts` (kept B's converted modules; `origin/main` had only retyped the old reader's input, and the `RawValue` typing on B's reader came with the lint fix `5373a64c`); `src/lib/publication/delivery.ts` and `tests/lib/publication-delivery.test.ts` (modified on A, deleted on B: kept deleted); `tests/api/publication.test.ts` (modified on A, deleted on B: restored afterwards, see the file map); `docs/verification.md` (both the journal model section and the corpus section kept); `tests/scripts/quint-run.test.ts` (the driver test now lists five models, with the publication model last); the three fixtures `publication-mcp`, `publication-token` and `work-feed` (taken from A, then re-recorded). Two lint findings were fixed in files this branch changed: the unknown-typed input of `parsePublication` and of the frozen copy's reader, which now take the raw-value type the other readers use.
 
-- `pnpm run format:check`: `Checked 805 files in 105ms. No fixes applied.`
+- `pnpm run format:check`: `Checked 806 files in 133ms. No fixes applied.`
 - `pnpm run build`: completed.
 - `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: 27 tests passed.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 313 test files, 13,144 tests passed, 1 skipped; `git status` unchanged by the run.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: 314 test files, 13,153 tests passed, 1 skipped; `git status` unchanged by the run.
 - `pnpm run golden:neutral --all refs/heads/claude/effect-12-publication-fixes HEAD`: `publication-mcp` 43 identical, 18 neutral with D1 changes; `publication-token` 51 identical, 4 neutral with D1 changes; `work-feed` 126 identical, 110 neutral with D1 changes; 0 not neutral, 0 added, 0 removed, 0 renamed; compared 77 fixtures and 9,056 cases; `golden:neutral: NEUTRAL`. The fixtures are re-recorded in their own commits.
-- `QUINT_JOBS=4 pnpm run verify:quint:all`: exit 0, 73 lines of output, no failure.
+- `QUINT_JOBS=4 pnpm run verify:quint:all`: exit 0, no failure.
 - `pnpm run publicist:gate`: `publicist-gate passed: 84 entries checked.`
 - `pnpm run lint`: `oxlint --deny-warnings` printed no finding.
-- `pnpm run check`: `Result (831 files): 0 errors, 0 warnings, 17 hints`.
+- `pnpm run check`: `Result (832 files): 0 errors, 0 warnings, 17 hints`.
 - Differential test against the frozen validator: 6,000 seeded inputs plus the fixed pool plus 18 non-plain, odd-key, deep and very long inputs, zero differences, key order included; the new inputs fail against the previous reader.
 
 Limits: the sign-in against a real GitHub and the real OAuth library on a deployed Worker were not run; the corpus drives the library on a fake KV. The consent page was not seen in a browser (its markup and policy are byte-identical in the corpus). UNVERIFIED: any live call (no live publication endpoint was called). The Quint model is checked by random simulation, not by Apalache.
