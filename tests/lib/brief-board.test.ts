@@ -1295,3 +1295,105 @@ describe("found in the fifth review", () => {
 		expect(commits(text)).toBe(true);
 	});
 });
+
+describe("found in the sixth review", () => {
+	it("still names the card in the reply card's own lane that says its idea, when its ref points at another lane", () => {
+		let board = started(
+			suggested("parts", "Local fans"),
+			suggested("audience", "Local fans nearby"),
+		);
+
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		const after = applyReply(
+			board,
+			[{ ...suggested("audience", "Local fans"), ref: "c1" }],
+			n,
+			ANSWERS,
+			false,
+		);
+
+		expect(after.withdrawn).toBe(0);
+		expect(after.board.cards.map((c) => [c.lane, c.text])).toEqual([
+			["parts", "Local fans"],
+			["audience", "Local fans"],
+		]);
+	});
+
+	it("prunes a removed note only when Undo brings that note back", () => {
+		let board = removeNote(addNote(emptyBoard(), "parts", "Booking"), "c1");
+		board = addNote(board, "parts", "Booking");
+		board = editCard(board, "c2", "Gallery");
+		board = undo(board);
+		expect(board.removed).toEqual([{ lane: "parts", text: "Booking" }]);
+	});
+
+	it.each([
+		"1주일 안에",
+		"2주일만에 완성",
+		"3주간의 개발",
+		"3주가 걸려요",
+		"3주차",
+		"10만원은",
+		"100만원의 예산",
+		"5만원도",
+		"預算10萬",
+	])("refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each(["支持4块硬盘", "首页分3块内容", "1時間目の授業"])(
+		"accepts %s",
+		(text) => {
+			expect(commits(text)).toBe(false);
+		},
+	);
+
+	it("does not read back a set-aside card whose words commit, unless the visitor reworded it", () => {
+		const read = readSavedBoards({
+			boards: {
+				website: {
+					cards: [
+						{
+							id: "c1",
+							lane: "parts",
+							text: "Launch page by spring",
+							status: "dismissed",
+							basis: "suggested",
+							quote: "",
+							reason: "",
+							answer: "",
+						},
+						{
+							id: "c2",
+							lane: "parts",
+							text: "Launch page by spring",
+							status: "dismissed",
+							basis: "suggested",
+							quote: "",
+							reason: "",
+							answer: "",
+							edited: true,
+						},
+						{
+							id: "c3",
+							lane: "parts",
+							text: "Shows",
+							status: "proposed",
+							basis: "suggested",
+							quote: "",
+							reason: "Ready in 2 weeks",
+							answer: "",
+						},
+					],
+				},
+			},
+		});
+
+		expect(read.boards.website?.cards.map((c) => [c.id, c.reason])).toEqual([
+			["c2", ""],
+			["c3", ""],
+		]);
+	});
+});

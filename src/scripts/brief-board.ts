@@ -278,6 +278,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		} | null = null,
 		lastAnnounced = 0,
 		boardChangedAt = 0,
+		unsaid = "",
 		laterTimer: ReturnType<typeof setTimeout> | undefined,
 		pendingNews = 0,
 		newsTimer: ReturnType<typeof setTimeout> | undefined,
@@ -901,12 +902,26 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	function sayWhenFree(text: string) {
 		clearTimeout(laterTimer);
 
-		// Nothing is said about a board that is paused, hidden or set aside for the plain form.
-		if (paused || plain || !visible) return;
+		// Nothing is said about a board that is paused, hidden, set aside for the plain form or off; it is said when the
+		// board is back (sayUnsaid).
+		if (paused || plain || !visible || !options.aiEnabled()) {
+			unsaid = text;
+
+			return;
+		}
+
 		const wait = lastAnnounced + 4050 - Date.now();
 
 		if (wait <= 0 && pendingNews <= 0 && announce(text)) return;
 		laterTimer = setTimeout(() => sayWhenFree(text), Math.max(wait, 200));
+	}
+
+	/** Says a stop the visitor did not hear because the board was paused, hidden, plain or off. */
+	function sayUnsaid() {
+		const text = unsaid;
+		unsaid = "";
+
+		if (text) sayWhenFree(text);
 	}
 
 	/** Drops messages still waiting for the throttle: the board they were about is paused, hidden or plain. */
@@ -1137,6 +1152,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 					render();
 					announce(laneFull(laneLabels[options.path()][lane]), true);
 					parts.input.focus();
+					// In a phone's scrolling box the reason below the editor can be out of sight.
+					parts.full.scrollIntoView({ block: "nearest" });
 
 					return;
 				}
@@ -1183,7 +1200,12 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 
 		if (paused) stopAsking();
 		persist();
-		announce(paused ? "Outline paused." : "Outline resumed.", true);
+
+		// Resuming a board that has stopped asking says why, not that it resumed.
+		if (!paused && stopped) {
+			unsaid = "";
+			announce(stopped, true);
+		} else announce(paused ? "Outline paused." : "Outline resumed.", true);
 		schedule();
 	});
 	plainButton.addEventListener("click", () => {
@@ -1254,6 +1276,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				render();
 
 				if (held && !interacting()) applyHeld(false);
+				sayUnsaid();
 				schedule();
 			}
 		},
@@ -1269,6 +1292,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		},
 		aiChanged() {
 			if (!options.aiEnabled()) stopAsking();
+			else sayUnsaid();
 			render();
 			schedule();
 		},
