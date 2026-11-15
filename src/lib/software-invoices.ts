@@ -388,10 +388,10 @@ export async function depositOfferBlock(
 	const paid = rows.results.filter((row) => row.status === "paid");
 
 	if (paid.some((row) => row.offer_status === "sent"))
-		return "A deposit is already paid for this offer. Start the project, or refund it in Stripe before sending new terms.";
+		return "A deposit is already paid for this offer. Start the project, or refund it in Stripe and record the refund with owner:stripe:reconcile before sending new terms.";
 
 	if (paid.length > 0)
-		return "A deposit is paid on an earlier offer. Refund it in Stripe before sending new terms.";
+		return "A deposit is paid on an earlier offer. Refund it in Stripe and record the refund with owner:stripe:reconcile before sending new terms.";
 
 	return null;
 }
