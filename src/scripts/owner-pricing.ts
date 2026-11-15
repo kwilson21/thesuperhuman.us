@@ -197,11 +197,32 @@ async function save(
 				return;
 			}
 
+			// Cleared without a reload: the box and the research it showed go too, so a later Save research never puts back
+			// what was just cleared.
+			if (body.action === "market" && body.market === null) {
+				const box = form.querySelector<HTMLTextAreaElement>(
+					"[data-pricing-market]",
+				);
+
+				if (box) {
+					box.value = "";
+					box.defaultValue = "";
+				}
+
+				const shown = document.querySelector<HTMLElement>(
+					"[data-pricing-research]",
+				);
+
+				if (shown) shown.hidden = true;
+			}
+
 			if (status)
 				status.textContent =
-					body.action === "market"
-						? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
-						: "Saved.";
+					body.action === "market" && body.market === null
+						? "Research cleared. Save or undo your day value and contingency changes, then reload the page."
+						: body.action === "market"
+							? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
+							: "Saved.";
 
 			return;
 		}
@@ -244,9 +265,7 @@ export function setupOwnerPricing() {
 		);
 
 		// Focus where the owner was working, then say it, after the page is ready so the status region announces it.
-		document
-			.querySelector<HTMLElement>("#pricing-market-heading")
-			?.focus({ preventScroll: true });
+		document.querySelector<HTMLElement>("#pricing-market-heading")?.focus();
 
 		if (status)
 			setTimeout(() => {

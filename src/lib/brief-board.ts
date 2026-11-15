@@ -544,10 +544,10 @@ const OFFER_UNITS =
 	"(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?|rounds?|revisions?|iterations?|pages?|screens?|views?|products?|items?|skus?|users?|members?|accounts?|records?|rows?|entries|orders?|customers?|clients?|subscribers?|visitors?|emails?|messages?|files?|photos?|images?|videos?|posts?|articles?|templates?|forms?|fields?|steps?|milestones?|features?|integrations?|languages?|locations?|stores?|sites?|apps?|carriers?|reports?|dashboards?|seats?|licen[cs]es?|people|staff|employees?|requests?|calls?|tickets?|días|dias|semanas|meses|horas|páginas|paginas|productos|produtos|usuarios|usuários|tage|wochen|monate|stunden|seiten|produkte|jours|semaines|mois|heures|giorni|settimane|mesi|ore|pagine|prodotti|дней|недел[ьи]|месяц[аев]*|часов|страниц|dni|tygodni|miesięcy|godzin|stron|gün|hafta|ay|saat|sayfa)(?!\\p{L})";
 
 /** What may follow a large amount when it counts things rather than money: a range, perhaps one word, then a unit. */
-const COUNTED_AFTER = `${OFFER_RANGE}\\s*(?:(?!(?:per|a|an|each|for|plus|or|and|including|on|with|to|of)(?!\\p{L}))\\p{L}+\\s+)?${OFFER_UNITS}`;
+const COUNTED_AFTER = `\\+?${OFFER_RANGE}\\s*(?:(?!(?:per|a|an|each|every|for|plus|or|and|including|on|in|with|to|of|the|this|next|last|first|across|over|during|throughout)(?!\\p{L}))\\p{L}+\\s+)?${OFFER_UNITS}`;
 
 /** What follows a small amount when it is money: the end, a full stop, a period of time after a slash, or a paying word. */
-const PAID_AFTER = `${OFFER_RANGE}\\s*(?:$|[.;)\\]](?=\\s|$)|\\/\\s?(?:mo|month|yr|year|wk|week|day|hr|hour)\\b|(?:dollars?|euros?|pounds?|bucks|per|a|an|each|flat|upfront|up front|total|plus)\\b)`;
+const PAID_AFTER = `${OFFER_RANGE}\\s*(?:$|[.;)\\]](?=\\s|$)|\\/\\s?(?:mo|month|yr|year|wk|week|day|hr|hour)\\b|(?:dollars?|euros?|pounds?|bucks|per|a(?!\\s*\\d)|an|each|flat|upfront|up front|total|plus)\\b)`;
 
 /** A money word with an amount that is money by the rules above. */
 const OFFER_MONEY_WORD_AMOUNT = `${OFFER_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${PAID_AFTER}))`;
@@ -565,8 +565,8 @@ const OTHER_CODE_BEFORE = "\\b(?:pln|czk|huf|rub|zar|sgd|hkd)\\s?\\d";
  * ("3 CAD file types").
  */
 const AMOUNT_THEN_CURRENCY = [
-	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])",
-	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])",
+	"\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])",
+	"\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])",
 	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
 	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
 	"\\brs\\.\\s?\\d",

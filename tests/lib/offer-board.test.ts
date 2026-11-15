@@ -449,3 +449,34 @@ describe("found in the offer board's seventh review", () => {
 		expect(performance.now() - start).toBeLessThan(500);
 	});
 });
+
+describe("found in the offer board's eighth review", () => {
+	it.each([
+		"Costs 1,500 every month",
+		"Fee 3,000 every month for hosting",
+		"Fee 3,000 next month",
+		"Fee 2,400 this year",
+		"Fee 3,000 first month",
+		"Cost 1,500 every sprint",
+		"Budget of 4,500 across milestones",
+		"Pauschal 5.000,- €",
+		"Hosting 20,- € im Monat",
+		"5.000,- EUR",
+		"2 000 рублей",
+		"2 000 рубля",
+		"Хостинг 300 евро",
+		"500 долларов",
+	])("drops %s", (text) => {
+		expect(pricesOrLinks(text)).toBe(true);
+	});
+
+	it.each([
+		"Cada integración de pago tiene un costo de 2 a 3 días extra",
+		"Cada integração de pagamento tem um custo de 2 a 3 dias extras",
+		"Costo de 2 a 3 días por integración",
+		"Estimated 200+ product pages",
+		"Estimated 1,500+ products to import",
+	])("keeps %s", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});

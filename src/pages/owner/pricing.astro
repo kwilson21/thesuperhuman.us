@@ -66,8 +66,8 @@ const updated = pricing.updatedAt
       </form>
     </section>
     <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading" tabindex="-1">Market research</h2>
-      {market ? <>
-        <p class="rail-muted">Researched {market.researchedOn}, from {market.sources.length} {market.sources.length === 1 ? 'source' : 'sources'}. The board holds the AI’s market figure inside the range for the brief’s kind and size.</p>
+      {market ? <div data-pricing-research>
+        <p class="rail-muted">Researched {market.researchedOn.replace(/-/g, '\u2011')}{market.sources.length > 0 && `, from ${market.sources.length} ${market.sources.length === 1 ? 'source' : 'sources'}`}. The board holds the AI’s market figure inside the range for the brief’s kind and size.</p>
         <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-table-caption" tabindex="0">
         <table class="pricing-table">
           <caption id="pricing-table-caption" class="visually-hidden">Fixed-price ranges by kind of work and size</caption>
@@ -78,7 +78,7 @@ const updated = pricing.updatedAt
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
         {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
         {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{(source.published || source.kind) && <span class="pricing-source-meta">{[source.published, source.kind].filter((part): part is string => Boolean(part)).map((part) => part.replace(/(\d)-(\d)/g, '$1\u2011$2')).join('\u00a0· ')}</span>}</li>)}</ol></details>}
-      </> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
+      </div> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
       <form data-pricing-form data-part="market" data-version={pricing.version}>
         <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" aria-describedby="pricing-market-hint" data-pricing-market>{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced, or edit this copy. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
         <div class="software-actions"><button class="studio-button" type="submit">Save research</button><button class="studio-quiet" type="button" data-pricing-clear>Clear research</button></div>

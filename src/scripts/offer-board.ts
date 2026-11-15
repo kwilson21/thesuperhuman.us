@@ -196,6 +196,9 @@ export function setupOfferBoard() {
 
 	/** Each milestone card's detail: what it delivers and its days. */
 	const details = new Map<string, MilestoneDetail>();
+
+	/** Whether a suggestion has arrived on this page: the Suggest button says "again" only then. */
+	let replied = false;
 	/** The cards Use has put into the offer (Undo takes a card out again). */
 	const used = new Set<string>();
 	/** Where a used milestone card went in the offer editor. */
@@ -211,6 +214,17 @@ export function setupOfferBoard() {
 	const announce = (text: string) => {
 		live.textContent = text;
 	};
+
+	/** A date that never splits across lines at its hyphens. */
+	const day = (date: string) => date.replace(/-/g, "\u2011");
+
+	/** What this kind of work is called in a sentence. */
+	const kindNoun =
+		kind === "webapp"
+			? "web app"
+			: kind === "workflow"
+				? "workflow tool"
+				: "website";
 
 	/** The AI's own words quoted inside a sentence: trimmed, without a closing period. */
 	const clause = (text: string) => text.trim().replace(/[.。]+$/, "");
@@ -550,7 +564,7 @@ export function setupOfferBoard() {
 			}
 
 			case "drivers":
-				said = `Kept “${card.text}”${endAfter(card.text)}`;
+				said = `Kept “${card.text}” on the board for you; it is not added to the offer.`;
 
 				break;
 		}
@@ -738,7 +752,7 @@ export function setupOfferBoard() {
 
 		if (range && pricing.market && sizing?.size) {
 			marketParts.push(
-				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI’s reason: “${clause(sizing.sizeReason)}”)` : ""}. `,
+				`The AI reads this as a ${sizing.size} ${kindNoun}${sizing.sizeReason ? ` (its reason: “${clause(sizing.sizeReason)}”)` : ""}. Your research (${day(pricing.market.researchedOn)}) puts a ${sizing.size} ${kindNoun} at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}. `,
 			);
 
 			if (sizing.figureUsd !== null) {
@@ -768,7 +782,7 @@ export function setupOfferBoard() {
 			);
 		} else if (pricing.market && sizing?.size)
 			marketParts.push(
-				`The AI reads this as ${sizing.size}, and your research has no figure for that size.`,
+				`The AI reads this as a ${sizing.size} ${kindNoun}, and your research has no figure for that size.`,
 			);
 		else marketParts.push(...marketDefault.map((node) => node.cloneNode(true)));
 
@@ -1030,8 +1044,9 @@ export function setupOfferBoard() {
 		heldButton.textContent = held
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
 			: "";
-		askButton.textContent =
-			requests > 0 ? "Suggest again" : "Suggest an offer with AI";
+		askButton.textContent = replied
+			? "Suggest again"
+			: "Suggest an offer with AI";
 		drawPrices();
 	}
 
@@ -1067,6 +1082,8 @@ export function setupOfferBoard() {
 		JSON.stringify(one) === JSON.stringify(two);
 
 	function apply(reply: Held) {
+		replied = true;
+
 		const result = applyReplyIn(
 			OFFER_LANE_CONFIG,
 			board,
@@ -1149,7 +1166,7 @@ export function setupOfferBoard() {
 	/** A failure stops automatic asking. The route's own sentence is shown as it is; the page's own adds what to do. */
 	function failed(text: string, own = false) {
 		autoAsk = false;
-		say(own ? `${text} Press Suggest again to try again.` : text);
+		say(own ? `${text} Press the Suggest button to try again.` : text);
 	}
 
 	async function ask(pressed = false) {

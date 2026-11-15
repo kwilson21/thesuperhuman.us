@@ -14,6 +14,7 @@ import {
 } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/offer-board";
 import { withheldFrom } from "~/server/offer-board-model";
+import { readPricingReference } from "~/lib/pricing-reference";
 import { pastOffers } from "~/server/offer-board-store";
 import { PRICING_KEY } from "~/server/pricing-store";
 import { fakeKv, partial } from "../helpers/doubles";
@@ -155,7 +156,7 @@ beforeEach(() => {
 	run = vi.fn(async () => ({ response: reply }));
 	pricing = JSON.stringify({
 		version: 1,
-		dayValueCents: 48723,
+		dayValueCents: 61300,
 		contingencyPercent: 37,
 		market: {
 			researchedOn: "2026-11-15",
@@ -280,13 +281,15 @@ describe("the offer board's route", () => {
 			"project",
 		]);
 		expect(
-			numbers.filter((n) =>
-				[48723, 487.23, 487, 37, 0.37, 91357, 94211].includes(n),
-			),
+			numbers.filter((n) => [61300, 613, 37, 0.37, 91357, 94211].includes(n)),
 		).toEqual([]);
 		expect(texts.join(" ")).not.toMatch(
-			/48723|487\.23|91357|94211|91,357|94,211|\b37 ?%/,
+			/61300|\b613\b|91357|94211|91,357|94,211|\b37 ?%/,
 		);
+		// The record the route read holds this day value, so the checks above could fail.
+		expect(
+			readPricingReference(JSON.parse(pricing ?? "null")).dayValueCents,
+		).toBe(61300);
 	});
 
 	it.each([
@@ -358,6 +361,18 @@ describe("the offer board's route", () => {
 		expect(sent).toContain("the client asked by email (the client).");
 		expect(sent).toContain("A studio site for the client");
 		expect(sent).toContain("Logins for the client’s current site");
+	});
+
+	it("rewrites only free text: a client whose details read like fixed values leaves card states and range sizes alone", async () => {
+		db.exec("DELETE FROM owner_requests");
+		seed("r1", "new", { company: "Small", currentUrl: "open" });
+		await POST(context());
+		const [, inputs] = run.mock.calls[0];
+
+		expect(JSON.parse(inputs.messages[1].content)).toMatchObject({
+			cards: [{ ref: "c1", lane: "outcome", state: "open" }],
+			marketRanges: [{ size: "small" }],
+		});
 	});
 
 	it("keeps the first shown refs of a long keep list rather than none", async () => {

@@ -135,24 +135,34 @@ export function offerMessages(
 	request: OfferBoardRequest,
 	ranges: readonly MarketRange[],
 ) {
+	// Only free text is rewritten, read back as plain JSON so every string in it, however deep, is checked. Fixed values
+	// (the card states and lanes, the range sizes, the brief's choices) stay as they are, whatever the client is called.
+	const hide = (
+		value:
+			| string
+			| OfferBoardRequest["draft"]
+			| Readonly<Record<string, string>>,
+	): JsonValue =>
+		withheldFrom(JSON.parse(JSON.stringify(value)), brief.withheld);
+
 	const data = {
 		project: projectNames[brief.kind],
 		lanes: offerLaneLabels,
 		brief: {
-			answers: brief.answers,
-			outline: brief.outline,
-			existingContent: brief.existing,
+			answers: hide(brief.answers),
+			outline: hide(brief.outline),
+			existingContent: hide(brief.existing),
 			whoUpdatesIt: brief.updates,
 			timing: brief.timing,
 			timingDate: brief.timingDate,
-			budgetNote: brief.budgetNote,
+			budgetNote: hide(brief.budgetNote),
 		},
-		ownersFitReview: { label: brief.fitLabel, note: brief.fitNote },
-		draft: request.draft,
-		cards: request.cards,
+		ownersFitReview: { label: brief.fitLabel, note: hide(brief.fitNote) },
+		draft: hide(request.draft),
+		cards: request.cards.map((card) => ({ ...card, text: hide(card.text) })),
 		marketRanges: ranges.map(({ size, definition, lowUsd, highUsd }) => ({
 			size,
-			definition,
+			definition: hide(definition),
 			lowUsd,
 			highUsd,
 		})),
@@ -160,13 +170,7 @@ export function offerMessages(
 
 	return [
 		{ role: "system", content: OFFER_INSTRUCTIONS },
-		{
-			role: "user",
-			// Read back as plain JSON, so every string in it, however deep, is checked.
-			content: JSON.stringify(
-				withheldFrom(JSON.parse(JSON.stringify(data)), brief.withheld),
-			),
-		},
+		{ role: "user", content: JSON.stringify(data) },
 	];
 }
 

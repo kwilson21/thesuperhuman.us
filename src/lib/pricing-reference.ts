@@ -88,7 +88,9 @@ const whole = (min: number, max: number) =>
 	fieldOf<number>((raw) =>
 		Predicate.isNumber(raw) && Number.isInteger(raw) && raw >= min && raw <= max
 			? { value: raw }
-			: { say: `A whole number from ${min} to ${max}.` },
+			: {
+					say: `A whole number from ${min.toLocaleString("en-US")} to ${max.toLocaleString("en-US")}.`,
+				},
 	);
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -146,12 +148,18 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	const researchedOn = own(raw, "researchedOn");
 
 	if (!Predicate.isString(researchedOn) || !ISO_DAY.test(researchedOn))
-		return { ok: false, error: "researchedOn must be a date, YYYY-MM-DD." };
+		return {
+			ok: false,
+			error: "The researchedOn field must be a date, YYYY-MM-DD.",
+		};
 
 	const rangeItems = listOf(own(raw, "ranges"), 9);
 
 	if (!rangeItems)
-		return { ok: false, error: "ranges must be a list of at most 9." };
+		return {
+			ok: false,
+			error: "The ranges field must be a list of at most 9.",
+		};
 
 	if (rangeItems.length === 0)
 		return {
@@ -199,7 +207,10 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	const sourceItems = listOf(own(raw, "sources") ?? [], 60);
 
 	if (!sourceItems)
-		return { ok: false, error: "sources must be a list of at most 60." };
+		return {
+			ok: false,
+			error: "The sources field must be a list of at most 60.",
+		};
 
 	const sources: MarketSource[] = [];
 
@@ -226,7 +237,7 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	)
 		return {
 			ok: false,
-			error: "caveats must be at most 20 texts of 2,000 characters.",
+			error: "The caveats field must be at most 20 texts of 2,000 characters.",
 		};
 
 	// No day rate is null when stored, and absent from a research file without one: either reads as none.
@@ -238,7 +249,7 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 			: readFields(dayRateFields, dayRateRaw);
 
 	if (dayRate && (!dayRate.ok || dayRate.value.lowUsd > dayRate.value.highUsd))
-		return { ok: false, error: "dayRate is not readable." };
+		return { ok: false, error: "The dayRate field is not readable." };
 
 	return {
 		ok: true,

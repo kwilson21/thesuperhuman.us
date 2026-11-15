@@ -195,6 +195,36 @@ function check(name, ok, detail = "") {
 		);
 		await page.unroute("**/api/owner/pricing");
 
+		// Clear research while the other form has unsaved changes: no reload, so the box and the research it showed go.
+		await page.reload();
+
+		const clearVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", (route) =>
+			route.fulfill({ json: { ok: true, version: clearVersion + 1 } }),
+		);
+		page.once("dialog", (dialog) => dialog.accept());
+		await values.locator('[name="contingencyPercent"]').fill("12");
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+		await page.waitForFunction(() =>
+			/Research cleared/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+
+		const research = page.locator("[data-pricing-research]");
+
+		check(
+			"a clear without a reload empties the research box and hides the research it showed",
+			(await page.locator("[data-pricing-market]").inputValue()) === "" &&
+				((await research.count()) === 0 || (await research.isHidden())),
+		);
+		await page.unroute("**/api/owner/pricing");
+
 		const queue = [];
 
 		await page.route("**/api/owner/requests/*/offer-board", (route) =>
