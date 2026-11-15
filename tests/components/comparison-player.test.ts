@@ -169,8 +169,11 @@ it("seeks once per gesture, keeps playback through a drag past the end, and leav
 	expectSource(script).toContain(
 		"      stage.addEventListener('pointerup', event => {\n        if (!gesture || !stage.hasPointerCapture(event.pointerId)) return;\n        seekFromPointer(event);\n      });",
 	);
-	expect(script).toContain("resume: Boolean(transport?.playing)");
-	expect(script).toContain("position < transport.duration");
+	// A drag that began while sounding plays again once back inside the track, before the handover too.
+	expect(script).toContain(
+		"transport?.playing || (streaming && !streaming.paused)",
+	);
+	expect(script).toContain("if (gesture.resume && position < duration) {");
 	expect(script).toContain("transport.play()");
 	expect(script).toContain("if (!gesture.scrubbing) {");
 	expect(script).toContain("gesture.scrubbing = true");

@@ -66,7 +66,11 @@ class StandInAudio extends EventTarget {
 		if (volumeSettable) this.level = level;
 	}
 
+	/** How many times play() was called, so a test can tell a stream was not restarted. */
+	plays = 0;
+
 	play() {
+		this.plays++;
 		this.paused = false;
 		this.ended = false;
 		setTimeout(() => this.dispatchEvent(new Event("play")));
@@ -391,6 +395,7 @@ it("leaves the stream alone when the version already chosen is chosen again", as
 	ab.play.click();
 	ab.choose("before");
 	await settle();
+	expect(ab.mix.plays).toBe(1);
 	expect(ab.mix.paused).toBe(false);
 	expect(ab.label()).toMatch(/^Pause /);
 	ab.play.click();
@@ -621,4 +626,35 @@ it("plays both native players at the same volume in the fallback", async () => {
 	expect(ab.root.dataset.audioFallback).toBe("true");
 	expect(ab.mix.volume).toBeCloseTo(0.3);
 	expect(ab.master.volume).toBeCloseTo(0.3);
+});
+
+it("pauses when the version that is not streaming is played from outside the page", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.mix.currentTime = 6;
+	void ab.master.play().catch(() => {});
+	await settle();
+	expect(ab.mix.paused).toBe(true);
+	expect(ab.master.paused).toBe(true);
+	expect(ab.label()).toMatch(/^Play /);
+	expect(ab.seek.value).toBe("6");
+});
+
+it("streams again on iOS when the version chosen can play at full level after one that had to wait", async () => {
+	const ab = mount({ fixedVolume: true });
+
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	ab.play.click();
+	await tick();
+	ab.choose("after");
+	await tick();
+	expect(ab.play.getAttribute("aria-busy")).toBe("true");
+	ab.choose("before");
+	await tick();
+	expect(ab.mix.paused).toBe(false);
+	expect(ab.play.getAttribute("aria-busy")).toBe("false");
+	expect(ab.status.textContent).toBe("");
 });
