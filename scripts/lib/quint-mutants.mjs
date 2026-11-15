@@ -133,6 +133,19 @@ export const agreementLinkMutants = {
 	agreementLinkRetryNewAt: { property: "lostGuardNeverStores" },
 };
 
+// verification/audio-project-messages.qnt: a client's messages and review decisions on one audio project, to several requests
+// at once and the owner's moves in between (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectMessagesMutants = {
+	projectMessagesNoCount: { property: "clientRateBounded" },
+	projectMessagesNoDecision: { property: "oneDecisionPerReview" },
+	projectMessagesNoReview: { property: "decisionNamesLatestReview" },
+	projectMessagesRuleNoRounds: { property: "changesWithinRounds" },
+	projectMessagesNoAccess: { property: "writtenForOpenAccess" },
+	projectMessagesNoStage: { property: "answeredInReviewStage" },
+	projectMessagesStopSplit: { property: "stopClosesAccess" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -205,5 +218,15 @@ export const models = [
 		equivalents: [],
 		exhaustive: ["agreementLink"],
 		samples: "20000",
+	},
+	{
+		file: "verification/audio-project-messages.qnt",
+		current: ["projectMessages"],
+		mutants: audioProjectMessagesMutants,
+		equivalents: [],
+		exhaustive: [],
+		// The rarest mutant (NoDecision) takes about 26,000 random runs to find with the fixed seed (about 2 s); the rest a few hundred.
+		samples: "60000",
+		passSamples: "8000",
 	},
 ];
