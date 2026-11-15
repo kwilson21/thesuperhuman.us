@@ -21,7 +21,7 @@ The decisions are therefore pure rules and the sequences are flows, as in the pi
 
 ## Findings on the corpus branch (reported, then fixed on A)
 
-The corpus records every answer each route can give (89 cases for the music file route, 86 for the audio file route and 84 for the link preview video route), including every outage and every Range header the routes read differently. Reading it showed these behaviors, each fixed on A below:
+The corpus records every answer each route can give (88 cases for the music file route, 85 for the audio file route and 83 for the link preview video route, 256 in all), including every outage and every Range header the routes read differently. Reading it showed these behaviors, each fixed on A below:
 
 - A failing bucket read (head or get throwing), a failing assets fetch, and a catalog that cannot be read rejected out of the handler, so Astro answered its own bare 500 with nothing logged by the route.
 - A missing audio bucket (music file and audio file routes) rejected the same way, and so did a production link preview route with no assets binding, which instead fetched the site's own address through the global fetch.
@@ -32,10 +32,9 @@ Seen on the corpus and not changed, with the reason:
 
 - `mediaRange` (`src/lib/music-media.ts`) answers 416 for a Range header it cannot read as one range (another unit, two ranges, capitals), where RFC 9110 lets a server ignore such a header. It is shared with the studio file route, whose own corpus records those answers, so changing it is another area's decision.
 - The audio file route reads a suffix range (`bytes=-8`), two ranges and another unit as "no range" and answers the whole file with 200. The standard allows that; it is not the same as the other two routes, which serve a suffix range.
-- `HEAD` on the audio file route: the route exports only `GET`, so Astro serves a `HEAD` from it, and the function reads the whole object for it. Only the headers reach the client. It costs a read, nothing else.
 - The `audio-tracks` collection holds no files in this repository (`src/content/audio-tracks` is empty), so on this site the audio file route answers 404 for every slug. The route is kept as it is: removing it is a product decision.
 - The link preview route reads the whole video into memory to slice it (the static assets answer every request with the whole file). The files are about 1 MB or less.
-- `X-Content-Type-Options` is absent from the routes' own responses, which the corpus records, because `src/middleware.ts` adds the security headers to every response. It is not a defect.
+- `X-Content-Type-Options` is set by the music file route itself and is absent from the audio file and link preview routes' own responses, which the corpus records, because `src/middleware.ts` adds the security headers to every response. It is not a defect.
 - The private findings list for the work so far has no item about these routes.
 
 ## Scope
@@ -49,36 +48,49 @@ Corpus branch (no change to `src/`): `tests/golden/music-file.test.ts`, `audio-f
 
 The link preview corpus pins the rendered names of two scenes so that a re-render never changes it. It assigns the names into the imported `src/data/og-media.json` after import, so the converted code has to read that file when asked and not at module load, and likewise `import.meta.env.DEV`, which the music and link preview cases set around the call.
 
-Branch A, behavior fixes (each with a failing test in `tests/api/media-failures.test.ts` first, then a fixture-only re-record of 26 cases):
+Branch A, behavior fixes (each with a failing test in `tests/api/media-failures.test.ts` first, then a fixture-only re-record of 26 cases, and of 28 changed and 2 added cases once item 5 was added):
 
 1. A failing bucket read or catalog read answers 500 "Media unavailable" and is logged once through `logUnexpected` (6 music file cases, 4 for the bucket and 2 for the catalog, and 3 audio file cases). It rejected.
 2. A missing audio bucket answers 503 "Media unavailable" for a request that names a file the catalog has (2 music file cases, 2 audio file cases). An unknown recording, slug or private key still answers 404 first, so a missing binding discloses nothing. It rejected.
 3. The link preview route: the assets fetch rejecting answers 500 and is logged once (4 cases); an assets answer that is neither a success nor a 404 answers 500 and is logged once (4 cases); 404 stays 404; production with no assets binding answers 503 (2 cases), after the name has been judged. In a development server the global fetch is passed in by the route, so it still works there.
 4. The audio file route clamps a last byte past the end to the end and answers 206 with `content-range: bytes first-last/size` (3 cases). A start at or past the end is still 416.
 
+5. Both routes serve only keys under `music/` and `tracks/` (the allow list of judgment call (d)). Two audio corpus cases that were served, a key with `Studio/` in capitals and one with a leading slash, are now 404, and two cases with an `agreements/` key are added.
+
 Branch B, the conversion:
 
-- Input: `src/server/media-input.ts` reads the version and the slug with Effect Schema. The routes have no body, and no Zod schema exists in the area, so there is no frozen copy and no differential test; the Range header is read by `mediaRange` (shared, kept in `src/lib/music-media.ts`) and by `readAudioRange` (the audio route's own, now in its rule file).
-- Rules (`src/server/rules/`): `music-file.ts` (which catalog file, and never a private object), `media-range.ts` (which bytes, shared by the music and link preview routes), `audio-file.ts` (which track, the audio Range header, which bytes), `og-video.ts` (which rendered video, and how to judge the assets' answer). Each is built with `alwaysWrites`; every refusal is a `Data.TaggedError` with a `say` sentence.
+- Input: `src/server/media-input.ts` reads the version and the slug with Effect Schema. The routes have no body and none of their own files has a Zod schema, so there is no frozen copy and no differential test. Zod still runs in the area: every music file request validates the catalog through the Astro collection (`validateCatalog`, and A's fixture logs a `ZodError` for an invalid catalog). That leaves our code with the plan's step 13, with the content collections. the Range header is read by `mediaRange` (shared, kept in `src/lib/music-media.ts`) and by `readAudioRange` (the audio route's own, now in its rule file).
+- Rules (`src/server/rules/`): `music-file.ts` (which catalog file: its key must start with exactly `music/`, case and all, nothing normalised; any other key is refused), `media-range.ts` (which bytes, shared by the music and link preview routes), `audio-file.ts` (which track, its key must start with exactly `tracks/`; the audio Range header, which bytes), `og-video.ts` (which rendered video, and how to judge the assets' answer). Each is built with `alwaysWrites`; every refusal is a `Data.TaggedError` with a `say` sentence.
 - Store: `src/server/media-store.ts` reads the music catalog and the audio-tracks collection (no SQL). Services added to `src/server/services.ts`: `MediaObjects` (the bucket's head and get) and `OgAssets` (the static assets fetch), each with a live constructor that fails with a named error (`MediaBucketNotBound`, `MediaObjectFailed`, `AssetsNotBound`, `AssetsFailed`) and uses `Effect.tryPromise`. They do not use `AudioBucket` and `bindingsOrUnavailable`, because an unknown recording must answer 404 whether or not the bucket is bound.
 - Flows (`src/server/flows/`): `music-file.ts`, `audio-file.ts`, `og-video.ts` and the shared `media-range.ts`. They read, decide and read again in the order the old code did and build no response text. The rules' range refusal carries no facts, so the flow adds the size the route's 416 names (`RangeOutsideFile`, `AudioRangeOutsideFile`).
 - Routes: thin, on `runRoute(services, program, { route, answer })`, with every refusal and failure mapped by `catchTags`. A failure is logged once through `logUnexpected` with its cause (and for an assets status, with the line it logged on A). The fixed answers are in `src/lib/media-answers.ts`.
 - Deleted: `streamMusic` (`src/lib/music-media.ts`) and `serveOgVideo` (`src/lib/og-media.ts`) with their tests, and the audio route's range helpers (`parseRangeRequest`, `resolveRange`), which became rules. `mediaRange` stays: the studio file route (`src/lib/audio-project-files.ts`) calls it.
 - Tests: `tests/server/media-rules.test.ts` (every rule branch), `tests/flows/media-stories.test.ts` (each flow against a bucket and an assets double that record what they were asked) and `tests/api/media-failures.test.ts` (the route answers on A and B).
 
+## Review
+
+An independent review of the three branches found nothing that had to be fixed and confirmed that B answers as A does beyond the corpus. Each finding it made is fixed:
+
+- The deny list of two folders became an allow list (`music/`, `tracks/`) on A; the record now says exactly what is checked.
+- The `failed` helper copied in each route, and in the agreement and intake routes, is one `loggedAnswer` in `src/server/answers.ts`; the file `src/server/agreement-answers.ts` is gone.
+- Tests added for the audio collection failing to read and for the video's bytes failing to read after a success answer.
+- B reads the bucket inside the program, so a request with no runtime answers the logged 500 A gives.
+- `AssetsNotOk.say` is kept because the rule type requires it, with a comment saying the flow turns it into the failure that names the status; the audio route passes a slug that is not well formed into its rule.
+- The record's case counts, the `nosniff` line, the Zod lines, the missing-file line and the stop item for `HEAD` are corrected.
+
 ## Owner decisions
 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
 - Owner, 2026-11-14: an unexpected database or store error answers 500 with the route's fixed sentence; a real lost race stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
-- Owner, 2026-11-15 (recorded in the plan): Effect Schema as the only validator, no Zod from our code. These routes import none.
-- Owner, 2026-11-15, asked who writes the code of the whole-area conversions: "You decide".
-- Judgment calls made in this work, for the owner to confirm: (a) the 500 and 503 answers reuse the sentence the music file route already used for a missing object, "Media unavailable", on all three routes, so no new copy was written; the audio file and link preview routes had no sentence for an outage of their own, and their 404 sentences ("not found", "Not found") do not say it. A person never reads these bodies, since they are the answer to an audio or video request. (b) The audio file route clamps a last byte past the end, by RFC 9110 and as the other two routes do, instead of answering 416. (c) A missing binding answers 503 only after the request has been judged, so an unknown recording is a 404 with or without the bucket. (d) The music file route keeps its second wall against a private object key (a key under `studio/` or `software/`), now a rule; the catalog schema already holds every key under `music/`, so no corpus case reaches it and the rule tests do.
+- Owner, 2026-11-15 (recorded in the plan): Effect Schema as the only validator, no Zod from our code. The three routes' own files import none; the catalog read still runs Zod through the Astro collection until step 13.
+- Judgment calls made in this work, for the owner to confirm: (a) the 500 and 503 answers reuse the sentence the music file route already used for a missing object, "Media unavailable", on all three routes, so no new copy was written; the audio file and link preview routes had no sentence for an outage of their own, and their 404 sentences ("not found", "Not found") do not say it. A person never reads these bodies, since they are the answer to an audio or video request. (b) The audio file route clamps a last byte past the end, by RFC 9110 and as the other two routes do, instead of answering 416. (c) A missing binding answers 503 only after the request has been judged, so an unknown recording is a 404 with or without the bucket. (d) Both routes serve a key only when it starts with exactly the public folder (`music/` or `tracks/`), checked case-sensitively with nothing normalised, and refuse anything else with the route's existing not-found answer. This is an allow list: the bucket also holds studio files, software visuals, signed agreements and attachments, and a deny list of two of those folders would have served the rest. The catalog schema already holds every music key under `music/`, so no music corpus case reaches the check and the rule tests do; the audio corpus has cases for `studio/`, `software/`, `agreements/`, `Studio/` and `/studio/` keys.
 
 ## Stop items for the owner (not fixed)
 
 - `mediaRange` answers 416 for a Range header with another unit, two ranges or capitals, which RFC 9110 lets a server ignore. Changing it changes the studio file route's recorded answers.
 - The audio file route does not serve suffix ranges (`bytes=-8`), and serves 200 with the whole file instead. The other two routes serve them.
 - The `audio-tracks` collection is empty in this repository, so the audio file route answers 404 for every slug. Whether to remove the route is a product decision.
+- A `HEAD` request on the audio file route reads the whole object: the route exports only `GET`, Astro serves a `HEAD` from it, and the function reads the bytes before the body is dropped.
 - The audio file route sends `immutable` and one year of caching under a name that is the track's slug, not a name with a hash. A track replaced under the same slug would be served stale by caches. This is a caching decision.
 
 ## Statement classes (the SQL of the three routes)
@@ -121,7 +133,7 @@ The unmeasured parts: none of the three routes was run against a real R2 bucket,
 
 - Answers: the three corpora are identical before and after the conversion (`golden:neutral` against branch A compares every case and finds none changed).
 - Errors: every unexpected failure is 500 with a fixed sentence, logged once without the request; the only 503s are the missing audio bucket and the missing assets binding.
-- Non-disclosure: an unknown recording, slug or name, a private object and a missing file read the same whether the bucket is bound or not.
+- Non-disclosure: an unknown recording, slug or name answers 404 whether or not the bucket is bound. A known file missing from storage answers 404 with the bucket bound and 503 without it. A music key outside `music/` cannot occur (the catalog schema rejects it); if it did, A would answer 503 with no bucket and B 404.
 - Rules: every decision of the three routes is a rule with a test per branch; no route decides a status from a condition.
 - Services: the bucket and the assets are services with named failures; no module is mocked in the area's tests.
 
