@@ -6,9 +6,10 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 ## Decisions
 
-- **No Zod in our code.** Owner, 2026-11-15: "Effect schema as our only validator no zod use from us". The only Zod
-  imports left at the end are the frozen reference copies in `tests/fixtures/legacy-validators/` and the differential
-  test. Astro and the MCP SDK keep their own dependency on Zod; see "Library boundaries".
+- **No Zod in our code.** Owner, 2026-11-15: "Effect schema as our only validator no zod use from us". The frozen
+  reference copies in `tests/fixtures/legacy-validators/` and the differential test import Zod until the last step,
+  which deletes them, as their headers say. Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in
+  `package.json` as the MCP SDK's required peer; see "Library boundaries".
 - **Stacked branches.** Owner, 2026-11-15: conversion PRs may be stacked so one does not wait for another to merge.
 - **Order: the discount first.** Recommended 2026-11-15 (offers, then studio sign-in, then signing, then the discount),
   with the alternative of small areas first named. The owner has not chosen yet; the first steps below are needed in
@@ -24,7 +25,13 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 ## Rules this order follows
 
 - A behaviour fix goes in its own PR before the conversion of its area (golden rule 1).
-- An area is converted completely, in one PR or a stack merged together; no ratchets and no legacy lists.
+- An area is converted completely and reaches `main` in one merge; no ratchets and no legacy lists. A large area may be
+  reviewed as a stack of PRs, but the lower PRs target the stack's top branch, not `main`, so `main` (and production,
+  since every merge deploys) never holds a partly converted area.
+- An area's design comes before its code: its XState diagrams (the states and moves the area's machine will have), and
+  its Quint model where the list below names one, are reviewed in the area's first PR, before any conversion code. For
+  offers, the offer version and installment machines are already drawn (docs/plans/2026-11-discount-flow.md, section
+  3); its design PR adds the request's moves (fit, question, decline, revoke).
 - A converted store may carry statements on another area's tables when an action writes them (as `music-store.ts`
   writes `owner_requests`), but a converted area does not call an unconverted helper that keeps a rule in SQL.
 - The discount's PRs 3 to 6 (`docs/plans/2026-11-discount-flow.md`, section 7) wait for the areas they touch.
@@ -53,7 +60,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    requests get a Quint model.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
-   golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs merged together. The
+   golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and
+   merged into `main` as one. The
    Quint model covers a resend during review, signing a withdrawn offer and countersign or abandon while offers change,
    extending `verification/discount-offers.qnt` where it already models them.
 4. **The discount, PRs 3 to 5.** Read and show the discount, the SOW fields with the send check, then the owner form.
@@ -75,13 +83,29 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
     owner decision (note (e) in `src/server/guarded-save.ts`). The `audio_project_close_declined_request` trigger is
     decided here.
 13. **Finish.** The content collections stop importing Zod (see "Library boundaries"); remove the Zod import from
-    `src/server/failure.ts`; drop `zod` from `package.json` if nothing of ours needs it; move the two triggers fired
-    only by retention scripts; add the architecture test that fails on any Zod import outside
-    `tests/fixtures/legacy-validators/` and the differential test (added only once nothing else imports it, so it is
-    not a ratchet).
+    `src/server/failure.ts`; delete `tests/fixtures/legacy-validators/` and the differential test, as their headers
+    say; move the two triggers fired only by retention scripts; then add the architecture test that fails on any Zod
+    import in `src/`, `scripts/` or `tests/` (added only once nothing imports it, so it is not a ratchet). `zod` stays
+    in `package.json` as the MCP SDK's required peer.
 
-Each area's PR brings its XState diagrams, its Quint model where the list above names one, its rule files, store,
-services and flows, `golden:neutral` output and the `conversion` label.
+Each area goes through the same states. Its design PR (diagrams, and a Quint model where named) merges before its
+conversion is written; its behaviour fixes, found while recording or modelling, merge before the conversion; the
+conversion PR (rule files, store, services, flows, `golden:neutral` output, the `conversion` label) merges last:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Design: the area is next in the order
+    Design --> Design: review asks for changes to the diagrams or model
+    Design --> Fixes: the design PR merges
+    Fixes --> Fixes: a behaviour fix merges, its changed cases explained
+    Fixes --> Converting: no known fix is left
+    Converting --> Converting: review or golden neutral finds a difference, the conversion is corrected
+    Converting --> Converted: the conversion merges into main in one merge
+    Converted --> [*]
+```
+
+A difference `golden:neutral` finds during a conversion is never recorded over: either the conversion is wrong and is
+corrected, or it is a behaviour fix and leaves the conversion for its own PR first.
 
 ## Library boundaries
 
@@ -97,4 +121,5 @@ Two libraries take a Zod schema as their interface. Our code gives them none:
   published schema is written to match what clients see today, and the arguments are checked with Effect Schema. The
   `publication-mcp` and `mcp-probe` golden corpora record `tools/list` and every refusal, so they show whether the
   published schemas and error answers stay identical; anything that changes is a behaviour change, explained in its
-  own PR first.
+  own PR first. Our code no longer imports Zod here, but `zod` stays installed: the SDK declares it a required peer
+  dependency.
