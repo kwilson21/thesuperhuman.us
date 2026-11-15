@@ -279,13 +279,15 @@ export const models = [
 	},
 	{
 		file: "verification/audio-project-files.qnt",
-		current: ["projectFiles"],
+		current: ["projectFiles", "projectFilesFinalAndReview"],
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
 		// The mutants whose race needs one particular starting point (PublishNoStage, PublishStaleSupersede, CompleteNoStage)
-		// begin from that point only, and are found within a few thousand random runs; the run that must pass takes every
-		// starting point and makes 8,000.
+		// begin from that point only, and are found within a few thousand random runs. Two runs must pass, each of 8,000 runs:
+		// projectFiles takes every starting point, and projectFilesFinalAndReview takes only finalAndReview, the one where a
+		// publish whose stage guard is false in a race is reached (the first run reaches it only between 8,000 and 12,000
+		// runs), so a fault in the publish's own stage condition cannot pass either.
 		samples: "20000",
 		passSamples: "8000",
 	},

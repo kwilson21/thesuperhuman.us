@@ -39,6 +39,7 @@ module audioProjectFiles {
 //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
 //                           are still the ones read (and without the retry)
   //   "complete-no-stage"     a completion compares neither the stage nor the published final
+//   "only-final-and-review" no change to the rules: the run starts only from the point `finalAndReview` (a pass run, not a mutant)
 //   "complete-no-file"      a completion does not compare the published final (an equivalent mutant: the stage implies it)
 //   "final-no-supersede"    a publish of a final does not revoke the live review (the write has no condition on the version only for a review)
   //   "complete-no-payment"   a completion does not compare the payments
@@ -153,6 +154,7 @@ module audioProjectFiles {
     if (MUTANT == "publish-no-stage") Set("finalAndReview")        // a review publish read at in_progress, a final publish lands first
     else if (MUTANT == "publish-stale-supersede") Set("twoReviews")  // two uploaded reviews published at once
     else if (MUTANT == "complete-no-stage") Set("final", "finalPlus") // the last final is revoked between the read and the write
+    else if (MUTANT == "only-final-and-review") Set("finalAndReview") // no mutation: the pass run that reaches a publish whose stage guard is false in a race
     else allStarts
 
   action init = {
@@ -484,3 +486,4 @@ module projectFilesPublishStaleSupersede { import audioProjectFiles(MUTANT = "pu
 module projectFilesResetNoLink { import audioProjectFiles(MUTANT = "reset-no-link").* }
 module projectFilesCompleteNoFile { import audioProjectFiles(MUTANT = "complete-no-file").* }
 module projectFilesFinalNoSupersede { import audioProjectFiles(MUTANT = "final-no-supersede").* }
+module projectFilesFinalAndReview { import audioProjectFiles(MUTANT = "only-final-and-review").* }

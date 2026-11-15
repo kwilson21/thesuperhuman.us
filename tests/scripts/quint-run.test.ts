@@ -466,6 +466,7 @@ describe("the audio project files model", () => {
 				...Object.keys(audioProjectFilesMutants),
 				"projectFiles",
 				"projectFilesCompleteNoFile",
+				"projectFilesFinalAndReview",
 			].sort(),
 		);
 	});
