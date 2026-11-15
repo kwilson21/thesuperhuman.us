@@ -4,8 +4,8 @@
 // plays. A mouse press also focuses a link, and a touch screen sends pointer events for a tap, but neither plays a scene
 // (hover effects belong to fine pointers, design.md); a link a mouse press focused shows its focus ring at the next key
 // press, and its scene plays then. Escape hides a label that shows (WCAG 1.4.13). A plain click on
-// the headphones plays the mix-and-master comparison further down Home when it can play here; otherwise, and for a
-// click that opens a new tab or window, they open the audio portfolio, their link.
+// the headphones plays the newest song, the mix-and-master comparison further down Home, when it can play here;
+// otherwise, and for a click that opens a new tab or window, they follow their link.
 export function setupStudioObjects() {
 	const scene = document.querySelector<HTMLElement>("[data-studio-scene]");
 
@@ -135,7 +135,14 @@ export function setupStudioObjects() {
 			event.shiftKey ||
 			event.altKey;
 
-		if (event.defaultPrevented || ownTabOrWindow) return;
+		// Home plays the newest song only when its comparison is that song's (Hero.astro sets data-plays-here); a newer
+		// song opens its own page, the link.
+		if (
+			event.defaultPrevented ||
+			ownTabOrWindow ||
+			headphones.dataset.playsHere !== "true"
+		)
+			return;
 
 		const player = document.querySelector<HTMLElement>(
 			'.music-proof-preview [data-comparison][data-initialized="true"]:not([data-audio-fallback="true"])',

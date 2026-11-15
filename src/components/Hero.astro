@@ -2,12 +2,21 @@
 import studio from "~/assets/site/studio-v1.webp";
 import PersonalName from "~/components/PersonalName.astro";
 import StudioLife from "~/components/home/StudioLife.astro";
-import { tallyMilestones } from "~/data/project-stories/tally";
+import { latestEssay } from "~/data/writing";
+import { homeComparisonExample, latestRelease } from "~/lib/music-catalog";
+import { loadMusicCatalog } from "~/lib/music-content";
 
-// Tally's newest published journal entry; the monitor types its headline when a visitor points at it. Of entries on
-// the same day it takes the first listed, the one the journal shows first.
-const latest = tallyMilestones.reduce((newest, entry) =>
-	entry.day > newest.day ? entry : newest,
+// The headphones play the newest released song. Home's comparison plays it when it is that song's mix and master; a
+// newer song it does not have opens its own page instead.
+const music = await loadMusicCatalog();
+const latestSong = latestRelease(music);
+
+const homeRecording = music.examples.find(
+	(example) => example.id === homeComparisonExample,
+)?.recordingId;
+
+const playsHere = Boolean(
+	latestSong && homeRecording && latestSong.tracks.includes(homeRecording),
 );
 
 // The objects on the desk, in the artwork's own pixels (1536 x 1024), each a way into the site. The touch pin (`short`)
@@ -25,9 +34,10 @@ const objects = [
 	},
 	{
 		id: "headphones",
-		label: "Listen to a mix and master",
-		short: "Listen",
-		href: "/audio/portfolio",
+		label: "Hear a mix and master",
+		short: "Hear",
+		href:
+			playsHere || !latestSong ? "/audio/portfolio" : `/music/${latestSong.slug}`,
 		// Its area stops short of the headband's tip, which is off screen at widths from 1233 to about 1290 pixels, so
 		// its focus ring stays on screen.
 		x: 1075,
@@ -39,7 +49,7 @@ const objects = [
 		id: "notebook",
 		label: "What I’m writing",
 		short: "Writing",
-		href: "/writing/ai-gives-you-speed",
+		href: latestEssay.href,
 		x: 805,
 		y: 745,
 		w: 500,
@@ -73,9 +83,9 @@ const percent = (value: number, of: number) =>
   <div class="studio-art">
     <div class="studio-scene" data-studio-scene>
       <img src={studio.src} width={studio.width} height={studio.height} alt="" loading="eager" fetchpriority="high" />
-      <StudioLife headline={`tally · ${latest.title}`} />
+      <StudioLife />
       <nav class="studio-objects" aria-label="Around the studio">
-        {objects.map(object => <a class="studio-object" href={object.href} data-studio-object={object.id} style={`left:${percent(object.x, 1536)};top:${percent(object.y, 1024)};width:${percent(object.w, 1536)};height:${percent(object.h, 1024)}`}><span class="studio-object-label">{object.label} <span aria-hidden="true">→</span></span><span class="studio-object-pin" aria-hidden="true">{object.short}</span></a>)}
+        {objects.map(object => <a class="studio-object" href={object.href} data-studio-object={object.id} data-plays-here={object.id === "headphones" && playsHere ? "true" : undefined} style={`left:${percent(object.x, 1536)};top:${percent(object.y, 1024)};width:${percent(object.w, 1536)};height:${percent(object.h, 1024)}`}><span class="studio-object-label">{object.label} <span aria-hidden="true">→</span></span><span class="studio-object-pin" aria-hidden="true">{object.short}</span></a>)}
       </nav>
     </div>
   </div>

@@ -269,6 +269,22 @@ export function visibleCatalog(
 	};
 }
 
+/** The mix and master comparison Home plays (src/pages/index.astro), which the headphones on Home's desk start. */
+export const homeComparisonExample = "old-news-mastering";
+
+/** The newest released song: the release with the latest date among those released. */
+export function latestRelease(catalog: MusicCatalog): Release | undefined {
+	return catalog.releases
+		.filter((release) => release.status === "released")
+		.reduce<Release | undefined>(
+			(newest, release) =>
+				!newest || (release.date ?? "") > (newest.date ?? "")
+					? release
+					: newest,
+			undefined,
+		);
+}
+
 export function musicFile(id: string, version: keyof Recording["versions"]) {
 	return `/music/file/${id}/${version}`;
 }

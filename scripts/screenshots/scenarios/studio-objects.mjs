@@ -1,12 +1,8 @@
-// The hero's desk objects as links into the site: pointing at the monitor (its label, and Tally's newest journal
-// headline on its screen), pointing at the headphones, keyboard focus on the notebook, and the one-word pins a touch
-// screen shows. Captures run with reduced motion, so each scene shows its finished frame.
+// The hero's desk objects as links into the site: pointing at the monitor and at the headphones, keyboard focus on the
+// notebook, and the one-word pins a touch screen shows. Captures run with reduced motion, so each scene shows its
+// finished frame.
 const desktop = [
-	[
-		"monitor",
-		"hover",
-		"Pointing at the monitor: its label, and Tally's newest journal headline on the screen",
-	],
+	["monitor", "hover", "Pointing at the monitor"],
 	["headphones", "hover", "Pointing at the headphones"],
 	["notebook", "focus", "Keyboard focus on the notebook"],
 ];

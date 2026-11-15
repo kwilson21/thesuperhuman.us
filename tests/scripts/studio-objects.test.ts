@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
+import { latestEssay } from "~/data/writing";
 import { setupStudioObjects } from "~/scripts/studio-objects";
 
 const hero = readFileSync("src/components/Hero.astro", "utf8");
@@ -58,7 +59,13 @@ class StandInDocument extends EventTarget {
 class StudioLink extends EventTarget {
 	keyboardFocus = false;
 
-	constructor(readonly dataset: { studioObject: string; hovered?: string }) {
+	constructor(
+		readonly dataset: {
+			studioObject: string;
+			hovered?: string;
+			playsHere?: string;
+		},
+	) {
 		super();
 	}
 
@@ -104,11 +111,15 @@ function mount({
 	playing = false,
 	busy = false,
 	fineHover = true,
+	playsHere = true,
 } = {}) {
 	const links = new Map(
 		["monitor", "headphones", "notebook", "controller"].map((id) => [
 			id,
-			new StudioLink({ studioObject: id }),
+			new StudioLink({
+				studioObject: id,
+				playsHere: id === "headphones" && playsHere ? "true" : undefined,
+			}),
 		]),
 	);
 
@@ -443,19 +454,16 @@ it("follows the headphones' link when the comparison cannot play here", () => {
 	expect(studio.click("monitor")).toBe(false);
 });
 
+it("follows the headphones' link to a newer song that Home's comparison does not hold", () => {
+	const studio = mount({ playsHere: false });
+
+	expect(studio.click("headphones")).toBe(false);
+	expect(studio.button.click).not.toHaveBeenCalled();
+});
+
 it("links each object to a page that exists, with its label as the link's name", () => {
 	for (const [label, href, page] of [
 		["What I’m building", "/building", "src/pages/building.astro"],
-		[
-			"Listen to a mix and master",
-			"/audio/portfolio",
-			"src/pages/audio/portfolio.astro",
-		],
-		[
-			"What I’m writing",
-			"/writing/ai-gives-you-speed",
-			"src/pages/writing/ai-gives-you-speed.astro",
-		],
 		[
 			"Kaillera Next, netplay for old games",
 			"/building/kaillera-next",
@@ -466,6 +474,15 @@ it("links each object to a page that exists, with its label as the link's name",
 		expect(hero).toContain(`href: "${href}",`);
 		expect(existsSync(page), page).toBe(true);
 	}
+
+	// The notebook opens the latest essay, and the headphones the newest song (on Home, or its own page).
+	expect(hero).toContain('label: "What I’m writing",');
+	expect(hero).toContain("href: latestEssay.href,");
+	expect(existsSync(`src/pages${latestEssay.href}.astro`)).toBe(true);
+	expect(hero).toContain('label: "Hear a mix and master",');
+	expect(hero).toContain('"/audio/portfolio" : `/music/${latestSong.slug}`');
+	expect(existsSync("src/pages/audio/portfolio.astro")).toBe(true);
+	expect(existsSync("src/pages/music/[slug].astro")).toBe(true);
 
 	expect(hero).toContain(
 		'<nav class="studio-objects" aria-label="Around the studio">',
