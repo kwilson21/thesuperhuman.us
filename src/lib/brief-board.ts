@@ -460,10 +460,10 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		"\\d[\\d,.]*\\s?(?:千|万|亿|億)?\\s?(?:円|元|块|圓)",
+		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓)",
 		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
-		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
-		"(?:预算|予算|費用|费用|价格|価格|예산|비용)\\s*[:：]?\\s*\\d",
+		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
+		"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
 		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
@@ -481,9 +481,10 @@ const DURATION = new RegExp(
 		"\\b(?:fortnights?|overnight|same[- ]day|asap)\\b",
 		"(?<![\\p{N}])\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni)(?![\\p{L}])",
 		// Not "創業10周年" (an anniversary) or "Step 1 주문" (an order): 周 and 주 stand alone or before a particle.
-		"\\d+\\s*(?:週間|か月|ヶ月|カ月|ヵ月|ケ月|日間|時間|天|個月|个月|星期|개월|일간|시간)",
+		"\\d+\\s*(?:週間|か月|ヶ月|カ月|ヵ月|ケ月|日間|天|個月|个月|星期|개월|일간|시간)",
+		"\\d+\\s*時間(?!目)",
 		"\\d+\\s*周(?!年)",
-		"\\d+\\s?(?:주|일|년)(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|후|정도|쯤)",
+		"\\d+\\s?(?:주일|주|일|년)(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|차|째|이|을|는|도)",
 	].join("|"),
 	"iu",
 );
@@ -797,22 +798,25 @@ export function applyReplyIn<L extends string>(
 		const refIndex =
 			item.ref === "" ? -1 : cards.findIndex((card) => card.id === item.ref);
 
-		// Cards never move between lanes: a reply that puts a card in another lane, or whose version is dropped because its
-		// passage is not in the answers, leaves the card it names as it is, while that card still stands.
+		// Cards never move between lanes: a reply card that names a card in another lane, or whose version is dropped
+		// because its passage is not in the answers, leaves the card it names as it is, while that card still stands.
+		const elsewhere = refIndex >= 0 && cards[refIndex].lane !== item.lane;
+
+		const ungrounded =
+			item.basis === "said" && !quotedFrom(item.quote, answers);
+
 		if (
 			refIndex >= 0 &&
-			(cards[refIndex].lane !== item.lane ||
-				(item.basis === "said" && !quotedFrom(item.quote, answers)))
-		) {
-			if (supported(cards[refIndex])) named.add(cards[refIndex].id);
+			(elsewhere || ungrounded) &&
+			supported(cards[refIndex])
+		)
+			named.add(cards[refIndex].id);
 
-			continue;
-		}
+		if (ungrounded) continue;
 
-		if (item.basis === "said" && !quotedFrom(item.quote, answers)) continue;
-
-		// The card the item names: by its ref first, then by saying the same idea.
-		const byRef = refIndex;
+		// The card the item names in its own lane: by its ref first, then by saying the same idea. A card named from
+		// another lane is not added here; a card in this lane that says its idea is still named (and may be reworded).
+		const byRef = elsewhere ? -1 : refIndex;
 
 		const index =
 			byRef >= 0
@@ -823,6 +827,7 @@ export function applyReplyIn<L extends string>(
 
 		if (index < 0) {
 			if (
+				!elsewhere &&
 				!fresh.some(
 					(other) =>
 						other.lane === item.lane && sameIdea(other.text, item.text),
@@ -1189,8 +1194,11 @@ export function undoIn<L extends string>(
 	// removal added), so an earlier removal of the same words still stands.
 	const removed = [...(board.removed ?? [])];
 
-	for (const { card } of step.before)
-		if (card?.status === "wrote") {
+	for (const { id, card } of step.before)
+		if (
+			card?.status === "wrote" &&
+			!board.cards.some((present) => present.id === id)
+		) {
 			const at = removed.findLastIndex(
 				(note) => note.lane === card.lane && note.text === card.text,
 			);
@@ -1604,7 +1612,11 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 				words.length > textLimits[value.lane] ||
 				cards.some((c) => c.id === value.id) ||
 				// The model's words that commit to something are never kept (an earlier build allowed some).
-				((value.status === "kept" || value.status === "proposed") &&
+				(value.status !== "wrote" &&
+					value.status !== "edited" &&
+					!(
+						value.status === "dismissed" && ownField(item, "edited") === true
+					) &&
 					commits(words)) ||
 				(value.status === "dismissed" &&
 					cards.filter((c) => c.status === "dismissed").length >=
@@ -1619,7 +1631,8 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 				...value,
 				text: words,
 				quote: oneLine(value.quote),
-				reason: oneLine(value.reason),
+				// A reason that commits (an earlier build allowed some) is not shown again.
+				reason: commits(value.reason) ? "" : oneLine(value.reason),
 				answer: value.lane === "questions" ? oneLine(value.answer) : "",
 				since: 0,
 				edited: ownField(item, "edited") === true,

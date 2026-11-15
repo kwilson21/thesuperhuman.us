@@ -40,6 +40,7 @@ Rules:
 - Never include prices, costs, budgets, timelines, durations, technologies, promises, links or email addresses.
 - Cards marked "open" are your earlier suggestions. Repeat a card's ref to keep or reword it; leave a card out to withdraw it.
 - Never repeat or rephrase a card marked "yours" or "avoid". Do not suggest anything similar to an "avoid" card.
+- A card stays in its lane. To put an idea in another lane, give it there as a new card with no ref.
 - At most 1 purpose, 2 audience, 6 parts and 3 questions, counting the open cards you keep. Prefer fewer, better cards.
 - Write in the language of the answers.`;
 
