@@ -1,7 +1,7 @@
 // Home's scenes on top of the shared motion layer (scroll-scenes.ts): the studio plays
-// once on arrival and again when the visitor comes back to it or points at it (the picture
-// itself stays still), the waveform edge follows scroll, and the capacity figure counts up
-// when it reveals.
+// once on arrival and again when the visitor comes back to it (the picture itself stays
+// still; pointing at one object plays that object's scene, in studio-objects.ts), the
+// waveform edge follows scroll, and the capacity figure counts up when it reveals.
 import {
 	barsPath,
 	capacityCells,
@@ -13,7 +13,7 @@ import {
 } from "~/lib/home-motion";
 import { runMotion, scenePlayer } from "~/scripts/scroll-scenes";
 
-runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
+runMotion(({ onScene, onReveal, cleanup }) => {
 	// Studio: the three short scenes rest within five seconds and never loop.
 	const studio = document.querySelector<HTMLElement>("[data-studio]");
 	const scene = studio?.querySelector<HTMLElement>("[data-studio-scene]");
@@ -38,39 +38,6 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 			heroWatch.disconnect();
 			player.stop();
 		});
-
-		if (finePointer) {
-			let frame = 0;
-			let inside = false;
-			studio.addEventListener(
-				"pointermove",
-				(event) => {
-					cancelAnimationFrame(frame);
-					frame = requestAnimationFrame(() => {
-						const box = scene.getBoundingClientRect();
-
-						const over =
-							event.clientX > box.left + box.width * 0.3 &&
-							event.clientX < box.right &&
-							event.clientY > box.top &&
-							event.clientY < box.bottom;
-
-						// Replays when the pointer arrives over the studio, not continuously while it stays.
-						if (over && !inside) player.play();
-						inside = over;
-					});
-				},
-				{ signal },
-			);
-			studio.addEventListener(
-				"pointerleave",
-				() => {
-					inside = false;
-				},
-				{ signal },
-			);
-			cleanup(() => cancelAnimationFrame(frame));
-		}
 	}
 
 	// Sound: the waveform edge is redrawn from its scroll progress.
