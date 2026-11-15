@@ -86,6 +86,25 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
+// name -> the property its change must break.
+export const inquiryMutants = {
+	inquiryNoIndex: { property: "oneBriefPerId" },
+	inquiryNoRetry: { property: "loserNeverFailed" },
+	inquiryKeepAllowance: { property: "allowanceReturned" },
+	inquiryAnyAddress: { property: "strangerNeverSeesBrief" },
+	inquiryCopyForAll: { property: "oneCopyPerId" },
+};
+
+// verification/suggestion-budget.qnt: the daily suggestion budget reserved by concurrent requests
+// (src/server/brief-suggest-store.ts `reserve`). Module name -> the property its change must break.
+export const budgetMutants = {
+	budgetUnguardedVisitor: { property: "visitorWithinCap" },
+	budgetUnguardedSite: { property: "siteWithinCap" },
+	budgetReadThenWrite: { property: "countsAreReservations" },
+	budgetIgnoreRefusal: { property: "modelOnlyForReserved" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -124,5 +143,23 @@ export const models = [
 		equivalents: [],
 		exhaustive: ["music"],
 		samples: "20000",
+	},
+	{
+		file: "verification/software-inquiry.qnt",
+		current: ["inquiry"],
+		mutants: inquiryMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
+	},
+	{
+		file: "verification/suggestion-budget.qnt",
+		current: ["budget"],
+		mutants: budgetMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
+		// The run that must pass makes every sample (about 2 s per 6,000); each mutant is found within a few hundred.
+		passSamples: "8000",
 	},
 ];
