@@ -1005,7 +1005,7 @@ const cases: Case[] = [
 		revoke("a note for a draft"),
 	),
 	{
-		name: "revoke: a bad publish body with no R2 bucket answers 400",
+		name: "publish: a bad body with no R2 bucket answers 400",
 		...draft("in_progress"),
 		r2: { missing: true },
 		steps: [act({ action: "publish", downloadable: true })],
