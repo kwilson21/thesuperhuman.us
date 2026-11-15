@@ -47,7 +47,7 @@ export async function deliverSoftwareBriefCopyDetailed(
 		const claimed = await db
 			.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,
       '$.clientCopyStatus','uncertain','$.clientCopyAttemptedAt',?)
-      WHERE id=? AND kind='software' AND status NOT IN ('resolved','withdrawn') AND email<>'' AND${retry ? " email=? AND" : ""}
+      WHERE id=? AND kind='software' AND status NOT IN ('resolved','withdrawn') AND email<>'' AND
       (${
 				retry
 					? `(json_extract(details_json,'$.clientCopyStatus') IS NULL OR json_extract(details_json,'$.clientCopyStatus')='failed' OR
@@ -60,7 +60,6 @@ export async function deliverSoftwareBriefCopyDetailed(
 				request.id,
 				...(retry
 					? [
-							request.email,
 							confirmedNotSent ? 1 : 0,
 							new Date(Date.parse(at) - 60_000).toISOString(),
 						]
