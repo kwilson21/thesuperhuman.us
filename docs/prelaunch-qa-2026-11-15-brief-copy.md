@@ -78,7 +78,7 @@ There is no statement of class (d) left.
 
 ### Public inquiry
 
-`golden:neutral --all dba9e556 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
+`golden:neutral --all 693e6f84 HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
 
 ### Differences outside the corpus
 
