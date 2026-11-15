@@ -316,10 +316,17 @@ const BAD_PART = new Error(
 );
 
 const completeUpload = () =>
-	post(`${owner}/uploads`, {
-		action: "complete",
-		uploadId: UPLOAD,
-		parts: [{ partNumber: 1, etag: "etag-1" }],
+	new Request(`https://thesuperhuman.us${owner}/uploads`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			origin: "https://thesuperhuman.us",
+		},
+		body: JSON.stringify({
+			action: "complete",
+			uploadId: UPLOAD,
+			parts: [{ partNumber: 1, etag: "etag-1" }],
+		}),
 	});
 
 /** A bucket whose head answers one object after the first call (or never) and whose multipart upload fails to complete. */
