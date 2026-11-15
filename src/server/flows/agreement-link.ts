@@ -110,11 +110,15 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			),
 		);
 
+		// The link's instant is read once, after the first read of the address, and kept by every retry (as `cooling` is):
+		// a retry that read the clock again could find the window free where the first attempt found it taken.
+		const linkAt = yield* Effect.cached(Effect.sync(() => request.now()));
+
 		const issued = yield* decideAndSave({
 			facts: Effect.gen(function* () {
 				const read = yield* readLinkFacts(email);
 
-				return { ...read, at: request.now() };
+				return { ...read, at: yield* linkAt };
 			}),
 			decide: (facts) => issueArchiveLink.decide(null, facts),
 			save: (write) =>
