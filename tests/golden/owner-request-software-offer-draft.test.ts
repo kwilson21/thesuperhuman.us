@@ -56,10 +56,13 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            normalisation), fees of 0, 99, 1.5, text, null, over $1,000,000 and 1e21, checkpoint percentages 0, 50, 96, 100,
 //            50.5, a text percentage, an estimate below the total or with high below low or beyond the safe integer
 //   409 {ok:false,updatedAt,message}  the draft changed since the page loaded: no draft but a time expected, a draft but
-//            null expected, a different time; also a batch that another request's change refused (a guard, a unique index
-//            on the draft or the version, an attachment guard, stored JSON that is not JSON, or a foreign key on
-//            reusedMsaId when a read after it finds that MSA gone) and a FieldsRefused from malformed attachments in
-//            agreementDetails, all answered with the current draft's updated_at
+//            null expected, a different time; also a batch that another request's change refused (a guard, an attachment
+//            guard, stored JSON that is not JSON, or a foreign key on reusedMsaId when a read after it finds that MSA gone)
+//            and a FieldsRefused from malformed attachments in agreementDetails, all answered with the current draft's
+//            updated_at. A unique index on the draft or the version (another writer saved a draft or took the version
+//            after the offers were read) is not answered at once: the draft is read and decided again from the start,
+//            three tries in all, so the second try refuses a draft another tab opened and saves the next free version
+//            otherwise; the lookups answer only a third such failure
 //   409 project started    a project that appears between the checks and the batch
 //   200 {ok:true,version,updatedAt,attachmentCleanupPending}  a first draft (version 1), the next version after each offer
 //            status, an update of the open draft, agreement details kept, cleared or replaced, an MSA reuse kept, set or

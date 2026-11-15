@@ -462,6 +462,10 @@ export async function getLinkedOffer(db: D1Database, token: string) {
 export const offerSendingMessage =
 	"An offer is still being sent. Try again in a moment.";
 
+/** The start of the sending window: a live link made after it (compared as text) means an offer is still being sent. */
+export const offerSendingSince = () =>
+	new Date(Date.now() - 20_000).toISOString();
+
 // The fixed answers of the owner's software request actions (POST /api/owner/requests/[id]/software). The owner's page
 // shows `message`, and every answer of that route is private. A refusal's own sentence is the route's; what is here is
 // answered for a failure, which is no refusal.
@@ -531,14 +535,14 @@ export function offerSendingGuard(db: D1Database, requestId: string) {
 		.prepare(
 			`SELECT CASE WHEN NOT EXISTS(${recentLiveLink}) THEN 1 ELSE json_extract('Offer still sending','$') END`,
 		)
-		.bind(requestId, new Date(Date.now() - 20_000).toISOString());
+		.bind(requestId, offerSendingSince());
 }
 
 export async function offerIsSending(db: D1Database, requestId: string) {
 	return Boolean(
 		await db
 			.prepare(recentLiveLink)
-			.bind(requestId, new Date(Date.now() - 20_000).toISOString())
+			.bind(requestId, offerSendingSince())
 			.first(),
 	);
 }
