@@ -70,7 +70,7 @@ const replyText = <Reply>(reply: Reply) => {
 	if (!reply) return Effect.succeed("");
 
 	// A truthy primitive cannot have a field: the route's `in` check threw on it, and that is a failure.
-	if (!Predicate.isObject(reply))
+	if (!Predicate.isObjectOrArray(reply))
 		return Effect.fail(
 			new ReplyUnreadable({
 				raised: new TypeError("The model reply is not an object"),
