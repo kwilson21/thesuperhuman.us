@@ -2,18 +2,17 @@
 // each a refusal the route answers as it always has. The counters are read by the flow (src/server/flows/rate-limit.ts), so
 // each rule is given the answer of its count, and the order of the rules is the order the flows check them in.
 import * as Data from "effect/Data";
-import { intakeWait } from "../../lib/music-request";
 import { alwaysWrites, term, unless } from "../terms";
 import { CaptchaRefused, CaptchaUnavailable } from "./captcha";
 
 /** The address has used up its attempts in the window: 429. */
 export class TooManyAttempts extends Data.TaggedError("TooManyAttempts") {
-	readonly say = intakeWait;
+	readonly say = "Please wait a few minutes before sending again.";
 }
 
 /** The address has already sent a request in the window: 429. */
 export class TooManyRequests extends Data.TaggedError("TooManyRequests") {
-	readonly say = intakeWait;
+	readonly say = "Please wait a few minutes before sending again.";
 }
 
 /** An attempt is allowed while the address is within the attempt limit. */

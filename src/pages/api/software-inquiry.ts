@@ -108,7 +108,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							{ status: 403 },
 						),
 					),
-				SubmissionIdTaken: () => Effect.succeed(notStored(409)),
+				SubmissionIdTaken: (refusal) =>
+					Effect.succeed(
+						Response.json({ ok: false, error: refusal.say }, { status: 409 }),
+					),
 				BriefReadFailed: () => Effect.succeed(notStored(500)),
 				BriefNotStored: () => Effect.succeed(notStored(500)),
 				BriefTooLarge: () =>

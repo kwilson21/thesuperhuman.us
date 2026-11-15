@@ -13,9 +13,11 @@
 //                        submission id answers with the stored brief and keeps the allowance it spent, so the key is
 //                        never deleted by a delivery that finds a brief stored
 //   the client's copy:   src/lib/software-brief-copy.ts, sent once for the request this delivery stored
-// Because a delivery that finds its submission already stored never deletes the key, a stored brief keeps its address's key
-// whatever the deliveries from one address do: `keptForStored` holds without an exception. The mutant "loser-gives-back" is the
-// earlier behaviour (the loser deleted the key), and breaks `loserKeepsAllowance`.
+// A delivery that finds its submission already stored keeps its key, whatever its address, so a stored brief keeps its
+// address's key and `keptForStored` holds without an exception: no modelled step deletes a key after a stored brief. The code
+// has one deletion the model leaves out, which predates the conversion: a failed insert (the database failing) gives back the
+// whole address-wide key. The mutant "loser-gives-back" is the earlier behaviour (the loser deleted the key), and breaks
+// `loserKeepsAllowance`.
 // What is left out, on purpose: the attempt limit and the captcha (they come before the look-up and decide nothing about
 // the brief), the owner notice (best effort, sent once for a stored request), and the owner's alert on a lost insert, and the key
 // that a failed insert (the database failing, not the index) gives back: the insert failing for another reason than the index is
@@ -78,7 +80,7 @@ module softwareInquiry {
   }
 
   // The look-up: ONE statement, one step. A brief found is answered at once (nothing stored); a delivery that had been counted
-  // (it came back from a lost insert) deletes its address's key. Nothing found goes on to the key, but on the pass after a
+  // (it came back from a lost insert) keeps its address's key, as the code does. Nothing found goes on to the key, but on the pass after a
   // lost insert it ends the try: the brief is lost (no second insert), the key is given back and the visitor is told so.
   action lookup = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "idle").oneOf()
@@ -185,8 +187,8 @@ module softwareInquiry {
     oneBriefPerId, oneCopyPerId, loserNeverFailed, loserKeepsAllowance, keptForStored, strangerNeverSeesBrief,
   }
 
-  // Reachability witness, for a hand h with the negated invariant: two deliveries took the same id at once from different
-  // addresses, one stored it and the other, which had been counted, was answered with the stored brief.
+  // Reachability witness, for a hand h with the negated invariant: two deliveries took the same id at once (the model puts
+  // no condition on their addresses), one stored it and the other, which had been counted, was answered with the stored brief.
   val raced = runs.keys().exists(a => runs.keys().exists(b => a != b and runs.get(a).outcome == "stored" and runs.get(b).outcome == "duplicate" and runs.get(b).tries > 0 and runs.get(a).sid == runs.get(b).sid))
   val neverRaced = not(raced)
 }

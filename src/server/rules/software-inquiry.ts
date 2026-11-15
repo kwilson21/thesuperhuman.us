@@ -3,18 +3,19 @@
 // submission with the same id is a retry (or a clash with someone else's id), and the visitor is answered with what is
 // already stored instead of a second request. The facts are read by the flow (src/server/intake-store.ts).
 import * as Data from "effect/Data";
-import { intakeNotStored, intakeWaitKept } from "../../lib/music-request";
 import type { OwnerRequest } from "../../lib/owner-model";
 import { alwaysWrites, rule, term, unless } from "../terms";
 
 /** Another visitor's brief is stored under this submission id: 409. */
 export class SubmissionIdTaken extends Data.TaggedError("SubmissionIdTaken") {
-	readonly say = intakeNotStored;
+	readonly say =
+		"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
 }
 
 /** The address has already sent a brief in the window: 429. The form still holds what was typed, and says so. */
 export class TooManyBriefs extends Data.TaggedError("TooManyBriefs") {
-	readonly say = intakeWaitKept;
+	readonly say =
+		"Please wait a few minutes before sending again. Your details are still here.";
 }
 
 /** What the store holds under the submission id (a brief the form sent before), or nothing. */

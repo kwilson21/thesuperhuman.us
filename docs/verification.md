@@ -369,7 +369,7 @@ File: `verification/software-inquiry.qnt`, written for the conversion of the pub
 2. `oneCopyPerId`: one client copy per id, sent by the delivery that stored the brief.
 3. `loserNeverFailed`: a delivery is never told its brief was lost while a brief for its id is stored.
 4. `loserKeepsAllowance`: a delivery that counted and was then answered with the stored brief leaves its address's key set.
-5. `keptForStored`: a stored brief keeps its address's key, whatever other deliveries from the same address do. It holds with no exception, because a delivery that finds a brief stored never deletes the key. Checked by simulation, and `RetryGivesBack` and `NeverCounts` break it.
+5. `keptForStored`: a stored brief keeps its address's key, whatever other deliveries from the same address do. It holds with no exception in the model because no modelled step deletes a key after a stored brief (the model's lost-brief step cannot happen, since stored rows only grow, and a delivery that finds a brief stored keeps its key). The code has one unmodelled deletion that predates the conversion: after a failed insert (the database failing, not the index), the flow gives back the whole address-wide key, so a request from the same address that stored at the same moment loses its count. That is left as it was. Checked by simulation, and `RetryGivesBack` and `NeverCounts` break it.
 6. `strangerNeverSeesBrief`: a stored brief is answered only to the email that sent it.
 
 | Mutant | The change | Breaks |

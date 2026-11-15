@@ -72,21 +72,14 @@ export const musicFailed = () =>
 // The fixed sentences of the public intake forms (the audio request and the software brief), which both routes and their
 // refusals show. A route builds the response around them; the status is the route's.
 
-/** An address that has used its attempts or its request allowance. */
-export const intakeWait = "Please wait a few minutes before sending again.";
+// A refusal's own sentence (a wait, a refused captcha, a captcha outage, a submission id taken) is its `say` in the rule
+// file; what is here is answered for a failure, which is no rule's refusal.
 
-/** The software brief's own wait: the visitor is also told the form still holds what was typed. */
-export const intakeWaitKept =
-	"Please wait a few minutes before sending again. Your details are still here.";
-
-/** The captcha token was refused. */
-export const intakeCheckAgain = "Please complete the security check again.";
-
-/** The captcha service, or the intake's own limiter, could not answer. */
+/** An intake's own store or limiter could not answer. */
 export const intakeUnavailable =
 	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
 
-/** The request or brief was not stored, or its stored copy cannot be told to be this visitor's. */
+/** The request or brief was not stored. */
 export const intakeNotStored =
 	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
 

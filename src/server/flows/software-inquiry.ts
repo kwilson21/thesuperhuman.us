@@ -2,8 +2,10 @@
 // only a brief not stored yet is counted against the request limit and stored. A brief already stored under the id (a retry
 // of the same form) is answered with the stored one and is not counted. The store is guarded by the unique index on the id:
 // when another request stores the same id between the look-up and the insert, the look-up is made again (three tries, src/server/guarded-save.ts),
-// finds the other request's brief and answers with it, as a retry would have been answered; the rival is the same visitor's
-// same submission, so this request keeps the allowance it spent and the address-wide count is left alone. A failed insert gives the
+// finds the other request's brief and answers with it, as a retry would have been answered. This request keeps the allowance it
+// spent, whatever its address (a retry from the same form, one open form sent from two addresses, or another visitor reusing the id),
+// and the address-wide count is left alone; that fails closed (an address waits the usual few minutes) and it takes a race on one
+// submission id to get here. A failed insert gives the
 // allowance back, is logged, sends the owner an urgent alert and goes on as `BriefNotStored`, unless a look-up then finds the
 // brief stored. Every refusal and failure is named and goes to the route, which says what the visitor is told. A stored brief is
 // answered after the client's copy is sent; the owner notice is handed to the background (ctx.waitUntil, with no context it is
@@ -148,7 +150,7 @@ export const submitInquiry = (submission: InquirySubmission) =>
 					),
 				);
 
-				// The rival is the same visitor's same submission, already stored: the allowance stays spent.
+				// Another request stored this submission id first: the allowance stays spent, whatever the address (it fails closed).
 				if (rival) return rival;
 
 				if (failure instanceof BriefTooLarge) {

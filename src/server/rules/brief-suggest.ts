@@ -1,12 +1,12 @@
 // The decisions of a brief suggestion request, each a named rule. Nothing here reads a store or calls out: the flow reads the
 // facts (the stored count, the limiters' answers, whether the pass is valid) and asks a rule what to do. A refusal says
 // nothing to the visitor, so each one is answered the way the route has always answered it (an empty suggestion, or the
-// pass prompt); the refusal's name is what tells the cases apart in the flow.
+// pass prompt); the refusal's name is what tells the cases apart in the route.
 import * as Data from "effect/Data";
 import { alwaysWrites, term, unless } from "../terms";
 
 // Every refusal here has no sentence (`say` is empty): the route answers each with an empty suggestion, or with the pass
-// prompt, and the refusal's name is what tells the cases apart.
+// prompt, and the refusal's name is what tells the cases apart in the route.
 
 /** The text has fewer than three words. */
 export class TooFewWords extends Data.TaggedError("TooFewWords") {
