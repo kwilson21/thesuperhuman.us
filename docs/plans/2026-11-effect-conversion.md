@@ -59,7 +59,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
      calling an unconverted payments helper.
 1. **Software offers.** `owner/requests/[id]/software.ts`: fit, question, decline, revoke, draft, send. Its store
    carries the signing statements these actions write (`retireRequestSigning`, the attachment delete) and the PDF
-   preflight becomes a service. Design: `docs/plans/2026-11-offers-conversion.md`.
+   preflight becomes a service. Design: `docs/plans/2026-11-offers-conversion.md`. Send and decline around their
+   emails, and drafts saved while a decline's email is in flight, get a Quint model (an extension of
+   `verification/discount-offers.qnt`) before its code.
 2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts` and `audio-client-access.ts`. Small, and signing
    link issuance needs its allowance rule (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to
    the browser, a behaviour fix for this area) merged on 2026-11-15, before it. Codes, attempts and sessions under

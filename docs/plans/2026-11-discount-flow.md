@@ -58,8 +58,11 @@ An offer without a discount stores exactly what it stores today.
 
 ## 3. State diagrams
 
-The offer version, with the moves that set, read or fix the discount. This is the XState machine the offers area gets
-when it moves to Effect; the discount adds data to its context, not new states.
+The offer version, with the moves that set, read or fix the discount. The diagram is the picture of the offer's whole
+life. Amended 2026-11-15 (docs/plans/2026-11-offers-conversion.md, section 1): the XState machine the offers area gets
+when it moves to Effect stores four of these states, the values of `software_offers.status` (draft, sent, superseded,
+withdrawn); InReview, ClientSigned and Started are facts its rules read from agreement and project rows. The discount
+adds data to the machine's context, not new states.
 
 ```mermaid
 stateDiagram-v2
