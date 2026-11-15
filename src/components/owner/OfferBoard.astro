@@ -39,18 +39,22 @@ const dollars = (cents: number) =>
 
 const pastSpread = spread(past.map((offer) => offer.totalCents));
 
+/** This kind's ranges in the research; none when the research does not cover it. */
+const kindRanges = market?.ranges.filter((range) => range.kind === kind) ?? [];
+
 /** What the page script needs, for the owner only: their numbers, and the research for this kind of work. */
 const pricing = JSON.stringify({
 	dayValueCents,
 	contingencyPercent,
-	market: market
-		? {
-				researchedOn: market.researchedOn,
-				ranges: market.ranges.filter((range) => range.kind === kind),
-				sources: [],
-				caveats: [],
-			}
-		: null,
+	market:
+		market && kindRanges.length > 0
+			? {
+					researchedOn: market.researchedOn,
+					ranges: kindRanges,
+					sources: [],
+					caveats: [],
+				}
+			: null,
 });
 
 /** The lanes whose cards Use puts into the offer, and how the button says it. */
@@ -97,8 +101,8 @@ const useLabels: Record<OfferLane, string> = {
     <h3 id="offer-pricing-title" tabindex="-1">What to charge</h3>
     <dl class="offer-prices">
       <div><dt>From your day value</dt><dd data-price-day>{dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
-      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{dollars(pastSpread.low)} to {dollars(pastSpread.high)}, middle {dollars(pastSpread.middle)}, from your last {past.length} sent. <button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the estimate range: your past offers">Use as the estimate range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Offer'}</a> · {dollars(offer.totalCents)} · {offer.sentAt.slice(0, 10)}</li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
-      <div><dt>From the market</dt><dd data-price-market>{market ? 'Suggest an offer to see where this brief sits in your research.' : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
+      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{dollars(pastSpread.low)} to {dollars(pastSpread.high)}, middle {dollars(pastSpread.middle)}, from your last {past.length} sent. <button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the whole-project range: your past offers">Use as the whole-project range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || `Offer sent ${offer.sentAt.slice(0, 10)}`}</a> · {dollars(offer.totalCents)} · <span class="offer-past-date">{offer.sentAt.slice(0, 10)}</span></li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
+      <div><dt>From the market</dt><dd data-price-market>{market && kindRanges.length > 0 ? 'Suggest an offer to see where this brief sits in your research.' : market ? <>Your research has no ranges for {kindNames[kind]} work. Add them on the <a href="/owner/pricing">pricing page</a>.</> : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
     </dl>
     <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && <>{` The research’s ${market.sources.length} ${market.sources.length === 1 ? 'source is' : 'sources are'} on the `}<a href="/owner/pricing">pricing page</a>.</>}</p>
   </section>
@@ -121,7 +125,8 @@ const useLabels: Record<OfferLane, string> = {
 <style>
   /* The board's working text is the studio's sans; the section heading keeps the rail's serif. */
   .offer-board { display: grid; gap: 1rem; font: 400 .9rem/1.5 var(--font-sans); }
-  .offer-board p { font: inherit; }
+  /* Unscoped, so it outranks the site's own paragraph rule but not the classes below (.offer-card-origin and the rest). */
+  :global(.offer-board p) { font: inherit; }
   .offer-board-head h2 { margin-bottom: .5rem; }
   .offer-board-controls { align-items: center; }
   .offer-board-status { min-height: 3em; color: var(--studio-muted); }
@@ -135,7 +140,9 @@ const useLabels: Record<OfferLane, string> = {
   /* A price row's button sits on its own line under the figures it uses. */
   .offer-prices :global(.studio-quiet) { display: flex; width: fit-content; }
   .offer-past { margin: .35rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
-  .offer-past a { display: inline-flex; align-items: center; min-height: 44px; }
+  .offer-past li { min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; column-gap: .3rem; }
+  .offer-past a { border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; padding-block: .6rem; }
+  .offer-past-date { white-space: nowrap; }
   .offer-caption { font-size: .85rem; color: var(--studio-muted); }
   /* The board scrolls inside its own box, so the page never grows with the cards. */
   .offer-board-scroll { max-height: min(36rem, 70vh); max-height: min(36rem, 70dvh); overflow-y: auto; display: grid; gap: 1rem; padding-right: .25rem; }
@@ -154,6 +161,7 @@ const useLabels: Record<OfferLane, string> = {
   .offer-card-editor label { display: grid; gap: .3rem; font: 500 .82rem/1.4 var(--font-sans); }
   .offer-card-editor input { width: min(100%, 40rem); min-width: 0; font-size: 1rem; min-height: 44px; }
   .offer-card-error { margin: .25rem 0 0; font-size: .875rem; color: var(--studio-danger); }
+  .offer-card-editor input[aria-invalid="true"] { border-color: var(--accent); }
   .offer-aside summary { display: flex; align-items: center; gap: .5rem; min-height: 44px; cursor: pointer; font: 500 .85rem/1.3 var(--font-sans); list-style: none; }
   .offer-aside summary::-webkit-details-marker { display: none; }
   .offer-aside summary::before { content: '+'; color: var(--accent); }

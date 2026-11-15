@@ -146,33 +146,55 @@ export const readOfferRequest = (id: string, day: string) =>
 const CLIENT = "the client";
 const CLIENT_SITE = "the client’s current site";
 
-/** The client's name, email, company and current site (and its host, with and without "www."), each with what replaces it. */
+/**
+ * The client's name, email, company and current site, each with what replaces it. The site is withheld in every form a
+ * text may give it: as entered; without its scheme, "www." or a trailing slash ("facebook.com/AcmeBakery"); its host as
+ * typed ("bücher.de") and as the browser reads it ("xn--bcher-kva.de").
+ */
 function withheldOf(
 	row: RequestRow,
 	details: Readonly<Record<string, JsonValue>>,
 ): OfferBrief["withheld"] {
 	const site = textOf(details, "currentUrl").trim();
-	let host = "";
+
+	const bare = site
+		.replace(/^[a-z][a-z\d+.-]*:\/\//i, "")
+		.replace(/^www\./i, "");
+
+	const typedHost = bare.split(/[/:?#]/)[0] ?? "";
+	let readHost = "";
 
 	try {
-		host = new URL(
-			/^[a-z][a-z\d+.-]*:\/\//i.test(site) ? site : `https://${site}`,
-		).hostname.replace(/^www\./i, "");
+		readHost = new URL(`https://${bare}`).hostname.replace(/^www\./i, "");
 	} catch {
 		// Not a link: the text itself is withheld.
 	}
+
+	const forms = [
+		site,
+		site.replace(/\/+$/, ""),
+		...[bare, typedHost, readHost].flatMap((form) => [
+			form,
+			form.replace(/\/+$/, ""),
+			form && `www.${form}`,
+		]),
+	];
+
+	const seen = new Set<string>();
 
 	return [
 		{ text: row.name, as: CLIENT },
 		{ text: row.email, as: CLIENT },
 		{ text: textOf(details, "company"), as: CLIENT },
-		{ text: site, as: CLIENT_SITE },
-		{ text: host && `www.${host}`, as: CLIENT_SITE },
-		{ text: host, as: CLIENT_SITE },
+		...forms.map((text) => ({ text, as: CLIENT_SITE })),
 	].flatMap(({ text, as }) => {
 		const trimmed = String(text ?? "").trim();
+		const key = trimmed.toLowerCase();
 
-		return trimmed.length >= 2 ? [{ text: trimmed, as }] : [];
+		if (trimmed.length < 2 || seen.has(key)) return [];
+		seen.add(key);
+
+		return [{ text: trimmed, as }];
 	});
 }
 

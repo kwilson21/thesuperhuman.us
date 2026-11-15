@@ -2,6 +2,7 @@
 // the model answered by a mock. Every figure is made up for the test.
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
+import * as Predicate from "effect/Predicate";
 import {
 	afterEach,
 	beforeEach,
@@ -17,6 +18,7 @@ import { pastOffers } from "~/server/offer-board-store";
 import { PRICING_KEY } from "~/server/pricing-store";
 import { fakeKv, partial } from "../helpers/doubles";
 import { readJson, type JsonObject } from "../helpers/json";
+import type { JsonValue } from "~/lib/json-value";
 import type { TestRuntime } from "../helpers/runtime";
 import {
 	DatabaseSync,
@@ -153,8 +155,8 @@ beforeEach(() => {
 	run = vi.fn(async () => ({ response: reply }));
 	pricing = JSON.stringify({
 		version: 1,
-		dayValueCents: 50000,
-		contingencyPercent: 10,
+		dayValueCents: 48723,
+		contingencyPercent: 37,
 		market: {
 			researchedOn: "2026-11-15",
 			ranges: [
@@ -170,8 +172,8 @@ beforeEach(() => {
 					kind: "webapp",
 					size: "small",
 					definition: "A tool",
-					lowUsd: 9000,
-					highUsd: 9500,
+					lowUsd: 91357,
+					highUsd: 94211,
 					sourceIds: [],
 				},
 			],
@@ -251,8 +253,67 @@ describe("the offer board's route", () => {
 		expect(sent).toContain("A few thousand dollars.");
 		expect(sent).toContain("A few pages");
 		expect(sent).not.toMatch(
-			/Sam Example|sam@example\.com|Clay Studio Co|example\.org\/old|50000|9500/,
+			/Sam Example|sam@example\.com|Clay Studio Co|example\.org\/old/,
 		);
+
+		// The owner's day value (in cents and dollars), contingency and another kind's research appear nowhere, in any
+		// form, and the request holds only what the plan lists.
+		const data: JsonValue = JSON.parse(inputs.messages[1].content);
+		const numbers: number[] = [];
+		const texts: string[] = [];
+
+		const walk = (value: JsonValue) => {
+			if (Predicate.isNumber(value)) numbers.push(value);
+			else if (Predicate.isString(value)) texts.push(value);
+			else if (Array.isArray(value)) value.forEach(walk);
+			else if (value) Object.values(value).forEach(walk);
+		};
+
+		walk(data);
+		expect(Object.keys(data ?? {}).sort()).toEqual([
+			"brief",
+			"cards",
+			"draft",
+			"lanes",
+			"marketRanges",
+			"ownersFitReview",
+			"project",
+		]);
+		expect(
+			numbers.filter((n) =>
+				[48723, 487.23, 487, 37, 0.37, 91357, 94211].includes(n),
+			),
+		).toEqual([]);
+		expect(texts.join(" ")).not.toMatch(
+			/48723|487\.23|91357|94211|91,357|94,211|\b37 ?%/,
+		);
+	});
+
+	it.each([
+		[
+			"an internationalised domain, as typed",
+			"https://bücher.de/",
+			"Our shop bücher.de sells books",
+		],
+		[
+			"a page on a shared host, written without its scheme",
+			"https://www.facebook.com/AcmeBakery",
+			"We post at facebook.com/AcmeBakery daily",
+		],
+		[
+			"the site with www and a trailing slash",
+			"http://example.net/shop",
+			"See www.example.net/shop/ for the shop",
+		],
+	])("hides %s from the model", async (_, currentUrl, purpose) => {
+		db.exec("DELETE FROM owner_requests");
+		seed("r1", "new", { currentUrl, purpose });
+		await POST(context());
+		const [, inputs] = run.mock.calls[0];
+		const sent: string = inputs.messages[1].content;
+
+		expect(sent).toContain("the client’s current site");
+		expect(sent).not.toMatch(/bücher|xn--bcher|AcmeBakery|example\.net/i);
 	});
 
 	it("replaces the client's details wherever they appear in what the model reads, the owner's draft and cards included", async () => {
@@ -290,6 +351,65 @@ describe("the offer board's route", () => {
 		expect(sent).toContain("the client asked by email (the client).");
 		expect(sent).toContain("A studio site for the client");
 		expect(sent).toContain("Logins for the client’s current site");
+	});
+
+	it("keeps the first shown refs of a long keep list rather than none", async () => {
+		const many = Array.from({ length: 45 }, (_, index) => ({
+			ref: `c${index + 1}`,
+			lane: "inputs",
+			text: `Input ${index + 1}`,
+			state: "open",
+		}));
+
+		run.mockResolvedValueOnce({
+			response: { ...reply, cards: [], keep: many.map((card) => card.ref) },
+		});
+
+		const answer: JsonValue = await readJson(
+			await POST(context({ ...body, cards: many })),
+		);
+
+		expect(answer).toMatchObject({
+			ok: true,
+			refs: many.map((card) => card.ref),
+		});
+	});
+
+	it("keeps a milestone whose deliverables count things, and drops only a line that names money", async () => {
+		run.mockResolvedValueOnce({
+			response: {
+				...reply,
+				cards: [
+					{
+						lane: "milestones",
+						text: "Catalog import",
+						reason: "The shop's products",
+						deliverables: [
+							"Import up to 2,000 products",
+							"A catalog of a few hundred items, sorted",
+							"Hosting at $20 a month",
+						],
+						acceptance: ["Find any product by name"],
+						daysLow: 3,
+						daysHigh: 5,
+					},
+				],
+			},
+		});
+
+		expect(await readJson(await POST(context()))).toMatchObject({
+			cards: [
+				{
+					text: "Catalog import",
+					detail: {
+						deliverables: [
+							"Import up to 2,000 products",
+							"A catalog of a few hundred items, sorted",
+						],
+					},
+				},
+			],
+		});
 	});
 
 	it("keeps the shown cards the reply lists in keep without repeating them, and no other ref", async () => {

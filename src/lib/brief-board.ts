@@ -456,23 +456,37 @@ export function sameIdea(a: string, b: string): boolean {
 const MONEY_WORDS =
 	"budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|around|about|roughly|approximately|under|over|below|above|up to|less than|more than";
 
+// An amount of money: a currency's symbol, code, word or character with a number, or a money word with one. The last
+// part is the money word with a number.
+const PRICE_PARTS = [
+	"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
+	"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
+	// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
+	// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
+	"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d",
+	"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
+	// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
+	"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
+	"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
+	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
+];
+
+/**
+ * Money, or an amount a brief reads as money: "about 5k", or a bare large amount after "under", "up to" and the like
+ * ("up to 5,000"). The same alternatives in the same order as before the offer board split PRICE out.
+ */
 const MONEY = new RegExp(
 	[
-		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
-		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
-		// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
-		"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d",
-		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
-		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
-		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
-		"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
+		...PRICE_PARTS.slice(0, -1),
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
-		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
+		PRICE_PARTS.at(-1),
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
 	].join("|"),
 	"iu",
 );
+
+/** An amount of money only: no quantities, which an offer's cards may need ("Import up to 2,000 products", "about 5k"). */
+const PRICE = new RegExp(PRICE_PARTS.join("|"), "iu");
 
 const NUMBER_WORDS =
 	"a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|few|couple of|several";
@@ -549,11 +563,12 @@ const plainText = (text: string) =>
 		.replace(/\s+/g, " ");
 
 /**
- * Whether text names a price, a cost or a link: the offer board's filter, where durations and promises belong to the
- * offer the owner writes, but money belongs to the pricing panel and links to nobody.
+ * Whether text names an amount of money or a link: the offer board's filter, where durations, promises and quantities
+ * ("a few hundred products", "up to 2,000 subscribers") belong to the offer the owner writes, but money belongs to the
+ * pricing panel and links to nobody. Words about cost without an amount ("low-cost hosting") are not money.
  */
 export const pricesOrLinks = (text: string) =>
-	[MONEY, COST, LINK].some((pattern) => pattern.test(plainText(text)));
+	[PRICE, LINK].some((pattern) => pattern.test(plainText(text)));
 
 /**
  * Whether text makes a commitment or points somewhere: a price, a time estimate, a date, a promise, a link or an

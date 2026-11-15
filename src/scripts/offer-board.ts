@@ -17,11 +17,9 @@ import {
 	editCardIn,
 	emptyBoard,
 	lastAction,
-	listOf,
 	markStep,
 	oneLine,
 	ownField,
-	replyRefs,
 	sendRequest,
 	setAside,
 	undoIn,
@@ -36,11 +34,13 @@ import {
 	type OfferDraft,
 	type OfferLane,
 	type OfferSizing,
+	cardRefs,
 	fitOfferCards,
 	offerLaneLabels,
 	offerTextLimits,
 	pricingKind,
 	readOfferReply,
+	refList,
 } from "../lib/offer-board";
 import { dayValueEstimate, withinRange } from "../lib/offer-pricing";
 import {
@@ -299,7 +299,12 @@ export function setupOfferBoard() {
 		// Empty means every field Use fills is empty: a row with no name may still hold deliverables or a fee the owner
 		// typed (verification/offer-board.qnt, ownerWordsKept, mutant name-only-empty).
 		const empty = milestones().find((fieldset) =>
-			MILESTONE_FIELDS.every((name) => !named(fieldset, name)?.value.trim()),
+			MILESTONE_FIELDS.every((name) => {
+				const control = named(fieldset, name);
+
+				// valueOf reads a partly typed fee ("1e") as typed, though its value is "".
+				return !control || !valueOf(control).trim();
+			}),
 		);
 
 		if (empty) return { fieldset: empty, added: false, drawn: [] };
@@ -613,6 +618,22 @@ export function setupOfferBoard() {
 	function useRange(lowCents: number, highCents: number) {
 		const low = Math.max(100, lowCents);
 		const high = Math.max(low, highCents);
+
+		// The editor refuses a whole-project range whose low end is under the offer's total, so this never fills one.
+		const total = milestones().reduce((sum, fieldset) => {
+			const fee = Number(named(fieldset, "fee")?.value || 0);
+
+			return sum + (Number.isFinite(fee) ? Math.round(fee * 100) : 0);
+		}, 0);
+
+		if (total > low) {
+			say(
+				`Your milestone fees add up to ${exactDollars(total)}, more than this range’s low end of ${exactDollars(low)}. The whole-project range must start at the offer total or above, so it was not filled. Change the fees, or type a range in the offer.`,
+			);
+
+			return;
+		}
+
 		const has = named<HTMLInputElement>(form!, "hasRange");
 
 		if (has && !has.checked) {
@@ -633,7 +654,7 @@ export function setupOfferBoard() {
 		}
 
 		say(
-			`Filled the estimate range: ${exactDollars(low)} to ${exactDollars(high)}. Nothing is saved until you save the draft.`,
+			`Filled the whole-project range the client sees as an estimate: ${exactDollars(low)} to ${exactDollars(high)}. Nothing is saved until you save the draft.`,
 		);
 	}
 
@@ -641,8 +662,11 @@ export function setupOfferBoard() {
 		const button = document.createElement("button");
 		button.type = "button";
 		button.className = "studio-quiet";
-		button.textContent = "Use as the estimate range";
-		button.setAttribute("aria-label", `Use as the estimate range: ${what}`);
+		button.textContent = "Use as the whole-project range";
+		button.setAttribute(
+			"aria-label",
+			`Use as the whole-project range: ${what}`,
+		);
 		button.dataset.priceUse = "";
 		button.dataset.low = String(lowCents);
 		button.dataset.high = String(highCents);
@@ -698,7 +722,7 @@ export function setupOfferBoard() {
 
 		if (range && pricing.market && sizing?.size) {
 			marketParts.push(
-				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI: ${sizing.sizeReason})` : ""}. `,
+				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI’s reason: ${sizing.sizeReason})` : ""}. `,
 			);
 
 			if (sizing.figureUsd !== null) {
@@ -1067,11 +1091,15 @@ export function setupOfferBoard() {
 			if (!held || reply.n > held.n) held = { ...reply, changes };
 			render();
 			status.textContent =
-				"Updates are waiting. Show them with the button beside Undo.";
+				held.changes === 1
+					? "An update is waiting. Show it with the button beside Undo."
+					: "Updates are waiting. Show them with the button beside Undo.";
 
 			if (first)
 				announce(
-					`${held.changes} ${held.changes === 1 ? "update is" : "updates are"} waiting. Show them with the button beside Undo.`,
+					held.changes === 1
+						? "An update is waiting. Show it with the button beside Undo."
+						: `${held.changes} updates are waiting. Show them with the button beside Undo.`,
 				);
 
 			return;
@@ -1153,12 +1181,8 @@ export function setupOfferBoard() {
 
 			// The route named these cards; those it or this page then left out still do.
 			const refs = [
-				...replyRefs({
-					cards: (listOf(field(json, "refs"), OFFER_CONTEXT_MAX) ?? []).map(
-						(ref) => ({ ref }),
-					),
-				}),
-				...replyRefs(json).filter(
+				...refList(field(json, "refs")),
+				...cardRefs(json).filter(
 					(ref) => !reply.cards.some((card) => card.ref === ref),
 				),
 			];
@@ -1298,10 +1322,15 @@ export function setupOfferBoard() {
 				break;
 			case "aside": {
 				const near = node.nextElementSibling ?? node.previousElementSibling;
+				const wasUsed = used.has(card.id);
 				board = setAside(board, card.id);
 				render();
 				(near?.querySelector<HTMLElement>("button") ?? asideSummary).focus();
-				say(`Set aside “${card.text}”. Undo or Bring back restores it.`);
+				say(
+					wasUsed
+						? `Set aside “${card.text}”. It stays in the offer; remove it there if you don’t want it. Undo or Bring back restores the card.`
+						: `Set aside “${card.text}”. Undo or Bring back restores it.`,
+				);
 				schedule();
 
 				break;
@@ -1379,7 +1408,8 @@ export function setupOfferBoard() {
 		for (const card of board.cards) {
 			const after = next.cards.find((each) => each.id === card.id);
 
-			if (after && after.text === card.text) continue;
+			if (after && after.text === card.text && after.status !== "dismissed")
+				continue;
 			const editing = unsavedEdit(card);
 
 			if (editing) {

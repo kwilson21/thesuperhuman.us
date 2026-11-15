@@ -6,12 +6,12 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import {
+	cardRefs,
 	keptRefs,
 	type OfferBoardRequest,
 	type OfferReply,
 	readOfferReply,
 } from "../../lib/offer-board";
-import { replyRefs } from "../../lib/brief-board";
 import type { MarketRange } from "../../lib/pricing-reference";
 import { decideAndSave } from "../guarded-save";
 import {
@@ -97,7 +97,7 @@ export const suggestOffer = (asked: OfferSuggestion) =>
 		const answer: OfferAnswer = {
 			...reply,
 			cards,
-			refs: [...new Set([...replyRefs(raw), ...keptRefs(raw)])].filter(
+			refs: [...new Set([...cardRefs(raw), ...keptRefs(raw)])].filter(
 				(ref) => shown.has(ref) && !cards.some((card) => card.ref === ref),
 			),
 		};

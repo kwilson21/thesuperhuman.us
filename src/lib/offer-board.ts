@@ -6,7 +6,6 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
 	type LaneConfig,
-	listOf,
 	oneLine,
 	ownField,
 	pricesOrLinks,
@@ -100,11 +99,29 @@ export const OFFER_CONTEXT_MAX = 60;
 /** The most cards one reply may carry. */
 export const OFFER_REPLY_MAX = 24;
 
-/** The refs a reply keeps as they are without repeating them (its `keep` list), as card refs the board gives. */
+/** Whether a value is a card ref as the board gives them. */
+const isRef = (ref: RawValue): ref is string =>
+	Predicate.isString(ref) && /^c\d{1,6}$/.test(ref);
+
+/** Up to the request's limit of a list's items, the rest ignored; [] when it is not a list. */
+const firstOf = (raw: RawValue): readonly RawValue[] =>
+	Array.isArray(raw) ? raw.slice(0, OFFER_CONTEXT_MAX) : [];
+
+/** The refs a reply keeps as they are without repeating them (its `keep` list). */
 export function keptRefs(raw: RawValue): string[] {
-	return (listOf(ownField(raw, "keep"), 40) ?? []).filter(
-		(ref): ref is string => Predicate.isString(ref) && /^c\d{1,6}$/.test(ref),
-	);
+	return firstOf(ownField(raw, "keep")).filter(isRef);
+}
+
+/** The refs on a reply's cards, read or not (a card the reader drops still names a card the reply keeps). */
+export function cardRefs(raw: RawValue): string[] {
+	return firstOf(ownField(raw, "cards"))
+		.map((item) => ownField(item, "ref"))
+		.filter(isRef);
+}
+
+/** A list of refs as the route answers it. */
+export function refList(raw: RawValue): string[] {
+	return firstOf(raw).filter(isRef);
 }
 
 /** A milestone's detail: what it delivers, how the client checks it, and the model's days for it (low and high). */
@@ -221,19 +238,18 @@ const own = (raw: RawValue, name: string): RawValue =>
 		? raw[name]
 		: undefined;
 
-/** A list of short lines, each cleaned, none with a price or link; null when it is not one or holds none. */
+/**
+ * A list of short lines, each cleaned. A line that is empty, too long, or names money or a link is left out on its own;
+ * null when it is not a list, is too long, or no line is left.
+ */
 function lines(raw: RawValue, max: number): string[] | null {
-	if (!Array.isArray(raw) || raw.length === 0 || raw.length > max) return null;
+	if (!Array.isArray(raw) || raw.length > max) return null;
 
-	const read = raw.map((item) =>
-		Predicate.isString(item) ? oneLine(item) : "",
-	);
+	const read = raw
+		.map((item) => (Predicate.isString(item) ? oneLine(item) : ""))
+		.filter((item) => item && item.length <= ITEM_MAX && !pricesOrLinks(item));
 
-	return read.every(
-		(item) => item && item.length <= ITEM_MAX && !pricesOrLinks(item),
-	)
-		? read
-		: null;
+	return read.length > 0 ? read : null;
 }
 
 /** A milestone's detail from the model, or null when any part is missing or out of bounds. */

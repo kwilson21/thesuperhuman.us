@@ -65,16 +65,16 @@ const updated = pricing.updatedAt
         </table>
         </div>
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
-        {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul>{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
-        {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol>{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && ` · ${source.published}`}{source.kind && ` · ${source.kind}`}</li>)}</ol></details>}
+        {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
+        {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && ` · ${source.published}`}{source.kind && ` · ${source.kind}`}</li>)}</ol></details>}
       </> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
       <form data-pricing-form data-part="market" data-version={pricing.version}>
-        <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" aria-describedby="pricing-market-hint">{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced, or edit this copy. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
+        <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" aria-describedby="pricing-market-hint" data-pricing-market>{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced, or edit this copy. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
         <div class="software-actions"><button class="studio-button" type="submit">Save research</button><button class="studio-quiet" type="button" data-pricing-clear>Clear research</button></div>
-        <p class="studio-status" data-pricing-status role="status" aria-live="polite"></p>
+        <p class="studio-status" id="pricing-market-status" data-pricing-status role="status" aria-live="polite"></p>
       </form>
     </section>
-    <p class="rail-muted rail-caption" data-pricing-last-saved>{updated && `Last saved ${updated} (version ${pricing.version}).`}</p>
+    <p class="rail-muted rail-caption pricing-last-saved" data-pricing-last-saved>{updated && `Last saved ${updated} (version ${pricing.version}).`}</p>
   </div>
   <script>
     import { setupOwnerPricing } from '~/scripts/owner-pricing';
@@ -90,6 +90,7 @@ const updated = pricing.updatedAt
   .pricing-table { width: 100%; min-width: 40rem; border-collapse: collapse; font: .9rem/1.45 var(--font-sans); }
   .pricing-table th, .pricing-table td { text-align: left; vertical-align: top; padding: .45rem .6rem .45rem 0; border-bottom: 1px solid var(--rule); }
   .pricing-table thead th { color: var(--studio-muted); font-weight: 500; }
+  .pricing-table tbody th { font-weight: 500; }
   .pricing-table td:nth-child(3) { white-space: nowrap; font-variant-numeric: tabular-nums; }
   /* Wide enough that a definition wraps to a few lines, not a column of single words. */
   .pricing-table td:last-child { min-width: 18rem; }
@@ -100,7 +101,16 @@ const updated = pricing.updatedAt
   .pricing-settings summary::-webkit-details-marker { display: none; }
   .pricing-settings summary::before { content: '+'; color: var(--accent); }
   .pricing-settings details[open] > summary::before { transform: rotate(45deg); }
-  .pricing-settings li a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* Interface text in Inter (design.md D4.4-B), the lists included. */
+  .pricing-settings details { font: .9rem/1.5 var(--font-sans); }
+  .pricing-last-saved { font-family: var(--font-sans); }
+  .pricing-caveats { padding-left: 1.1rem; }
+  .pricing-caveats li + li { margin-top: .5rem; }
+  /* Numbered, because the caveats cite sources by number. */
+  .pricing-sources { list-style: decimal; padding-left: 2rem; }
+  .pricing-sources li { min-height: 44px; padding-block: .55rem; }
+  .pricing-sources a { border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+  .pricing-settings textarea[aria-invalid="true"] { border-color: var(--accent); }
   .pricing-settings .studio-quiet { min-height: 44px; }
   /* While a save is on its way: marked rather than disabled, so focus stays where it was. */
   .pricing-settings [aria-disabled="true"] { opacity: .5; cursor: wait; }

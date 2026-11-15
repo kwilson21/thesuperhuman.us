@@ -40,10 +40,11 @@ Three rows, each with the reasoning behind it:
 |---|---|---|
 | From your day value | The AI estimates each milestone's working days as a low and a high. Ordinary code multiplies them by the owner's private day value and adds the owner's contingency, rounded up to whole $50. | "Set your day value on the pricing page." |
 | From your past offers | Ordinary code reads the owner's sent offers on the same path (website, web app or workflow), each the version the client last received (never a superseded or withdrawn one): each one's total (the sum of its milestone fees), outcome and date, the five most recent, with the lowest, middle and highest. | "No sent website offers yet." (the path's name) |
-| From the market | The researched range for this path and the size the AI chose (small, medium or large), with the date it was researched and its sources. The AI also names a figure in that range with a reason; ordinary code moves a figure outside the range to the nearer end and says so. | "Add the market research on the pricing page." |
+| From the market | The researched range for this path and the size the AI chose (small, medium or large), with the date it was researched and its sources. The AI also names a figure in that range with a reason; ordinary code moves a figure outside the range to the nearer end and says so. | "Add the market research on the pricing page.", or, when the research has no range for this path, "Your research has no ranges for website work." |
 
-Each row can fill the offer's whole-project range ("Use as the estimate range", which also ticks "Whole-project
-range"), and each milestone card can fill its milestone's fee ("Add with a fee of $N" when it is used, "Set its fee to
+Each row can fill the offer's whole-project range ("Use as the whole-project range", which also ticks "Whole-project
+range") unless the offer's fees already add up to more than the range's low end, which the offer editor refuses (the
+board says so instead); each milestone card can fill its milestone's fee ("Add with a fee of $N" when it is used, "Set its fee to
 $N" once it is in the offer, which fills the fee and nothing else). These are the only ways money
 reaches the offer, and only by the owner's press. The panel says: "Estimates to help you decide. The fee is yours, and
 nothing is sent until you send the offer."

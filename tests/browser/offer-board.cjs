@@ -722,6 +722,80 @@ function check(name, ok, detail = "") {
 		if (stillThere)
 			await timingCard(third).getByRole("button", { name: "Cancel" }).click();
 
+		// The fifth review's bugs.
+		// Undo of a Bring back never loses words typed in that card's editor.
+		await fresh();
+
+		const outcomeWords = await card("outcome")
+			.locator("[data-card-text]")
+			.textContent();
+
+		await card("outcome")
+			.getByRole("button", { name: /^Not this/ })
+			.click();
+		await page.locator("[data-offer-aside]").evaluate((element) => {
+			element.open = true;
+		});
+		await page
+			.getByRole("button", { name: `Bring back: ${outcomeWords}` })
+			.click();
+		await card("outcome").getByRole("button", { name: /^Edit/ }).click();
+		await card("outcome")
+			.locator("[data-card-input]")
+			.fill("A band site that books shows, in our words.");
+		await undo();
+
+		const broughtBack = (await card("outcome").count()) === 1;
+
+		check(
+			"Undo of a Bring back never loses words typed in that card's editor",
+			broughtBack &&
+				(await card("outcome").locator("[data-card-input]").inputValue()) ===
+					"A band site that books shows, in our words." &&
+				(await card("outcome").locator("[data-card-error]").isVisible()),
+		);
+
+		if (broughtBack)
+			await card("outcome").getByRole("button", { name: "Cancel" }).click();
+
+		// A row holding only a partly typed fee is not empty: Add with a fee adds a row instead.
+		await fresh();
+		await rows.first().locator('[name="fee"]').click();
+		await page.keyboard.type("1e");
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add with a fee/ })
+			.click();
+		check(
+			"Add with a fee never writes over a partly typed fee",
+			(await rows.count()) === 2 &&
+				(await rows
+					.first()
+					.locator('[name="fee"]')
+					.evaluate((input) => input.validity.badInput)) &&
+				(await value("milestoneName", rows.nth(1))) === "Design direction",
+			`${await rows.count()} rows`,
+		);
+
+		// The whole-project range is never filled below the offer's total, which the offer editor refuses.
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add with a fee/ })
+			.click();
+		await card("milestones", 1)
+			.getByRole("button", { name: /^Add with a fee/ })
+			.click();
+		await page
+			.locator("[data-price-day]")
+			.getByRole("button", { name: /^Use as the whole-project range/ })
+			.click();
+		check(
+			"the whole-project range is never filled below the offer's total",
+			(await page.locator('[name="rangeLow"]').inputValue()) === "" &&
+				/must start at the offer total/.test(
+					await page.locator("[data-offer-status]").textContent(),
+				),
+		);
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

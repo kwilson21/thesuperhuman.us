@@ -36,6 +36,28 @@ const unsaved = (form: HTMLFormElement) =>
 		),
 	].some((input) => input.value !== input.defaultValue);
 
+/** Marks the research box as refused, described by its form's status line, or clears the mark. */
+function markResearch(invalid: boolean) {
+	const box = document.querySelector<HTMLTextAreaElement>(
+		"[data-pricing-market]",
+	);
+
+	if (!box) return;
+
+	if (invalid) {
+		box.setAttribute("aria-invalid", "true");
+		box.setAttribute(
+			"aria-describedby",
+			"pricing-market-hint pricing-market-status",
+		);
+	} else {
+		box.removeAttribute("aria-invalid");
+		box.setAttribute("aria-describedby", "pricing-market-hint");
+	}
+}
+
+const BUSY = "A save is on its way. Try again when it answers.";
+
 /** Where the page notes, across the reload new research triggers, that it was saved. */
 const SAVED_KEY = "owner-pricing-saved";
 
@@ -65,8 +87,7 @@ async function send(
 	status: Status,
 ) {
 	if (saving) {
-		if (status)
-			status.textContent = "A save is on its way. Try again when it answers.";
+		if (status) status.textContent = BUSY;
 
 		return;
 	}
@@ -94,6 +115,12 @@ async function send(
 		saving = false;
 
 		for (const button of buttons) button.removeAttribute("aria-disabled");
+
+		// A press made while it was on its way said so; that is no longer true.
+		for (const line of document.querySelectorAll<HTMLElement>(
+			"[data-pricing-status]",
+		))
+			if (line.textContent === BUSY) line.textContent = "";
 	}
 }
 
@@ -103,6 +130,8 @@ async function save(
 	status: Status,
 ) {
 	if (status) status.textContent = "Saving…";
+
+	if (body.action === "market") markResearch(false);
 
 	try {
 		const response = await fetch("/api/owner/pricing", {
@@ -181,6 +210,9 @@ async function save(
 			status.textContent = Predicate.isString(error)
 				? error
 				: "Your pricing could not be saved. Try again.";
+
+		// A research file the route refused: the box is marked with the reason beside it.
+		if (body.action === "market" && response.status === 400) markResearch(true);
 	} catch {
 		// The request or its answer was lost on the way: the save may have reached the store.
 		needsReload = true;
@@ -222,6 +254,11 @@ export function setupOwnerPricing() {
 		const status = form.querySelector<HTMLElement>("[data-pricing-status]");
 		const expectedVersion = () => Number(form.dataset.version ?? "0");
 
+		// Typing in a refused research box clears its mark.
+		form
+			.querySelector("[data-pricing-market]")
+			?.addEventListener("input", () => markResearch(false));
+
 		form.addEventListener("submit", (event) => {
 			event.preventDefault();
 			const data = new FormData(form);
@@ -261,6 +298,7 @@ export function setupOwnerPricing() {
 				if (status)
 					status.textContent =
 						"That is not valid JSON. Check the file and paste it again.";
+				markResearch(true);
 
 				return;
 			}
@@ -276,10 +314,7 @@ export function setupOwnerPricing() {
 			.querySelector<HTMLButtonElement>("[data-pricing-clear]")
 			?.addEventListener("click", () => {
 				if (saving || needsReload) {
-					if (status)
-						status.textContent = needsReload
-							? RELOAD_FIRST
-							: "A save is on its way. Try again when it answers.";
+					if (status) status.textContent = needsReload ? RELOAD_FIRST : BUSY;
 
 					return;
 				}
