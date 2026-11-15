@@ -1,0 +1,96 @@
+---
+// The owner's private pricing reference (docs/plans/2026-11-offer-board.md, section 4): the day value and contingency
+// the offer board turns the AI's day estimates into money with, and the market research its market figure is held
+// inside. Stored in KV (src/server/pricing-store.ts); never shown to a client, never in the repository.
+import OwnerLayout from "~/layouts/OwnerLayout.astro";
+import {
+	type PricingKind,
+	type PricingSize,
+	PRICING_KINDS,
+	PRICING_SIZES,
+	emptyPricing,
+	marketRange,
+} from "~/lib/pricing-reference";
+import { loadPricing } from "~/server/pricing-store";
+
+export const prerender = false;
+
+const kv = Astro.locals.runtime.env.RESUME_STORE;
+const pricing = kv ? await loadPricing(kv) : emptyPricing();
+const market = pricing.market;
+
+const kindLabels: Record<PricingKind, string> = {
+	website: "Website",
+	webapp: "Web app",
+	workflow: "Workflow",
+};
+
+const sizeLabels: Record<PricingSize, string> = {
+	small: "Small",
+	medium: "Medium",
+	large: "Large",
+};
+
+const dollars = (amount: number) => `$${amount.toLocaleString("en-US")}`;
+
+const updated = pricing.updatedAt
+	? new Date(pricing.updatedAt).toLocaleString("en-US", {
+			dateStyle: "medium",
+			timeStyle: "short",
+			timeZone: "America/New_York",
+		})
+	: "";
+---
+<OwnerLayout title="Pricing" current="pricing" newRequestCount={0} ownerEmail={Astro.locals.owner!.email}>
+  <p class="owner-breadcrumb"><a href="/owner">Owner center</a> <span aria-hidden="true">/</span> Pricing</p>
+  <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone.</p></div></header>
+  {!kv && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
+  <div class="software-rail pricing-settings">
+    <section class="rail-section" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
+      <form data-pricing-form data-part="values" data-version={pricing.version}>
+        <div class="software-field"><label>Day value (USD)<input class="studio-input" type="number" name="dayValue" min="1" max="10000" step="1" inputmode="numeric" value={pricing.dayValueCents === null ? '' : pricing.dayValueCents / 100} aria-describedby="pricing-day-hint" /></label><p id="pricing-day-hint" class="rail-muted rail-caption">What a working day is worth to you, in whole dollars. The board multiplies the AI’s day estimates by it to suggest a range. Leave it empty to hide that suggestion.</p></div>
+        <div class="software-field"><label>Contingency (%)<input class="studio-input" type="number" name="contingencyPercent" min="0" max="100" step="1" inputmode="numeric" required value={pricing.contingencyPercent} aria-describedby="pricing-contingency-hint" /></label><p id="pricing-contingency-hint" class="rail-muted rail-caption">Added to the high end of that range, for what the brief leaves unknown.</p></div>
+        <button class="studio-button" type="submit">Save</button>
+        <p class="studio-status" data-pricing-status role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading">Market research</h2>
+      {market ? <>
+        <p class="rail-muted">Researched {market.researchedOn}, from {market.sources.length} {market.sources.length === 1 ? 'source' : 'sources'}. The board holds the AI’s market figure inside the range for the brief’s kind and size.</p>
+        <table class="pricing-table">
+          <caption class="visually-hidden">Fixed-price ranges by kind of work and size</caption>
+          <thead><tr><th scope="col">Kind</th><th scope="col">Size</th><th scope="col">Range</th><th scope="col">What it covers</th></tr></thead>
+          <tbody>{PRICING_KINDS.flatMap(kind => PRICING_SIZES.map(size => { const range = marketRange(market, kind, size); return <tr><th scope="row">{kindLabels[kind]}</th><td>{sizeLabels[size]}</td><td>{range ? `${dollars(range.lowUsd)} to ${dollars(range.highUsd)}` : 'No figure'}</td><td>{range?.definition ?? ''}</td></tr>; }))}</tbody>
+        </table>
+        {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
+        {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul>{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
+        {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol>{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && ` · ${source.published}`}{source.kind && ` · ${source.kind}`}</li>)}</ol></details>}
+      </> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
+      <form data-pricing-form data-part="market" data-version={pricing.version}>
+        <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" aria-describedby="pricing-market-hint">{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced, or edit this copy. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
+        <div class="software-actions"><button class="studio-button" type="submit">Save research</button><button class="studio-quiet" type="button" data-pricing-clear>Clear research</button></div>
+        <p class="studio-status" data-pricing-status role="status" aria-live="polite"></p>
+      </form>
+    </section>
+    {updated && <p class="rail-muted rail-caption">Last saved {updated} (version {pricing.version}).</p>}
+  </div>
+  <script>
+    import { setupOwnerPricing } from '~/scripts/owner-pricing';
+
+    setupOwnerPricing();
+  </script>
+</OwnerLayout>
+<style>
+  .pricing-settings { display: grid; gap: 1.5rem; }
+  .pricing-table { width: 100%; border-collapse: collapse; font: .9rem/1.45 Inter, sans-serif; margin: .75rem 0 1rem; }
+  .pricing-table th, .pricing-table td { text-align: left; vertical-align: top; padding: .45rem .6rem .45rem 0; border-bottom: 1px solid var(--rule); }
+  .pricing-table thead th { color: var(--studio-muted); font-weight: 500; }
+  .pricing-table td:nth-child(3) { white-space: nowrap; }
+  .pricing-json { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .85rem; }
+  @media (max-width: 40rem) {
+    .pricing-table thead { display: none; }
+    .pricing-table tr { display: grid; grid-template-columns: auto 1fr; gap: 0 .75rem; padding: .5rem 0; border-bottom: 1px solid var(--rule); }
+    .pricing-table th, .pricing-table td { border: 0; padding: 0; }
+    .pricing-table td:last-child { grid-column: 1 / -1; color: var(--studio-muted); }
+  }
+</style>

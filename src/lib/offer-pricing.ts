@@ -54,7 +54,9 @@ export function twiceExactHigh(
 	//@ verify
 	//@ requires halfDays >= 0 && dayValueCents >= 0 && contingencyPercent >= 0
 	//@ ensures \result >= 0
-	return halfDays * Math.floor(dayValueCents / 100) * (100 + contingencyPercent);
+	return (
+		halfDays * Math.floor(dayValueCents / 100) * (100 + contingencyPercent)
+	);
 }
 
 /** The low end of an estimate: the exact low amount, rounded up to whole $50. */
