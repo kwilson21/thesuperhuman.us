@@ -1,4 +1,4 @@
-import { hashValue } from "./audio-client-access";
+import { hashValue } from "./client-portal";
 import { mediaRange } from "./music-media";
 
 export type ProjectFile = {

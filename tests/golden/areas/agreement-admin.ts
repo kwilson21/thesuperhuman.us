@@ -6,7 +6,7 @@ import { canonicalJson, hashBytes } from "~/lib/agreement-artifacts";
 import { hashOfferToken } from "~/lib/software-offers";
 import { templateFields } from "~/lib/agreement-templates";
 import { isObject } from "~/lib/type-guards";
-import { hashValue } from "~/lib/audio-client-access";
+import { hashValue } from "~/lib/client-portal";
 import type { JsonObject, JsonValue } from "../../helpers/json";
 import {
 	asOwner,

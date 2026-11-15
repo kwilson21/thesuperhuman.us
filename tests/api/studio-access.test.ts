@@ -6,7 +6,7 @@ import type { TestRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 import { freshMusicDb, rows, seed } from "../golden/harness";
 import { type ResendEmail, stubResend } from "../helpers/resend-fetch";
-import { hashValue, keyedHash } from "~/lib/audio-client-access";
+import { hashValue, keyedHash } from "~/lib/client-portal";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { POST as signOut } from "~/pages/api/studio/sign-out";

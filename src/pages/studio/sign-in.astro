@@ -5,10 +5,10 @@ import BaseLayout from "~/layouts/BaseLayout.astro";
 import "~/styles/studio.css";
 import studioCorner from "~/assets/site/studio-corner-v1.webp";
 import {
-	clientPortalEnabled,
 	clientProjectsForSession,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 
 const env = Astro.locals.runtime?.env;
 

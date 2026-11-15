@@ -1,10 +1,8 @@
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import {
-	agreementJson,
-	canonicalAgreementRequest,
-} from "~/lib/agreement-access";
+import { agreementJson } from "~/lib/agreement-access";
+import { canonicalAgreementRequest } from "~/lib/agreement-host";
 import {
 	agreementRequest,
 	nativeAgreementRoute,
