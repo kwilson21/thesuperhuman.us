@@ -9,7 +9,7 @@ import {
 	musicRequest,
 } from "~/lib/music-request";
 import { softwareBrief, validateSoftwareInquiry } from "~/lib/software-inquiry";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
 import {
 	type InquiryAnswer,
 	submitInquiry,
@@ -27,6 +27,9 @@ import {
 export const prerender = false;
 
 const ROUTE = "/api/software-inquiry";
+
+/** A failure the form answers with the temporary sentence, logged as it always was. */
+const failed = loggedAnswer(ROUTE, () => intakeTemporarilyUnavailable(500));
 
 /** What the flow answers when it goes through, as the form shows it. */
 const answerResponse = (answer: InquiryAnswer) =>
@@ -57,14 +60,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
 
 	if (!bindings.ok) return intakeNotAvailable();
-
-	/** A failure the form answers with the temporary sentence, logged as it always was. */
-	const failed = (failure: { readonly failure: unknown }) =>
-		Effect.sync(() => {
-			logUnexpected(ROUTE, failure.failure);
-
-			return intakeTemporarilyUnavailable(500);
-		});
 
 	return runRoute(
 		Context.merge(
@@ -120,7 +115,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 							{ status: 400 },
 						),
 					),
-				RateLimitStoreFailed: failed,
+				RateLimitStoreFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's temporary sentence, logged once.
