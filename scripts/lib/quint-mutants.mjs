@@ -146,6 +146,35 @@ export const audioProjectMessagesMutants = {
 	projectMessagesStopSplit: { property: "stopClosesAccess" },
 };
 
+// verification/audio-project-files.qnt: an audio project's uploads, publishes, revokes and completion, while access closes, the
+// request is withdrawn or a payment is voided (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectFilesMutants = {
+	projectFilesStartNoAccess: { property: "uploadsOnlyForOpenProject" },
+	projectFilesInsertNoAccess: { property: "filesOnlyForOpenProject" },
+	projectFilesInsertNoState: { property: "noFileFromDiscarded" },
+	projectFilesAbortNoCas: { property: "fileHasObject" },
+	projectFilesPublishNoAccess: { property: "publishedOnlyWhenAllowed" },
+	projectFilesPublishNoPayment: { property: "publishedOnlyWhenAllowed" },
+	projectFilesPublishNoStage: { property: "publishedOnlyWhenAllowed" },
+	projectFilesNoSupersede: { property: "oneLiveReview" },
+	projectFilesRevokeNoOthers: { property: "readyStagesHaveFiles" },
+	projectFilesCompleteNoStage: { property: "readyStagesHaveFiles" },
+	projectFilesCompleteNoPayment: { property: "completedOnlyWhenPaid" },
+};
+
+// verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
+// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectNoticesMutants = {
+	projectNoticesClaimNoStatus: { property: "oneEmailPerQueuing" },
+	projectNoticesClaimNoOpen: { property: "claimOnlyWhileOpen" },
+	projectNoticesQueueNoOpen: { property: "queueOnlyWhileOpen" },
+	projectNoticesQueueAnyStatus: { property: "sentNeverRequeued" },
+	projectNoticesUncertainSent: { property: "sentMeansMailed" },
+	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
 // steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
@@ -227,6 +256,24 @@ export const models = [
 		exhaustive: [],
 		// The rarest mutant (NoDecision) takes about 26,000 random runs to find with the fixed seed (about 2 s); the rest a few hundred.
 		samples: "60000",
+		passSamples: "8000",
+	},
+	{
+		file: "verification/audio-project-files.qnt",
+		current: ["projectFiles"],
+		mutants: audioProjectFilesMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "60000",
+		passSamples: "8000",
+	},
+	{
+		file: "verification/audio-project-notices.qnt",
+		current: ["projectNotices"],
+		mutants: audioProjectNoticesMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
 		passSamples: "8000",
 	},
 ];
