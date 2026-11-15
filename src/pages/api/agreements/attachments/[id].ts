@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
-import { agreementHeaders, agreementText } from "~/lib/agreement-access";
+import { agreementText } from "~/lib/agreement-access";
+import { agreementHeaders } from "~/lib/agreement-host";
 import { loggedAnswer } from "~/server/agreement-answers";
 import { downloadAttachment } from "~/server/flows/agreement-attachment";
 import { runRoute } from "~/server/run";

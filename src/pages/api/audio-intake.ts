@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { validateIntake } from "~/lib/audio-intake";
 import {
 	intakeNotAvailable,

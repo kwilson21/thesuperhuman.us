@@ -3289,12 +3289,10 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 });
 
 it("releases offer blocks only after an explicit full pre-start refund record and lets old absent attempts recover", async () => {
-	const {
-		reserveSoftwareInvoice,
-		depositOfferBlock,
-		paidFirstDeposit,
-		listSoftwareInvoices,
-	} = await import("~/lib/software-invoices");
+	const { reserveSoftwareInvoice, paidFirstDeposit, listSoftwareInvoices } =
+		await import("~/lib/software-invoices");
+
+	const { depositOfferBlock } = await import("~/lib/software-offer-deposit");
 
 	const { reconciliationStatements } = await import(
 		"../../scripts/stripe-reconciliation.mjs"

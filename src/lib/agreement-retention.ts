@@ -1,7 +1,7 @@
 import { canonicalJson, hashBytes } from "./agreement-artifacts";
 import { hashOfferToken } from "./software-offers";
 import { agreementEvent } from "./agreement-events";
-import { softwareGuard } from "./software-projects";
+import { softwareGuard } from "./software-guard";
 import type { Agreement } from "./software-agreements";
 import { isText } from "./type-guards";
 import { ReaderMessage } from "./reader-message";
