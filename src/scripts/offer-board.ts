@@ -215,6 +215,9 @@ export function setupOfferBoard() {
 		live.textContent = text;
 	};
 
+	/** The offer editor's largest fee or estimate, $1,000,000 (its fields' max and the server's check). */
+	const EDITOR_MAX_CENTS = 100_000_000;
+
 	/** A date that never splits across lines at its hyphens. */
 	const day = (date: string) => date.replace(/-/g, "\u2011");
 
@@ -398,7 +401,10 @@ export function setupOfferBoard() {
 			pricing.contingencyPercent,
 		);
 
-		return estimate ? estimate.highCents : null;
+		// Above the offer editor's own limit, no fee is offered: the editor would refuse to save it.
+		return estimate && estimate.highCents <= EDITOR_MAX_CENTS
+			? estimate.highCents
+			: null;
 	}
 
 	/** Sets only the fee of a milestone already in the offer: the rest of it is the owner's now. */
@@ -655,6 +661,14 @@ export function setupOfferBoard() {
 	function useRange(lowCents: number, highCents: number) {
 		const low = Math.max(100, lowCents);
 		const high = Math.max(low, highCents);
+
+		if (high > EDITOR_MAX_CENTS) {
+			say(
+				"This range runs past the offer editor’s limit of $1,000,000, so it was not filled. Type a range in the offer.",
+			);
+
+			return;
+		}
 
 		// The editor refuses a whole-project range whose low end is under the offer's total, so this never fills one.
 		const total = milestones().reduce((sum, fieldset) => {

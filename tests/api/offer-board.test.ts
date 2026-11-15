@@ -479,6 +479,69 @@ describe("the offer board's route", () => {
 		expect(run).not.toHaveBeenCalled();
 	});
 
+	it("reads again when another tab takes the day's last place between its read and its save, then refuses", async () => {
+		db.prepare(
+			"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('2026-11-15', 'offer:owner', 39)",
+		).run();
+
+		const d1 = sqliteD1(db);
+		const batch = d1.batch.bind(d1);
+		let raced = false;
+
+		const racing = Object.assign(Object.create(d1), {
+			prepare: d1.prepare.bind(d1),
+			batch: async (statements: Parameters<D1Database["batch"]>[0]) => {
+				if (!raced) {
+					raced = true;
+					db.prepare(
+						"UPDATE brief_suggestion_budget SET count = count + 1 WHERE scope = 'offer:owner'",
+					).run();
+				}
+
+				return batch(statements);
+			},
+		});
+
+		const response = await POST(context(body, { env: { MUSIC_DB: racing } }));
+
+		expect(response.status).toBe(429);
+		expect(run).not.toHaveBeenCalled();
+		expect(count()).toBe(40);
+	});
+
+	it("answers 409 when the day's last place is taken between read and save three times over", async () => {
+		db.prepare(
+			"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('2026-11-15', 'offer:owner', 39)",
+		).run();
+
+		const d1 = sqliteD1(db);
+		const batch = d1.batch.bind(d1);
+
+		// Each try reads 39; just before its save another tab takes place 40, then gives it back.
+		const racing = Object.assign(Object.create(d1), {
+			prepare: d1.prepare.bind(d1),
+			batch: async (statements: Parameters<D1Database["batch"]>[0]) => {
+				db.prepare(
+					"UPDATE brief_suggestion_budget SET count = 40 WHERE scope = 'offer:owner'",
+				).run();
+
+				try {
+					return await batch(statements);
+				} finally {
+					db.prepare(
+						"UPDATE brief_suggestion_budget SET count = 39 WHERE scope = 'offer:owner'",
+					).run();
+				}
+			},
+		});
+
+		const response = await POST(context(body, { env: { MUSIC_DB: racing } }));
+
+		expect(response.status).toBe(409);
+		expect(run).not.toHaveBeenCalled();
+		expect(count()).toBe(39);
+	});
+
 	it("stops at today's limit with 429", async () => {
 		db.prepare(
 			"INSERT INTO brief_suggestion_budget (day, scope, count) VALUES ('2026-11-15', 'offer:owner', 40)",
