@@ -73,7 +73,7 @@ const replyText = <Reply>(reply: Reply) => {
 	if (!Predicate.isObject(reply))
 		return Effect.fail(
 			new ReplyUnreadable({
-				cause: new TypeError("The reply is not an object"),
+				cause: new TypeError("The model reply is not an object"),
 			}),
 		);
 
