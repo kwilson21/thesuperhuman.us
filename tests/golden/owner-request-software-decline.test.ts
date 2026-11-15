@@ -17,6 +17,7 @@ import {
 	request,
 	revokedLink,
 	running,
+	secondsFromNow,
 	sent,
 	unreachable,
 	withOffers,
@@ -115,6 +116,38 @@ const signing = (status: string, over: SeedRow = {}) => ({
 const movedUpdatedAt = running(
 	"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
 );
+
+// F10 (docs/plans/2026-11-offers-conversion.md, section 5): the owner saves a draft, or saves and sends one, in another
+// tab while the decline's email is in flight. The first statement the route makes after the email is the second batch
+// today; F10's fix reads the request's draft and sent offers first, so the pattern names that read too, and a hook on it
+// runs while the email is in flight whichever statement comes first.
+const afterTheEmail =
+	/UPDATE owner_requests SET status='resolved'|^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/;
+
+/** A draft the owner saves (version 2, after the first batch withdrew version 1). */
+const savingDraft = inserting(
+	"software_offers",
+	offer("draft", 2, { created_at: NOW, updated_at: NOW }),
+);
+
+/**
+ * A draft the owner saves and sends (version 2), with its live link made `ago` seconds before the frozen clock. The clock
+ * does not move during the email, so a link made when a 20-second email began is written 20 seconds before it: the
+ * boundary the model found, where the second batch's sending guard (created_at > now less 20 seconds) passes.
+ */
+const savingAndSending = (ago: number) => {
+	const at = secondsFromNow(-ago);
+
+	return (sqlite: { exec: (sql: string) => void }) => {
+		inserting(
+			"software_offers",
+			offer("sent", 2, { created_at: at, updated_at: at, sent_at: at }),
+		)(sqlite);
+		running(
+			`UPDATE software_offer_links SET token_hash='hash-r1-v2',created_at='${at}',revoked_at=NULL`,
+		)(sqlite);
+	};
+};
 
 const cases: Case[] = [
 	// who and what
@@ -461,6 +494,47 @@ const cases: Case[] = [
 				run: running(
 					"INSERT INTO audio_projects(request_id,created_at,updated_at) VALUES ('r1','2026-11-13T11:00:00.000Z','2026-11-13T11:00:00.000Z')",
 				),
+			},
+		],
+	}),
+	// F10: an offer saved while the email is sent
+	declineCase("a draft is saved while the email is sent", sentSeed(), {
+		interleave: [
+			{ on: afterTheEmail, label: "the owner saves a draft", run: savingDraft },
+		],
+	}),
+	declineCase(
+		"a draft is saved and sent while the email is sent, its link made 20 seconds before",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: afterTheEmail,
+					label: "the owner saves and sends a draft",
+					run: savingAndSending(20),
+				},
+			],
+		},
+	),
+	declineCase(
+		"a draft is saved and sent while the email is sent, its link made a moment ago",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: afterTheEmail,
+					label: "the owner saves and sends a draft",
+					run: savingAndSending(0),
+				},
+			],
+		},
+	),
+	declineCase("a draft is saved just before the second batch", sentSeed(), {
+		interleave: [
+			{
+				on: /UPDATE owner_requests SET status='resolved'/,
+				label: "the owner saves a draft",
+				run: savingDraft,
 			},
 		],
 	}),
