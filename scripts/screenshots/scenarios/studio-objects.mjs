@@ -21,7 +21,7 @@ export default {
 				file: `studio-${id}-${how}-desktop.png`,
 				path: "/",
 				viewport: "desktop",
-				selector: "[data-studio]",
+				selector: ".studio-art",
 				prepare: async (page) => {
 					if (how === "hover")
 						await page.locator(`[data-studio-object="${id}"]`).hover();
@@ -40,7 +40,7 @@ export default {
 			file: "studio-touch-phone.png",
 			path: "/",
 			viewport: "phone",
-			selector: "[data-studio]",
+			selector: ".studio-art",
 			prepare: async (page) => {
 				// A touch screen has no hover, so the objects show their one-word pins.
 				const cdp = await page.context().newCDPSession(page);

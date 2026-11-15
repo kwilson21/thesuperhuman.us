@@ -13,20 +13,55 @@ class SceneData {
 	play?: string;
 }
 
-/** One of the desk's links: an EventTarget, so the script's listeners run as they would on the page. */
+/**
+ * One of the desk's links: an EventTarget, so the script's listeners run as they would on the page. `keyboardFocus` is
+ * whether it matches :focus-visible.
+ */
 class StudioLink extends EventTarget {
+	keyboardFocus = false;
+
 	constructor(readonly dataset: { studioObject: string }) {
 		super();
 	}
 
+	matches(selector: string) {
+		return selector === ":focus-visible" && this.keyboardFocus;
+	}
+
 	focus = vi.fn();
+}
+
+/** The parts of a click the headphones' handler reads, with `defaultPrevented` for a click a handler already took. */
+type ClickOptions = {
+	button?: number;
+	metaKey?: boolean;
+	ctrlKey?: boolean;
+	shiftKey?: boolean;
+	altKey?: boolean;
+	defaultPrevented?: boolean;
+};
+
+/** A click as the headphones' handler reads it (Node has no MouseEvent). */
+class Click extends Event {
+	button = 0;
+	metaKey = false;
+	ctrlKey = false;
+	shiftKey = false;
+	altKey = false;
+
+	constructor({ defaultPrevented = false, ...keys }: ClickOptions) {
+		super("click", { cancelable: true });
+		Object.assign(this, keys);
+
+		if (defaultPrevented) this.preventDefault();
+	}
 }
 
 /**
  * The hero's scene with its four links, and Home's comparison player when `player` is set (`playing` is whether it is
  * already playing).
  */
-function mount({ player = true, playing = false } = {}) {
+function mount({ player = true, playing = false, busy = false } = {}) {
 	const links = new Map(
 		["monitor", "headphones", "notebook", "controller"].map((id) => [
 			id,
@@ -44,6 +79,8 @@ function mount({ player = true, playing = false } = {}) {
 
 	const button = {
 		dataset: { playing: String(playing) },
+		getAttribute: (name: string) =>
+			name === "aria-busy" ? String(busy) : null,
 		click: vi.fn(),
 		focus: vi.fn(),
 	};
@@ -78,16 +115,21 @@ function mount({ player = true, playing = false } = {}) {
 		link,
 		point: (id: string) => link(id).dispatchEvent(new Event("pointerenter")),
 		leave: (id: string) => link(id).dispatchEvent(new Event("pointerleave")),
-		focus: (id: string) => {
+		/** Focus by keyboard (`keyboard`), which matches :focus-visible, or by a mouse press, which does not. */
+		focus: (id: string, keyboard = true) => {
 			active = link(id);
+			link(id).keyboardFocus = keyboard;
 			link(id).dispatchEvent(new Event("focus"));
 		},
 		blur: (id: string) => {
 			active = null;
+			link(id).keyboardFocus = false;
 			link(id).dispatchEvent(new Event("blur"));
 		},
-		click: (id: string) => {
-			const event = new Event("click", { cancelable: true });
+		/** Clicks the link and answers whether the script kept the browser from following it. */
+		click: (id: string, options: ClickOptions = {}) => {
+			const event = new Click(options);
+
 			link(id).dispatchEvent(event);
 
 			return event.defaultPrevented;
@@ -119,6 +161,15 @@ it("keeps a focused object's scene while the pointer passes over and off it", ()
 	expect(studio.scene.dataset.play).toBeUndefined();
 });
 
+it("rests a scene once the pointer leaves, even when a mouse press focused its link", () => {
+	const studio = mount();
+
+	studio.point("monitor");
+	studio.focus("monitor", false);
+	studio.leave("monitor");
+	expect(studio.scene.dataset.play).toBeUndefined();
+});
+
 it("plays Old News on Home from the headphones, without leaving the page", () => {
 	const studio = mount();
 
@@ -135,6 +186,34 @@ it("does not stop Old News when the headphones are clicked while it plays", () =
 	expect(studio.button.click).not.toHaveBeenCalled();
 });
 
+it("does not stop Old News while it is still getting ready to play", () => {
+	const studio = mount({ busy: true });
+
+	expect(studio.click("headphones")).toBe(true);
+	expect(studio.button.click).not.toHaveBeenCalled();
+	expect(studio.button.focus).toHaveBeenCalled();
+});
+
+it("leaves a click that opens a new tab or window, or that was already handled, to the browser", () => {
+	const studio = mount();
+
+	for (const options of [
+		{ metaKey: true },
+		{ ctrlKey: true },
+		{ shiftKey: true },
+		{ altKey: true },
+		{ button: 1 },
+	]) {
+		expect(studio.click("headphones", options), JSON.stringify(options)).toBe(
+			false,
+		);
+	}
+
+	expect(studio.click("headphones", { defaultPrevented: true })).toBe(true);
+	expect(studio.button.click).not.toHaveBeenCalled();
+	expect(studio.comparison.scrollIntoView).not.toHaveBeenCalled();
+});
+
 it("follows the headphones' link when the comparison cannot play here", () => {
 	const studio = mount({ player: false });
 
@@ -146,7 +225,7 @@ it("links each object to a page that exists, with its label as the link's name",
 	for (const [label, href, page] of [
 		["What I’m building", "/building", "src/pages/building.astro"],
 		[
-			"Hear a mix and master",
+			"Listen to a mix and master",
 			"/audio/portfolio",
 			"src/pages/audio/portfolio.astro",
 		],
@@ -169,8 +248,19 @@ it("links each object to a page that exists, with its label as the link's name",
 	expect(hero).toContain(
 		'<nav class="studio-objects" aria-label="Around the studio">',
 	);
-	// The link's text is its full label; the touch pin is a visual short form only.
+	// The link's text is its full label; the touch pin is a visual short form only, and a word of the label, so speech
+	// input that names the pin reaches the link (WCAG 2.5.3).
 	expect(hero).toContain(
 		'<span class="studio-object-pin" aria-hidden="true">{object.short}</span>',
 	);
+
+	const objects = [...hero.matchAll(/label: "([^"]+)",\s+short: "([^"]+)"/g)];
+
+	expect(objects).toHaveLength(4);
+
+	for (const [, label, short] of objects) {
+		expect(label.toLowerCase().split(/\W+/), label).toContain(
+			short.toLowerCase(),
+		);
+	}
 });

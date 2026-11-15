@@ -286,7 +286,7 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/components/home/StudioLife.astro": ["studio-objects"],
 	"src/scripts/studio-objects.ts": ["studio-objects"],
 	"src/data/work-with-me.ts": ["services-print"],
-	"src/data/project-stories/tally.ts": ["services-print"],
+	"src/data/project-stories/tally.ts": ["services-print", "studio-objects"],
 	"src/data/project-stories/kaillera-next.ts": ["services-print"],
 	"src/components/SoftwareOffer.astro": ["software-offer"],
 	"src/components/owner/SoftwareOfferEditor.astro": [

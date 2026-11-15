@@ -1,7 +1,8 @@
-// The objects on the hero's desk are links into the site (Hero.astro). Pointing at or focusing one plays that object's
-// own scene (StudioLife.astro reads [data-play]); with reduced motion the scene shows its finished frame instead. The
-// headphones play the mix-and-master comparison further down Home when it can play here, and otherwise open the audio
-// portfolio, their link.
+// The objects on the hero's desk are links into the site (Hero.astro). Pointing at one, or reaching it with the keyboard,
+// plays that object's own scene (StudioLife.astro reads [data-play]); with reduced motion the scene shows its finished
+// frame instead. A mouse click also focuses a link, but only keyboard focus (:focus-visible) holds the scene once the
+// pointer leaves. A plain click on the headphones plays the mix-and-master comparison further down Home when it can play
+// here; otherwise, and for a click that opens a new tab or window, they open the audio portfolio, their link.
 export function setupStudioObjects() {
 	const scene = document.querySelector<HTMLElement>("[data-studio-scene]");
 
@@ -31,9 +32,11 @@ export function setupStudioObjects() {
 
 			link.addEventListener("pointerenter", () => play(id));
 			link.addEventListener("pointerleave", () => {
-				if (document.activeElement !== link) rest(id);
+				if (!link.matches(":focus-visible")) rest(id);
 			});
-			link.addEventListener("focus", () => play(id));
+			link.addEventListener("focus", () => {
+				if (link.matches(":focus-visible")) play(id);
+			});
 			link.addEventListener("blur", () => rest(id));
 		});
 
@@ -42,6 +45,15 @@ export function setupStudioObjects() {
 	);
 
 	headphones?.addEventListener("click", (event) => {
+		const ownTabOrWindow =
+			event.button !== 0 ||
+			event.metaKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
+			event.altKey;
+
+		if (event.defaultPrevented || ownTabOrWindow) return;
+
 		const player = document.querySelector<HTMLElement>(
 			'.music-proof-preview [data-comparison][data-initialized="true"]:not([data-audio-fallback="true"])',
 		);
@@ -59,8 +71,13 @@ export function setupStudioObjects() {
 				: "smooth",
 		});
 
-		// The click is the visitor's own gesture, so the comparison may start its audio.
-		if (button.dataset.playing !== "true") button.click();
+		// The click is the visitor's own gesture, so the comparison may start its audio. While it is playing, or still
+		// getting ready to (aria-busy), another click on its button would stop it.
+		const started =
+			button.dataset.playing === "true" ||
+			button.getAttribute("aria-busy") === "true";
+
+		if (!started) button.click();
 		button.focus({ preventScroll: true });
 	});
 }
