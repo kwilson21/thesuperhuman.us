@@ -1,3 +1,4 @@
+/** The bytes a Range header names in a file of `size` bytes: none when there is no header, "invalid" when it cannot be served. Shared by the music, link preview and studio file routes. */
 export function mediaRange(
 	header: string | null,
 	size: number,
@@ -19,49 +20,4 @@ export function mediaRange(
 		return "invalid";
 
 	return { offset: start, length: end - start + 1 };
-}
-
-export async function streamMusic(
-	request: Request,
-	bucket: R2Bucket,
-	asset: { key: string; type: string },
-) {
-	if (asset.key.startsWith("studio/") || asset.key.startsWith("software/"))
-		return new Response("Media unavailable", { status: 404 });
-	const head = await bucket.head(asset.key);
-
-	if (!head) return new Response("Media unavailable", { status: 404 });
-
-	const range =
-		request.method === "HEAD"
-			? null
-			: mediaRange(request.headers.get("range"), head.size);
-
-	if (range === "invalid")
-		return new Response(null, {
-			status: 416,
-			headers: { "content-range": `bytes */${head.size}` },
-		});
-
-	const headers = new Headers({
-		"content-type": asset.type,
-		"accept-ranges": "bytes",
-		"content-length": String(range?.length ?? head.size),
-		"cache-control": "public, max-age=3600, s-maxage=3600",
-		"x-content-type-options": "nosniff",
-		"content-disposition": "inline",
-	});
-
-	if (range)
-		headers.set(
-			"content-range",
-			`bytes ${range.offset}-${range.offset + range.length - 1}/${head.size}`,
-		);
-
-	if (request.method === "HEAD") return new Response(null, { headers });
-	const object = await bucket.get(asset.key, range ? { range } : undefined);
-
-	if (!object) return new Response("Media unavailable", { status: 404 });
-
-	return new Response(object.body, { status: range ? 206 : 200, headers });
 }
