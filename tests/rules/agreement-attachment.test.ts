@@ -107,12 +107,73 @@ describe("an attachment id", () => {
 		expect(decide(facts(details))).toEqual(notFound);
 	});
 
-	it("is allowed when the attachments are an object whose member is the pin, as the JSON walk visited it", () => {
+	it.each([
+		[
+			"an object of pins in place of a list",
+			JSON.stringify({ attachments: { first: { key: "k1", sha256: "d1" } } }),
+		],
+		[
+			"a duplicate key in the pin (SQLite reads the first, JavaScript the last)",
+			'{"attachments":[{"key":"k9","key":"k1","sha256":"d1"}]}',
+		],
+		[
+			"a duplicate attachments list",
+			'{"attachments":[{"key":"k9","sha256":"d9"}],"attachments":[{"key":"k1","sha256":"d1"}]}',
+		],
+		[
+			"a duplicate key in the details",
+			'{"x":1,"x":2,"attachments":[{"key":"k1","sha256":"d1"}]}',
+		],
+		[
+			"spacing the writers never produce",
+			'{ "attachments": [ { "key": "k1", "sha256": "d1" } ] }',
+		],
+		[
+			"a pin written as text",
+			JSON.stringify({
+				attachments: [JSON.stringify({ key: "k1", sha256: "d1" })],
+			}),
+		],
+		[
+			"details written as text holding JSON",
+			JSON.stringify(
+				JSON.stringify({ attachments: [{ key: "k1", sha256: "d1" }] }),
+			),
+		],
+		[
+			"a numeric key",
+			JSON.stringify({ attachments: [{ key: 1, sha256: "d1" }] }),
+		],
+		[
+			"a numeric digest",
+			JSON.stringify({ attachments: [{ key: "k1", sha256: 1 }] }),
+		],
+		[
+			"a pin in a list inside the list",
+			JSON.stringify({ attachments: [[{ key: "k1", sha256: "d1" }]] }),
+		],
+	])("is refused with %s", (_name, details) => {
+		expect(decide(facts(details))).toEqual(notFound);
+	});
+
+	it("is allowed for the exact shape the writers store, with the other fields they store", () => {
 		expect(
 			decide(
 				facts(
 					JSON.stringify({
-						attachments: { first: { key: "k1", sha256: "d1" } },
+						planned_start: "2026-01-01",
+						milestones: [{ start: "2026-01-01" }],
+						attachments: [
+							{
+								filename: "a.pdf",
+								version: "1",
+								date: "2026-01-01",
+								bytes: 10,
+								key: "k1",
+								sha256: "d1",
+							},
+						],
+						invoice_first_duration: null,
 					}),
 				),
 			),
@@ -121,6 +182,10 @@ describe("an attachment id", () => {
 
 	it("answers its 500 for details that are not JSON, and only for the offer's own request's attachment", () => {
 		expect(decide(facts("{not json"))).toEqual({
+			refused: "AttachmentDetailsUnreadable",
+		});
+		// JSON5 spellings are not JSON to the reader either: the fixed 500, never a served file.
+		expect(decide(facts("{attachments:[{key:'k1',sha256:'d1'}]}"))).toEqual({
 			refused: "AttachmentDetailsUnreadable",
 		});
 		expect(decide(facts("{not json", { ...row, request_id: "r2" }))).toEqual(

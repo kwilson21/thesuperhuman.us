@@ -53,10 +53,15 @@ export type PinnedAttachment = typeof PinnedAttachment.Type;
 const StoredDetails = Schema.fromJsonString(Schema.Json);
 
 /**
- * Reads the attachments an offer's stored agreement details pin (`$.attachments`). No details, no `attachments`, or an
- * entry that is not a key and a digest pins nothing. Text that is not JSON is unreadable: the statement this replaces
- * (`json_each` over the column) raised on it, and the route answered its fixed 500, so the rule refuses it the same way.
- * A list pins its entries; an object pins its members' values, as `json_each` visits them.
+ * Reads the attachments an offer's stored agreement details pin (`$.attachments`), serving only the exact shape the two
+ * writers store (`JSON.stringify` of details whose `attachments` `parseAgreementAttachments` checked): a plain object with
+ * a list of attachment objects, written compactly. No details pins nothing. Text that is not JSON is unreadable: the
+ * statement this replaces (`json_each` over the column) raised on it, and the route answered its fixed 500, so the rule
+ * refuses it the same way. Anything that parses but is not that exact shape pins nothing and is refused as an unpinned
+ * attachment: details that are not a plain object, attachments that are not a list, an entry that is not an object with a
+ * text key and a text digest, and text that is not what `JSON.stringify` writes for its own value (which is how a
+ * duplicate key, JSON5 spelling or odd spacing shows itself; SQLite and JavaScript read those differently, so B refuses
+ * where the SQL it replaces may have served). These inputs are unreachable through the writers.
  */
 export function readPinnedAttachments(
 	stored: string | null,
@@ -69,18 +74,14 @@ export function readPinnedAttachments(
 	if (Result.isFailure(details)) return { ok: false };
 	const root = details.success;
 
+	// A text that does not read back as itself has a duplicate key, another spelling or other spacing.
+	if (JSON.stringify(root) !== stored) return { ok: true, pins: [] };
+
 	const listed = Predicate.isObject(root)
 		? Object.entries(root).find(([name]) => name === "attachments")?.[1]
 		: undefined;
 
-	const entries: readonly unknown[] = Array.isArray(listed)
-		? listed
-		: Predicate.isObject(listed)
-			? Object.values(listed)
-			: Predicate.isNullish(listed)
-				? []
-				: [listed];
-
+	const entries: readonly unknown[] = Array.isArray(listed) ? listed : [];
 	const read = Schema.decodeUnknownOption(PinnedAttachment);
 
 	return {
