@@ -70,12 +70,13 @@
 .software-intake .board-card-origin{font:500 11px/1.4 var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
 .software-intake .board-card-text{font-size:1rem;line-height:1.4;margin-top:.2rem;overflow-wrap:anywhere}
 .software-intake .board-card[data-status="proposed"][data-basis="said"][data-grounded="false"] .board-card-text{color:var(--muted)}
-.software-intake .board-card-quote{border-left:2px solid var(--accent);padding-left:.6rem;margin-top:.45rem;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.software-intake .board-card-quote{margin-top:.35rem;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
 .software-intake :is(.board-card-reason,.board-card-answer){color:var(--muted);font-size:.9rem;margin-top:.35rem;overflow-wrap:anywhere}
 .software-intake .board-card-answer{color:var(--ink)}
 .software-intake .board-card-actions{display:flex;flex-wrap:wrap;gap:0 1rem;margin-top:.15rem}
 .software-intake .board-editor .intake-field{margin-top:.5rem;font-size:.9rem}
-.software-intake .board-editor input{min-height:44px}
+/* Fields keep 16px text (design.md, States), which also stops iOS zooming in on focus. */
+.software-intake .board-editor input{min-height:44px;font-size:1rem}
 .software-intake .board-editor-actions{display:flex;gap:1rem}
 .software-intake .board-aside{margin-top:1.5rem;border-block:1px solid var(--rule);padding:.25rem 0}
 .software-intake .board-aside ul{list-style:none;margin:0 0 .5rem;padding:0}
@@ -85,9 +86,10 @@
 .software-intake .review-outline{list-style:disc;margin:0 0 .25rem 1.1rem;white-space:normal}
 .software-intake .review-outline li{margin:.15rem 0}
 .software-intake .review-outline-origin{color:var(--muted)}
-.software-intake .board-card.is-new{box-shadow:inset 3px 0 0 var(--accent)}
+/* A new card is outlined in the accent all round for a moment, then settles to the field edge. */
+.software-intake .board-card.is-new{border-color:var(--accent)}
 @media (prefers-reduced-motion:no-preference){
-  .software-intake .board-card{transition:box-shadow 600ms var(--ease-site)}
+  .software-intake .board-card{transition:border-color 600ms var(--ease-site)}
   .software-intake .board-card.is-new{animation:board-card-in 180ms var(--ease-site)}
   @keyframes board-card-in{from{opacity:0;transform:translateY(4px)}}
 }

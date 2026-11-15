@@ -214,6 +214,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		hovering = false,
 		stopped = "",
 		failures = 0,
+		// After a failure, no request before this time, however the visitor writes (the back-off).
+		retryAt = 0,
 		requests = 0,
 		lastSendAt = 0,
 		timer: ReturnType<typeof setTimeout> | undefined,
@@ -275,6 +277,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		if (stopped) return stopped;
 
 		if (phase === "reading") return "Reading your answers…";
+
+		if (failures > 0)
+			return "Couldn’t read your answers just now. Trying again shortly.";
 
 		if (held) return "Updates are waiting below.";
 
@@ -602,7 +607,10 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		updateStatus();
 
 		if (!canAsk() || lastSent[options.path()] === answersKey()) return;
-		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
+		timer = setTimeout(
+			ask,
+			Math.max(delay, lastSendAt + GAP - Date.now(), retryAt - Date.now()),
+		);
 	}
 
 	async function ask() {
@@ -699,7 +707,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				stopped =
 					"Suggestions aren’t available right now. You can add your own notes.";
 			updateStatus();
-			schedule(failures > 0 ? retry : IDLE);
+			retryAt = failures > 0 ? Date.now() + retry : 0;
+			schedule();
 		}
 	}
 
