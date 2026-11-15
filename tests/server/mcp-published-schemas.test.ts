@@ -14,7 +14,9 @@ type Schema = { readonly [key: string]: JsonValue };
 
 type Path = readonly string[];
 
-const isMembers = (value: JsonValue | undefined) =>
+const isMembers = (
+	value: JsonValue | undefined,
+): value is { [key: string]: JsonValue } =>
 	Predicate.isObject(value) && !Array.isArray(value);
 
 const HEADERS = {
