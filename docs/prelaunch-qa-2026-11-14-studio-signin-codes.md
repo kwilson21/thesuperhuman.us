@@ -30,6 +30,8 @@ Rollback revision: `origin/main` before this branch merges. Re-check `git rev-pa
   - Refusal: "That code is invalid or expired. Enter it in the browser where you asked for it, or request a new one here."
 - 2026-11-13: remove the "Open the sign-in page" link from the sign-in code email (done; the invitation, update, review and handoff emails keep their links).
 - 2026-11-13: apply migration `0027_audio_client_signin_codes.sql` to production. That approval was for the earlier file; the file changed afterwards (see Evidence and "Before merge" step 3).
+- 2026-11-15: asked for a go-ahead on the changed migration 0027 and approval of the privacy sentence, the owner answered "You decide"; both were decided yes under that delegation.
+  - Privacy sentence (`src/pages/privacy.astro`): "An email code protects access. When you ask for an email code, the site sets a cookie in your browser for 10 minutes so that only that browser can use the code; it stores a hash of the code, and a short-lived session cookie once you sign in."
 - Recorded without a separate owner decision (a design consequence): the studio routes keep answering 503 for a database error, and the code route answers the generic 200 after a lost race. A 409 or a 500 there would show that an address has a project, and the studio area is not converted to the Effect form yet.
 
 ## Reviews
@@ -136,7 +138,7 @@ Block for the pull request description:
 ## 6. Privacy, legal and measurement
 
 - **PASS · Data stored.** `migrations/music/0027_audio_client_signin_codes.sql` stores `nonce_hash`, `code_hash` and `session_token_hash`, never the code or the cookie value; the pending cookie holds a random value only. No new processor, analytics or storage beyond the table in 0027 (`git diff origin/main --stat -- package.json pnpm-lock.yaml` is empty).
-- **UNVERIFIED · Cookie inventory and privacy notice.** The checklist asks to inventory cookies and keep the privacy notice accurate. The new `__Host-studio_pending` cookie (10 minutes, used only to complete sign-in) is not described in `src/pages/privacy.astro`, which says only that the studio stores "a short-lived session cookie". That page was not changed. Pending the owner's decision on a replacement sentence (proposed in the report that accompanies this record).
+- **PASS · Cookie inventory and privacy notice.** The checklist asks to inventory cookies and keep the privacy notice accurate. `src/pages/privacy.astro` now describes the pending cookie: an email code sets a cookie in the browser for 10 minutes so that only that browser can use the code (the `__Host-studio_pending` cookie), and the site stores a hash of the code and a short-lived session cookie once you sign in. The page's date is November 15, 2026.
 - **N/A · Consent banner.** The cookie is strictly necessary for sign-in and short lived, so a consent banner is not needed; this does not remove the privacy notice item above.
 
 ## 7. Release and final QA
