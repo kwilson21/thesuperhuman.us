@@ -4,11 +4,10 @@
 // then is the address looked up. The receipt is the same for every address; an address with no executed agreement gets it
 // without a link or a mail. Every decision is a rule in src/server/rules/agreement-link.ts: the limits, the cooldown, the
 // 30-second guard, which older links are consumed. The two writes with a guard (the cooldown row, the link batch) use
-// `decideAndSave`: the rule judges from a read, the guard re-checks at write time, and a lost guard reads and judges
+// `alwaysDecideAndSave` (the cooldown, whose rule always writes or refuses) and `decideAndSave` (the link): the rule judges from a read, the guard re-checks at write time, and a lost guard reads and judges
 // again (three tries), then answers the cooldown's sentence. The clock is read where the route has always read it: once
 // for the cooldown and once, after the address is first read, for the link; each is kept across its retries.
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 import { normalizeClientEmail } from "../../lib/client-portal";
 import { hashOfferToken } from "../../lib/software-offers";
 import {
@@ -26,7 +25,7 @@ import {
 	saveCooldown,
 	storeArchiveLink,
 } from "../agreement-store";
-import { decideAndSave } from "../guarded-save";
+import { alwaysDecideAndSave, decideAndSave } from "../guarded-save";
 import {
 	ADDRESS_ALLOWANCE,
 	afterMail,
@@ -97,12 +96,9 @@ export const requestArchiveLink = (request: ArchiveLinkRequest) =>
 			`archive-link-cooldown:${email}`,
 		);
 
-		yield* decideAndSave({
+		yield* alwaysDecideAndSave({
 			facts: readCooldown(cooldownKey),
-			decide: (facts) =>
-				takeCooldown
-					.decide({ at: cooling }, facts)
-					.pipe(Effect.map(Option.some)),
+			decide: (facts) => takeCooldown.decide({ at: cooling }, facts),
 			save: (write) => saveCooldown(cooldownKey, write.at, write.since),
 		}).pipe(
 			Effect.catchTag("SaveKeptChanging", () =>
