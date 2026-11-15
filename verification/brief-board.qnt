@@ -7,8 +7,9 @@
 //                reply whose request was sent after the card last became unowned: `since`)
 //   actions:     src/lib/brief-board.ts `keepCard`, `editCard`, `setAside`, `bringBack`, `addNote`, `undo`
 //   the outline: src/lib/brief-board.ts `briefOutline` (what is sent with the brief, and its "from your answers" items)
-// What is left out, on purpose: lanes (each lane is reconciled on its own and the rules do not cross lanes, so one is
-// enough), similarity (an idea here is its normalised key; tests/lib/brief-board.test.ts covers the matching), lane limits,
+// What is left out, on purpose: lanes (each lane is reconciled on its own; the one rule that looks across lanes is
+// naming: a reply card that names, by its ref, a card in another lane leaves that card as it is, which the model's
+// replies already cover by naming any idea; cards never move between lanes), similarity (an idea here is its normalised key; tests/lib/brief-board.test.ts covers the matching), lane limits,
 // the scheduler's timing (it only makes overlap rarer: here any number of requests overlap and replies come in any order),
 // and holding replies while focus is in the board (a held reply is the same as one delivered later).
 // The model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or

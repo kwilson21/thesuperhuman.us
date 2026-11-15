@@ -1102,7 +1102,7 @@ describe("found in the third review", () => {
 		expect(commits(text)).toBe(false);
 	});
 
-	it("moves a card the model puts in another lane, rather than copying it", () => {
+	it("leaves a card in its lane when the model puts it in another, rather than copying or moving it", () => {
 		let board = started(suggested("parts", "Booking"));
 		let n: number;
 		[board, n] = sendRequest(board);
@@ -1116,7 +1116,7 @@ describe("found in the third review", () => {
 		).board;
 
 		expect(after.cards.map((c) => [c.lane, c.text])).toEqual([
-			["audience", "Booking"],
+			["parts", "Booking"],
 		]);
 	});
 
@@ -1243,5 +1243,55 @@ describe("found in the fourth review", () => {
 			["parts", "Track attendance"],
 		]);
 		expect(after.withdrawn).toBe(0);
+	});
+});
+
+describe("found in the fifth review", () => {
+	it("restores one removed note per Undo, so an earlier removal of the same words still stands", () => {
+		let board = removeNote(addNote(emptyBoard(), "parts", "Booking"), "c1");
+		board = removeNote(addNote(board, "parts", "Booking"), "c2");
+		expect(board.removed).toHaveLength(2);
+		board = undo(board);
+		expect(board.removed).toEqual([{ lane: "parts", text: "Booking" }]);
+	});
+
+	it("keeps a card the reply names from another lane only while it still stands", () => {
+		let board = started(
+			said("purpose", "Small business owners", "Fans should hear new music"),
+		);
+
+		let n: number;
+		[board, n] = sendRequest(board);
+
+		const moved = {
+			...said("audience", "Fans", "Fans should hear new music"),
+			ref: "c1",
+		};
+
+		expect(
+			applyReply(board, [moved], n, ANSWERS, false).board.cards,
+		).toHaveLength(1);
+		expect(
+			applyReply(board, [moved], n, "A home for my band.", false).withdrawn,
+		).toBe(1);
+	});
+
+	it.each(["創業10周年記念サイト", "10주년 기념", "3원칙", "Step 1 주문 접수"])(
+		"accepts %s, which only looks like a duration or a price",
+		(text) => {
+			expect(commits(text)).toBe(false);
+		},
+	);
+
+	it.each([
+		"3주 동안",
+		"10만 원",
+		"5천만원",
+		"5千元",
+		"予算10万",
+		"3ヵ月で",
+		"24時間対応",
+	])("refuses %s", (text) => {
+		expect(commits(text)).toBe(true);
 	});
 });

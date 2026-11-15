@@ -32,12 +32,12 @@ const { privacyHref } = Astro.props;
       <ul class="board-cards" role="list" data-lane-cards></ul>
       <p class="board-empty" data-lane-empty>Nothing here yet.</p>
       <button type="button" class="board-add" data-lane-add>{addLabels.website[lane]}</button>
-      {/* After Add, so pressing Add on a full list never moves the button just pressed. */}
-      <p class="board-empty board-full" data-lane-full hidden></p>
       <div class="board-editor" data-lane-editor hidden>
         <label class="intake-field"><span data-lane-editor-label>{addLabels.website[lane]}</span><input type="text" data-lane-input autocomplete="off" /></label>
         <div class="board-editor-actions"><button type="button" data-lane-save>Add</button><button type="button" data-lane-cancel>Cancel</button></div>
       </div>
+      {/* Last in the lane, so the reason never moves Add or the open editor the visitor just used. */}
+      <p class="board-empty board-full" data-lane-full hidden></p>
     </section>
   ))}
   <details class="board-aside" data-board-aside hidden>

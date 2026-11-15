@@ -443,7 +443,10 @@ const MONEY = new RegExp(
 	[
 		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
 		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		"\\d[\\d,.]*\\s?(?:円|元|万円|万元|千円|원|만원)",
+		"\\d[\\d,.]*\\s?(?:千|万|亿|億)?\\s?(?:円|元|块|圓)",
+		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
+		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
+		"(?:预算|予算|費用|费用|价格|価格|예산|비용)\\s*[:：]?\\s*\\d",
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
 		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
@@ -460,7 +463,10 @@ const DURATION = new RegExp(
 		`\\b(?:${NUMBER_WORDS})[- ](?:hours?|days?|weeks?|months?|years?)\\b`,
 		"\\b(?:fortnights?|overnight|same[- ]day|asap)\\b",
 		"(?<![\\p{N}])\\d+\\s*(?:semanas?|meses|mes|d[ií]as?|wochen?|monate?n?|tagen?|semaines?|mois|jours?|settimane?|mesi|giorni)(?![\\p{L}])",
-		"\\d+\\s*(?:週間|か月|ヶ月|カ月|日間|天|周|個月|个月|星期|주|개월|일간)",
+		// Not "創業10周年" (an anniversary) or "Step 1 주문" (an order): 周 and 주 stand alone or before a particle.
+		"\\d+\\s*(?:週間|か月|ヶ月|カ月|ヵ月|ケ月|日間|時間|天|個月|个月|星期|개월|일간|시간)",
+		"\\d+\\s*周(?!年)",
+		"\\d+\\s?(?:주|일|년)(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|후|정도|쯤)",
 	].join("|"),
 	"iu",
 );
@@ -687,13 +693,13 @@ export function readBoardAnswer(raw: RawValue): BoardAnswer {
 	};
 }
 
-/** Whether reply number `n` may change `card`: only an unowned card that was unowned when request `n` was sent. */
 /** Whether a reply card says the idea of a note the visitor removed from that lane. */
 const removedIdea = (board: Board, item: ReplyCard) =>
 	(board.removed ?? []).some(
 		(note) => note.lane === item.lane && sameIdea(note.text, item.text),
 	);
 
+/** Whether reply number `n` may change `card`: only an unowned card that was unowned when request `n` was sent. */
 const mayChange = (card: BoardCard, n: number) =>
 	card.status === "proposed" && n > card.since;
 
@@ -741,17 +747,26 @@ export function applyReply(
 	let updated = 0;
 
 	for (const item of reply) {
-		// The card the item names: by its ref first, then by saying the same idea.
-		const byRef = cards.findIndex(
-			(card) =>
-				card.lane === item.lane && item.ref !== "" && card.id === item.ref,
-		);
+		// The card the item names by its ref, in any lane.
+		const refIndex =
+			item.ref === "" ? -1 : cards.findIndex((card) => card.id === item.ref);
 
-		if (item.basis === "said" && !quotedFrom(item.quote, answers)) {
-			if (byRef >= 0 && supported(cards[byRef])) named.add(cards[byRef].id);
+		// Cards never move between lanes: a reply that puts a card in another lane, or whose version is dropped because its
+		// passage is not in the answers, leaves the card it names as it is, while that card still stands.
+		if (
+			refIndex >= 0 &&
+			(cards[refIndex].lane !== item.lane ||
+				(item.basis === "said" && !quotedFrom(item.quote, answers)))
+		) {
+			if (supported(cards[refIndex])) named.add(cards[refIndex].id);
 
 			continue;
 		}
+
+		if (item.basis === "said" && !quotedFrom(item.quote, answers)) continue;
+
+		// The card the item names: by its ref first, then by saying the same idea.
+		const byRef = refIndex;
 
 		const index =
 			byRef >= 0
@@ -813,29 +828,9 @@ export function applyReply(
 		}
 	}
 
-	// A new idea that names, by its ref, an open card in another lane moves that card. The card stays where it is until
-	// the new idea is placed, so a move into a full lane leaves it where it was.
-	const movedFrom = (item: ReplyCard) =>
-		item.ref === ""
-			? undefined
-			: cards.find(
-					(card) =>
-						card.id === item.ref &&
-						card.lane !== item.lane &&
-						mayChange(card, n),
-				);
-
-	for (const item of fresh) {
-		const from = movedFrom(item);
-
-		if (from) named.add(from.id);
-	}
-
 	const kept = cards.filter(
 		(card) => named.has(card.id) || !mayChange(card, n),
 	);
-
-	const moved = new Set<string>();
 
 	let nextId = board.nextId,
 		added = 0;
@@ -865,18 +860,13 @@ export function applyReply(
 			edited: false,
 		});
 		added++;
-		const from = movedFrom(item);
-
-		if (from) moved.add(from.id);
 	}
 
-	const result = kept.filter((card) => !moved.has(card.id));
-
 	return {
-		board: { ...board, cards: result, nextId, applied: n },
+		board: { ...board, cards: kept, nextId, applied: n },
 		added,
 		updated,
-		withdrawn: cards.length - (result.length - added),
+		withdrawn: cards.length - (kept.length - added),
 	};
 }
 
@@ -1064,7 +1054,7 @@ export function addNote(board: Board, lane: Lane, text: string): Board {
 
 /** What the page says when a list is full and the visitor tries to add to it or bring a card back to it. */
 export const laneFull = (label: string) =>
-	`“${label}” is full. Use Not this on one of its cards, or remove a note, then try again.`;
+	`“${label}” is full. Use “Not this” on one of its cards, or remove a note, then try again.`;
 
 /** What Undo would undo, for its label; null when there is nothing. */
 export const lastAction = (board: Board) =>
@@ -1102,21 +1092,24 @@ export function undo(board: Board): Board {
 			];
 	}
 
-	// A removed note Undo brings back is no longer removed.
-	const restored = step.before.flatMap(({ card }) =>
-		card?.status === "wrote" ? [card] : [],
-	);
+	// A removed note Undo brings back is no longer removed: one entry for each note restored (the newest, which its
+	// removal added), so an earlier removal of the same words still stands.
+	const removed = [...(board.removed ?? [])];
+
+	for (const { card } of step.before)
+		if (card?.status === "wrote") {
+			const at = removed.findLastIndex(
+				(note) => note.lane === card.lane && note.text === card.text,
+			);
+
+			if (at >= 0) removed.splice(at, 1);
+		}
 
 	return {
 		...board,
 		cards: withinLimits(cards),
 		history: board.history.slice(0, -1),
-		removed: (board.removed ?? []).filter(
-			(note) =>
-				!restored.some(
-					(card) => card.lane === note.lane && card.text === note.text,
-				),
-		),
+		removed,
 	};
 }
 
@@ -1513,6 +1506,9 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 				!words ||
 				words.length > textLimits[value.lane] ||
 				cards.some((c) => c.id === value.id) ||
+				// The model's words that commit to something are never kept (an earlier build allowed some).
+				((value.status === "kept" || value.status === "proposed") &&
+					commits(words)) ||
 				(value.status === "dismissed" &&
 					cards.filter((c) => c.status === "dismissed").length >=
 						ASIDE_SAVED_MAX) ||
