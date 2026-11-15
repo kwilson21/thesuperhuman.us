@@ -297,6 +297,31 @@ describe("the file route for a verified visitor", () => {
 		).toBe(true);
 	});
 
+	it("reads the same for a studio visitor whose project is for the other client's request, as for an unknown id", async () => {
+		// The visitor has a project whose request is the very request of the looked-up agreement: a read that used the
+		// looked-up row to choose what to read next would bind that project, and differ from the unknown id's.
+		const projects = [project({ request_id: "r-other", agreement_id: "a9" })];
+
+		const unknown = await serve({
+			path: "file",
+			id: "a1",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: null,
+			projects,
+		});
+
+		const other = await serve({
+			path: "file",
+			id: "a1",
+			cookie: `studio_session=${STUDIO}`,
+			agreement: theirs,
+			projects,
+		});
+
+		expect(other).toEqual(unknown);
+		expect(other.status).toBe(404);
+	});
+
 	it("lets a studio visitor reach the copy of their own project's agreement", async () => {
 		const own = await serve({
 			path: "file",
@@ -368,6 +393,12 @@ describe("the attachment route for a signing session", () => {
 			cookie: `agreement_session=${TOKEN}`,
 			agreement: null,
 			pinned: null,
+			attachmentOffer: {
+				request_id: "r-mine",
+				agreement_details_json: JSON.stringify({
+					attachments: [{ key: "k-other", sha256: "d-other" }],
+				}),
+			},
 		});
 
 		const other = await serve({
@@ -375,7 +406,18 @@ describe("the attachment route for a signing session", () => {
 			id: "a1",
 			cookie: `agreement_session=${TOKEN}`,
 			agreement: theirs,
-			pinned: null,
+			// Another client's real attachment, pinned by that client's own offer: the offer this session names is not it.
+			pinned: {
+				request_id: "r-other",
+				object_key: "k-other",
+				sha256: "d-other",
+			},
+			attachmentOffer: {
+				request_id: "r-mine",
+				agreement_details_json: JSON.stringify({
+					attachments: [{ key: "k-other", sha256: "d-other" }],
+				}),
+			},
 		});
 
 		expect(other.status).toBe(404);
