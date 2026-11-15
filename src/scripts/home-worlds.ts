@@ -118,6 +118,21 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 
 		const horizon = document.querySelector<HTMLElement>(".horizon");
 
+		// The sun's glow at a level while music plays (it follows at once), or none (it fades) once it stops.
+		const glow = (level?: number) => {
+			if (!horizon) return;
+
+			if (level === undefined) {
+				delete horizon.dataset.playing;
+				horizon.style.removeProperty("--glow");
+
+				return;
+			}
+
+			horizon.dataset.playing = "";
+			horizon.style.setProperty("--glow", level.toFixed(3));
+		};
+
 		// The last scroll progress, and whether music is driving the edge now.
 		let progress = 0.5,
 			playing = false,
@@ -141,7 +156,7 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 			{
 				playing(level) {
 					playing = true;
-					horizon?.style.setProperty("--glow", level.toFixed(3));
+					glow(level);
 
 					if (onScreen)
 						draw(musicFrame(peaks, level, performance.now() / 1000));
@@ -150,7 +165,7 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 				stopped() {
 					playing = false;
 					draw(signalFrame(peaks, progress));
-					horizon?.style.removeProperty("--glow");
+					glow();
 				},
 			},
 			signal,
@@ -159,7 +174,7 @@ runMotion(({ signal, finePointer, onScene, onReveal, cleanup }) => {
 			edgeWatch.disconnect();
 			up?.setAttribute("d", rest.up);
 			down?.setAttribute("d", rest.down);
-			horizon?.style.removeProperty("--glow");
+			glow();
 		});
 	}
 

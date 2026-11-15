@@ -2,11 +2,12 @@ import { expect, it } from "vitest";
 import { ComparisonSignal } from "~/scripts/comparison-signal";
 import { followComparison } from "~/scripts/home-signal";
 
-/** Follows a stand-in comparison and records what Home would draw. */
-function follow() {
+/** Follows a stand-in comparison whose frames come `frame` milliseconds apart, and records what Home would draw. */
+function follow(frame = 1000 / 60) {
 	const target = new EventTarget();
 	const heard: (number | "stopped")[] = [];
 	const stop = new AbortController();
+	let clock = 0;
 
 	followComparison(
 		target,
@@ -15,13 +16,16 @@ function follow() {
 			stopped: () => heard.push("stopped"),
 		},
 		stop.signal,
+		() => clock,
 	);
 
 	return {
 		heard,
 		stop,
-		send: (level: number, playing = true) =>
-			target.dispatchEvent(new ComparisonSignal(level, playing)),
+		send: (level: number, playing = true) => {
+			target.dispatchEvent(new ComparisonSignal(level, playing));
+			clock += frame;
+		},
 	};
 }
 
@@ -64,4 +68,16 @@ it("ignores an event that only shares the name", () => {
 	);
 	target.dispatchEvent(new Event("comparison-signal"));
 	expect(heard).toEqual([]);
+});
+
+it("moves alike at any refresh rate: two frames at 120 Hz reach where one at 60 Hz does", () => {
+	const at60 = follow();
+	const at120 = follow(1000 / 120);
+
+	at60.send(1);
+	at60.send(1);
+	at120.send(1);
+	at120.send(1);
+	at120.send(1);
+	expect(at120.heard.at(-1)).toBeCloseTo(Number(at60.heard.at(-1)), 10);
 });
