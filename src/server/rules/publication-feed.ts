@@ -241,9 +241,11 @@ export const moreToRead = alwaysWrites({
 		_facts: Record<string, never>,
 	) => {
 		const { history } = request.choice;
+
 		const firstUnread = history.findIndex(
 			(pick) => !request.asked.has(pick.revision),
 		);
+
 		const read = firstUnread < 0 ? history : history.slice(0, firstUnread);
 
 		const missing =
