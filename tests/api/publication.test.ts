@@ -166,7 +166,7 @@ describe("publication receiver", () => {
 	);
 	it("does not expose storage errors and serves only listed public projects", async () => {
 		const response = await POST(ctx(body, { PUBLICATION_DB: unmigratedD1() }));
-		expect(response.status).toBe(503);
+		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({
 			error: "Delivery pending. Retry the same event.",
 		});

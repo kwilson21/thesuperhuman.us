@@ -4241,7 +4241,8 @@ it.each(["creating", "open", "payment_failed", "uncollectible", "paid"])(
 		const response = await call();
 		expect(response.status).toBe(409);
 		expect(await response.json()).toMatchObject({
-			error: "Void or refund the deposit invoice first.",
+			error:
+				"Void the deposit invoice first, or refund it in Stripe and record the refund with owner:stripe:reconcile --software-deposit-refunded.",
 		});
 		expect((await offer())!.status).toBe("sent");
 		expect(
@@ -4512,7 +4513,8 @@ it("rechecks a newly live deposit inside the abandonment transaction", async () 
 
 	expect(response.status).toBe(409);
 	expect(await response.json()).toMatchObject({
-		error: "Void or refund the deposit invoice first.",
+		error:
+			"Void the deposit invoice first, or refund it in Stripe and record the refund with owner:stripe:reconcile --software-deposit-refunded.",
 	});
 	expect((await offer())!.status).toBe("sent");
 	expect(
