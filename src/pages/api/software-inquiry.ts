@@ -55,9 +55,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	if (!env?.TURNSTILE_SECRET_KEY) return intakeNotAvailable();
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
-	const db = env.MUSIC_DB;
 
-	if (!bindings.ok || !db) return intakeNotAvailable();
+	if (!bindings.ok) return intakeNotAvailable();
 
 	/** A failure the form answers with the temporary sentence, logged as it always was. */
 	const failed = (failure: { readonly failure: unknown }) =>

@@ -77,6 +77,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				SaveKeptChanging: () => cannotSend(CANNOT_SEND),
 				IntakeReadFailed: failed,
 				CopyClaimFailed: failed,
+				CopyNotBuilt: failed,
 				CopyNotRecorded: failed,
 			}),
 		),

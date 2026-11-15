@@ -48,6 +48,11 @@ export class CopyNotRecorded extends Data.TaggedError("CopyNotRecorded")<{
 	readonly status: "uncertain" | "failed";
 }> {}
 
+/** The copy could not be built from the stored brief (its answers cannot be turned into text): nothing was sent, and a failure was recorded over this attempt. */
+export class CopyNotBuilt extends Data.TaggedError("CopyNotBuilt")<{
+	readonly failure: unknown;
+}> {}
+
 /** What the provider did, and the status the copy now records. */
 export type CopyDelivery = {
 	readonly outcome: ClientCopyOutcome;
@@ -89,6 +94,15 @@ const claimFailed = (
 		);
 	});
 
+/** The provider was never asked: a failure is recorded over this attempt, and the state is logged as failed. */
+const failedBeforeAsking = (write: ClaimWrite) =>
+	Effect.gen(function* () {
+		yield* recordOwnFailure(write.request.id, write.at).pipe(
+			Effect.catchTag("IntakeStoreFailed", () => say(NOT_RECORDED)),
+		);
+		yield* stateIs("failed");
+	});
+
 /** The answer could not be recorded: a provider that was never asked leaves a failure behind, one that was asked leaves the claim. */
 const notRecorded = (
 	write: ClaimWrite,
@@ -107,10 +121,7 @@ const notRecorded = (
 			);
 		}
 
-		yield* recordOwnFailure(write.request.id, write.at).pipe(
-			Effect.catchTag("IntakeStoreFailed", () => say(NOT_RECORDED)),
-		);
-		yield* stateIs("failed");
+		yield* failedBeforeAsking(write);
 
 		return yield* Effect.fail(
 			new CopyNotRecorded({ failure: failure.failure, status: "failed" }),
@@ -121,7 +132,13 @@ const notRecorded = (
 const sendClaimed = (write: ClaimWrite) =>
 	Effect.gen(function* () {
 		const mail = yield* ClientCopyMail;
-		const outcome = yield* mail.send(briefCopyMessage(write.request));
+
+		const message = yield* Effect.try({
+			try: () => briefCopyMessage(write.request),
+			catch: (failure) => new CopyNotBuilt({ failure }),
+		}).pipe(Effect.tapError(() => failedBeforeAsking(write)));
+
+		const outcome = yield* mail.send(message);
 		const status = statusOf(outcome);
 
 		yield* recordCopyStatus(write.request.id, write.at, status).pipe(
@@ -211,6 +228,7 @@ export const sendFirstBriefCopy = (input: {
 			// The request could not be read, so nothing was claimed.
 			IntakeReadFailed: () => Effect.as(stateIs("failed"), "failed"),
 			CopyClaimFailed: () => Effect.succeed("failed"),
+			CopyNotBuilt: () => Effect.succeed("failed"),
 			CopyNotRecorded: (failure) => Effect.succeed(failure.status),
 		}),
 	);

@@ -127,6 +127,12 @@ const throwing = (pattern: RegExp, after = 0): MusicWorldOptions => {
 	};
 };
 
+/** A stored answer that is an object with a text toString: the brief cannot be turned into a label, so no copy can be built. */
+const UNBUILDABLE: RequestDetails = {
+	path: "webapp",
+	timing: { toString: "x" },
+};
+
 const CLAIM = /clientCopyStatus','uncertain'/;
 
 const READ = /FROM owner_requests WHERE id=\?/;
@@ -450,6 +456,37 @@ describe("a failure of the database", () => {
 		]);
 	});
 
+	it("building the copy records a failure over this attempt, asks nothing of the provider and names the failure", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld();
+
+		seed(world, UNBUILDABLE);
+		const { result, sent } = await resend(world);
+
+		expect(result).toMatchObject({ failed: "CopyNotBuilt" });
+		expect(sent).toEqual([]);
+		expect(detailsOf(world)).toMatchObject({
+			clientCopyStatus: "failed",
+			clientCopyAttemptedAt: NOW.toISOString(),
+		});
+		expect(logged.mock.calls).toEqual([["Client brief copy state is failed."]]);
+	});
+
+	it("building the copy and recording its failure both failing logs both", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld(throwing(/clientCopyStatus','failed'/));
+
+		seed(world, UNBUILDABLE);
+		const { result } = await resend(world);
+
+		expect(result).toMatchObject({ failed: "CopyNotBuilt" });
+		expect(detailsOf(world).clientCopyStatus).toBe("uncertain");
+		expect(logged.mock.calls).toEqual([
+			["Client brief copy failure could not be recorded."],
+			["Client brief copy state is failed."],
+		]);
+	});
+
 	it("on a request whose details are not a JSON object is named, and nothing is sent", async () => {
 		const world = musicWorld();
 
@@ -556,6 +593,18 @@ describe("the public form's first copy", () => {
 
 		seed(record);
 		expect((await first(record)).result).toEqual({ done: "uncertain" });
+	});
+
+	it("answers failed and sends nothing when the copy cannot be built", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld();
+
+		seed(world, UNBUILDABLE);
+		const { result, sent } = await first(world);
+
+		expect(result).toEqual({ done: "failed" });
+		expect(sent).toEqual([]);
+		expect(detailsOf(world).clientCopyStatus).toBe("failed");
 	});
 
 	it("answers failed when the request cannot be read", async () => {
