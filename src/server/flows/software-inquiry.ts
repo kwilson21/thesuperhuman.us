@@ -36,11 +36,11 @@ import {
 import { answerStoredBrief, storeBrief } from "../rules/software-inquiry";
 import {
 	Background,
-	BriefCopy,
 	OwnerAlert,
 	SoftwareNotice,
 	TurnstileCheck,
 } from "../services";
+import { sendFirstBriefCopy } from "./brief-copy";
 import { countRequest, giveBack } from "./rate-limit";
 
 const ROUTE = "/api/software-inquiry";
@@ -255,8 +255,10 @@ export const submitInquiry = (submission: InquirySubmission) =>
 
 		// SAFETY: the rule stores whenever nothing is stored, so `saved` is the stored brief here.
 		const request = saved as OwnerRequest;
-		const copy = yield* BriefCopy;
-		const clientCopyStatus = yield* copy.deliver(request);
+		const clientCopyStatus = yield* sendFirstBriefCopy({
+			id: request.id,
+			now: submission.now,
+		});
 		const notice = yield* SoftwareNotice;
 		const background = yield* Background;
 

@@ -18,7 +18,7 @@ import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
 	liveBackground,
-	liveBriefCopy,
+	liveClientCopyMail,
 	liveOwnerAlert,
 	liveSoftwareNotice,
 	liveTurnstileCheck,
@@ -74,7 +74,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				liveTurnstileCheck(env.TURNSTILE_SECRET_KEY),
 			),
 			Context.merge(
-				Context.merge(liveOwnerAlert(env), liveBriefCopy(db, env)),
+				Context.merge(liveOwnerAlert(env), liveClientCopyMail(env)),
 				Context.merge(
 					liveSoftwareNotice(env),
 					liveBackground(locals.runtime?.ctx),
@@ -122,7 +122,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 						),
 					),
 				RateLimitStoreFailed: failed,
-				BriefCopyFailed: failed,
 			}),
 		),
 		// A defect is the route's temporary sentence, logged once.

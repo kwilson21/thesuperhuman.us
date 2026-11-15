@@ -24,8 +24,8 @@ export class NoSuchSoftwareRequest extends Data.TaggedError(
 	readonly say = "There is no such software request.";
 }
 
-/** The sentence every refusal to send the copy again gives the owner. */
-const CANNOT_SEND = "This brief copy cannot be sent again here.";
+/** The sentence every refusal to send the copy again gives the owner, and a claim lost three times in a row. */
+export const CANNOT_SEND = "This brief copy cannot be sent again here.";
 
 /** The request is resolved or withdrawn: its copy is not sent. */
 export class BriefCopyRequestClosed extends Data.TaggedError(

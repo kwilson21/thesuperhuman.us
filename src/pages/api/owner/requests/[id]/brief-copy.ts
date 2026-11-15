@@ -1,95 +1,86 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
-import { musicRequest } from "~/lib/music-request";
-import { getOwnerRequest } from "~/lib/owner-requests";
-import { deliverSoftwareBriefCopyDetailed } from "~/lib/software-brief-copy";
-import { isObject } from "~/lib/type-guards";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import {
+	briefCopyFailed,
+	briefCopyUnavailable,
+	musicRequest,
+} from "~/lib/music-request";
+import { readBriefCopyInput } from "~/server/brief-copy-input";
 import { logUnexpected } from "~/server/failure";
+import { type CopyDelivery, resendBriefCopy } from "~/server/flows/brief-copy";
+import { CANNOT_SEND } from "~/server/rules/brief-copy";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable, liveClientCopyMail } from "~/server/services";
 
 export const prerender = false;
 
 const ROUTE = "/api/owner/requests/[id]/brief-copy";
 
-const schema = z.object({
-	action: z.literal("send"),
-	confirmedNotSent: z.boolean().optional(),
-});
+/** What the owner is told for what the provider did with the copy. */
+const answerDelivery = (delivery: CopyDelivery) => {
+	switch (delivery.outcome) {
+		case "sent":
+			return Response.json({ ok: true });
+		// No mail key or address on this deployment: unavailable, and nothing was asked of the provider.
+		case "unconfigured":
+			return briefCopyUnavailable();
+		// The provider refused the copy or did not answer. What was recorded is on the request.
+		case "refused":
+		case "uncertain":
+			return briefCopyFailed();
+	}
+};
 
-/** A failure of the database or of the mail provider: the route's fixed sentence, whatever was raised. */
-const failed = () =>
-	Response.json(
-		{
-			ok: false,
-			error: "The brief copy could not be sent. Please try again.",
-		},
-		{ status: 500 },
-	);
+/** The copy cannot be sent here: the request, its copy or a lost claim does not allow it. */
+const cannotSend = (say: string) =>
+	Effect.succeed(Response.json({ ok: false, error: say }, { status: 409 }));
+
+/** A failure of the database, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = (failure: { readonly failure: unknown }) =>
+	Effect.sync(() => {
+		logUnexpected(ROUTE, failure.failure);
+
+		return briefCopyFailed();
+	});
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
+	const bindings = env ? bindingsOrUnavailable(env, ["MUSIC_DB"]) : undefined;
 
-	if (!env?.MUSIC_DB) return Response.json({ ok: false }, { status: 503 });
+	if (!env || !bindings?.ok)
+		return Response.json({ ok: false }, { status: 503 });
 	const body = await musicRequest(request, 1024);
 
 	if (body instanceof Response) return body;
-	const parsed = schema.safeParse(body);
+	const input = readBriefCopyInput(body);
 
-	if (!parsed.success) return Response.json({ ok: false }, { status: 400 });
+	if (!input.ok) return Response.json({ ok: false }, { status: 400 });
 
-	try {
-		// A request with no id is no such request. (Astro never routes one here: the segment is not empty.)
-		const saved = params.id
-			? await getOwnerRequest(env.MUSIC_DB, params.id)
-			: null;
-
-		if (!saved || saved.kind !== "software")
-			return Response.json({ ok: false }, { status: 404 });
-
-		// Stored details are a JSON object. Anything else cannot record that a copy was claimed, so no email is sent for it.
-		if (!isObject(saved.details) || Array.isArray(saved.details)) {
-			logUnexpected(ROUTE, new Error("Stored details are not a JSON object."));
-
-			return failed();
-		}
-
-		const delivery = await deliverSoftwareBriefCopyDetailed(
-			env.MUSIC_DB,
-			saved,
-			env,
-			true,
-			parsed.data.confirmedNotSent,
-		);
-
-		switch (delivery.kind) {
-			case "sent":
-				return Response.json({ ok: true });
-			case "notClaimed":
-				return Response.json(
-					{ ok: false, error: "This brief copy cannot be sent again here." },
-					{ status: 409 },
-				);
-			// No mail key or address on this deployment: unavailable, and nothing was asked of the provider.
-			case "unconfigured":
-				return Response.json(
-					{
-						ok: false,
-						error: "The brief copy could not be sent. Please try again.",
-					},
-					{ status: 503 },
-				);
-			// The provider refused the copy or did not answer. What was recorded is on the request.
-			case "refused":
-			case "uncertain":
-				return failed();
-			case "unexpected":
-				logUnexpected(ROUTE, delivery.failure);
-
-				return failed();
-		}
-	} catch (failure) {
-		logUnexpected(ROUTE, failure);
-
-		return failed();
-	}
+	return runRoute(
+		Context.merge(bindings.services, liveClientCopyMail(env)),
+		resendBriefCopy({
+			// A request with no id is no such request. (Astro never routes one here: the segment is not empty.)
+			id: params.id ?? "",
+			confirmedNotSent: input.value.confirmedNotSent ?? false,
+			now: () => new Date(),
+		}).pipe(
+			Effect.map(answerDelivery),
+			Effect.catchTags({
+				NoSuchSoftwareRequest: () =>
+					Effect.succeed(Response.json({ ok: false }, { status: 404 })),
+				BriefCopyRequestClosed: (refusal) => cannotSend(refusal.say),
+				BriefCopyNoAddress: (refusal) => cannotSend(refusal.say),
+				BriefCopyNotDue: (refusal) => cannotSend(refusal.say),
+				// The claim was lost to another sender three times in a row.
+				SaveKeptChanging: () => cannotSend(CANNOT_SEND),
+				IntakeReadFailed: failed,
+				CopyClaimFailed: failed,
+				CopyNotRecorded: failed,
+			}),
+		),
+		// A defect is the route's fixed sentence, logged once.
+		{ route: ROUTE, answer: briefCopyFailed },
+	);
 };

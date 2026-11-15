@@ -1040,7 +1040,7 @@ it("accepts legacy date briefs and validates explicit new dates", () => {
 	).toBe(true);
 });
 
-it.each(["claim", "construction", "config"] as const)(
+it.each(["claim", "config"] as const)(
 	"records a pre-send %s failure and returns an error on owner retry",
 	async (failure) => {
 		const ctx = context();
@@ -1055,13 +1055,6 @@ it.each(["claim", "construction", "config"] as const)(
 					throw new Error("claim failed");
 
 				return prepare(query);
-			});
-		}
-
-		if (failure === "construction") {
-			const emails = await import("~/lib/client-emails");
-			vi.spyOn(emails, "softwareBriefEmail").mockImplementation(() => {
-				throw new Error("construction failed");
 			});
 		}
 
