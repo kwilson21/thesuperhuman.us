@@ -59,6 +59,7 @@ const href = (path: string) =>
         <h1 tabindex="-1" data-question-title></h1>
         <p class="intake-intro" data-question-hint></p>
         <p class="intake-footnote" data-question-footnote>Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
+        <details class="brief-examples"><summary>Not sure what to write? See examples</summary><ul data-examples-list></ul></details>
         <div class="intake-field brief-answer">
           <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
           <div class="brief-ghost" aria-hidden="true"><span data-ghost-prefix></span><span data-ghost-text></span></div>
@@ -84,7 +85,7 @@ const href = (path: string) =>
       <section data-step="4" hidden>
         <h1 tabindex="-1">Is there a budget you’d like to share?</h1>
         <p class="intake-intro">Only if it helps. I’ll quote a fixed price either way.</p>
-        <label class="intake-field">Amount (optional)<input name="budgetNote" type="number" min="0" step="0.01" inputmode="decimal" /></label>
+        <label class="intake-field">Amount in US dollars (optional)<input name="budgetNote" type="number" min="0" step="0.01" inputmode="decimal" /></label>
         <p data-form-error="budgetNote" hidden></p><button type="button" data-skip>Skip</button>
       </section>
       <section data-step="5" hidden>

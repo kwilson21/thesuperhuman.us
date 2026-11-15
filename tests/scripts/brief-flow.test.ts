@@ -42,8 +42,8 @@ class Node extends EventTarget {
 
 		return node;
 	}
-	replaceChildren() {
-		this.children = [];
+	replaceChildren(...nodes: Node[]) {
+		this.children = nodes;
 	}
 	contains(node: Node) {
 		return Object.values(this.nodes).includes(node);
@@ -194,6 +194,7 @@ async function setup(
 			"[data-suggestions-off]",
 			"[data-ghost-prefix]",
 			"[data-ghost-text]",
+			"[data-examples-list]",
 		])
 			section.nodes[selector] = new Node();
 		section.nodes["[data-ghost-prefix]"].parentElement = new Node();
@@ -1456,6 +1457,45 @@ it("shows the web app brief with seven screens, its own first question and no ti
 	click("[data-next]");
 	expect(current()).toBe(3);
 	expect(form.nodes["[data-timing-hint]"].hidden).toBe(true);
+});
+
+it("lists example answers under each written question and swaps them with the path", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	const listed = (index: number) =>
+		steps[index].nodes["[data-examples-list]"].children.map(
+			(item) => item.textContent,
+		);
+
+	for (const path of ["workflow", "webapp", "website"] as const) {
+		backToStart();
+		choose("path", path);
+		briefQuestions[path].forEach((question, i) => {
+			expect(listed(i + 1)).toEqual(question.examples);
+			expect(field(question.key).placeholder).toBe(question.placeholder);
+		});
+	}
+});
+
+it("gives every written question a placeholder and a few different examples, kept within its limit", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	for (const question of Object.values(briefQuestions).flat()) {
+		expect(question.placeholder).not.toBe("");
+		expect(question.examples.length).toBeGreaterThanOrEqual(2);
+		expect(new Set(question.examples).size).toBe(question.examples.length);
+		expect(question.examples).not.toContain(question.placeholder);
+
+		for (const text of [question.placeholder, ...question.examples])
+			expect(text.length).toBeLessThanOrEqual(question.max);
+	}
+
+	const page = readFileSync("src/pages/software/start.astro", "utf8");
+
+	expect(page).toContain(
+		'<details class="brief-examples"><summary>Not sure what to write? See examples</summary><ul data-examples-list></ul></details>',
+	);
+	expect(page).toContain("Amount in US dollars (optional)");
 });
 
 it("restores an old idea draft as a web app brief with its idea as the first answer", async () => {
