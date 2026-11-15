@@ -2,8 +2,8 @@
 // only a brief not stored yet is counted against the request limit and stored. A brief already stored under the id (a retry
 // of the same form) is answered with the stored one and is not counted. The store is guarded by the unique index on the id:
 // when another request stores the same id between the look-up and the insert, the look-up is made again (three tries, src/server/guarded-save.ts),
-// finds the other request's brief and answers with it, and this request's allowance is given back, as a retry would have been
-// answered. A failed insert gives the allowance back too, is logged, sends the owner an urgent alert and tells the visitor the
+// finds the other request's brief and answers with it, as a retry would have been answered; the rival is the same visitor's
+// same submission, so this request keeps the allowance it spent and the address-wide count is left alone. A failed insert gives the allowance back too, is logged, sends the owner an urgent alert and tells the visitor the
 // brief was not stored, unless a look-up then finds it stored. A stored brief is answered after the client's copy is sent;
 // the owner notice is handed to the background (ctx.waitUntil, with no context it is waited for) at the point the route always
 // did, and never changes the answer.
@@ -168,12 +168,9 @@ export const submitInquiry = (submission: InquirySubmission) =>
 				if (Result.isFailure(rival))
 					yield* Effect.sync(() => logUnexpected(ROUTE, rival.failure.failure));
 
-				if (Result.isSuccess(rival) && rival.success) {
-					// This request stored nothing and sent nothing, so its allowance is given back.
-					yield* release;
-
+				// The rival is the same visitor's same submission, already stored: the allowance stays spent.
+				if (Result.isSuccess(rival) && rival.success)
 					return yield* answerStored(rival.success);
-				}
 
 				if (failure instanceof BriefTooLarge) {
 					yield* release;
@@ -285,12 +282,8 @@ export const submitInquiry = (submission: InquirySubmission) =>
 
 		const { facts, saved } = stored.done;
 
-		// Nothing was stored because the id was already taken: a retry, or the loser of a race. A loser counted its allowance.
-		if (facts.stored) {
-			if ((yield* Ref.get(counted)) === true) yield* release;
-
-			return yield* answerStored(facts.stored);
-		}
+		// Nothing was stored because the id was already taken: a retry, or the loser of a race, which keeps its allowance.
+		if (facts.stored) return yield* answerStored(facts.stored);
 
 		// SAFETY: the rule stores whenever nothing is stored, so `saved` is the stored brief here.
 		const request = saved as OwnerRequest;

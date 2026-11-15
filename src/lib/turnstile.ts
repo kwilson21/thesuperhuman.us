@@ -11,13 +11,14 @@ function hasSuccessFlag(value: unknown): value is { success: unknown } {
 }
 
 /**
- * Error codes that mean the fault is ours (a missing or wrong secret, or Cloudflare itself): the visitor did nothing wrong,
- * so the answer is "unavailable", not "complete the check again".
+ * Error codes that mean the fault is ours (a missing or wrong secret, a malformed verification request, or Cloudflare
+ * itself): the visitor did nothing wrong, so the answer is "unavailable", not "complete the check again".
  */
 const SERVICE_FAULT_CODES = [
 	"internal-error",
 	"missing-input-secret",
 	"invalid-input-secret",
+	"bad-request",
 ];
 
 function reportsServiceFault(value: { success: unknown }): boolean {
