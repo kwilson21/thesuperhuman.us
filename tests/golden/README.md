@@ -178,7 +178,8 @@ prints where the first difference is. A case with no D1 entries at all (the olde
 
 The three older recorder fixtures (contact, resume-request and resume-approve) stay on the older recorder. They use their
 own record shape (`answers` and a flat effect list, without steps, effect kinds or digests) and have no D1 entries, so the
-D1 rule above never applies to them. What `golden:neutral` can show for them: every response (status, headers, body) and
+D1 rule above never applies to them.
+They carry no `format` field. `scripts/golden-format-proof.mjs` does not compare them by format: for a case with no `format` in either revision it requires the two cases to be identical field for field, and reports any difference as a problem. What `golden:neutral` can show for them: every response (status, headers, body) and
 every KV operation and fetch, with its order, is identical between two revisions. What it cannot show: anything about a
 database (these routes use KV and fetch only, so every state they change is a compared KV operation or fetch). Bringing
 them onto this harness would rename every pre-existing field, so it cannot be shown to keep them.
