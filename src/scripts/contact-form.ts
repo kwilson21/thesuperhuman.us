@@ -37,6 +37,7 @@ export function setupContactForm() {
 	const sendNow = panel?.querySelector<HTMLButtonElement>("[data-hold-send]");
 	// The fields stay editable while a send is in flight, so the confirmation names what was sent, not what the fields hold now.
 	let sent = { name: "", email: "" };
+	let notSent: ReturnType<typeof setTimeout> | undefined;
 
 	const showCount = (text: string) => {
 		// Only a change is written, so the timer's text is not rewritten under a screen reader every tick.
@@ -76,18 +77,19 @@ export function setupContactForm() {
 				listening.abort();
 
 				if (send) {
-					// The panel stays up while the message sends; the form comes back only if the send fails.
+					// The panel stays up while the message sends; the form comes back only if the send fails. The count takes
+					// focus, so "Sending…" is read out and focus does not drop with the buttons it disables.
 					showCount("Sending…");
 
 					for (const button of [undo, sendNow])
 						if (button) button.disabled = true;
-					panel.focus();
+					count?.focus({ preventScroll: true });
 				} else {
 					panel.hidden = true;
 					form.hidden = false;
 					form.querySelector<HTMLElement>('[name="email"]')?.focus();
 					// Set once the form is back in view, so the status is read out as it appears.
-					setTimeout(() => {
+					notSent = setTimeout(() => {
 						if (status)
 							status.textContent =
 								"Not sent. Edit your message, then send it again.";
@@ -134,12 +136,17 @@ export function setupContactForm() {
 
 			for (const button of [undo, sendNow]) if (button) button.disabled = false;
 
+			clearTimeout(notSent);
+
 			if (status) status.textContent = "";
 			tick();
 			timer = setInterval(tick, 250);
 			form.hidden = true;
 			panel.hidden = false;
-			panel.focus();
+			// The form was taller than the panel, so the panel's top can open above the screen: bring the heading and
+			// count into view before focusing, which would not scroll a panel that is already partly in view.
+			panel.querySelector("h3")?.scrollIntoView({ block: "nearest" });
+			panel.focus({ preventScroll: true });
 		});
 
 	setupFormSubmission({

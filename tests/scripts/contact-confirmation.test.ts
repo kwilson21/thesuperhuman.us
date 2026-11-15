@@ -76,8 +76,10 @@ function mount({
 			"[data-hold-email]",
 			"[data-hold-from]",
 			"[data-hold-message]",
-		].map((selector) => [selector, { textContent: "" }]),
+		].map((selector) => [selector, { textContent: "", focus: vi.fn() }]),
 	);
+
+	const heading = { scrollIntoView: vi.fn() };
 
 	const buttons = new Map([
 		["[data-hold-undo]", undo],
@@ -88,10 +90,13 @@ function mount({
 		...element(),
 		hidden: true,
 		querySelector: (selector: string) =>
-			texts.get(selector) ?? buttons.get(selector) ?? null,
+			selector === "h3"
+				? heading
+				: (texts.get(selector) ?? buttons.get(selector) ?? null),
 	};
 
 	const text = (selector: string) => texts.get(selector)?.textContent;
+	const count = texts.get("[data-hold-count]")!;
 
 	let submit: (() => Promise<void>) | undefined;
 
@@ -118,6 +123,7 @@ function mount({
 	};
 
 	const answers: ((response: Response) => void)[] = [];
+	const failures: ((error: Error) => void)[] = [];
 	const windowEvents = new EventTarget();
 
 	const documentEvents = Object.assign(new EventTarget(), {
@@ -143,8 +149,9 @@ function mount({
 
 	const fetch = vi.fn(
 		(_url: string, init: { body: string; keepalive?: boolean }) =>
-			new Promise<Response>((resolve) => {
+			new Promise<Response>((resolve, reject) => {
 				answers.push(resolve);
+				failures.push(reject);
 				void init;
 			}),
 	);
@@ -159,6 +166,8 @@ function mount({
 		values,
 		form,
 		panel,
+		heading,
+		count,
 		page,
 		status,
 		email,
@@ -176,6 +185,7 @@ function mount({
 		submit: () => submit!(),
 		answer: (body: ContactAnswer = { ok: true }, status = 200) =>
 			answers.shift()!(Response.json(body, { status })),
+		fail: () => failures.shift()!(new TypeError("Failed to fetch")),
 	};
 }
 
@@ -225,7 +235,10 @@ it("holds the message where the visitor can check it, then sends it when the tim
 	expect(contact.fetch).not.toHaveBeenCalled();
 	expect(contact.form.hidden).toBe(true);
 	expect(contact.panel.hidden).toBe(false);
-	expect(contact.panel.focus).toHaveBeenCalled();
+	expect(contact.heading.scrollIntoView).toHaveBeenCalledWith({
+		block: "nearest",
+	});
+	expect(contact.panel.focus).toHaveBeenCalledWith({ preventScroll: true });
 	expect(contact.text("[data-hold-count]")).toBe(
 		holdCountText(CONTACT_HOLD_SECONDS),
 	);
@@ -246,6 +259,8 @@ it("holds the message where the visitor can check it, then sends it when the tim
 	expect(contact.form.hidden).toBe(true);
 	expect(contact.undo.disabled).toBe(true);
 	expect(contact.sendNow.disabled).toBe(true);
+	// The count takes focus, so "Sending…" is read out.
+	expect(contact.count.focus).toHaveBeenCalled();
 	contact.answer();
 	await sending;
 
@@ -272,8 +287,13 @@ it("sends nothing on Undo and edit, and sends at once on Send now", async () => 
 	);
 	expect(contact.email.focus).toHaveBeenCalled();
 
+	// Leaving after Undo sends nothing: the hold is over.
+	contact.leave();
+	contact.switchAway();
+	await vi.advanceTimersByTimeAsync(0);
+	expect(contact.fetch).not.toHaveBeenCalled();
+
 	contact.values.set("email", "alex@example.org");
-	contact.panel.focus.mockClear();
 
 	const second = contact.submit();
 
@@ -284,8 +304,8 @@ it("sends nothing on Undo and edit, and sends at once on Send now", async () => 
 	expect(contact.sentBodies()).toEqual([
 		expect.objectContaining({ email: "alex@example.org" }),
 	]);
-	// Focus stays on the panel, not on the button that Send now disabled.
-	expect(contact.panel.focus).toHaveBeenCalled();
+	// Focus moves to the count, not left on the button that Send now disabled.
+	expect(contact.count.focus).toHaveBeenCalled();
 	contact.answer();
 	await second;
 	expect(contact.reply.textContent).toContain("alex@example.org");
@@ -297,7 +317,9 @@ it("sends at once when the visitor leaves or switches away, since Undo only work
 		const sending = contact.submit();
 
 		contact[away]();
-		await vi.advanceTimersByTimeAsync(0);
+
+		// The send starts in the microtasks after the event, with no timer run: a page that is unloading runs no timers.
+		for (let step = 0; step < 5; step++) await Promise.resolve();
 		expect(contact.fetch).toHaveBeenCalledTimes(1);
 		expect(contact.fetch.mock.calls[0][1].keepalive).toBe(true);
 		contact.answer();
@@ -330,6 +352,26 @@ it("returns to the form when the held message is refused, where the message show
 	expect(contact.form.hidden).toBe(false);
 	expect(contact.status.textContent).toBe("Captcha failed.");
 	expect(contact.status.focus).toHaveBeenCalled();
+});
+
+it("brings the form back before a failed send's message takes focus", async () => {
+	const contact = mount();
+	const sending = contact.submit();
+	let formHiddenAtFocus: boolean | undefined;
+
+	contact.status.focus.mockImplementation(() => {
+		formHiddenAtFocus = contact.form.hidden;
+	});
+	contact.sendNow.click();
+	await vi.advanceTimersByTimeAsync(0);
+	contact.fail();
+	await sending;
+
+	expect(contact.status.textContent).toBe(
+		"We couldn’t confirm your message was sent. Your text is still here. Try again or use email.",
+	);
+	expect(formHiddenAtFocus).toBe(false);
+	expect(contact.panel.hidden).toBe(true);
 });
 
 it("does not hold a form the server would refuse at once", async () => {
@@ -365,9 +407,9 @@ it("names the address that was sent, even when the field changes while sending",
 it("gives the hold every part the script fills, with a fixed label and no other address", () => {
 	for (const hook of [
 		'<h3 id="contact-hold-title">Check it before it sends.</h3>',
-		`<p class="contact-hold-count" role="timer" data-hold-count>${holdCountText(CONTACT_HOLD_SECONDS)}</p>`,
-		'aria-labelledby="contact-hold-title" aria-describedby="contact-hold-about"',
-		"I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving this page sends it right away.",
+		`<p id="contact-hold-count" class="contact-hold-count" role="timer" tabindex="-1" data-hold-count>${holdCountText(CONTACT_HOLD_SECONDS)}</p>`,
+		'aria-labelledby="contact-hold-title" aria-describedby="contact-hold-count contact-hold-about"',
+		"I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving or switching away from this page sends it right away.",
 		"data-hold-undo>Undo and edit</button>",
 		"data-hold-send>Send now</button>",
 		"data-hold-from></p>",
