@@ -475,8 +475,10 @@ enabled only while a request is between its read and its write, which is the win
 bias the random runs rarely reach the races.
 
 - `audio-project-messages.qnt` (module `projectMessages`): a client's messages and review decisions, with the rate limit,
-  the review awaiting an answer, the revision rounds and the stop that closes access. 7 properties, 7 mutants.
-  `RuleNoRounds` drops the rounds condition from the rule and the write; the others remove one condition of the write.
+  the review awaiting an answer, the revision rounds and the stop that closes access. The rule reads the count and the write
+  re-checks it. 7 properties, 7 mutants and 2 equivalent mutants. `RuleNoRounds` drops the rounds condition from the rule and the
+  write; the others remove one condition of the write. `WriteNoRounds` and `RuleNoCount` drop one of two checks of the same
+  fact and keep every property. Revision rounds are not capped, as in the code.
 - `audio-project-files.qnt` (module `projectFiles`): an upload that starts, completes or is aborted, and the owner's
   publish, revoke and completion, with R2 as separate steps. 8 properties, 11 mutants. It found that the stage compare
   already protects the published final, so the conversion's completion compares the stage and not the file. The revoke's
