@@ -32,7 +32,12 @@ describe("checkTurnstile", () => {
 		expect(await checkTurnstile("tok", "secret", "1.2.3.4")).toBe("refused");
 	});
 
-	it.each(["internal-error", "missing-input-secret", "invalid-input-secret"])(
+	it.each([
+		"internal-error",
+		"missing-input-secret",
+		"invalid-input-secret",
+		"bad-request",
+	])(
 		"is unavailable when Cloudflare reports %s, which is a fault on our side",
 		async (code) => {
 			fetchMock.mockResolvedValueOnce(
@@ -51,7 +56,6 @@ describe("checkTurnstile", () => {
 		"missing-input-response",
 		"invalid-input-response",
 		"timeout-or-duplicate",
-		"bad-request",
 		"some-future-code",
 	])(
 		"is refused when Cloudflare reports %s, a fault of the visitor's token",
