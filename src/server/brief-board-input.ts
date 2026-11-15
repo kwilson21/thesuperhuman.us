@@ -5,10 +5,13 @@
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import {
+	ANSWER_MAX,
 	type BoardRequest,
-	BoardRequestSchema,
+	CONTEXT_MAX,
+	LANES,
 	answerText,
 	boardAnswerKeys,
+	textLimits,
 } from "../lib/brief-board";
 import type { RawValue } from "../lib/fields";
 
@@ -17,6 +20,25 @@ export const BOARD_CONTENT_MAX = 6000;
 
 /** The fewest words of answers worth interpreting; the page waits for as many. */
 export const BOARD_MIN_WORDS = 6;
+
+/** The request as the page sends it. Server only: Array and Record schemas stay out of the browser bundle. */
+const BoardRequestSchema = Schema.Struct({
+	path: Schema.Literals(["website", "webapp", "workflow"]),
+	answers: Schema.Record(
+		Schema.String.check(Schema.isMaxLength(20)),
+		Schema.String.check(Schema.isMaxLength(2000)),
+	),
+	cards: Schema.Array(
+		Schema.Struct({
+			ref: Schema.String.check(Schema.isMaxLength(12)),
+			lane: Schema.Literals(LANES),
+			text: Schema.String.check(
+				Schema.isMaxLength(textLimits.questions + ANSWER_MAX + 12),
+			),
+			state: Schema.Literals(["open", "yours", "avoid"]),
+		}),
+	).check(Schema.isMaxLength(CONTEXT_MAX)),
+});
 
 const decodeRequest = Schema.decodeUnknownResult(BoardRequestSchema);
 

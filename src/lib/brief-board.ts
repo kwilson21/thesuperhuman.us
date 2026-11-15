@@ -4,9 +4,14 @@
 // applied (`applyReply`, modelled in verification/brief-board.qnt) and what the visitor's own actions do. Pure and
 // synchronous: Effect Schema only, decoded with `decodeUnknownResult`; no Effect runtime, service or storage.
 import * as Predicate from "effect/Predicate";
-import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import type { Mutable, RawValue } from "./fields";
+import {
+	type Mutable,
+	type RawValue,
+	choiceField,
+	readFields,
+	stringField,
+} from "./fields";
 import type { SoftwarePath } from "./software-inquiry";
 
 export const LANES = ["purpose", "audience", "parts", "questions"] as const;
@@ -282,23 +287,53 @@ export const commits = (text: string) =>
 	PROMISE.test(text.replace(/[‘’]/g, "'")) ||
 	LINK.test(text);
 
+// ---- Lists --------------------------------------------------------------------------------------------------------
+
+/**
+ * The items of a list of at most `max`, unread, or null when `raw` is not one. Each item is then read field by field (see
+ * the note under "The reply"), never with a `Schema.Array`, `Schema.Record` or `Schema.Struct` decoder.
+ */
+export function listOf(raw: RawValue, max: number): readonly RawValue[] | null {
+	return Array.isArray(raw) && raw.length <= max ? raw : null;
+}
+
 // ---- The reply ----------------------------------------------------------------------------------------------------
 
-const LaneSchema = Schema.Literals(LANES);
+// The browser reads every object here field by field, with the shared helpers in ./fields (`readFields`, `stringField`,
+// `choiceField`), as the site's other browser readers do. A `Schema.Struct`, `Schema.Array` or `Schema.Record` decoder
+// brings Effect's concurrent parsing into the browser bundle, which tests/architecture/client-bundle.test.ts refuses.
+
+const unreadable = { missing: "Missing.", wrongType: () => "Not text." };
+
+/** Text of at most `max` characters, trimmed. */
+const text = (max: number) =>
+	stringField(unreadable, Schema.isMaxLength(max, { message: "Too long." }));
+
+/** One of `values`. */
+const oneOf = <const V extends readonly [string, ...string[]]>(values: V) =>
+	choiceField(values, { ...unreadable, notOneOf: () => "Not one of them." });
+
+/** What `raw` holds under its own key `name`, unread; undefined when it is not an object or has no such key. */
+export const ownField = (raw: RawValue, name: string): RawValue =>
+	Predicate.isObject(raw) && !Array.isArray(raw) && Object.hasOwn(raw, name)
+		? raw[name]
+		: undefined;
+
+/** Whether `raw` is an object with its own key `name`. */
+const has = (raw: RawValue, name: string) =>
+	Predicate.isObject(raw) && !Array.isArray(raw) && Object.hasOwn(raw, name);
 
 /** One card as the model answers it. Each card is read on its own, so one bad card does not lose the rest. */
-const ReplyCardSchema = Schema.Struct({
-	ref: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(12))),
-	lane: LaneSchema,
-	text: Schema.String.check(Schema.isMaxLength(200)),
-	basis: Schema.Literals(["said", "suggested"]),
-	quote: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(400))),
-	reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(300))),
-});
+const replyCardFields = {
+	ref: text(12),
+	lane: oneOf(LANES),
+	text: text(200),
+	basis: oneOf(["said", "suggested"]),
+	quote: text(400),
+	reason: text(300),
+};
 
-const ReplyCardsSchema = Schema.Struct({
-	cards: Schema.Array(Schema.Unknown).check(Schema.isMaxLength(40)),
-});
+const replyCardDefaults = { ref: "", quote: "", reason: "" };
 
 export type ReplyCard = {
 	readonly ref: string;
@@ -309,9 +344,6 @@ export type ReplyCard = {
 	readonly reason: string;
 };
 
-const readReplyCards = Schema.decodeUnknownResult(ReplyCardsSchema);
-const readCard = Schema.decodeUnknownResult(ReplyCardSchema);
-
 /**
  * The cards of a reply that are fit to show, read from anything (the model's JSON on the server, the route's JSON in the
  * browser): each card's text cleaned and within its lane's limit, a passage for one read from the answers, a short reason
@@ -319,25 +351,27 @@ const readCard = Schema.decodeUnknownResult(ReplyCardSchema);
  * is left out; null when the reply itself is not a list of cards. At most REPLY_MAX cards.
  */
 export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
-	const listed = readReplyCards(raw);
+	const items = listOf(ownField(raw, "cards"), 40);
 
-	if (Result.isFailure(listed)) return null;
+	if (!items) return null;
 
 	const cards: ReplyCard[] = [];
 
-	for (const item of listed.success.cards) {
-		const read = readCard(item);
+	for (const item of items) {
+		const read = readFields(replyCardFields, item, {
+			defaults: replyCardDefaults,
+		});
 
-		if (Result.isFailure(read)) continue;
-		const card = read.success;
-		const text = oneLine(card.text);
-		const quote = oneLine(card.quote ?? "");
-		const reason = oneLine(card.reason ?? "");
+		if (!read.ok) continue;
+		const card = read.value;
+		const words = oneLine(card.text);
+		const quote = oneLine(card.quote);
+		const reason = oneLine(card.reason);
 
 		if (
-			!text ||
-			text.length > textLimits[card.lane] ||
-			commits(text) ||
+			!words ||
+			words.length > textLimits[card.lane] ||
+			commits(words) ||
 			(card.basis === "said" &&
 				(quote.length > QUOTE_MAX || !quotedFrom(quote, answers))) ||
 			reason.length > REASON_MAX ||
@@ -346,9 +380,9 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 			continue;
 
 		cards.push({
-			ref: card.ref ?? "",
+			ref: card.ref,
 			lane: card.lane,
-			text,
+			text: words,
 			basis: card.basis,
 			quote: card.basis === "said" ? quote : "",
 			reason: card.basis === "suggested" ? reason : "",
@@ -360,13 +394,6 @@ export function readReply(raw: RawValue, answers: string): ReplyCard[] | null {
 	return cards;
 }
 
-const BoardAnswerSchema = Schema.Struct({
-	reason: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(20))),
-	cards: Schema.optionalKey(Schema.Unknown),
-});
-
-const readAnswer = Schema.decodeUnknownResult(BoardAnswerSchema);
-
 /** Why the route did not interpret: "pass" (renew the pass), "limit", "off", "busy" or "" when it did not say. */
 export type BoardRefusal = "pass" | "limit" | "off" | "busy" | "";
 
@@ -377,25 +404,15 @@ export type BoardAnswer = {
 	readonly reason: BoardRefusal;
 };
 
+const refusals: readonly BoardRefusal[] = ["pass", "limit", "off", "busy"];
+
 /** The route's answer, read in the browser: its cards when it sent some, and the reason it gave when it refused. */
 export function readBoardAnswer(raw: RawValue): BoardAnswer {
-	const read = readAnswer(raw);
-
-	if (Result.isFailure(read)) return { cards: undefined, reason: "" };
-	const reason = read.success.reason;
+	const reason = refusals.find((known) => known === ownField(raw, "reason"));
 
 	return {
-		cards:
-			read.success.cards === undefined
-				? undefined
-				: { cards: read.success.cards },
-		reason:
-			reason === "pass" ||
-			reason === "limit" ||
-			reason === "off" ||
-			reason === "busy"
-				? reason
-				: "",
+		cards: has(raw, "cards") ? { cards: ownField(raw, "cards") } : undefined,
+		reason: reason ?? "",
 	};
 }
 
@@ -747,26 +764,12 @@ export function boardContext(board: Board): ContextCard[] {
 		.slice(0, CONTEXT_MAX);
 }
 
-/** A request to interpret the brief: the path, its written answers and the board as context. */
-export const BoardRequestSchema = Schema.Struct({
-	path: Schema.Literals(["website", "webapp", "workflow"]),
-	answers: Schema.Record(
-		Schema.String.check(Schema.isMaxLength(20)),
-		Schema.String.check(Schema.isMaxLength(2000)),
-	),
-	cards: Schema.Array(
-		Schema.Struct({
-			ref: Schema.String.check(Schema.isMaxLength(12)),
-			lane: LaneSchema,
-			text: Schema.String.check(
-				Schema.isMaxLength(textLimits.questions + ANSWER_MAX + 12),
-			),
-			state: Schema.Literals(["open", "yours", "avoid"]),
-		}),
-	).check(Schema.isMaxLength(CONTEXT_MAX)),
-});
-
-export type BoardRequest = Schema.Schema.Type<typeof BoardRequestSchema>;
+/** A request to interpret the brief: the path, its written answers and the board as context (read on the server by src/server/brief-board-input.ts). */
+export type BoardRequest = {
+	readonly path: SoftwarePath;
+	readonly answers: Readonly<Record<string, string>>;
+	readonly cards: readonly ContextCard[];
+};
 
 /** The written answers of a request joined, as a passage is checked against them. */
 export const answerText = (
@@ -830,21 +833,39 @@ export function briefOutline(board: Board, answers: string): OutlineItem[] {
 	return items;
 }
 
-const OutlineItemSchema = Schema.Struct({
-	lane: LaneSchema,
-	text: Schema.String.check(Schema.isMaxLength(textLimits.purpose)),
-	origin: Schema.Literals(["answers", "kept", "edited", "wrote"]),
-	quote: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(QUOTE_MAX))),
-	answer: Schema.optionalKey(
-		Schema.String.check(Schema.isMaxLength(ANSWER_MAX)),
-	),
-});
+const outlineItemFields = {
+	lane: oneOf(LANES),
+	text: text(textLimits.purpose),
+	origin: oneOf(["answers", "kept", "edited", "wrote"]),
+	quote: text(QUOTE_MAX),
+	answer: text(ANSWER_MAX),
+};
 
-const OutlineSchema = Schema.Array(OutlineItemSchema).check(
-	Schema.isMaxLength(OUTLINE_MAX),
-);
+/** An outline's items, each read with its schema; null when it is not a list of at most OUTLINE_MAX well-formed items. */
+function readOutlineItems(raw: RawValue): OutlineItem[] | null {
+	const items = listOf(raw, OUTLINE_MAX);
 
-const readOutlineItems = Schema.decodeUnknownResult(OutlineSchema);
+	if (!items) return null;
+	const read: OutlineItem[] = [];
+
+	for (const item of items) {
+		const one = readFields(outlineItemFields, item, {
+			defaults: { quote: "", answer: "" },
+		});
+
+		if (!one.ok) return null;
+		const { lane, text: words, origin, quote, answer } = one.value;
+		const outline: Mutable<OutlineItem> = { lane, text: words, origin };
+
+		// A passage or an answer is there only when it was sent, even an empty one, so readBriefOutline can refuse it.
+		if (has(item, "quote")) outline.quote = quote;
+
+		if (has(item, "answer")) outline.answer = answer;
+		read.push(outline);
+	}
+
+	return read;
+}
 
 /** The sentence a visitor sees when the outline sent does not match the brief. */
 export const OUTLINE_CHANGED =
@@ -864,7 +885,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 	if (raw === undefined) return { ok: true, value: undefined };
 	const read = readOutlineItems(raw);
 
-	if (Result.isFailure(read)) return { ok: false, error: OUTLINE_CHANGED };
+	if (!read) return { ok: false, error: OUTLINE_CHANGED };
 
 	const counts: Record<Lane, number> = {
 		purpose: 0,
@@ -873,7 +894,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 		questions: 0,
 	};
 
-	for (const item of read.success) {
+	for (const item of read) {
 		counts[item.lane]++;
 		const quote = item.quote ?? "";
 
@@ -898,9 +919,7 @@ export function readBriefOutline(raw: RawValue, answers: string): OutlineRead {
 
 	return {
 		ok: true,
-		value: read.success.length
-			? read.success.map((item) => ({ ...item }))
-			: undefined,
+		value: read.length ? read : undefined,
 	};
 }
 
@@ -920,26 +939,16 @@ export const outlineOriginWords: Record<OutlineOrigin, string> = {
 	wrote: "own note",
 };
 
-const SentSchema = Schema.Struct({
-	outline: Schema.optionalKey(Schema.Unknown),
-});
-
-const readSent = Schema.decodeUnknownResult(SentSchema);
-
 /** The outline a brief's body carries, unread; undefined when it has none. */
 export function sentOutline(body: RawValue): RawValue | undefined {
-	const read = readSent(body);
-
-	return Result.isSuccess(read) ? read.success.outline : undefined;
+	return ownField(body, "outline");
 }
 
 /** An outline as stored with a brief, read for display (it was checked against the answers when it was sent). */
 export function storedOutline(raw: RawValue): OutlineItem[] {
 	const read = readOutlineItems(raw);
 
-	return Result.isSuccess(read)
-		? read.success.map((item) => ({ ...item }))
-		: [];
+	return read ?? [];
 }
 
 /** The outline as JSON to store with a brief: each item's fields, an absent passage or answer left out. */
@@ -971,30 +980,19 @@ export const outlineText = (
 /** The localStorage key the boards are saved under, beside the brief's draft (`software-brief-draft`). */
 export const BOARD_STORAGE_KEY = "software-brief-board";
 
-const SavedCardSchema = Schema.Struct({
-	id: Schema.String.check(Schema.isPattern(/^c\d{1,6}$/)),
-	lane: LaneSchema,
-	text: Schema.String.check(Schema.isMaxLength(textLimits.purpose)),
-	status: Schema.Literals(["proposed", "kept", "edited", "dismissed", "wrote"]),
-	basis: Schema.Literals(["said", "suggested", "none"]),
-	quote: Schema.String.check(Schema.isMaxLength(QUOTE_MAX)),
-	reason: Schema.String.check(Schema.isMaxLength(REASON_MAX)),
-	answer: Schema.String.check(Schema.isMaxLength(ANSWER_MAX)),
-});
-
-const SavedSchema = Schema.Struct({
-	boards: Schema.Record(
-		Schema.String,
-		Schema.Struct({
-			cards: Schema.Array(Schema.Unknown).check(Schema.isMaxLength(60)),
-		}),
+const savedCardFields = {
+	id: stringField(
+		unreadable,
+		Schema.isPattern(/^c\d{1,6}$/, { message: "Not a card id." }),
 	),
-	paused: Schema.Boolean,
-	plain: Schema.Boolean,
-});
-
-const readSaved = Schema.decodeUnknownResult(SavedSchema);
-const readSavedCard = Schema.decodeUnknownResult(SavedCardSchema);
+	lane: oneOf(LANES),
+	text: text(textLimits.purpose),
+	status: oneOf(["proposed", "kept", "edited", "dismissed", "wrote"]),
+	basis: oneOf(["said", "suggested", "none"]),
+	quote: text(QUOTE_MAX),
+	reason: text(REASON_MAX),
+	answer: text(ANSWER_MAX),
+};
 
 export type SavedBoards = {
 	readonly boards: Partial<Record<SoftwarePath, Board>>;
@@ -1019,26 +1017,27 @@ export const savedBoards = (saved: SavedBoards) => ({
  * cards over its limit, repeated ids and anything else left out), with no request in flight and nothing to undo.
  */
 export function readSavedBoards(raw: RawValue): SavedBoards {
-	const read = readSaved(raw);
-
-	if (Result.isFailure(read))
-		return { boards: {}, paused: false, plain: false };
 	const boards: Partial<Record<SoftwarePath, Board>> = {};
 
 	for (const path of ["website", "webapp", "workflow"] as const) {
-		if (!Object.hasOwn(read.success.boards, path)) continue;
+		const items = listOf(
+			ownField(ownField(ownField(raw, "boards"), path), "cards"),
+			60,
+		);
+
+		if (!items) continue;
 		const cards: BoardCard[] = [];
 
-		for (const item of read.success.boards[path].cards) {
-			const card = readSavedCard(item);
+		for (const item of items) {
+			const card = readFields(savedCardFields, item);
 
-			if (Result.isFailure(card)) continue;
-			const value = card.success;
-			const text = oneLine(value.text);
+			if (!card.ok) continue;
+			const value = card.value;
+			const words = oneLine(value.text);
 
 			if (
-				!text ||
-				text.length > textLimits[value.lane] ||
+				!words ||
+				words.length > textLimits[value.lane] ||
 				cards.some((c) => c.id === value.id) ||
 				(value.status !== "dismissed" &&
 					cards.filter((c) => c.lane === value.lane && c.status !== "dismissed")
@@ -1048,7 +1047,7 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 
 			cards.push({
 				...value,
-				text,
+				text: words,
 				quote: oneLine(value.quote),
 				reason: oneLine(value.reason),
 				answer: value.lane === "questions" ? oneLine(value.answer) : "",
@@ -1064,5 +1063,9 @@ export function readSavedBoards(raw: RawValue): SavedBoards {
 		boards[path] = { ...emptyBoard(), cards, nextId: highest + 1 };
 	}
 
-	return { boards, paused: read.success.paused, plain: read.success.plain };
+	return {
+		boards,
+		paused: ownField(raw, "paused") === true,
+		plain: ownField(raw, "plain") === true,
+	};
 }
