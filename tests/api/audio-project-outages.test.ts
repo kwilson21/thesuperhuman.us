@@ -302,7 +302,7 @@ describe("a lost race answers 409", () => {
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({
 			ok: false,
-			error: "This upload cannot be finished now.",
+			error: "This part could not be uploaded. Please try again.",
 		});
 	});
 });

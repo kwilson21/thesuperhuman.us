@@ -13,8 +13,10 @@ import {
 	ownerProjectCanUpload,
 	putProjectUploadPart,
 	uploadPartSize,
+	UploadBeingDiscarded,
 } from "~/lib/audio-project-uploads";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 const id = z.uuid();
@@ -117,8 +119,10 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			);
 
 		return Response.json({ ok: true, fileId: upload.id });
-	} catch {
-		return fail("The upload could not be saved. Please try again.", 503);
+	} catch (error) {
+		logUnexpected("owner/projects/uploads", error);
+
+		return fail("The upload could not be saved. Please try again.", 500);
 	}
 };
 
@@ -173,7 +177,11 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true, part });
-	} catch {
-		return fail("This part could not be uploaded. Please try again.", 503);
+	} catch (error) {
+		if (error instanceof UploadBeingDiscarded)
+			return fail("This part could not be uploaded. Please try again.", 409);
+		logUnexpected("owner/projects/uploads", error);
+
+		return fail("This part could not be uploaded. Please try again.", 500);
 	}
 };

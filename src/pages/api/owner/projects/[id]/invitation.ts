@@ -6,6 +6,7 @@ import {
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
@@ -61,13 +62,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true });
-	} catch {
+	} catch (error) {
+		logUnexpected("owner/projects/invitation", error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The invitation could not be queued. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

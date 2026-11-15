@@ -9,6 +9,14 @@ export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
 export const maxPartEtagLength = 256;
 
+/** A part was put for an upload that an abort has already marked discarding: a lost race, not an outage. */
+export class UploadBeingDiscarded extends Error {
+	constructor() {
+		super("This upload is being discarded.");
+		this.name = "UploadBeingDiscarded";
+	}
+}
+
 export type ProjectUpload = {
 	id: string;
 	request_id: string;
@@ -164,8 +172,7 @@ export async function putProjectUploadPart(
 	partNumber: number,
 	body: ArrayBuffer,
 ): Promise<R2UploadedPart> {
-	if (upload.state !== "pending")
-		throw new Error("This upload is being discarded.");
+	if (upload.state !== "pending") throw new UploadBeingDiscarded();
 
 	return bucket
 		.resumeMultipartUpload(upload.object_key, upload.upload_id)

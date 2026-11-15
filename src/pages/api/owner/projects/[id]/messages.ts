@@ -7,6 +7,7 @@ import {
 	validateProjectMessage,
 } from "~/lib/audio-project-messages";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
@@ -85,13 +86,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		if (!saved) return Response.json({ ok: false }, { status: 409 });
 
 		return Response.json({ ok: true, message: saved });
-	} catch {
+	} catch (error) {
+		logUnexpected("owner/projects/messages", error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "Your message could not be saved. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

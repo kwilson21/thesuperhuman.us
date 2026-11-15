@@ -8,6 +8,7 @@ import {
 	validProjectDate,
 } from "~/lib/audio-project-updates";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 const note = z.string().trim().min(1).max(1000);
@@ -105,13 +106,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true, update });
-	} catch {
+	} catch (error) {
+		logUnexpected("owner/projects/updates", error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The project update could not be saved. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

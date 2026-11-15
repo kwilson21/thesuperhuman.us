@@ -130,7 +130,7 @@ export async function streamClientProjectFile(
 
 	if (head.size !== file.byte_size)
 		return new Response("File unavailable", {
-			status: 503,
+			status: 500,
 			headers: { "cache-control": "private, no-store" },
 		});
 

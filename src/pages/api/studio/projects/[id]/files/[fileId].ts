@@ -8,6 +8,7 @@ import {
 	recordProjectFileAccess,
 	streamClientProjectFile,
 } from "~/lib/audio-project-files";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
@@ -57,9 +58,11 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 		}
 
 		return response;
-	} catch {
+	} catch (error) {
+		logUnexpected("studio/projects/file", error);
+
 		return new Response("Private audio is temporarily unavailable", {
-			status: 503,
+			status: 500,
 			headers: { "cache-control": "private, no-store" },
 		});
 	}

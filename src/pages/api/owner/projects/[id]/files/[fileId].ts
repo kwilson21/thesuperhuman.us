@@ -5,6 +5,7 @@ import { deliverProjectUpdateNotice } from "~/lib/audio-project-updates";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
 import { revokeProjectFile } from "~/lib/audio-project-revocation";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
 
@@ -107,13 +108,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true, updateId });
-	} catch {
+	} catch (error) {
+		logUnexpected("owner/projects/file", error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The file could not be published. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };
