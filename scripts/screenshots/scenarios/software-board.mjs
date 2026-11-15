@@ -39,6 +39,57 @@ const OUTLINE = [
 	},
 ].map(({ quote, ...item }) => (quote ? { ...item, quote } : item));
 
+/** A suggested question and a note that each end their own sentence, for the board's messages that quote a card. */
+const QUESTION = "Who will add new show dates?";
+const NOTE = "Fans hear new songs first.";
+
+/**
+ * Each message that quotes a card (Kept, Set aside, Brought back, Removed, Undid) ends its sentence once: no period
+ * after a quote that already ends in "?" or ".", and one after a quote that does not. Every action is undone, so the
+ * board keeps the same cards. The Undid message that also names the cards Undo withdrew is not reached here.
+ */
+async function quotesEndOnce(page) {
+	const live = page.locator("[data-board-live]");
+
+	const said = async (expected) => {
+		const text = await live.textContent();
+
+		if (text !== expected)
+			throw new Error(
+				`The board said ${JSON.stringify(text)}, not ${JSON.stringify(expected)}`,
+			);
+	};
+
+	const press = async (name, expected) => {
+		await page.getByRole("button", { name, exact: true }).click();
+		await said(expected);
+	};
+
+	const undo = async (expected) => {
+		await page.locator("[data-board-undo]").click();
+		await said(expected);
+	};
+
+	await press("Keep: Shows", "Kept “Shows”.");
+	await undo("Undid: kept “Shows”.");
+	await press(`Keep: ${QUESTION}`, `Kept “${QUESTION}”`);
+	await undo(`Undid: kept “${QUESTION}”`);
+	await press(
+		`Not this: ${QUESTION}`,
+		`Set aside “${QUESTION}” Undo or Bring back restores it.`,
+	);
+	await page.locator("[data-board-aside-summary]").click();
+	await press(`Bring back: ${QUESTION}`, `Brought back “${QUESTION}”`);
+	await undo(`Undid: brought back “${QUESTION}”`);
+	await undo(`Undid: set aside “${QUESTION}”`);
+	await page.getByRole("button", { name: /^Add what it/ }).click();
+	await page.keyboard.type(NOTE);
+	await page.keyboard.press("Enter");
+	await press(`Remove: ${NOTE}`, `Removed “${NOTE}” Undo brings it back.`);
+	await undo(`Undid: removed “${NOTE}”`);
+	await undo(`Undid: added “${NOTE}”`);
+}
+
 export default {
 	title: "Living brief board",
 	async run({ capture, sql }) {
@@ -205,6 +256,11 @@ export default {
 				async (page) => {
 					await open(page);
 					await write(page, PURPOSE);
+
+					// The check runs in this step because the plain form hides the board before the capture: its undone choices
+					// still leave the Set aside list open and start the wait for a new request, so no picture changes. Desktop
+					// only: the messages are the same at every width.
+					if (viewport === "desktop") await quotesEndOnce(page);
 					await page
 						.getByRole("button", { name: "Use the plain form" })
 						.click();
