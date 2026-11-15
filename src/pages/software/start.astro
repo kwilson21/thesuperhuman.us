@@ -58,8 +58,8 @@ const href = (path: string) =>
       {[1, 2].map(index => <section data-step={index} hidden>
         <h1 tabindex="-1" data-question-title></h1>
         <p class="intake-intro" data-question-hint></p>
-        <p class="intake-footnote" data-question-footnote>Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</p>
-        <details class="brief-examples"><summary>Not sure what to write? See examples</summary><ul data-examples-list></ul></details>
+        <p class="intake-footnote brief-footnote"><span data-question-footnote>Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.</span> <button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>
+        <ul class="brief-examples" id={`brief-examples-${index}`} aria-label="Example answers" data-examples-list hidden></ul>
         <div class="intake-field brief-answer">
           <label class="sr-only" for={`brief-answer-${index}`} data-answer-label></label>
           <div class="brief-ghost" aria-hidden="true"><span data-ghost-prefix></span><span data-ghost-text></span></div>

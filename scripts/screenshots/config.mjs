@@ -306,7 +306,7 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief"],
+	"src/pages/software/start.astro": ["brief-examples", "website-brief"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -361,9 +361,17 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
-	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/styles/software-intake.css": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",

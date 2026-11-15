@@ -10,7 +10,7 @@ import {
 	type SoftwarePath,
 } from "../lib/software-inquiry";
 import { ownLabel } from "../lib/type-guards";
-import { setupFormSubmission } from "./form-submission";
+import { greetingName, setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
@@ -141,7 +141,7 @@ export function renderSoftwareReceipt(
 ) {
 	const brief = isBriefRecord(result.brief) ? result.brief : {};
 
-	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
+	const firstName = greetingName(brief.name);
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
 		`Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
 	document.querySelector<HTMLElement>("[data-intake-progress]")!.hidden = true;
@@ -394,6 +394,26 @@ export function setupSoftwareInquiry(
 	}
 
 	configureQuestions();
+
+	// Each written question's example answers open under its footnote and stay open through a path switch.
+	form
+		.querySelectorAll<HTMLButtonElement>("[data-examples-toggle]")
+		.forEach((toggle) =>
+			toggle.addEventListener("click", () => {
+				const list = toggle
+					.closest("[data-step]")
+					?.querySelector<HTMLElement>("[data-examples-list]");
+
+				if (!list) return;
+
+				const open = list.hidden;
+				list.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				toggle.textContent = open
+					? "Hide example answers"
+					: "See example answers";
+			}),
+		);
 
 	const suggestions = setupBriefAutocomplete(
 		form,

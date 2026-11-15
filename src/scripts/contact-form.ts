@@ -1,17 +1,15 @@
-import { setupFormSubmission } from "~/scripts/form-submission";
+import { greetingName, setupFormSubmission } from "~/scripts/form-submission";
 
 /**
- * The confirmation's reply line, in three parts so the address can be set apart. The route answers ok only once the
- * owner's copy is accepted for delivery, with the visitor's address as its Reply-To, so the reply goes to what they typed.
+ * The confirmation's reply line, or null without an address. The route answers ok only once the owner's copy is
+ * accepted for delivery, with the visitor's address as its Reply-To, so the reply goes to what they typed.
  */
 export function contactReplyLine(name: string, email: string) {
-	const firstName = name.trim().split(/\s+/)[0] || "there";
+	const address = email.trim();
 
-	return [
-		`Thanks, ${firstName}. I’ll read it myself and reply by email to `,
-		email.trim(),
-		".",
-	] as const;
+	return address
+		? `Thanks, ${greetingName(name)}. I’ll read it myself and reply by email to ${address}.`
+		: null;
 }
 
 export function setupContactForm() {
@@ -39,14 +37,10 @@ export function setupContactForm() {
 		},
 		onSuccess: () => {
 			const reply = success.querySelector("[data-contact-reply]");
-			const [before, email, after] = contactReplyLine(sent.name, sent.email);
+			const line = contactReplyLine(sent.name, sent.email);
 
 			// Without an address the page keeps its general sentence.
-			if (!reply || !email) return;
-
-			const address = document.createElement("strong");
-			address.textContent = email;
-			reply.replaceChildren(before, address, after);
+			if (reply && line) reply.textContent = line;
 		},
 	});
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { contactReplyLine, setupContactForm } from "~/scripts/contact-form";
+import { greetingName } from "~/scripts/form-submission";
 import { contactOwnerMessage, contactReplyMessage } from "~/lib/resend";
 import type { ContactInput } from "~/server/contact-input";
 
@@ -12,14 +13,22 @@ afterEach(() => {
 });
 
 it("names the visitor and the address the reply goes to", () => {
-	expect(contactReplyLine("  Alex  Example ", " alex@example.com ")).toEqual([
-		"Thanks, Alex. I’ll read it myself and reply by email to ",
-		"alex@example.com",
-		".",
-	]);
-	expect(contactReplyLine("   ", "alex@example.com")[0]).toBe(
-		"Thanks, there. I’ll read it myself and reply by email to ",
+	expect(contactReplyLine("  Alex  Example ", " alex@example.com ")).toBe(
+		"Thanks, Alex. I’ll read it myself and reply by email to alex@example.com.",
 	);
+	expect(contactReplyLine("   ", "alex@example.com")).toBe(
+		"Thanks, there. I’ll read it myself and reply by email to alex@example.com.",
+	);
+	expect(contactReplyLine("Alex", "  ")).toBeNull();
+});
+
+it("greets by the first word of a name without doubling its punctuation", () => {
+	expect(greetingName("Dr. Jane Q. Example")).toBe("Dr");
+	expect(greetingName("J. Smith")).toBe("J");
+	expect(greetingName("Smith, Jane")).toBe("Smith");
+	expect(greetingName("Alex")).toBe("Alex");
+	expect(greetingName(undefined)).toBe("there");
+	expect(greetingName(" ... ")).toBe("there");
 });
 
 it("names the address that was sent, even when the field changes while sending", async () => {
@@ -41,7 +50,7 @@ it("names the address that was sent, even when the field changes while sending",
 
 	const button = { ...element(), textContent: "Send message" };
 	const status = element();
-	const reply = { replaceChildren: vi.fn() };
+	const reply = { textContent: "" };
 	const page = { ...element(), querySelector: () => reply };
 
 	let submit:
@@ -71,7 +80,6 @@ it("names the address that was sent, even when the field changes while sending",
 	vi.stubGlobal("document", {
 		querySelector: () => contactForm,
 		getElementById: () => page,
-		createElement: () => ({ textContent: "" }),
 	});
 	vi.stubGlobal(
 		"FormData",
@@ -98,10 +106,8 @@ it("names the address that was sent, even when the field changes while sending",
 	respond(Response.json({ ok: true }));
 	await sending;
 
-	expect(reply.replaceChildren).toHaveBeenCalledWith(
-		"Thanks, Alex. I’ll read it myself and reply by email to ",
-		{ textContent: "alex@example.com" },
-		".",
+	expect(reply.textContent).toBe(
+		"Thanks, Alex. I’ll read it myself and reply by email to alex@example.com.",
 	);
 });
 

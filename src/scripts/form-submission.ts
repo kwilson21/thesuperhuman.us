@@ -1,5 +1,15 @@
 import { openMessages } from "./form-messages";
 
+/** The first word of a name for a sent form's greeting, without punctuation that would double the sentence's own ("Dr." gives "Dr"). */
+export function greetingName(name: string | undefined) {
+	return (
+		(name ?? "")
+			.trim()
+			.split(/\s+/)[0]
+			.replace(/[.,;:!?]+$/, "") || "there"
+	);
+}
+
 /** Shared interaction states; each form retains its own payload and server rules. */
 export function setupFormSubmission<Payload, Result>({
 	form,
