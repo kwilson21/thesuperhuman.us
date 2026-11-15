@@ -472,9 +472,16 @@ const offersAnswer = (message: string, status: number) =>
 		{ status, headers: { "cache-control": "private, no-store" } },
 	);
 
-/** A dependency this deployment does not have (the mail settings, the attachment bucket): a deliberate 503. */
+/** A dependency this deployment does not have: a deliberate 503. */
 export const offersUnavailable = () =>
 	offersAnswer("Software offers are temporarily unavailable.", 503);
+
+/** A send that needs R2 (attachments, or a reused MSA whose signed copy the packet imports) with no R2 binding: 503. */
+export const offersStorageNotConfigured = () =>
+	offersAnswer(
+		"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.",
+		503,
+	);
 
 /** A store that failed unexpectedly, or a defect: 500, because nothing is known to be unavailable. */
 export const offersFailed = () =>

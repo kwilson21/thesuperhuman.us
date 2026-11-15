@@ -79,8 +79,10 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //                           prepared: the signing setting, template, contractor, reused MSA or attachment metadata read, an
 //                           attachment's R2 read, the preflight's read of the reused MSA; and the send batch (an outage).
 //                           Nothing is written or emailed
-//   503 {ok:false,message:"Software offers are temporarily unavailable."}  attachments to read and no R2 binding, answered
-//                           where the first attachment's bytes are read; nothing is written or emailed
+//   503 {ok:false,message:"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent."}  no R2 binding
+//                           when the send needs it: attachments to read (answered where the first attachment's bytes are
+//                           read) or a reused MSA whose signed copy the packet imports (answered before the preflight);
+//                           nothing is written or emailed
 //   effects: reads (signing setting, templates, contractor config, reused MSA, attachment metadata), R2 get and a hash per
 //   attachment, the batch (attachment guards, the offer pinned with its snapshots), Resend POSTs, the live-link read.
 
@@ -391,6 +393,11 @@ const cases: Case[] = [
 				},
 			],
 		},
+	),
+	signCase(
+		"a reused MSA with no R2 binding",
+		signSeed({ msa: true, offer: { reused_msa_id: MSA_ID } }),
+		{ r2: { missing: true } },
 	),
 	signCase(
 		"a draft sent over a sent offer with a pinned template",

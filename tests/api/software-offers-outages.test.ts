@@ -30,11 +30,13 @@ import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 // How POST /api/owner/requests/[id]/software answers when its database or R2 fails. The owner's decisions (2026-11-14
 // and 2026-11-15, F1 to F4 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the
 // route's fixed sentence and never the error's own text; after the client email went out (or the draft was saved), it
-// says so; a missing R2 binding while a send reads its attachments is a known unavailable dependency, 503; a guard that
-// refuses a batch (a lost race or a stale page) still answers 409. Real SQLite with the music schema; nothing is mocked.
+// says so; a missing R2 binding when a send needs it is a known unavailable dependency, 503; a guard that refuses a batch
+// (a lost race or a stale page) still answers 409. Real SQLite with the music schema; nothing is mocked.
 
 const FAILED = "The change could not be saved. Please try again.";
-const UNAVAILABLE = "Software offers are temporarily unavailable.";
+
+const NO_STORAGE =
+	"Attachment storage isn’t configured. Check the AUDIO binding. Nothing was sent.";
 
 const AFTER_EMAIL =
 	"The email was sent, but saving failed. Reload before you try again.";
@@ -571,7 +573,32 @@ describe("signing: preparing the agreement", () => {
 	it("no R2 binding: 503, nothing written", async () => {
 		const { sql, call } = setUp(signing({ bucket: undefined }));
 
-		expect(await read(await call(send))).toEqual(answer(503, UNAVAILABLE));
+		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
+		unsent(sql);
+	});
+
+	it("a reused MSA and no R2 binding: 503 before the packet is rendered, nothing written", async () => {
+		const { sql, call } = setUp({
+			signing: true,
+			faults: [
+				// The preflight's read of the MSA would fail: it is never made.
+				{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
+			],
+			seed: {
+				...signingBase(),
+				owner_requests: [request()],
+				software_agreements: [executedMsa()],
+				software_agreement_artifacts: [readyArtifact()],
+				software_offers: [
+					offer("draft", 1, {
+						agreement_details_json: JSON.stringify(details()),
+						reused_msa_id: MSA_ID,
+					}),
+				],
+			},
+		});
+
+		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
 		unsent(sql);
 	});
 

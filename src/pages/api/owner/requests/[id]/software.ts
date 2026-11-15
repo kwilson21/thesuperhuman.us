@@ -31,7 +31,7 @@ import {
 	offersFailed,
 	offersFailedAfterDraft,
 	offersFailedAfterEmail,
-	offersUnavailable,
+	offersStorageNotConfigured,
 } from "~/lib/software-offers";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { isUniqueViolation, raisedByJsonGuard } from "~/server/guarded-save";
@@ -800,7 +800,7 @@ const answer = async ({
 
 					// Without the bucket the attachments cannot be read: a dependency this deployment does not have, answered
 					// before anything is written.
-					if (!env.AUDIO) throw new FixedAnswer(offersUnavailable);
+					if (!env.AUDIO) throw new FixedAnswer(offersStorageNotConfigured);
 					const object = await stored(env.AUDIO.get(attachment.key));
 
 					if (
@@ -811,6 +811,10 @@ const answer = async ({
 					)
 						throw new Error("Attachment unavailable.");
 				}
+
+				// The packet imports the reused MSA's signed copy from R2, so without the bucket it cannot be rendered either.
+				if (offer.reused_msa_id && !env.AUDIO)
+					throw new FixedAnswer(offersStorageNotConfigured);
 
 				const pdf = await import("~/lib/agreement-pdf");
 
