@@ -12,7 +12,9 @@ import {
 	ownerRequestFromRow,
 } from "../lib/owner-model";
 import { type NewOwnerRequest, requestColumns } from "../lib/owner-requests";
+import { isObject } from "../lib/type-guards";
 import { ChangedSinceRead, isUniqueViolation } from "./guarded-save";
+import type { ClaimWrite, FailureWrite } from "./rules/brief-copy";
 import { MusicDb } from "./services";
 
 /** The database refused the write. */
@@ -147,5 +149,121 @@ export const findStoredBrief = (submissionId: string) =>
 				return row ? ownerRequestFromRow(row) : null;
 			},
 			catch: (failure) => new IntakeReadFailed({ failure }),
+		});
+	});
+
+// The client's copy of a brief (src/server/flows/brief-copy.ts). The read says what is stored and decides nothing: the rule
+// (src/server/rules/brief-copy.ts) judges it. Each write compares only that the row is still as it was read, or still carries
+// this attempt's instant, and says nothing when it is not (`claimCopy` says so with a `ChangedSinceRead`, so the flow reads and
+// judges again; the writes that record what happened leave a row another attempt claimed as it is).
+
+/** The request a copy is for, with its details text exactly as stored, or null when nothing is stored under the id. */
+export const readCopyFacts = (id: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		const row = yield* Effect.tryPromise({
+			try: () =>
+				db
+					.prepare(`SELECT ${requestColumns} FROM owner_requests WHERE id=?`)
+					.bind(id)
+					.first<OwnerRequestRow>(),
+			catch: (failure) => new IntakeReadFailed({ failure }),
+		});
+
+		if (!row) return null;
+
+		const request = yield* Effect.try({
+			try: () => ownerRequestFromRow(row),
+			catch: (failure) => new IntakeReadFailed({ failure }),
+		});
+
+		// Details are a JSON object: anything else cannot record that a copy was claimed, so no email is sent for it.
+		if (!isObject(request.details) || Array.isArray(request.details))
+			return yield* Effect.fail(
+				new IntakeReadFailed({
+					failure: new Error("Stored details are not a JSON object."),
+				}),
+			);
+
+		return { request, detailsJson: row.details_json };
+	});
+
+/**
+ * Claims the copy for this attempt: status "uncertain" and the attempt's instant, only while the request still has the
+ * status, address and details text the rule judged. A row that changed since is a `ChangedSinceRead`.
+ */
+export const claimCopy = (write: ClaimWrite) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		const claimed = yield* Effect.tryPromise({
+			try: () =>
+				db
+					.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,
+      '$.clientCopyStatus','uncertain','$.clientCopyAttemptedAt',?)
+      WHERE id=? AND status=? AND email=? AND details_json=? RETURNING id`)
+					.bind(
+						write.at,
+						write.request.id,
+						write.request.status,
+						write.request.email,
+						write.detailsJson,
+					)
+					.first<{ id: string }>(),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
+		});
+
+		if (!claimed) return yield* Effect.fail(new ChangedSinceRead());
+	});
+
+/** Records what the provider answered, only while the request still carries this attempt's instant. */
+export const recordCopyStatus = (id: string, at: string, status: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus',?)
+      WHERE id=? AND json_extract(details_json,'$.clientCopyAttemptedAt')=?`)
+						.bind(status, id, at),
+				]),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
+		});
+	});
+
+/** Records a failure for an attempt that never asked the provider, only while the request still carries this attempt's instant. */
+export const recordOwnFailure = (id: string, at: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','failed')
+          WHERE id=? AND json_extract(details_json,'$.clientCopyAttemptedAt')=?`)
+						.bind(id, at),
+				]),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
+		});
+	});
+
+/** Records a failure for a claim that could not be written, only while the details are the text that was read. */
+export const recordUnclaimedFailure = (write: FailureWrite) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					db
+						.prepare(`UPDATE owner_requests SET details_json=json_set(details_json,'$.clientCopyStatus','failed')
+          WHERE id=? AND details_json=?`)
+						.bind(write.id, write.expected),
+				]),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
 		});
 	});
