@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
-import { agreementSession, agreementHeaders } from "~/lib/agreement-access";
+import { agreementSession } from "~/lib/agreement-access";
+import { agreementHeaders } from "~/lib/agreement-host";
 import { hashBytes } from "~/lib/agreement-artifacts";
 
 export const prerender = false;

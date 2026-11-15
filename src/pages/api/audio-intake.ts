@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { ownerRequestForIntake, validateIntake } from "~/lib/audio-intake";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { deliverProjectInvitation } from "~/lib/audio-project-invitations";
 import { sendOwnerRequestNotice } from "~/lib/audio-resend";
 import { musicRequest } from "~/lib/music-request";

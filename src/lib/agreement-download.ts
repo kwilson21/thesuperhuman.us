@@ -1,4 +1,5 @@
-import { agreementSession, agreementHeaders } from "./agreement-access";
+import { agreementSession } from "./agreement-access";
+import { agreementHeaders } from "./agreement-host";
 import {
 	studioSessionFromRequest,
 	clientSoftwareProjectForSession,
@@ -42,7 +43,7 @@ export async function agreementDownload(
 					"SELECT email FROM audio_client_sessions WHERE token_hash=? AND expires_at>? AND revoked_at IS NULL",
 				)
 				.bind(
-					await (await import("./audio-client-access")).hashValue(studio),
+					await (await import("./client-portal")).hashValue(studio),
 					new Date().toISOString(),
 				)
 				.first<{ email: string }>()

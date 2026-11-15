@@ -1,16 +1,14 @@
 import type { JsonValue } from "./json-value";
 import { siteOrigin } from "./site-origin.mjs";
+import { agreementHeaders, canonicalAgreementRequest } from "./agreement-host";
 import { agreementEvent } from "./agreement-events";
 import {
 	hashOfferToken,
 	getLinkedOffer,
 	newOfferToken,
 } from "./software-offers";
-import {
-	keyedHash,
-	normalizeClientEmail,
-	reserveStudioAllowance,
-} from "./audio-client-access";
+import { reserveStudioAllowance } from "./audio-client-access";
+import { keyedHash, normalizeClientEmail } from "./client-portal";
 import { sendAudioMessage } from "./audio-resend";
 import { escapeHtml } from "./email-template";
 import { verifyTurnstile } from "./turnstile";
@@ -18,29 +16,8 @@ import { verifyTurnstile } from "./turnstile";
 export const maskedAgreementEmail = (email: string) =>
 	`${[...email][0]}•••@${email.split("@")[1]}`;
 
-export const agreementHeaders = {
-	"cache-control": "private, no-store",
-	"x-robots-tag": "noindex, nofollow",
-	"referrer-policy": "no-referrer",
-};
-
 export const agreementJson = (body: JsonValue, status = 200) =>
 	Response.json(body, { status, headers: agreementHeaders });
-
-export function canonicalAgreementRequest(env: Env, request: Request) {
-	try {
-		const canonical = new URL(siteOrigin(env.SITE_ORIGIN));
-		const url = new URL(request.url);
-
-		return (
-			url.origin === canonical.origin &&
-			(!request.headers.has("host") ||
-				request.headers.get("host")?.toLowerCase() === canonical.host)
-		);
-	} catch {
-		return false;
-	}
-}
 
 export async function cleanupAgreementAccess(db: D1Database) {
 	const before = new Date(Date.now() - 30 * 86400000).toISOString();

@@ -5,7 +5,7 @@ import {
 	zodSentences,
 } from "./agreement-client-fields";
 import type { RawValue } from "./fields";
-import { validProjectDate } from "./audio-project-updates";
+import { validProjectDate } from "./project-dates";
 import {
 	alwaysTrue,
 	dateText,
@@ -24,7 +24,7 @@ import {
 	type Value,
 	withDefault,
 } from "./readers";
-import { softwareInvoiceTerms } from "./software-invoices";
+import { softwareInvoiceTerms } from "./software-invoice-terms";
 import { formatUSD, offerTotal, type OfferTerms } from "./software-offers";
 import { ReaderMessage } from "./reader-message";
 

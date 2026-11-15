@@ -45,7 +45,7 @@ import {
 	type OfferTerms,
 	type SoftwareOffer,
 } from "~/lib/software-offers";
-import { projectToday } from "~/lib/audio-project-updates";
+import { projectToday } from "~/lib/project-dates";
 import { FieldsRefused, type RawValue } from "~/lib/fields";
 import {
 	prefillAgreementDraft,
@@ -3741,7 +3741,7 @@ it("renders cumulative checkpoint payments and invoice-identical odd-cent instal
 		"~/lib/agreement-fields"
 	);
 
-	const { softwareInvoiceTerms } = await import("~/lib/software-invoices");
+	const { softwareInvoiceTerms } = await import("~/lib/software-invoice-terms");
 
 	const purchased = {
 		...terms,
@@ -4690,7 +4690,7 @@ it("applies the same archive cooldown to known and unknown emails without storin
 	expect(JSON.stringify(vi.mocked(fetch).mock.calls)).not.toContain(
 		"unknown@example.com",
 	);
-	const { keyedHash } = await import("~/lib/audio-client-access");
+	const { keyedHash } = await import("~/lib/client-portal");
 
 	const key = await keyedHash(
 		secret,

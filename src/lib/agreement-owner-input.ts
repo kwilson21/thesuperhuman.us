@@ -1,7 +1,7 @@
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import { cleanCheck, requiredField } from "./agreement-client-fields";
-import { validProjectDate } from "./audio-project-updates";
+import { validProjectDate } from "./project-dates";
 import {
 	afterwards,
 	type FieldValues,

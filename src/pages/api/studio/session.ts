@@ -1,14 +1,16 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import {
-	clientPortalEnabled,
 	completeClientCode,
-	hashValue,
-	normalizeClientEmail,
 	pendingSignInFromRequest,
 	studioSessionCookie,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
+import {
+	clientPortalEnabled,
+	hashValue,
+	normalizeClientEmail,
+} from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
 
 export const prerender = false;
