@@ -213,6 +213,85 @@ export default {
 				},
 			);
 
+			// Choices made while a request is in flight win over its reply. Desktop only: the rule is the same at every width.
+			if (viewport === "desktop")
+				await shot(
+					"stale",
+					"Choices made while a reply was on its way",
+					async (page) => {
+						await open(page);
+						await write(page, PURPOSE);
+						const held = [];
+
+						await page.unroute("**/api/software/brief/board");
+						await page.route("**/api/software/brief/board", (route) =>
+							held.push(route),
+						);
+						await page
+							.locator('[data-step="1"] textarea')
+							.pressSequentially(MORE, { delay: 2 });
+						await page.waitForFunction(
+							() =>
+								document.querySelector("[data-board-status]")?.textContent ===
+								"Reading your answers…",
+							undefined,
+							{ timeout: 20000 },
+						);
+						await page
+							.getByRole("button", { name: "Not this: Contact" })
+							.click();
+						await page.getByRole("button", { name: "Keep: Shows" }).click();
+						// Leave the board (pointer and focus), or the reply is rightly held until the visitor does.
+						await page.mouse.move(5, 5);
+						await page.locator('[data-step="1"] textarea').focus();
+
+						// The reply was made before those choices: it offers Contact again, in other words, and rewords Shows.
+						const reply = scriptedReply(held[0].request().postData() ?? "{}");
+
+						reply.cards = reply.cards.map((card) =>
+							card.text === "Shows" ? { ...card, text: "Tour dates" } : card,
+						);
+						// First, so the reply stays within its twelve cards.
+						reply.cards.unshift(
+							{
+								lane: "parts",
+								text: "Contact page",
+								basis: "suggested",
+								reason: "Venues need it",
+							},
+							{
+								lane: "questions",
+								text: "Who will run the merch table?",
+								basis: "suggested",
+								reason: "You sell merch at shows",
+							},
+						);
+						await held[0].fulfill({ json: reply });
+						await page.waitForFunction(
+							() =>
+								document.querySelector("[data-board-status]")?.textContent ===
+								"Up to date with your answers.",
+						);
+
+						const texts = await page
+							.locator(".board-card [data-card-text]")
+							.allTextContents();
+
+						if (!texts.includes("Who will run the merch table?"))
+							throw new Error(
+								"The reply was not applied, so it proves nothing",
+							);
+
+						if (
+							texts.some((text) => /Contact|Tour dates/.test(text)) ||
+							!texts.includes("Shows")
+						)
+							throw new Error(
+								`A stale reply overrode the visitor: ${texts.join(", ")}`,
+							);
+					},
+				);
+
 			steps.push({
 				title: `Owner readback with the outline, ${viewport}`,
 				images: [
