@@ -10,10 +10,10 @@ import {
 	groupStudioProjects,
 	issueClientCode,
 	listStudioSignInFailures,
-	normalizeClientEmail,
 	revokeClientSession,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
+import { normalizeClientEmail } from "~/lib/client-portal";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 

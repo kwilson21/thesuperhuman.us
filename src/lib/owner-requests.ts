@@ -1,11 +1,11 @@
 import { deleteRetiredCodes } from "./audio-client-access";
 import { retireRequestSigning } from "./software-agreements";
-import { depositOfferBlock, depositOfferGuard } from "./software-invoices";
+import { depositOfferBlock, depositOfferGuard } from "./software-offer-deposit";
 import {
 	getSoftwareProject,
 	softwareAccessRevocation,
-	softwareGuard,
 } from "./software-projects";
+import { softwareGuard } from "./software-guard";
 import {
 	offerSendingGuard,
 	offerIsSending,
