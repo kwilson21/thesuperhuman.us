@@ -428,7 +428,8 @@ function check(name, ok, detail = "") {
 		await box.fill(boxBefore);
 		await page.unroute("**/api/owner/pricing");
 
-		// Fields are read-only while a save is on its way, so what the answer marks saved is what was sent.
+		// A save marks saved only what it sent: text typed while it was on its way is kept, said, and still counts as
+		// unsaved, so the leave-page warning still protects it.
 		await page.reload();
 
 		const raceVersion = Number(await values.getAttribute("data-version"));
@@ -440,27 +441,77 @@ function check(name, ok, detail = "") {
 		});
 
 		const dayField = values.locator('[name="dayValue"]');
-		const sentDay = (await dayField.inputValue()) === "450" ? "475" : "450";
+		const dayStored = await dayField.inputValue();
+		const sentDay = dayStored === "450" ? "475" : "450";
 
 		await dayField.fill(sentDay);
 		await values.getByRole("button", { name: "Save", exact: true }).click();
 		await dayField.focus();
+		await page.keyboard.press("End");
 		await page.keyboard.type("9");
-
-		const typedDuring = await dayField.inputValue();
-
 		await page.waitForFunction(() =>
-			/^Saved\./.test(
+			/^Saved/.test(
 				document.querySelector('[data-part="values"] [data-pricing-status]')
 					?.textContent ?? "",
 			),
 		);
 		check(
-			"typing while a save is on its way changes nothing, and the field is editable again after",
-			typedDuring === sentDay &&
-				!(await dayField.evaluate((element) => element.readOnly)),
-			typedDuring,
+			"text typed while a save is on its way is kept, said, and still counts as unsaved",
+			(await dayField.inputValue()) === `${sentDay}9` &&
+				(await dayField.evaluate(
+					(element) => element.defaultValue,
+				)) === sentDay &&
+				/You changed it since/.test(
+					await values.locator("[data-pricing-status]").textContent(),
+				),
+			await values.locator("[data-pricing-status]").textContent(),
 		);
+		await page.unroute("**/api/owner/pricing");
+
+		// A clear keeps text typed in the research box while it was on its way, and says it is not saved.
+		await page.reload();
+
+		const keepVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({ json: { ok: true, version: keepVersion + 1 } });
+		});
+		await contingency.fill(contingencyBefore === "12" ? "13" : "12");
+		page.once("dialog", (dialog) => dialog.accept());
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+
+		const clearingSaid = await page
+			.locator('[data-part="market"] [data-pricing-status]')
+			.textContent();
+
+		await box.focus();
+		await page.keyboard.press("Control+End");
+		await page.keyboard.type(" note");
+		await page.waitForFunction(() =>
+			/Research cleared/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a clear says Clearing, then keeps text typed in the box meanwhile and says it is not saved",
+			clearingSaid === "Clearing…" &&
+				(await box.inputValue()).endsWith(" note") &&
+				/is not saved/.test(
+					await page
+						.locator('[data-part="market"] [data-pricing-status]')
+						.textContent(),
+				),
+			clearingSaid,
+		);
+		// Leave nothing unsaved, so leaving the page raises no warning.
+		await box.fill("");
+		await contingency.fill(contingencyBefore);
 		await page.unroute("**/api/owner/pricing");
 
 		const queue = [];

@@ -136,25 +136,23 @@ async function send(
 
 	for (const button of buttons) button.setAttribute("aria-disabled", "true");
 
-	// The fields are read-only while it is on its way, so what the answer marks saved (or a clear empties) is what was
-	// sent: text typed meanwhile would otherwise count as saved, or be cleared, without having been sent. Read-only
-	// rather than disabled, so focus stays in the field.
-	const fields = [
-		...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-			"[data-pricing-form] input, [data-pricing-form] textarea",
-		),
-	];
-
-	for (const each of fields) each.readOnly = true;
+	// What the form held when it was sent. The fields stay editable while the save is on its way, and the answer marks
+	// only this as saved: text typed meanwhile still counts as unsaved, and a clear empties the box only if it still
+	// holds this.
+	const sent = new Map(
+		[
+			...form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+				"input, textarea",
+			),
+		].map((input) => [input, input.value]),
+	);
 
 	try {
-		await save(body, form, status);
+		await save(body, form, status, sent);
 	} finally {
 		saving = false;
 
 		for (const button of buttons) button.removeAttribute("aria-disabled");
-
-		for (const each of fields) each.readOnly = false;
 
 		// A press made while it was on its way said so; that is no longer true.
 		for (const line of document.querySelectorAll<HTMLElement>(
@@ -168,8 +166,11 @@ async function save(
 	body: PricingRequest,
 	form: HTMLFormElement,
 	status: Status,
+	sent: ReadonlyMap<HTMLInputElement | HTMLTextAreaElement, string>,
 ) {
-	if (status) status.textContent = "Saving…";
+	const clearing = body.action === "market" && body.market === null;
+
+	if (status) status.textContent = clearing ? "Clearing…" : "Saving…";
 
 	if (body.action === "market") markResearch(false);
 
@@ -213,15 +214,13 @@ async function save(
 			if (lastSaved)
 				lastSaved.textContent = `Last saved just now (version ${version}).`;
 
-			// What was saved is now what the page was drawn with.
-			for (const input of form.querySelectorAll<
-				HTMLInputElement | HTMLTextAreaElement
-			>("input, textarea"))
-				input.defaultValue = input.value;
+			// What was sent is now what is saved; anything typed since still differs from it.
+			for (const [input, value] of sent) input.defaultValue = value;
 
-			const others = forms.filter((each) => each !== form && unsaved(each));
+			const changedSince = unsaved(form);
 
-			if (body.action === "market" && others.length === 0) {
+			// A research save reloads to show its ranges, unless that would lose changes not yet saved in either form.
+			if (body.action === "market" && !forms.some(unsaved)) {
 				// The reloaded page says it was saved: the status here would go with the page.
 				try {
 					sessionStorage.setItem(
@@ -245,8 +244,9 @@ async function save(
 					"[data-pricing-market]",
 				);
 
+				// Text typed in the box while the clear was on its way stays, and counts as not saved.
 				if (box) {
-					box.value = "";
+					if (box.value === sent.get(box)) box.value = "";
 					box.defaultValue = "";
 				}
 
@@ -300,11 +300,15 @@ async function save(
 
 			if (status)
 				status.textContent =
-					body.action === "market" && body.market === null
-						? "Research cleared."
-						: body.action === "market"
-							? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
-							: "Saved.";
+					clearing && changedSince
+						? "Research cleared. What you typed in the box since is not saved."
+						: clearing
+							? "Research cleared."
+							: changedSince
+								? "Saved what this form held when you pressed Save. You changed it since; save again to keep those changes."
+								: body.action === "market"
+									? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
+									: "Saved.";
 
 			return;
 		}
