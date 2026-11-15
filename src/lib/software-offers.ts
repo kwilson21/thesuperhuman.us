@@ -462,6 +462,71 @@ export async function getLinkedOffer(db: D1Database, token: string) {
 export const offerSendingMessage =
 	"An offer is still being sent. Try again in a moment.";
 
+/** The start of the sending window: a live link made after it (compared as text) means an offer is still being sent. */
+export const offerSendingSince = () =>
+	new Date(Date.now() - 20_000).toISOString();
+
+// The fixed answers of the owner's software request actions (POST /api/owner/requests/[id]/software). The owner's page
+// shows `message`, and every answer of that route is private. A refusal's own sentence is the route's; what is here is
+// answered for a failure, which is no refusal.
+
+const offersAnswer = (message: string, status: number) =>
+	Response.json(
+		{ ok: false, message },
+		{ status, headers: { "cache-control": "private, no-store" } },
+	);
+
+/** A question or a decline with the mail settings missing: 503, answered before anything is written. */
+export const offersMailNotConfigured = () =>
+	offersAnswer(
+		"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was sent or saved.",
+		503,
+	);
+
+/** A send that needs R2 (attachments, or a reused MSA whose signed copy the packet imports) with no R2 binding: 503. */
+export const offersStorageNotConfigured = () =>
+	offersAnswer(
+		"File storage isn’t configured. Check the AUDIO binding. Nothing was sent.",
+		503,
+	);
+
+/**
+ * A store that failed unexpectedly: 500, because nothing is known to be unavailable. It is not meant for defects, but
+ * the route cannot always tell one apart: a defect in a helper the route wraps as a store read is answered with this
+ * and logged as a failed store, and one thrown inside the action's main try is answered by the lookups after a refused
+ * batch, as before. Defects get their own answer in the conversion.
+ */
+export const offersFailed = () =>
+	offersAnswer("The change could not be saved. Please try again.", 500);
+
+/** A store that failed after the client email went out (a question's record, a decline's resolve). */
+export const offersFailedAfterEmail = () =>
+	offersAnswer(
+		"The email was sent, but saving failed. Reload before you try again.",
+		500,
+	);
+
+/** A send's live-link check that failed after the client email was accepted: the offer was saved, and only the read failed. */
+export const offersCheckFailedAfterEmail = () =>
+	offersAnswer(
+		"The email was sent, but the link could not be checked. Reload before you try again.",
+		500,
+	);
+
+/** A store that failed after the draft was saved, while an attachment the draft removed was being cleaned up. */
+export const offersFailedAfterDraft = () =>
+	offersAnswer(
+		"The draft was saved, but an attachment could not be cleaned up. Reload before you try again.",
+		500,
+	);
+
+/** A store that failed after a client email that was refused or may not have gone out, in a send's live-link check. */
+export const offersCheckFailedAfterFailedEmail = () =>
+	offersAnswer(
+		"The offer was saved, but the email may not have been sent and the link could not be checked. Reload before you try again.",
+		500,
+	);
+
 const recentLiveLink =
 	"SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?";
 
@@ -470,14 +535,14 @@ export function offerSendingGuard(db: D1Database, requestId: string) {
 		.prepare(
 			`SELECT CASE WHEN NOT EXISTS(${recentLiveLink}) THEN 1 ELSE json_extract('Offer still sending','$') END`,
 		)
-		.bind(requestId, new Date(Date.now() - 20_000).toISOString());
+		.bind(requestId, offerSendingSince());
 }
 
 export async function offerIsSending(db: D1Database, requestId: string) {
 	return Boolean(
 		await db
 			.prepare(recentLiveLink)
-			.bind(requestId, new Date(Date.now() - 20_000).toISOString())
+			.bind(requestId, offerSendingSince())
 			.first(),
 	);
 }
