@@ -4,7 +4,7 @@
 // code (./offer-pricing) turns those into ranges with the owner's own numbers.
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
-import { oneLine, pricesOrLinks } from "./brief-board";
+import { type LaneConfig, oneLine, pricesOrLinks } from "./brief-board";
 import {
 	type RawValue,
 	choiceField,
@@ -66,6 +66,18 @@ export const offerTextLimits: Record<OfferLane, number> = {
 	timing: 200,
 	questions: 200,
 	drivers: 120,
+};
+
+/**
+ * The offer board's lanes for the board's rules (src/lib/brief-board.ts `applyReplyIn` and the `...In` actions): no lane
+ * takes an answer, and a card stands while it names no price, cost or link (durations and promises belong in an offer).
+ */
+export const OFFER_LANE_CONFIG: LaneConfig<OfferLane> = {
+	lanes: OFFER_LANES,
+	limits: offerLaneLimits,
+	textLimits: offerTextLimits,
+	answerLane: null,
+	stands: (card) => !pricesOrLinks(card.text),
 };
 
 export const OFFER_REASON_MAX = 160;
@@ -170,9 +182,13 @@ const own = (raw: RawValue, name: string): RawValue =>
 /** A list of short lines, each cleaned, none with a price or link; null when it is not one or holds none. */
 function lines(raw: RawValue, max: number): string[] | null {
 	if (!Array.isArray(raw) || raw.length === 0 || raw.length > max) return null;
-	const read = raw.map((item) => (Predicate.isString(item) ? oneLine(item) : ""));
+	const read = raw.map((item) =>
+		Predicate.isString(item) ? oneLine(item) : "",
+	);
 
-	return read.every((item) => item && item.length <= ITEM_MAX && !pricesOrLinks(item))
+	return read.every(
+		(item) => item && item.length <= ITEM_MAX && !pricesOrLinks(item),
+	)
 		? read
 		: null;
 }
@@ -251,10 +267,9 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			figure <= MARKET_USD_MAX
 				? figure
 				: null,
-		figureReason:
-			Predicate.isString(figureReason)
-				? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
-				: "",
+		figureReason: Predicate.isString(figureReason)
+			? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
+			: "",
 	};
 }
 
