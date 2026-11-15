@@ -112,6 +112,8 @@ Owner feedback on the branch preview (in conversation, 2026-11-15): "The preview
 
 A fourth review, of the physics commit, found: the drop could start while the cable was still below the fold (the observer watched the board's top edge) and the first frame showed the final hang before laying it straight; a narrow board's cable length jumped by 8 to 11 percent when the plug crossed 36px above or below your jack; a layout change re-laid the cable in its drawn curve, a visible snap that then stayed frozen; and the records overstated how fast the motion settles. All are fixed (measured above). It also verified the back-forward restore in Chromium with the cache on: the plug returns to rest with the lamps out.
 
+A fifth review found that the quicker reach spring, stepped once per frame, became unstable at about 30 frames a second, the rate battery savers hold animation to: the plug flew off the page and the loop never stopped. The plug's springs now advance in fixed 1/120s steps, like the cable, and `tests/scripts/switchboard-spring.test.ts` drives them at 30, 60 and 144 frames a second (the reach never overshoots, the seat overshoots slightly, both stop). In Chromium with frames held to 33.4ms and 31ms, the plug reaches the jack in about 0.3s and stays there, and the page keeps its width.
+
 Design choices for Kazon (not changed):
 
 1. From 1100px the six columns wrap each title to two lines and the descriptions run 13 to 17 characters a line at 1280px (6 to 10 at 1100px). A: as built. B: the side layout up to about 1400px. C: a 3 × 2 grid with the cable hanging between the rows.

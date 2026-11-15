@@ -29,10 +29,39 @@ export type Switchboard = { connect: (id: string) => void };
 // A slightly under-damped spring: the plug overshoots a touch as it seats or drops and settles in
 // about half a second. Reaching toward a line on hover or focus is quicker and critically damped, so
 // the plug keeps up with a sweeping pointer and never overshoots.
-const STIFFNESS = 420;
-const DAMPING = 30;
-const REACH_STIFFNESS = 700;
-const REACH_DAMPING = 53;
+export const STIFFNESS = 420;
+export const DAMPING = 30;
+export const REACH_STIFFNESS = 700;
+export const REACH_DAMPING = 53;
+
+// The plug's springs advance in fixed steps, like the cable, so a slow frame rate (a battery saver's
+// 30 frames a second) takes more steps per frame instead of one long, unstable one.
+export const PLUG_STEP = 1 / 120;
+
+export type Spring = { value: number; speed: number };
+
+/** How many fixed steps a frame of dt seconds holds, and the time carried to the next frame. */
+export function plugSteps(clock: number, dt: number) {
+	const total = Math.min(clock + clamp(dt, 0, 1 / 30), PLUG_STEP * 8);
+	const steps = Math.floor(total / PLUG_STEP);
+
+	return { steps, clock: total - steps * PLUG_STEP };
+}
+
+export function springSteps(
+	spring: Spring,
+	goal: number,
+	steps: number,
+	stiffness: number,
+	damping: number,
+) {
+	for (let index = 0; index < steps; index++) {
+		spring.speed +=
+			(stiffness * (goal - spring.value) - damping * spring.speed) * PLUG_STEP;
+		spring.value += spring.speed * PLUG_STEP;
+	}
+}
+
 const LIFTED = 1.14;
 
 // Long enough to see the lamp strike, short enough not to feel like a wait.
@@ -107,6 +136,7 @@ export function setupSwitchboard(
 	const velocity: Point = { x: 0, y: 0 };
 	let scale = 1;
 	let scaleVelocity = 0;
+	let plugClock = 0;
 	let measured = false;
 	let rope: Point[] = [];
 	let ropeBefore: Point[] = [];
@@ -412,6 +442,9 @@ export function setupSwitchboard(
 		const stiffness = reaching ? REACH_STIFFNESS : STIFFNESS;
 		const damping = reaching ? REACH_DAMPING : DAMPING;
 
+		const tick = plugSteps(plugClock, dt);
+		plugClock = tick.clock;
+
 		// A carried plug stays under the pointer; its speed is kept, so a plug let go mid-swing is thrown.
 		if (target.kind === "drag" && !target.near && dt > 0) {
 			velocity.x = clamp((point.x - position.x) / dt, -2400, 2400);
@@ -419,17 +452,20 @@ export function setupSwitchboard(
 			position.x = point.x;
 			position.y = point.y;
 		} else {
-			velocity.x +=
-				(stiffness * (point.x - position.x) - damping * velocity.x) * dt;
-			velocity.y +=
-				(stiffness * (point.y - position.y) - damping * velocity.y) * dt;
-			position.x += velocity.x * dt;
-			position.y += velocity.y * dt;
+			const across = { value: position.x, speed: velocity.x };
+			const down = { value: position.y, speed: velocity.y };
+			springSteps(across, point.x, tick.steps, stiffness, damping);
+			springSteps(down, point.y, tick.steps, stiffness, damping);
+			position.x = across.value;
+			velocity.x = across.speed;
+			position.y = down.value;
+			velocity.y = down.speed;
 		}
 
-		scaleVelocity +=
-			(stiffness * (goalScale - scale) - damping * scaleVelocity) * dt;
-		scale += scaleVelocity * dt;
+		const size = { value: scale, speed: scaleVelocity };
+		springSteps(size, goalScale, tick.steps, stiffness, damping);
+		scale = size.value;
+		scaleVelocity = size.speed;
 		swing(dt);
 		draw();
 
