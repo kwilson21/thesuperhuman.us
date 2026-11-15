@@ -10,14 +10,15 @@ It assumes `claude/offers-prep-split` (#305) lands first (it moves `softwareGuar
 today `src/lib/software-invoices.ts:365-412`; after the split they are `src/lib/software-offer-deposit.ts`
 (`depositOfferBlock` 12-44, `depositOfferGuard` 47-58, at `aeb390fa` on that branch).
 
-## What the owner is asked
+## Owner decisions
 
-1. Each candidate behaviour fix in section 5 (F1, F3 to F5, F8, F9, F10): yes, no, or a different answer. F2, F6 and
-   F7 are decided. F5's stored-details case (StoredRequestInvalid) needs an answer either way, because a converted route
-   cannot reject: recommended, 500 with the fixed sentence, in the F2 PR.
-2. The sentences proposed for F3: "The email was sent, but saving failed. Reload before you try again." and, for the
-   draft's failed restore, "The draft was saved, but an attachment could not be cleaned up. Reload before you try
-   again."
+1. Every behaviour fix in section 5 (F1 to F10) is decided: F2, F6 and F7 in the review of #306, the others on
+   2026-11-15 ("Do the fixes"), as recommended there. F10's recommendation was to fix it if the model confirmed it,
+   which it does (section 7). F5's stored-details case answers 500 with the fixed sentence, in the F2 PR.
+2. The F3 sentences were approved as proposed: "The email was sent, but saving failed. Reload before you try again."
+   and, for the draft's failed restore, "The draft was saved, but an attachment could not be cleaned up. Reload before
+   you try again." The fix PR (#313) gives the send's live-link check, which fails after a save that succeeded,
+   sentences of its own, since "saving failed" is not true there.
 
 Decided in the review of #306, and not asked again: the Quint extension is a prerequisite (section 7); every condition
 that only a guard checks today is read first and refused by name (section 2; the four conditions there, before the
@@ -409,9 +410,8 @@ effects; no read moves ahead of a decision that comes before it today. Each buil
   `MUSIC_DB`, and `boundServices` adds `AudioBucket` only when `env.AUDIO` is set (services.ts:105-125), so a missing
   binding is an absent service. The store reads it with `Effect.serviceOption(AudioBucket)`: with none, `remove` fails as
   a failed delete does today (golden draft "a removed attachment with no R2 binding": cleanup pending). `read` with none
-  is a known unavailable dependency: if the owner accepts F4's case for it, `read` fails with the store's own named error
-  and the send answers 503 at the point where the first attachment is read today; if not, `read` answers that there is no
-  object, and the send answers DetailsIncomplete as today (golden signing "an attachment with no R2 binding").
+  is a known unavailable dependency: F4's case is decided, so `read` fails with the store's own named error
+  and the send answers 503 at the point where the first attachment is read today.
 - **AgreementPreflight** wraps `preflightAgreementPacket` (src/lib/agreement-pdf.ts:379-464), loaded with the same dynamic
   import (software.ts:698-700). It reads D1 and R2 itself (agreement-pdf.ts:147-161, 344-350, 431-438), so its live
   implementation takes `env`; converting its insides is the signing area's work. Any rejection is PacketNotReady, which
@@ -597,38 +597,39 @@ decided in review; for the others the owner accepted the recommendations on 2026
 | F10 | A draft saved during a decline's email survives the decline: the request is resolved with a draft | none: found by reading and confirmed by the model (section 7; docs/verification.md, "F10, reproduced") | 0 |
 
 **F2, a store failure that rejects (decided).** A converted route passes `{ route, answer }` to `runRoute`
-(src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the route
-maps `OffersStoreFailed` to a Response too (its program's error type is `never`, run.ts:9-10): a converted route cannot
-answer a bare 500 with no body. Under the owner's decision of 2026-11-14 an unexpected store failure answers 500 with a
-fixed sentence, so that is F2's answer, and keeping today's answer is not an option: its 16 cases change from a bare 500
-to 500 with the fixed sentence. Its own PR changes the old route to answer so, which keeps the conversion neutral for
-them. That PR proposes the fixed sentence, and adds the helpers `offersUnavailable` and `offersFailed` next to
-`offerSendingMessage` in `src/lib/software-offers.ts`, as `musicUnavailable` and `musicFailed` sit next to
-`musicRequest`. It also carries F5's stored-details case if the owner takes the recommendation there.
+(src/server/run.ts:28-46), so every defect is logged once and answered 500 with the route's fixed sentence, and the
+route maps `OffersStoreFailed` to a Response too (its program's error type is `never`, run.ts:9-10): a converted route
+cannot answer a bare 500 with no body. Under the owner's decision of 2026-11-14 an unexpected store failure answers
+500 with a fixed sentence, so that is F2's answer, and keeping today's answer is not an option: its 16 cases change
+from a bare 500 to 500 with the fixed sentence. Its own PR changes the old route to answer so, which keeps the
+conversion neutral for them. That PR proposes the fixed sentence, and adds the helper `offersFailed` (the fixes add
+the other fixed answers beside it) next to `offerSendingMessage` in `src/lib/software-offers.ts`, as
+`musicUnavailable` and `musicFailed` sit next to `musicRequest`. It also carries F5's stored-details case.
 
-**F1, F3 and F4, store failures (candidates).** CLAUDE.md has a converted route map its store failure tag to 500 with a
+**F1, F3 and F4, store failures (decided).** CLAUDE.md has a converted route map its store failure tag to 500 with a
 fixed sentence, so converting these as they are changes their answers, and keeping today's answers would mean mapping
-that tag to 409 or 400 against the rule. Each needs the owner's answer before the conversion: the fix, or an exception
-the conversion then reproduces. F1 and F4 answer with `offersFailed`, F2's sentence. For F3, the email (or, for the
-draft, the save) has already happened, so the sentence says so. Proposed, awaiting the owner: "The email was sent, but
-saving failed. Reload before you try again." The draft's failed restore comes after the draft was saved, so "saving
-failed" would be wrong there; it gets its own sentence, also proposed and awaiting the owner: "The draft was saved, but
-an attachment could not be cleaned up. Reload before you try again." F4 also covers a missing R2 binding in a send
-(golden signing "an attachment with no R2 binding", 400 DetailsIncomplete today, software.ts:688-695): it is a known
-unavailable dependency, which the owner's decision answers 503. Recommended: 503 with `offersUnavailable`'s sentence, at
-the point where the first attachment is read today, with nothing written. F4's preflight case needs the signing area's
-help: `preflightAgreementPacket` throws a plain `Error` for missing data (src/lib/agreement-pdf.ts:102, 154, 157, 161,
-346, 350, 438, 463; 102 is "Unsupported character", thrown while the preflight renders its sample packet, 443-460) and
-lets a D1 or R2 rejection through as it comes (148-152, 155, 344, 432-437), so its caller cannot tell an outage from
-missing data. Fixing that case means the preflight raising a named error for one of them, which is signing's code.
+that tag to 409 or 400 against the rule. The owner chose the fix for each (2026-11-15). F1 and F4 answer with
+`offersFailed`, F2's sentence. For F3, the email (or, for the draft, the save) has already happened, so the sentence
+says so. Approved: "The email was sent, but saving failed. Reload before you try again." The draft's failed restore
+comes after the draft was saved, so "saving failed" would be wrong there; it gets its own sentence, also approved:
+"The draft was saved, but an attachment could not be cleaned up. Reload before you try again." F4 also covers a
+missing R2 binding in a send (golden signing "an attachment with no R2 binding", 400 DetailsIncomplete today,
+software.ts:688-695): it is a known unavailable dependency, which the owner's decision answers 503. Decided: 503
+(`offersStorageNotConfigured`, with its own sentence, in #313), at the point where the first attachment is read today,
+with nothing written. F4's preflight case needs the signing area's help: `preflightAgreementPacket` throws a plain
+`Error` for missing data (src/lib/agreement-pdf.ts:102, 154, 157, 161, 346, 350, 438, 463; 102 is "Unsupported
+character", thrown while the preflight renders its sample packet, 443-460) and lets a D1 or R2 rejection through as it
+comes (148-152, 155, 344, 432-437), so its caller cannot tell an outage from missing data. Fixing that case means the
+preflight raising a named error for one of them, which is signing's code.
 
-**F5, bad input and bad stored data (candidates).** Not store failures: the conversion keeps them through the named
-refusals of section 2 (AttachmentsUnreadable, MsaNotFound, StoredTermsUnreadable), so they are listed because they look
-wrong, not because they block. MsaNotFound needs the reused MSA read before the batch, which answers as the FOREIGN KEY
-failure does today. One case cannot be kept: fit "a request whose stored details are not JSON" rejects today, and a
-refusal answers a Response, never a rejection (a converted route passes a `DefectAnswer`, so even a defect is answered,
-src/server/run.ts:28-46). It goes through StoredRequestInvalid, and its answer has to be decided in a fix PR before the
-conversion, since it cannot stay a rejection. Recommended: 500 with the fixed sentence, in the F2 PR.
+**F5, bad input and bad stored data (decided).** Not store failures: the conversion keeps them through the named
+refusals of section 2 (AttachmentsUnreadable, MsaNotFound, StoredTermsUnreadable), so they are listed because they
+look wrong, not because they block. MsaNotFound needs the reused MSA read before the batch, which answers as the
+FOREIGN KEY failure does today. One case cannot be kept: fit "a request whose stored details are not JSON" rejects
+today, and a refusal answers a Response, never a rejection (a converted route passes a `DefectAnswer`, so even a
+defect is answered, src/server/run.ts:28-46). It goes through StoredRequestInvalid, and its answer has to be decided
+in a fix PR before the conversion, since it cannot stay a rejection. Recommended: 500 with the fixed sentence, in the
+F2 PR.
 
 **F6, a missing id (decided).** It answers what an unknown id answers today: 404 `{ok:false}` with the private header
 (software.ts:108-110; golden fit "an unknown request id"). A missing or empty id is treated as an id that matches no
@@ -661,15 +662,15 @@ after it" (owner-request-software-question.test.ts:284-297) and decline "the sec
 lookup after it" (owner-request-software-decline.test.ts:496-512). The fix PR that makes the first failure answer directly
 rewrites each of these cases, its second trigger marked optional or removed, with the reason.
 
-**F8, mail not configured (candidate).** The check runs inside `email`, after the batches (software.ts:155-156, called at
-326 after 276-324). Recommended: check the three settings before any write and answer 503, a known unavailable
+**F8, mail not configured (decided).** The check runs inside `email`, after the batches (software.ts:155-156, called
+at 326 after 276-324). Recommended: check the three settings before any write and answer 503, a known unavailable
 dependency in the owner's decision, with nothing written, and a sentence the fix PR proposes.
 
-**F9, a closed link after a failed email (candidate).** The check counts only when the email was accepted
+**F9, a closed link after a failed email (decided).** The check counts only when the email was accepted
 (software.ts:835), and the golden header says such a link is live
-(tests/golden/owner-request-software-offer-send.test.ts:67-68), which that case shows is not so. Recommended: answer as
-the accepted-email case does when the link closed, 409, with a sentence that does not say the email went out (today's
-says it did), proposed in the fix PR.
+(tests/golden/owner-request-software-offer-send.test.ts:67-68), which that case shows is not so. Recommended: answer
+as the accepted-email case does when the link closed, 409, with a sentence that does not say the email went out
+(today's says it did), proposed in the fix PR.
 
 **F10, a draft saved during a decline's email (confirmed by the model; decided).** The owner accepted the
 recommendation below on 2026-11-15 ("Do the fixes"), and the extended `verification/discount-offers.qnt` confirms the
@@ -772,15 +773,14 @@ conversion's bottom PR, with the rules.
 ## 8. The PR stack
 
 Before the stack, each its own PR to `main`, in this order: this design; `claude/offers-prep-split` (#305); the Quint
-extension (section 7); then F2, F6, F7 and each candidate fix the owner accepts (each re-records its corpora and explains
-every changed case, as the music area's branch A did, docs/prelaunch-qa-2026-11-14-music-area.md:87-100; a fix that makes
-a store failure answer directly also rewrites the cases whose second trigger then never fires, section 5, "Second
-triggers that stop firing"). A small
-test-comment PR, also to do and not part of this one, corrects the stale golden header comments found while reading:
-tests/golden/owner-request-software-offer-send.test.ts:67-68 (a failed email's link is not always live, F9) and 74-75
-(the check after the email throws answers OfferStillSending, not the generic 409), and
-tests/golden/owner-request-software-offer-signing.test.ts:71 ("ZodError failures carry errors": the readers throw
-`FieldsRefused` since they moved to Effect Schema).
+extension (section 7); then the behaviour fixes F1 to F9 (#313, #314, #316) and F10 (each re-records its corpora and
+explains every changed case, as the music area's branch A did, docs/prelaunch-qa-2026-11-14-music-area.md:87-100; a
+fix that makes a store failure answer directly also rewrites the cases whose second trigger then never fires, section
+5, "Second triggers that stop firing"). A small test-comment PR, also to do and not part of this one, corrects the
+stale golden header comments found while reading: tests/golden/owner-request-software-offer-send.test.ts:67-68 (a
+failed email's link is not always live, F9) and 74-75 (the check after the email throws answers OfferStillSending, not
+the generic 409), and tests/golden/owner-request-software-offer-signing.test.ts:71 ("ZodError failures carry errors":
+the readers throw `FieldsRefused` since they moved to Effect Schema).
 
 The conversion, one merge to `main`:
 
