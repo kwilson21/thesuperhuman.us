@@ -34,7 +34,8 @@
 
 .software-intake [data-copy-card]{overflow-wrap:anywhere}.software-intake [data-copy-status]{margin-top:.75rem}
 .software-intake .brief-footnote{max-width:calc(var(--measure-prose) * .9)}
-/* Example answers open under the footnote from its own inline toggle, so the closed state adds no height above Next. */
+/* Example answers open under the footnote from its own inline toggle. Closed, the toggle adds at most one footnote line
+   (none at 390px wide), not a row of its own. role="list" keeps the unstyled list announced as one in Safari. */
 .software-intake .brief-examples{list-style:none;margin:.75rem 0 0;padding:0;max-width:calc(var(--measure-prose) * .9);font-size:.9rem;line-height:1.5}
 .software-intake .brief-examples li{padding:.6rem 0;border-top:1px solid var(--rule)}
 .software-intake .brief-examples li:last-child{border-bottom:1px solid var(--rule)}

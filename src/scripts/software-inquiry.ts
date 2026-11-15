@@ -33,7 +33,7 @@ type BriefQuestion = {
 	/** One example answer, shown in the empty box. */
 	placeholder: string;
 	max: number;
-	/** Further example answers from other situations, listed under "Not sure what to write?". */
+	/** Further example answers from other situations, shown under the footnote by its "See example answers" toggle. */
 	examples: readonly string[];
 };
 

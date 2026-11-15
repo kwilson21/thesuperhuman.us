@@ -1521,7 +1521,7 @@ it("gives every written question a placeholder and a few different examples, kep
 		'<button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>',
 	);
 	expect(page).toContain(
-		'<ul class="brief-examples" id={`brief-examples-${index}`} aria-label="Example answers" data-examples-list hidden></ul>',
+		'<ul class="brief-examples" id={`brief-examples-${index}`} role="list" aria-label="Example answers" data-examples-list hidden></ul>',
 	);
 	expect(page).toContain("Amount in US dollars (optional)");
 });
