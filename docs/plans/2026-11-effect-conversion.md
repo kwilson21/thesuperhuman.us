@@ -1,6 +1,6 @@
 # Moving the rest of the server to Effect: order
 
-Status: proposed, 2026-11-15. The owner asked for the rest of the site to move to XState, Effect and Effect Schema,
+Status: decided, 2026-11-15. The owner asked for the rest of the site to move to XState, Effect and Effect Schema,
 and for the friends and family discount to be stated in the agreement. This plan orders the work so the discount
 comes as early as the rules allow. Every area follows the Back-end rules in CLAUDE.md; nothing here changes them.
 
@@ -13,12 +13,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
   it). Astro and the MCP SDK keep their own dependency on Zod, and `zod` stays in `package.json` as the MCP SDK's
   required peer; see "Library boundaries".
 - **Stacked branches.** Owner, 2026-11-15: conversion PRs may be stacked so one does not wait for another to merge.
-
-## Proposed, not yet decided
-
-- **Order: the discount first.** Recommended 2026-11-15 (offers, then studio sign-in, then signing, then the discount),
-  with the alternative of small areas first named. The owner has not chosen yet; the first steps below are needed in
-  either order.
+- **Order: the discount first.** Owner, 2026-11-15 ("Go", to the recommendation of offers, then studio sign-in, then
+  signing, then the discount, over small areas first).
 
 ## Where things stand
 
