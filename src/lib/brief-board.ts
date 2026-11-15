@@ -491,13 +491,14 @@ const DURATION = new RegExp(
 		// Not an ordinal ("1일차", "3주차", "1주 차에", "3년 차입니다", "1년 차일 때") or parking ("주차장"). Unspaced, 차
 		// fails the lookahead at the end; spaced, 차 is an ordinal only alone or before a particle or ending (a one-syllable
 		// ending only at the end of the word, so "차일피일" is not one), and "2주 차이" (a difference) still counts. The
-		// ordinal check comes before 간: "2주간 차를" is a duration. A four-digit year ("1876년부터") is a date, not a
-		// duration, and the date rules handle it.
-		"(?<!\\d)(?!\\d{4}\\s?년)\\d+\\s?(?:주일|주|일|년)(?!\\s차(?:$|[^가-힣]|에|의|인|부터|까지|로|를|가|는|도|째|이상|이하|와|만|마다|보다|처럼|랑|하고|엔|쯤|께|입니|예요|였|라서|라도|지만|면|여서|여야|라면|라고|라는|니까|며|든|죠|밖에|(?:일|나|요|고|다)(?![가-힣])))(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
+		// ordinal check comes before 간: "2주간 차를" is a duration. A four-digit year outside 19xx and 20xx ("1876년부터")
+		// is history, not a duration; 19xx and 20xx count here too, since "FY2027년" has no word boundary for the date rules.
+		"(?<!\\d)(?!(?!19|20)\\d{4}\\s?년)\\d+\\s?(?:주일|주|일|년)(?!\\s차(?:$|[^가-힣]|에|의|인|부터|까지|로|를|가|는|도|째|이상|이하|와|만|마다|보다|처럼|랑|하고|엔|쯤|께|입니|예요|였|라서|라도|지만|면|여서|여야|라면|라고|라는|니까|며|든|죠|밖에|(?:일|나|요|고|다)(?![가-힣])))(?:간)?(?=$|[^가-힣]|안|내|이내|동안|만에|만|후|정도|쯤|가|의|째|이|을|는|도)",
 		// More endings, only with the unit written straight after the number ("2주면", "2주를", "2주짜리"), so "React 18
-		// 주로 사용" (mainly) is not one. Known limits of this net: shares written with 주 ("10주를 매수") are refused;
+		// 주로 사용" (mainly) is not one, nor "1 년은" with a space. Known limits of this net: shares written with 주
+		// ("10주를 매수") are refused;
 		// months written with 달, minutes, and a date followed by 에 ("3월 1일에") pass; "10년 차이며" is refused.
-		"(?<!\\d)(?!\\d{4}년)\\d+(?:주일|주|일|년)(?:간)?(?=면|를|은|로|으로|짜리|밖에|뿐|씩|나|미만|까지|부터|에\\s?걸쳐)",
+		"(?<!\\d)(?!(?!19|20)\\d{4}년)\\d+(?:주일|주|일|년)(?:간)?(?=면|를|은|로|으로|짜리|밖에|뿐|씩|나|미만|까지|부터|에\\s?걸쳐)",
 	].join("|"),
 	"iu",
 );

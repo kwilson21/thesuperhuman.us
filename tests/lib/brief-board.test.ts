@@ -1562,3 +1562,22 @@ describe("found in the eleventh review", () => {
 		expect(commits(text)).toBe(true);
 	});
 });
+
+describe("found in the twelfth review", () => {
+	it.each([
+		"FY2027년 상반기 출시",
+		"CY2026년 하반기",
+		"FY2027년까지 완료",
+		"FY2027년부터",
+	])("refuses the year in %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each([
+		"1876년부터 이어온 전통",
+		"1800년으로 거슬러",
+		"5000년 역사의 전통",
+	])("still accepts the history in %s", (text) => {
+		expect(commits(text)).toBe(false);
+	});
+});
