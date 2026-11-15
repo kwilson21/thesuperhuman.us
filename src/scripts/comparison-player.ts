@@ -1,4 +1,5 @@
 import { ComparisonTransport, type LoopRegion } from "./comparison-transport";
+import { ComparisonSignal } from "./comparison-signal";
 import { meterLine, meterShare } from "./loudness-meter";
 import { registerMusicPlayer } from "./music-playback";
 import {
@@ -244,6 +245,9 @@ export function setupComparisonPlayers() {
 				followFlip();
 			}
 
+			// Whether the last frame told the page the comparison was playing.
+			let signalled = false;
+
 			// A hidden page draws no frames, so a slow timer keeps the flips scheduled.
 			let hiddenTimer: number | undefined;
 
@@ -293,6 +297,16 @@ export function setupComparisonPlayers() {
 								lane.dataset.lane === media[selected].dataset.version,
 							)),
 					);
+
+				// The page hears how the comparison sounds at each frame while it plays, and once when it stops, so what
+				// moves with it comes to rest.
+				const sounding = Boolean(transport?.playing);
+
+				if (sounding || signalled)
+					root.dispatchEvent(
+						new ComparisonSignal(transport?.level() ?? 0, sounding),
+					);
+				signalled = sounding;
 
 				if (transport?.playing) frame = requestAnimationFrame(render);
 			}

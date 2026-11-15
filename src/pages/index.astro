@@ -17,7 +17,7 @@ import tallyTransactions from "~/assets/projects/tally/transactions-demo-2026-09
 import kailleraLanding from "~/assets/projects/kaillera-next/landing-2026-09-26.webp";
 import { tallyStory } from "~/data/project-stories/tally";
 import { kailleraStory } from "~/data/project-stories/kaillera-next";
-import { capacityCells, parseFigure } from "~/lib/home-motion";
+import { capacityCells, parseFigure, resamplePeaks } from "~/lib/home-motion";
 import { loadMusicCatalog } from "~/lib/music-content";
 import { audioPath } from "~/lib/host-routing";
 
@@ -127,7 +127,7 @@ const jsonLd = {
           </div>
         </section>
       </div>
-      <SignalEdge />
+      <SignalEdge peaks={oldNewsExample?.waveforms && resamplePeaks(oldNewsExample.waveforms.after, 110)} />
     </div>
 
     <div class="site-shell">
@@ -233,12 +233,13 @@ const jsonLd = {
   .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
   .writing-preview .site-link { margin-top: 1.6rem; }
 
-  /* The horizon: the contact rule, with a sun that rises over it as the page ends. */
+  /* The horizon: the contact rule, with a sun that rises over it as the page ends. While the A/B comparison plays,
+     home-worlds.ts sets --glow (0 to 1) from the music's level, and the sun glows with it. */
   .contact-section { position: relative; border-top: 1px solid var(--rule); padding-block: 3rem; margin-top: calc(var(--site-section-space) + 4rem); scroll-margin-top: 2rem; }
   .horizon { position: absolute; left: calc(var(--site-gutter) * -1); right: calc(var(--site-gutter) * -1); bottom: 100%; height: 150px; overflow: hidden; pointer-events: none; }
   .horizon::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 74% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); opacity: var(--p, 1); }
   .horizon::after { content: ''; position: absolute; left: var(--site-gutter); right: var(--site-gutter); bottom: 0; height: 1px; background: linear-gradient(to right, transparent, var(--accent) 74%, transparent); opacity: calc(var(--p, 1) * .7); }
-  .horizon-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
+  .horizon-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 calc(50px + var(--glow, 0) * 40px) calc(14px + var(--glow, 0) * 18px) color-mix(in srgb, var(--accent) 14%, transparent), 0 0 calc(var(--glow, 0) * 48px) calc(var(--glow, 0) * 14px) color-mix(in srgb, var(--accent) 40%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
 
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
   .contact-intro h2 { max-width: 24ch; font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; text-wrap: balance; }

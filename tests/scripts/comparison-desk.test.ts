@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { setupComparisonPlayers } from "~/scripts/comparison-player";
+import {
+	COMPARISON_SIGNAL,
+	ComparisonSignal,
+} from "~/scripts/comparison-signal";
 
 // The full A/B player's listening desk: Loop repeats a passage from where the visitor is, its length is chosen, and
 // Flip A/B switches versions on each pass. These stand-ins run the real player against fake elements, a fake audio
@@ -182,6 +186,15 @@ function mount({ decodes = true, decodedLength = 160 } = {}) {
 
 		resume() {
 			return Promise.resolve();
+		}
+
+		createAnalyser() {
+			// Every sample at a quarter of full scale: about 12 dB down, a level of about 0.75.
+			return {
+				fftSize: 0,
+				connect() {},
+				getFloatTimeDomainData: (into: Float32Array) => into.fill(0.25),
+			};
 		}
 
 		createGain() {
@@ -470,4 +483,29 @@ it("brings the louder version's meter down to the quieter one's when Match loudn
 	ab.match.checked = false;
 	ab.match.dispatchEvent(new Event("change"));
 	expect(ab.meters()[1]).toEqual([String(8.5 / 14), "\u221211.5 LUFS"]);
+});
+
+it("tells the page how loud it sounds at each frame while playing, and once when it stops", async () => {
+	const ab = mount();
+	const heard: [number, boolean][] = [];
+
+	ab.root.addEventListener(COMPARISON_SIGNAL, (event) => {
+		if (event instanceof ComparisonSignal)
+			heard.push([event.level, event.playing]);
+	});
+	ab.choose("after");
+	expect(heard).toEqual([]);
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(heard.at(-1)?.[1]).toBe(true);
+	expect(heard.at(-1)?.[0]).toBeCloseTo(1 + (20 * Math.log10(0.25)) / 48, 5);
+	ab.play.click();
+	expect(heard.at(-1)).toEqual([0, false]);
+
+	const sent = heard.length;
+
+	// Once stopped, it stays quiet.
+	ab.choose("before");
+	expect(heard).toHaveLength(sent);
 });

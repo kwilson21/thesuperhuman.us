@@ -1,18 +1,25 @@
 ---
 // Where the dark screen ends and the paper page resumes, the edge is a waveform: paper
 // peaks rise into the dark and dark peaks fall into the paper, so the zero line is the
-// border between the two worlds. home-worlds.ts redraws it with scroll (silent at the
-// viewport's edges, loudest crossing the middle); this is the resting frame, mid-phrase.
-// No sound plays: it is a picture of one, and aria-hidden.
+// border between the two worlds. Given a recording's peaks (Home passes Old News), the
+// edge is that song's real waveform; without them it is a drawn one. home-worlds.ts
+// redraws it with scroll (silent at the viewport's edges, loudest crossing the middle)
+// and, while the A/B comparison plays, with the music's live level; this is the resting
+// frame, mid-phrase. It makes no sound itself, and is aria-hidden.
 import { barsPath, signalFrame, waveformPeaks } from "~/lib/home-motion";
 
-const bars = 110;
+interface Props {
+	/** The recording's waveform, one height from 0 to 1 per bar. */
+	peaks?: number[];
+}
+
 const width = 1200;
 const mid = 60;
-const peaks = waveformPeaks(bars);
+const peaks = Astro.props.peaks ?? waveformPeaks(110);
+const bars = peaks.length;
 const rest = signalFrame(peaks, 0.5);
 ---
-<div class="signal-edge" data-scene="signal" data-start="1.05" data-end="-0.1" data-bars={bars} data-width={width} data-mid={mid} aria-hidden="true">
+<div class="signal-edge" data-scene="signal" data-start="1.05" data-end="-0.1" data-bars={bars} data-peaks={Astro.props.peaks?.join(",")} data-width={width} data-mid={mid} aria-hidden="true">
   <svg viewBox={`0 0 ${width} ${mid * 2}`} preserveAspectRatio="none" focusable="false">
     <rect class="signal-paper" x="0" y={mid} width={width} height={mid} />
     <path class="signal-paper" data-signal="up" d={barsPath(rest, { width, mid, depth: mid, direction: 'up' })} />

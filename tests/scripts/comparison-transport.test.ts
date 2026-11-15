@@ -36,9 +36,19 @@ function fixture() {
 	const sources: FakeSource[] = [],
 		gains: FakeGain[] = [];
 
+	// What the analyser reads out: every sample at this value, so its level is known.
+	const sound = { sample: 0 };
+
+	const analyser = {
+		fftSize: 2048,
+		connect: vi.fn(),
+		getFloatTimeDomainData: (into: Float32Array) => into.fill(sound.sample),
+	};
+
 	const context = {
 		currentTime: 10,
 		destination: {},
+		createAnalyser: () => analyser,
 		createGain() {
 			const node: FakeGain = {
 				gain: {
@@ -70,7 +80,7 @@ function fixture() {
 	};
 
 	const transport = new ComparisonTransport(
-		// SAFETY: ComparisonTransport reads only currentTime, destination, createGain and createBufferSource from the context, and the fake supplies each of them; its nodes are plain objects with the members the transport uses.
+		// SAFETY: ComparisonTransport reads only currentTime, destination, createAnalyser, createGain and createBufferSource from the context, and the fake supplies each of them; its nodes are plain objects with the members the transport uses.
 		context as never,
 		[
 			partial<AudioBuffer>({ duration: 160.3 }),
@@ -81,7 +91,7 @@ function fixture() {
 		vi.fn(),
 	);
 
-	return { context, sources, gains, transport };
+	return { context, sources, gains, transport, analyser, sound };
 }
 
 describe("shared comparison clock", () => {
@@ -325,5 +335,32 @@ describe("flipping A/B at each wrap", () => {
 		expect(gains[0].gain.setTargetAtTime.mock.calls.length).toBeGreaterThan(
 			before,
 		);
+	});
+});
+
+describe("how loud the comparison sounds", () => {
+	it("sends both versions out through one analyser", () => {
+		const { gains, analyser, context } = fixture();
+
+		gains.forEach((gain) =>
+			expect(gain.connect).toHaveBeenCalledWith(analyser),
+		);
+		expect(analyser.connect).toHaveBeenCalledWith(context.destination);
+	});
+
+	it("reads 0 while paused or silent, 1 at full scale, and halfway 24 dB down", () => {
+		const { transport, sound } = fixture();
+
+		sound.sample = 0.5;
+		expect(transport.level()).toBe(0);
+		transport.play();
+		sound.sample = 0;
+		expect(transport.level()).toBe(0);
+		sound.sample = 1;
+		expect(transport.level()).toBe(1);
+		sound.sample = 10 ** (-24 / 20);
+		expect(transport.level()).toBeCloseTo(0.5, 5);
+		sound.sample = 10 ** (-60 / 20);
+		expect(transport.level()).toBe(0);
 	});
 });

@@ -11,6 +11,9 @@ const FLIPS_AHEAD = 64;
 export class ComparisonTransport {
 	private sources: AudioBufferSourceNode[] = [];
 	private gains: GainNode[];
+	// Both versions pass through it on their way out, so the page can read how loud the comparison sounds now.
+	private analyser: AnalyserNode;
+	private samples: Float32Array<ArrayBuffer>;
 	private storedPosition = 0;
 	private startedAt = 0;
 	private generation = 0;
@@ -36,14 +39,37 @@ export class ComparisonTransport {
 				...buffers.map((buffer, index) => buffer.duration - offsets[index]),
 			),
 		);
+		this.analyser = context.createAnalyser();
+		this.analyser.fftSize = 1024;
+		this.analyser.connect(context.destination);
+		this.samples = new Float32Array(this.analyser.fftSize);
 		this.gains = buffers.map(() => {
 			const gain = context.createGain();
 			gain.gain.value = 0;
-			gain.connect(context.destination);
+			gain.connect(this.analyser);
 
 			return gain;
 		});
 	}
+	/**
+	 * How loud the comparison sounds now, from 0 (silent, or 48 dB below full scale) to 1 (full scale): the level of the
+	 * last few milliseconds that left it, after the volume, the loudness match and the selected version.
+	 */
+	level() {
+		if (!this.playing) return 0;
+		this.analyser.getFloatTimeDomainData(this.samples);
+
+		let sum = 0;
+
+		for (const sample of this.samples) sum += sample * sample;
+
+		const rms = Math.sqrt(sum / this.samples.length);
+
+		return rms > 0
+			? Math.max(0, Math.min(1, 1 + (20 * Math.log10(rms)) / 48))
+			: 0;
+	}
+
 	/** Where playback would be without the loop: the stored position plus the time played since. */
 	private get unwrapped() {
 		return (
