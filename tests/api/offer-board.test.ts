@@ -305,6 +305,11 @@ describe("the offer board's route", () => {
 			"http://example.net/shop",
 			"See www.example.net/shop/ for the shop",
 		],
+		[
+			"the client's own email domain, with no site entered",
+			"",
+			"Rebuild example.com with class sign-ups",
+		],
 	])("hides %s from the model", async (_, currentUrl, purpose) => {
 		db.exec("DELETE FROM owner_requests");
 		seed("r1", "new", { currentUrl, purpose });
@@ -313,7 +318,9 @@ describe("the offer board's route", () => {
 		const sent: string = inputs.messages[1].content;
 
 		expect(sent).toContain("the client’s current site");
-		expect(sent).not.toMatch(/bücher|xn--bcher|AcmeBakery|example\.net/i);
+		expect(sent).not.toMatch(
+			/bücher|xn--bcher|AcmeBakery|example\.net|example\.com/i,
+		);
 	});
 
 	it("replaces the client's details wherever they appear in what the model reads, the owner's draft and cards included", async () => {

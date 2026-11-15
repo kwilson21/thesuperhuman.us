@@ -16,7 +16,18 @@ import { loadPricing } from "~/server/pricing-store";
 export const prerender = false;
 
 const kv = Astro.locals.runtime.env.RESUME_STORE;
-const pricing = kv ? await loadPricing(kv) : emptyPricing();
+// A read that fails says so, and the forms stay out, so nothing is saved over what could not be read.
+
+let readFailed = false;
+
+const pricing = kv
+	? await loadPricing(kv).catch(() => {
+			readFailed = true;
+
+			return emptyPricing();
+		})
+	: emptyPricing();
+
 const market = pricing.market;
 
 const kindLabels: Record<PricingKind, string> = {
@@ -45,7 +56,7 @@ const updated = pricing.updatedAt
   <p class="owner-breadcrumb"><a href="/owner">Owner center</a> <span aria-hidden="true">/</span> Pricing</p>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone. The offer board shows the AI your research for a brief’s kind of work so its figure stays in range; it never sees your day value or contingency.</p></div></header>
   {!kv && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
-  <div class="software-rail pricing-settings">
+  {readFailed ? <p class="rail-muted" role="alert">Your pricing could not be read just now. Reload the page to try again; nothing has changed.</p> : <div class="software-rail pricing-settings">
     <section class="rail-section" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
       <form data-pricing-form data-part="values" data-version={pricing.version}>
         <div class="software-field"><label>Day value (USD)<input class="studio-input" type="number" name="dayValue" min="1" max="10000" step="1" inputmode="numeric" value={pricing.dayValueCents === null ? '' : pricing.dayValueCents / 100} aria-describedby="pricing-day-hint" /></label><p id="pricing-day-hint" class="rail-muted rail-caption">What a working day is worth to you, in whole dollars. The board multiplies the AI’s day estimates by it to suggest a range. Leave it empty to hide that suggestion.</p></div>
@@ -66,7 +77,7 @@ const updated = pricing.updatedAt
         </div>
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
         {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
-        {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{source.published && ` · ${source.published}`}{source.kind && ` · ${source.kind}`}</li>)}</ol></details>}
+        {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{(source.published || source.kind) && <span class="pricing-source-meta">{[source.published, source.kind].filter((part): part is string => Boolean(part)).map((part) => part.replace(/(\d)-(\d)/g, '$1\u2011$2')).join('\u00a0· ')}</span>}</li>)}</ol></details>}
       </> : <p class="rail-muted">No research saved yet. Paste the research file below.</p>}
       <form data-pricing-form data-part="market" data-version={pricing.version}>
         <div class="software-field"><label>Research file (JSON)<textarea class="studio-textarea pricing-json" name="market" rows="12" spellcheck="false" aria-describedby="pricing-market-hint" data-pricing-market>{market ? JSON.stringify(market, null, 2) : ''}</textarea></label><p id="pricing-market-hint" class="rail-muted rail-caption">Paste the file the research produced, or edit this copy. Each range needs a kind (website, webapp or workflow), a size (small, medium or large), lowUsd and highUsd in whole dollars, and a definition. Sources need https links.</p></div>
@@ -75,7 +86,7 @@ const updated = pricing.updatedAt
       </form>
     </section>
     <p class="rail-muted rail-caption pricing-last-saved" data-pricing-last-saved>{updated && `Last saved ${updated} (version ${pricing.version}).`}</p>
-  </div>
+  </div>}
   <script>
     import { setupOwnerPricing } from '~/scripts/owner-pricing';
 
@@ -111,7 +122,8 @@ const updated = pricing.updatedAt
   .pricing-caveats li + li { margin-top: .5rem; }
   /* Numbered, because the caveats cite sources by number. */
   .pricing-sources { list-style: decimal; padding-left: 2rem; }
-  .pricing-sources a { display: inline-block; padding-block: .75rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+  .pricing-sources a { display: block; padding-block: .75rem .2rem; border-bottom: 0; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: .2em; }
+  .pricing-source-meta { display: block; color: var(--studio-muted); font-size: .82rem; padding-bottom: .35rem; }
   .pricing-settings textarea[aria-invalid="true"] { border-color: var(--accent); }
   .pricing-settings .studio-quiet { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; }
   /* While a save is on its way: marked rather than disabled, so focus stays where it was. */

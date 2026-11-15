@@ -155,8 +155,13 @@ back-end rules' Effect form, like the living brief's route:
 3. Reserve one call in the owner's daily count (`offer:owner` in `brief_suggestion_budget`, 40 a day), with the
    same guarded batch as the living brief.
 4. Ask `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON Mode with a JSON schema, 1,200 output tokens, 30 seconds.
-5. Read the reply card by card as untrusted data: lanes, limits, text limits, no prices or links in text, days between
-   0.5 and 60 per milestone, size one of three, the market figure a whole number.
+5. Read the reply card by card as untrusted data: lanes, limits, text limits, no money or links in text, days between
+   0.5 and 60 per milestone, size one of three, the market figure a whole number. The money test (`pricesOrLinks`,
+   `PRICE` in `src/lib/brief-board.ts`) is a net under the model's instructions, not a proof, and its comment lists
+   what it lets through or drops on purpose: a currency before or after the amount is money in any listed form; after a
+   money word, a large amount is money unless a unit or counted thing follows ("Fee 3,000 plus VAT" is money, "Estimated
+   1,500 pages" is not) and a small one only when what follows reads as paying ("costs 25/month"). The living brief's own
+   filter (`MONEY`) is unchanged.
 6. Answer the cards, the size, the AI's day estimates and its market figure. The pricing panel's arithmetic runs in the
    browser from numbers the owner page already holds (the day value, contingency, research for this path, past offer
    totals), rendered into the page for the owner only.
@@ -166,8 +171,9 @@ the timing and its date; the budget note; the owner's fit label and private fit 
 board's cards; the researched ranges for this path. Never the name, email, company, the current site's address, the
 day value, the contingency or any past offer. The owner's draft and card texts are the owner's own words, and the
 client's answers may name the client too, so before the request is sent every string in it has the client's name,
-email, company and current site (as entered, and the site's host) replaced with "the client" or "the client's current
-site": whole words, any case, the longest first (`withheldFrom`). A first name alone, or a misspelling, is not caught.
+email, company and current site (as entered, without its scheme or "www.", and its host as typed or as read) and the
+email's own domain (unless it is a free mail service) replaced with "the client" or "the client's current site": whole
+words, any case, the longest first (`withheldFrom`). A first name alone, or a misspelling, is not caught.
 
 A card the model keeps unchanged is listed by its ref in `keep` rather than repeated, so a full board does not use up
 the reply's 1,200 tokens repeating itself; the route treats a kept ref as it treats a ref named in a card the reader

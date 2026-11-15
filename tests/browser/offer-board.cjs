@@ -826,6 +826,26 @@ function check(name, ok, detail = "") {
 		if (stillEditing)
 			await card("summary").getByRole("button", { name: "Cancel" }).click();
 
+		// The seventh review's bugs: Undo names Keep for what it did, and an edit that changes nothing is not a step.
+		await fresh();
+		await card("drivers").getByRole("button", { name: /^Keep/ }).click();
+
+		const afterKeep = await page
+			.locator("[data-offer-undo]")
+			.getAttribute("aria-label");
+
+		await card("summary").getByRole("button", { name: /^Edit/ }).click();
+		await card("summary").locator("[data-card-input]").press("Enter");
+		check(
+			"Undo names Keep, and an unchanged edit is not a step",
+			/^Undo: kept /.test(afterKeep ?? "") &&
+				(await page.locator("[data-offer-status]").textContent()) ===
+					"No change to the card." &&
+				(await page.locator("[data-offer-undo]").getAttribute("aria-label")) ===
+					afterKeep,
+			afterKeep ?? "",
+		);
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

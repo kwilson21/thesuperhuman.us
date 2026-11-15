@@ -164,8 +164,17 @@ export function readMarketReference(raw: RawValue): Read<MarketReference> {
 	for (const [index, item] of rangeItems.entries()) {
 		const read = readFields(rangeFields, item);
 
-		if (!read.ok)
-			return { ok: false, error: `Range ${index + 1} is not readable.` };
+		if (!read.ok) {
+			const [field, message] = Object.entries(read.errors)[0] ?? [];
+
+			return {
+				ok: false,
+				error: field
+					? `Range ${index + 1}, ${field}: ${String(message)}`
+					: `Range ${index + 1} is not readable.`,
+			};
+		}
+
 		const range = read.value;
 
 		if (range.lowUsd > range.highUsd)

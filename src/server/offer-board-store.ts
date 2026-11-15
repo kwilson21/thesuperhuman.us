@@ -142,6 +142,39 @@ export const readOfferRequest = (id: string, day: string) =>
 		}),
 	);
 
+/** Mail services whose domain says nothing about who the client is. */
+const FREE_MAIL = new Set([
+	"gmail.com",
+	"googlemail.com",
+	"yahoo.com",
+	"ymail.com",
+	"outlook.com",
+	"hotmail.com",
+	"live.com",
+	"msn.com",
+	"icloud.com",
+	"me.com",
+	"mac.com",
+	"aol.com",
+	"proton.me",
+	"protonmail.com",
+	"pm.me",
+	"gmx.com",
+	"gmx.de",
+	"gmx.net",
+	"web.de",
+	"mail.com",
+	"yandex.com",
+	"yandex.ru",
+	"zoho.com",
+	"fastmail.com",
+	"hey.com",
+	"tutanota.com",
+	"qq.com",
+	"163.com",
+	"naver.com",
+]);
+
 /** What stands in for the client's details where they appear in text the model reads. */
 const CLIENT = "the client";
 const CLIENT_SITE = "the client’s current site";
@@ -149,7 +182,8 @@ const CLIENT_SITE = "the client’s current site";
 /**
  * The client's name, email, company and current site, each with what replaces it. The site is withheld in every form a
  * text may give it: as entered; without its scheme, "www." or a trailing slash ("facebook.com/AcmeBakery"); its host as
- * typed ("bücher.de") and as the browser reads it ("xn--bcher-kva.de").
+ * typed ("bücher.de") and as the browser reads it ("xn--bcher-kva.de"). The email's own domain is withheld as a site too,
+ * unless it is a free mail service.
  */
 function withheldOf(
 	row: RequestRow,
@@ -170,10 +204,14 @@ function withheldOf(
 		// Not a link: the text itself is withheld.
 	}
 
+	// The email's domain names the client too ("jane@acmebakery.com"), unless it is a free mail service.
+	const mailDomain = row.email.split("@")[1]?.trim().toLowerCase() ?? "";
+	const ownDomain = FREE_MAIL.has(mailDomain) ? "" : mailDomain;
+
 	const forms = [
 		site,
 		site.replace(/\/+$/, ""),
-		...[bare, typedHost, readHost].flatMap((form) => [
+		...[bare, typedHost, readHost, ownDomain].flatMap((form) => [
 			form,
 			form.replace(/\/+$/, ""),
 			form && `www.${form}`,

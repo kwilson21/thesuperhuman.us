@@ -387,3 +387,65 @@ describe("found in the offer board's sixth review", () => {
 		expect(reply?.figureReason).toBe("");
 	});
 });
+
+describe("found in the offer board's seventh review", () => {
+	it.each([
+		"A fixed fee of 4,800 covers design and build",
+		"Budget of 5,000 for the first version",
+		"Estimated cost 6,500 including launch support",
+		"Quoted at 3,000 for three pages",
+		"Price 2,400 for the first milestone",
+		"Fee 3,000 plus VAT",
+		"Fee: 1,500 (half on signing)",
+		"Budget 10,000 or less",
+		"Hosting costs 25/month after handoff",
+		"Homepage design (fee 1,200 on approval)",
+		"Presupuesto estimado: 3.000 dólares",
+		"Orçamento de 5.000 reais",
+		"Kosten: 5.000",
+		"Prix : 3 000",
+		"Цена 50 000 руб.",
+		"Koszt 20 000 zł",
+		"Fiyat 50.000 TL",
+		"₺50.000",
+		"₪20,000",
+		"50,000 pesos",
+		"5.000 R$",
+		"Precio: 2.500",
+		"Preis 4.000 netto",
+	])(
+		"drops %s: a large amount after a money word, or money in another language",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Estimated 120 hours",
+		"Budget 2 rounds of revisions",
+		"Import 3 CAD file types",
+		"Convert drawings from 2 CAD formats to PDF",
+		"Estimated 6, up to 8 weeks from the start date",
+		"Estimated: 4, possibly 5 weeks",
+		"Estimated 5k users at launch",
+		"Price 5k products",
+		"Quote 5k items",
+		"Estimated 1,200 product pages",
+		"Unas 6 semanas desde el inicio",
+		"Plazo estimado: 4 a 6 semanas",
+	])("keeps %s: a duration, a count or a file format", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+
+	it("reads long text quickly", () => {
+		const long =
+			"Estimated 6 weeks for design, build and launch with a fee of review ".repeat(
+				150,
+			);
+
+		const start = performance.now();
+
+		pricesOrLinks(long);
+		expect(performance.now() - start).toBeLessThan(500);
+	});
+});

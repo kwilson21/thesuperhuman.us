@@ -456,19 +456,45 @@ export function sameIdea(a: string, b: string): boolean {
 const MONEY_WORDS =
 	"budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|around|about|roughly|approximately|under|over|below|above|up to|less than|more than";
 
-// An amount of money: a currency's symbol, code, word or character with a number, or a money word with one. The last
-// part is the money word with a number.
+// The money forms, as named parts. PRICE_PARTS keeps the living brief's order, so MONEY's source stays as it was; the
+// offer board's PRICE below reuses some of them and adds its own.
+/** A currency's symbol before the amount ("$5,000", "€300", "$5k"). */
+const SYMBOL_BEFORE =
+	"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?";
+
+/** An amount, then a currency's code or word ("5,000 USD", "300 euros"). */
+const CODE_OR_WORD_AFTER =
+	"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b";
+
+// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
+// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
+const CODE_BEFORE =
+	"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d";
+
+/** Chinese and Japanese amounts ("5000元", "3万円"). */
+const CJK_AMOUNT =
+	"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)";
+
+// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
+const WON_AMOUNT =
+	"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)";
+
+/** A Chinese, Japanese or Korean money word with an amount ("预算: 5000"). */
+const CJK_MONEY_WORD =
+	"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d";
+
+/** The living brief's money word with any number ("estimated 6 weeks" included: the brief refuses durations anyway). */
+const BRIEF_MONEY_WORD_AMOUNT =
+	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*";
+
 const PRICE_PARTS = [
-	"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
-	"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-	// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
-	// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
-	"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d",
-	"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
-	// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
-	"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
-	"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
-	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
+	SYMBOL_BEFORE,
+	CODE_OR_WORD_AFTER,
+	CODE_BEFORE,
+	CJK_AMOUNT,
+	WON_AMOUNT,
+	CJK_MONEY_WORD,
+	BRIEF_MONEY_WORD_AMOUNT,
 ];
 
 /**
@@ -479,39 +505,87 @@ const MONEY = new RegExp(
 	[
 		...PRICE_PARTS.slice(0, -1),
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
-		PRICE_PARTS.at(-1),
+		BRIEF_MONEY_WORD_AMOUNT,
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
 	].join("|"),
 	"iu",
 );
 
-/**
- * A money word with a number, read as money only when nothing but a range, punctuation, a scale or a word about paying
- * follows: "a fee of 500", "costs 500 a month", "price: 1,500.", but not "Estimated 6 weeks", "costs 2 to 3 extra days"
- * or "Quote 3 shipping carriers". The number is read whole first, so "estimated 16 weeks" never reads as "estimated 1".
- */
-const MONEY_WORD_AMOUNT =
-	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*(?![\\d,.]*\\d)(?=\\s*(?:(?:to|-|–)\\s*\\d[\\d,.]*)?\\s*(?:$|[.,;:!?)\\]](?!\\d)|(?:k|m|thousand|million|dollars?|euros?|pounds?|bucks|per|a|an|each|flat|upfront|up front|total)\\b))";
+// ---- The offer board's money test --------------------------------------------------------------------------------
+// An offer's cards may count things and give durations ("Import up to 2,000 products", "Estimated 6 weeks"), so the
+// offer board reads a number after a money word by what follows it. A large amount (three digits or more, a thousands
+// separator, or "k") is money unless a unit or a counted thing follows ("Fee 3,000 plus VAT" is money; "Estimated 1,500
+// pages" is not). A small one is money only when what follows reads as paying ("a fee of 50", "costs 25/month").
+// Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"); a large number
+// followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"); money words are listed for English,
+// Spanish, Portuguese, French, German, Italian, Russian, Polish and Turkish only, so another language's money word
+// passes unless a currency is written; a currency code that is also a word ("TRY") is not listed.
+
+/** A money word, in the languages listed above, standing as a word of its own. */
+const OFFER_MONEY_WORD =
+	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
+
+/** What may stand between a money word and its amount ("of", "is", "de", ":"). */
+const OFFER_CONNECTOR =
+	"\\s*(?:(?:of|is|at|around|about|under|over|roughly|approximately|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*)?[:：]?\\s*";
+
+/** A large amount: a thousands separator, three digits or more, or a scale ("1,500", "3 000", "120", "5k"). */
+const LARGE_AMOUNT =
+	"(?:\\d{1,3}(?:[,.\\s]\\d{3})+|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m)\\b)(?!\\d|[.,]\\d)";
+
+/** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
+const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
+
+/** A range after an amount ("to 6", "- 8", "– 1,200"). */
+const OFFER_RANGE = "(?:\\s*(?:to|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?k)?)?";
+
+/** Units of time, and things an offer counts, in the languages listed above. */
+const OFFER_UNITS =
+	"(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?|rounds?|revisions?|iterations?|pages?|screens?|views?|products?|items?|skus?|users?|members?|accounts?|records?|rows?|entries|orders?|customers?|clients?|subscribers?|visitors?|emails?|messages?|files?|photos?|images?|videos?|posts?|articles?|templates?|forms?|fields?|steps?|milestones?|features?|integrations?|languages?|locations?|stores?|sites?|apps?|carriers?|reports?|dashboards?|seats?|licen[cs]es?|people|staff|employees?|requests?|calls?|tickets?|días|dias|semanas|meses|horas|páginas|paginas|productos|produtos|usuarios|usuários|tage|wochen|monate|stunden|seiten|produkte|jours|semaines|mois|heures|giorni|settimane|mesi|ore|pagine|prodotti|дней|недел[ьи]|месяц[аев]*|часов|страниц|dni|tygodni|miesięcy|godzin|stron|gün|hafta|ay|saat|sayfa)(?!\\p{L})";
+
+/** What may follow a large amount when it counts things rather than money: a range, perhaps one word, then a unit. */
+const COUNTED_AFTER = `${OFFER_RANGE}\\s*(?:(?!(?:per|a|an|each|for|plus|or|and|including|on|with|to|of)(?!\\p{L}))\\p{L}+\\s+)?${OFFER_UNITS}`;
+
+/** What follows a small amount when it is money: the end, a full stop, a period of time after a slash, or a paying word. */
+const PAID_AFTER = `${OFFER_RANGE}\\s*(?:$|[.;)\\]](?=\\s|$)|\\/\\s?(?:mo|month|yr|year|wk|week|day|hr|hour)\\b|(?:dollars?|euros?|pounds?|bucks|per|a|an|each|flat|upfront|up front|total|plus)\\b)`;
+
+/** A money word with an amount that is money by the rules above. */
+const OFFER_MONEY_WORD_AMOUNT = `${OFFER_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${PAID_AFTER}))`;
+
+/** Currency symbols the living brief does not list, before the amount ("₽5 000", "₺50.000", "₪20,000"). */
+const OTHER_SYMBOL_BEFORE = "[₽₺₪₱₫]\\s?\\d";
+
+/** Codes the living brief does not list, before the amount ("PLN 2 000"). */
+const OTHER_CODE_BEFORE = "\\b(?:pln|czk|huf|rub|zar|sgd|hkd)\\s?\\d";
 
 /**
  * Money written after the amount, as many languages write it and the model writes in the brief's language: "20 €",
- * "1.500 €", "15 CHF", "5k USD", "50 000 kr", and "Rs. 50,000" with its dot (without it, "RS 232" is a port).
+ * "1.500 €", "5.000 R$", "15 CHF", "5k USD", "50 000 kr", "3.000 dólares", "20 000 zł", and "Rs. 50,000" with its dot
+ * (without it, "RS 232" is a port). "CAD" and "AUD" after a small number followed by a word are formats, not money
+ * ("3 CAD file types").
  */
 const AMOUNT_THEN_CURRENCY = [
-	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?[$€£¥₹₩]",
-	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|cad|aud|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr)\\b",
+	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])",
+	"\\d[\\d,.]*(?:\\s\\d{3})*\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])",
+	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
+	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
 	"\\brs\\.\\s?\\d",
 ];
 
 /**
- * An amount of money only, for the offer board: the currency forms above, a money word with an amount, and money written
- * after the amount. No quantities or durations, which an offer's cards need ("Import up to 2,000 products", "about 5k",
- * "Estimated 6 weeks"). MONEY above keeps its own alternatives for the living brief.
+ * An amount of money only, for the offer board: a currency before or after the amount, or a money word with an amount
+ * that reads as money. MONEY above keeps its own alternatives for the living brief.
  */
 const PRICE = new RegExp(
 	[
-		...PRICE_PARTS.slice(0, -1),
-		MONEY_WORD_AMOUNT,
+		SYMBOL_BEFORE,
+		OTHER_SYMBOL_BEFORE,
+		CODE_BEFORE,
+		OTHER_CODE_BEFORE,
+		CJK_AMOUNT,
+		WON_AMOUNT,
+		CJK_MONEY_WORD,
+		OFFER_MONEY_WORD_AMOUNT,
 		...AMOUNT_THEN_CURRENCY,
 	].join("|"),
 	"iu",
@@ -1039,6 +1113,8 @@ export function keepCard<L extends string>(
 export function useCard<L extends string>(
 	board: Board<L>,
 	id: string,
+	/** What the press did, as Undo names it; "used" by default. */
+	verb = "used",
 ): Board<L> {
 	const card = find(board, id);
 
@@ -1047,7 +1123,7 @@ export function useCard<L extends string>(
 
 	return act(
 		board,
-		`used “${card.text}”`,
+		`${verb} “${card.text}”`,
 		[id],
 		replace<L>(id, (c) => ({ ...c, status: "kept" })),
 	);

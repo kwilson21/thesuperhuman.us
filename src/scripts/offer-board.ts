@@ -212,6 +212,9 @@ export function setupOfferBoard() {
 		live.textContent = text;
 	};
 
+	/** The AI's own words quoted inside a sentence: trimmed, without a closing period. */
+	const clause = (text: string) => text.trim().replace(/[.。]+$/, "");
+
 	/** The end of a sentence after a quoted text: nothing when the quote already ends one (“…are in.”, “…launch?”). */
 	const endAfter = (text: string) =>
 		/[.?!]["”’)]*$/.test(text.trim()) ? "" : ".";
@@ -557,7 +560,16 @@ export function setupOfferBoard() {
 		restore.unshift(() => {
 			if (!wasUsed) used.delete(card.id);
 		});
-		const next = useCard(board, card.id);
+
+		const next = useCard(
+			board,
+			card.id,
+			card.lane === "drivers"
+				? "kept"
+				: card.lane === "questions"
+					? "copied to Ask a question"
+					: "used",
+		);
 
 		if (next === board) {
 			for (const undoField of restore.reverse()) undoField();
@@ -726,7 +738,7 @@ export function setupOfferBoard() {
 
 		if (range && pricing.market && sizing?.size) {
 			marketParts.push(
-				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI’s reason: ${sizing.sizeReason})` : ""}. `,
+				`Your research (${pricing.market.researchedOn}) puts a ${sizing.size} project of this kind at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}${sizing.sizeReason ? ` (the AI’s reason: “${clause(sizing.sizeReason)}”)` : ""}. `,
 			);
 
 			if (sizing.figureUsd !== null) {
@@ -736,8 +748,14 @@ export function setupOfferBoard() {
 					range.highUsd,
 				);
 
+				const why = sizing.figureReason
+					? ` (its reason: “${clause(sizing.figureReason)}”)`
+					: "";
+
 				marketParts.push(
-					`The AI suggests ${dollars(figure * 100)}${figure === sizing.figureUsd ? "" : ", moved into the researched range"}${sizing.figureReason ? `: ${sizing.figureReason}` : ""}. `,
+					figure === sizing.figureUsd
+						? `The AI suggests ${dollars(figure * 100)}${why}. `
+						: `The AI named ${dollars(sizing.figureUsd * 100)}${why}; held to your research’s range, that is ${dollars(figure * 100)}. `,
 				);
 			}
 
@@ -835,6 +853,12 @@ export function setupOfferBoard() {
 		const input = node.querySelector<HTMLInputElement>("[data-card-input]")!;
 		input.setAttribute("aria-label", `Edit “${card.text}”`);
 		input.maxLength = offerTextLimits[card.lane];
+		const hint = node.querySelector<HTMLElement>("[data-card-hint]")!;
+		hint.id = `offer-card-hint-${card.id}`;
+		hint.textContent = `Up to ${offerTextLimits[card.lane]} characters.`;
+
+		if (!input.hasAttribute("aria-invalid"))
+			input.setAttribute("aria-describedby", hint.id);
 		const detail = details.get(card.id);
 		const list = node.querySelector<HTMLElement>("[data-card-detail]")!;
 		list.hidden = !detail;
@@ -1390,10 +1414,15 @@ export function setupOfferBoard() {
 			node.querySelector<HTMLElement>("[data-card-editor]")!.hidden = true;
 
 			if (target.matches("[data-card-save]")) {
-				board = editCardIn(OFFER_LANE_CONFIG, board, card.id, input.value);
-				render();
-				say("Saved your words on the card. Undo puts the old ones back.");
-				schedule();
+				const next = editCardIn(OFFER_LANE_CONFIG, board, card.id, input.value);
+
+				if (next === board) say("No change to the card.");
+				else {
+					board = next;
+					render();
+					say("Saved your words on the card. Undo puts the old ones back.");
+					schedule();
+				}
 			}
 
 			const drawn = nodes.get(card.id);
@@ -1456,7 +1485,7 @@ export function setupOfferBoard() {
 		error.textContent = message;
 		error.hidden = false;
 		input.setAttribute("aria-invalid", "true");
-		input.setAttribute("aria-describedby", error.id);
+		input.setAttribute("aria-describedby", `${error.id} offer-card-hint-${id}`);
 		announce(message);
 		input.focus();
 	}
@@ -1472,7 +1501,11 @@ export function setupOfferBoard() {
 		}
 
 		input?.removeAttribute("aria-invalid");
-		input?.removeAttribute("aria-describedby");
+
+		const hint = node.querySelector<HTMLElement>("[data-card-hint]");
+
+		if (hint?.id) input?.setAttribute("aria-describedby", hint.id);
+		else input?.removeAttribute("aria-describedby");
 	}
 
 	root.addEventListener("input", (event) => {

@@ -207,12 +207,19 @@ async function save(
 		}
 
 		if (status)
-			status.textContent = Predicate.isString(error)
-				? error
-				: "Your pricing could not be saved. Try again.";
+			status.textContent =
+				response.status === 413
+					? "The research file is too large to save (the limit is 96 KB). Shorten the caveats or source titles, then save again."
+					: Predicate.isString(error)
+						? error
+						: "Your pricing could not be saved. Try again.";
 
 		// A research file the route refused: the box is marked with the reason beside it.
-		if (body.action === "market" && response.status === 400) markResearch(true);
+		if (
+			body.action === "market" &&
+			(response.status === 400 || response.status === 413)
+		)
+			markResearch(true);
 	} catch {
 		// The request or its answer was lost on the way: the save may have reached the store.
 		needsReload = true;
@@ -286,6 +293,7 @@ export function setupOwnerPricing() {
 				if (status)
 					status.textContent =
 						"Paste the research file, or use Clear research to remove it.";
+				markResearch(true);
 
 				return;
 			}
