@@ -36,7 +36,32 @@ const unsaved = (form: HTMLFormElement) =>
 		),
 	].some((input) => input.value !== input.defaultValue);
 
+/** Where the page notes, across the reload new research triggers, that it was saved. */
+const SAVED_KEY = "owner-pricing-saved";
+
 async function send(
+	body: PricingRequest,
+	form: HTMLFormElement,
+	status: Status,
+) {
+	// One save at a time: a second press would carry the same version and be refused as stale.
+	if (form.dataset.saving === "true") return;
+	form.dataset.saving = "true";
+
+	for (const button of form.querySelectorAll<HTMLButtonElement>("button"))
+		button.disabled = true;
+
+	try {
+		await save(body, form, status);
+	} finally {
+		delete form.dataset.saving;
+
+		for (const button of form.querySelectorAll<HTMLButtonElement>("button"))
+			button.disabled = false;
+	}
+}
+
+async function save(
 	body: PricingRequest,
 	form: HTMLFormElement,
 	status: Status,
@@ -66,6 +91,13 @@ async function send(
 
 			for (const each of forms) each.dataset.version = String(version);
 
+			const lastSaved = document.querySelector<HTMLElement>(
+				"[data-pricing-last-saved]",
+			);
+
+			if (lastSaved)
+				lastSaved.textContent = `Last saved just now (version ${version}).`;
+
 			// What was saved is now what the page was drawn with.
 			for (const input of form.querySelectorAll<
 				HTMLInputElement | HTMLTextAreaElement
@@ -75,6 +107,16 @@ async function send(
 			const others = forms.filter((each) => each !== form && unsaved(each));
 
 			if (body.action === "market" && others.length === 0) {
+				// The reloaded page says it was saved: the status here would go with the page.
+				try {
+					sessionStorage.setItem(
+						SAVED_KEY,
+						body.market === null ? "cleared" : "saved",
+					);
+				} catch {
+					// Without storage the reloaded table is the confirmation.
+				}
+
 				location.reload();
 
 				return;
@@ -100,6 +142,28 @@ async function send(
 }
 
 export function setupOwnerPricing() {
+	let reloaded: string | null = null;
+
+	try {
+		reloaded = sessionStorage.getItem(SAVED_KEY);
+		sessionStorage.removeItem(SAVED_KEY);
+	} catch {
+		// Nothing to say without storage.
+	}
+
+	if (reloaded === "saved" || reloaded === "cleared") {
+		const status = document.querySelector<HTMLElement>(
+			'[data-part="market"] [data-pricing-status]',
+		);
+
+		// Set after the page is ready, so the status region announces it.
+		if (status)
+			setTimeout(() => {
+				status.textContent =
+					reloaded === "cleared" ? "Research cleared." : "Research saved.";
+			}, 300);
+	}
+
 	for (const form of document.querySelectorAll<HTMLFormElement>(
 		"[data-pricing-form]",
 	)) {

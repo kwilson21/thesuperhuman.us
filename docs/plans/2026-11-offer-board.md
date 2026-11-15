@@ -39,11 +39,12 @@ Three rows, each with the reasoning behind it:
 | Row | How it is worked out | When it is missing |
 |---|---|---|
 | From your day value | The AI estimates each milestone's working days as a low and a high. Ordinary code multiplies them by the owner's private day value and adds the owner's contingency, rounded up to whole $50. | "Set your day value on the pricing page." |
-| From your past offers | Ordinary code reads the owner's sent offers on the same path (website, web app or workflow), each the version the client last received (never a superseded or withdrawn one): each one's total (the sum of its milestone fees), outcome and date, the five most recent, with the lowest, middle and highest. | "No sent offers on this path yet." |
+| From your past offers | Ordinary code reads the owner's sent offers on the same path (website, web app or workflow), each the version the client last received (never a superseded or withdrawn one): each one's total (the sum of its milestone fees), outcome and date, the five most recent, with the lowest, middle and highest. | "No sent website offers yet." (the path's name) |
 | From the market | The researched range for this path and the size the AI chose (small, medium or large), with the date it was researched and its sources. The AI also names a figure in that range with a reason; ordinary code moves a figure outside the range to the nearer end and says so. | "Add the market research on the pricing page." |
 
 Each row can fill the offer's whole-project range ("Use as the estimate range", which also ticks "Whole-project
-range"), and each milestone card can fill its milestone's fee ("Use $N as the fee"). These are the only ways money
+range"), and each milestone card can fill its milestone's fee ("Add with a fee of $N" when it is used, "Set its fee to
+$N" once it is in the offer, which fills the fee and nothing else). These are the only ways money
 reaches the offer, and only by the owner's press. The panel says: "Estimates to help you decide. The fee is yours, and
 nothing is sent until you send the offer."
 
@@ -53,7 +54,7 @@ nothing is sent until you send the offer."
 |---|---|---|---|
 | Outcome | the Outcome field (replaces it) | 3 | 120 |
 | Summary | the Summary field (replaces it) | 2 | 300 |
-| Milestones | a new milestone (name, deliverables, acceptance examples), or the first empty one | 4 | name 80; 1 to 8 deliverables and 1 to 5 acceptance examples of up to 200 each |
+| Milestones | the first milestone row with every field empty, or a new one (name, deliverables, acceptance examples), at most three | 3 | name 80; 1 to 8 deliverables and 1 to 5 acceptance examples of up to 200 each |
 | What you need from them | a line added to "What you need from them" | 6 | 120 |
 | Outside this offer | a line added to "Outside this offer" | 6 | 120 |
 | Timing | the Timing field (replaces it) | 2 | 200 |
@@ -98,8 +99,9 @@ The same as the living brief, with Use as the owner's Keep:
 ```mermaid
 stateDiagram-v2
   [*] --> proposed: a reply adds it
-  [*] --> wrote: Add
   proposed --> kept: Use or Keep
+  edited --> kept: Use
+  kept --> kept: Use (a card kept by Bring back)
   proposed --> edited: Edit
   proposed --> dismissed: Not this
   kept --> dismissed: Not this
@@ -120,18 +122,20 @@ stays.
 
 ## 4. The pricing reference (private)
 
-A new owner page, `/owner/pricing`, reached from the board and the owner home:
+A new owner page, `/owner/pricing`, reached from the owner nav and from the board's links:
 
 - **Day value** (whole dollars): what a working day is worth to the owner, used only to turn the AI's day estimates
   into a range. It is never shown to clients; offers stay fixed-price per milestone.
 - **Contingency** (0 to 100 %): added to the high end.
 - **Market research:** for each path (website, web app, workflow) and size (small, medium, large), a low and high in
-  whole dollars and what the size means; the sources (title, link, date); the date researched. "Import research" reads
-  the file the research workflow produces; every field can also be edited by hand.
+  whole dollars and what the size means; the sources (title, link, date); the date researched. The owner pastes the
+  file the research workflow produces into a box and presses Save research; the page shows it as a table with its
+  sources and caveats, and the box can be edited by hand.
 
 Stored as one record (`owner:pricing`) in the RESUME_STORE KV namespace, which already holds the owner's private records,
 saved with the version the owner last read (a stale save is refused with 409 and the page says to reload; KV has no
-compare-and-set, and one owner writes this record). A MUSIC_DB table was the first plan: it would have changed the
+compare-and-set, and one owner writes this record; `verification/pricing-save.qnt` shows what that allows between
+two tabs). A MUSIC_DB table was the first plan: it would have changed the
 database digest every golden case records, so the corpus would have needed a re-record its rules do not allow. The research itself is produced outside the site
 by a workflow that searches, reads and cross-checks sources and is rerun when the owner wants it refreshed; a live
 search on every request would need a new paid service, which the owner has not approved.

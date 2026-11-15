@@ -36,6 +36,7 @@ import {
 	type OfferSizing,
 	fitOfferCards,
 	offerLaneLabels,
+	offerTextLimits,
 	pricingKind,
 	readOfferReply,
 } from "../lib/offer-board";
@@ -568,7 +569,7 @@ export function setupOfferBoard() {
 		button.type = "button";
 		button.className = "studio-quiet";
 		button.textContent = "Use as the estimate range";
-		button.setAttribute("aria-label", `Use ${what} as the estimate range`);
+		button.setAttribute("aria-label", `Use as the estimate range: ${what}`);
 		button.dataset.priceUse = "";
 		button.dataset.low = String(lowCents);
 		button.dataset.high = String(highCents);
@@ -728,9 +729,9 @@ export function setupOfferBoard() {
 			originLabel(card);
 		node.querySelector<HTMLElement>("[data-card-text]")!.textContent =
 			card.text;
-		node
-			.querySelector<HTMLInputElement>("[data-card-input]")!
-			.setAttribute("aria-label", `Edit “${card.text}”`);
+		const input = node.querySelector<HTMLInputElement>("[data-card-input]")!;
+		input.setAttribute("aria-label", `Edit “${card.text}”`);
+		input.maxLength = offerTextLimits[card.lane];
 		const detail = details.get(card.id);
 		const list = node.querySelector<HTMLElement>("[data-card-detail]")!;
 		list.hidden = !detail;
@@ -753,6 +754,17 @@ export function setupOfferBoard() {
 		reason.textContent = reason.hidden ? "" : `Why: ${card.reason}`;
 		const actions = node.querySelector<HTMLElement>("[data-card-actions]")!;
 		const wanted = actionsFor(card);
+		const editor = node.querySelector<HTMLElement>("[data-card-editor]")!;
+
+		if (!editor.hidden && !wanted.some(([act]) => act === "edit")) {
+			const editing = editor.contains(document.activeElement);
+			editor.hidden = true;
+
+			if (editing)
+				queueMicrotask(() =>
+					actions.querySelector<HTMLElement>("button")?.focus(),
+				);
+		}
 
 		const signature =
 			wanted.map(([act, label]) => `${act}:${label}`).join("|") + card.text;
@@ -978,9 +990,10 @@ export function setupOfferBoard() {
 		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
 	}
 
-	function failed(text: string) {
+	/** A failure stops automatic asking. The route's own sentence is shown as it is; the page's own adds what to do. */
+	function failed(text: string, own = false) {
 		autoAsk = false;
-		say(`${text} Press Suggest again to try again.`);
+		say(own ? `${text} Press Suggest again to try again.` : text);
 	}
 
 	async function ask() {
@@ -1026,11 +1039,12 @@ export function setupOfferBoard() {
 			if (!reply) {
 				const error = field(json, "error");
 
-				failed(
-					Predicate.isString(error)
-						? error
-						: "The AI couldn’t answer just now. Your draft is unchanged.",
-				);
+				if (Predicate.isString(error)) failed(error);
+				else
+					failed(
+						"The AI couldn’t answer just now. Your draft is unchanged.",
+						true,
+					);
 
 				return;
 			}
@@ -1067,7 +1081,7 @@ export function setupOfferBoard() {
 				changes: 0,
 			});
 		} catch {
-			failed("The AI couldn’t answer just now. Your draft is unchanged.");
+			failed("The AI couldn’t answer just now. Your draft is unchanged.", true);
 		} finally {
 			clearTimeout(stop);
 			inFlight = null;
@@ -1160,7 +1174,7 @@ export function setupOfferBoard() {
 				const near = node.nextElementSibling ?? node.previousElementSibling;
 				board = setAside(board, card.id);
 				render();
-				(near?.querySelector<HTMLElement>("button") ?? heading).focus();
+				(near?.querySelector<HTMLElement>("button") ?? asideSummary).focus();
 				announce(`Set aside “${card.text}”. Undo or Bring back restores it.`);
 				schedule();
 
@@ -1183,6 +1197,16 @@ export function setupOfferBoard() {
 
 		if (target.matches("[data-card-save], [data-card-cancel]")) {
 			const input = node.querySelector<HTMLInputElement>("[data-card-input]")!;
+
+			if (target.matches("[data-card-save]") && !input.value.trim()) {
+				say(
+					"A card needs some words. Use Cancel to keep it as it was, or Not this to set it aside.",
+				);
+				input.focus();
+
+				return;
+			}
+
 			node.querySelector<HTMLElement>("[data-card-editor]")!.hidden = true;
 
 			if (target.matches("[data-card-save]")) {
@@ -1191,10 +1215,13 @@ export function setupOfferBoard() {
 				schedule();
 			}
 
-			nodes
-				.get(card.id)
-				?.querySelector<HTMLElement>('[data-act="edit"]')
-				?.focus();
+			const drawn = nodes.get(card.id);
+
+			(
+				drawn?.querySelector<HTMLElement>('[data-act="edit"]') ??
+				drawn?.querySelector<HTMLElement>("[data-card-actions] button") ??
+				heading
+			).focus();
 		}
 	});
 

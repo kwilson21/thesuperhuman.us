@@ -74,7 +74,7 @@ const useLabels: Record<OfferLane, string> = {
       {/* Beside Undo, so a reply that waits never moves the cards or the prices. */}
       <button type="button" class="studio-quiet" data-offer-held hidden></button>
     </div>
-    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your draft and your market research for this kind of work. It never sees the client’s name, email or company, your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
+    <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It never sees the client’s name, email or company, your day value or your other offers. Nothing is saved or sent until you use the offer editor below.</p>
     <p class="visually-hidden" data-offer-live role="status"></p>
   </div>
 
@@ -97,10 +97,10 @@ const useLabels: Record<OfferLane, string> = {
     <h3 id="offer-pricing-title" tabindex="-1">What to charge</h3>
     <dl class="offer-prices">
       <div><dt>From your day value</dt><dd data-price-day>{dayValueCents === null ? <>Set your day value on the <a href="/owner/pricing">pricing page</a>.</> : 'Suggest an offer to see the AI’s day estimates.'}</dd></div>
-      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{dollars(pastSpread.low)} to {dollars(pastSpread.high)}, middle {dollars(pastSpread.middle)}, from your last {past.length} sent. <button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use your past offers as the estimate range">Use as the estimate range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Offer'}</a> · {dollars(offer.totalCents)} · {offer.sentAt.slice(0, 10)}</li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
+      <div><dt>From your past {kindNames[kind]} offers</dt><dd data-price-past>{pastSpread ? <>{dollars(pastSpread.low)} to {dollars(pastSpread.high)}, middle {dollars(pastSpread.middle)}, from your last {past.length} sent. <button type="button" class="studio-quiet" data-price-use data-low={pastSpread.low} data-high={pastSpread.high} aria-label="Use as the estimate range: your past offers">Use as the estimate range</button><ul class="offer-past" role="list">{past.map(offer => <li><a href={`/owner/requests/${encodeURIComponent(offer.requestId)}`}>{offer.outcome || 'Offer'}</a> · {dollars(offer.totalCents)} · {offer.sentAt.slice(0, 10)}</li>)}</ul></> : `No sent ${kindNames[kind]} offers yet.`}</dd></div>
       <div><dt>From the market</dt><dd data-price-market>{market ? 'Suggest an offer to see where this brief sits in your research.' : <>Add the market research on the <a href="/owner/pricing">pricing page</a>.</>}</dd></div>
     </dl>
-    <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && <> The research’s {market.sources.length} {market.sources.length === 1 ? 'source is' : 'sources are'} on the <a href="/owner/pricing">pricing page</a>.</>}</p>
+    <p class="offer-caption">Estimates to help you decide. The fee is yours, and nothing is sent until you send the offer.{market && <>{` The research’s ${market.sources.length} ${market.sources.length === 1 ? 'source is' : 'sources are'} on the `}<a href="/owner/pricing">pricing page</a>.</>}</p>
   </section>
 
   <template data-offer-card-template>
