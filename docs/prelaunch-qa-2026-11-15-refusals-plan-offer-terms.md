@@ -17,24 +17,27 @@ revert its merge commit.
 ## Scope
 
 - #287: the send refusals for a paid deposit (on the sent offer, and on an earlier offer) and the abandon-signing
-  refusal for an open or paid deposit now say to record a refund with
+  refusal for a deposit that is creating, open, payment_failed, uncollectible, or paid and not refunded now say to record a refund with
   `owner:stripe:reconcile --software-deposit-refunded`; the first also says new terms can't be sent while an agreement
   is signed. Owner pages only; no status, guard or write changes. 16 golden cases differ, each only in the response
   sentence.
 - #288: `docs/plans/2026-11-effect-conversion.md`, the Zod sentences in CLAUDE.md and AGENTS.md, and the release
   record of #285. No code.
-- #289: `offerTermsSchema` is Effect Schema, held by a differential test to the frozen Zod 3 copy over about 18,500
+- #289: the offer terms validator (`offerTermsSchema`, now `readOfferTerms` and `parseOfferTerms`) is Effect Schema, held by a differential test to the frozen Zod 3 copy over about 18,500
   inputs. No golden fixture changed; the PR carried the `conversion` label, so the neutrality check enforced it.
 
 ## Evidence and limits
 
 - Each head, before merge: `validate`, `neutrality` and the Workers preview build succeeded; #289 also `capture`.
-  Locally (Node 26.13.1) on each head: `pnpm test` passed in full (13,070 or more tests), `pnpm run lint` no findings,
-  `pnpm run format:check` no fixes, `pnpm run check` 0 errors.
+  Locally (Node 26.13.1), on the content of each merged head: #287, the full `pnpm test` (13,070 passed) and
+  `pnpm run lint` after the last merge of main; #288 (docs only), `tests/scripts` and `tests/architecture`,
+  `pnpm run format:check` and the copy check; #289, the full `pnpm test` (13,075 passed), `pnpm run lint`,
+  `pnpm run format:check` and `pnpm run check` (0 errors). `pnpm run check` was run on earlier heads of #287, not
+  recorded on its last.
 - Reviews: Codex's code and security reviews of each PR's first head found nothing on #287 and #289 and four points on
-  #288, all fixed. Independent Claude Code passes reviewed every later head; each finding was fixed, and the last
-  changes (a merge of main into #287 re-recording two fixtures, two sentences in #288, a two-line loop in #289) were
-  checked by `golden:neutral` and the full suite.
+  #288, all fixed. Independent Claude Code passes reviewed every head but the last of each PR, and each finding was
+  fixed. The last changes were tested, not reviewed again: a merge of main into #287 re-recording two fixtures
+  (checked by `golden:neutral`, the same 16 cases), two sentences in #288, and a two-line loop in #289 (the full suite).
 - After merge: on `399406ed`, which holds all three, `validate` succeeded (14:27:22 UTC) and the check run
   "Workers Builds: thesuperhuman-us" succeeded (14:20:02 UTC). The `validate` runs on `a416e34f` and `fd3c8170` were
   cancelled by the newer push, as the workflow does.
