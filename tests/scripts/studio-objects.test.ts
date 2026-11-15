@@ -164,6 +164,9 @@ function mount({
 		leave: (id: string, pointerType = "mouse") =>
 			link(id).dispatchEvent(new Pointer("pointerleave", pointerType)),
 		escape: () => page.dispatchEvent(new Key("Escape")),
+		/** The desk scrolls under a pointer resting at (x, y), which arrives over an object without moving. */
+		scrollUnder: (x: number, y: number) =>
+			scene.dispatchEvent(new Pointer("pointerover", "mouse", x, y)),
 		/** The pointer moves to (x, y) over the desk. */
 		move: (x: number, y: number) =>
 			scene.dispatchEvent(new Pointer("pointermove", "mouse", x, y)),
@@ -307,6 +310,22 @@ it("keeps labels hidden after Escape until the pointer really moves, even when t
 	studio.move(100, 100);
 	expect(studio.scene.dataset.labelsDismissed).toBe("true");
 	studio.move(108, 100);
+	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
+});
+
+it("keeps labels hidden after Escape when a scroll brought the desk under a resting pointer", () => {
+	const studio = mount();
+
+	studio.focus("notebook");
+	studio.scrollUnder(300, 200);
+	studio.point("notebook");
+	studio.escape();
+	// A one-pixel nudge hands the hover to the controller under the label; it is not a real move.
+	studio.leave("notebook");
+	studio.point("controller");
+	studio.move(301, 200);
+	expect(studio.scene.dataset.labelsDismissed).toBe("true");
+	studio.move(310, 200);
 	expect(studio.scene.dataset.labelsDismissed).toBeUndefined();
 });
 

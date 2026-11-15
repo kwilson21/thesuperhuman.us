@@ -74,6 +74,11 @@ export function setupStudioObjects() {
 	let pointer: { x: number; y: number } | undefined,
 		dismissedAt: { x: number; y: number } | undefined;
 
+	// A scroll can bring an object under a pointer that is not moving: that sends pointerover, with the pointer's place,
+	// and no pointermove.
+	scene.addEventListener("pointerover", (event) => {
+		pointer = { x: event.clientX, y: event.clientY };
+	});
 	scene.addEventListener("pointermove", (event) => {
 		pointer = { x: event.clientX, y: event.clientY };
 
