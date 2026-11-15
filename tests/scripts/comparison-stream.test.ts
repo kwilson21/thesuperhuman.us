@@ -133,6 +133,39 @@ class StandInControl extends EventTarget {
 	}
 }
 
+/** A pointer on a waveform, from a mouse, at `clientX` (Node has no PointerEvent). */
+class PointerAt extends Event {
+	readonly isPrimary = true;
+	readonly button = 0;
+	readonly pointerType = "mouse";
+	readonly pointerId = 1;
+	readonly clientY = 0;
+
+	constructor(
+		type: string,
+		readonly clientX: number,
+	) {
+		super(type);
+	}
+}
+
+/** A waveform 160 px wide, one pixel a second of the song, that takes the pointer a press starts on it. */
+class StandInStage extends EventTarget {
+	private captured = false;
+
+	getBoundingClientRect() {
+		return { left: 0, width: 160 };
+	}
+
+	setPointerCapture() {
+		this.captured = true;
+	}
+
+	hasPointerCapture() {
+		return this.captured;
+	}
+}
+
 /** The comparison root's data attributes the player reads and writes. */
 type RootData = { duration: string; title: string; audioFallback?: string };
 
@@ -185,6 +218,7 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 	]);
 
 	const dataset: RootData = { duration: "160", title: "Old News" };
+	const stage = new StandInStage();
 
 	const root = Object.assign(new EventTarget(), {
 		dataset,
@@ -195,7 +229,9 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 				? [mix, master]
 				: selector === "[data-select-version]"
 					? switches
-					: [],
+					: selector.includes(".comparison-waveform-stage")
+						? [stage]
+						: [],
 		contains: () => false,
 	});
 
@@ -206,18 +242,34 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 	});
 
 	const sources: Source[] = [];
+	const contexts: StandInContext[] = [];
+	const gains: [number, number][][] = [];
 
 	class StandInContext {
 		currentTime = 0;
 		destination = {};
+
+		constructor() {
+			contexts.push(this);
+		}
 
 		resume() {
 			return Promise.resolve();
 		}
 
 		createGain() {
+			// Each level a gain is set to, with the clock time it is set for.
+			const levels: [number, number][] = [];
+
+			gains.push(levels);
+
 			return {
-				gain: { value: 0, cancelScheduledValues() {}, setTargetAtTime() {} },
+				gain: {
+					value: 0,
+					cancelScheduledValues() {},
+					setTargetAtTime: (level: number, time: number) =>
+						levels.push([level, time]),
+				},
 				connect() {},
 			};
 		}
@@ -293,6 +345,18 @@ function mount({ decodes = true, fixedVolume = false } = {}) {
 			releaseDecode();
 			await settle();
 		},
+		stage,
+		/** Presses, moves or lets go of the pointer on the waveform at `x` seconds into the song. */
+		drag: (type: string, x: number) =>
+			stage.dispatchEvent(new PointerAt(type, x)),
+		/** The level each version is set to now, on the audio clock (the last level set for the current time). */
+		levelsNow: () =>
+			gains.map(
+				(levels) =>
+					levels
+						.filter(([, time]) => time === contexts[0].currentTime)
+						.at(-1)?.[0],
+			),
 		/** Whether the synced transport is sounding. */
 		synced: () => sources.some((source) => source.started && !source.stopped),
 		label: () => controls.play.getAttribute("aria-label") ?? "",
@@ -531,4 +595,22 @@ it("streams again on iOS when the version chosen can play at full level after on
 	expect(ab.mix.paused).toBe(false);
 	expect(ab.play.getAttribute("aria-busy")).toBe("false");
 	expect(ab.status.textContent).toBe("");
+});
+
+it("plays a transport decoded during a drag held past the end at its levels, once the pointer is back", async () => {
+	const ab = mount();
+
+	ab.play.click();
+	await tick();
+	ab.drag("pointerdown", 50);
+	ab.drag("pointermove", 200);
+	// The stream held past the end ends, which pauses the comparison; both versions then finish decoding.
+	ab.mix.end();
+	await tick();
+	expect(ab.label()).toMatch(/^Play /);
+	await ab.decode();
+	ab.drag("pointermove", 80);
+	expect(ab.synced()).toBe(true);
+	expect(ab.levelsNow()).toEqual([1, 0]);
+	expect(ab.mix.getAttribute("src")).toBeNull();
 });
