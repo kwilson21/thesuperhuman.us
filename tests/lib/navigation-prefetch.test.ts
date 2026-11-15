@@ -18,7 +18,6 @@ describe("public navigation trial", () => {
 		for (const path of [
 			"/owner",
 			"/studio",
-			"/software/start",
 			"/api/contact",
 			"/work/private",
 			"/offer/token",
@@ -40,8 +39,6 @@ describe("public navigation trial", () => {
 		}
 
 		for (const source of [
-			"https://audio.thesuperhuman.us/",
-			"https://audio.thesuperhuman.us/services",
 			"https://other.thesuperhuman.us/work",
 			"https://unreviewed.example/",
 			"file:///work",
@@ -57,10 +54,8 @@ describe("public navigation trial", () => {
 
 		for (const path of [
 			"/api/contact",
-			"/software/start",
 			"/owner",
 			"/work?secret=a",
-			"/work#x",
 			"https://evil.test/work",
 			"javascript:alert(1)",
 			"/",
@@ -70,6 +65,55 @@ describe("public navigation trial", () => {
 		])
 			expect(prefetchTarget(path, current)).toBeNull();
 	});
+	it("normalizes audio host routes without crossing origins or media boundaries", () => {
+		const current = "https://audio.thesuperhuman.us/";
+		expect(isPublicPrefetchSource(current)).toBe(true);
+		expect(prefetchTarget("/portfolio#mixes", current)).toBe(
+			"https://audio.thesuperhuman.us/portfolio",
+		);
+		expect(prefetchTarget("/music/old-news", current)).toBe(
+			"https://audio.thesuperhuman.us/music/old-news",
+		);
+
+		for (const target of [
+			"/about",
+			"/start",
+			"/file/mix",
+			"/music/file/id/master",
+			"https://thesuperhuman.us/work",
+			"/music/not-published",
+		])
+			expect(prefetchTarget(target, current)).toBeNull();
+	});
+	it("discovers public content but not no-store, form, redirect, media or unknown targets", () => {
+		const base = "https://thesuperhuman.us/about";
+
+		for (const path of [
+			"/",
+			"/privacy",
+			"/writing/ai-gives-you-speed",
+			"/audio/",
+			"/music/old-news",
+		])
+			expect(prefetchTarget(path, base)).not.toBeNull();
+
+		for (const path of [
+			"/software/start",
+			"/audio/start",
+			"/building/threadline",
+			"/building/personal-website",
+			"/services.html",
+			"/music/hidden",
+			"/new-unknown-page",
+			"/og/home.mp4",
+		])
+			expect(prefetchTarget(path, base)).toBeNull();
+		expect(prefetchTarget("/work#history", base)).toBe(
+			"https://thesuperhuman.us/work",
+		);
+		expect(prefetchTarget("#resumes", base)).toBeNull();
+	});
+
 	it("reserves synchronously, deduplicates and caps even repeated predictions", () => {
 		const seen = new Set<string>();
 
