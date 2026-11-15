@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import * as Effect from "effect/Effect";
 import { suggestionPassCookie } from "~/lib/brief-suggestion-pass";
 import { BodyReadFailed, readBody, readPassInput } from "~/server/brief-input";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
 import { issuePass, PassSigningFailed } from "~/server/flows/brief-pass";
 import { runRoute } from "~/server/run";
 import { liveTurnstileCheck } from "~/server/services";
@@ -18,6 +18,8 @@ const notIssued = () => Response.json({ ok: false }, { headers: headers() });
 
 const signingFailed = () =>
 	Response.json({ ok: false }, { status: 500, headers: headers() });
+
+const failed = loggedAnswer(ROUTE, signingFailed);
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
@@ -58,18 +60,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 						Response.json({ ok: false }, { status: 503, headers: headers() }),
 					),
 				CaptchaRefused: () => Effect.succeed(notIssued()),
-				BodyReadFailed: (failure: BodyReadFailed) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return signingFailed();
-					}),
+				BodyReadFailed: (failure: BodyReadFailed) => failed(failure.failure),
 				PassSigningFailed: (failure: PassSigningFailed) =>
-					Effect.sync(() => {
-						logUnexpected(ROUTE, failure.failure);
-
-						return signingFailed();
-					}),
+					failed(failure.failure),
 			}),
 		),
 		{ route: ROUTE, answer: signingFailed },

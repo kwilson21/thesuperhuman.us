@@ -279,6 +279,9 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/service-sheet.ts": ["services"],
 	"src/scripts/site-nav.ts": SHARED_SITE_PAGES,
 	"src/scripts/payload-review-illustration.ts": TIMELINE_PAGES,
+	"src/components/PrefetchTrial.astro": SHARED_SITE_PAGES,
+	"src/scripts/navigation-prefetch.ts": SHARED_SITE_PAGES,
+	"src/lib/navigation-prefetch.ts": SHARED_SITE_PAGES,
 	"src/scripts/project-timeline.ts": TIMELINE_PAGES,
 	"src/components/ProjectTimeline.astro": TIMELINE_PAGES,
 	"src/scripts/project-updates-feed.ts": BUILDING_PROJECT_PAGES,
@@ -287,8 +290,13 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/components/Hero.astro": ["studio-objects"],
+	"src/components/home/StudioLife.astro": ["studio-objects"],
+	"src/scripts/studio-objects.ts": ["studio-objects"],
 	"src/data/work-with-me.ts": ["services-print"],
 	"src/data/project-stories/tally.ts": ["services-print"],
+	"src/data/writing.ts": ["studio-objects"],
+	"src/lib/music-catalog.ts": ["studio-objects"],
 	"src/data/project-stories/kaillera-next.ts": ["services-print"],
 	"src/components/SoftwareOffer.astro": ["software-offer"],
 	"src/components/owner/SoftwareOfferEditor.astro": [
@@ -389,6 +397,9 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/scripts/software-offer-print.ts": ["software-offer"],
 	"src/scripts/studio-sign-in.ts": ["software-project"],
 	"src/scripts/studio-sign-out.ts": ["studio-client", "software-project"],
+	"src/components/PrefetchTrial.astro": ["prefetch-trial"],
+	"src/scripts/navigation-prefetch.ts": ["prefetch-trial"],
+	"src/lib/navigation-prefetch.ts": ["prefetch-trial"],
 	"src/scripts/project-timeline.ts": ["journal-pagination"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
 	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],

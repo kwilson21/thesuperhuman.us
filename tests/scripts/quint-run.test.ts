@@ -172,18 +172,38 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(5);
+		expect(properties.length).toBeGreaterThanOrEqual(7);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
-	it("every mutant names a module in the model, and every module is listed", () => {
+	it("every mutant and equivalent names a module in the model, and every module is listed", () => {
 		const modules = [
 			...model.matchAll(/^module (\w+) \{ import discountOffers/gm),
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(discountMutants), "discount"].sort(),
+			[
+				...Object.keys(discountMutants),
+				...models[1].equivalents,
+				"discount",
+			].sort(),
 		);
+	});
+
+	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
+		expect(models[1].current).toEqual(["discount"]);
+		expect(models[1].exhaustive).toEqual(["discount"]);
+		expect(models[1].equivalents).toEqual([
+			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
+		]);
+		expect(Object.keys(discountMutants)).not.toContain(
+			"discountSecondBatchNoSendingGuard",
+		);
+		// The second batch as it was before the fix stays a mutant, so CI reproduces F10 on every run.
+		expect(discountMutants.discountTodaySecondBatch).toEqual({
+			property: "declinedHasNoOffer",
+		});
 	});
 
 	it("every mutant property is one of allProperties", () => {
@@ -412,5 +432,14 @@ describe("the models the driver runs", () => {
 		expect(models[5].mutants).toBe(budgetMutants);
 		expect(models[6].mutants).toBe(publicationMutants);
 		expect(models[7].mutants).toBe(agreementLinkMutants);
+	});
+
+	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
+		models.forEach((model: { steps?: string }) =>
+			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
+		);
+
+		// The discount model's send and decline are three steps each, so its deepest witness needs about 50.
+		expect(models[1].steps).toBe("50");
 	});
 });

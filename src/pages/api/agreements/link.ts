@@ -14,7 +14,7 @@ import {
 	liveAgreementAllowance,
 	liveAgreementMail,
 } from "~/server/agreement-services";
-import { loggedAnswer } from "~/server/agreement-answers";
+import { loggedAnswer } from "~/server/answers";
 import { requestArchiveLink } from "~/server/flows/agreement-link";
 import {
 	ARCHIVE_RECEIPT,
