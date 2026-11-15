@@ -266,3 +266,30 @@ it("sets every player control in Libron at 14px or more (type board D4.4-B)", ()
 		"@media(max-width:370px){.comparison-match{grid-column:1/-1;grid-row:3;justify-self:start}.comparison-seek{grid-row:4}}",
 	);
 });
+
+it("gives the full player a listening desk: Loop, its length and Flip A/B each pass, with the region on both waveforms", () => {
+	const full = component.slice(
+		component.indexOf(': <div class="comparison-controls" hidden>'),
+	);
+
+	for (const control of [
+		'<button type="button" data-loop aria-pressed="false">Loop</button>',
+		'<label class="comparison-loop-length">Loop length <select data-loop-length><option value="4">4 s</option><option value="8" selected>8 s</option><option value="16">16 s</option></select></label>',
+		'<label class="comparison-match comparison-loop-flip"><input type="checkbox" data-loop-flip disabled /> Flip A/B each pass</label>',
+	])
+		expect(full).toContain(control);
+
+	// The compact Home player keeps its minimal controls.
+	const compact = component.slice(
+		component.indexOf("{compact ? <>"),
+		component.indexOf(': <div class="comparison-controls" hidden>'),
+	);
+
+	for (const hook of ["data-loop ", "data-loop-length", "data-loop-flip"])
+		expect(compact).not.toContain(hook);
+
+	expect(component).toContain(
+		'<span class="comparison-loop" data-loop-region aria-hidden="true" hidden></span>',
+	);
+	expect(component).toContain("Loop repeats a few seconds from where you are.");
+});

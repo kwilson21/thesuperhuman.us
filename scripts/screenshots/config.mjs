@@ -385,6 +385,9 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/scripts/studio-sign-in.ts": ["software-project"],
 	"src/scripts/studio-sign-out.ts": ["studio-client", "software-project"],
 	"src/scripts/project-timeline.ts": ["journal-pagination"],
+	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
+	"src/scripts/comparison-player.ts": ["loop-desk"],
+	"src/scripts/comparison-transport.ts": ["loop-desk"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
 };
 
