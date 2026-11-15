@@ -55,6 +55,8 @@ import type { JsonValue } from "../helpers/json";
 //   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the recording batch
 //                               throws (an outage, not a guard) after the email went out, or a lookup after a refused
 //                               recording batch fails; no lookup follows a recording batch that throws
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reservation batch (request guard, no-project guard, update updated_at), then Resend POST for the client,
 //   Resend POST for the owner's copy, then the recording batch (request guard at the reserved time, no-project guard,
 //   audit "question-sent"). No R2, no background work.

@@ -69,6 +69,8 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            refused batch
 //   500 {ok:false,message:"The draft was saved, but an attachment could not be cleaned up. Reload before you try again."}
 //            an R2 delete fails and putting its metadata back fails too
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (offers, removed attachment metadata), one batch of guards, insert or update, details, MSA choice, audit and
 //   one DELETE ... RETURNING per removed attachment, R2 deletes, and a statement that puts the metadata back when an R2
 //   delete fails.

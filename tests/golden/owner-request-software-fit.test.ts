@@ -60,6 +60,8 @@ import type { JsonValue } from "../helpers/json";
 //                                         note of 500 characters, unicode and markup stored as written, a request with a
 //                                         started project, a request whose updated_at is ahead of the clock (the new
 //                                         time is one millisecond later), a repeat that updates the same review row
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: one batch of four statements (guard, upsert review, update owner_requests.updated_at, audit "fit-reviewed")
 //   or one rolled-back batch; no email, no R2, no outgoing fetch.
 

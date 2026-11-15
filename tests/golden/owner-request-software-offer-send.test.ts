@@ -81,6 +81,8 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            check after an accepted email throws (the offer is already saved as sent; only the read failed)
 //   500 {ok:false,message:"The offer was saved, but the email may not have been sent and the link could not be
 //            checked. Reload before you try again."}  the check throws after a client email that was refused or lost
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (offers, sending window, deposits, signing setting), the batch, Resend POST for the client and one for
 //   the owner's copy, the live-link read. No R2.
 

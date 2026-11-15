@@ -63,6 +63,8 @@ import type { JsonValue } from "../helpers/json";
 //            revoked, signing retired, updated_at moved; the request is not resolved and no audit row says "declined"
 //   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement
 //   guard, request guard, sending guard, deposit guard, audio guard, no-project guard, withdraw offers, four
 //   signing-retirement statements, revoke links, update updated_at, audit "offer-link-revoked"), Resend POST for the

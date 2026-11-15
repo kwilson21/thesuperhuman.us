@@ -224,7 +224,18 @@ function setUp(world: World) {
 const emails = () =>
 	vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes("resend"));
 
+/** The lines the route logged through console.error (silenced in every test). */
+const logs = () => vi.mocked(console.error).mock.calls;
+
+/** The one line a failed store logs: the route, and the error the database or R2 gave. */
+const LOGGED = [
+	"/api/owner/requests/[id]/software failed unexpectedly:",
+	"Error",
+	SECRET,
+];
+
 beforeEach(() => {
+	vi.spyOn(console, "error").mockImplementation(() => undefined);
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async () => Response.json({ id: "em_1" })),
@@ -236,6 +247,7 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 /** The answer's status and body, and whether it is private. */
@@ -286,6 +298,25 @@ const withDraft: Seed = {
 	owner_requests: [request()],
 	software_offers: [offer("draft")],
 };
+
+/** Signing on, and a draft that reuses an executed MSA from another offer, with its signed copy in R2. */
+const reusing = (over: Partial<World> = {}): World => ({
+	signing: true,
+	bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
+	seed: {
+		...signingBase(),
+		owner_requests: [request()],
+		software_agreements: [executedMsa()],
+		software_agreement_artifacts: [readyArtifact()],
+		software_offers: [
+			offer("draft", 1, {
+				agreement_details_json: JSON.stringify(details()),
+				reused_msa_id: MSA_ID,
+			}),
+		],
+	},
+	...over,
+});
 
 describe("a store that fails answers 500 with the fixed sentence, and nothing is emailed", () => {
 	it.each<[string, JsonObject, Seed, RegExp]>([
@@ -586,25 +617,6 @@ describe("signing: preparing the agreement", () => {
 		unsent(sql);
 	});
 
-	/** A draft that reuses an executed MSA from another offer, with its signed copy in R2. */
-	const reusing = (over: Partial<World> = {}): World => ({
-		signing: true,
-		bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
-		seed: {
-			...signingBase(),
-			owner_requests: [request()],
-			software_agreements: [executedMsa()],
-			software_agreement_artifacts: [readyArtifact()],
-			software_offers: [
-				offer("draft", 1, {
-					agreement_details_json: JSON.stringify(details()),
-					reused_msa_id: MSA_ID,
-				}),
-			],
-		},
-		...over,
-	});
-
 	it("a reused MSA with its signed copy in R2 is sent", async () => {
 		const { sql, call } = setUp(reusing());
 
@@ -709,5 +721,76 @@ describe("a link made in the last 20 seconds", () => {
 		).toEqual(
 			answer(409, "An offer is still being sent. Try again in a moment."),
 		);
+	});
+});
+
+describe("what failed is logged once, and never answered", () => {
+	it.each<[string, World, JsonObject, string]>([
+		[
+			"a batch that fails",
+			{ seed: plain, faults: [{ on: /INSERT INTO software_fit_reviews/ }] },
+			fit,
+			FAILED,
+		],
+		[
+			"a record that fails after the email",
+			{ seed: plain, faults: [{ on: /INSERT INTO owner_request_audit/ }] },
+			question,
+			AFTER_EMAIL,
+		],
+		[
+			"a lookup that fails after a refused batch (the refusal is not logged)",
+			{
+				seed: plain,
+				race: {
+					on: /UPDATE owner_requests SET updated_at/,
+					sql: "UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+				},
+				faults: [{ on: /^SELECT 1 FROM software_projects/, nth: 2 }],
+			},
+			question,
+			FAILED,
+		],
+		[
+			"a read in the preflight that fails (the rejection itself, not its name)",
+			reusing({
+				faults: [
+					{ on: /SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts/ },
+				],
+			}),
+			send,
+			FAILED,
+		],
+	])("%s", async (_name, world, body, sentence) => {
+		const { call } = setUp(world);
+
+		expect(await read(await call(body))).toEqual(answer(500, sentence));
+		expect(logs()).toEqual([LOGGED]);
+	});
+
+	it.each<[string, World, JsonObject, number]>([
+		[
+			"a refused guard",
+			{
+				seed: plain,
+				race: {
+					on: /INSERT INTO software_fit_reviews/,
+					sql: "UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
+				},
+			},
+			fit,
+			409,
+		],
+		[
+			"a send that needs R2 with no R2 binding",
+			reusing({ bucket: undefined }),
+			send,
+			503,
+		],
+	])("%s logs nothing", async (_name, world, body, status) => {
+		const { call } = setUp(world);
+
+		expect((await read(await call(body))).status).toBe(status);
+		expect(logs()).toEqual([]);
 	});
 });

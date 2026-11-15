@@ -86,6 +86,8 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //                           when the send needs it: attachments to read (answered where the first attachment's bytes are
 //                           read) or a reused MSA whose signed copy the packet imports (answered before the preflight);
 //                           nothing is written or emailed
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (signing setting, templates, contractor config, reused MSA, attachment metadata), R2 get and a hash per
 //   attachment, the batch (attachment guards, the offer pinned with its snapshots), Resend POSTs, the live-link read.
 

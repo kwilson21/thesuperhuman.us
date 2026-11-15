@@ -50,6 +50,8 @@ import type { JsonValue } from "../helpers/json";
 //   409 generic "...changed or could not be saved..."  updated_at, status or email moved during the batch
 //   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read, the
 //                    batch (an outage, not a guard), or a lookup after a refused batch
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: one batch (request guard, four signing-retirement statements, sending guard, link guard, revoke, audit), then,
 //   when a guard refuses it, one or two lookups to decide which 409 to answer (none when the batch throws for another
 //   reason).
