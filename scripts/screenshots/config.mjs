@@ -250,6 +250,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": COMPARISON_PAGES,
 	"src/scripts/comparison-player.ts": COMPARISON_PAGES,
 	"src/lib/waveform.ts": COMPARISON_PAGES,
+	"src/lib/loudness-meter.ts": COMPARISON_PAGES,
 	"src/components/audio/PlayIcon.astro": [
 		"audio-portfolio",
 		"audio-releases",
@@ -389,7 +390,7 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
 	"src/scripts/comparison-player.ts": ["loop-desk"],
 	"src/scripts/comparison-transport.ts": ["loop-desk"],
-	"src/scripts/loudness-meter.ts": ["loop-desk"],
+	"src/lib/loudness-meter.ts": ["loop-desk"],
 };
 
 function routeForPageFile(file) {

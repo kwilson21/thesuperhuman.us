@@ -626,3 +626,26 @@ it("moves focus off Flip too, to the chosen version's native player, when a load
 	expect(ab.master.focused).toBe(true);
 	expect(ab.mix.focused).toBe(false);
 });
+
+it("shows each export's own loudness in the fallback, where the native players do not match loudness", async () => {
+	const ab = mount({ decodes: false });
+
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()[1][1]).toBe("\u221214.0 LUFS, turned down 2.5 dB");
+	ab.play.click();
+	await tick();
+	await ab.decode();
+	expect(ab.root.dataset.audioFallback).toBe("true");
+	expect(ab.meters()[1]).toEqual([String(8.5 / 14), "\u221211.5 LUFS"]);
+	// Ticking Match there changes nothing the meters say.
+	ab.match.checked = false;
+	ab.match.dispatchEvent(new Event("change"));
+	ab.match.checked = true;
+	ab.match.dispatchEvent(new Event("change"));
+	expect(ab.meters()[1][1]).toBe("\u221211.5 LUFS");
+	// Another try matches again.
+	ab.loadNextTime();
+	ab.play.click();
+	expect(ab.meters()[1][1]).toBe("\u221214.0 LUFS, turned down 2.5 dB");
+});
