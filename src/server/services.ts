@@ -451,6 +451,9 @@ export const liveAssistant = (ai: Ai) =>
 					}),
 				]);
 
+				// `race` cannot reject: the model's promise has a handler for both outcomes and the timer promise only resolves. A throw
+				// before the race exists (`ai.run` throwing at once) is a defect inside this suspend, which the route answers with its
+				// fixed sentence.
 				return Effect.promise(() => race).pipe(
 					Effect.ensuring(
 						Effect.sync(() => {
@@ -468,8 +471,10 @@ export const liveAssistant = (ai: Ai) =>
 	});
 
 /**
- * Runs each task after the response is sent: through ctx.waitUntil when the request has a context, and on its own when it
- * has none. The task starts on the next turn, as the route's own promise chain always did.
+ * Work that outlives the response, in two forms because they start at different times: `schedule` starts a task on the next
+ * turn (the suggest cleanup's own promise chain always did), and `defer` starts effects at once, at the point the route made
+ * its promises before the response. Folding them would move a start across a turn, which the golden corpus records as a change.
+ * Both go through ctx.waitUntil when the request has a context.
  */
 export const liveBackground = (ctx: ExecutionContext | undefined) =>
 	Context.make(Background, {
@@ -480,7 +485,10 @@ export const liveBackground = (ctx: ExecutionContext | undefined) =>
 				if (ctx) ctx.waitUntil(pending);
 			}),
 		// Each item runs synchronously as it is started, as a route's promise did when it was made before the response: its
-		// first outside call is on the request's side of the response, and the same single waitUntil is registered.
+		// first outside call is on the request's side of the response, and the same single waitUntil is registered. An item is
+		// an `Effect<void>` with no failure and no service (its type says so), so running it here, outside the caller's context,
+		// needs nothing from it; a callee that fails has already named and handled the failure. A defect would reject `pending`:
+		// into waitUntil with a context, and into the caller's defect answer without one.
 		defer: (work) =>
 			Effect.suspend(() => {
 				const pending = Promise.all(
