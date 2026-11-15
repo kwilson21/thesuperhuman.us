@@ -514,6 +514,123 @@ function check(name, ok, detail = "") {
 		await contingency.fill(contingencyBefore);
 		await page.unroute("**/api/owner/pricing");
 
+		// A research save with the other form clean, and text typed in the box while it is on its way, does not reload over
+		// that text (a reload would bring back the stored research without it), and still says to reload for the ranges.
+		await page.reload();
+
+		const noReloadVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({
+				json: { ok: true, version: noReloadVersion + 1 },
+			});
+		});
+		await page.evaluate(() => {
+			window.__beforeSave = true;
+		});
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Save research" })
+			.click();
+		await box.focus();
+		await page.keyboard.press("Control+End");
+		await page.keyboard.type(" note");
+		await page.waitForFunction(() =>
+			/^Saved the research as it was/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		await page.waitForTimeout(500);
+		check(
+			"a research save does not reload over text typed in the box meanwhile, and still says to reload",
+			(await page.evaluate(() => window.__beforeSave === true)) &&
+				(await box.inputValue()).endsWith(" note") &&
+				/reload the page to see the new ranges/.test(
+					await page
+						.locator('[data-part="market"] [data-pricing-status]')
+						.textContent(),
+				),
+		);
+		// Leave nothing unsaved, so leaving the page raises no warning.
+		await box.evaluate((element) => {
+			element.value = element.defaultValue;
+		});
+		await page.unroute("**/api/owner/pricing");
+
+		// A press while a save is on its way is refused before the fields are checked, so no field is marked for it.
+		await page.reload();
+
+		const busyVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({ json: { ok: true, version: busyVersion + 1 } });
+		});
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		await contingency.focus();
+		await page.keyboard.press("Control+a");
+		await page.keyboard.type("150");
+		await page.keyboard.press("Enter");
+
+		const busySaid = await values.locator("[data-pricing-status]").textContent();
+		const busyMarked = await contingency.getAttribute("aria-invalid");
+
+		await page.waitForFunction(() =>
+			/^Saved/.test(
+				document.querySelector('[data-part="values"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a press while a save is on its way says so and marks no field",
+			/on its way/i.test(busySaid) && busyMarked === null,
+			`${busySaid} / ${busyMarked}`,
+		);
+		await contingency.fill(contingencyBefore);
+		await page.unroute("**/api/owner/pricing");
+
+		// A research refusal answered after the box changed is about what was sent: the box is not marked, and the reason
+		// says so.
+		await page.reload();
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({
+				status: 400,
+				json: { ok: false, error: "The research file is missing its ranges." },
+			});
+		});
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Save research" })
+			.click();
+		await box.focus();
+		await page.keyboard.press("Control+End");
+		await page.keyboard.type(" ");
+		await page.waitForFunction(() =>
+			/missing its ranges/.test(
+				document.querySelector('[data-part="market"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"a research refusal answered after the box changed leaves the box unmarked and says why",
+			(await box.getAttribute("aria-invalid")) !== "true" &&
+				/you changed the box since/.test(
+					await page
+						.locator('[data-part="market"] [data-pricing-status]')
+						.textContent(),
+				),
+		);
+		await box.evaluate((element) => {
+			element.value = element.defaultValue;
+		});
+		await page.unroute("**/api/owner/pricing");
+
 		const queue = [];
 
 		await page.route("**/api/owner/requests/*/offer-board", (route) =>

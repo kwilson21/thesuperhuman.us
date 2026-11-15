@@ -1,6 +1,7 @@
 // The owner's pricing page (src/pages/owner/pricing.astro): each form is sent as JSON to /api/owner/pricing with the
 // version the page last saw. A saved form takes the new version (both forms do), so the next save is not refused. New
-// research reloads the page to show its table, unless the other form holds unsaved changes, which a reload would lose.
+// research reloads the page to show its table, unless either form holds unsaved changes (the research box included, when
+// it changed while the save was on its way), which a reload would lose.
 import * as Predicate from "effect/Predicate";
 import type { RawValue } from "../lib/fields";
 
@@ -304,29 +305,43 @@ async function save(
 						? "Research cleared. What you typed in the box since is not saved."
 						: clearing
 							? "Research cleared."
-							: changedSince
-								? "Saved what this form held when you pressed Save. You changed it since; save again to keep those changes."
-								: body.action === "market"
-									? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
-									: "Saved.";
+							: changedSince && body.action === "market"
+								? "Saved the research as it was when you pressed Save research. You changed the box since; save again to keep those changes, then reload the page to see the new ranges."
+								: changedSince
+									? "Saved what this form held when you pressed Save. You changed it since; save again to keep those changes."
+									: body.action === "market"
+										? "Saved. Save or undo your day value and contingency changes, then reload the page to see the new ranges."
+										: "Saved.";
 
 			return;
 		}
 
+		const refusedResearch =
+			body.action === "market" &&
+			(response.status === 400 || response.status === 413);
+
+		const box = form.querySelector<HTMLTextAreaElement>(
+			"[data-pricing-market]",
+		);
+
+		// The reason is about what was sent. A box changed since is not marked for it; the reason says so instead.
+		const boxChangedSince = box !== null && box.value !== sent.get(box);
+
+		const reason =
+			response.status === 413
+				? "The research file is too large to save (the limit is 96 KB). Shorten the caveats or source titles, then save again."
+				: Predicate.isString(error)
+					? error
+					: "Your pricing could not be saved. Try again.";
+
 		if (status)
 			status.textContent =
-				response.status === 413
-					? "The research file is too large to save (the limit is 96 KB). Shorten the caveats or source titles, then save again."
-					: Predicate.isString(error)
-						? error
-						: "Your pricing could not be saved. Try again.";
+				refusedResearch && boxChangedSince
+					? `${reason} (This is about the research as it was when you pressed Save research; you changed the box since.)`
+					: reason;
 
-		// A research file the route refused: the box is marked with the reason beside it.
-		if (
-			body.action === "market" &&
-			(response.status === 400 || response.status === 413)
-		)
-			markResearch(true);
+		// A research file the route refused: the box is marked with the reason beside it, if it still holds that file.
+		if (refusedResearch && !boxChangedSince) markResearch(true);
 	} catch {
 		// The request or its answer was lost on the way: the save may have reached the store.
 		needsReload = true;
@@ -391,6 +406,14 @@ export function setupOwnerPricing() {
 
 		form.addEventListener("submit", (event) => {
 			event.preventDefault();
+
+			// Answered before the fields are checked, so a refusal said now is not replaced by the earlier save's answer.
+			if (saving || needsReload) {
+				if (status) status.textContent = needsReload ? RELOAD_FIRST : BUSY;
+
+				return;
+			}
+
 			const data = new FormData(form);
 
 			if (form.dataset.part === "values") {
