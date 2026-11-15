@@ -97,7 +97,6 @@ class StandInAudio extends EventTarget {
 		});
 	}
 
-	/** Plays to the end of the file, as a stream that outruns decoding does. */
 	/** Whether playback has ended: it reached the file's end and has not been moved back since, as a browser reports. */
 	get ended() {
 		return (
@@ -107,6 +106,7 @@ class StandInAudio extends EventTarget {
 
 	private reachedEnd = false;
 
+	/** Plays to the end of the file, as a stream that outruns decoding does. */
 	end() {
 		this.currentTime = 160 + Number(this.dataset.offset);
 		this.paused = true;
@@ -874,4 +874,19 @@ it("goes round a loop that ends with the song when the stream reaches its file's
 	expect(ab.mix.paused).toBe(false);
 	expect(ab.mix.currentTime).toBe(152);
 	expect(ab.label()).toMatch(/^Pause /);
+});
+
+it("hands over at the loop's wrap when decoding finishes as the stream reaches its file's end", async () => {
+	const ab = mount({ desk: true });
+
+	ab.seek.value = "156";
+	ab.seek.dispatchEvent(new Event("input"));
+	ab.loop.toggle.click();
+	ab.play.click();
+	await tick();
+	// The stream has reached the end and reports it, but its ended event has not arrived when decoding finishes.
+	ab.mix.end();
+	await ab.decode();
+	expect(ab.synced()).toBe(true);
+	expect(ab.startedAt()).toBe(152);
 });

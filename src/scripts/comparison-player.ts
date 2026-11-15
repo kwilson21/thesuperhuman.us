@@ -519,9 +519,16 @@ export function setupComparisonPlayers() {
 
 						// A stream that has stopped, or is about to end, is left to its pause and ended handlers, which park
 						// the comparison where it stopped; the transport would start the song again from the top. A loop
-						// has no end: the transport starts inside it.
-						if (handed.paused || (!loop && at >= transport!.duration)) return;
-						position = wrapStreamPlace(at);
+						// has no end: the transport starts inside it, and a stream that has just reached its file's end
+						// (its ended event still to come) is handed over at the loop's wrap.
+						const wrapped = Boolean(loop && handed.ended);
+
+						if (
+							(handed.paused && !wrapped) ||
+							(!loop && at >= transport!.duration)
+						)
+							return;
+						position = wrapStreamPlace(wrapped ? loop!.end : at);
 						streaming = undefined;
 					}
 
