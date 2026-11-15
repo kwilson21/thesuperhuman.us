@@ -37,7 +37,9 @@ const objects = [
 		label: "Hear a mix and master",
 		short: "Hear",
 		href:
-			playsHere || !latestSong ? "/audio/portfolio" : `/music/${latestSong.slug}`,
+			playsHere || !latestSong
+				? "/audio/portfolio"
+				: `/music/${latestSong.slug}`,
 		// Its area stops short of the headband's tip, which is off screen at widths from 1233 to about 1290 pixels, so
 		// its focus ring stays on screen.
 		x: 1075,

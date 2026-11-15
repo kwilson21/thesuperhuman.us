@@ -207,6 +207,9 @@ timings and local colour tokens.
   clearance, and never a personal address. Gate 46 (no invented metrics) applies.
 - Design-choice findings go to the owner as alternatives. They are never silently
   fixed, flattened or "brought into line"; only defects are fixed directly.
+- The studio's labels and phone pins are frosted glass pills (owner decision, November
+  15, 2026), against Hallmark's editorial default of no glass. They are overlays over
+  the picture, the one case Hallmark's anti-patterns allow.
 
 ## Owner decisions (October 22, 2026)
 All picks are quoted in `docs/design-concepts/README.md` ("Owner's picks"), with
@@ -240,15 +243,17 @@ At enlarged text on phone widths the footer's side gutter stops growing, so the 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
 
 ## Owner decisions (November 15, 2026)
-Kazon chose the studio's labels and phone pins from sketches drawn on the real page: frosted
-glass for both ("Frosted glass looks the best but let's improve upon what we have with that").
-The glass is paper glass that blurs the desk behind it, with a bright top edge, a hairline
-and a soft shadow; the monitor's pin is dark glass over its screen; each pin carries an
-accent dot and sits at its object's edge, so the object stays in view; where a browser
-cannot blur, the glass is plain paper. Its colours are local tokens mixed from the site's
-own (`--glass-*` in `src/components/Hero.astro`). The controller's label is "Play Kaillera
-Next" (pin "Play"). Pointing at it or focusing it plays the Combo scene: the D-pad glints,
-then the four face buttons light in turn, resting within two seconds.
+Kazon's picks on the round-two decision page, given in conversation: frosted glass for the
+studio's labels and for its phone pins, "Play Kaillera Next" for the controller's label, and
+the Combo for its scene, with the note "Frosted glass looks the best but let's improve upon
+what we have with that". Built from those picks and that note, and shown to Kazon in the
+PR: paper glass that blurs the desk behind it, in pill corners like the buttons, with a
+bright top edge, a hairline and a soft shadow; dark glass for the monitor's pin over its
+screen; an accent dot on each pin, which sits at its object's edge so the object stays in
+view; plain paper where a browser cannot blur. Its colours are local tokens mixed from the
+site's own (`--glass-*` in `src/components/Hero.astro`). The controller's pin is "Play".
+Pointing at the controller or focusing it plays the Combo: the D-pad glints, then the four
+face buttons light in turn, resting within two seconds.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

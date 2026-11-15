@@ -1,5 +1,6 @@
-// The hero's desk objects as links into the site, with their frosted glass labels: pointing at the monitor, the
-// headphones and the controller, keyboard focus on the notebook, and the one-word pins a touch screen shows. Captures run with reduced motion, so each scene shows its
+// The hero's desk objects as links into the site, with their frosted glass labels: pointing at
+// the monitor, the headphones and the controller, keyboard focus on the notebook, and the
+// one-word pins a touch screen shows. Captures run with reduced motion, so each scene shows its
 // finished frame.
 const desktop = [
 	["monitor", "hover", "Pointing at the monitor"],

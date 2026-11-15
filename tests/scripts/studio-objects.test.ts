@@ -480,7 +480,10 @@ it("links each object to a page that exists, with its label as the link's name",
 	expect(hero).toContain("href: latestEssay.href,");
 	expect(existsSync(`src/pages${latestEssay.href}.astro`)).toBe(true);
 	expect(hero).toContain('label: "Hear a mix and master",');
-	expect(hero).toContain('"/audio/portfolio" : `/music/${latestSong.slug}`');
+	// Compared without the formatter's line breaks.
+	expect(hero.replace(/\s+/g, " ")).toContain(
+		'playsHere || !latestSong ? "/audio/portfolio" : `/music/${latestSong.slug}`',
+	);
 	expect(existsSync("src/pages/audio/portfolio.astro")).toBe(true);
 	expect(existsSync("src/pages/music/[slug].astro")).toBe(true);
 
