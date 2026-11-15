@@ -375,6 +375,13 @@ export async function renderAgreementPacket(
 	return pdf.save();
 }
 
+/**
+ * The preflight could not read the reused MSA: the database failed, which says nothing about the details. Every other
+ * error the preflight throws is about the inputs (missing, unreadable or too large), and its caller answers those as
+ * incomplete details; this one it answers as a failed store (POST /api/owner/requests/[id]/software).
+ */
+export class PreflightReadFailed extends Error {}
+
 /** Validate the actual merge inputs before sending. Reserve space for bounded signer evidence. */
 export async function preflightAgreementPacket(
 	env: Env,
@@ -433,7 +440,10 @@ export async function preflightAgreementPacket(
 				"SELECT * FROM software_agreements WHERE id=? AND status='executed' AND archive_closed_at IS NULL",
 			)
 			.bind(reusedMsaId)
-			.first<Agreement>();
+			.first<Agreement>()
+			.catch(() => {
+				throw new PreflightReadFailed();
+			});
 
 		if (!original) throw new Error("Original MSA unavailable.");
 		documents[0] = original;

@@ -45,11 +45,16 @@ import type { JsonValue } from "../helpers/json";
 //                               network (uncertain), no Resend key, no sender address or no owner address (not uncertain).
 //                               The reservation stays: updated_at moved, no audit row, no question-sent record
 //   409 "...changed or could not be saved..."  the reservation batch fails its guard (updated_at, status or email moved)
-//                               or throws; recorded as the generic answer
 //   409 project started         the project appears between the pre-check and the reservation batch, or between the email
 //                               and the recording batch
-//   409 "The client email was sent, but the request changed..."  the recording batch fails its guard or throws after the
-//                               email went out
+//   409 "The client email was sent, but the request changed..."  the recording batch fails its guard after the email
+//                               went out
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
+//                               first read, the project pre-check, the reservation batch (an outage, not a guard), or a
+//                               lookup after a refused reservation. Nothing is emailed
+//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the recording batch
+//                               throws (an outage, not a guard) after the email went out, or a lookup after a refused
+//                               recording batch fails; no lookup follows a recording batch that throws
 //   effects: reservation batch (request guard, no-project guard, update updated_at), then Resend POST for the client,
 //   Resend POST for the owner's copy, then the recording batch (request guard at the reserved time, no-project guard,
 //   audit "question-sent"). No R2, no background work.
@@ -293,6 +298,13 @@ const cases: Case[] = [
 					message: "D1 is down again",
 				},
 			],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /^SELECT 1 FROM software_projects/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the project lookup after it is never made",
+				},
+			],
 		},
 	),
 	askCase(
@@ -305,6 +317,13 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_projects/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /^SELECT 1 FROM software_projects/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the project lookup after it is never made",
 				},
 			],
 		},

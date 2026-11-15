@@ -56,15 +56,19 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //            normalisation), fees of 0, 99, 1.5, text, null, over $1,000,000 and 1e21, checkpoint percentages 0, 50, 96, 100,
 //            50.5, a text percentage, an estimate below the total or with high below low or beyond the safe integer
 //   409 {ok:false,updatedAt,message}  the draft changed since the page loaded: no draft but a time expected, a draft but
-//            null expected, a different time; also every failure of the batch (a guard, a unique index on the draft or the
-//            version, a foreign key on reusedMsaId, an attachment guard, a throw) and a ZodError from malformed attachments
-//            in agreementDetails, all answered with the current draft's updated_at
+//            null expected, a different time; also a batch that another request's change refused (a guard, a unique index
+//            on the draft or the version, an attachment guard, stored JSON that is not JSON, or a foreign key on
+//            reusedMsaId when a read after it finds that MSA gone) and a FieldsRefused from malformed attachments in
+//            agreementDetails, all answered with the current draft's updated_at
 //   409 project started    a project that appears between the checks and the batch
 //   200 {ok:true,version,updatedAt,attachmentCleanupPending}  a first draft (version 1), the next version after each offer
 //            status, an update of the open draft, agreement details kept, cleared or replaced, an MSA reuse kept, set or
 //            cleared, attachments pinned, removed attachments deleted from R2, cleanup pending when R2 fails or is unbound
-//   rejected               a read fails with no handler around it (the request, the project pre-check) or the lookup after a
-//            failed batch fails
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails: the first read, the
+//            project pre-check, the offers read, the removed attachment lookup, the batch (an outage), or a lookup after a
+//            refused batch
+//   500 {ok:false,message:"The draft was saved, but an attachment could not be cleaned up. Reload before you try again."}
+//            an R2 delete fails and putting its metadata back fails too
 //   effects: reads (offers, removed attachment metadata), one batch of guards, insert or update, details, MSA choice, audit and
 //   one DELETE ... RETURNING per removed attachment, R2 deletes, and a statement that puts the metadata back when an R2
 //   delete fails.
@@ -971,6 +975,14 @@ const raceCases: Case[] = [
 				message: "D1 is down again",
 			},
 		],
+		mustNotFire: [
+			{
+				trigger:
+					"d1 failure on /^SELECT \\* FROM software_offers WHERE request_id/ (match 2)",
+				reason:
+					"a control: the failure before it is a store failure, which answers 500 at once, so the second offers read is never made",
+			},
+		],
 	}),
 	draftCase(
 		"the removed attachment lookup fails",
@@ -1011,6 +1023,14 @@ const raceCases: Case[] = [
 					on: /^SELECT \* FROM software_offers WHERE request_id/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /^SELECT \\* FROM software_offers WHERE request_id/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the offers read after it is never made",
 				},
 			],
 		},

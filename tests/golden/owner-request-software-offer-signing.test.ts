@@ -64,18 +64,23 @@ import type { JsonObject, JsonValue } from "../helpers/json";
 //                           period over 30 days not confirmed; retention and handoff texts that do not name the days; more
 //                           than five attachments or over 25 MiB; details over 64 KiB; contractor details of the wrong shape,
 //                           with an extra key or with the registered agent unconfirmed; an attachment with no metadata row,
-//                           missing in R2, of another size, with another hash, with a R2 read that throws, with no R2
-//                           binding or that is not a PDF; characters the packet font cannot draw, in the details or in the
-//                           contractor details (the preflight refuses them); a reused MSA whose signed copy has no
-//                           artifact record, is not in R2, has another hash or is not a PDF; and every database outage in
-//                           these steps (reported as this same message, with no errors). ZodError failures carry errors keyed
-//                           "agreement.<path>"; every other failure carries the message alone
+//                           missing in R2, of another size, with another hash or that is not a PDF; characters the packet
+//                           font cannot draw, in the details or in the contractor details (the preflight refuses them); a
+//                           reused MSA whose signed copy has no artifact record, is not in R2, has another hash or is not a
+//                           PDF. A FieldsRefused (the Effect Schema readers of the details and the contractor details)
+//                           carries errors keyed "agreement.<path>"; every other failure carries the message alone
 //   400 "Publish both templates and complete contractor details before sending."  no MSA template, no SOW template or no
 //                           contractor details
 //   409 "The confirmed MSA is unavailable for this recipient."  the reused MSA is missing, not executed, terminated, closed,
 //                           has no ready artifact, or belongs to another recipient
 //   409 generic             an attachment guard fails in the batch (the metadata row deleted, or the attachment named in a
 //                           closed archive) after validation passed
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails while the agreement is
+//                           prepared: the signing setting, template, contractor, reused MSA or attachment metadata read, an
+//                           attachment's R2 read, the preflight's read of the reused MSA; and the send batch (an outage).
+//                           Nothing is written or emailed
+//   503 {ok:false,message:"Software offers are temporarily unavailable."}  attachments to read and no R2 binding, answered
+//                           where the first attachment's bytes are read; nothing is written or emailed
 //   effects: reads (signing setting, templates, contractor config, reused MSA, attachment metadata), R2 get and a hash per
 //   attachment, the batch (attachment guards, the offer pinned with its snapshots), Resend POSTs, the live-link read.
 

@@ -51,18 +51,24 @@ import type { JsonValue } from "../helpers/json";
 //   409 "An offer is still being sent..."    a live offer link created in the last 20 seconds (20 seconds exactly and a
 //            revoked link do not count); also from the first batch's guard or the second batch's guard in a race
 //   409 generic "...changed or could not be saved..."  the first batch fails a guard (updated_at, status or email moved; a
-//            signed or executed agreement exists; a deposit invoice opened; an audio project exists) or throws
+//            signed or executed agreement exists; a deposit invoice opened; an audio project exists)
 //   409 project started     the project appears before the first batch or the second batch
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
+//            first read, the project pre-check, the deposit read, the sending read, the first batch (an outage, not a
+//            guard), or a lookup after a refused first batch. Nothing is emailed
+//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the second batch throws
+//            (an outage, not a guard) after the email, or a lookup after a refused second batch fails
 //   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain), or not
 //            configured (no key, sender or owner address). The first batch has already run: offers withdrawn, link
 //            revoked, signing retired, updated_at moved; the request is not resolved and no audit row says "declined"
-//   409 "The client email was sent, but..."  the second batch fails a guard or throws after the email
+//   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement
 //   guard, request guard, sending guard, deposit guard, audio guard, no-project guard, withdraw offers, four
 //   signing-retirement statements, revoke links, update updated_at, audit "offer-link-revoked"), Resend POST for the
 //   client and one for the owner's copy, the second batch (request guard at the new time, no-project guard, sending guard,
-//   audio guard, resolve, audit "declined"), and after a rolled-back batch the lookups that choose the 409.
+//   audio guard, resolve, audit "declined"), and after a batch that a guard refused the lookups that choose the 409 (a
+//   batch that throws for another reason is answered at once, with no lookup).
 
 const decline = (text: JsonValue = "Not a fit right now."): JsonValue => ({
 	action: "decline",
@@ -508,6 +514,13 @@ const cases: Case[] = [
 					message: "D1 is down again",
 				},
 			],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /^SELECT 1 FROM software_projects/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the project lookup after it is never made",
+				},
+			],
 		},
 	),
 	declineCase(
@@ -523,6 +536,14 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_offer_links/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the sending lookup after it is never made",
 				},
 			],
 		},
