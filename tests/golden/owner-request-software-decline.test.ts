@@ -57,24 +57,30 @@ import type { JsonValue } from "../helpers/json";
 //   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
 //            first read, the project pre-check, the deposit read, the sending read, the first batch (an outage, not a
 //            guard), or a lookup after a refused first batch. Nothing is emailed
-//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the second batch throws
-//            (an outage, not a guard) after the email, or a lookup after a refused second batch fails
+//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the read of the
+//            request's draft and sent offers after the email fails, the second batch throws (an outage, not a guard), or a
+//            lookup after a refused second batch fails
 //   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
 //            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
 //            not resolved and no audit row says "declined"
 //   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
 //            sent or saved."}  mail not configured (no Resend key, sender or owner address), checked after the refusals
 //            and before the first batch: nothing withdrawn or emailed
-//   409 "The client email was sent, but..."  the second batch fails a guard after the email
+//   409 "The client email was sent, but..."  the second batch fails a guard after the email; or (F10) a draft or sent
+//            offer of the request is found after the email, by the read before the second batch or, when it is saved after
+//            that read, by the batch's guard. Both are answered by the lookups after a refused second batch, so a sent
+//            offer whose link is under 20 seconds old answers "An offer is still being sent..." as the batch's sending
+//            guard does
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
 //   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
 //            message), and its answer never carries the error's text
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement
 //   guard, request guard, sending guard, deposit guard, audio guard, no-project guard, withdraw offers, four
 //   signing-retirement statements, revoke links, update updated_at, audit "offer-link-revoked"), Resend POST for the
-//   client and one for the owner's copy, the second batch (request guard at the new time, no-project guard, sending guard,
-//   audio guard, resolve, audit "declined"), and after a batch that a guard refused the lookups that choose the 409 (a
-//   batch that throws for another reason is answered at once, with no lookup).
+//   client and one for the owner's copy, the read of the request's draft and sent offers, the second batch (request guard
+//   at the new time, no-project guard, sending guard, audio guard, no-offer-left guard, resolve, audit "declined"), and
+//   after a batch that a guard refused, or an offer found by that read, the lookups that choose the 409 (a batch that
+//   throws for another reason is answered at once, with no lookup).
 
 const decline = (text: JsonValue = "Not a fit right now."): JsonValue => ({
 	action: "decline",
@@ -118,9 +124,9 @@ const movedUpdatedAt = running(
 );
 
 // F10 (docs/plans/2026-11-offers-conversion.md, section 5): the owner saves a draft, or saves and sends one, in another
-// tab while the decline's email is in flight. The first statement the route makes after the email is the second batch
-// today; F10's fix reads the request's draft and sent offers first, so the pattern names that read too, and a hook on it
-// runs while the email is in flight whichever statement comes first.
+// tab while the decline's email is in flight. The first statement the route makes after the email is the read of the
+// request's draft and sent offers that F10's fix added (before the fix, when these cases were first recorded, it was the
+// second batch), so the pattern names both, and a hook on it runs while the email is in flight.
 const afterTheEmail =
 	/UPDATE owner_requests SET status='resolved'|^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/;
 
@@ -574,6 +580,14 @@ const cases: Case[] = [
 		failures: [
 			{
 				on: /UPDATE owner_requests SET status='resolved'/,
+				message: "D1 is down",
+			},
+		],
+	}),
+	declineCase("the offers read after the email fails", sentSeed(), {
+		failures: [
+			{
+				on: /^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/,
 				message: "D1 is down",
 			},
 		],

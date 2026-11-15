@@ -198,6 +198,10 @@ class DraftTaken extends Error {}
 const LINK_CHANGED =
 	"The client link changed since this page loaded. Reload to see the current link.";
 
+/** A draft or sent offer of the request. A decline does not resolve the request while one is left (F10). */
+const OFFER_LEFT =
+	"SELECT 1 FROM software_offers WHERE request_id=? AND status IN ('draft','sent')";
+
 const act = async (
 	env: Env,
 	db: D1Database,
@@ -468,34 +472,9 @@ const act = async (
 					502,
 				);
 
-			try {
-				await db.batch([
-					requestGuard(now),
-					guard(
-						"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",
-						[record.id],
-					),
-					...(command.action === "decline"
-						? [
-								offerSendingGuard(db, record.id),
-								guard(
-									"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)",
-									[record.id],
-								),
-								db
-									.prepare(
-										"UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?",
-									)
-									.bind(now, now, record.id),
-							]
-						: []),
-					audit(command.action === "question" ? "question-sent" : "declined"),
-				]);
-			} catch (error) {
-				// The email has gone out, so a failed store from here on says so.
-				if (!refusedByGuard(error))
-					throw new StoreFailed(offersFailedAfterEmail, error);
-
+			// After a refused second batch, or a decline that finds an offer left, these lookups choose the 409. The email
+			// has gone out, so a failed store from here on says so.
+			const changedAfterEmail = async () => {
 				if (
 					await stored(
 						db
@@ -527,6 +506,49 @@ const act = async (
 					},
 					409,
 				);
+			};
+
+			// F10: the draft and send batches never write owner_requests, so a draft saved, or saved and sent, while the email
+			// was in flight passes the request guard below. A decline reads the request's draft and sent offers first and
+			// refuses while one is left, as a refused second batch is answered; the batch's guard re-checks it.
+			if (
+				command.action === "decline" &&
+				(await stored(
+					db.prepare(OFFER_LEFT).bind(record.id).first(),
+					offersFailedAfterEmail,
+				))
+			)
+				return changedAfterEmail();
+
+			try {
+				await db.batch([
+					requestGuard(now),
+					guard(
+						"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_projects WHERE request_id=?)",
+						[record.id],
+					),
+					...(command.action === "decline"
+						? [
+								offerSendingGuard(db, record.id),
+								guard(
+									"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM audio_projects WHERE request_id=?)",
+									[record.id],
+								),
+								guard(`SELECT 1 WHERE NOT EXISTS(${OFFER_LEFT})`, [record.id]),
+								db
+									.prepare(
+										"UPDATE owner_requests SET status='resolved',resolved_at=?,updated_at=? WHERE id=?",
+									)
+									.bind(now, now, record.id),
+							]
+						: []),
+					audit(command.action === "question" ? "question-sent" : "declined"),
+				]);
+			} catch (error) {
+				if (!refusedByGuard(error))
+					throw new StoreFailed(offersFailedAfterEmail, error);
+
+				return changedAfterEmail();
 			}
 
 			return json({ ok: true, copySent: sent.copySent });

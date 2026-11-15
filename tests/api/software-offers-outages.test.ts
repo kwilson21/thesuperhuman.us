@@ -29,14 +29,16 @@ import { testRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 
 // How POST /api/owner/requests/[id]/software answers when its database, R2 or mail settings fail it, when the id is
-// missing, when a send's link closes while its email fails, and where a decision moved out of SQL reads first. The
-// owner's decisions (2026-11-14 and 2026-11-15, F1 to F4 and F6 to F9 of docs/plans/2026-11-offers-conversion.md): an
-// unexpected store failure answers 500 with the route's fixed sentence and never the error's own text, and is logged
-// once; after the client email went out (or the draft was saved), it says so; a missing R2 binding when a send needs
-// it, or mail that is not configured for a question or a decline, is a known unavailable dependency, 503, with nothing
-// written; a guard that refuses a batch (a lost race or a stale page) still answers 409; revoke reads its link before
-// the batch, and a draft whose version or open-draft slot another writer took is read and decided again. Real SQLite
-// with the music schema; nothing is mocked.
+// missing, when a send's link closes while its email fails, when an offer is saved while a decline's email is sent, and
+// where a decision moved out of SQL reads first. The owner's decisions (2026-11-14 and 2026-11-15, F1 to F4 and F6 to
+// F10 of docs/plans/2026-11-offers-conversion.md): an unexpected store failure answers 500 with the route's fixed
+// sentence and never the error's own text, and is logged once; after the client email went out (or the draft was
+// saved), it says so; a missing R2 binding when a send needs it, or mail that is not configured for a question or a
+// decline, is a known unavailable dependency, 503, with nothing written; a guard that refuses a batch (a lost race or a
+// stale page) still answers 409; revoke reads its link before the batch, a draft whose version or open-draft slot
+// another writer took is read and decided again, and a decline whose second batch would leave a draft or sent offer on
+// a resolved request (one saved while its email was sent) reads the offers first and refuses, as a refused second batch
+// is answered. Real SQLite with the music schema; nothing is mocked.
 
 const FAILED = "The change could not be saved. Please try again.";
 
@@ -57,6 +59,10 @@ const AFTER_FAILED_EMAIL =
 
 const AFTER_DRAFT =
 	"The draft was saved, but an attachment could not be cleaned up. Reload before you try again.";
+
+/** The read of a decline's draft and sent offers after its email (F10). */
+const OFFER_LEFT =
+	/^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/;
 
 /** The error text the database gives; no answer may carry it. */
 const SECRET = "D1_ERROR: private details for r1";
@@ -573,6 +579,23 @@ describe("after the client email went out, a failure says so", () => {
 		});
 	});
 
+	it("decline: the read of the offers left after the email fails", async () => {
+		const { sql, call } = setUp({
+			seed: withSent,
+			faults: [{ on: OFFER_LEFT }],
+		});
+
+		expect(await read(await call(decline))).toEqual(answer(500, AFTER_EMAIL));
+		expect(emails()).toHaveLength(2);
+		expect(logs()).toEqual([LOGGED]);
+		expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
+			status: "reviewed",
+		});
+		expect(sql.prepare("SELECT action FROM owner_request_audit").all()).toEqual(
+			[{ action: "offer-link-revoked" }],
+		);
+	});
+
 	it("send: the live-link check after the email fails", async () => {
 		const { sql, call } = setUp({
 			seed: withDraft,
@@ -878,6 +901,94 @@ describe("a send whose link closes while its email is sent", () => {
 				"The email went out, but the link was closed while it was sending. Send the offer again for a working link.",
 			),
 		);
+	});
+});
+
+describe("a decline does not resolve a request whose offer was saved while its email was sent (F10)", () => {
+	const CHANGED =
+		"The client email was sent, but the request changed before it could be recorded. Reload before taking another action.";
+
+	/** The owner saves a draft (version 2) in another tab; the decline's first batch has withdrawn version 1. */
+	const savesDraft = `INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at) VALUES ('o2','r1',2,'draft','{}','${START}','${START}')`;
+
+	/** The owner saves and sends a draft, its link made `ago` milliseconds before the clock. */
+	const savesAndSends = (ago: number) => {
+		const at = new Date(Date.parse(START) - ago).toISOString();
+
+		return `INSERT INTO software_offers(id,request_id,version,status,terms_json,created_at,updated_at,sent_at,sent_by) VALUES ('o2','r1',2,'sent','{}','${at}','${at}','${at}','owner@example.test');
+			UPDATE software_offer_links SET token_hash='hash-v2',created_at='${at}',revoked_at=NULL`;
+	};
+
+	const resolve = /UPDATE owner_requests SET status='resolved'/;
+
+	/** Nothing after the first batch was written: the request is open and no audit row says it was declined. */
+	const unresolved = (sql: SqliteDatabase) => {
+		expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
+			status: "reviewed",
+		});
+		expect(sql.prepare("SELECT action FROM owner_request_audit").all()).toEqual(
+			[{ action: "offer-link-revoked" }],
+		);
+	};
+
+	it.each<[string, string, string]>([
+		["a draft", savesDraft, "draft"],
+		["a draft saved and sent", savesAndSends(20_000), "sent"],
+	])(
+		"%s found by the read after the email is refused before the batch",
+		async (_name, race, status) => {
+			// The second batch would fail if it ran: the read refuses before it.
+			const { sql, call } = setUp({
+				seed: withSent,
+				race: { on: OFFER_LEFT, sql: race },
+				faults: [{ on: resolve }],
+			});
+
+			expect(await read(await call(decline))).toEqual(answer(409, CHANGED));
+			expect(emails()).toHaveLength(2);
+			expect(logs()).toEqual([]);
+			unresolved(sql);
+			expect(
+				sql
+					.prepare("SELECT id,status FROM software_offers WHERE id='o2'")
+					.get(),
+			).toEqual({ id: "o2", status });
+		},
+	);
+
+	it("a draft saved after the read is refused by the batch's guard", async () => {
+		const { sql, call } = setUp({
+			seed: withSent,
+			race: { on: resolve, sql: savesDraft },
+		});
+
+		expect(await read(await call(decline))).toEqual(answer(409, CHANGED));
+		unresolved(sql);
+	});
+
+	it("a draft saved and sent with its link under 20 seconds old answers as the batch's sending guard does", async () => {
+		const { sql, call } = setUp({
+			seed: withSent,
+			race: { on: OFFER_LEFT, sql: savesAndSends(10_000) },
+		});
+
+		expect(await read(await call(decline))).toEqual(
+			answer(409, "An offer is still being sent. Try again in a moment."),
+		);
+		unresolved(sql);
+	});
+
+	it("a decline with no offer left still resolves the request", async () => {
+		const { sql, call } = setUp({ seed: withSent });
+
+		expect(await read(await call(decline))).toEqual({
+			status: 200,
+			body: { ok: true, copySent: true },
+			private: true,
+		});
+		expect(sql.prepare("SELECT status FROM owner_requests").get()).toEqual({
+			status: "resolved",
+		});
 	});
 });
 
