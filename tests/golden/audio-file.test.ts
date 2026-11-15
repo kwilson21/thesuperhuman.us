@@ -128,6 +128,18 @@ const cases: Case[] = [
 			r2: { seed: { "studio/projects/r1/f1.mp3": { body: BODY } } },
 		},
 	),
+	open("an entry whose key is a signed agreement", [read("agreement-file")], {
+		setup: entries(["agreement-file", "agreements/a1/signed.pdf"]),
+		r2: { seed: { "agreements/a1/signed.pdf": { body: BODY } } },
+	}),
+	open(
+		"an entry whose key is an agreement attachment, asked for a range",
+		[read("agreement-file", { headers: { range: "bytes=0-9" } })],
+		{
+			setup: entries(["agreement-file", "agreements/attachments/a1.pdf"]),
+			r2: { seed: { "agreements/attachments/a1.pdf": { body: BODY } } },
+		},
+	),
 	open("an entry whose key has studio in capitals", [read("odd-key")], {
 		setup: entries(["odd-key", "Studio/projects/r1/f1.mp3"]),
 		r2: { seed: { "Studio/projects/r1/f1.mp3": { body: BODY } } },

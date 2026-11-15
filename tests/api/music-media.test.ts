@@ -39,6 +39,10 @@ it("allows public media responses to use shared caching", async () => {
 it.each([
 	"studio/projects/request/file.mp3",
 	"software/request/update/visual.png",
+	"agreements/a1/signed.pdf",
+	"Studio/projects/request/file.mp3",
+	"/studio/projects/request/file.mp3",
+	"other/file.mp3",
 ])("refuses private object %s through the public media helper", async (key) => {
 	const bucket = double<R2Bucket>({
 		head: async () => {
