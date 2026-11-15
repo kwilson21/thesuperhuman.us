@@ -221,9 +221,11 @@ export async function finishProjectUpload(
 			// R2 refused a part it lists as missing or with another entity tag: the route's own check of the parts answers the same.
 			if (multipartPartInvalid(error)) return "blocked";
 
-			// Another completion, an abort or the incomplete-upload lifecycle got there first. The object may now exist, so look
-			// again, as the abort does: a later completion finds it and finishes.
-			if (!multipartUploadGone(error)) throw error;
+			// Another completion, an abort or the incomplete-upload lifecycle got there first, or two completions wrote the same
+			// key at once (error 10058). The object may now exist, so look again, as the abort does: a later completion finds it
+			// and finishes.
+			if (!multipartUploadGone(error) && !concurrentWriteToKey(error))
+				throw error;
 			object = await bucket.head(upload.object_key);
 
 			if (!object) return "blocked";
@@ -268,6 +270,11 @@ export function multipartUploadGone(error: RawValue): boolean {
 		error instanceof Error &&
 		/\b10024\b|multipart upload does not exist/i.test(error.message)
 	);
+}
+
+/** R2 reports two writes to one key at once, which the losing completion of two can get, as error 10058. */
+export function concurrentWriteToKey(error: RawValue): boolean {
+	return error instanceof Error && /\b10058\b/.test(error.message);
 }
 
 /** R2 reports a completion with a missing part, or a part whose entity tag does not match, as error 10025 (invalid part). */

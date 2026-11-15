@@ -6,6 +6,7 @@ import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/access";
 const input = z.object({ action: z.literal("revoke") });
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -39,7 +40,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true });
 	} catch (error) {
-		logUnexpected("owner/projects/access", error);
+		logUnexpected(ROUTE, error);
 
 		return Response.json(
 			{

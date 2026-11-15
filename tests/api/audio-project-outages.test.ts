@@ -244,6 +244,7 @@ const outages: {
 describe("an unexpected failure answers 500 with the route's sentence", () => {
 	for (const outage of outages)
 		it(outage.name, async () => {
+			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 			const db = failing(world(outage.seed), outage.pattern);
 
 			const response = await outage.handler(
@@ -255,6 +256,11 @@ describe("an unexpected failure answers 500 with the route's sentence", () => {
 			expect(response.status).toBe(500);
 			expect(text).toContain(outage.sentence);
 			expect(text).not.toContain(LEAK);
+			// The log line names the route by its path, as the converted routes do.
+			expect(String(logged.mock.calls[0]?.[0])).toMatch(
+				/^\/api\/(owner|studio)\/projects\/\[id\]\/.* failed unexpectedly:/,
+			);
+			logged.mockRestore();
 		});
 
 	it("a client's file", async () => {
@@ -478,7 +484,7 @@ describe("a stored state that disagrees with R2 is not an unavailable service", 
 		expect(await response.text()).toBe("File unavailable");
 		expect(logged).toHaveBeenCalledTimes(1);
 		expect(String(logged.mock.calls[0])).toContain(
-			"studio/projects/file failed unexpectedly",
+			"/api/studio/projects/[id]/files/[fileId] failed unexpectedly",
 		);
 		logged.mockRestore();
 	});

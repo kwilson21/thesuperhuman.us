@@ -19,6 +19,7 @@ import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/uploads";
 const id = z.uuid();
 
 const start = z.object({
@@ -120,7 +121,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true, fileId: upload.id });
 	} catch (error) {
-		logUnexpected("owner/projects/uploads", error);
+		logUnexpected(ROUTE, error);
 
 		return fail("The upload could not be saved. Please try again.", 500);
 	}
@@ -180,7 +181,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 	} catch (error) {
 		if (error instanceof UploadBeingDiscarded)
 			return fail("This part could not be uploaded. Please try again.", 409);
-		logUnexpected("owner/projects/uploads", error);
+		logUnexpected(ROUTE, error);
 
 		return fail("This part could not be uploaded. Please try again.", 500);
 	}

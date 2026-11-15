@@ -8,6 +8,7 @@ import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/files/[fileId]";
 
 const input = z.discriminatedUnion("action", [
 	z.object({
@@ -109,7 +110,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true, updateId });
 	} catch (error) {
-		logUnexpected("owner/projects/file", error);
+		logUnexpected(ROUTE, error);
 
 		return Response.json(
 			{

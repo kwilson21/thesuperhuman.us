@@ -11,6 +11,7 @@ import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/updates";
 const note = z.string().trim().min(1).max(1000);
 const date = z.string().refine(validProjectDate);
 
@@ -107,7 +108,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true, update });
 	} catch (error) {
-		logUnexpected("owner/projects/updates", error);
+		logUnexpected(ROUTE, error);
 
 		return Response.json(
 			{

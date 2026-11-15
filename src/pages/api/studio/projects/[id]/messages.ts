@@ -16,6 +16,7 @@ import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/studio/projects/[id]/messages";
 
 const inputSchema = z.discriminatedUnion("action", [
 	z.object({ action: z.literal("send"), body: z.unknown() }),
@@ -187,7 +188,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true, message: saved });
 	} catch (error) {
-		logUnexpected("studio/projects/messages", error);
+		logUnexpected(ROUTE, error);
 
 		return Response.json(
 			{

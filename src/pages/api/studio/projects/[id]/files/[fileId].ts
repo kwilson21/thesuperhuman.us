@@ -4,11 +4,13 @@ import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	clientProjectFile,
 	recordProjectFileAccess,
+	sizeMismatchResponse,
 	streamClientProjectFile,
 } from "~/lib/audio-project-files";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/studio/projects/[id]/files/[fileId]";
 
 const hidden = () =>
 	new Response("File not found", {
@@ -48,12 +50,14 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 			download,
 		);
 
-		// The only 500 the stream answers is an object whose size differs from the row: a stored state that disagrees with R2.
-		if (response.status === 500)
+		if (response === "size-mismatch") {
 			logUnexpected(
-				"studio/projects/file",
+				ROUTE,
 				new Error("The stored object has another size than the file row."),
 			);
+
+			return sizeMismatchResponse();
+		}
 
 		if (
 			request.method === "GET" &&
@@ -64,7 +68,7 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 
 		return response;
 	} catch (error) {
-		logUnexpected("studio/projects/file", error);
+		logUnexpected(ROUTE, error);
 
 		return new Response("Private audio is temporarily unavailable", {
 			status: 500,
