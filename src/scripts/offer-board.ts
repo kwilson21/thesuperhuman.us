@@ -456,20 +456,20 @@ export function setupOfferBoard() {
 
 		switch (card.lane) {
 			case "outcome":
-				setField(named(form!, "outcome"), card.text, restore);
-				said = "Filled the outcome.";
-
-				break;
 			case "summary":
-				setField(named(form!, "summary"), card.text, restore);
-				said = "Filled the summary.";
+			case "timing": {
+				const field = named(form!, card.lane);
+				const had = field?.value.trim() ?? "";
+
+				setField(field, card.text, restore);
+				said =
+					had && had !== card.text
+						? `Replaced your ${card.lane} with this card. Undo puts your words back.`
+						: `Filled the ${card.lane}.`;
 
 				break;
-			case "timing":
-				setField(named(form!, "timing"), card.text, restore);
-				said = "Filled the timing.";
+			}
 
-				break;
 			case "inputs":
 				addLine(
 					named<HTMLTextAreaElement>(form!, "clientInputs"),
@@ -1040,10 +1040,13 @@ export function setupOfferBoard() {
 		const label = lastAction(board);
 		undoButton.disabled = !label;
 		undoButton.setAttribute("aria-label", label ? `Undo: ${label}` : "Undo");
-		heldButton.hidden = !held;
+		// The button keeps its place while nothing waits (hidden from sight and from assistive technology), so showing it
+		// never moves the cards.
+		heldButton.hidden = false;
+		heldButton.toggleAttribute("data-idle", !held);
 		heldButton.textContent = held
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
-			: "";
+			: "Show 1 update";
 		askButton.textContent = replied
 			? "Suggest again"
 			: "Suggest an offer with AI";
@@ -1143,11 +1146,8 @@ export function setupOfferBoard() {
 			const first = !held;
 
 			if (!held || reply.n > held.n) held = { ...reply, changes };
+			// The status line keeps its words, so its height and the cards below it stay; the arrival is only announced.
 			render();
-			status.textContent =
-				held.changes === 1
-					? "An update is waiting. Press “Show 1 update” to see it."
-					: `${held.changes} updates are waiting. Press “Show ${held.changes} updates” to see them.`;
 
 			if (first)
 				announce(
@@ -1173,9 +1173,13 @@ export function setupOfferBoard() {
 	}
 
 	/** A failure stops automatic asking. The route's own sentence is shown as it is; the page's own adds what to do. */
-	function failed(text: string, own = false) {
+	/** The same sentence the route answers when the AI fails, so one failure reads one way. */
+	const AI_FAILED =
+		"The AI couldn’t answer just now. Your draft is unchanged; press Suggest to try again.";
+
+	function failed(text: string) {
 		autoAsk = false;
-		say(own ? `${text} Press the Suggest button to try again.` : text);
+		say(text);
 	}
 
 	async function ask(pressed = false) {
@@ -1224,11 +1228,15 @@ export function setupOfferBoard() {
 				const error = field(json, "error");
 
 				if (Predicate.isString(error)) failed(error);
-				else
+				else if (
+					json === null ||
+					response.status === 401 ||
+					response.status === 403
+				)
 					failed(
-						"The AI couldn’t answer just now. Your draft is unchanged.",
-						true,
+						"The answer could not be read, perhaps because your sign-in lapsed. Your draft is unchanged; reload the page, then press Suggest.",
 					);
+				else failed(AI_FAILED);
 
 				return;
 			}
@@ -1261,7 +1269,7 @@ export function setupOfferBoard() {
 				changes: 0,
 			});
 		} catch {
-			failed("The AI couldn’t answer just now. Your draft is unchanged.", true);
+			failed(AI_FAILED);
 		} finally {
 			clearTimeout(stop);
 			inFlight = null;
@@ -1359,7 +1367,7 @@ export function setupOfferBoard() {
 						editing.node,
 						editing.input,
 						card.id,
-						"Save or Cancel your edit first, then use the card.",
+						`Save or Cancel your edit first, then ${card.lane === "drivers" ? "keep the card" : card.lane === "questions" ? "copy the question" : "use the card"}.`,
 					);
 
 					break;

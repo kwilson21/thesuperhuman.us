@@ -28,7 +28,7 @@ const offerFailed = () =>
 const offerBusy = () =>
 	say(
 		503,
-		"The AI couldn’t answer just now. Your draft is unchanged; try again.",
+		"The AI couldn’t answer just now. Your draft is unchanged; press Suggest to try again.",
 	);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {

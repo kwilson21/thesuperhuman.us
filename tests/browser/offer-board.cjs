@@ -1011,6 +1011,42 @@ function check(name, ok, detail = "") {
 		);
 		await page.mouse.move(2, 2);
 
+		// The tenth interface review's bug: at phone width a held reply moves nothing (its button keeps its place).
+		await page.setViewportSize({ width: 320, height: 844 });
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const narrow = await next();
+
+		await card("outcome").hover();
+
+		// Measured in the page, not the viewport: Chrome's scroll anchoring can keep a moved card still on screen.
+		const pageTop = () =>
+			card("outcome").evaluate(
+				(element) => element.getBoundingClientRect().top + window.scrollY,
+			);
+
+		const outcomeTop = await pageTop();
+		const moving = scriptedOfferReply(narrow.request().postData());
+
+		moving.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		await release(narrow, moving);
+		await page.waitForTimeout(500);
+		check(
+			"at 320 px a held reply moves no card",
+			(await page.locator("[data-offer-held]").isVisible()) &&
+				Math.abs((await pageTop()) - outcomeTop) < 1,
+			`${outcomeTop} -> ${await pageTop()}`,
+		);
+		await page.mouse.move(2, 2);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.
 		await page.getByRole("button", { name: "Suggest again" }).click();
 		(await next()).fulfill({

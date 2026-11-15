@@ -214,6 +214,16 @@ async function save(
 				);
 
 				if (shown) shown.hidden = true;
+
+				const empty = document.querySelector<HTMLElement>(
+					"[data-pricing-empty]",
+				);
+
+				if (empty) empty.hidden = false;
+
+				const clear = form.querySelector<HTMLElement>("[data-pricing-clear]");
+
+				if (clear) clear.hidden = true;
 			}
 
 			if (status)
@@ -265,7 +275,11 @@ export function setupOwnerPricing() {
 		);
 
 		// Focus where the owner was working, then say it, after the page is ready so the status region announces it.
-		document.querySelector<HTMLElement>("#pricing-market-heading")?.focus();
+		// The browser restores the scroll position, so focus goes back to Save research, which that view shows, with the
+		// status line beside it saying what happened.
+		document
+			.querySelector<HTMLElement>('[data-part="market"] button[type="submit"]')
+			?.focus({ preventScroll: true });
 
 		if (status)
 			setTimeout(() => {
@@ -325,6 +339,16 @@ export function setupOwnerPricing() {
 				if (status)
 					status.textContent =
 						"That is not valid JSON. Check the file and paste it again.";
+				markResearch(true);
+
+				return;
+			}
+
+			// A pasted null is not a research file: clearing goes through Clear research and its question.
+			if (!Predicate.isObject(market) || Array.isArray(market)) {
+				if (status)
+					status.textContent =
+						"That is not a research file. To remove the saved research, use Clear research.";
 				markResearch(true);
 
 				return;
