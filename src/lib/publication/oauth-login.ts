@@ -380,10 +380,7 @@ export async function publicationLogin(
 			};
 
 			// GitHub's documented access token errors that are about this site's own OAuth app, not about the visitor's code.
-			if (
-				typeof token.error === "string" &&
-				appConfigurationErrors.includes(token.error)
-			)
+			if (appConfigurationErrors.some((code) => code === token.error))
 				throw new Unavailable(500);
 
 			if (!exchange.response.ok || token.error || !token.access_token)

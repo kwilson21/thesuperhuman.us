@@ -724,6 +724,7 @@ describe("publication sign-in when something other than the visitor's request fa
 			for (const lookup of [false, true]) {
 				const { env } = fixture();
 				const { response, nonce } = await start(env);
+
 				const refused = () =>
 					Response.json({ message: "rate limit" }, { status: 403, headers });
 
