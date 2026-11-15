@@ -6,6 +6,7 @@ import {
 	propertiesWithoutMutant,
 } from "../../scripts/lib/quint-run.mjs";
 import {
+	agreementLinkMutants,
 	budgetMutants,
 	discountMutants,
 	inquiryMutants,
@@ -322,8 +323,43 @@ describe("the mutants of verification/suggestion-budget.qnt", () => {
 	});
 });
 
+describe("the agreement link model", () => {
+	const model = readFileSync(
+		new URL("../../verification/agreement-link.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(7);
+		expect(propertiesWithoutMutant(properties, agreementLinkMutants)).toEqual(
+			[],
+		);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import agreementLinkProtocol/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(agreementLinkMutants), "agreementLink"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			agreementLinkMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
 describe("the models the driver runs", () => {
-	it("lists the six models, each with its own registry", () => {
+	it("lists the seven models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
@@ -331,6 +367,7 @@ describe("the models the driver runs", () => {
 			"verification/music-playback.qnt",
 			"verification/software-inquiry.qnt",
 			"verification/suggestion-budget.qnt",
+			"verification/agreement-link.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
 		expect(models[1].mutants).toBe(discountMutants);
@@ -338,5 +375,6 @@ describe("the models the driver runs", () => {
 		expect(models[3].mutants).toBe(musicMutants);
 		expect(models[4].mutants).toBe(inquiryMutants);
 		expect(models[5].mutants).toBe(budgetMutants);
+		expect(models[6].mutants).toBe(agreementLinkMutants);
 	});
 });

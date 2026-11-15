@@ -303,14 +303,12 @@ export function readOfferTerms(input: RawValue) {
 /**
  * What `parseOfferTerms` throws: a `FieldsRefused`, so the review route refuses it as a validator's error and the failure
  * log leaves out its message (which holds only the readers' paths and fixed sentences, though Zod's could quote a
- * received value). Its name stays "ZodError", the name `logUnexpected` has always
- * logged for stored terms that do not read (the golden corpus records that line for an invoice reserved against an offer
- * whose terms are an empty object); renaming it changes the log line.
+ * received value). Its name, which `logUnexpected` logs, says what failed.
  */
 class OfferTermsRefused extends FieldsRefused {
 	constructor(issues: readonly Issue[]) {
 		super(issues);
-		this.name = "ZodError";
+		this.name = "OfferTermsRefused";
 	}
 }
 
