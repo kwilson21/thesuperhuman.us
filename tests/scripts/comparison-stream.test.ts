@@ -24,7 +24,6 @@ type PendingPlay = { resolve: () => void; reject: (error: Error) => void };
  */
 class StandInAudio extends EventTarget {
 	paused = true;
-	ended = false;
 	currentTime = 0;
 	controls = true;
 	hidden = false;
@@ -72,7 +71,7 @@ class StandInAudio extends EventTarget {
 	play() {
 		this.plays++;
 		this.paused = false;
-		this.ended = false;
+		this.reachedEnd = false;
 		setTimeout(() => this.dispatchEvent(new Event("play")));
 
 		return new Promise<void>((resolve, reject) => {
@@ -99,11 +98,22 @@ class StandInAudio extends EventTarget {
 	}
 
 	/** Plays to the end of the file, as a stream that outruns decoding does. */
+	/** Whether playback has ended: it reached the file's end and has not been moved back since, as a browser reports. */
+	get ended() {
+		return (
+			this.reachedEnd && this.currentTime >= 160 + Number(this.dataset.offset)
+		);
+	}
+
+	private reachedEnd = false;
+
 	end() {
 		this.currentTime = 160 + Number(this.dataset.offset);
 		this.paused = true;
-		this.ended = true;
+		this.reachedEnd = true;
+		// A browser fires timeupdate, then pause, then ended.
 		setTimeout(() => {
+			this.dispatchEvent(new Event("timeupdate"));
 			this.dispatchEvent(new Event("pause"));
 			this.dispatchEvent(new Event("ended"));
 		});
@@ -849,4 +859,19 @@ it("weighs an A/B press after the stream has gone round its loop and flipped", a
 	expect(ab.master.currentTime).toBeLessThan(1);
 	expect(ab.mix.paused).toBe(true);
 	expect(ab.label()).toMatch(/Master$/);
+});
+
+it("goes round a loop that ends with the song when the stream reaches its file's end, with Flip off", async () => {
+	const ab = mount({ desk: true });
+
+	ab.seek.value = "156";
+	ab.seek.dispatchEvent(new Event("input"));
+	ab.loop.toggle.click();
+	ab.play.click();
+	await tick();
+	ab.mix.end();
+	await settle();
+	expect(ab.mix.paused).toBe(false);
+	expect(ab.mix.currentTime).toBe(152);
+	expect(ab.label()).toMatch(/^Pause /);
 });

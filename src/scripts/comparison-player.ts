@@ -337,7 +337,14 @@ export function setupComparisonPlayers() {
 			 * selection follows the version sounding.
 			 */
 			function followLoop() {
-				if (streaming && loop && streamPosition() >= loop.end) {
+				// A stream that has reached its file's end is left to the ended handler, which takes it round: a seek
+				// here would leave it paused, not ended, and its pause handler would stop the comparison.
+				if (
+					streaming &&
+					loop &&
+					!streaming.ended &&
+					streamPosition() >= loop.end
+				) {
 					if (loopFlip?.checked) {
 						selected = 1 - selected;
 						stopStream();
