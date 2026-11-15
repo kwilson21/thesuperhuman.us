@@ -3755,6 +3755,9 @@ it.each(["balance", "milestone"])(
 it.each([false, true])(
 	"atomically blocks offer changes or declines for an uncollectible deposit (decline=%s)",
 	async (decline) => {
+		// A decline without the mail settings is refused before any write; with them it reaches the batch under test.
+		env.OWNER_EMAIL = "owner@example.com";
+
 		const saved = await call(offerPost, {
 			action: "draft",
 			terms: { ...terms, summary: "Updated" },

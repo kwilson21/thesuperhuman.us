@@ -58,9 +58,12 @@ import type { JsonValue } from "../helpers/json";
 //            guard), or a lookup after a refused first batch. Nothing is emailed
 //   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the second batch throws
 //            (an outage, not a guard) after the email, or a lookup after a refused second batch fails
-//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain), or not
-//            configured (no key, sender or owner address). The first batch has already run: offers withdrawn, link
-//            revoked, signing retired, updated_at moved; the request is not resolved and no audit row says "declined"
+//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
+//            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
+//            not resolved and no audit row says "declined"
+//   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
+//            sent or saved."}  mail not configured (no Resend key, sender or owner address), checked after the refusals
+//            and before the first batch: nothing withdrawn or emailed
 //   409 "The client email was sent, but..."  the second batch fails a guard after the email
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
 //   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
