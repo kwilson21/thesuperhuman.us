@@ -15,7 +15,7 @@ import {
 import { followComparison } from "~/scripts/home-signal";
 import { runMotion, scenePlayer } from "~/scripts/scroll-scenes";
 
-runMotion(({ onScene, onReveal, cleanup }) => {
+runMotion(({ signal, onScene, onReveal, cleanup }) => {
 	// Studio: the three short scenes rest within five seconds and never loop.
 	const studio = document.querySelector<HTMLElement>("[data-studio]");
 	const scene = studio?.querySelector<HTMLElement>("[data-studio-scene]");
