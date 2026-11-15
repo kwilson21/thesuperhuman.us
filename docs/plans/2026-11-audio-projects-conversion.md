@@ -8,11 +8,8 @@ code cites a file and line on `origin/main` at `14cce493`; the lib files are `sr
 
 ## What the owner is asked
 
-1. The defects in section 7: F1 and F2 follow the standing answer rules and are fixed without a question (F1 is 500 for an
-   unexpected failure where nine handlers answer 503 today). F3 (the studio file route when R2 holds a different size than
-   the row) is a judgment call: recommended 500, as an inconsistent stored state is not an unavailable service, and it
-   logs one fixed line, as the other 500s do. F4 (an upload R2 no longer has, or a completion R2 refuses for a missing part
-   or a wrong entity tag) answers 409 with sentences the routes already have.
+1. Nothing is asked about the defects. F1 to F5 in section 7 follow the house failure rules (an unexpected failure answers
+   500 and is logged once; a refused request or a lost race answers 409; no new sentences) and are listed there in order.
 2. Nothing else is asked. Two behaviours are today's and the design keeps both (section 7, "Today's behaviour, kept"):
    closing one project's access ends the client's sessions for all of that client's projects, and the owner can begin a
    third revision round.
@@ -66,8 +63,7 @@ existing `readStudioSession`, below).
 The plan's step 0 split the shared helpers into modules of their own, and it has landed on `main` (PR #305):
 `src/lib/client-portal.ts` holds `clientPortalEnabled`, `normalizeClientEmail`, `hashValue` and `keyedHash`, and
 `src/lib/project-dates.ts` holds `validProjectDate` and `projectToday`. The converted area imports those two modules and
-no longer imports `audio-client-access.ts` or the date helpers of `audio-project-updates.ts`, which the conversion
-deletes.
+no longer imports `audio-client-access.ts`; the date helpers already left `audio-project-updates.ts` in that PR.
 
 `src/server/services.ts:544-570` already has a `ProjectInvitation` service whose `deliver` calls the unconverted
 `deliverProjectInvitation` for the public intake flow. The conversion replaces that call with the new invitation delivery
@@ -110,8 +106,8 @@ stateDiagram-v2
 
 Moves by action (statement numbers are in section 4): `accept` (U2), `start_work` (U5), `begin_revision` (U8), `complete`
 (U11), `revise_date` (U14, a date move, no stage move), `progress` (U1, a note, no move), publish (P2 and P4), revoke a file
-(F3). `progress` applies in every stage but `files_under_review` and `complete`; `revise_date` in every stage but `complete`,
-and needs the due date `accept` sets, so it applies from `accepted` on. `files_under_review` refuses progress (updates.ts:130); `complete` refuses any further update (updates.ts:115).
+(FR3). `progress` applies in every stage but `files_under_review` and `complete`; `revise_date` in every stage but `complete`,
+and needs the due date `accept` sets, so it applies from `accepted` on. `files_under_review` refuses progress (updates.ts); `complete` refuses any further update (updates.ts).
 
 ```mermaid
 stateDiagram-v2
@@ -170,7 +166,7 @@ stateDiagram-v2
     Sent --> [*]
 ```
 
-`sent` is final for an invitation and for an update (the owner's retry refuses it: updates.ts:372, invitations.ts:80).
+`sent` is final for an invitation and for an update (the owner's retry refuses it: updates.ts, invitations.ts:80).
 
 ### The client's answer to a review
 
@@ -199,8 +195,8 @@ below are today's, exactly (the fixes in section 7 change status codes, never a 
 |---|---|---|
 | `audio-project-access.ts` | `revokeAccess`: the project exists and is open | AccessAlreadyClosed (409, "Project access is already closed.") |
 | `audio-project-notices.ts` | each rule takes the kind of notice and states that kind's own conditions (below). `queueNotice`: status failed or pending, or sending and confirmed and stale (60 s); project open, request not withdrawn, email present, and for the invitation the request's kind is service; `claimNotice`: for the invitation, status pending, project open, and the request is a service, not withdrawn, with an email; for an update notice, status pending and nothing else; `deliveryOutcome`: sent, failed, or uncertain (writes nothing), and whether the outcome write needs an open project (the invitation's does, the update notice's does not) | NoticeNotQueueable (409, "This invitation cannot be sent again here." for the invitation, "This email cannot be retried here." for an update) |
-| `audio-project-messages.ts` | `postOwnerMessage`, `postClientMessage` (session open, project open, request not withdrawn, stage not complete), `answerReview` (stage review_ready, a published review that awaits an answer, the named review is the latest, the decision allowed by the rounds used, the same session rules), `markRead` (session open, project open, request not withdrawn, the message is the owner's and unread; the route answers `{ok:true}` whatever the rule decides, as today) | MessageNotAccepted (409, none: `{ok:false}`), ClientRateLimited (429, "Please wait a few minutes before sending another message.", raised only by the count read after a refusal, see M6), ReviewNotAnswerable (409, "That answer is not available for this review. Refresh the page to see where your song stands.") |
-| `audio-project-updates.ts` | one rule per action, each from the plain facts: state (stage, due dates, request status, access) and payments. `beginRevision` needs the stage `review_ready`, the booking paid, the project open and the request not withdrawn, and a published review. The published-review check is redundant, as the completion's published-final check is: `review_ready` already implies a published review (a revoke of the last review resets the stage in the same batch, section 4 F3, and the files model's `readyStagesHaveFiles` checks it). The rule keeps it as a named fact so a state that broke the implication would refuse by name; the write's guard is the stage and the access, and has no file condition (U8) | ProjectCannotTakeUpdate (409, "This project cannot take that update right now.") |
+| `audio-project-messages.ts` | `postOwnerMessage`, `clientLookup` (the lookup, decided first: session open, the session's email is the request's, the request's email not blank, project open, request not withdrawn), `postClientMessage` (stage not complete, and fewer than 12 client messages in the last 300 seconds), `answerReview` (stage review_ready, a published review that awaits an answer, the named review is the latest, the decision allowed by the rounds used, and the same count rule), `markRead` (after the lookup: the message is the owner's and unread; the route answers `{ok:true}` whatever the rule decides after the lookup, as today) | MessageNotAccepted (409, none: `{ok:false}`), ClientRateLimited (429, "Please wait a few minutes before sending another message."), ProjectHidden (404, `{ok:false}`, the lookup's refusal), ReviewNotAnswerable (409, "That answer is not available for this review. Refresh the page to see where your song stands.") |
+| `audio-project-updates.ts` | one rule per action, each from the plain facts: state (stage, due dates, request status, access) and payments. `beginRevision` needs the stage `review_ready`, the booking paid, the project open and the request not withdrawn, and a published review. The published-review check is redundant, as the completion's published-final check is: `review_ready` already implies a published review (a revoke of the last review resets the stage in the same batch, section 4 FR3, and the files model's `readyStagesHaveFiles` checks it). The rule keeps it as a named fact so a state that broke the implication would refuse by name; the write's guard is the stage and the access, and has no file condition (U8) | ProjectCannotTakeUpdate (409, "This project cannot take that update right now.") |
 | `audio-project-files.ts` | `publishFile`: file uploaded, object key matches, object size matches, project open, request not withdrawn, booking paid, final needs balance paid, stage allows the version; `revokeFile`: file uploaded or published, a published file needs a note of 1 to 1,000 characters, project open; the stage reset decision | FileNotPublishable (409, "This file cannot be published yet. Check the project and payment state."), FileNotRevocable (409, "This file cannot be revoked here. A shared file needs a short note to the client.") |
 | `audio-project-uploads.ts` | `startUpload`, `finishUpload`, `putPart` (the part length, the discard state), `abortUpload` | UploadNotReady (409, "This project is not ready for file upload."), UploadGone (404, "This upload is no longer available."), UploadSizeMismatch (409, "The file size did not match. It was not published."), UploadNotFinishable (409, "This upload cannot be finished now."), PartWrongSize (400, "This file part has the wrong size.") |
 | `studio-project-file.ts` | `serveProjectFile`: session open, the session's email owns the request, project open, request not withdrawn, file published and not revoked, `published_at` not after now, not expired, the stage and payment conditions of the version, the object key matches, a download needs `downloadable`, a final is available one year | FileHidden (404, "File not found", with `cache-control: private, no-store`) |
@@ -212,14 +208,24 @@ what its refused write answers today, with the same tag a read-time refusal uses
 "after the lookup" or "before the insert" answer 409 (or 429) today, so a read-time 404 happens only where the old lookup
 answered it.
 
-The rate limit is not a rule input. Today the count of the client's messages in the last 300 seconds is a condition of the
-insert (M2, M3) and is read once more, as a statement of its own (M6), after any refused write; a full count then answers
-429, otherwise the refusal answers 409. The design keeps exactly that: the rule does not read the count, the write keeps
-the count under the cap as its guard, and every refusal of a client message or review answer, whether the rule refused it
-at read time or the guard refused it at write time, is followed by the count read. **429 beats every other refusal**: a
-client whose count is full is answered 429 even when the session is revoked or the project is complete (the corpus cases
-"send when the rate limit fills after the lookup", 429, and "the rate-limit count fails after a refused send", 500 on a
-complete project). A failed count read is an unexpected failure and answers 500.
+The lookup comes first. Today the studio messages route looks the project up before it reads the message
+(`clientProjectForSession`, studio `messages.ts`): a session that is not open, an email that is not the request's, a blank
+request email, a closed project and a withdrawn request all answer 404 `{ok:false}` there, with no count read and no read
+mark. The design keeps that order: the rule `clientLookup` decides these conditions first from the session read and the
+project read, answers ProjectHidden (404), and nothing after it runs. Only refusals after the lookup (the stage, the review,
+the rounds, the message, the count, or a guard lost at write time) go through the rate count described next.
+
+The rate limit is a fact first, as the offers design decided for conditions only a guard checks
+(`docs/plans/2026-11-offers-conversion.md`, "Conditions only a guard checks today", and AGENTS.md, "Back-end rules"). The
+count of the client's messages in the last 300 seconds is read in the batch (M6), the rule refuses a full window with the
+named ClientRateLimited, and the write keeps `count < cap` as its guard (M2, M3), so a request that read room and lost it to
+another request is refused by the write. After a refused write the count is read once more (M6 again), because the race
+may have filled the window: a full count then answers 429, otherwise the write's refusal answers 409 as today. **429 beats
+every other refusal after the lookup**: the rule checks the count before the stage and the review, so a client whose window
+is full is answered 429 even when the project is complete (the corpus cases "send when the rate limit fills after the
+lookup", 429, and "the rate-limit count fails after a refused send", 500 on a complete project). The count is now read with
+every client message and answer, so a failed count read answers 500 for a request that would have succeeded; today only a
+refused write reaches that read. The conversion's golden run reports any corpus case that records otherwise.
 
 Hidden answers: every client refusal of the file route is one tag, FileHidden, so an unknown file, another client's file, a
 revoked file, an unpaid review and a closed project answer alike. The studio messages route answers 404 `{ok:false}` for
@@ -237,7 +243,7 @@ and the write's guard re-checks the session (the model's `sessionEnds` step). Th
 batch is the project's facts only.
 
 The client's email rule. A rule compares the session's email with the request's, and the two reads that exist today
-differ, so the rule states both. The project lookup (`clientProjectForSession`, `audio-client-access.ts:517`) refuses a
+differ, so the rule states both. The project lookup (`clientProjectForSession`, `audio-client-access.ts`) refuses a
 request whose email is blank (`r.email<>''`); the file read (`clientFileScope`, `audio-project-files.ts:21-32`) has no such
 condition and relies on the join of the session's email to the request's. The design keeps each: the messages routes and the
 project page refuse a blank request email (a hidden answer), the file route does not check it separately, and its rule
@@ -252,13 +258,13 @@ in rows), with `now` and ids passed in as thunks:
 
 | Flow | Shape |
 |---|---|
-| `revokeProjectAccess` | read project (plain); rule; batch (R1 to R4, with the client's email read first); best-effort `deleteRetiredCodes` after the batch, as today (a failure logs one fixed line through `logUnexpected`) |
+| `revokeProjectAccess` | read project (plain); rule; batch (AR1 to AR4, with the client's email read first); best-effort `deleteRetiredCodes` after the batch, as today ("no such table" is silent; any other failure logs once through `logUnexpected`, a change of log text) |
 | `queueInvitation`, `retryUpdateNotice` | read notice and open facts in one batch; `queueNotice`; guarded write; then `waitUntil` delivery |
 | `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today |
-| `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); then one batch (project, request, latest review, decisions since it, rounds used); rule; guarded insert (section 6); on any refusal the count read (M6) and 429 when it is full, else the refusal; `markRead` ends in a guarded update and answers `{ok:true}` |
+| `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); then one batch (project, request, latest review, decisions since it, rounds used, the count); the lookup rule (404, nothing after it runs), then the action's rule (the count first); guarded insert (section 6). A refused write is caught with `Effect.catchTag` on its refusal tag, the count is read (M6), and the flow fails again with `ClientRateLimited` when it is full and with the same named refusal otherwise, so no refusal is swallowed and the route maps each tag. `markRead` ends in a guarded update after the lookup and answers `{ok:true}` |
 | `saveProjectUpdate` | one read batch; the action's rule; guarded batch (U1 to U16); a lost guard answers 409, no retry |
 | `startUpload`, `putPart`, `finishUpload`, `abortUpload` | the section 6 protocol; R2 calls through `AudioBucket` with `Effect.tryPromise`, as `agreement-download` reads its bucket |
-| `publishFile`, `revokeFile` | read; rule; R2 `head` (publish); guarded batch; `waitUntil` notice delivery. `revokeFile` runs read, rule and batch through `decideAndSave` (the retry re-decides the stage reset, section 4, F3) and answers 409 at once when the file's own guard refuses |
+| `publishFile`, `revokeFile` | read; rule; R2 `head` (publish); guarded batch; `waitUntil` notice delivery. `revokeFile` runs read, rule and batch through `decideAndSave` (the retry re-decides the stage reset, section 4, FR3) and answers 409 at once when the file's own guard refuses |
 | `serveProjectFile` | session; project and file facts in one batch; rule; R2 head and get; the access upsert last (B3 below) |
 
 Services. Reused: `MusicDb`, `AudioBucket`, the existing `hashing` helper and `ProjectInvitation` (reimplemented as the
@@ -271,6 +277,18 @@ The R2 calls are the five the flows make on `AudioBucket` (`head`, `get`, `delet
 `resumeMultipartUpload`); each is wrapped in `Effect.tryPromise` and fails with a named error carried by the store or flow
 that makes it (`ObjectStoreFailed`). The portal flag and the missing-binding 503 come from `bindingsOrUnavailable`.
 
+Where the pieces live, as AGENTS.md "Where code goes" and "Rule files, stores and answers" require. The store is one file,
+`src/server/audio-project-store.ts`: one function per statement of section 4 over the binding service, each with
+`Effect.tryPromise`, a rejection becoming `AudioProjectStoreFailed` (carrying its cause in `failure` only where the route logs
+it) and a lost compare-and-set or a unique violation a rule's facts depend on becoming `ChangedSinceRead`, which
+`decideAndSave` reads and decides again. The R2 calls fail with `ObjectStoreFailed`, carried by the flow or store that makes
+the call. The three machines are `audioProject`, `projectFile` and `projectNotice` in `src/server/machines/` and each gets a
+test beside the existing ones (`tests/server/machines-audio-project.test.ts` and so on, like `machines-next.test.ts`); the
+folder has no README to update. The fixed answers that are not a refusal's `say` (the hidden 404 `{ok:false}`, the routes'
+failure sentences, the file route's "File unavailable" and "Private audio is temporarily unavailable") live in an area
+answers module, `src/lib/audio-project-answers.ts`, beside `musicRequest` in `src/lib/music-request.ts` as the music
+routes do; a route passes `{ route, answer }` to `runRoute`.
+
 ## 4. The store: every statement and its class
 
 Classes: (a) plain read, (b) write guarded by key or constraint, (c) compare-and-set write, (d) decides an outcome. After
@@ -278,13 +296,13 @@ the conversion there is no (d): each (d) below becomes a plain read, a rule that
 offers design (`docs/plans/2026-11-offers-conversion.md`, section 2, "Conditions only a guard checks today" and "Guard
 failures and retries"), **the write keeps today's conditions as its compare-and-set guard** (the project is open, the
 stage is one of the allowed, the payment is paid, the count is under the cap), the rule reads the same facts first and
-refuses by name, and **a refused guard is not retried**, with one exception (the stage reset of a file revoke, F3 below): it answers what a refused write answers today. Equality with the
+refuses by name, and **a refused guard is not retried**, with one exception (the stage reset of a file revoke, FR3 below): it answers what a refused write answers today. Equality with the
 snapshot would refuse races that succeed today (an upload completing while a publish moves the stage from `in_progress`
 to `review_ready`). Two facts a rule needs together are read in one `batch`. Every new read must match no golden hook
 pattern: the hooks run just before the matching statement (`tests/golden/README.md`), so the new read sees the old row and
 the guard refuses, as today.
 
-The stage reset after a file revoke (F3) is a decision, so a rule makes it. `revokeFile` reads the file and the version's
+The stage reset after a file revoke (FR3) is a decision, so a rule makes it. `revokeFile` reads the file and the version's
 other published files (their ids) and the stage, and decides the reset: reset when no other published file of the version
 is left and the stage is the one the version resets (`review_ready` for a review; `final_files_ready` or `complete` for a
 final). The batch carries a guard that the version's other published files are the ones the rule read and that the stage is
@@ -299,16 +317,16 @@ drops the guard and the retry).
 
 | ID | Statement | Today | After |
 |---|---|---|---|
-| R1 | UPDATE `audio_projects` SET `revoked_at`... WHERE `revoked_at IS NULL` RETURNING (revocation.ts:15) | (c) | (c) |
-| R2 | UPDATE `audio_client_sessions` ... WHERE `email=(subquery by project and revocation id)` (revocation.ts:19) | (d) | (c): `email=?` with the email read first, and `EXISTS(the project's `access_revocation_id` is this request's revocation id)` kept as the guard, so a request that lost the revoke to another one ends no session |
-| R3 | DELETE `audio_client_signin_codes` WHERE `email=(subquery)` (revocation.ts:24) | (d) | (c): the same email read and the same revocation id guard (the corpus case "race: revoked by another request just before the write" keeps `tok-1` and its sign-in code) |
-| R4 | INSERT `audio_project_audit` SELECT ... WHERE revocation id (revocation.ts:29) | (b) | (b) |
-| R5 | DELETE `audio_client_codes` WHERE `email=(subquery)`, best effort (audio-client-access.ts:666-683) | (d) | (b): `email=?` with the email read first; it has no revocation link today and gets none |
-| F1 | SELECT `version,status` of the file (revocation.ts:50) | (a) | (a) |
-| F2 | UPDATE the file to revoked WHERE `status=?` AND EXISTS open project (revocation.ts:66) | (c)+(d) | (c): the read status and an open project; the rule refuses a closed project first; an empty `RETURNING` answers 409, no retry |
-| F3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file (revocation.ts:75) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read) and a batch guard that the other published files are the ones read; a moved guard rolls the batch back and `decideAndSave` re-decides |
-| F4 | INSERT audit WHERE `changes()=1` (revocation.ts:91) | (d) | (b), written with F3 only when the rule decided the reset |
-| F5 | INSERT `audio_project_updates` from the file's revocation id (revocation.ts:100) | (b) | (b) |
+| AR1 | UPDATE `audio_projects` SET `revoked_at`... WHERE `revoked_at IS NULL` RETURNING (revocation.ts:15) | (c) | (c) |
+| AR2 | UPDATE `audio_client_sessions` ... WHERE `email=(subquery by project and revocation id)` (revocation.ts:19) | (d) | (c): `email=?` with the email read first, and `EXISTS(the project's `access_revocation_id` is this request's revocation id)` kept as the guard, so a request that lost the revoke to another one ends no session |
+| AR3 | DELETE `audio_client_signin_codes` WHERE `email=(subquery)` (revocation.ts:24) | (d) | (c): the same email read and the same revocation id guard (the corpus case "race: revoked by another request just before the write" keeps `tok-1` and its sign-in code) |
+| AR4 | INSERT `audio_project_audit` SELECT ... WHERE revocation id (revocation.ts:29) | (b) | (b) |
+| AR5 | DELETE `audio_client_codes` WHERE `email=(subquery)`, best effort (audio-client-access.ts) | (d) | (b): `email=?` with the email read first; it has no revocation link today and gets none. A "no such table" failure stays silent: it becomes the normal case once migration 0028 drops `audio_client_codes` (issue #271). Any other failure logs once through `logUnexpected`, which changes the log text (today `console.error` with the error class only); no answer changes |
+| FR1 | SELECT `version,status` of the file (revocation.ts:50) | (a) | (a) |
+| FR2 | UPDATE the file to revoked WHERE `status=?` AND EXISTS open project (revocation.ts:66) | (c)+(d) | (c): the read status and an open project; the rule refuses a closed project first; an empty `RETURNING` answers 409, no retry |
+| FR3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file (revocation.ts:75) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read) and a batch guard that the other published files are the ones read; a moved guard rolls the batch back and `decideAndSave` re-decides |
+| FR4 | INSERT audit WHERE `changes()=1` (revocation.ts:91) | (d) | (b), written with FR3 only when the rule decided the reset |
+| FR5 | INSERT `audio_project_updates` from the file's revocation id (revocation.ts:100) | (b) | (b) |
 | P1 | SELECT the file (publishing.ts:26) | (a) | (a), with the project, request and payments in the same batch |
 | P2 | UPDATE the file to published WHERE status AND EXISTS(access, payments, stage) RETURNING (publishing.ts:52) | (d) | (c): `status='uploaded'` and the conditions today's EXISTS checks; the rule refuses first |
 | P3 | UPDATE the other published review files to revoked, WHERE the file's `publication_id` (publishing.ts:71) | (b) | (b) |
@@ -319,27 +337,27 @@ drops the guard and the retry).
 | I3 | UPDATE invitation to failed WHERE sending AND open, after a recipient read that threw (invitations.ts:35) | (c) | (c): sending and open, as today |
 | I4 | UPDATE invitation to sent or failed WHERE sending AND open (invitations.ts:57) | (c) | (c): sending and open, as today; an email sent just after a revoke leaves the invitation at `sending` |
 | I5 | UPDATE invitation to pending WHERE status IN, or sending and stale, AND open AND EXISTS(request kind='service', not withdrawn, email present) (invitations.ts:76) | (d) | (c): the same conditions; the rule refuses first |
-| N1 | UPDATE the update's notice pending to sending WHERE `id` AND pending (updates.ts:310) | (c) | (c): `id` and pending only. It has no access condition and none is added: a closed project's update notice is claimed, finds no recipient and ends `failed`, as today |
-| N2 | SELECT the recipient's email, filtered by status, email and access, with no kind (updates.ts:320) | (d) | (a): the columns, decided by the rule; no recipient is a failed outcome |
-| N3 | UPDATE the update's notice to failed WHERE `id` AND sending, after a recipient read that threw (updates.ts:326) | (c) | (c): `id` and sending, no access condition |
-| N4 | UPDATE the update's notice to sent or failed WHERE `id` AND sending (updates.ts:348) | (c) | (c): `id` and sending, no access condition |
-| N5 | UPDATE the update's notice to pending WHERE `id`, request, status IN or sending and stale, AND open AND EXISTS(request not withdrawn, email present), with no kind (updates.ts:368) | (d) | (c): the same conditions; the rule refuses first |
+| N1 | UPDATE the update's notice pending to sending WHERE `id` AND pending (updates.ts) | (c) | (c): `id` and pending only. It has no access condition and none is added: a closed project's update notice is claimed, finds no recipient and ends `failed`, as today |
+| N2 | SELECT the recipient's email, filtered by status, email and access, with no kind (updates.ts) | (d) | (a): the columns, decided by the rule; no recipient is a failed outcome |
+| N3 | UPDATE the update's notice to failed WHERE `id` AND sending, after a recipient read that threw (updates.ts) | (c) | (c): `id` and sending, no access condition |
+| N4 | UPDATE the update's notice to sent or failed WHERE `id` AND sending (updates.ts) | (c) | (c): `id` and sending, no access condition |
+| N5 | UPDATE the update's notice to pending WHERE `id`, request, status IN or sending and stale, AND open AND EXISTS(request not withdrawn, email present), with no kind (updates.ts) | (d) | (c): the same conditions; the rule refuses first |
 | O1 | SELECT `request_id` FROM `audio_projects` (owner messages.ts:48, inline in the route) | (a) | (a), in the read batch |
 | M1 | INSERT the owner's message SELECT FROM project and request WHERE stage, access, status (messages.ts:84) | (d) | (c): today's conditions |
-| M2 | INSERT the client's message SELECT ... session, access, stage, and a count subquery (messages.ts:109) | (d) | (c): today's conditions, the count under the cap among them |
+| M2 | INSERT the client's message SELECT ... session, access, stage, and a count subquery (messages.ts:109) | (d) | (c): today's conditions, the count under the cap among them; the rule has read the same count first |
 | M3 | INSERT the decision SELECT ... session, access, review awaiting, rounds, named review, count (messages.ts:157) | (d) | (c): today's conditions |
 | M4 | UPDATE `audio_projects` revoked WHERE EXISTS the stopped decision, in the stop batch (messages.ts:192) | (d) | (c), in the same batch as M3 |
 | M5 | INSERT audit `client-stopped` WHERE EXISTS the stopped decision (messages.ts:197) | (d) | (b) |
-| M6 | SELECT the rate count (messages.ts:259) | (a) | (a), kept as a read after any refusal of a client message or review answer; 429 beats every other refusal (section 2) |
+| M6 | SELECT the rate count (messages.ts:259) | (a), after a refused write | (a), in the read batch and again after a refused write; 429 beats every other refusal after the lookup (section 2) |
 | M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b) |
 | M8 | UPDATE the client's read mark WHERE EXISTS(session, project, request) (messages.ts:292) | (d) | (c): the session and access conditions stay as the write's guard (`token_hash`, session not revoked and not expired, project open, request not withdrawn), plus `read_at IS NULL`; the rule `markRead` reads first. The corpus case "read when the session is revoked after the lookup" fires its hook before this statement and records `read_at` null, so an unguarded write would set it |
-| U1 | INSERT a progress note WHERE stage and access (updates.ts:133) | (d) | (c) |
-| U2, U3, U4 | accept: UPDATE the project (`files_under_review`, `updated_at`, open, request reviewed), INSERT the update, INSERT the audit by `changes()=1` (updates.ts:150, 162, 167) | (c)+(d), (d), (d) | (c), (b), (b) |
-| U5, U6, U7 | start_work: UPDATE the project (`accepted`, `updated_at`, open, request not withdrawn, booking paid), INSERT the update, INSERT the audit (updates.ts:180, 186, 191) | (c)+(d), (d), (d) | (c), (b), (b) |
-| U8, U9, U10 | begin_revision: UPDATE the project (`review_ready`, `updated_at`, open, request not withdrawn, a published review), INSERT, INSERT (updates.ts:204, 211, 216) | (c)+(d), (d), (d) | (c), (b), (b); the guard drops the published-review condition, which the stage implies (section 2) |
-| U11, U12, U13 | complete: UPDATE the project (`final_files_ready`, `updated_at`, open, request status, both paid, a published final), INSERT, INSERT (updates.ts:234, 250, 255) | (c)+(d), (d), (d) | (c), (b), (b) |
-| U14, U15, U16 | revise_date: UPDATE the project (`current_due_at`, `updated_at`, not complete, open, request not withdrawn), INSERT, INSERT (updates.ts:267, 280, 295) | (c)+(d), (d), (d) | (c), (b), (b) |
-| U17 | SELECT the project state, request status and payments (updates.ts:73) | (a) | (a) |
+| U1 | INSERT a progress note WHERE stage and access (updates.ts) | (d) | (c) |
+| U2, U3, U4 | accept: UPDATE the project (`files_under_review`, `updated_at`, open, request reviewed), INSERT the update, INSERT the audit by `changes()=1` (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b) |
+| U5, U6, U7 | start_work: UPDATE the project (`accepted`, `updated_at`, open, request not withdrawn, booking paid), INSERT the update, INSERT the audit (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b) |
+| U8, U9, U10 | begin_revision: UPDATE the project (`review_ready`, `updated_at`, open, request not withdrawn, a published review), INSERT, INSERT (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b); the guard drops the published-review condition, which the stage implies (section 2) |
+| U11, U12, U13 | complete: UPDATE the project (`final_files_ready`, `updated_at`, open, request status, both paid, a published final), INSERT, INSERT (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b) |
+| U14, U15, U16 | revise_date: UPDATE the project (`current_due_at`, `updated_at`, not complete, open, request not withdrawn), INSERT, INSERT (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b) |
+| U17 | SELECT the project state, request status and payments (updates.ts) | (a) | (a) |
 | S1 | SELECT 1 WHERE EXISTS(project, request, payment, stage) (uploads.ts:40) | (d) | (a): the columns, one rule |
 | S2 | INSERT the upload row SELECT WHERE EXISTS(...) (uploads.ts:70) | (d) | (c): today's conditions |
 | S3 | SELECT the upload (uploads.ts:104) | (a) | (a) |
@@ -355,7 +373,7 @@ drops the guard and the retry).
 
 The counts of statements by class are recomputed from this table in the conversion record, where the plan's counts are updated.
 
-The sign-in area's tables. R2, R3 and R5 write `audio_client_sessions`, `audio_client_signin_codes` and
+The sign-in area's tables. AR2, AR3 and AR5 write `audio_client_sessions`, `audio_client_signin_codes` and
 `audio_client_codes`, which the studio sign-in area (step 2 of the plan, converted by another change) owns. This area's
 store carries those three statements as named functions (`endClientSessions`, `deleteClientSigninCodes`,
 `deleteRetiredClientCodes`), each taking the email, and the sign-in area's conversion reuses them rather than redefining
@@ -370,7 +388,7 @@ owner and a hidden answer for the client).
 
 `audio_project_close_declined_request` (owner status area): the owner declining a request still at `files_under_review`
 sets the project's `revoked_at` and writes an audit row (`migrations/music/0015_audio_project_close_declined.sql`). This
-area does not fire it, but it is the second writer of `revoked_at` besides R1 and M4, and every guard in section 4 that
+area does not fire it, but it is the second writer of `revoked_at` besides AR1 and M4, and every guard in section 4 that
 names the access checks `revoked_at IS NULL` at the write, so a decline in the middle of any protocol is a lost guard and
 is modelled as access closing (the models' `ownerRevokes` step). It is named in the rule files that read the access.
 
@@ -380,7 +398,7 @@ A read followed by a write that depends on it, where another request can change 
 statement holds the whole decision. After the conversion the rule reads first and the write re-checks today's conditions
 (section 4), so the old single-statement atomicity stays for each write, and what the models check is the set of
 conditions each write keeps: each is needed, and none is missing. A refused guard is not retried, with one exception: the
-stage reset after a file revoke (section 4, F3) is decided by a rule, its batch guard raises when the facts moved, and the
+stage reset after a file revoke (section 4, FR3) is decided by a rule, its batch guard raises when the facts moved, and the
 files model has that retry (three tries in all).
 
 How the properties are written. Each property reads the stored rows, never a flag set from the guard that is being
@@ -389,18 +407,17 @@ checked. Every write takes the next stamp of one counter (the order D1 serialize
 no message is stamped after the close, no revision round began between the review a decision names and the decision, and
 so on. The one exception is the world in the notices model (the emails that went out), which is not a row.
 
-The models are written before any code and run in the pooled driver (`verify:quint:all`). Measured on a 12-core laptop
-shared with other work (load average about 40), the whole driver exits 0 in about 64 seconds of wall time and 398 seconds of
-CPU time with the three models in the pool, against 77 and 396 for the first version of the three models, so the change to
-stamped properties and the retry did not move the figure. The plan's budget is 2 minutes 30 seconds on a 4-core CI runner,
-which this has not been measured on (UNVERIFIED until CI reports it).
+The models are written before any code and run in the pooled driver (`verify:quint:all`). The whole driver exits 0 in about
+64 seconds of wall time and 398 seconds of CPU time with the three models in the pool, against 77 and 396 for the first
+version of the three models, so the change to stamped properties and the retry did not move the figure. The plan's budget is
+2 minutes 30 seconds on a 4-core CI runner, which this has not been measured on (UNVERIFIED until CI reports it).
 
 **Messages and review decisions** (`verification/audio-project-messages.qnt`, module `projectMessages`). Three requests,
 a client session, the owner's publishing, beginning a revision and closing access between a request's read and its write,
 and a clock for the 5 minute window (scaled: 2 messages in 2 ticks, 2 revision rounds). The session is read first and the
 rest in one batch; the model takes both as one step (a session that ends between them is the same fact as one that ends
 after the batch, and the write re-checks it). The write is one statement that checks today's conditions and the rate count
-(the count is the write's own and not a rule input, section 2), the stop one batch. A write the guard refuses writes
+(the rule reads the same count first, section 2), the stop one batch. The owner may begin any number of rounds, as the code allows; the model reaches at most three, a bound on the search and not a rule. A write the guard refuses writes
 nothing and the request answers what a refused write answers today (409, or 429 when the count is full): the corpus cases
 "send when the session is revoked after the lookup" and the nine like it record exactly that.
 
@@ -410,6 +427,7 @@ nothing and the request answers what a refused write answers today (409, or 429 
 | `oneDecisionPerReview`: the decisions that name a review are at most one | `NoDecision`: no check of the decisions since the review |
 | `decisionNamesLatestReview`: no review was published between the one an answer names and the answer | `NoReview`: no check of the latest review |
 | `changesWithinRounds`: the rounds begun before a change request are fewer than two, before a stop are two | `RuleNoRounds`: neither the rule nor the write checks the rounds |
+| (equivalent mutants, which keep every property) | `WriteNoRounds`: only the write drops its rounds check, and it is not reachable in a race: a round is begun by leaving `review_ready`, and the way back is a newer review, which the write's checks of the stage and of the latest review already refuse, so the write's rounds check is redundant but kept as today's condition; `RuleNoCount`: only the rule drops its count read, and the write's guard refuses |
 | `writtenForOpenAccess`: no message is stamped after the close or the session's end | `NoAccess`: no check of session and access |
 | `answeredInReviewStage`: no revision round began between the review an answer names and the answer | `NoStage`: no check of the stage |
 | `stopClosesAccess`: no state holds the stopped decision with the access open | `StopSplit`: the close is a separate statement after the decision |
@@ -436,14 +454,14 @@ back and the request reads again (a third failure answers 409), while a file who
 | `completedOnlyWhenPaid`: the completion's stamp precedes the voiding of the booking and of the balance | `CompleteNoPayment` |
 | `fileHasObject`: an uploaded or published file has its R2 object | `AbortNoCas`: abort deletes the object without first marking the row discarding; `InsertNoState`: the insert does not require a pending upload row |
 
-Findings from writing it. The old completion statement also required a published final (updates.ts:243), but its stage
+Findings from writing it. The old completion statement also required a published final (updates.ts), but its stage
 condition already implies it, because revoking the last final resets the stage in the same batch; the model's completion
 therefore checks the stage and the payments, and a mutant that drops the stage breaks the property. The same holds for the
 published-review condition of `begin_revision` (U8): `review_ready` implies a published review, so the design's rule names
 the fact and the write's guard does not repeat it (section 2). The stage reset after a revoke must be decided from facts
-the write still sees (section 4, F3): a reset decided from the count the read saw and written without the guard leaves a
+the write still sees (section 4, FR3): a reset decided from the count the read saw and written without the guard leaves a
 project at `final_files_ready` with no published final when two finals are revoked at once (`RevokeStaleReset`). The
-revoke also requires an open project (F2), which the model checks as part of its guard. A separate property for "no file
+revoke also requires an open project (FR2), which the model checks as part of its guard. A separate property for "no file
 row comes from an upload being discarded" was dropped: such a file has no object (the abort deleted it), so `fileHasObject`
 covers it, and `InsertNoState` breaks that property.
 
@@ -468,7 +486,7 @@ condition has no stored effect beyond its own answer (409): a delivery that foll
 nothing (the invitation's claim refuses it, the update notice's recipient read is empty), which `oneEmailInTotal` and
 `sentMeansMailed` already cover. The condition stays in the write as a guard (I5, N5).
 
-Not modelled, and why: revoking access is one batch of atomic statements (R1 to R4) and a sign-in racing it is the studio
+Not modelled, and why: revoking access is one batch of atomic statements (AR1 to AR4) and a sign-in racing it is the studio
 sign-in area's model (`signin-codes.qnt`, `noAuditForClosedProject`); the client's file read is a read with no write but
 the access upsert (B3, a key-guarded upsert); the update batches U2 to U16 already carry `updated_at` and the stage as
 conditions, which the files model covers for the same facts, and a lost guard answers 409 with no retry because the owner's
@@ -486,15 +504,15 @@ Each is fixed on `claude/effect-15-audio-projects-fixes`, tests first, by the st
 
 | ID | Defect | Fix |
 |---|---|---|
-| F1 | An unexpected failure of a D1 call in each handler answers 503 with the route's sentence: the `catch` at access.ts:40, invitation.ts:64, messages.ts:88, updates.ts:108, uploads.ts:120 and 176, files/[fileId].ts:110, and the studio routes at messages.ts:188 and files/[fileId].ts:60. The standing rule says 500 and the sentence unchanged. What can throw inside each `try` is a D1 call and, in the uploads, the owner file and the studio file routes, an R2 call. | The `catch` answers 500 with the same sentence, except where the thrown thing is a known condition (F2, and F4). A missing binding and a missing context stay 503. The corpus cases that record a failed D1, R2 or KV call change, each only in status (the cases that answer 503 for a missing binding do not). |
+| F1 | An unexpected failure of a D1 call in each handler answers 503 with the route's sentence: the `catch` at access.ts:40, invitation.ts:64, messages.ts:88, updates.ts, uploads.ts:120 and 176, files/[fileId].ts:110, and the studio routes at messages.ts:188 and files/[fileId].ts:60. The standing rule says 500 and the sentence unchanged. What can throw inside each `try` is a D1 call and, in the uploads, the owner file and the studio file routes, an R2 call. | The `catch` answers 500 with the same sentence, except where the thrown thing is a known condition (F2, and F4). A missing binding and a missing context stay 503. The corpus cases that record a failed D1, R2 or KV call change, each only in status (the cases that answer 503 for a missing binding do not). |
 | F2 | A part put while the upload is being discarded throws "This upload is being discarded." from `putProjectUploadPart` (uploads.ts:166) and the PUT answers 503. It is a lost race. | 409 with the PUT route's own sentence, "This part could not be uploaded. Please try again." (a status change only; a sentence that names the lost race would be a copy choice for the owner). |
-| F4 | R2 error 10024 ("the specified multipart upload does not exist") on a part put or on a completion answers 503 today: the abort or the incomplete-upload lifecycle got there first, which is a lost race and not an outage. A completion that R2 refuses because a listed part is missing or its entity tag does not match (R2's invalid part error) answers 503 too, where the route's own check of the same parts (count, order, tag length) answers 409. | A part put: 409 with the PUT route's own sentence, as F2. A completion: on 10024 the flow asks R2 for the object again, as the abort path does (`audio-project-uploads.ts` after a failed `abort`): if the object exists the completion continues to the file row (a later completion finds the object and answers 200 today), and if not it answers 409, "This upload cannot be finished now.", the sentence the same row's refused completion answers. A completion R2 refuses for a missing part or a wrong tag: 409 with the same sentence, matching the route's own parts check. No new sentence. The corpus cases "put: R2 fails to take the part", "complete: no object and R2 fails to complete" and "complete with a wrong etag" change status (and the first and last also the sentence of the complete case). Any other R2 failure stays 500. |
+| F3 | The studio file route answers 503 when the object's size differs from the row (files.ts:131). An inconsistent stored state is not an unavailable service. | 500, the same body ("File unavailable"). |
+| F4 | R2 error 10024 ("the specified multipart upload does not exist") on a part put or on a completion answers 503 today: the abort or the incomplete-upload lifecycle got there first, which is a lost race and not an outage. R2 error 10058 (concurrent writes to one key) can reach the losing completion of two at once, with the same effect. A completion that R2 refuses because a listed part is missing or its entity tag does not match (R2's invalid part error) answers 503 too, where the route's own check of the same parts (count, order, tag length) answers 409. | A part put: 409 with the PUT route's own sentence, as F2. A completion: on 10024 or 10058 the flow asks R2 for the object again, as the abort path does (`audio-project-uploads.ts` after a failed `abort`): if the object exists the completion continues to the file row (a later completion finds the object and answers 200 today), and if not it answers 409, "This upload cannot be finished now.", the sentence the same row's refused completion answers. A completion R2 refuses for a missing part or a wrong tag: 409 with the same sentence, matching the route's own parts check. No new sentence. Six corpus cases change from 500 (after F1) to 409: "complete: no object in R2 and the parts were never uploaded", "complete: no object and R2 no longer has the multipart upload", "complete: both parts of a two-part file, but part 1 was never uploaded", "put: R2 no longer has the multipart upload", "flow: start, put, complete with a wrong etag" and "flow: a two-part file, the short last part, then a failed complete". "put: R2 fails to take the part" and "complete: no object and R2 fails to complete" are other R2 failures and only change from 503 to 500 (F1). |
 | F5 | The studio file route's 500 for a size mismatch (F3) logs nothing. | One fixed line through `logUnexpected`, as the other 500 answers log. |
-| F3 | The studio file route answers 503 when the object's size differs from the row (files.ts:131). An inconsistent stored state is not an unavailable service. | 500, the same body ("File unavailable"). Judgment call, in "What the owner is asked". |
 
 Not fixed, with the reason:
 
-- STOP, wording. A failed file revoke answers with the publish route's sentence, "The file could not be published. Please
+- Left for the owner (a new sentence is a copy choice). A failed file revoke answers with the publish route's sentence, "The file could not be published. Please
   try again." (files/[fileId].ts:112), because the route has one `catch` for both actions. A sentence that names the revoke
   is a new copy line, so it is the owner's; today's sentence is kept on the revoke path with the status 500.
 - The invitation's outcome write requires an open project (invitations.ts:62), so an email sent just after a revoke leaves
@@ -515,8 +533,10 @@ Today's behaviour, kept (not defects and not questions):
 ## 8. Answers and what changes in the corpus
 
 On the fixes branch the changed cases are the outage cases of the nine corpora (F1, status 503 to 500, body sentence
-unchanged), one uploads PUT case (F2), the studio file case "R2 head size differs" (F3, and its log line, F5), and the three R2 cases of F4. Every other case
-is byte-identical. On the conversion branch `golden:neutral --all <fixes tip> HEAD` must print NEUTRAL; the changed D1
+unchanged), one uploads PUT case (F2), the studio file cases with a wrong object size (F3, and the log line of F5), and the six R2 cases of F4. Two cases are added on the
+fixes branch for the lookup order (a client message with a full rate window while the session is revoked, and while the
+project is closed: today 404 with no count read); they record today's behaviour and change none. Every other case is
+byte-identical. On the conversion branch `golden:neutral --all <fixes tip> HEAD` must print NEUTRAL; the changed D1
 statements of section 4 are the expected "neutral with D1 changes".
 
 Input readers (Effect Schema, in `src/server/audio-project-input.ts`, with frozen Zod copies under
@@ -526,7 +546,8 @@ is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId`; `
 
 ## 9. The PR stack
 
-1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes.
+1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes. It merges before
+   the fixes PR (the stack order), and the fixes PR is cut from it.
 2. `claude/effect-15-audio-projects-fixes`: F1 to F5, each reproduced by a failing test first; fixture re-records in
    commits that contain fixture files only.
 3. `claude/effect-15-audio-projects`: the conversion; the record `docs/prelaunch-qa-2026-11-15-audio-projects.md`; step 7

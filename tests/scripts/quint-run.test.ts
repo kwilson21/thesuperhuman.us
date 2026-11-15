@@ -418,7 +418,12 @@ describe("the audio project messages model", () => {
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(audioProjectMessagesMutants), "projectMessages"].sort(),
+			[
+				...Object.keys(audioProjectMessagesMutants),
+				"projectMessages",
+				"projectMessagesWriteNoRounds",
+				"projectMessagesRuleNoCount",
+			].sort(),
 		);
 	});
 

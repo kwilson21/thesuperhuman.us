@@ -251,7 +251,7 @@ export const models = [
 		file: "verification/audio-project-messages.qnt",
 		current: ["projectMessages"],
 		mutants: audioProjectMessagesMutants,
-		equivalents: [],
+		equivalents: ["projectMessagesWriteNoRounds", "projectMessagesRuleNoCount"],
 		exhaustive: [],
 		samples: "20000",
 		passSamples: "8000",
