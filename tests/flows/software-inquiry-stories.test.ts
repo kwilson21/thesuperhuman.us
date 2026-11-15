@@ -427,5 +427,7 @@ describe("a storage failure", () => {
 
 		expect(answer).toEqual({ kind: "tooLarge" });
 		expect(logged).toHaveBeenCalledTimes(1);
+		// The log names no one: not the visitor's name, address or words.
+		expect(JSON.stringify(logged.mock.calls)).not.toMatch(/alex|example|xxxx/i);
 	});
 });

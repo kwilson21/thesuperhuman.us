@@ -1761,3 +1761,21 @@ it("words the client copy of a website brief in the client’s voice", () => {
 	expect(copy.text).toContain("Current website\nhttps://jordanclay.example");
 	expect(`${copy.text}${copy.html}`).not.toContain("What they already have");
 });
+
+it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
+	const response = await POST(
+		context({
+			...websiteInput,
+			purpose: `${'"'.repeat(1999)}x`,
+			currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
+			existing: '"'.repeat(2000),
+			company: '"'.repeat(120),
+			timingReason: '"'.repeat(500),
+			budgetNote: '"'.repeat(200),
+			approver: "other",
+			approverRole: '"'.repeat(120),
+		}),
+	);
+
+	expect(response.status).toBe(200);
+});
