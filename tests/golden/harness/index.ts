@@ -21,7 +21,7 @@ export { START, uuidFor } from "./determinism";
 
 export type { InjectedFailure, Interleave } from "./d1";
 
-export type { Effect, EffectBody } from "./log";
+export { EffectLog, type Effect, type EffectBody } from "./log";
 
 export {
 	aiAfter,
@@ -31,6 +31,7 @@ export {
 	byHost,
 	json,
 	networkDown,
+	recordingFetch,
 	text,
 	type AiAnswer,
 	type FetchAnswer,

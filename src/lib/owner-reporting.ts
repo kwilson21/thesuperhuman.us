@@ -329,6 +329,9 @@ export async function loadCampaignDesk(
 		subjectType: row.subject_type,
 		subjectId: row.subject_id,
 		status: row.status,
+		// SAFETY: no application code writes secondary_signals. migrations/music/0001_music_schema.sql declares it NOT NULL DEFAULT '[]',
+		// so the column holds that default unless something outside the application writes it. Nothing in the schema enforces that
+		// the value is a JSON array of strings, so this cast is an assumption about the stored data.
 		secondarySignals: JSON.parse(row.secondary_signals) as string[],
 		approvedPlan: row.approved_plan,
 		retrospective: row.retrospective,

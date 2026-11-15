@@ -1,3 +1,4 @@
+import { deleteRetiredCodes } from "./audio-client-access";
 import { retireRequestSigning } from "./software-agreements";
 import { depositOfferBlock, depositOfferGuard } from "./software-invoices";
 import {
@@ -18,6 +19,7 @@ import {
 	type OwnerRequestKind,
 	type OwnerRequestRow,
 	type OwnerRequestStatus,
+	type RequestDetails,
 } from "./owner-model";
 
 export type NewOwnerRequest = {
@@ -29,7 +31,7 @@ export type NewOwnerRequest = {
 	email: string;
 	cityRegion?: string;
 	summary: string;
-	details?: Record<string, unknown>;
+	details?: RequestDetails;
 	submissionId?: string;
 };
 
@@ -411,6 +413,9 @@ export async function changeOwnerRequest(
 			throw new Error(offerSendingMessage);
 		throw error;
 	}
+
+	if (current.kind === "software" && command.action === "withdraw")
+		await deleteRetiredCodes(db, command.id);
 
 	const update =
 		results[

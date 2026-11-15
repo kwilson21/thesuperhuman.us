@@ -1,3 +1,4 @@
+import type { RawValue } from "./fields";
 import { hashValue } from "./audio-client-access";
 import { nonHttpsLinkText } from "./link-check";
 import { isText } from "./type-guards";
@@ -21,7 +22,8 @@ const messageColumns = "id,actor,body,created_at,read_at,review_decision";
 const CLIENT_MESSAGE_WINDOW_MS = 300_000;
 const CLIENT_MESSAGE_LIMIT = 12;
 
-export function validateProjectMessage(value: unknown): string | null {
+/** `value` is the message text from a request body; only text is read. */
+export function validateProjectMessage(value: RawValue): string | null {
 	if (!isText(value)) return null;
 	const body = value.trim();
 
