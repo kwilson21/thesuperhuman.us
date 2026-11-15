@@ -34,7 +34,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 - A behaviour fix goes in its own PR before the conversion of its area (golden rule 1).
 - An area is converted completely and reaches `main` in one merge; no ratchets and no legacy lists. A large area may be
   reviewed as a stack of PRs, but only the bottom PR targets `main`; the PRs above it are merged into it, in order,
-  before it merges, so `main` (and production, since every merge deploys) never holds a partly converted area.
+  before it merges, so `main` (and production, since every merge deploys) never holds a partly converted area. The
+  repository keeps merged branches, so after a PR in the middle of a stack merges, the PR above it is retargeted by
+  hand to the branch below.
 - An area's design comes before its code: its XState diagrams (the states and moves the area's machine will have), and
   its Quint model where the list below names one, are reviewed in the area's first PR, before any conversion code. For
   offers, the offer version and installment machines are already drawn (docs/plans/2026-11-discount-flow.md, section
@@ -94,12 +96,14 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
     that the decision covers it). The `audio_project_close_declined_request` trigger stays and is named in its rule
     file.
 13. **Finish.** The content collections stop importing Zod (see "Library boundaries"); remove the Zod import from
-    `src/server/failure.ts`; delete `tests/fixtures/legacy-validators/` and the differential test, as their headers
-    say, with `tests/server/validator-types.test.ts` and `tests/architecture/legacy-validators.test.ts`; convert the
+    `src/server/failure.ts`; delete `tests/fixtures/legacy-validators/`, as the copies' headers say, with the tests
+    that read it (`tests/server/validators-differential.test.ts`, `tests/server/validator-types.test.ts` and
+    `tests/architecture/legacy-validators.test.ts`, whose own header says it goes with the directory); convert the
     test helpers and tests that still import Zod (`tests/helpers/astro-content.ts`, `tests/security/failure.test.ts`,
     `tests/lib/software-agreements.test.ts` and any others by then) and `scripts/prepare-music.mjs`, which parses with
     the music Zod schemas; then add the architecture test that fails on any Zod import in `src/`, `scripts/` or
-    `tests/` (added only once nothing imports it, so it is not a ratchet). `zod` stays in `package.json` as the MCP SDK's required peer.
+    `tests/` (added only once nothing imports it, so it is not a ratchet). `zod` stays in `package.json` as the MCP
+    SDK's required peer.
     Then the five database triggers move into code, after the last conversion layer as issue 242 sets out, one PR
     each: `audio_project_after_service_request` (intake: the request and the project it creates must be written
     together, so it gets a Quint model), `audio_project_close_declined_request` (owner status),
