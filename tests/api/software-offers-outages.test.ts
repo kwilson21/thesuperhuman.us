@@ -62,6 +62,8 @@ type Race = { readonly on: RegExp; readonly sql: string };
 type Bucket = {
 	readonly objects?: Readonly<Record<string, Uint8Array>>;
 	readonly fails?: readonly ("get" | "delete")[];
+	/** get() rejects from its n-th call on (the calls before it answer). */
+	readonly getFailsFrom?: number;
 };
 
 type World = {
@@ -148,12 +150,19 @@ function faultyDb(sql: SqliteDatabase, world: World): D1Database {
 
 function r2(bucket: Bucket): R2Bucket {
 	const objects = new Map(Object.entries(bucket.objects ?? {}));
+	let gets = 0;
 
 	return double<R2Bucket>({
 		// SAFETY: get() is overloaded (with and without conditional options), so one function cannot be typed as the member;
 		// the route calls get(key) and reads only size and arrayBuffer() of the object, which the double supplies.
 		get: (async (key: string) => {
-			if (bucket.fails?.includes("get")) throw new Error(SECRET);
+			gets += 1;
+
+			if (
+				bucket.fails?.includes("get") ||
+				gets >= (bucket.getFailsFrom ?? Number.POSITIVE_INFINITY)
+			)
+				throw new Error(SECRET);
 			const bytes = objects.get(key);
 
 			return bytes
@@ -577,55 +586,94 @@ describe("signing: preparing the agreement", () => {
 		unsent(sql);
 	});
 
-	it("a reused MSA and no R2 binding: 503 before the packet is rendered, nothing written", async () => {
-		const { sql, call } = setUp({
-			signing: true,
-			faults: [
-				// The preflight's read of the MSA would fail: it is never made.
-				{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
+	/** A draft that reuses an executed MSA from another offer, with its signed copy in R2. */
+	const reusing = (over: Partial<World> = {}): World => ({
+		signing: true,
+		bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
+		seed: {
+			...signingBase(),
+			owner_requests: [request()],
+			software_agreements: [executedMsa()],
+			software_agreement_artifacts: [readyArtifact()],
+			software_offers: [
+				offer("draft", 1, {
+					agreement_details_json: JSON.stringify(details()),
+					reused_msa_id: MSA_ID,
+				}),
 			],
-			seed: {
-				...signingBase(),
-				owner_requests: [request()],
-				software_agreements: [executedMsa()],
-				software_agreement_artifacts: [readyArtifact()],
-				software_offers: [
-					offer("draft", 1, {
-						agreement_details_json: JSON.stringify(details()),
-						reused_msa_id: MSA_ID,
-					}),
+		},
+		...over,
+	});
+
+	it("a reused MSA with its signed copy in R2 is sent", async () => {
+		const { sql, call } = setUp(reusing());
+
+		expect((await read(await call(send))).status).toBe(200);
+		expect(sql.prepare("SELECT status FROM software_offers").get()).toEqual({
+			status: "sent",
+		});
+	});
+
+	it.each<[string, Partial<World>]>([
+		[
+			"the reused MSA read",
+			{
+				faults: [
+					{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
 				],
 			},
-		});
+		],
+		[
+			"the signed MSA's artifact read",
+			{
+				faults: [
+					{ on: /SELECT pdf_key,pdf_sha256 FROM software_agreement_artifacts/ },
+				],
+			},
+		],
+		[
+			"the signed MSA's R2 read",
+			{ bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES }, fails: ["get"] } },
+		],
+	])("%s in the preflight fails: 500", async (_name, over) => {
+		const { sql, call } = setUp(reusing(over));
 
-		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
+		expect(await read(await call(send))).toEqual(answer(500, FAILED));
 		unsent(sql);
 	});
 
-	it("the reused MSA read in the preflight fails: 500", async () => {
-		const world = signing();
-
-		const { sql, call } = setUp({
-			...world,
-			bucket: { objects: { [MSA_PDF_KEY]: PDF_BYTES } },
-			faults: [
-				{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
-			],
-			seed: {
-				...signingBase(),
-				owner_requests: [request()],
-				software_agreements: [executedMsa()],
-				software_agreement_artifacts: [readyArtifact()],
-				software_offers: [
-					offer("draft", 1, {
-						agreement_details_json: JSON.stringify(details()),
-						reused_msa_id: MSA_ID,
-					}),
-				],
-			},
-		});
+	it("an attachment's R2 read in the preflight fails after the route's own read passed: 500", async () => {
+		const { sql, call } = setUp(
+			signing({
+				bucket: { objects: { [ATTACHMENT_KEY]: PDF_BYTES }, getFailsFrom: 2 },
+			}),
+		);
 
 		expect(await read(await call(send))).toEqual(answer(500, FAILED));
+		unsent(sql);
+	});
+
+	it("a signed MSA missing from R2 is still incomplete details: 400", async () => {
+		const { sql, call } = setUp(reusing({ bucket: { objects: {} } }));
+
+		expect(await read(await call(send))).toEqual(
+			answer(400, "Complete and validate Agreement details before sending."),
+		);
+		unsent(sql);
+	});
+
+	it("a reused MSA and no R2 binding: 503 before the packet is rendered, nothing written", async () => {
+		const { sql, call } = setUp(
+			reusing({
+				bucket: undefined,
+				// The preflight's read of the MSA would fail: it is never made.
+				faults: [
+					{ on: /FROM software_agreements WHERE id=\? AND status='executed'/ },
+				],
+			}),
+		);
+
+		expect(await read(await call(send))).toEqual(answer(503, NO_STORAGE));
 		unsent(sql);
 	});
 
