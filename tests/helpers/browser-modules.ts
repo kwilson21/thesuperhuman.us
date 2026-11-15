@@ -9,6 +9,8 @@
  * Adding a name is a review decision: read the file for server work first.
  */
 export const BROWSER_MODULES: readonly string[] = [
+	"src/data/navigation-inventory.json",
+	"src/lib/host-routing.ts",
 	"src/lib/agreement-client-fields.ts",
 	"src/lib/agreement-draft-fields.ts",
 	"src/lib/audio-intake.ts",
