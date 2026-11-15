@@ -4,12 +4,21 @@
 // Code modelled (today each write is one statement or batch with its conditions in the WHERE; after the conversion a read,
 // a rule and a guarded write, which is what the model has):
 //   the read:     one batch reads the facts a rule uses: the project (access, stage), the request's status, the payments and the
-//                 file or upload row; R2 is a separate call (createMultipartUpload, complete, head, delete, abort)
+//                 file or upload row (for a revoke also the version's other published files); R2 is a separate call
+//                 (createMultipartUpload, complete, head, delete, abort)
 //   the write:    ONE statement or batch that changes a row only while the conditions the rule used still hold now (the guard
 //                 keeps today's conditions, as the offers design does), and that revokes the review files a publish replaces;
-//                 a lost guard is not retried, the request answers what a refused write answers today (409)
+//                 a lost guard is not retried, the request answers what a refused write answers today (409). One write is
+//                 different: a revoke's stage reset is decided by the rule from the read (no other published file of the
+//                 version is left), and its batch carries a guard that the other published files and the stage are the ones
+//                 read; a moved guard rolls the batch back and the request reads and decides again (three tries in all, as
+//                 `decideAndSave` does), while the file's own guard (the status read, an open project) answers 409 at once
 //   the upload:   the row is created before the file exists; `abort` marks it discarding in one guarded statement (only while
 //                 no file row exists) and only then deletes the object; a file row is inserted only from a pending upload row
+// The properties read the stored rows and never a flag set from a guard. Every write takes the next stamp of one counter
+// (`seq`, the order D1 serializes the statements in, as the tables' timestamps order them), and the project's access, the
+// request's withdrawal and the payments carry the stamp of the move that ended them (0 while they hold), as `revoked_at` and
+// a payment's status change do. A payment that was never paid carries the first stamp.
 // What is left out, on purpose: the file's name, size, peaks and expiry, the notices queued by a publish or revoke (the
 // notices model), the client's reads of a file, the audit rows, and the bytes of the parts.
 //
@@ -24,35 +33,37 @@ module audioProjectFiles {
   //   "publish-no-payment"    a publish does not compare the payments
   //   "publish-no-stage"      a publish does not compare the stage
   //   "no-supersede"          a publish does not revoke the review it replaces
-  //   "revoke-no-others"      a revoke does not compare the other published files of its version
+  //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
+//                           are still the ones read (and without the retry)
   //   "complete-no-stage"     a completion does not compare the stage
   //   "complete-no-payment"   a completion does not compare the payments
   const MUTANT: str
 
-  // A file row. status "none" is no row; the ghosts are set from the state the write found.
-  type File = { version: str, status: str, openAtInsert: bool, upload: str, allowedAtPublish: bool }
+  // A file row. status "none" is no row; insAt and pubAt are the stamps of its insert and publication (0 for none).
+  type File = { version: str, status: str, insAt: int, pubAt: int }
   // The facts one read saw.
   type Snap = {
     revoked: bool, withdrawn: bool, booking: bool, balance: bool, stage: str,
-    fileStatus: str, upload: str, object: bool, othersLive: int, finalLive: int,
+    fileStatus: str, upload: str, object: bool, others: Set[int], finalLive: int,
   }
-  // One request: kind "upload", "publish", "revoke" or "complete", on file `id`; and its phase.
-  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap }
+  // One request: kind "upload", "publish", "revoke" or "complete", on file `id`; its phase; and the reads a revoke made.
+  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int }
 
   // The project, its files, its uploads and R2, in one record so a step names only what it changes.
   type World = {
     files: int -> File,
     ups: int -> str,         // the upload rows: "none", "pending" or "discarding"
     upVersion: int -> str,
-    upOpen: int -> bool,     // ghost: the project's access was open when the upload row was written
+    upAt: int -> int,        // the stamp of the upload row's write (0 for none)
     mp: int -> bool,         // R2: the multipart upload is alive
     obj: int -> bool,        // R2: the object exists
-    revoked: bool,
-    withdrawn: bool,
-    booking: bool,
-    balance: bool,
+    seq: int,                // the last stamp taken
+    revokedAt: int,          // the stamp of the project's close (0 while open): `revoked_at`
+    withdrawnAt: int,        // the stamp of the request's withdrawal (0 while not withdrawn)
+    bookingVoidAt: int,      // the stamp of the booking's voiding (0 while paid)
+    balanceVoidAt: int,      // the stamp of the balance's voiding (0 while paid; 1 when it was never paid)
     stage: str,
-    completedPaid: bool,     // ghost: the payments were paid when the project was completed
+    completedAt: int,        // the stamp of the completion (0 while not complete): `completed_at`
   }
   var w: World
   var runs: int -> Run
@@ -63,10 +74,16 @@ module audioProjectFiles {
 
   val noSnap = {
     revoked: false, withdrawn: false, booking: false, balance: false, stage: "in_progress",
-    fileStatus: "none", upload: "none", object: false, othersLive: 0, finalLive: 0,
+    fileStatus: "none", upload: "none", object: false, others: Set(), finalLive: 0,
   }
-  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap }
-  val noFile = { version: "review", status: "none", openAtInsert: true, upload: "pending", allowedAtPublish: true }
+  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0 }
+  val noFile = { version: "review", status: "none", insAt: 0, pubAt: 0 }
+
+  // The facts the rules and guards read, from the stamps.
+  def isRevoked: bool = w.revokedAt > 0
+  def isWithdrawn: bool = w.withdrawnAt > 0
+  def bookingPaid: bool = w.bookingVoidAt == 0
+  def balancePaid: bool = w.balanceVoidAt == 0
 
   // ---- Rules, from the plain columns -------------------------------------------------------------------------------
   def openStage(s: str): bool = s == "in_progress" or s == "review_ready" or s == "revision_in_progress"
@@ -83,34 +100,34 @@ module audioProjectFiles {
   }
 
   // The published files of a version, other than file `id`.
-  def liveOthers(version: str, id: int): int =
-    IDS.filter(i => i != id and w.files.get(i).status == "published" and w.files.get(i).version == version).size()
+  def liveOtherIds(version: str, id: int): Set[int] =
+    IDS.filter(i => i != id and w.files.get(i).status == "published" and w.files.get(i).version == version)
 
   def liveOf(version: str): int =
     IDS.filter(i => w.files.get(i).status == "published" and w.files.get(i).version == version).size()
 
   def snapOf(id: int): Snap = {
-    revoked: w.revoked, withdrawn: w.withdrawn, booking: w.booking, balance: w.balance, stage: w.stage,
+    revoked: isRevoked, withdrawn: isWithdrawn, booking: bookingPaid, balance: balancePaid, stage: w.stage,
     fileStatus: w.files.get(id).status, upload: w.ups.get(id), object: w.obj.get(id),
-    othersLive: liveOthers(w.files.get(id).version, id), finalLive: liveOf("final"),
+    others: liveOtherIds(w.files.get(id).version, id), finalLive: liveOf("final"),
   }
 
   // The guards of the writes, each the conditions the code checks today, now. A mutant leaves one out.
   def uploadGuard(version: str): bool = and {
-    MUTANT == "start-no-access" or (not(w.revoked) and not(w.withdrawn)),
-    w.booking,
+    MUTANT == "start-no-access" or (not(isRevoked) and not(isWithdrawn)),
+    bookingPaid,
     openStage(w.stage) or (version == "final" and w.stage == "final_files_ready"),
   }
 
   def insertGuard(version: str): bool = and {
-    MUTANT == "insert-no-access" or (not(w.revoked) and not(w.withdrawn)),
-    w.booking,
+    MUTANT == "insert-no-access" or (not(isRevoked) and not(isWithdrawn)),
+    bookingPaid,
     openStage(w.stage) or (version == "final" and w.stage == "final_files_ready"),
   }
 
   def publishGuard(version: str): bool = and {
-    MUTANT == "publish-no-access" or (not(w.revoked) and not(w.withdrawn)),
-    MUTANT == "publish-no-payment" or (w.booking and (version == "review" or w.balance)),
+    MUTANT == "publish-no-access" or (not(isRevoked) and not(isWithdrawn)),
+    MUTANT == "publish-no-payment" or (bookingPaid and (version == "review" or balancePaid)),
     MUTANT == "publish-no-stage" or (if (version == "review") openStage(w.stage) else (openStage(w.stage) or w.stage == "final_files_ready")),
   }
 
@@ -122,6 +139,7 @@ module audioProjectFiles {
   // ---- Start ------------------------------------------------------------------------------------------------------
   action init = {
     nondet scenario = Set("fresh", "review", "final", "reviewPlus", "finalPlus", "finalBoth").oneOf()
+    val paidBalance = scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth"
     all {
       w' = {
         files: IDS.mapBy(i =>
@@ -133,14 +151,13 @@ module audioProjectFiles {
           else noFile),
         ups: IDS.mapBy(i => "none"),
         upVersion: IDS.mapBy(i => "review"),
-        upOpen: IDS.mapBy(i => true),
+        upAt: IDS.mapBy(i => 0),
         mp: IDS.mapBy(i => false),
         obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth")),
-        revoked: false, withdrawn: false, booking: true,
-        balance: scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth",
+        seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
         stage: if (scenario == "review" or scenario == "reviewPlus") "review_ready"
-               else if (scenario == "final" or scenario == "finalPlus" or scenario == "finalBoth") "final_files_ready" else "in_progress",
-        completedPaid: true,
+               else if (paidBalance) "final_files_ready" else "in_progress",
+        completedAt: 0,
       },
       runs' = RUNS.mapBy(r => idleRun),
     }
@@ -193,22 +210,29 @@ module audioProjectFiles {
     val f = w.files.get(h.id)
     val fresh = f.status == s.fileStatus
     val rev = f.version
-    val others = liveOthers(rev, h.id)
+    val at = w.seq + 1
+    // A revoke's stage reset is decided by the rule from the read: no other published file of the version was left, and the
+    // stage was the one the version resets. Its batch guard: the others and the stage are still the ones read.
+    val reset = s.others.size() == 0 and ((rev == "review" and s.stage == "review_ready") or (rev == "final" and (s.stage == "final_files_ready" or s.stage == "complete")))
+    val guardMoved = MUTANT != "revoke-stale-reset" and (liveOtherIds(rev, h.id) != s.others or w.stage != s.stage)
     val ok =
       if (h.kind == "publish") and { fresh, publishGuard(rev) }
-      else if (h.kind == "revoke") and { fresh, not(w.revoked) }
+      else if (h.kind == "revoke") and { fresh, not(isRevoked) }
       else and {
         // The stage guard is also what protects the published final: a revoke of the last final resets the stage in its own batch.
         MUTANT == "complete-no-stage" or w.stage == "final_files_ready",
-        MUTANT == "complete-no-payment" or (w.booking and w.balance),
-        not(w.revoked) and not(w.withdrawn),
+        MUTANT == "complete-no-payment" or (bookingPaid and balancePaid),
+        not(isRevoked) and not(isWithdrawn),
       }
     if (not(ok)) all { w' = w, runs' = runs.set(r, { ...h, phase: "conflict" }) }
+    else if (h.kind == "revoke" and guardMoved)
+      // The batch guard raised: nothing was written. The request reads and decides again, three tries in all.
+      all { w' = w, runs' = runs.set(r, if (h.tries < 2) { ...h, tries: h.tries + 1, phase: "read" } else { ...h, phase: "conflict" }) }
     else if (h.kind == "publish") all {
       w' = { ...w,
+        seq: at,
         files: IDS.mapBy(i =>
-          if (i == h.id) { ...f, status: "published",
-            allowedAtPublish: canPublish(rev, w.revoked, w.withdrawn, w.booking, w.balance, w.stage) }
+          if (i == h.id) { ...f, status: "published", pubAt: at }
           else if (rev == "review" and MUTANT != "no-supersede" and w.files.get(i).version == "review" and w.files.get(i).status == "published")
             { ...w.files.get(i), status: "revoked" }
           else w.files.get(i)),
@@ -216,16 +240,17 @@ module audioProjectFiles {
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else if (h.kind == "revoke") all {
-      // Without another published file of its version the project returns to in_progress (also a completed project losing its only final). The
-      // statement keeps today's condition and checks it at the write; the mutant decides it from the count the read saw.
+      // Without another published file of its version the project returns to in_progress (also a completed project losing its
+      // only final), as the rule decided from the read; the mutant writes that decision without the guard.
       w' = { ...w,
+        seq: at,
         files: w.files.set(h.id, { ...f, status: "revoked" }),
-        stage: if ((if (MUTANT == "revoke-stale-reset") s.othersLive == 0 else others == 0) and ((rev == "review" and w.stage == "review_ready") or (rev == "final" and (w.stage == "final_files_ready" or w.stage == "complete")))) "in_progress"
-               else w.stage },
+        stage: if (reset) "in_progress" else w.stage,
+        completedAt: if (reset) 0 else w.completedAt },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all {
-      w' = { ...w, stage: "complete", completedPaid: w.booking and w.balance },
+      w' = { ...w, seq: at, stage: "complete", completedAt: at },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
   }
@@ -248,9 +273,10 @@ module audioProjectFiles {
     val ok = and { w.ups.get(h.id) == "none", uploadGuard(h.version) }
     if (ok) all {
       w' = { ...w,
+        seq: w.seq + 1,
         ups: w.ups.set(h.id, "pending"),
         upVersion: w.upVersion.set(h.id, h.version),
-        upOpen: w.upOpen.set(h.id, canUpload(h.version, w.revoked, w.withdrawn, w.booking, w.stage)) },
+        upAt: w.upAt.set(h.id, w.seq + 1) },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all {
@@ -291,11 +317,10 @@ module audioProjectFiles {
     }
     if (ok) all {
       w' = { ...w,
-        files: w.files.set(h.id, {
-          version: v, status: "uploaded",
-          openAtInsert: canUpload(v, w.revoked, w.withdrawn, w.booking, w.stage),
-          upload: w.ups.get(h.id), allowedAtPublish: true }),
-        ups: w.ups.set(h.id, "none") },
+        seq: w.seq + 1,
+        files: w.files.set(h.id, { version: v, status: "uploaded", insAt: w.seq + 1, pubAt: 0 }),
+        ups: w.ups.set(h.id, "none"),
+        upAt: w.upAt.set(h.id, 0) },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all { w' = w, runs' = runs.set(r, { ...h, phase: "blocked" }) }
@@ -327,7 +352,7 @@ module audioProjectFiles {
     nondet r = RUNS.filter(i => runs.get(i).phase == "abortRow").oneOf()
     val h = runs.get(r)
     all {
-      w' = if (w.files.get(h.id).status == "none") { ...w, ups: w.ups.set(h.id, "none") } else w,
+      w' = if (w.files.get(h.id).status == "none") { ...w, ups: w.ups.set(h.id, "none"), upAt: w.upAt.set(h.id, 0) } else w,
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
   }
@@ -336,47 +361,64 @@ module audioProjectFiles {
   // These happen while a request is between its read and its write (see `inflightPhase`); so a step takes one only then.
   val inflight = RUNS.exists(r => inflightPhase(runs.get(r).phase))
 
-  action ownerRevokes = all { inflight, not(w.revoked), w' = { ...w, revoked: true }, runs' = runs }
-  action requestWithdrawn = all { inflight, not(w.withdrawn), w' = { ...w, withdrawn: true }, runs' = runs }
-  action bookingVoided = all { inflight, w.booking, w' = { ...w, booking: false }, runs' = runs }
-  action balanceVoided = all { inflight, w.balance, w' = { ...w, balance: false }, runs' = runs }
+  action ownerRevokes = all { inflight, not(isRevoked), w' = { ...w, seq: w.seq + 1, revokedAt: w.seq + 1 }, runs' = runs }
+  action requestWithdrawn = all { inflight, not(isWithdrawn), w' = { ...w, seq: w.seq + 1, withdrawnAt: w.seq + 1 }, runs' = runs }
+  action bookingVoided = all { inflight, bookingPaid, w' = { ...w, seq: w.seq + 1, bookingVoidAt: w.seq + 1 }, runs' = runs }
+  action balanceVoided = all { inflight, balancePaid, w' = { ...w, seq: w.seq + 1, balanceVoidAt: w.seq + 1 }, runs' = runs }
 
   action step = any {
     begin, read, write, createMultipart, row, completeRead, completeR2, fileRow, abortCas, abortR2, abortRow,
     ownerRevokes, requestWithdrawn, bookingVoided, balanceVoided,
   }
 
-  // ---- Properties -------------------------------------------------------------------------------------------------
-  // 1. A file row is written only while the project's access is open and its payment and stage allow an upload.
-  val filesOnlyForOpenProject = IDS.forall(i => w.files.get(i).status == "none" or w.files.get(i).openAtInsert)
+  // ---- Properties (each reads the stored rows and stamps) ----------------------------------------------------------
+  // A stamp `t` is "before" a move whose stamp is `m` when the move has not happened (0) or came later.
+  def before(t: int, m: int): bool = m == 0 or t < m
+  def whileOpenAndBooked(t: int): bool = and {
+    before(t, w.revokedAt), before(t, w.withdrawnAt), before(t, w.bookingVoidAt),
+  }
 
-  // 2. An upload row is written only while the project's access is open and its payment and stage allow an upload.
-  val uploadsOnlyForOpenProject = IDS.forall(i => w.ups.get(i) == "none" or w.upOpen.get(i))
+  // 1. A file row is written only while the project's access is open, the request is not withdrawn and the booking is paid.
+  val filesOnlyForOpenProject = IDS.forall(i => w.files.get(i).status == "none" or whileOpenAndBooked(w.files.get(i).insAt))
 
-  // 3. A file is published only while the project's access is open, the booking (and for a final the balance) is paid, and the stage allows it.
-  val publishedOnlyWhenAllowed = IDS.forall(i => w.files.get(i).allowedAtPublish)
+  // 2. An upload row is written only while the project's access is open, the request is not withdrawn and the booking is paid.
+  val uploadsOnlyForOpenProject = IDS.forall(i => w.ups.get(i) == "none" or whileOpenAndBooked(w.upAt.get(i)))
 
-  // 4. At most one review file is published at a time.
+  // 3. A file is published only while the access is open, the request is not withdrawn and the booking (and for a final the
+  // balance) is paid.
+  val publishedOnlyWhenPaidAndOpen = IDS.forall(i =>
+    w.files.get(i).status != "published" or and {
+      whileOpenAndBooked(w.files.get(i).pubAt),
+      w.files.get(i).version == "review" or before(w.files.get(i).pubAt, w.balanceVoidAt),
+    })
+
+  // 4. The stage agrees with the rows around it: a published final means the project is at a final stage (a review is never
+  // published over it), and a completion is stamped exactly while the stage is complete (a final is never published over a
+  // completed project), whatever the stage allowed.
+  val stageCoherent = and {
+    liveOf("final") == 0 or w.stage == "final_files_ready" or w.stage == "complete",
+    (w.completedAt > 0) == (w.stage == "complete"),
+  }
+
+  // 5. At most one review file is published at a time.
   val oneLiveReview = liveOf("review") <= 1
 
-  // 5. A stage that needs a published file has one: review_ready a published review; final_files_ready and complete a published final.
+  // 6. A stage that needs a published file has one: review_ready a published review; final_files_ready and complete a published final.
   val readyStagesHaveFiles = and {
     w.stage != "review_ready" or liveOf("review") > 0,
     (w.stage != "final_files_ready" and w.stage != "complete") or liveOf("final") > 0,
   }
 
-  // 6. A project is completed only while the booking and the balance are paid.
-  val completedOnlyWhenPaid = w.stage != "complete" or w.completedPaid
+  // 7. A project is completed only while the booking and the balance are paid.
+  val completedOnlyWhenPaid = w.completedAt == 0 or (before(w.completedAt, w.bookingVoidAt) and before(w.completedAt, w.balanceVoidAt))
 
-  // 7. A file row never comes from an upload that was being discarded.
-  val noFileFromDiscarded = IDS.forall(i => w.files.get(i).status == "none" or w.files.get(i).upload != "discarding")
-
-  // 8. A file that is uploaded or published has its object in R2.
+  // 8. A file that is uploaded or published has its object in R2 (so a file row never comes from an upload being discarded: the
+  // abort deletes the object).
   val fileHasObject = IDS.forall(i => (w.files.get(i).status != "uploaded" and w.files.get(i).status != "published") or w.obj.get(i))
 
   val allProperties = and {
-    filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenAllowed, oneLiveReview,
-    readyStagesHaveFiles, completedOnlyWhenPaid, noFileFromDiscarded, fileHasObject,
+    filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
+    readyStagesHaveFiles, completedOnlyWhenPaid, fileHasObject,
   }
 
   // Reachability witness, for a hand with the negated invariant: an owner's upload becomes a published file.

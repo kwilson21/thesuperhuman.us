@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	abortProjectUpload,
 	beginProjectUpload,

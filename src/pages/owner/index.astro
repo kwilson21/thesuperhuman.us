@@ -6,10 +6,8 @@ import AttentionIndex from "~/components/owner/AttentionIndex.astro";
 import ListeningPath from "~/components/owner/ListeningPath.astro";
 import RequestList from "~/components/owner/RequestList.astro";
 import MetricDefinition from "~/components/owner/MetricDefinition.astro";
-import {
-	clientPortalEnabled,
-	listStudioSignInFailures,
-} from "~/lib/audio-client-access";
+import { listStudioSignInFailures } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	listStudioProjectAttention,
 	loadStudioLedger,

@@ -152,11 +152,11 @@ export const audioProjectMessagesMutants = {
 export const audioProjectFilesMutants = {
 	projectFilesStartNoAccess: { property: "uploadsOnlyForOpenProject" },
 	projectFilesInsertNoAccess: { property: "filesOnlyForOpenProject" },
-	projectFilesInsertNoState: { property: "noFileFromDiscarded" },
+	projectFilesInsertNoState: { property: "fileHasObject" },
 	projectFilesAbortNoCas: { property: "fileHasObject" },
-	projectFilesPublishNoAccess: { property: "publishedOnlyWhenAllowed" },
-	projectFilesPublishNoPayment: { property: "publishedOnlyWhenAllowed" },
-	projectFilesPublishNoStage: { property: "publishedOnlyWhenAllowed" },
+	projectFilesPublishNoAccess: { property: "publishedOnlyWhenPaidAndOpen" },
+	projectFilesPublishNoPayment: { property: "publishedOnlyWhenPaidAndOpen" },
+	projectFilesPublishNoStage: { property: "stageCoherent" },
 	projectFilesNoSupersede: { property: "oneLiveReview" },
 	projectFilesRevokeStaleReset: { property: "readyStagesHaveFiles" },
 	projectFilesCompleteNoStage: { property: "readyStagesHaveFiles" },
@@ -167,10 +167,9 @@ export const audioProjectFilesMutants = {
 // queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
 // property its change must break.
 export const audioProjectNoticesMutants = {
-	projectNoticesClaimNoStatus: { property: "oneEmailPerQueuing" },
+	projectNoticesClaimNoStatus: { property: "oneEmailInTotal" },
 	projectNoticesClaimNoOpen: { property: "claimOnlyWhileOpen" },
-	projectNoticesQueueNoOpen: { property: "queueOnlyWhileOpen" },
-	projectNoticesQueueAnyStatus: { property: "sentNeverRequeued" },
+	projectNoticesQueueAnyStatus: { property: "oneEmailInTotal" },
 	projectNoticesUncertainSent: { property: "sentMeansMailed" },
 	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
 };
@@ -270,7 +269,7 @@ export const models = [
 	},
 	{
 		file: "verification/audio-project-notices.qnt",
-		current: ["projectNotices"],
+		current: ["projectNotices", "projectNoticesUpdate"],
 		mutants: audioProjectNoticesMutants,
 		equivalents: [],
 		exhaustive: [],

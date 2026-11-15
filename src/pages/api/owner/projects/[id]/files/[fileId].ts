@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { deliverProjectUpdateNotice } from "~/lib/audio-project-updates";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
 import { revokeProjectFile } from "~/lib/audio-project-revocation";

@@ -9,7 +9,7 @@
 // for the cooldown and once, after the address is first read, for the link; each is kept across its retries.
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { normalizeClientEmail } from "../../lib/audio-client-access";
+import { normalizeClientEmail } from "../../lib/client-portal";
 import { hashOfferToken } from "../../lib/software-offers";
 import {
 	AgreementAllowance,

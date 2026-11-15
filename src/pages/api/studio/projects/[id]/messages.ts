@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
 import {
-	clientPortalEnabled,
 	clientProjectForSession,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	clientMessageRateLimited,
 	markProjectMessagesRead,
