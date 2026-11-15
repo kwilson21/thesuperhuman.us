@@ -5,12 +5,12 @@ Two branches are gated: branch A (behavior fixes to the owner's brief copy route
 Date: November 15, 2026
 Repository: the personal website repository
 Branches: A is `claude/effect-16-brief-copy-fixes`, B is `claude/effect-16-brief-copy`, cut from A and merged with A's later commits (merge commits, no rebase). Cut from `origin/main` at `14cce493`, then merged with `origin/main` at `2f7add57`, and again at `fbfc3e05` (the media conversion, PRs 309 to 311) after the review.
-Tips: A is `24c4059c` (the merge of `origin/main` into `693e6f84`, with no file conflicts). B's code is at `064eb1d4` (the merge of A at `d623dc25`, then the route's move to the shared logged answer); the merge conflicts are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
+Tips: A is `c342dd8a` (after the review fixes, merged with `origin/main` at `7beca022`). B's code is at `0b2ad2b7` (A merged in, then the conversion of the review items below); the merge conflicts with the media conversion are described under "Merge with the media conversion"; this record is committed after it, in a commit that changes documentation only.
 Pull requests: #321 (A) and #322 (B).
 Decisions: Kazon Wilson. Implementation was done with Claude Code.
 Target: production
 Reviews: what independent reviews found, and what was fixed, is under "Review findings".
-Rollback revision: for A, `fbfc3e05`; for B, A's tip `24c4059c`. No deployed revision was observed.
+Rollback revision: for A, `fbfc3e05`; for B, A's tip `c342dd8a`. No deployed revision was observed.
 
 ## Scope
 
@@ -79,7 +79,7 @@ There is no statement of class (d) left.
 
 ### Public inquiry
 
-`golden:neutral --all 24c4059c HEAD` (B against A at that point) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
+`golden:neutral --all c342dd8a HEAD` (B against A) is NEUTRAL: `owner-request-brief-copy` 24 identical and 41 neutral with D1 changes, `software-inquiry` 138 identical and 69 neutral with D1 changes, every other fixture identical. The public inquiry's answers, effects, console lines and database states are the same; its D1 statements for the copy changed, which is why its fixture was re-recorded in a commit of fixture files only. The corpus test files were edited only in two comment lines of `tests/golden/owner-request-brief-copy.test.ts`, which now name the brief copy flow instead of the deleted helper; no case, step or assertion changed, and the injection patterns of both corpora still match the new statements.
 
 ### Differences outside the corpus
 
@@ -115,18 +115,18 @@ Independent reviews of the work found the following. Each is fixed; the later he
 
 ## Evidence
 
-Run after the merge of `origin/main` (the earlier run before it is not repeated here).
+Run on the final tips, after `origin/main` at `7beca022` was merged in.
 
-Branch A at `24c4059c`:
-- `format:check`: `Checked 882 files in 106ms. No fixes applied.`; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  340 passed (340)`, `Tests  13820 passed | 1 skipped (13821)`; `git status` clean apart from `.jolli/`.
+Branch A at `c342dd8a`:
+- `format:check`: `Checked 882 files in 116ms. No fixes applied.`; `lint`: no findings; `build`: `[build] Complete!`; `REQUIRE_CLIENT_BUNDLE=1 ... client-bundle.test.ts`: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  340 passed (340)`, `Tests  13823 passed | 1 skipped (13824)`; `git status` clean apart from `.jolli/`. One earlier run failed a timing test of another area (`tests/api/studio-signin-noninterference.test.ts`, a request racing the clock) while the machine was busy; it passed alone and in the run above.
 - `golden:neutral --all origin/main`: `compared 80 fixtures and 9329 cases; 1 of 80 fixtures differ`, `golden:neutral: NOT NEUTRAL` (the cases above, expected; only `owner-request-brief-copy` differs).
-- `verify:quint:all`: exit 0. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
+- `verify:quint:all`: exit 0, 94 `ok` lines. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
 
-Branch B at `064eb1d4`:
-- `format:check`: `Checked 889 files in 111ms. No fixes applied.`; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  344 passed (344)`, `Tests  13950 passed | 1 skipped (13951)`; `git status` clean apart from `.jolli/`.
-- `golden:neutral --all 24c4059c HEAD`: `compared 80 fixtures and 9331 cases; 2 of 80 fixtures differ`, `golden:neutral: NEUTRAL` (`owner-request-brief-copy` 24 identical and 41 neutral with D1 changes; `software-inquiry` 138 identical and 69 neutral with D1 changes).
-- `verify:quint:all`: exit 0. `publicist:gate`: `publicist-gate passed: 84 entries checked.` `lint`: no findings. `check`: `0 errors`, `0 warnings`, `16 hints`.
+Branch B at `0b2ad2b7`:
+- `format:check`: `Checked 889 files`, no fixes applied; `lint`: no findings; `build`: `[build] Complete!`; client bundle test: `Tests  27 passed (27)`.
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  344 passed (344)`, `Tests  13966 passed | 1 skipped (13967)`; `git status` clean apart from `.jolli/`.
+- `golden:neutral --all c342dd8a HEAD`: `compared 80 fixtures and 9331 cases; 2 of 80 fixtures differ`, `golden:neutral: NEUTRAL` (`owner-request-brief-copy` 24 identical and 41 neutral with D1 changes; `software-inquiry` 138 identical and 69 neutral with D1 changes).
+- `verify:quint:all`: exit 0, 106 `ok` lines (the eleven mutants of the brief copy model break their properties). `publicist:gate`: `publicist-gate passed: 84 entries checked.` `check`: `0 errors`, `0 warnings`, `16 hints`.
 
 UNVERIFIED: the owner page in a browser (the reload after a 500 was driven only with a stubbed fetch); delivery through the real mail provider (the corpus shows each Resend call with its exact body; no real email was sent); the exhaustive Apalache run (the model has none).
