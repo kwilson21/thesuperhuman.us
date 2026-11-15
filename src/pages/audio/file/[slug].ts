@@ -59,7 +59,7 @@ const serve: APIRoute = async (context) => {
 	const env = context.locals.runtime.env;
 	const key = entry.data.file;
 
-	if (key.startsWith("studio/") || key.startsWith("software/"))
+	if (!key.startsWith("tracks/"))
 		return new Response("not found", { status: 404 });
 
 	if (!env.AUDIO) return mediaUnavailable();

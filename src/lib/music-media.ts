@@ -26,7 +26,7 @@ export async function streamMusic(
 	bucket: R2Bucket,
 	asset: { key: string; type: string },
 ) {
-	if (asset.key.startsWith("studio/") || asset.key.startsWith("software/"))
+	if (!asset.key.startsWith("music/"))
 		return new Response("Media unavailable", { status: 404 });
 	const head = await bucket.head(asset.key);
 
