@@ -54,7 +54,7 @@ const updated = pricing.updatedAt
         <p class="studio-status" data-pricing-status role="status" aria-live="polite"></p>
       </form>
     </section>
-    <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading">Market research</h2>
+    <section class="rail-section wide" aria-labelledby="pricing-market-heading"><h2 id="pricing-market-heading" tabindex="-1">Market research</h2>
       {market ? <>
         <p class="rail-muted">Researched {market.researchedOn}, from {market.sources.length} {market.sources.length === 1 ? 'source' : 'sources'}. The board holds the AI’s market figure inside the range for the brief’s kind and size.</p>
         <div class="pricing-table-scroll" role="region" aria-labelledby="pricing-table-caption" tabindex="0">
@@ -99,4 +99,6 @@ const updated = pricing.updatedAt
   .pricing-settings summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
   .pricing-settings li a { display: inline-flex; align-items: center; min-height: 44px; }
   .pricing-settings .studio-quiet { min-height: 44px; }
+  /* While a save is on its way: marked rather than disabled, so focus stays where it was. */
+  .pricing-settings [aria-disabled="true"] { opacity: .5; cursor: wait; }
 </style>

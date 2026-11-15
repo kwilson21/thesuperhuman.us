@@ -55,20 +55,21 @@ async function send(
 	if (saving) return;
 	saving = true;
 
+	// Marked, not disabled: a disabled button would drop keyboard focus to the page. `saving` refuses a second press.
 	const buttons = [
 		...document.querySelectorAll<HTMLButtonElement>(
 			"[data-pricing-form] button",
 		),
 	];
 
-	for (const button of buttons) button.disabled = true;
+	for (const button of buttons) button.setAttribute("aria-disabled", "true");
 
 	try {
 		await save(body, form, status);
 	} finally {
 		saving = false;
 
-		for (const button of buttons) button.disabled = false;
+		for (const button of buttons) button.removeAttribute("aria-disabled");
 	}
 }
 
@@ -167,7 +168,11 @@ export function setupOwnerPricing() {
 			'[data-part="market"] [data-pricing-status]',
 		);
 
-		// Set after the page is ready, so the status region announces it.
+		// Focus where the owner was working, then say it, after the page is ready so the status region announces it.
+		document
+			.querySelector<HTMLElement>("#pricing-market-heading")
+			?.focus({ preventScroll: true });
+
 		if (status)
 			setTimeout(() => {
 				status.textContent =

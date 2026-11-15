@@ -117,8 +117,9 @@ stateDiagram-v2
 Use has a second effect outside the board (the form field), and Undo reverses both together. The page keys what Use
 changed by the board's history step itself, so a step that falls off the 40-step history takes its entry with it. Undo
 puts a field back only while it still holds what Use put there, removes only the line Use added to a one-per-line
-field, and removes a milestone row Use added once that row's fields are empty again: anything the owner typed since
-stays.
+field, and removes a milestone row Use added only while all of it, its checkpoint and its agreement row included,
+still reads as the editor drew it: anything the owner typed since stays. Set its fee is its own step, so Undo puts the
+fee back first.
 
 ## 4. The pricing reference (private)
 

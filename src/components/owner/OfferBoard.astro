@@ -112,6 +112,7 @@ const useLabels: Record<OfferLane, string> = {
       <div class="software-actions offer-card-actions" data-card-actions></div>
       <div class="offer-card-editor" data-card-editor hidden>
         <label>Edit<input class="studio-input" type="text" data-card-input autocomplete="off" /></label>
+        <p class="offer-card-error" data-card-error hidden></p>
         <div class="software-actions"><button type="button" class="studio-quiet" data-card-save>Save</button><button type="button" class="studio-quiet" data-card-cancel>Cancel</button></div>
       </div>
     </li>
@@ -151,6 +152,7 @@ const useLabels: Record<OfferLane, string> = {
   .offer-empty { font-size: .875rem; color: var(--studio-muted); }
   .offer-card-editor label { display: grid; gap: .3rem; font: 500 .82rem/1.4 var(--font-sans); }
   .offer-card-editor input { width: min(100%, 40rem); min-width: 0; font-size: 1rem; min-height: 44px; }
+  .offer-card-error { margin: .25rem 0 0; font-size: .875rem; color: var(--studio-danger); }
   .offer-aside summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font: 500 .85rem/1.3 var(--font-sans); }
   .offer-board :global(.offer-aside li) { margin: .25rem 0; overflow-wrap: anywhere; }
   @media (prefers-reduced-motion: no-preference) {

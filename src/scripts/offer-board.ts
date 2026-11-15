@@ -371,6 +371,7 @@ export function setupOfferBoard() {
 			say(
 				"This milestone is no longer in the offer under its name. Set its fee in the offer itself.",
 			);
+			render();
 
 			return;
 		}
@@ -1171,7 +1172,7 @@ export function setupOfferBoard() {
 			(document.activeElement === undoButton && undoButton.disabled)
 		)
 			(undoButton.disabled ? heading : undoButton).focus();
-		announce(`Undid: ${label}.`);
+		say(`Undid: ${label}.`);
 		schedule();
 	}
 
@@ -1260,14 +1261,24 @@ export function setupOfferBoard() {
 		if (target.matches("[data-card-save], [data-card-cancel]")) {
 			const input = node.querySelector<HTMLInputElement>("[data-card-input]")!;
 
+			const error = node.querySelector<HTMLElement>("[data-card-error]")!;
+
 			if (target.matches("[data-card-save]") && !input.value.trim()) {
-				say(
-					"A card needs some words. Use Cancel to keep it as it was, or Not this to set it aside.",
-				);
+				const message =
+					"A card needs some words. Use Cancel to keep it as it was, or Not this to set it aside.";
+
+				error.id = `offer-card-error-${card.id}`;
+				error.textContent = message;
+				error.hidden = false;
+				input.setAttribute("aria-invalid", "true");
+				input.setAttribute("aria-describedby", error.id);
+				announce(message);
 				input.focus();
 
 				return;
 			}
+
+			clearEditError(node);
 
 			node.querySelector<HTMLElement>("[data-card-editor]")!.hidden = true;
 
@@ -1285,6 +1296,32 @@ export function setupOfferBoard() {
 				heading
 			).focus();
 		}
+	});
+
+	/** The card editor's error line and the field's invalid mark go together. */
+	function clearEditError(node: HTMLElement) {
+		const error = node.querySelector<HTMLElement>("[data-card-error]");
+		const input = node.querySelector<HTMLInputElement>("[data-card-input]");
+
+		if (error) {
+			error.hidden = true;
+			error.textContent = "";
+		}
+
+		input?.removeAttribute("aria-invalid");
+		input?.removeAttribute("aria-describedby");
+	}
+
+	root.addEventListener("input", (event) => {
+		const input =
+			event.target instanceof HTMLInputElement &&
+			event.target.matches("[data-card-input]")
+				? event.target
+				: null;
+
+		const node = input?.closest<HTMLElement>("[data-card]");
+
+		if (node && input?.getAttribute("aria-invalid")) clearEditError(node);
 	});
 
 	root.addEventListener("keydown", (event) => {
@@ -1345,7 +1382,16 @@ export function setupOfferBoard() {
 	});
 
 	// Once the owner has asked, the board keeps up with the draft.
-	form.addEventListener("input", () => schedule());
+	form.addEventListener("input", (event) => {
+		// Set its fee is offered only while the milestone's row holds its name.
+		if (
+			event.target instanceof HTMLInputElement &&
+			event.target.name === "milestoneName"
+		)
+			render();
+
+		schedule();
+	});
 	form.addEventListener("change", () => schedule());
 	render();
 }
