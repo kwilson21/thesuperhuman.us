@@ -428,6 +428,41 @@ function check(name, ok, detail = "") {
 		await box.fill(boxBefore);
 		await page.unroute("**/api/owner/pricing");
 
+		// Fields are read-only while a save is on its way, so what the answer marks saved is what was sent.
+		await page.reload();
+
+		const raceVersion = Number(await values.getAttribute("data-version"));
+
+		await page.route("**/api/owner/pricing", async (route) => {
+			await new Promise((resolve) => setTimeout(resolve, 1500));
+
+			return route.fulfill({ json: { ok: true, version: raceVersion + 1 } });
+		});
+
+		const dayField = values.locator('[name="dayValue"]');
+		const sentDay = (await dayField.inputValue()) === "450" ? "475" : "450";
+
+		await dayField.fill(sentDay);
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		await dayField.focus();
+		await page.keyboard.type("9");
+
+		const typedDuring = await dayField.inputValue();
+
+		await page.waitForFunction(() =>
+			/^Saved\./.test(
+				document.querySelector('[data-part="values"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		check(
+			"typing while a save is on its way changes nothing, and the field is editable again after",
+			typedDuring === sentDay &&
+				!(await dayField.evaluate((element) => element.readOnly)),
+			typedDuring,
+		);
+		await page.unroute("**/api/owner/pricing");
+
 		const queue = [];
 
 		await page.route("**/api/owner/requests/*/offer-board", (route) =>

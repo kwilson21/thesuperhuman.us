@@ -136,12 +136,25 @@ async function send(
 
 	for (const button of buttons) button.setAttribute("aria-disabled", "true");
 
+	// The fields are read-only while it is on its way, so what the answer marks saved (or a clear empties) is what was
+	// sent: text typed meanwhile would otherwise count as saved, or be cleared, without having been sent. Read-only
+	// rather than disabled, so focus stays in the field.
+	const fields = [
+		...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+			"[data-pricing-form] input, [data-pricing-form] textarea",
+		),
+	];
+
+	for (const each of fields) each.readOnly = true;
+
 	try {
 		await save(body, form, status);
 	} finally {
 		saving = false;
 
 		for (const button of buttons) button.removeAttribute("aria-disabled");
+
+		for (const each of fields) each.readOnly = false;
 
 		// A press made while it was on its way said so; that is no longer true.
 		for (const line of document.querySelectorAll<HTMLElement>(
