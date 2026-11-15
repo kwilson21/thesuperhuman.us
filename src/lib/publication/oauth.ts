@@ -7,6 +7,7 @@ import {
 	type LoginEnv,
 } from "./oauth-login";
 import { publicationMcp, type PublicationIdentity } from "./mcp";
+import { keyBoundedKv } from "./key-bounded-kv";
 import { isText } from "../type-guards";
 
 const paths = new Set([
@@ -74,7 +75,7 @@ function isIdentity(value: unknown): value is PublicationIdentity {
  * OAUTH_PROVIDER, which OAuthProvider.fetch adds to the env object before any handler reads it,
  * so it is not checked here.
  */
-function isConfigured(env: Env): env is LoginEnv {
+function isConfigured(env: Env): env is LoginEnv & { OAUTH_KV: KVNamespace } {
 	return Boolean(
 		env.OAUTH_KV &&
 			env.PUBLICATION_DB &&
@@ -157,7 +158,12 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 			}),
 		});
 
-		const response = await provider.fetch(limited, env, locals.runtime.ctx);
+		// The library keeps its state in KV; give it a namespace that answers "not found" for a key KV would refuse.
+		const response = await provider.fetch(
+			limited,
+			{ ...env, OAUTH_KV: keyBoundedKv(env.OAUTH_KV) },
+			locals.runtime.ctx,
+		);
 
 		const wrapped = new Response(response.body, response);
 		wrapped.headers.set("Cache-Control", "no-store");
@@ -165,7 +171,7 @@ export const publicationOAuthRoute: APIRoute = async ({ request, locals }) => {
 		return wrapped;
 	} catch {
 		return new Response("Publication connection unavailable.", {
-			status: 503,
+			status: 500,
 			headers,
 		});
 	}
