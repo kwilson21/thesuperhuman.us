@@ -1,19 +1,17 @@
 // What the public intake routes read from and write to MUSIC_DB. A write stores one owner request and its creation audit in
-// one batch (src/lib/owner-requests.ts `saveOwnerRequest`: only this store calls it in `src/`, and it stays there because
-// the owner-request tests use it to create requests). A read asks for what is stored and decides nothing. The only SQL
-// that can refuse is the unique index on the submission id, which `insertBrief` turns into ChangedSinceRead (a
-// SubmissionIdClash) so the flow asks the rule again on fresh facts. A failure carries what it raised, which the route
-// logs as it always has.
+// one batch, one function per statement, and answers the row as it stored it (nothing is read back: a read that failed
+// after the insert would make a stored request look unsaved, and a retry would store it twice). A read asks for what is
+// stored and decides nothing. A failure carries what the database raised in a field named `failure`, which the route logs
+// as it always has; the flow that stores a brief maps a unique violation on the submission id to a `SubmissionIdClash`, so
+// the flow asks the rule again on fresh facts.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { OwnerRequest } from "../lib/owner-model";
 import {
 	getOwnerRequestBySubmission,
 	type NewOwnerRequest,
-	RequestDetailsTooLargeError,
-	saveOwnerRequest,
 } from "../lib/owner-requests";
-import { ChangedSinceRead, isUniqueViolation } from "./guarded-save";
+import { ChangedSinceRead } from "./guarded-save";
 import { MusicDb } from "./services";
 
 /** The database refused the write. */
@@ -36,15 +34,92 @@ export class SubmissionIdClash extends ChangedSinceRead {
 	}
 }
 
-/** Stores one owner request with its audit row, and answers the row as stored. */
-export const storeRequest = (request: NewOwnerRequest) =>
+/** The most a request's details may hold once written as JSON. */
+const DETAILS_LIMIT = 16_000;
+
+/** The insert of the request row. */
+const requestStatement = (
+	db: D1Database,
+	row: OwnerRequest,
+	detailsJson: string,
+	submissionId: string | undefined,
+) =>
+	db
+		.prepare(`INSERT INTO owner_requests
+      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at${submissionId ? ",submission_id" : ""})
+      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?${submissionId ? ",?" : ""})`)
+		.bind(
+			row.id,
+			row.kind,
+			row.releaseId,
+			row.serviceId,
+			row.campaignId,
+			row.name,
+			row.email,
+			row.cityRegion,
+			row.summary,
+			detailsJson,
+			row.createdAt,
+			row.updatedAt,
+			...(submissionId ? [submissionId] : []),
+		);
+
+/** The insert of the request's creation audit row. */
+const creationAuditStatement = (db: D1Database, row: OwnerRequest) =>
+	db
+		.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
+      VALUES (?,'created','system','',?)`)
+		.bind(row.id, row.createdAt);
+
+/**
+ * Stores one owner request and its creation audit in one batch, and answers the row as stored. A brief too large is
+ * refused before anything is sent. Any other refusal carries what the database raised; a caller that guards the write with
+ * a unique index recognises its own violation there.
+ */
+export const insertRequest = (request: NewOwnerRequest) =>
 	Effect.gen(function* () {
 		const db = yield* MusicDb;
+		const detailsJson = JSON.stringify(request.details ?? {});
 
-		return yield* Effect.tryPromise({
-			try: () => saveOwnerRequest(db, request),
-			catch: (cause) => new IntakeStoreFailed({ failure: cause }),
+		if (detailsJson.length > DETAILS_LIMIT)
+			return yield* Effect.fail(new BriefTooLarge());
+
+		// The id is made before the time, as the batch always was.
+		const id = crypto.randomUUID();
+		const at = new Date().toISOString();
+
+		// SAFETY: detailsJson is the JSON.stringify of a plain object (request.details ?? {}), so JSON.parse gives back the same record the database returns on a read.
+		const details: OwnerRequest["details"] = JSON.parse(detailsJson);
+
+		const row: OwnerRequest = {
+			id,
+			kind: request.kind,
+			releaseId: request.releaseId ?? null,
+			serviceId: request.serviceId ?? null,
+			campaignId: request.campaignId ?? null,
+			name: request.name?.trim() ?? "",
+			email: request.email.trim().toLowerCase(),
+			cityRegion: request.cityRegion?.trim() ?? "",
+			summary: request.summary.trim(),
+			details,
+			status: "new",
+			privateNote: "",
+			createdAt: at,
+			updatedAt: at,
+			resolvedAt: null,
+			contactDeleteAfter: null,
+		};
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db.batch([
+					requestStatement(db, row, detailsJson, request.submissionId),
+					creationAuditStatement(db, row),
+				]),
+			catch: (failure) => new IntakeStoreFailed({ failure }),
 		});
+
+		return row;
 	});
 
 /** The brief stored under a submission id, or null. */
@@ -55,28 +130,6 @@ export const findStoredBrief = (submissionId: string) =>
 		return yield* Effect.tryPromise({
 			try: (): Promise<OwnerRequest | null> =>
 				getOwnerRequestBySubmission(db, submissionId),
-			catch: (cause) => new IntakeReadFailed({ failure: cause }),
-		});
-	});
-
-/**
- * Stores the brief the rule decided on. The unique index on the submission id refuses it when another request stored the
- * same id first, which is ChangedSinceRead: the facts the rule read have changed. A brief too large is its own failure, and
- * any other failure is an IntakeStoreFailed.
- */
-export const insertBrief = (request: NewOwnerRequest) =>
-	Effect.gen(function* () {
-		const db = yield* MusicDb;
-
-		return yield* Effect.tryPromise({
-			try: () => saveOwnerRequest(db, request),
-			catch: (cause) => {
-				if (cause instanceof RequestDetailsTooLargeError)
-					return new BriefTooLarge();
-
-				return isUniqueViolation(cause) && cause instanceof Error
-					? new SubmissionIdClash(cause)
-					: new IntakeStoreFailed({ failure: cause });
-			},
+			catch: (failure) => new IntakeReadFailed({ failure }),
 		});
 	});

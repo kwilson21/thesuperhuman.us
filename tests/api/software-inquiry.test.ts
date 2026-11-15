@@ -16,7 +16,6 @@ import {
 	updateLabels,
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
-import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
 import type { OwnerRequest } from "~/lib/owner-model";
 import type { RawValue } from "~/lib/fields";
 import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
@@ -441,35 +440,6 @@ it("logs the rival lookup failure once without the visitor's details", async () 
 	log.mockRestore();
 });
 
-it("logs the give-back failure once and still answers 400 on the too-large path", async () => {
-	const oversized = fakeD1({
-		prepare: db.prepare.bind(db),
-		batch: async () => {
-			throw new RequestDetailsTooLargeError();
-		},
-	});
-
-	const log = vi.spyOn(console, "error").mockImplementation(() => {});
-
-	const response = await POST(
-		context(base, {
-			db: oversized,
-			rate: fakeKv({
-				get: async () => null,
-				put: async () => {},
-				delete: async () => {
-					throw new Error("kv down");
-				},
-			}),
-		}),
-	);
-
-	expect(response.status).toBe(400);
-	expect(log).toHaveBeenCalledTimes(1);
-	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
-	log.mockRestore();
-});
-
 it("answers 500 and still alerts when the lookup after a failed save also throws", async () => {
 	let lookups = 0;
 
@@ -847,27 +817,6 @@ it("omits approver role from the API receipt when approver is self", async () =>
 	expect(
 		(await readJson<{ brief: Record<string, string> }>(response)).brief,
 	).not.toHaveProperty("approverRole");
-});
-
-it("treats an oversized saved detail as a field error without an urgent alert", async () => {
-	const oversized = fakeD1({
-		prepare: db.prepare.bind(db),
-		batch: async () => {
-			throw new RequestDetailsTooLargeError();
-		},
-	});
-
-	const response = await POST(context(base, { db: oversized }));
-	expect(response.status).toBe(400);
-	expect(
-		(await readJson<{ errors: Record<string, string> }>(response)).errors,
-	).toEqual({ _form: "Keep the brief shorter and try again." });
-	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
-	expect(
-		vi
-			.mocked(fetch)
-			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
-	).toHaveLength(0);
 });
 
 it("emails only answered fields to the client with the saved title and configured contact Reply-To", async () => {

@@ -10,7 +10,7 @@ import {
 	ownerRequestForIntake,
 } from "../../lib/audio-intake";
 import { logUnexpected } from "../failure";
-import { storeRequest } from "../intake-store";
+import { IntakeStoreFailed, insertRequest } from "../intake-store";
 import {
 	admitForPassedCheck,
 	attemptWithinLimit,
@@ -91,7 +91,7 @@ export const submitIntake = (submission: IntakeSubmission) =>
 		if (Result.isFailure(limit)) return { kind: "tooManyRequests" } as const;
 
 		const stored = yield* Effect.result(
-			storeRequest(ownerRequestForIntake(submission.input)),
+			insertRequest(ownerRequestForIntake(submission.input)),
 		);
 
 		if (Result.isFailure(stored)) {
@@ -105,7 +105,14 @@ export const submitIntake = (submission: IntakeSubmission) =>
 					logUnexpected(ROUTE, released.failure.failure),
 				);
 
-			yield* Effect.sync(() => logUnexpected(ROUTE, stored.failure.failure));
+			yield* Effect.sync(() =>
+				logUnexpected(
+					ROUTE,
+					stored.failure instanceof IntakeStoreFailed
+						? stored.failure.failure
+						: stored.failure,
+				),
+			);
 
 			const alert = yield* OwnerAlert;
 

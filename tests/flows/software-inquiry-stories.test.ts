@@ -19,6 +19,7 @@ import {
 	SoftwareNoticeFailed,
 	TurnstileCheck,
 } from "../../src/server/services";
+import { fakeKv } from "../helpers/doubles";
 import { musicWorld, type MusicWorldOptions } from "../helpers/music-world";
 
 // The software inquiry flow as stories: a visitor sends a brief, sends it again, loses a race with another request that used the
@@ -53,6 +54,16 @@ const read = (over: Record<string, string> = {}) => {
 	return checked.value;
 };
 
+/** A workflow brief whose details are too large to store (the form's own limits would refuse it, so it is built here). */
+const oversized = (): SoftwareInput => {
+	const input = read();
+
+	if (input.path !== "workflow")
+		throw new Error("the story's brief is a workflow");
+
+	return { ...input, today: "x".repeat(17_000) };
+};
+
 const REQUESTS = "rl:software:203.0.113.7";
 
 type Told = {
@@ -68,6 +79,7 @@ type Options = {
 	alertFails?: boolean;
 	copyFails?: boolean;
 	noticeFails?: boolean;
+	kv?: KVNamespace;
 };
 
 const send = async (
@@ -86,7 +98,7 @@ const send = async (
 		}).pipe(
 			Effect.provideContext(
 				Context.make(MusicDb, world.db).pipe(
-					Context.add(RateLimit, world.kv),
+					Context.add(RateLimit, options.kv ?? world.kv),
 					Context.add(TurnstileCheck, {
 						check: () => Effect.succeed(options.captcha ?? "passed"),
 					}),
@@ -382,5 +394,38 @@ describe("a storage failure", () => {
 		expect(requests(world)).toHaveLength(1);
 		expect(world.counts.has(REQUESTS)).toBe(false);
 		expect(told.alerts).toEqual([]);
+	});
+
+	it("tells the visitor to shorten a brief too large to store, gives the allowance back and sends no alert", async () => {
+		const world = musicWorld();
+		const { answer, told } = await send(world, { input: oversized() });
+
+		expect(answer).toEqual({ kind: "tooLarge" });
+		expect(requests(world)).toEqual([]);
+		expect(world.counts.has(REQUESTS)).toBe(false);
+		expect(told.alerts).toEqual([]);
+	});
+
+	it("logs a failed give-back once and still answers that a too large brief must be shortened", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const world = musicWorld();
+
+		const kv = fakeKv({
+			get: async (key: string) => world.counts.get(key) ?? null,
+			put: async (key: string, value: string) => {
+				world.counts.set(key, value);
+			},
+			delete: async () => {
+				throw new Error("kv down");
+			},
+		});
+
+		const { answer } = await send(world, {
+			input: oversized(),
+			kv,
+		});
+
+		expect(answer).toEqual({ kind: "tooLarge" });
+		expect(logged).toHaveBeenCalledTimes(1);
 	});
 });

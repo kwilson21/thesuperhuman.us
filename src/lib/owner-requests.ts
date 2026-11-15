@@ -60,12 +60,6 @@ export const projectIncompleteMessage = "Mark the project complete first.";
 export const projectStartedMessage =
 	"This project has started. Use the project controls.";
 
-export class RequestDetailsTooLargeError extends Error {
-	constructor() {
-		super("Request details are too large.");
-	}
-}
-
 const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
   summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
@@ -75,67 +69,6 @@ function validActor(actor: string) {
 	if (!value || value.length > 320) throw new Error("Invalid request actor.");
 
 	return value;
-}
-
-export async function saveOwnerRequest(
-	db: D1Database,
-	input: NewOwnerRequest,
-	actor = "system",
-): Promise<OwnerRequest> {
-	if (!ownerRequestKinds.includes(input.kind))
-		throw new Error("Invalid request kind.");
-	const details = JSON.stringify(input.details ?? {});
-
-	if (details.length > 16_000) throw new RequestDetailsTooLargeError();
-	const id = crypto.randomUUID();
-	const now = new Date().toISOString();
-	await db.batch([
-		db
-			.prepare(`INSERT INTO owner_requests
-      (id,kind,release_id,service_id,campaign_id,name,email,city_region,summary,details_json,status,private_note,created_at,updated_at${input.submissionId ? ",submission_id" : ""})
-      VALUES (?,?,?,?,?,?,?,?,?,?,'new','',?,?${input.submissionId ? ",?" : ""})`)
-			.bind(
-				id,
-				input.kind,
-				input.releaseId ?? null,
-				input.serviceId ?? null,
-				input.campaignId ?? null,
-				input.name?.trim() ?? "",
-				input.email.trim().toLowerCase(),
-				input.cityRegion?.trim() ?? "",
-				input.summary.trim(),
-				details,
-				now,
-				now,
-				...(input.submissionId ? [input.submissionId] : []),
-			),
-		db
-			.prepare(`INSERT INTO owner_request_audit (request_id,action,actor,note,occurred_at)
-      VALUES (?,'created',?,'',?)`)
-			.bind(id, validActor(actor), now),
-	]);
-
-	// The row as the batch stored it. Nothing is read back: a read that fails after the insert would make a stored request
-	// look unsaved, and a retry would store it twice.
-	// SAFETY: details is the JSON.stringify of a plain object (input.details ?? {}), so JSON.parse gives back the same record the database returns on a read.
-	return {
-		id,
-		kind: input.kind,
-		releaseId: input.releaseId ?? null,
-		serviceId: input.serviceId ?? null,
-		campaignId: input.campaignId ?? null,
-		name: input.name?.trim() ?? "",
-		email: input.email.trim().toLowerCase(),
-		cityRegion: input.cityRegion?.trim() ?? "",
-		summary: input.summary.trim(),
-		details: JSON.parse(details),
-		status: "new",
-		privateNote: "",
-		createdAt: now,
-		updatedAt: now,
-		resolvedAt: null,
-		contactDeleteAfter: null,
-	};
 }
 
 export async function getOwnerRequest(
