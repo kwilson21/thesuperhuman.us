@@ -26,7 +26,7 @@ step 0 split changed, cite the file only.
 Eight route files, nine handlers (`uploads.ts` has a POST and a PUT; the studio file route serves GET and HEAD with one
 function). Every owner route checks, in this order: the owner (403 `{ok:false}`; the uploads route answers its 403 and its 404 with its own sentences, "Owner access required." and "Not found."), the portal flag (404 "Not found"), the
 bindings (503), the body (`musicRequest`), the command's shape (400), then the action in one `try` whose `catch` answers
-every throw of any kind with 503 and a fixed sentence. The owner file route is the exception to the order of its bucket check: it checks `env.AUDIO` inside the `try`, for a publish only, after the body and the shape, so a revoke needs no bucket and answers 200 without one, and a bad publish body with no bucket answers 400 (the corpus cases "revoke: no R2 bucket is not needed" and the bad-body cases record it); the conversion keeps that order. The studio routes check the flag, the bindings and the cookie
+every throw of any kind with 503 and a fixed sentence. The uploads PUT has no `musicRequest` and its own order: the query's `uploadId` and `part` are read first (400 "Invalid file part."), then the upload read (S3, 404 "This upload is no longer available."), the project's readiness (S1 per part, 409), the length check (400 "This file part has the wrong size."), the body read, and the discard state at the put. The owner file route is the exception to the order of its bucket check: it checks `env.AUDIO` inside the `try`, for a publish only, after the body and the shape, so a revoke needs no bucket and answers 200 without one, and a bad publish body with no bucket answers 400 (the corpus cases "revoke: no R2 bucket is not needed" and the bad-body cases record it); the conversion keeps that order. The studio routes check the flag, the bindings and the cookie
 (`studioSessionFromRequest`): a missing cookie answers 401 on the messages route and 404 "File not found" on the file route, and anything else they cannot show answers 404.
 
 | Route | Handler | Actions | Code |
@@ -86,7 +86,7 @@ drawn for people only.
 
 ### The project
 
-The stage column holds seven values (`migrations/music/0005_audio_projects.sql:4-5`). Access is a separate fact
+The stage column holds seven values (`migrations/music/0005_audio_projects.sql:5-6`). Access is a separate fact
 (`revoked_at`), drawn after the stage. The trigger `audio_project_after_service_request` creates the project at
 `files_under_review` (intake).
 
@@ -280,7 +280,7 @@ in rows), with `now` and ids passed in as thunks:
 |---|---|
 | `revokeProjectAccess` | read project (plain); rule; batch (AR1 to AR4, with the client's email read first); best-effort `deleteRetiredCodes` after the batch, as today ("no such table" is silent; any other failure logs once through `logUnexpected`, a change of log text) |
 | `queueInvitation`, `retryUpdateNotice` | read notice and open facts in one batch; `queueNotice`; guarded write; then `waitUntil` delivery |
-| `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today. The four fixed `console.error` sentences of the background delivery ("Studio invitation email state is uncertain." and the update, file and revocation versions), written when the `waitUntil` task rejects while the task still settles fulfilled, are recorded in seven corpus cases and are kept as they are: they are not moved to `logUnexpected` |
+| `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today. The four fixed `console.error` sentences of the background delivery ("Studio invitation email state is uncertain." and the update, file and revocation versions), written when the `waitUntil` task rejects while the task still settles fulfilled, are kept as they are: they are not moved to `logUnexpected`. Three of the four are recorded in corpus cases; "Studio file revocation notice state is uncertain." is in no fixture. The `audio-intake` corpus also records the invitation sentence, through `ProjectInvitationFailed` (`flows/audio-intake.ts`), so the rewired `ProjectInvitation.deliver` must still fail with that tag, and `audio-intake` is an affected corpus |
 | `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); one batch for the project and request; the lookup rule (404, nothing after it runs, no count read); the text checks (400, as today, before any count); then one batch of what the action's rule needs (latest review, decisions since it, rounds used, the client's message count); the rule (the count first); guarded insert (section 4). A refused write is caught with `Effect.catchTag` on its refusal tag, the count is read again (M6), and the flow fails again with `ClientRateLimited` when it is full and with the same named refusal otherwise, so no refusal is swallowed and the route maps each tag. `markRead` ends in a guarded update after the lookup and answers `{ok:true}` |
 | `saveProjectUpdate` | one read batch; the action's rule; guarded batch (U1 to U16); a lost guard answers 409, no retry |
 | `startUpload`, `putPart`, `finishUpload`, `abortUpload` | the section 6 protocol; R2 calls through `AudioBucket` with `Effect.tryPromise`, as `agreement-download` reads its bucket |
@@ -333,8 +333,13 @@ re-decides (three tries). Two finals revoked at once both still succeed, as toda
 revokes without a reset (the rule saw the other final), the second finds the others moved, rolls back, reads again, sees
 none left, and revokes with the reset. The file's own guard is separate and is not a retry: the file update still requires
 `status` equal to the status read and an open project, and an empty `RETURNING` answers 409 (FileNotRevocable) at once,
-without a retry. After a retry the rule judges the fresh file row, so a file that was revoked meanwhile also ends in the
-409. The model checks the design (the revoke step in `audio-project-files.qnt`, with `RevokeStaleReset` as the mutant that
+without a retry. The file's status is also carried across the retries (the "facts carried across retries" pattern, note (c) of
+`src/server/guarded-save.ts`): the first read's status is kept, and after a retry the rule refuses with FileNotRevocable when
+the fresh status differs from the first read's. Without it, an owner revoking a draft with a note (the API accepts one on a
+draft, and today ignores it; corpus "revoke: an uploaded draft with a note ignores it") while a publish of that draft lands
+would have the batch guard raise, the retry read the file as published, the note satisfy the rule, and the live file be
+revoked with the stage reset, the client's notice row and its email, where today the status read earlier in the same request
+compares unequal and answers 409. A file that was revoked meanwhile also ends in the 409. The model checks the design (the revoke step in `audio-project-files.qnt`, with `RevokeStaleReset` as the mutant that
 drops the guard and the retry).
 
 | ID | Statement | Today | After |
@@ -369,7 +374,7 @@ drops the guard and the retry).
 | M2 | INSERT the client's message SELECT ... session, access, stage, and a count subquery (messages.ts:109) | (d) | (c): today's conditions, the count under the cap among them; the rule has read the same count first |
 | M3 | INSERT the decision SELECT ... session, access, review awaiting, rounds, named review, count (messages.ts:157) | (d) | (c): today's conditions |
 | M4 | UPDATE `audio_projects` revoked WHERE EXISTS the stopped decision, in the stop batch (messages.ts:192) | (d) | (c), in the same batch as M3, and keeping its link: the `EXISTS` of the stopped decision row this request just wrote, as today (not a comparison of `revoked_at` with this request's `now`, which two requests in the same millisecond share) |
-| M5 | INSERT audit `client-stopped` WHERE EXISTS the stopped decision (messages.ts:197) | (d) | (b): written in the stop batch with M4, keeping its link as today: the `EXISTS` of the stopped decision row, so an owner revoke and a client stop in the same millisecond cannot both write an audit row |
+| M5 | INSERT audit `client-stopped` WHERE EXISTS the stopped decision (messages.ts:197) | (d) | (b): written in the stop batch with M4, keeping its link as today: the `EXISTS` of the stopped decision row, which keys on the request, `review_decision='stopped'` and `created_at` equal to this request's `now`. Two stops by the same client in the same millisecond therefore both write a `client-stopped` audit row while the loser answers 409; that is today's behaviour and is kept |
 | M6 | SELECT the rate count (messages.ts:259) | (a), after a refused write | (a), in the read batch and again after a refused write; 429 beats every other refusal after the lookup (section 2) |
 | M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b) |
 | M8 | UPDATE the client's read mark WHERE EXISTS(session, project, request) (messages.ts:292) | (d) | (c): the session and access conditions stay as the write's guard (`token_hash`, session not revoked and not expired, project open, request not withdrawn), plus `read_at IS NULL`; the rule `markRead` reads first. The corpus case "read when the session is revoked after the lookup" fires its hook before this statement and records `read_at` null, so an unguarded write would set it |
@@ -430,12 +435,11 @@ so on. The one exception is the world in the notices model (the emails that went
 
 The models are written before any code and run in the pooled driver (`verify:quint:all`). Locally the whole driver exits 0 in
 about 55 to 62 seconds of wall time, and the three models add about 50 to 80 CPU-seconds to the pool (the driver's user time
-is about 416 to 431 s without them and 475 to 512 s with them). 35 checks at about 1.5 CPU-seconds of startup each are about
-50 CPU-seconds before any random run, so that is the floor while each property keeps a mutant and each pass run stays. The
+is about 416 to 431 s without them and 475 to 512 s with them). 37 checks at about 1.5 CPU-seconds of startup each are about
+55 CPU-seconds before any random run, so that is the floor while each property keeps a mutant and each pass run stays. The
 mutants whose race needs one particular starting point (`PublishNoStage`, `PublishStaleSupersede`, `CompleteNoStage`) begin
-from it alone and are found within a few thousand runs; two runs must pass, each of 8,000 runs: `projectFiles` takes all nine starting points and exercises every property, including the ones that need a published final, a paid balance or two uploaded reviews, and `projectFilesFinalAndReview` takes only `finalAndReview`. The first reaches a publish whose stage guard is false in a race only between 8,000 and 12,000 runs, so the second is the pass run that covers the publish's own stage condition; a fault in it cannot pass either run.
-The longest audio check is under 5 seconds. The plan's budget is 2 minutes 30 seconds on a 4-core CI runner; the Quint step took 227 s at the design head and 212 s at the
-fixes head, and 151 to 341 s on main's last nine successful runs (`docs/verification.md`, "Why one pool").
+from it alone and are found within a few thousand runs; three runs must pass, each of 8,000 runs: `projectFiles` takes all nine starting points and exercises every property, including the ones that need a published final, a paid balance or two uploaded reviews; `projectFilesFinalAndReview` takes only `finalAndReview`, where a review publish whose stage guard is false in a race is reached (the first run reaches it only between 8,000 and 12,000 runs); and `projectFilesFinalPlus` takes only `finalPlus`, where a final publish whose stage guard is false in a race is reached (a fault that lets the final branch also admit a completed project passes the first two runs and breaks `stageCoherent` from `finalPlus` within about 700 runs).
+The longest audio check is under 5 seconds. The plan's budget is 2 minutes 30 seconds on a 4-core CI runner; the Quint step took 212 to 344 s on this pull request's runs and 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15 (`docs/verification.md`, "Why one pool").
 
 **Messages and review decisions** (`verification/audio-project-messages.qnt`, module `projectMessages`). Three requests,
 a client session, the owner's publishing, beginning a revision and closing access between a request's read and its write,
@@ -465,7 +469,7 @@ access is revoked" protocol: the file row is a guarded write after R2 completed 
 no row (an orphan the owner's abort or the incomplete-upload lifecycle removes), and the model checks the reverse never
 happens. A lost guard writes nothing and answers 409. The revoke reads the version's other published files and the stage;
 the rule decides the reset from them; the batch guard compares both with what is stored now; a moved guard rolls the batch
-back and the request reads again (a third failure answers 409), while a file whose own status moved answers 409 at once.
+back and the request reads again (a third failure answers 409), while a file whose own status moved since the request's first read answers 409 at once (the status is carried across the retries).
 
 | Property | Mutant that breaks it |
 |---|---|
@@ -474,6 +478,7 @@ back and the request reads again (a third failure answers 409), while a file who
 | `publishedOnlyWhenPaidAndOpen`: a published file's stamp precedes them, and for a final the balance's voiding | `PublishNoAccess`, `PublishNoPayment` |
 | `stageCoherent`: a published final means a final stage, and a completion is stamped exactly while the stage is complete | `PublishNoStage`; `ResetNoLink`: the revoke's stage reset is written although its own file update was refused (the reset is not linked to the file update, FR3) |
 | `oneLiveReview`: at most one review is live (any publish revokes the live review, P3) | `NoSupersede`; `PublishStaleSupersede`: the publish revokes the review ids it read without the guard that they are still the live ones (and without the retry), so two publishes at once leave two live reviews |
+| `revokeKeepsFirstRead`: a revoke that read a draft never ends having revoked a file that had been published (the file's `published_at` is set exactly when the request's first read saw it published) | `RevokeNoFirstStatus`: the retry does not carry the first read's status, so a publish that landed in between lets the revoke take the published file |
 | `finalStageHasNoLiveReview`: a project at `final_files_ready` or `complete` has no live review, so publishing a final supersedes it (the starting point `reviewFinal` has a published review, an uploaded final and a paid balance; `finalAndReview` explores a final publish racing a review publish, which is `PublishNoStage`'s counterexample) | `FinalNoSupersede`: a final publish does not revoke the live review |
 | `readyStagesHaveFiles`: review_ready has a published review, final_files_ready and complete a published final | `RevokeStaleReset`: the revoke writes the reset it decided from its read without the guard that the other files and the stage are still the ones read (and without the retry); `CompleteNoStage`: complete compares neither the stage nor the published final |
 | `completedOnlyWhenPaid`: the completion's stamp precedes the voiding of the booking and of the balance | `CompleteNoPayment` |
@@ -572,7 +577,7 @@ branch `golden:neutral --all <fixes tip> HEAD` must print NEUTRAL; the changed D
 Input readers (Effect Schema, in `src/server/audio-project-input.ts`, with frozen Zod copies under
 `tests/fixtures/legacy-validators/` and a seeded differential test): the eight command unions above. `body` of a message
 is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId`; `peaks` 16 to 400 integers 0 to 100;
-`mediaType` and `version` enums.
+`mediaType` and `version` enums. The uploads PUT reads its query the same way, with its own reader (`uploadId` a uuid, `part` an integer), before anything else.
 
 ## 9. The PR stack
 
