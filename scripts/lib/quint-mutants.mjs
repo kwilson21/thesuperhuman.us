@@ -115,6 +115,7 @@ export const pricingMutants = {
 	pricingStaleRead: { property: "noFalseConflict" },
 	pricingTodayKv: { property: "otherPartKept" },
 	pricingParallelSaves: { property: "noFalseConflict" },
+	pricingRetryAfterLost: { property: "noFalseConflict" },
 };
 
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent

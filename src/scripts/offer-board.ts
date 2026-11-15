@@ -19,6 +19,7 @@ import {
 	lastAction,
 	listOf,
 	markStep,
+	oneLine,
 	ownField,
 	replyRefs,
 	sendRequest,
@@ -222,7 +223,10 @@ export function setupOfferBoard() {
 	const interacting = () =>
 		hovering ||
 		cardsBox.contains(document.activeElement) ||
-		document.activeElement === heldButton;
+		document.activeElement === heldButton ||
+		[...cardsBox.querySelectorAll<HTMLElement>("[data-card-editor]")].some(
+			(editor) => !editor.hidden,
+		);
 
 	// ---- The offer editor's fields ------------------------------------------------------------------------------------
 	const named = <E extends HTMLInputElement | HTMLTextAreaElement>(
@@ -333,7 +337,10 @@ export function setupOfferBoard() {
 		control instanceof HTMLInputElement &&
 		(control.type === "checkbox" || control.type === "radio")
 			? String(control.checked)
-			: control.value;
+			: // A partly typed date or number reads as "" with badInput set: the owner has typed in it.
+				control.validity.badInput
+				? "\u0000typed"
+				: control.value;
 
 	/** Every control in these parts and what it holds. */
 	function snapshot(parts: readonly HTMLElement[]) {
@@ -389,7 +396,10 @@ export function setupOfferBoard() {
 		changed(input);
 
 		// Its own step: Undo puts the fee back while it still holds what this put there (mutant fee-no-step).
-		board = markStep(board, card.id, `set the fee of “${card.text}”`);
+		const marked = markStep(board, card.id, `set the fee of “${card.text}”`);
+
+		if (marked === board) return;
+		board = marked;
 		const step = board.history.at(-1);
 
 		if (step)
@@ -1222,13 +1232,29 @@ export function setupOfferBoard() {
 
 		switch (target.dataset.act) {
 			case "use":
-				use(card);
+			case "use-fee": {
+				// Words typed in the card's open editor are the owner's: they are saved or cancelled first, never lost.
+				const editor = node.querySelector<HTMLElement>("[data-card-editor]")!;
+
+				const input =
+					node.querySelector<HTMLInputElement>("[data-card-input]")!;
+
+				if (!editor.hidden && oneLine(input.value) !== card.text) {
+					showEditError(
+						node,
+						input,
+						card.id,
+						"Save or Cancel your edit first, then use the card.",
+					);
+
+					break;
+				}
+
+				use(card, target.dataset.act === "use-fee");
 
 				break;
-			case "use-fee":
-				use(card, true);
+			}
 
-				break;
 			case "fee":
 				setFee(card);
 
@@ -1267,13 +1293,7 @@ export function setupOfferBoard() {
 				const message =
 					"A card needs some words. Use Cancel to keep it as it was, or Not this to set it aside.";
 
-				error.id = `offer-card-error-${card.id}`;
-				error.textContent = message;
-				error.hidden = false;
-				input.setAttribute("aria-invalid", "true");
-				input.setAttribute("aria-describedby", error.id);
-				announce(message);
-				input.focus();
+				showEditError(node, input, card.id, message);
 
 				return;
 			}
@@ -1297,6 +1317,24 @@ export function setupOfferBoard() {
 			).focus();
 		}
 	});
+
+	/** Says what is wrong next to the card's field, marks the field and moves focus to it. */
+	function showEditError(
+		node: HTMLElement,
+		input: HTMLInputElement,
+		id: string,
+		message: string,
+	) {
+		const error = node.querySelector<HTMLElement>("[data-card-error]")!;
+
+		error.id = `offer-card-error-${id}`;
+		error.textContent = message;
+		error.hidden = false;
+		input.setAttribute("aria-invalid", "true");
+		input.setAttribute("aria-describedby", error.id);
+		announce(message);
+		input.focus();
+	}
 
 	/** The card editor's error line and the field's invalid mark go together. */
 	function clearEditError(node: HTMLElement) {

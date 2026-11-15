@@ -136,7 +136,8 @@ A new owner page, `/owner/pricing`, reached from the owner nav and from the boar
 Stored as one record (`owner:pricing`) in the RESUME_STORE KV namespace, which already holds the owner's private records,
 saved with the version the owner last read (a stale save is refused with 409 and the page says to reload; KV has no
 compare-and-set, and one owner writes this record; `verification/pricing-save.qnt` shows what that allows between
-two tabs). A MUSIC_DB table was the first plan: it would have changed the
+two tabs). The page sends one save at a time, and after a save whose answer never arrived it asks for a reload before
+another, since that save may have been written. A MUSIC_DB table was the first plan: it would have changed the
 database digest every golden case records, so the corpus would have needed a re-record its rules do not allow. The research itself is produced outside the site
 by a workflow that searches, reads and cross-checks sources and is rerun when the owner wants it refreshed; a live
 search on every request would need a new paid service, which the owner has not approved.

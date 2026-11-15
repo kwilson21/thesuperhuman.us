@@ -11,8 +11,12 @@
 // the record in KV, whose reads may be up to about a minute old and whose read and write are separate steps: that is the
 // `pricingTodayKv` mutant, and the properties it breaks are what today's code allows (docs/verification.md, "The
 // pricing-save model"). Moving the record to D1 is the owner's decision; until then this model describes the intended code.
+// A save's answer is its own step: it can be lost after the write (a timeout at the edge, a cut connection), and the page
+// cannot tell whether the save was written, so it asks for a reload before another save. A reload is a new page: an
+// answer to the page it replaced is never read.
 // What is left out, on purpose: the contents of a part (a part is the number of the save that wrote it), the reload a new
-// research file triggers, and KV failures (a failed save writes nothing).
+// research file triggers, KV failures (a failed save writes nothing), and a request the page gave up on that the route
+// still runs after the reload (the reloaded page could then be refused, and reloads again).
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
 module pricingSaveModel {
@@ -23,13 +27,18 @@ module pricingSaveModel {
   //   "today-kv"          both: the code as it is today, on KV
   //   "parallel-saves"    a page sends a second save before the first answers, carrying the version the first replaces
   //                       (the second review: Save the values, then the research, from one tab)
+  //   "retry-after-lost"  after a lost answer the page lets the owner save again without a reload, with the version from
+  //                       before the save that may have been written (the third review)
   const MUTANT: str
 
-  // The stored record, and which page wrote this version (0: none yet).
-  type Record = { version: int, values: int, market: int, by: int }
-  type Page = { version: int, values: int, market: int }
-  // A save as sent: its page, form, value and the version its page had when Save was pressed.
-  type Req = { page: int, part: str, value: int, version: int, phase: str, base: Record }
+  // The stored record, and which page wrote this version: the tab and its load (0: none yet).
+  type Record = { version: int, values: int, market: int, by: int, byLoad: int }
+  // A tab: what it last saw, which load of the tab it is, and whether a lost answer asks for a reload.
+  type Page = { version: int, values: int, market: int, load: int, stale: bool }
+  // A save as sent: its tab and load, form, value and the version its page had when Save was pressed.
+  // Phases: read (on its way), write (read, to be written: the split mutants), written (the answer is on its way),
+  // saved, refused, lost (the page never hears).
+  type Req = { page: int, load: int, part: str, value: int, version: int, phase: str, base: Record }
 
   val PAGES = Set(1, 2)
   val MAXSAVES = 4
@@ -47,12 +56,12 @@ module pricingSaveModel {
   var otherPartLost: bool
   var falseConflict: bool
 
-  pure val empty: Record = { version: 0, values: 0, market: 0, by: 0 }
+  pure val empty: Record = { version: 0, values: 0, market: 0, by: 0, byLoad: 0 }
 
   action init = all {
     stored' = empty,
     written' = List(empty),
-    pages' = PAGES.mapBy(p => { version: 0, values: 0, market: 0 }),
+    pages' = PAGES.mapBy(p => { version: 0, values: 0, market: 0, load: 1, stale: false }),
     reqs' = Map(),
     saves' = 0,
     blindOverwrite' = false,
@@ -71,27 +80,33 @@ module pricingSaveModel {
     blindOverwrite' = blindOverwrite, otherPartLost' = otherPartLost, falseConflict' = falseConflict,
   }
 
-  // The owner opens or reloads a page.
+  // The owner opens or reloads a page: a new load, which never reads an answer sent to the one it replaced.
   action load = {
     nondet p = PAGES.oneOf()
     nondet r = readable.oneOf()
     all {
-      pages' = pages.set(p, { version: r.version, values: r.values, market: r.market }),
+      pages' = pages.set(p, {
+        version: r.version, values: r.values, market: r.market, load: pages.get(p).load + 1, stale: false,
+      }),
       stored' = stored, written' = written, reqs' = reqs, saves' = saves, unchangedGhosts,
     }
   }
 
-  // The owner presses Save on one form; the save's value is its number. A page sends one save at a time
-  // (src/scripts/owner-pricing.ts: every Save button waits while one is on its way).
-  def busy(p: int): bool = reqs.keys().exists(k => reqs.get(k).page == p and Set("read", "write").contains(reqs.get(k).phase))
+  // The owner presses Save on one form; the save's value is its number. A page sends one save at a time, and none after
+  // a lost answer until it is reloaded (src/scripts/owner-pricing.ts: `saving` and `needsReload`).
+  def busy(p: int): bool = reqs.keys().exists(k =>
+    reqs.get(k).page == p and reqs.get(k).load == pages.get(p).load
+      and Set("read", "write", "written").contains(reqs.get(k).phase))
   action press = {
     nondet p = PAGES.oneOf()
     nondet part = Set("values", "market").oneOf()
     all {
       saves < MAXSAVES,
       MUTANT == "parallel-saves" or not(busy(p)),
+      not(pages.get(p).stale),
       reqs' = reqs.put(saves + 1, {
-        page: p, part: part, value: saves + 1, version: pages.get(p).version, phase: "read", base: empty,
+        page: p, load: pages.get(p).load, part: part, value: saves + 1, version: pages.get(p).version, phase: "read",
+        base: empty,
       }),
       saves' = saves + 1,
       stored' = stored, written' = written, pages' = pages, unchangedGhosts,
@@ -101,17 +116,15 @@ module pricingSaveModel {
   pure def withPart(r: Record, part: str, value: int): Record =
     if (part == "values") { ...r, version: r.version + 1, values: value } else { ...r, version: r.version + 1, market: value }
 
-  // The write: the record read, with this save's part, at the next version. The page takes the new version and part.
+  // The write: the record read, with this save's part, at the next version. The answer follows in its own step.
   action write(id: int, base: Record): bool = {
     val q = reqs.get(id)
-    val saved = { ...withPart(base, q.part, q.value), by: q.page }
-    val page = pages.get(q.page)
+    val saved = { ...withPart(base, q.part, q.value), by: q.page, byLoad: q.load }
     all {
       stored' = saved,
       written' = written.append(saved),
-      pages' = pages.set(q.page, if (q.part == "values") { ...page, version: saved.version, values: q.value }
-        else { ...page, version: saved.version, market: q.value }),
-      reqs' = reqs.set(id, { ...q, phase: "saved" }),
+      pages' = pages,
+      reqs' = reqs.set(id, { ...q, phase: "written", base: saved }),
       saves' = saves,
       // The save was sent from a view older than the latest save, yet it replaced it.
       blindOverwrite' = (blindOverwrite or q.version != stored.version),
@@ -129,9 +142,37 @@ module pricingSaveModel {
       reqs' = reqs.set(id, { ...q, phase: "refused" }),
       stored' = stored, written' = written, pages' = pages, saves' = saves,
       blindOverwrite' = blindOverwrite, otherPartLost' = otherPartLost,
-      // Refused, though every save since the version it was sent with came from its own page.
+      // Refused, though every save since the version it was sent with came from this same page (tab and load).
       falseConflict' = (falseConflict
-        or written.foldl(true, (only, w) => only and (w.version <= q.version or w.by == q.page))),
+        or written.foldl(true, (only, w) => only and (w.version <= q.version or (w.by == q.page and w.byLoad == q.load)))),
+    }
+  }
+
+  // The answer to a written save reaches its page, unless the page was reloaded since: the page takes the new version
+  // (both forms do) and the part it saved.
+  action answer = {
+    nondet id = reqs.keys().filter(k => reqs.get(k).phase == "written").oneOf()
+    val q = reqs.get(id)
+    val page = pages.get(q.page)
+    all {
+      pages' = if (page.load != q.load) pages
+        else pages.set(q.page, if (q.part == "values") { ...page, version: q.base.version, values: q.value }
+          else { ...page, version: q.base.version, market: q.value }),
+      reqs' = reqs.set(id, { ...q, phase: "saved" }),
+      stored' = stored, written' = written, saves' = saves, unchangedGhosts,
+    }
+  }
+
+  // The answer is lost, before or after the write: the page cannot tell which, and asks for a reload before another save.
+  action lose = {
+    nondet id = reqs.keys().filter(k => Set("read", "written").contains(reqs.get(k).phase)).oneOf()
+    val q = reqs.get(id)
+    val page = pages.get(q.page)
+    all {
+      pages' = if (page.load != q.load or MUTANT == "retry-after-lost") pages
+        else pages.set(q.page, { ...page, stale: true }),
+      reqs' = reqs.set(id, { ...q, phase: "lost" }),
+      stored' = stored, written' = written, saves' = saves, unchangedGhosts,
     }
   }
 
@@ -156,7 +197,7 @@ module pricingSaveModel {
     write(id, reqs.get(id).base)
   }
 
-  action step = any { load, press, read, laterWrite }
+  action step = any { load, press, read, laterWrite, answer, lose }
 
   // For the Apalache check only (`--step stepOrEnd`).
   action finished = all {
@@ -171,7 +212,8 @@ module pricingSaveModel {
   // 2. Saving one form never puts the other form's part back to an older value.
   val otherPartKept = not(otherPartLost)
 
-  // 3. A save is refused only when another save really came in since its page last saw the record.
+  // 3. A save is refused only when another page's save really came in since its page last saw the record (a reload is
+  //    another page: it did not see the saves of the page it replaced).
   val noFalseConflict = not(falseConflict)
 
   val allProperties = and { noBlindOverwrite, otherPartKept, noFalseConflict }
@@ -189,3 +231,4 @@ module pricingSplitReadWrite { import pricingSaveModel(MUTANT = "split-read-writ
 module pricingStaleRead { import pricingSaveModel(MUTANT = "stale-read").* }
 module pricingTodayKv { import pricingSaveModel(MUTANT = "today-kv").* }
 module pricingParallelSaves { import pricingSaveModel(MUTANT = "parallel-saves").* }
+module pricingRetryAfterLost { import pricingSaveModel(MUTANT = "retry-after-lost").* }

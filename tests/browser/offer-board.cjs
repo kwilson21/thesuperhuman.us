@@ -118,9 +118,7 @@ function check(name, ok, detail = "") {
 		await page.goto(new URL("/owner/pricing", targetUrl).href);
 
 		const version = Number(
-			await page
-				.locator('[data-part="values"]')
-				.getAttribute("data-version"),
+			await page.locator('[data-part="values"]').getAttribute("data-version"),
 		);
 
 		const saved = await page.evaluate(
@@ -140,7 +138,47 @@ function check(name, ok, detail = "") {
 			version,
 		);
 
-		check("a made-up day value is saved for the check", saved === 200, `${saved}`);
+		check(
+			"a made-up day value is saved for the check",
+			saved === 200,
+			`${saved}`,
+		);
+
+		// retry-after-lost (verification/pricing-save.qnt): after a save whose answer was lost, the page asks for a reload
+		// and sends nothing more until then.
+		await page.reload();
+		let pricingPosts = 0;
+
+		await page.route("**/api/owner/pricing", (route) => {
+			pricingPosts += 1;
+
+			return route.abort("timedout");
+		});
+
+		const values = page.locator('[data-part="values"]');
+
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		await page.waitForFunction(() =>
+			/Reload the page/.test(
+				document.querySelector('[data-part="values"] [data-pricing-status]')
+					?.textContent ?? "",
+			),
+		);
+		await values.getByRole("button", { name: "Save", exact: true }).click();
+		await page
+			.locator('[data-part="market"]')
+			.getByRole("button", { name: "Clear research" })
+			.click();
+		await page.waitForTimeout(300);
+		check(
+			"retry-after-lost: after a lost answer the pricing page sends nothing until it is reloaded",
+			pricingPosts === 1 &&
+				/Reload the page before saving again/.test(
+					await values.locator("[data-pricing-status]").textContent(),
+				),
+			`${pricingPosts} sent`,
+		);
+		await page.unroute("**/api/owner/pricing");
 
 		const queue = [];
 
@@ -170,7 +208,9 @@ function check(name, ok, detail = "") {
 		const rows = page.locator("[data-milestone]");
 
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
-		await page.getByRole("button", { name: "Suggest an offer with AI" }).click();
+		await page
+			.getByRole("button", { name: "Suggest an offer with AI" })
+			.click();
 		await release(await next());
 		await page.waitForFunction(() =>
 			document
@@ -180,7 +220,9 @@ function check(name, ok, detail = "") {
 		await page.mouse.move(2, 2);
 
 		// restore-always: Undo of a Use keeps what the owner typed since.
-		await card("outcome").getByRole("button", { name: /^Use as outcome/ }).click();
+		await card("outcome")
+			.getByRole("button", { name: /^Use as outcome/ })
+			.click();
 		const used = await value("outcome");
 
 		await page.locator('[name="outcome"]').fill(`${used} and sells merch`);
@@ -192,7 +234,9 @@ function check(name, ok, detail = "") {
 		await page.locator('[name="outcome"]').fill("");
 
 		// The same rule for a one-per-line field: only the line Use added goes.
-		await card("inputs").getByRole("button", { name: /^Add to the offer/ }).click();
+		await card("inputs")
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
 		const inputs = page.locator('[name="clientInputs"]');
 
 		await inputs.fill(`${await inputs.inputValue()}\nThe band's logo`);
@@ -203,7 +247,10 @@ function check(name, ok, detail = "") {
 		);
 
 		// name-only-empty: deliverables typed in a row without a name are not written over.
-		await rows.first().locator('[name="deliverables"]').fill("Our own deliverable");
+		await rows
+			.first()
+			.locator('[name="deliverables"]')
+			.fill("Our own deliverable");
 		await card("milestones", 0)
 			.getByRole("button", { name: /^Add to the offer/ })
 			.click();
@@ -215,7 +262,10 @@ function check(name, ok, detail = "") {
 
 		// no-row-removal: Undo removes the row Use added.
 		await undo();
-		check("no-row-removal: Undo removes the row Use added", (await rows.count()) === 1);
+		check(
+			"no-row-removal: Undo removes the row Use added",
+			(await rows.count()) === 1,
+		);
 		await rows.first().locator('[name="deliverables"]').fill("");
 
 		// stale-used-in: after Undo, a milestone never takes another milestone's row.
@@ -290,7 +340,11 @@ function check(name, ok, detail = "") {
 
 		reply.cards = reply.cards.map((each) =>
 			each.text === "Design direction"
-				? { ...each, ref: "", detail: { ...each.detail, daysLow: 9, daysHigh: 12 } }
+				? {
+						...each,
+						ref: "",
+						detail: { ...each.detail, daysLow: 9, daysHigh: 12 },
+					}
 				: each,
 		);
 		await page.mouse.move(2, 2);
@@ -307,7 +361,9 @@ function check(name, ok, detail = "") {
 		);
 
 		// key-by-length: past the 40-step history, Undo never empties a field another step filled.
-		await card("outcome").getByRole("button", { name: /^Use as outcome/ }).click();
+		await card("outcome")
+			.getByRole("button", { name: /^Use as outcome/ })
+			.click();
 		const outcome = await value("outcome");
 
 		const question = await card("questions")
@@ -315,13 +371,15 @@ function check(name, ok, detail = "") {
 			.textContent();
 
 		for (let i = 0; i < 21; i++) {
-			await card("questions").getByRole("button", { name: /^Not this/ }).click();
+			await card("questions")
+				.getByRole("button", { name: /^Not this/ })
+				.click();
+			await page.locator("[data-offer-aside]").evaluate((element) => {
+				element.open = true;
+			});
 			await page
-				.locator("[data-offer-aside]")
-				.evaluate((element) => {
-					element.open = true;
-				});
-			await page.getByRole("button", { name: `Bring back: ${question}` }).click();
+				.getByRole("button", { name: `Bring back: ${question}` })
+				.click();
 		}
 
 		for (
@@ -368,7 +426,10 @@ function check(name, ok, detail = "") {
 
 		// four-fields-only: Undo keeps a row Use added when the owner typed in its checkpoint.
 		await fresh();
-		await rows.first().locator('[name="deliverables"]').fill("Our own deliverable");
+		await rows
+			.first()
+			.locator('[name="deliverables"]')
+			.fill("Our own deliverable");
 		await card("milestones", 0)
 			.getByRole("button", { name: /^Add to the offer/ })
 			.click();
@@ -376,9 +437,7 @@ function check(name, ok, detail = "") {
 		const added = rows.nth(1);
 
 		await added.locator('[name="hasCheckpoint"]').check();
-		await added
-			.locator('[name="checkpointLabel"]')
-			.fill("Direction approved");
+		await added.locator('[name="checkpointLabel"]').fill("Direction approved");
 		await undo();
 		check(
 			"four-fields-only: Undo keeps a row whose checkpoint the owner filled in",
@@ -429,6 +488,81 @@ function check(name, ok, detail = "") {
 				.getByRole("button", { name: /^Set its fee to .*: Design direction$/ })
 				.count()) === 0 &&
 				(await value("milestoneName", rows.first())) === "Build and launch",
+		);
+
+		// The third review's bugs.
+		// Use never throws away words typed in the card's open editor.
+		await fresh();
+
+		const outcomeCard = card("outcome");
+
+		const outcomeText = await outcomeCard
+			.locator("[data-card-text]")
+			.textContent();
+
+		await outcomeCard.getByRole("button", { name: /^Edit/ }).click();
+		await outcomeCard
+			.locator("[data-card-input]")
+			.fill("A home for the band, with the shows first.");
+		await outcomeCard.getByRole("button", { name: /^Use as outcome/ }).click();
+		check(
+			"Use with unsaved words in the card's editor keeps them and fills nothing",
+			(await value("outcome")) === "" &&
+				(await outcomeCard.locator("[data-card-input]").inputValue()) ===
+					"A home for the band, with the shows first." &&
+				(await outcomeCard.locator("[data-card-error]").isVisible()) &&
+				(await outcomeCard
+					.locator("[data-card-input]")
+					.getAttribute("aria-invalid")) === "true",
+			outcomeText.slice(0, 40),
+		);
+
+		// A reply waits while a card's editor is open, even with focus and the mouse elsewhere. This reply changes the
+		// card being edited, so applying it would lose the words typed there.
+		await page.getByRole("button", { name: "Suggest again" }).click();
+		await page.mouse.move(2, 2);
+		const changing = await next();
+		const changed = scriptedOfferReply(changing.request().postData());
+
+		changed.cards = changed.cards.map((each) =>
+			each.lane === "outcome"
+				? {
+						...each,
+						text: "A website for the band that sells merch and books shows",
+					}
+				: each,
+		);
+		await release(changing, changed);
+		await page.waitForTimeout(500);
+		check(
+			"a reply waits while a card's editor is open",
+			(await page.locator("[data-offer-held]").isVisible()) &&
+				(await outcomeCard.locator("[data-card-input]").inputValue()) ===
+					"A home for the band, with the shows first.",
+		);
+		await outcomeCard.getByRole("button", { name: "Cancel" }).click();
+
+		// A partly typed number in a row Use added reads as typed: Undo keeps the row.
+		await fresh();
+		await rows
+			.first()
+			.locator('[name="deliverables"]')
+			.fill("Our own deliverable");
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await rows.nth(1).locator('[name="fee"]').click();
+		await page.keyboard.type("1e");
+		await undo();
+		// Undo empties the fields Use wrote and keeps the row with the owner's typing in it.
+		check(
+			"a partly typed fee keeps the row Use added",
+			(await rows.count()) === 2 &&
+				(await rows
+					.nth(1)
+					.locator('[name="fee"]')
+					.evaluate((input) => input.validity.badInput)),
+			`${await rows.count()} rows`,
 		);
 
 		// retry-on-fail: after a failure the board asks again only when the owner presses Suggest.

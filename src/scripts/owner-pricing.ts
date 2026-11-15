@@ -43,6 +43,15 @@ const SAVED_KEY = "owner-pricing-saved";
 let saving = false;
 
 /**
+ * Whether a save's answer was lost: it may have reached the store, so this page's version may be old and another save
+ * would be refused as if another page had saved (verification/pricing-save.qnt, mutant retry-after-lost).
+ */
+let needsReload = false;
+
+const RELOAD_FIRST =
+	"The last save's answer did not arrive, so it may have been saved. Reload the page before saving again.";
+
+/**
  * One save at a time for the whole page: a second save sent before the first answers would carry the version the first
  * replaces, and be refused as if another page had saved (verification/pricing-save.qnt, mutant parallel-saves). Every
  * Save button waits while one is on its way, and the next save reads the version the last one answered.
@@ -52,7 +61,19 @@ async function send(
 	form: HTMLFormElement,
 	status: Status,
 ) {
-	if (saving) return;
+	if (saving) {
+		if (status)
+			status.textContent = "A save is on its way. Try again when it answers.";
+
+		return;
+	}
+
+	if (needsReload) {
+		if (status) status.textContent = RELOAD_FIRST;
+
+		return;
+	}
+
 	saving = true;
 
 	// Marked, not disabled: a disabled button would drop keyboard focus to the page. `saving` refuses a second press.
@@ -89,6 +110,15 @@ async function save(
 
 		const answer: RawValue = await response.json().catch(() => null);
 		const error = field(answer, "error");
+
+		// No readable answer (a timeout at the edge, a cut connection): the save may or may not have been written.
+		if (answer === null) {
+			needsReload = true;
+
+			if (status) status.textContent = RELOAD_FIRST;
+
+			return;
+		}
 
 		const version = field(answer, "version");
 
@@ -148,8 +178,10 @@ async function save(
 				? error
 				: "Your pricing could not be saved. Try again.";
 	} catch {
-		if (status)
-			status.textContent = "Your pricing could not be saved. Try again.";
+		// The request or its answer was lost on the way: the save may have reached the store.
+		needsReload = true;
+
+		if (status) status.textContent = RELOAD_FIRST;
 	}
 }
 
@@ -239,6 +271,15 @@ export function setupOwnerPricing() {
 		form
 			.querySelector<HTMLButtonElement>("[data-pricing-clear]")
 			?.addEventListener("click", () => {
+				if (saving || needsReload) {
+					if (status)
+						status.textContent = needsReload
+							? RELOAD_FIRST
+							: "A save is on its way. Try again when it answers.";
+
+					return;
+				}
+
 				if (!confirm("Clear the saved market research?")) return;
 				void send(
 					{

@@ -332,9 +332,9 @@ File: `verification/pricing-save.qnt` (module `pricing`). The owner's pricing pa
 
 **This model describes the intended code, not today's.** The module that must keep every property checks the version and writes the record in one step against the latest record: a compare-and-set, which D1 gives and KV does not. Today the record is in KV, whose reads may be cached for up to about a minute and whose read and write are separate steps. That is the `TodayKv` mutant, and it breaks all three properties. Its shortest counterexample: two tabs are open; one saves the market research; seconds later the other saves the day value, its read returns the record from before the research was saved, the versions match, and the write puts the old research back. With one tab, a stale read can refuse a second save that should succeed. Cloudflare says a change is usually visible at once in the location where it was made, so the owner should rarely meet either; moving the record to D1 removes both, and is the owner's decision (a new table changes the digest of every golden case).
 
-Each save carries the version its page had when Save was pressed, and a page sends one save at a time (`src/scripts/owner-pricing.ts`: every Save button waits while one is on its way).
+Each save carries the version its page had when Save was pressed, and a page sends one save at a time (`src/scripts/owner-pricing.ts`: every Save button waits while one is on its way). A save's answer is its own step after the write, and it can be lost (a timeout at the edge, a cut connection): the page cannot tell whether the save was written, so it asks for a reload before another save (`needsReload`). A reload is a new page, which never reads an answer sent to the page it replaced. Left out: a request the page gave up on that the route still runs after the reload (the reloaded page could then be refused once, and reloads again).
 
-**Properties** (`allProperties`): `noBlindOverwrite` (a save never replaces a save its page had not seen), `otherPartKept` (saving one form never puts the other form's part back to an older value) and `noFalseConflict` (a save is refused only when another page's save came in since the version it was sent with).
+**Properties** (`allProperties`): `noBlindOverwrite` (a save never replaces a save its page had not seen), `otherPartKept` (saving one form never puts the other form's part back to an older value) and `noFalseConflict` (a save is refused only when another page's save came in since the version it was sent with; a reload counts as another page, since it did not see the saves of the page it replaced).
 
 | Mutant | The change | Breaks |
 |---|---|---|
@@ -343,8 +343,9 @@ Each save carries the version its page had when Save was pressed, and a page sen
 | `StaleRead` | The version is compared against a record that may be a few saves old | `noFalseConflict` |
 | `TodayKv` | Both: the code as it is today, on KV | `otherPartKept` (and the other two) |
 | `ParallelSaves` | A page sends a second save before the first answers, carrying the version the first replaces (second review: the values, then the research, from one tab) | `noFalseConflict` |
+| `RetryAfterLost` | After a lost answer the page lets the owner save again without a reload, with the version from before the save that may have been written (third review: the model had written the store and the page's version in one step, so a lost answer could not happen) | `noFalseConflict` |
 
-**Exhaustive.** Run by hand as above with `--main pricing`: no violation at 3 steps (7 seconds) or 6 steps (9 seconds).
+**Exhaustive.** Run by hand as above with `--main pricing`: no violation at 3 steps (7 seconds) or 6 steps (9 seconds). Run again after the third review split the answer from the write: no violation at 3 steps (8 seconds) or 6 steps (16 seconds); at 6 steps Apalache finds the `RetryAfterLost` counterexample in 8 seconds.
 
 ## Verified modules
 
