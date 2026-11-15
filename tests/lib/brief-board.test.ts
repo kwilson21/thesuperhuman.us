@@ -1413,3 +1413,23 @@ describe("found in the seventh review", () => {
 		expect(commits(text)).toBe(false);
 	});
 });
+
+describe("found in the eighth review", () => {
+	it.each([
+		"일정이 2주 차이 납니다",
+		"3주간 차질 없이",
+		"1년 차이가 나요",
+		"배송이 3일 차이",
+		"첫 1주 차량 무료",
+		"5일 차감",
+	])("still refuses the spaced duration in %s", (text) => {
+		expect(commits(text)).toBe(true);
+	});
+
+	it.each(["1주 차", "1주 차에 런칭", "3년 차인 디자이너", "2주 차부터"])(
+		"accepts the ordinal %s",
+		(text) => {
+			expect(commits(text)).toBe(false);
+		},
+	);
+});
