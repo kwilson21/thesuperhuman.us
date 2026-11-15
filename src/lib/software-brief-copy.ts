@@ -3,6 +3,17 @@ import { softwareBriefEmail } from "./client-emails";
 import type { OwnerRequest } from "./owner-model";
 import { softwareBrief } from "./software-inquiry";
 
+/**
+ * What a delivery came to. `status` is what is recorded on the request and what the public form shows (null when another
+ * request holds the copy). `kind` says more for the owner's route: the provider sent it, refused it, did not answer, or was
+ * never asked (no key or address); `unexpected` is a failure of the database or of the work around the provider, with what
+ * was raised.
+ */
+export type BriefCopyDelivery =
+	| { status: null; kind: "notClaimed" }
+	| { status: string; kind: "sent" | "refused" | "uncertain" | "unconfigured" }
+	| { status: string; kind: "unexpected"; failure: unknown };
+
 export async function deliverSoftwareBriefCopy(
 	db: D1Database,
 	request: OwnerRequest,
@@ -10,6 +21,24 @@ export async function deliverSoftwareBriefCopy(
 	retry = false,
 	confirmedNotSent = false,
 ): Promise<string | null> {
+	return (
+		await deliverSoftwareBriefCopyDetailed(
+			db,
+			request,
+			env,
+			retry,
+			confirmedNotSent,
+		)
+	).status;
+}
+
+export async function deliverSoftwareBriefCopyDetailed(
+	db: D1Database,
+	request: OwnerRequest,
+	env: Env,
+	retry = false,
+	confirmedNotSent = false,
+): Promise<BriefCopyDelivery> {
 	const at = new Date().toISOString();
 	let providerStarted = false;
 
@@ -38,7 +67,7 @@ export async function deliverSoftwareBriefCopy(
 			)
 			.first<{ id: string }>();
 
-		if (!claimed) return null;
+		if (!claimed) return { status: null, kind: "notClaimed" };
 
 		const payload = {
 			from: env.CONTACT_FROM_EMAIL,
@@ -63,8 +92,17 @@ export async function deliverSoftwareBriefCopy(
 				.bind(status, request.id, at),
 		]);
 
-		return status;
-	} catch {
+		return {
+			status,
+			kind: copy.ok
+				? "sent"
+				: copy.uncertain
+					? "uncertain"
+					: providerStarted
+						? "refused"
+						: "unconfigured",
+		};
+	} catch (failure) {
 		const status = providerStarted ? "uncertain" : "failed";
 
 		if (!providerStarted) {
@@ -83,6 +121,6 @@ export async function deliverSoftwareBriefCopy(
 
 		console.error(`Client brief copy state is ${status}.`);
 
-		return status;
+		return { status, kind: "unexpected", failure };
 	}
 }
