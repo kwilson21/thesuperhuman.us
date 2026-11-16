@@ -38,9 +38,15 @@ module audioProjectFiles {
 //   "reset-no-link"         a revoke's stage reset is written when the file update was refused (the reset is not linked to it)
 //   "revoke-stale-reset"    a revoke decides the stage reset from the other files it read and writes it without the guard that they
 //                           are still the ones read (and without the retry)
-  //   "complete-no-stage"     a completion compares neither the stage nor the published final
+  //   "complete-no-stage"     a completion compares neither the stage, nor the published final, nor the `updated_at` it read (the last implies
+//                           the stage, because a revoke that resets the stage also moves `updated_at`)
 //   "revoke-no-first-status" a revoke that read a draft and retries does not carry the first read's status, so a publish that
 //                           landed in between lets it revoke the published file
+//   "complete-no-request-status" a completion does not compare that the request is still reviewed or resolved (a reopen to new)
+//   "complete-no-updated-at"     a completion does not compare the project's `updated_at` with the value it read, so a progress or
+//                                revise-date update between its read and its write is overwritten
+//   "part-no-state-guard"        a part put does not refuse an upload that is being discarded, so a part is acknowledged for an
+//                                upload whose abort already marked it
 //   "only-final-plus"       no change to the rules: the run starts only from `finalPlus` (a pass run, not a mutant)
 //   "only-final-and-review" no change to the rules: the run starts only from the point `finalAndReview` (a pass run, not a mutant)
 //   "complete-no-file"      a completion does not compare the published final (an equivalent mutant: the stage implies it)
@@ -54,9 +60,10 @@ module audioProjectFiles {
   type Snap = {
     revoked: bool, withdrawn: bool, booking: bool, balance: bool, stage: str,
     fileStatus: str, upload: str, object: bool, others: Set[int], reviews: Set[int], finalLive: int,
+    reqReviewed: bool, updatedAt: int, seq: int,
   }
   // One request: kind "upload", "publish", "revoke" or "complete", on file `id`; its phase; and the reads a revoke made.
-  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int, first: str }
+  type Run = { kind: str, id: int, version: str, phase: str, snap: Snap, tries: int, first: str, stamp: int }
 
   // The project, its files, its uploads and R2, in one record so a step names only what it changes.
   type World = {
@@ -73,19 +80,25 @@ module audioProjectFiles {
     balanceVoidAt: int,      // the stamp of the balance's voiding (0 while paid; 1 when it was never paid)
     stage: str,
     completedAt: int,        // the stamp of the completion (0 while not complete): `completed_at`
+    reopenedAt: int,         // the stamp of the request's reopening to `new` (0 while reviewed or resolved)
+    updatedAt: int,          // the stamp of the project's last update: `updated_at`
+    touches: List[int],      // the stamps of the progress and revise-date updates that leave the stage alone
+    parts: int -> bool,      // R2: a part is held for the multipart upload
+    discardAt: int -> int,   // the stamp of the abort's marking the upload row discarding (0 for none)
   }
   var w: World
   var runs: int -> Run
 
   val IDS = 1.to(2)
-  val RUNS = 1.to(5)
+  val RUNS = 1.to(6)
   val VERSIONS = Set("review", "final")
 
   val noSnap = {
     revoked: false, withdrawn: false, booking: false, balance: false, stage: "in_progress",
     fileStatus: "none", upload: "none", object: false, others: Set(), reviews: Set(), finalLive: 0,
+    reqReviewed: true, updatedAt: 0, seq: 0,
   }
-  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0, first: "none" }
+  val idleRun = { kind: "none", id: 1, version: "review", phase: "none", snap: noSnap, tries: 0, first: "none", stamp: 0 }
   val noFile = { version: "review", status: "none", insAt: 0, pubAt: 0 }
 
   // The facts the rules and guards read, from the stamps.
@@ -123,6 +136,7 @@ module audioProjectFiles {
     revoked: isRevoked, withdrawn: isWithdrawn, booking: bookingPaid, balance: balancePaid, stage: w.stage,
     fileStatus: w.files.get(id).status, upload: w.ups.get(id), object: w.obj.get(id),
     others: liveOtherIds(w.files.get(id).version, id), reviews: liveReviewIds(id), finalLive: liveOf("final"),
+    reqReviewed: w.reopenedAt == 0, updatedAt: w.updatedAt, seq: w.seq,
   }
 
   // The guards of the writes, each the conditions the code checks today, now. A mutant leaves one out.
@@ -146,7 +160,7 @@ module audioProjectFiles {
 
   // A request is between its read and its write: the facts it read can change now.
   def inflightPhase(p: str): bool = or {
-    p == "write", p == "createMultipart", p == "row", p == "completeR2", p == "fileRow", p == "abortR2",
+    p == "write", p == "createMultipart", p == "row", p == "completeR2", p == "fileRow", p == "abortR2", p == "partPut",
   }
 
   // ---- Start ------------------------------------------------------------------------------------------------------
@@ -157,6 +171,7 @@ module audioProjectFiles {
     if (MUTANT == "publish-no-stage") Set("finalAndReview")        // a review publish read at in_progress, a final publish lands first
     else if (MUTANT == "publish-stale-supersede") Set("twoReviews")  // two uploaded reviews published at once
     else if (MUTANT == "complete-no-stage") Set("final", "finalPlus") // the last final is revoked between the read and the write
+    else if (MUTANT == "insert-no-state" or MUTANT == "abort-no-cas" or MUTANT == "part-no-state-guard") Set("fresh") // the upload protocol alone
     else if (MUTANT == "revoke-no-first-status") Set("twoReviews") // a draft is revoked while its publish lands
     else if (MUTANT == "only-final-plus") Set("finalPlus") // no mutation: the pass run for the final branch of the publish's stage guard
     else if (MUTANT == "only-final-and-review") Set("finalAndReview") // no mutation: the pass run that reaches a publish whose stage guard is false in a race
@@ -185,6 +200,7 @@ module audioProjectFiles {
         mp: IDS.mapBy(i => false),
         obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews" or scenario == "reviewFinal" or scenario == "finalAndReview")),
         seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
+        reopenedAt: 0, updatedAt: 0, touches: List(), parts: IDS.mapBy(i => false), discardAt: IDS.mapBy(i => 0),
         stage: if (scenario == "review" or scenario == "reviewPlus" or scenario == "reviewFinal") "review_ready"
                else if (scenario == "finalAndReview") "in_progress"
                else if (paidBalance) "final_files_ready" else "in_progress",
@@ -205,6 +221,7 @@ module audioProjectFiles {
       if (r == 1) and { w.ups.get(2) == "none", w.files.get(2).status == "none" }
       else if (r == 2) w.ups.get(2) == "pending"
       else if (r == 3) w.ups.get(2) != "none"
+      else if (r == 6) w.ups.get(2) != "none"
       else if (ownerKind == "complete") true
       else w.files.get(id).status != "none",
       w' = w,
@@ -212,6 +229,7 @@ module audioProjectFiles {
         if (r == 1) { ...idleRun, kind: "upload", id: 2, version: version, phase: "read" }
         else if (r == 2) { ...idleRun, kind: "finish", id: 2, phase: "completeRead" }
         else if (r == 3) { ...idleRun, kind: "abort", id: 2, phase: "abortCas" }
+        else if (r == 6) { ...idleRun, kind: "part", id: 2, phase: "partRead" }
         else { ...idleRun, kind: ownerKind, id: id, phase: "read" }),
     }
   }
@@ -263,6 +281,9 @@ module audioProjectFiles {
         MUTANT == "complete-no-stage" or MUTANT == "complete-no-file" or liveOf("final") > 0,
         MUTANT == "complete-no-payment" or (bookingPaid and balancePaid),
         not(isRevoked) and not(isWithdrawn),
+        // Today's statement also compares the request's status (reviewed or resolved) and the project's `updated_at` with the value read.
+        MUTANT == "complete-no-request-status" or w.reopenedAt == 0,
+        MUTANT == "complete-no-updated-at" or MUTANT == "complete-no-stage" or w.updatedAt == s.updatedAt,
       }
     if (guardMoved)
       // The batch guard raised: nothing was written. The request reads and decides again, three tries in all.
@@ -283,7 +304,8 @@ module audioProjectFiles {
           else if (MUTANT != "no-supersede" and not(MUTANT == "final-no-supersede" and rev == "final") and s.reviews.contains(i))
             { ...w.files.get(i), status: "revoked" }
           else w.files.get(i)),
-        stage: if (rev == "review") "review_ready" else "final_files_ready" },
+        stage: if (rev == "review") "review_ready" else "final_files_ready",
+        updatedAt: at },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else if (h.kind == "revoke") all {
@@ -293,12 +315,13 @@ module audioProjectFiles {
         seq: at,
         files: w.files.set(h.id, { ...f, status: "revoked" }),
         stage: if (reset) "in_progress" else w.stage,
-        completedAt: if (reset) 0 else w.completedAt },
+        completedAt: if (reset) 0 else w.completedAt,
+        updatedAt: if (reset) at else w.updatedAt },
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all {
-      w' = { ...w, seq: at, stage: "complete", completedAt: at },
-      runs' = runs.set(r, { ...h, phase: "done" }),
+      w' = { ...w, seq: at, stage: "complete", completedAt: at, updatedAt: at },
+      runs' = runs.set(r, { ...h, phase: "done", stamp: at }),
     }
   }
 
@@ -327,7 +350,7 @@ module audioProjectFiles {
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all {
-      w' = { ...w, mp: w.mp.set(h.id, false) },
+      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false) },
       runs' = runs.set(r, { ...h, phase: "conflict" }),
     }
   }
@@ -346,7 +369,7 @@ module audioProjectFiles {
     val h = runs.get(r)
     // R2 can complete a multipart upload only while it is alive; an aborted one is gone (the call fails).
     if (w.mp.get(h.id) or w.obj.get(h.id)) all {
-      w' = { ...w, mp: w.mp.set(h.id, false), obj: w.obj.set(h.id, true) },
+      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false), obj: w.obj.set(h.id, true) },
       runs' = runs.set(r, { ...h, phase: "fileRow" }),
     }
     else all { w' = w, runs' = runs.set(r, { ...h, phase: "failed" }) }
@@ -380,7 +403,7 @@ module audioProjectFiles {
     val canMark = w.ups.get(h.id) != "none" and w.files.get(h.id).status == "none"
     if (MUTANT == "abort-no-cas") all { w' = w, runs' = runs.set(r, { ...h, phase: "abortR2" }) }
     else if (canMark) all {
-      w' = { ...w, ups: w.ups.set(h.id, "discarding") },
+      w' = { ...w, seq: w.seq + 1, ups: w.ups.set(h.id, "discarding"), discardAt: w.discardAt.set(h.id, w.seq + 1) },
       runs' = runs.set(r, { ...h, phase: "abortR2" }),
     }
     else all { w' = w, runs' = runs.set(r, { ...h, phase: "done" }) }
@@ -390,7 +413,7 @@ module audioProjectFiles {
     nondet r = RUNS.filter(i => runs.get(i).phase == "abortR2").oneOf()
     val h = runs.get(r)
     all {
-      w' = { ...w, mp: w.mp.set(h.id, false), obj: w.obj.set(h.id, false) },
+      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false), obj: w.obj.set(h.id, false) },
       runs' = runs.set(r, { ...h, phase: "abortRow" }),
     }
   }
@@ -404,9 +427,34 @@ module audioProjectFiles {
     }
   }
 
+  // ---- A part put: read the upload row and the readiness, then R2's uploadPart -------------------------------------------------
+  action partRead = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "partRead").oneOf()
+    val h = runs.get(r)
+    val s = snapOf(h.id)
+    val upFine = s.upload == "pending" or (MUTANT == "part-no-state-guard" and s.upload == "discarding")
+    val go = upFine and canUpload(w.upVersion.get(h.id), s.revoked, s.withdrawn, s.booking, s.stage)
+    all { w' = w, runs' = runs.set(r, { ...h, snap: s, phase: if (go) "partPut" else "refused" }) }
+  }
+
+  // R2 takes the part only while the multipart upload is alive; a removed one fails the call (error 10024), and the part answers 409.
+  action partPut = {
+    nondet r = RUNS.filter(i => runs.get(i).phase == "partPut").oneOf()
+    val h = runs.get(r)
+    if (w.mp.get(h.id)) all {
+      w' = { ...w, parts: w.parts.set(h.id, true) },
+      runs' = runs.set(r, { ...h, phase: "done" }),
+    }
+    else all { w' = w, runs' = runs.set(r, { ...h, phase: "conflict" }) }
+  }
+
   // ---- The world: access closes, the request is withdrawn, a payment is voided ------------------------------------
   // These happen while a request is between its read and its write (see `inflightPhase`); so a step takes one only then.
   val inflight = RUNS.exists(r => inflightPhase(runs.get(r).phase))
+
+  // The request is reopened to `new`, or a progress or revise-date update leaves the stage alone, while a request is between its read and its write.
+  action requestReopened = all { inflight, w.reopenedAt == 0, w' = { ...w, seq: w.seq + 1, reopenedAt: w.seq + 1 }, runs' = runs }
+  action progressUpdate = all { inflight, w' = { ...w, seq: w.seq + 1, updatedAt: w.seq + 1, touches: w.touches.append(w.seq + 1) }, runs' = runs }
 
   action ownerRevokes = all { inflight, not(isRevoked), w' = { ...w, seq: w.seq + 1, revokedAt: w.seq + 1 }, runs' = runs }
   action requestWithdrawn = all { inflight, not(isWithdrawn), w' = { ...w, seq: w.seq + 1, withdrawnAt: w.seq + 1 }, runs' = runs }
@@ -415,7 +463,7 @@ module audioProjectFiles {
 
   action step = any {
     begin, read, write, createMultipart, row, completeRead, completeR2, fileRow, abortCas, abortR2, abortRow,
-    ownerRevokes, requestWithdrawn, bookingVoided, balanceVoided,
+    ownerRevokes, requestWithdrawn, bookingVoided, balanceVoided, requestReopened, progressUpdate, partRead, partPut,
   }
 
   // ---- Properties (each reads the stored rows and stamps) ----------------------------------------------------------
@@ -471,8 +519,20 @@ module audioProjectFiles {
   val revokeKeepsFirstRead = RUNS.forall(r =>
     runs.get(r).kind != "revoke" or runs.get(r).phase != "done" or (w.files.get(runs.get(r).id).pubAt != 0) == (runs.get(r).first == "published"))
 
+  // 11. A project is completed only while the request is reviewed or resolved: no completion is stamped after the reopening.
+  val completedOnlyWhenReviewed = w.completedAt == 0 or before(w.completedAt, w.reopenedAt)
+
+  // 12. A completion saw every progress or revise-date update: none is stamped between its read and its own stamp.
+  val completeSawEveryUpdate = RUNS.forall(r =>
+    runs.get(r).kind != "complete" or runs.get(r).phase != "done" or
+      w.touches.select(t => t > runs.get(r).snap.seq and t < runs.get(r).stamp).length() == 0)
+
+  // 13. A part whose read came after the abort marked the upload discarding is never acknowledged.
+  val noPartAfterDiscard = RUNS.forall(r =>
+    runs.get(r).kind != "part" or runs.get(r).phase != "done" or w.discardAt.get(runs.get(r).id) == 0 or runs.get(r).snap.seq < w.discardAt.get(runs.get(r).id))
+
   val allProperties = and {
-    revokeKeepsFirstRead, finalStageHasNoLiveReview, filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
+    completedOnlyWhenReviewed, completeSawEveryUpdate, noPartAfterDiscard, revokeKeepsFirstRead, finalStageHasNoLiveReview, filesOnlyForOpenProject, uploadsOnlyForOpenProject, publishedOnlyWhenPaidAndOpen, stageCoherent, oneLiveReview,
     readyStagesHaveFiles, completedOnlyWhenPaid, fileHasObject,
   }
 
@@ -502,3 +562,6 @@ module projectFilesFinalNoSupersede { import audioProjectFiles(MUTANT = "final-n
 module projectFilesFinalAndReview { import audioProjectFiles(MUTANT = "only-final-and-review").* }
 module projectFilesFinalPlus { import audioProjectFiles(MUTANT = "only-final-plus").* }
 module projectFilesRevokeNoFirstStatus { import audioProjectFiles(MUTANT = "revoke-no-first-status").* }
+module projectFilesCompleteNoRequestStatus { import audioProjectFiles(MUTANT = "complete-no-request-status").* }
+module projectFilesCompleteNoUpdatedAt { import audioProjectFiles(MUTANT = "complete-no-updated-at").* }
+module projectFilesPartNoStateGuard { import audioProjectFiles(MUTANT = "part-no-state-guard").* }

@@ -172,6 +172,11 @@ export const audioProjectFilesMutants = {
 	projectFilesResetNoLink: { property: "stageCoherent" },
 	projectFilesFinalNoSupersede: { property: "finalStageHasNoLiveReview" },
 	projectFilesRevokeNoFirstStatus: { property: "revokeKeepsFirstRead" },
+	projectFilesCompleteNoRequestStatus: {
+		property: "completedOnlyWhenReviewed",
+	},
+	projectFilesCompleteNoUpdatedAt: { property: "completeSawEveryUpdate" },
+	projectFilesPartNoStateGuard: { property: "noPartAfterDiscard" },
 };
 
 // verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
