@@ -13,8 +13,9 @@ Rollback revision: `5f66acfd`, `origin/main`'s tip when it was last merged into 
 
 - Project brief (`src/scripts/software-inquiry.ts`, `src/pages/software/start.astro` and its script): a "See example answers" toggle on each written question with three short example answers, an example for the optional second question, and the budget labelled in US dollars. Answers stay free text; paths, drafts, review and sending are unchanged.
 - Brief suggestions (`src/scripts/brief-suggestion-pass.ts`): the pass renders its invisible Turnstile widget directly instead of calling `turnstile.ready()`, which throws when Turnstile's script is loaded with `defer`. Before this, the pass was never requested and suggestions never ran.
-- Home's contact form (`src/scripts/contact-form.ts`, `src/components/ContactForm.astro`, `src/scripts/home-contact.ts`): Send message holds the message in the browser for 15 seconds with Undo and edit and Send now; leaving or hiding the page sends at once with `keepalive`; nothing reaches the server during the hold. The confirmation names the reply address and says a short confirmation email should arrive.
-- Tests: `tests/scripts/contact-confirmation.test.ts`, `tests/scripts/brief-flow.test.ts` and related; screenshot scenarios `home-contact` and `brief-examples`.
+- Home's contact form (`src/scripts/contact-form.ts`, `src/components/ContactForm.astro`, and the `hold` and `keepalive` options in `src/scripts/form-submission.ts`): Send message holds the message in the browser for 15 seconds with Undo and edit and Send now; leaving or hiding the page sends at once with `keepalive`; nothing reaches the server during the hold. The confirmation names the reply address and says a short confirmation email should arrive.
+- Styles and types: `src/styles/global.css` (the hold panel), `src/styles/software-intake.css` (the example answers) and `src/env.d.ts` (Turnstile's `render` options).
+- Tests: `tests/scripts/contact-confirmation.test.ts`, `tests/scripts/brief-flow.test.ts`, `tests/scripts/brief-suggestion-pass.test.ts` and `tests/scripts/screenshots.test.ts`; screenshot scenarios `home-contact` and `brief-examples`.
 
 ## Checklist
 
@@ -55,7 +56,7 @@ Rollback revision: `5f66acfd`, `origin/main`'s tip when it was last merged into 
 
 ### 7. Release and final QA
 - Type, test, asset and build checks: PASS. See Evidence below.
-- Diff review: see Evidence below.
+- Diff review: PASS. Independent review of the whole pull request merged with `main` (`3eb3fd92`) found one defect, the hold's disabled buttons (fixed); a review of the change since then (`06eb2183`: the merge of `5f66acfd`, the fix and this record) found no code defect and one error in this record's file list (fixed).
 - Production bindings and headers: PASS. No change.
 - Rollback: PASS. `5f66acfd`, re-checked at merge time.
 - Live verification after deploy: UNVERIFIED until the deploy; recorded in the pull request once checked.
