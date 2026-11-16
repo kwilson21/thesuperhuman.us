@@ -1,0 +1,40 @@
+name: Record contact handoff preview
+on:
+  push:
+    branches: [preview/contact-handoff-recording]
+permissions:
+  contents: read
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run screenshots:preview
+      - name: Start local fixture preview
+        run: |
+          MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json pnpm exec astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
+          for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
+      - run: node scripts/screenshots/record-contact-handoff.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: contact-handoff-preview
+          path: |
+            handoff-recording/contact-handoff.mp4
+            handoff-recording/*.png
+            handoff-recording/README.txt
+          retention-days: 7
+          if-no-files-found: error
+      - if: failure()
+        run: tail -80 astro.log || true
