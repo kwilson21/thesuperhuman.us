@@ -28,12 +28,12 @@ const links = [
 	{ href: "/about", label: "About" },
 ];
 
-// The phone menu's "Work with me" group: the hub's three offers and the contact form, one tap each.
+// The phone menu's "Work with me" group: the hub's three offers and the Get in touch switchboard, one tap each.
 const hire = [
 	{ href: audioHref("/services"), label: "Mixing & mastering" },
 	{ href: mainHref("/services#website"), label: "Website design" },
 	{ href: mainHref("/services#software"), label: "Software engineering" },
-	{ href: mainHref("/#contact"), label: "Get in touch" },
+	{ href: mainHref("/contact"), label: "Get in touch" },
 ];
 
 const current = isAudio ? "" : Astro.url.pathname.replace(/\/$/, "") || "/";

@@ -8,7 +8,21 @@ import {
 	intakeTooLarge,
 	musicRequest,
 } from "~/lib/music-request";
-import { softwareBrief, validateSoftwareInquiry } from "~/lib/software-inquiry";
+import {
+	type SoftwareInput,
+	softwareBrief,
+	validateSoftwareInquiry,
+} from "~/lib/software-inquiry";
+import {
+	OUTLINE_CHANGED,
+	type OutlineRead,
+	answerText,
+	boardAnswerKeys,
+	outlineJson,
+	readBriefOutline,
+	sentOutline,
+} from "~/lib/brief-board";
+import type { JsonValue } from "~/lib/json-value";
 import { loggedAnswer } from "~/server/answers";
 import {
 	type InquiryAnswer,
@@ -18,7 +32,7 @@ import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
 	liveBackground,
-	liveBriefCopy,
+	liveClientCopyMail,
 	liveOwnerAlert,
 	liveSoftwareNotice,
 	liveTurnstileCheck,
@@ -46,6 +60,30 @@ const answerResponse = (answer: InquiryAnswer) =>
 const notStored = (status: number) =>
 	Response.json({ ok: false, error: intakeNotStored }, { status });
 
+/**
+ * The living brief's outline, when the board sent one, checked against the written answers sent with it. A brief without
+ * one is read and stored exactly as before. The retired idea path has no board, so an outline with it is refused.
+ */
+function readOutline(body: JsonValue, input: SoftwareInput): OutlineRead {
+	const raw = sentOutline(body);
+
+	if (input.path === "idea")
+		return raw === undefined
+			? { ok: true, value: undefined }
+			: { ok: false, error: OUTLINE_CHANGED };
+
+	const sent = new Map(Object.entries(input));
+
+	const answers = Object.fromEntries(
+		boardAnswerKeys[input.path].map((key) => [
+			key,
+			String(sent.get(key) ?? ""),
+		]),
+	);
+
+	return readBriefOutline(raw, answerText(answers, input.path));
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	const body = await musicRequest(request, 32768);
 
@@ -54,13 +92,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	if (!result.ok)
 		return Response.json({ ok: false, errors: result.errors }, { status: 400 });
+
+	// The outline counts only while the board is switched on; with it off, a brief is read and stored as before.
+	const outline: OutlineRead =
+		locals.runtime?.env?.SOFTWARE_BOARD_ENABLED === "true"
+			? readOutline(body, result.value)
+			: { ok: true, value: undefined };
+
+	if (!outline.ok)
+		return Response.json(
+			{ ok: false, errors: { outline: outline.error } },
+			{ status: 400 },
+		);
 	const env = locals.runtime?.env;
 
 	if (!env?.TURNSTILE_SECRET_KEY) return intakeNotAvailable();
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
-	const db = env.MUSIC_DB;
 
-	if (!bindings.ok || !db) return intakeNotAvailable();
+	if (!bindings.ok) return intakeNotAvailable();
 
 	return runRoute(
 		Context.merge(
@@ -69,7 +118,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				liveTurnstileCheck(env.TURNSTILE_SECRET_KEY),
 			),
 			Context.merge(
-				Context.merge(liveOwnerAlert(env), liveBriefCopy(db, env)),
+				Context.merge(liveOwnerAlert(env), liveClientCopyMail(env)),
 				Context.merge(
 					liveSoftwareNotice(env),
 					liveBackground(locals.runtime?.ctx),
@@ -78,6 +127,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		),
 		submitInquiry({
 			input: result.value,
+			outline: outline.value ? outlineJson(outline.value) : undefined,
 			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
 			now: () => new Date(),
 			newId: () => crypto.randomUUID(),
@@ -117,7 +167,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 						),
 					),
 				RateLimitStoreFailed: (failure) => failed(failure.failure),
-				BriefCopyFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's temporary sentence, logged once.

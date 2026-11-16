@@ -11,11 +11,10 @@ import * as Effect from "effect/Effect";
 import type { IntakeInput } from "../lib/audio-intake";
 import { deliverProjectInvitation } from "../lib/audio-project-invitations";
 import {
+	sendAudioMessage,
 	sendOwnerRequestNotice,
 	sendSoftwareRequestNotice,
 } from "../lib/audio-resend";
-import type { OwnerRequest } from "../lib/owner-model";
-import { deliverSoftwareBriefCopy } from "../lib/software-brief-copy";
 import type { StoredSoftwarePath } from "../lib/software-inquiry";
 import type { AudioPayment } from "../lib/audio-payments";
 import { type OwnerIncident, sendUrgentOwnerAlert } from "../lib/owner-alerts";
@@ -25,6 +24,8 @@ import {
 	type TurnstileOutcome,
 	verifyTurnstile,
 } from "../lib/turnstile";
+import type { BoardRequest } from "../lib/brief-board";
+import type { RawValue } from "../lib/fields";
 
 /**
  * Each binding service is typed as REQUIRED, as kwilson21/tally types its `Database`: a program that reads one is never
@@ -288,6 +289,58 @@ export const liveTurnstile = (secret: string) =>
 					passed ? Effect.void : Effect.fail(new TurnstileFailed()),
 				),
 			),
+	});
+
+// The brief board's interpreting model (src/server/brief-board-model.ts) and the two Cloudflare rate limits the brief's AI
+// routes count against. Each failure is named, so the board's route answers it as "busy" (503) and the page tries later.
+
+/** Workers AI refused or failed: an error, or "JSON Mode couldn't be met". */
+export class BoardModelFailed extends Data.TaggedError("BoardModelFailed") {}
+
+/** Workers AI did not answer within the route's limit. */
+export class BoardModelTimedOut extends Data.TaggedError(
+	"BoardModelTimedOut",
+) {}
+
+export class BoardModel extends Context.Service<
+	BoardModel,
+	{
+		/** The model's JSON answer for one request, unread: the caller reads it as untrusted data. */
+		readonly interpret: (
+			request: BoardRequest,
+		) => Effect.Effect<RawValue, BoardModelFailed | BoardModelTimedOut>;
+	}
+>()("site/BoardModel") {}
+
+/** A rate limit binding refused to answer. */
+export class RateLimiterFailed extends Data.TaggedError("RateLimiterFailed") {}
+
+/** env.BRIEF_SUGGEST_RATE_LIMIT (per visitor) and env.BRIEF_SUGGEST_SITE_LIMIT (the whole site), counted by key. */
+export class BriefRateLimits extends Context.Service<
+	BriefRateLimits,
+	{
+		/** Whether one more request under `key` is within the visitor's limit, or the site's. */
+		readonly allow: (
+			limit: "visitor" | "site",
+			key: string,
+		) => Effect.Effect<boolean, RateLimiterFailed>;
+	}
+>()("site/BriefRateLimits") {}
+
+/** A Cloudflare rate limit binding (the global `RateLimit` type; this file's `RateLimit` is the KV counter service). */
+type CloudflareRateLimit = NonNullable<Env["BRIEF_SUGGEST_RATE_LIMIT"]>;
+
+/** The live rate limits, from the two bindings. */
+export const liveBriefRateLimits = (
+	visitor: CloudflareRateLimit,
+	site: CloudflareRateLimit,
+) =>
+	Context.make(BriefRateLimits, {
+		allow: (limit, key) =>
+			Effect.tryPromise({
+				try: () => (limit === "visitor" ? visitor : site).limit({ key }),
+				catch: () => new RateLimiterFailed(),
+			}).pipe(Effect.map((outcome) => outcome.success)),
 	});
 
 // The owner alert: an urgent email that a valid visitor request could not be stored (src/lib/owner-alerts.ts). It says nothing
@@ -568,32 +621,60 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 			}),
 	});
 
-/** The client's copy of their software brief could not be delivered at all (a database or provider failure the copy does not record). */
-export class BriefCopyFailed extends Data.TaggedError("BriefCopyFailed")<{
-	readonly failure: unknown;
-}> {}
+/** What the provider did with the client's copy: sent it, refused it, did not answer (it may or may not have gone out), or was never asked. */
+export type ClientCopyOutcome =
+	| "sent"
+	| "refused"
+	| "uncertain"
+	| "unconfigured";
+
+/** The client's copy of their brief: where it goes, its subject and its two bodies. */
+export type ClientCopy = {
+	readonly to: string;
+	readonly subject: string;
+	readonly text: string;
+	readonly html: string;
+};
 
 /**
- * The client's copy of a stored software brief (src/lib/software-brief-copy.ts `deliverSoftwareBriefCopy`, which the owner
- * routes share). It records what happened on the request itself and answers that status, or null when another request
- * already claimed the copy.
+ * The client's copy of a stored software brief, sent from the site's address with replies to the owner (src/lib/audio-resend.ts
+ * `sendAudioMessage`). Not asking is part of the answer: with no key or address on this deployment the provider is never
+ * called. It answers an outcome and never fails: a refusal, a timeout and an unreachable provider are all outcomes the copy's
+ * status records.
  */
-export class BriefCopy extends Context.Service<
-	BriefCopy,
+export class ClientCopyMail extends Context.Service<
+	ClientCopyMail,
 	{
-		readonly deliver: (
-			request: OwnerRequest,
-		) => Effect.Effect<string | null, BriefCopyFailed>;
+		readonly send: (copy: ClientCopy) => Effect.Effect<ClientCopyOutcome>;
 	}
->()("site/BriefCopy") {}
+>()("site/ClientCopyMail") {}
 
-/** The brief copy through the project store in `db` and Resend, with the env the request gives. */
-export const liveBriefCopy = (db: D1Database, env: Env) =>
-	Context.make(BriefCopy, {
-		deliver: (request) =>
-			Effect.tryPromise({
-				try: () => deliverSoftwareBriefCopy(db, request, env),
-				catch: (cause) => new BriefCopyFailed({ failure: cause }),
+/** The client's copy through Resend, with the keys and addresses the request's env gives. */
+export const liveClientCopyMail = (env: Env) =>
+	Context.make(ClientCopyMail, {
+		send: (copy) =>
+			// sendAudioMessage catches every failure of the call (the request, the timeout and the body) and answers it as an outcome, so this promise cannot reject.
+			Effect.promise(async (): Promise<ClientCopyOutcome> => {
+				if (
+					!env.RESEND_API_KEY ||
+					!env.CONTACT_FROM_EMAIL ||
+					!env.CONTACT_TO_EMAIL
+				)
+					return "unconfigured";
+
+				const sent = await sendAudioMessage({
+					apiKey: env.RESEND_API_KEY,
+					payload: {
+						from: env.CONTACT_FROM_EMAIL,
+						to: [copy.to],
+						reply_to: env.CONTACT_TO_EMAIL,
+						subject: copy.subject,
+						text: copy.text,
+						html: copy.html,
+					},
+				});
+
+				return sent.ok ? "sent" : sent.uncertain ? "uncertain" : "refused";
 			}),
 	});
 

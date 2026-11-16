@@ -46,6 +46,10 @@ export type OwnerRequest = {
 	contactDeleteAfter: string | null;
 };
 
+/** Every column of an owner request, in the order of `OwnerRequestRow`: what a read selects and an update returns. */
+export const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
+  summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
+
 export type OwnerRequestRow = {
 	id: string;
 	kind: OwnerRequestKind;
@@ -67,7 +71,7 @@ export type OwnerRequestRow = {
 
 export function ownerRequestFromRow(row: OwnerRequestRow): OwnerRequest {
 	// SAFETY: details_json only ever holds a JSON object. createOwnerRequest (owner-requests.ts) stores JSON.stringify of a
-	// RequestDetails object or "{}", music-demand.ts stores a JSON object or "{}", software-brief-copy.ts only json_set's
+	// RequestDetails object or "{}", music-demand.ts stores a JSON object or "{}", the brief copy store (src/server/intake-store.ts) only json_set's
 	// keys on it, and scripts/owner-retention.mjs sets it to '{}' (the column default is '{}' too). So the parsed value is an
 	// object, and every value in it is a JSON value (or absent).
 	const details = JSON.parse(row.details_json) as RequestDetails;

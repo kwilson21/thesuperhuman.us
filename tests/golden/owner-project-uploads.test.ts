@@ -1256,6 +1256,48 @@ const cases: Case[] = [
 		),
 		failures: [{ on: INSERT_UPLOAD, message: "D1 is down" }],
 	},
+	named(
+		"complete: no object and R2 reports a concurrent write to the same key",
+		{
+			...open(),
+			r2: {
+				uploads: { "upload-1": keyOf(U1) },
+				concurrentWrites: ["complete"],
+			},
+		},
+		act(complete()),
+	),
+	named(
+		"put: a UUID of no valid variant",
+		open(),
+		put(1, BYTES, {}, "11111111-1111-1111-1111-111111111111"),
+	),
+	named(
+		"start: R2 is unavailable (10043)",
+		{ ...begin(), r2: { unavailable: ["createMultipartUpload"] } },
+		act(startBody()),
+	),
+	named(
+		"complete: R2 head is unavailable (10043)",
+		{ ...open(), r2: { unavailable: ["head"] } },
+		act(complete()),
+	),
+	named(
+		"complete: R2 is unavailable at the completion (10043)",
+		{
+			...open(),
+			r2: { uploads: { "upload-1": keyOf(U1) }, unavailable: ["complete"] },
+		},
+		act(complete()),
+	),
+	named(
+		"put: R2 is unavailable (10043)",
+		{
+			...open(),
+			r2: { uploads: { "upload-1": keyOf(U1) }, unavailable: ["uploadPart"] },
+		},
+		put(),
+	),
 ];
 
 defineCorpus("owner-project-uploads", POST, cases);

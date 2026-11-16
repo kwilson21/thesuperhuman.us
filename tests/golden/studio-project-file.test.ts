@@ -688,6 +688,16 @@ const cases: Case[] = [
 			],
 		},
 	),
+	open(
+		"R2 head is unavailable (10043)",
+		{},
+		{ r2: { seed: { [KEY]: { body: FILE_BODY } }, unavailable: ["head"] } },
+	),
+	open(
+		"R2 get is unavailable (10043)",
+		{},
+		{ r2: { seed: { [KEY]: { body: FILE_BODY } }, unavailable: ["get"] } },
+	),
 ];
 
 defineCorpus("studio-project-file", GET, cases);

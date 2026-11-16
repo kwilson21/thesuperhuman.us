@@ -188,8 +188,8 @@ importers:
         specifier: ^3.7.4
         version: 3.7.4
       '@cloudflare/workers-oauth-provider':
-        specifier: 1.2.3
-        version: 1.2.3
+        specifier: 1.2.4
+        version: 1.2.4
       '@modelcontextprotocol/sdk':
         specifier: 1.32.2
         version: 1.32.2(supports-color@10.2.2)(zod@4.6.7)
@@ -255,8 +255,8 @@ importers:
         specifier: 0.28.2
         version: 0.28.2
       lemmascript:
-        specifier: 0.6.8
-        version: 0.6.8(supports-color@10.2.2)(zod@4.6.7)
+        specifier: 0.6.6
+        version: 0.6.6(supports-color@10.2.2)(zod@4.6.7)
       oxlint:
         specifier: 1.93.0
         version: 1.93.0
@@ -629,8 +629,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@cloudflare/workers-oauth-provider@1.2.3':
-    resolution: {integrity: sha512-40eGeA3DnTOEl2ijHYY5Z9yNIf0fdjgomoaA6GHPo4FyKQw0oXPuy4GVjTE/uNfS/MoFAvzsuVBRwTPKUki4hA==}
+  '@cloudflare/workers-oauth-provider@1.2.4':
+    resolution: {integrity: sha512-ayo6Z8DBHdAxwDpplFU8BrEoxoSn6wNo+E7ypTENRHUOc8R89A8/+nZ+a8pMZjjXzF0JXfpYXhw/7qqG+DC18Q==}
 
   '@cloudflare/workers-types@4.20260702.1':
     resolution: {integrity: sha512-mOhf5TUEB1m2vPrxtqoIGfz0fUC9xyxRDx5gWHy5s+OCo6dcV+g7wI1R7gYCMFohhqF/2y2xeKVwMwCJjfn/WA==}
@@ -3587,15 +3587,8 @@ packages:
     peerDependencies:
       lemmascript: '>=0.5.7'
 
-  lemmascript-guard@0.1.0:
-    resolution: {integrity: sha512-f6N9L4gRXXbtlUdKlzy7zs57F/104m23YyzQbSmyX2RjKe+AytmSyXx3AcosYauMlHb8mWxG98Fqe2jEMXzTdw==}
-    engines: {node: '>=22'}
-    hasBin: true
-    peerDependencies:
-      lemmascript: '>=0.6.0 <0.7.0'
-
-  lemmascript@0.6.8:
-    resolution: {integrity: sha512-a2X3QRZ+56yrmPH/VI5fih9Hs56ZMQloF0h91eDkBMMb8A1x2SEfznZMYrim7EYG1/l08+kJwfWDzqPlcd4+lw==}
+  lemmascript@0.6.6:
+    resolution: {integrity: sha512-FW8XVxnOlxihWtJcAGrI8QqETPCsAdDeUqg23/furrfMXzJ5rZt2XNzAAvyloxCgOcEnzbuUAHyy9HcFFjPOzA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -5450,7 +5443,7 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20261001.1':
     optional: true
 
-  '@cloudflare/workers-oauth-provider@1.2.3': {}
+  '@cloudflare/workers-oauth-provider@1.2.4': {}
 
   '@cloudflare/workers-types@4.20260702.1': {}
 
@@ -8061,26 +8054,18 @@ snapshots:
 
   leac@0.6.0: {}
 
-  lemmascript-claimcheck@0.2.1(lemmascript@0.6.8(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7):
+  lemmascript-claimcheck@0.2.1(lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7):
     dependencies:
       claimcheck: 0.6.1(supports-color@10.2.2)(zod@4.6.7)
-      lemmascript: 0.6.8(supports-color@10.2.2)(zod@4.6.7)
+      lemmascript: 0.6.6(supports-color@10.2.2)(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
       - zod
 
-  lemmascript-guard@0.1.0(lemmascript@0.6.8(supports-color@10.2.2)(zod@4.6.7)):
+  lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7):
     dependencies:
-      lemmascript: 0.6.8(supports-color@10.2.2)(zod@4.6.7)
+      lemmascript-claimcheck: 0.2.1(lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7)
       ts-morph: 25.0.1
-    optional: true
-
-  lemmascript@0.6.8(supports-color@10.2.2)(zod@4.6.7):
-    dependencies:
-      lemmascript-claimcheck: 0.2.1(lemmascript@0.6.8(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7)
-      ts-morph: 25.0.1
-    optionalDependencies:
-      lemmascript-guard: 0.1.0(lemmascript@0.6.8(supports-color@10.2.2)(zod@4.6.7))
     transitivePeerDependencies:
       - supports-color
       - zod

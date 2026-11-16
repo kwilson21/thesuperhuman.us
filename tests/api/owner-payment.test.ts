@@ -355,6 +355,106 @@ it("does not record invoice success when Stripe fails", async () => {
 	).toBeTruthy();
 });
 
+async function approveMastering() {
+	await POST(
+		context({
+			action: "approve",
+			approvedService: "Mastering",
+			totalAmountCents: 7_500,
+			offerAccepted: true,
+		}),
+	);
+}
+
+function expectNoInvoiceRecorded() {
+	expect(
+		sql
+			.prepare("SELECT booking_invoice_id,booking_status FROM audio_payments")
+			.get(),
+	).toEqual({ booking_invoice_id: null, booking_status: "not_created" });
+}
+
+// Each is a real Stripe refusal, decided by its type, whose message does not say "Stripe".
+it.each([
+	{
+		name: "an invalid request",
+		failure: {
+			status: 400,
+			type: "invalid_request_error",
+			message: "Invalid email address: x",
+		},
+	},
+	{
+		name: "an API error",
+		failure: {
+			status: 500,
+			type: "api_error",
+			message: "An unknown error occurred",
+			retry: false,
+		},
+	},
+	{
+		name: "an authentication failure",
+		failure: {
+			status: 401,
+			type: "invalid_request_error",
+			message: "Invalid API Key provided: sk_test_***",
+		},
+	},
+])(
+	"answers 502 when Stripe refuses with $name whose message does not name Stripe",
+	async ({ failure }) => {
+		await approveMastering();
+		stripe = stripeFake({ invoiceFailure: failure });
+		vi.stubGlobal("fetch", stripe.fetch);
+
+		const response = await POST(context({ action: "create-booking-invoice" }));
+
+		expect(response.status).toBe(502);
+		expect(await response.json()).toEqual({ ok: false });
+		expectNoInvoiceRecorded();
+	},
+);
+
+it("answers 502 when the connection to Stripe fails before an invoice is created", async () => {
+	await approveMastering();
+	stripe = stripeFake({ invoiceFailure: "connection" });
+	vi.stubGlobal("fetch", stripe.fetch);
+
+	const response = await POST(context({ action: "create-booking-invoice" }));
+
+	expect(response.status).toBe(502);
+	expect(await response.json()).toEqual({ ok: false });
+	expectNoInvoiceRecorded();
+});
+
+it("answers 502 when Stripe sends back a draft with no hosted payment URL", async () => {
+	await approveMastering();
+	stripe = stripeFake({ unusableSend: true });
+	vi.stubGlobal("fetch", stripe.fetch);
+
+	const response = await POST(context({ action: "create-booking-invoice" }));
+
+	expect(response.status).toBe(502);
+	expect(await response.json()).toEqual({ ok: false });
+	expectNoInvoiceRecorded();
+});
+
+it("keeps 409 for a conflict this code raises before Stripe is called", async () => {
+	await approveMastering();
+	sql
+		.prepare(
+			"UPDATE audio_payments SET booking_creation_started_at='2026-09-19T12:00:00Z' WHERE request_id='request-1'",
+		)
+		.run();
+
+	const response = await POST(context({ action: "create-booking-invoice" }));
+
+	expect(response.status).toBe(409);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(stripe.calls()).toEqual([]);
+});
+
 it("reports pending recovery when D1 fails after Stripe sends the invoice", async () => {
 	await POST(
 		context({

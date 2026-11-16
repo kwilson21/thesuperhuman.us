@@ -13,6 +13,7 @@
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Ref from "effect/Ref";
+import type { JsonValue } from "../../lib/json-value";
 import type { OwnerRequest } from "../../lib/owner-model";
 import {
 	type SoftwareInput,
@@ -36,14 +37,23 @@ import {
 import { answerStoredBrief, storeBrief } from "../rules/software-inquiry";
 import {
 	Background,
-	BriefCopy,
 	OwnerAlert,
 	SoftwareNotice,
 	TurnstileCheck,
 } from "../services";
+import { sendFirstBriefCopy } from "./brief-copy";
 import { countRequest, giveBack } from "./rate-limit";
 
 const ROUTE = "/api/software-inquiry";
+
+/** The new brief as stored: its details carry the outline only when there is one, so a brief without one is stored as before. */
+const withOutline = (
+	request: ReturnType<typeof softwareRequest>,
+	outline: JsonValue | undefined,
+) =>
+	outline === undefined
+		? request
+		: { ...request, details: { ...request.details, outline } };
 
 /** The index refused the insert, and the look-up that followed found no other brief: the brief is lost, and is not inserted again. */
 class LostWithoutRival extends Data.TaggedError("LostWithoutRival") {}
@@ -71,6 +81,8 @@ export type InquiryAnswer =
 
 export type InquirySubmission = {
 	readonly input: SoftwareInput;
+	/** The living brief's outline, checked by the route; stored in the brief's details only when the board sent one. */
+	readonly outline?: JsonValue;
 	readonly ip: string;
 	readonly now: () => Date;
 	readonly newId: () => string;
@@ -199,7 +211,9 @@ export const submitInquiry = (submission: InquirySubmission) =>
 					{ stored: facts.stored },
 				),
 			save: () =>
-				insertRequest(softwareRequest(input)).pipe(
+				insertRequest(
+					withOutline(softwareRequest(input), submission.outline),
+				).pipe(
 					Effect.tapError((failure) =>
 						failure instanceof SubmissionIdClash
 							? Ref.set(clash, { failure: failure.clash })
@@ -255,8 +269,12 @@ export const submitInquiry = (submission: InquirySubmission) =>
 
 		// SAFETY: the rule stores whenever nothing is stored, so `saved` is the stored brief here.
 		const request = saved as OwnerRequest;
-		const copy = yield* BriefCopy;
-		const clientCopyStatus = yield* copy.deliver(request);
+
+		const clientCopyStatus = yield* sendFirstBriefCopy({
+			id: request.id,
+			now: submission.now,
+		});
+
 		const notice = yield* SoftwareNotice;
 		const background = yield* Background;
 

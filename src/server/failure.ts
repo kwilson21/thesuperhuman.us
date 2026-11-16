@@ -25,8 +25,9 @@
 //     setting and cleanup are single statements with no race
 //   Software invoices (`POST /api/owner/requests/[id]/invoices`, reserving)
 //     the delivery, deposit and attempt guards, `software_invoices_one_active` ......... 409
-//   A real outage (D1 or R2 unavailable, a failed bind, a CHECK that no request explains, a foreign key failure with no evidence of a race
-//   behind it) is none of these and answers 500.
+//   A real outage (D1 unavailable, a failed bind, a CHECK that no request explains, a foreign key failure with no evidence of a race
+//   behind it) is none of these and answers 500. A recognised R2 outage (error 10043, ServiceUnavailable) answers 503 where a route
+//   checks for it (`objectStoreUnavailable`, src/lib/object-store-errors.ts); any other R2 failure answers 500.
 //
 // Limit: stored data that is not valid JSON, read through `json_each` or `json_extract` in a batch, raises the same
 // "malformed JSON" as a guard, and D1 gives no more text to tell them apart. Such a failure answers 409 instead of 500.

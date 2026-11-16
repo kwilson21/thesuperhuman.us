@@ -24,6 +24,7 @@ export const SERVER_PAGES = {
 	"audio/services.astro": "public",
 	"audio/start.astro": "form",
 	"software/start.astro": "form",
+	"contact.astro": "form",
 	"building/personal-website.astro": "no-store",
 	"building/personal-website/story.astro": "no-store",
 	"building/personal-website/archive.astro": "no-store",
