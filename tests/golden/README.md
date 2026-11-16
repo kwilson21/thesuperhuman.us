@@ -103,8 +103,9 @@ rule, not a format change: the shape of a record is the same). For an AUTOINCREM
 counter row give the same next id (SQLite takes the larger of the stored counter and the table's largest rowid), so no
 later statement can tell them apart, and a refused `INSERT ... SELECT` that creates one is not a write a rule moved out of
 SQL may be asked to repeat. Every other counter is still state. `tests/golden/harness/digest.test.ts` shows both halves, and
-`node scripts/golden-sequence-proof.mjs <from> [<to>]` proves a re-record after the rule changed only digests and
-never gained a counter row. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
+`node scripts/golden-sequence-proof.mjs <from> [<to>]` proves a re-record after the rule changed only digests (by an
+exact list of paths), never gained a counter row, left every counter above 0 as it was, and has the same fixtures in both
+revisions. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
 the proof, not with `golden:neutral`.
 
 What is deliberately not compared, because a conversion may change it: the D1 statements themselves. So one UPDATE
