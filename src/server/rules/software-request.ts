@@ -253,20 +253,39 @@ export type AttachmentRow = {
 	readonly document_date: string;
 };
 
-/** What G11 checks, read first: the request's metadata rows for the named keys, and the named keys in a closed archive. */
-export type AttachmentsRead = {
-	readonly rows: readonly AttachmentRow[];
-	readonly closedKeys: readonly string[];
+/**
+ * The closed archives as G11 reads them, over every agreement whose archive is closed: which of the named keys a manifest
+ * names, and whether a manifest, or an entry of one, is not JSON. G11 reads each manifest with `json_each` and each entry
+ * with `json_extract`, which raise "malformed JSON" on such a value: the guard's own message, so the batch is refused.
+ */
+export type ClosedArchives = {
+	readonly keys: readonly string[];
+	readonly unreadable: boolean;
 };
 
-/** Each named attachment has its metadata row, unchanged, and is in no closed archive (G11, with SQL's `=` on each column). */
+/** What G11 checks, read first: the request's metadata rows for the named keys, and the closed archives. */
+export type AttachmentsRead = {
+	readonly rows: readonly AttachmentRow[];
+	readonly closed: ClosedArchives;
+};
+
+/** The attachment is in no closed archive, and every closed archive reads (G11's `NOT EXISTS` refuses either). */
+export const outsideClosedArchives = (
+	attachment: NamedAttachment,
+	closed: ClosedArchives,
+) => !closed.unreadable && !closed.keys.includes(attachment.key);
+
+/**
+ * Each named attachment has its metadata row, unchanged (with SQL's `=` on each column), in no closed archive, and every
+ * closed archive reads (G11). With none named there is nothing to check, as the batch then has no G11.
+ */
 export const attachmentsUsable = (
 	named: readonly NamedAttachment[],
 	read: AttachmentsRead,
 ) =>
 	named.every(
 		(attachment) =>
-			!read.closedKeys.includes(attachment.key) &&
+			outsideClosedArchives(attachment, read.closed) &&
 			read.rows.some(
 				(row) =>
 					row.object_key === attachment.key &&

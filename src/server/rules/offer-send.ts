@@ -41,10 +41,12 @@ import type { Pin } from "./offer-pin";
 import type { LinkRow } from "./offer-revoke";
 import {
 	AttachmentNotUsable,
+	type ClosedArchives,
 	type EmailWords,
 	noProjectStarted,
 	noSignedAgreement,
 	notSending,
+	outsideClosedArchives,
 	type ProjectRead,
 	proved,
 	type Requested,
@@ -280,8 +282,8 @@ export type SendFacts = Requested & {
 	readonly signedAgreement: boolean;
 	/** The request's link row, read for a reissue; null otherwise, or when it has none. */
 	readonly linkRow: LinkRow | null;
-	/** The pinned attachments' keys that are in a closed archive, read when the pin has attachments. */
-	readonly closedKeys: readonly string[];
+	/** The closed archives, as read for the pinned attachments' keys (nothing is read, and none found, with none pinned). */
+	readonly closed: ClosedArchives;
 };
 
 type SendGiven = SendFacts & { readonly command: SendRequest };
@@ -357,12 +359,12 @@ export const sendOffer = alwaysWrites({
 		),
 		unless(
 			term(
-				"no pinned attachment is in a closed archive",
+				"no pinned attachment is in a closed archive, and every closed archive reads",
 				// The pin read each attachment's row just before (attachmentRowFound); its archives are what was left to G11.
 				(given: SendGiven) =>
 					given.command.pin === null ||
-					given.command.pin.attachments.every(
-						(attachment) => !given.closedKeys.includes(attachment.key),
+					given.command.pin.attachments.every((attachment) =>
+						outsideClosedArchives(attachment, given.closed),
 					),
 			),
 			() => new AttachmentNotUsable(),

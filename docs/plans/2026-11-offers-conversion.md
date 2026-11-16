@@ -263,11 +263,13 @@ old row and the guard still refuses, as today: signing "the attachment's metadat
 attachment is named in a closed archive before the batch" (tests/golden/owner-request-software-offer-signing.test.ts:854,
 869); send "a client signs before the batch"; decline "a signed agreement
 appears before the first batch", "an audio project appears before the first batch"; draft "the metadata row is removed
-before an attachment is pinned". The closed-archive read uses the guard's own predicate (software.ts:197-198), so an
-agreement whose archive is open is never parsed (draft "an agreement with a malformed manifest does not break the
-attachment guard" stays 200); a closed archive whose manifest is not JSON would then fail as a read, where today the
-batch's guard message answers 409. No golden case has one. Every new read must match no golden hook pattern (they count
-by `nth`; section 4).
+before an attachment is pinned". The closed-archive read covers the agreements the guard's predicate covers
+(software.ts:197-198), those whose archive is closed, so an agreement whose archive is open never matters (draft "an
+agreement with a malformed manifest does not break the attachment guard" stays 200). It runs only when an attachment is
+named (with none, the batch has no G11), and it never fails on a closed archive whose manifest, or an entry of one, is
+not JSON: it reads that as a fact, and the rule refuses it with AttachmentNotUsable, as today the guard's `json_each` or
+`json_extract` raises "malformed JSON", the guard's own message, and the batch's refusal answers 409. No golden case has
+one. Every new read must match no golden hook pattern (they count by `nth`; section 4).
 
 Where reading a condition first changes a recorded answer, the case is F7 (section 5): revoke's link read, in "a link made
 10 seconds ago and the lookups after the batch fail".

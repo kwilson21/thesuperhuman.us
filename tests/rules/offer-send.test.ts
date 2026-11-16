@@ -471,7 +471,7 @@ describe("sending the offer", () => {
 		request: softwareRequest(),
 		signedAgreement: false,
 		linkRow: null,
-		closedKeys: [],
+		closed: { keys: [], unreadable: false },
 		...over,
 	});
 
@@ -501,15 +501,40 @@ describe("sending the offer", () => {
 			inOrder(
 				{
 					c: command({ pin }),
-					f: facts({ signedAgreement: true, closedKeys: [attachment.key] }),
+					f: facts({
+						signedAgreement: true,
+						closed: { keys: [attachment.key], unreadable: false },
+					}),
 				},
 				(s) => send(s.c, s.f),
 				[
 					(s) => ({ ...s, f: { ...s.f, signedAgreement: false } }),
-					(s) => ({ ...s, f: { ...s.f, closedKeys: [] } }),
+					(s) => ({
+						...s,
+						f: { ...s.f, closed: { keys: [], unreadable: false } },
+					}),
 				],
 			),
 		).toEqual(["AgreementSigned", "AttachmentNotUsable", "writes"]);
+	});
+
+	it("refuses a pinned attachment while a closed archive does not read, as G11's malformed JSON refuses the batch, and checks nothing with none pinned", () => {
+		const unreadable = { keys: [], unreadable: true };
+
+		expect(outcome(send(command({ pin }), facts({ closed: unreadable })))).toBe(
+			"AttachmentNotUsable",
+		);
+		expect(outcome(send(command(), facts({ closed: unreadable })))).toBe(
+			"writes",
+		);
+		expect(
+			outcome(
+				send(
+					command({ pin: { ...pin, attachments: [] } }),
+					facts({ closed: unreadable }),
+				),
+			),
+		).toBe("writes");
 	});
 
 	it("refuses a reissue when the request has no link, or a live one", () => {
