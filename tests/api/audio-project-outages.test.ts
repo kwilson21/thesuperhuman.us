@@ -177,7 +177,7 @@ const outages: {
 	{
 		name: "an owner message",
 		handler: messages,
-		pattern: /SELECT request_id FROM audio_projects/,
+		pattern: /SELECT request_id,stage,revoked_at FROM audio_projects/,
 		request: () => post(`${owner}/messages`, { action: "send", body: "Hello" }),
 		sentence: "Your message could not be saved. Please try again.",
 	},
