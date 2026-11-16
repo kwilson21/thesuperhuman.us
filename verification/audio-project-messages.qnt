@@ -33,6 +33,10 @@ module audioProjectMessages {
   //   "no-stage"       the write does not compare the stage, so an answer is written after the owner began a revision
   //   "no-access"      the write does not compare the session and the project's access, so a message is written after either closed
   //   "rule-no-rounds" the rule and the write do not compare the rounds, so a change request passes when no revision round is left
+  //   "send-no-stage"  the write of a plain message does not compare that the project is not complete, so a message is written after the
+  //                    owner completed the project
+  //   "no-withdrawn"   the write does not compare that the request is not withdrawn, so a message or an answer is written after the
+  //                    request was withdrawn
   //   "write-no-rounds" only the write does not compare the rounds (the rule still does): an equivalent mutant, because a round
   //                    is begun only by leaving review_ready and the way back is a newer review, which the write's checks of the
   //                    stage and of the latest review already refuse
@@ -44,7 +48,7 @@ module audioProjectMessages {
   // "approved", "changes" or "stopped") and the review the client named.
   type Msg = { ts: int, seq: int, kind: str, named: int }
   // What one read saw (the rule decides from these; the write re-checks them, except that the rate count is the write's alone).
-  type Snap = { at: int, session: bool, revoked: bool, stage: str, latest: int, decisions: int, rounds: int, count: int }
+  type Snap = { at: int, session: bool, revoked: bool, withdrawn: bool, stage: str, latest: int, decisions: int, rounds: int, count: int }
   // One request: phase "none", "read" (about to read), "write" (about to write), "closing" (the stop-split mutant: the
   // decision is stored, the close is to come), "done", "refused" or "conflict".
   type Run = { phase: str, kind: str, named: int, snap: Snap }
@@ -57,7 +61,9 @@ module audioProjectMessages {
     begins: List[int],     // the stamp of each revision round begun: the `created_at` of its update
     closedAt: int,         // the stamp of the project's close (0 while open): `revoked_at`
     endedAt: int,          // the stamp of the session's end (0 while active): the session's `revoked_at`
-    stage: str,            // "review_ready" or "other"
+    withdrawnAt: int,      // the stamp of the request's withdrawal (0 while not withdrawn)
+    completedAt: int,      // the stamp of the project's completion (0 while not complete): `completed_at`
+    stage: str,            // "review_ready", "other" or "complete"
     latest: int,           // the latest published review, 0 for none
     clock: int,
   }
@@ -73,7 +79,7 @@ module audioProjectMessages {
   val REVIEWS = 1.to(LAST_REVIEW)
   val KINDS = Set("send", "approved", "changes", "stopped")
 
-  val noSnap = { at: 0, session: false, revoked: false, stage: "other", latest: 0, decisions: 0, rounds: 0, count: 0 }
+  val noSnap = { at: 0, session: false, revoked: false, withdrawn: false, stage: "other", latest: 0, decisions: 0, rounds: 0, count: 0 }
   val idle = { phase: "none", kind: "send", named: 0, snap: noSnap }
 
   def isDecision(m: Msg): bool = m.kind != "send"
@@ -97,7 +103,7 @@ module audioProjectMessages {
         msgs: List(), seq: 2 * published,
         pubAt: 0.to(LAST_REVIEW).mapBy(r => if (r >= 1 and r <= published) 2 * r - 1 else 0),
         begins: List(2, 4).slice(0, k),
-        closedAt: 0, endedAt: 0,
+        closedAt: 0, endedAt: 0, withdrawnAt: 0, completedAt: 0,
         stage: if (published > 0) "review_ready" else "other",
         latest: published, clock: 0,
       },
@@ -109,9 +115,10 @@ module audioProjectMessages {
   def allowed(kind: str, named: int, s: Snap): bool = and {
     s.session,
     not(s.revoked),
+    not(s.withdrawn),
     MUTANT == "rule-no-count" or s.count < CAP,
     or {
-      kind == "send",
+      kind == "send" and s.stage != "complete",
       and {
         s.stage == "review_ready",
         s.latest > 0,
@@ -131,6 +138,8 @@ module audioProjectMessages {
   def guardHolds(kind: str, named: int, s: Snap): bool = and {
     MUTANT == "no-count" or countAfter(s.at) < CAP,
     MUTANT == "no-access" or (w.closedAt == 0 and w.endedAt == 0),
+    MUTANT == "no-withdrawn" or w.withdrawnAt == 0,
+    kind != "send" or MUTANT == "send-no-stage" or w.stage != "complete",
     kind == "send" or and {
       MUTANT == "no-stage" or w.stage == "review_ready",
       MUTANT == "no-review" or w.latest == named,
@@ -156,7 +165,7 @@ module audioProjectMessages {
     nondet r = RUNS.filter(i => runs.get(i).phase == "read").oneOf()
     val h = runs.get(r)
     val snap = {
-      at: w.clock, session: w.endedAt == 0, revoked: w.closedAt > 0, stage: w.stage, latest: w.latest,
+      at: w.clock, session: w.endedAt == 0, revoked: w.closedAt > 0, withdrawn: w.withdrawnAt > 0, stage: w.stage, latest: w.latest,
       decisions: decisionsFor(w.latest), rounds: roundsNow, count: countAfter(w.clock),
     }
     all {
@@ -199,6 +208,7 @@ module audioProjectMessages {
   action publishReview = all {
     writing,
     w.closedAt == 0,
+    w.stage != "complete",
     w.latest < LAST_REVIEW,
     w' = { ...w, seq: w.seq + 1, stage: "review_ready", latest: w.latest + 1, pubAt: w.pubAt.set(w.latest + 1, w.seq + 1) },
     runs' = runs,
@@ -220,6 +230,23 @@ module audioProjectMessages {
     runs' = runs,
   }
 
+  // The request is withdrawn while a request is between its read and its write.
+  action withdraws = all {
+    writing,
+    w.withdrawnAt == 0,
+    w' = { ...w, seq: w.seq + 1, withdrawnAt: w.seq + 1 },
+    runs' = runs,
+  }
+
+  // The owner completes the project (from a final stage, which the model calls "other"); the stage guard of a plain message must see it.
+  action completes = all {
+    writing,
+    w.closedAt == 0,
+    w.stage == "other",
+    w' = { ...w, seq: w.seq + 1, stage: "complete", completedAt: w.seq + 1 },
+    runs' = runs,
+  }
+
   action sessionEnds = all {
     writing,
     w.endedAt == 0,
@@ -233,7 +260,7 @@ module audioProjectMessages {
     runs' = runs,
   }
 
-  action step = any { begin, read, write, closing, publishReview, beginRevision, ownerRevokes, sessionEnds, tick }
+  action step = any { begin, read, write, closing, publishReview, beginRevision, ownerRevokes, withdraws, completes, sessionEnds, tick }
 
   // ---- Properties (each reads the stored rows) ---------------------------------------------------------------------
   // 1. No window of WINDOW ticks holds more than CAP client messages, however many requests read the same count.
@@ -265,8 +292,14 @@ module audioProjectMessages {
   // 7. A stop closes the project's access: no state holds the decision without the closed access.
   val stopClosesAccess = w.msgs.select(m => m.kind == "stopped").length() == 0 or w.closedAt > 0
 
+  // 8. A plain message is written only while the project is not complete: none is stamped after the completion.
+  val plainMessageBeforeCompletion = w.msgs.select(m => m.kind == "send" and w.completedAt > 0 and m.seq > w.completedAt).length() == 0
+
+  // 9. A message or an answer is written only while the request is not withdrawn: none is stamped after the withdrawal.
+  val noMessageAfterWithdrawal = w.msgs.select(m => w.withdrawnAt > 0 and m.seq > w.withdrawnAt).length() == 0
+
   val allProperties = and {
-    clientRateBounded, oneDecisionPerReview, decisionNamesLatestReview, changesWithinRounds,
+    plainMessageBeforeCompletion, noMessageAfterWithdrawal, clientRateBounded, oneDecisionPerReview, decisionNamesLatestReview, changesWithinRounds,
     writtenForOpenAccess, answeredInReviewStage, stopClosesAccess,
   }
 
@@ -287,3 +320,5 @@ module projectMessagesRuleNoRounds { import audioProjectMessages(MUTANT = "rule-
 module projectMessagesStopSplit { import audioProjectMessages(MUTANT = "stop-split").* }
 module projectMessagesWriteNoRounds { import audioProjectMessages(MUTANT = "write-no-rounds").* }
 module projectMessagesRuleNoCount { import audioProjectMessages(MUTANT = "rule-no-count").* }
+module projectMessagesSendNoStage { import audioProjectMessages(MUTANT = "send-no-stage").* }
+module projectMessagesNoWithdrawn { import audioProjectMessages(MUTANT = "no-withdrawn").* }
