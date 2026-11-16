@@ -47,6 +47,20 @@ export type CreatedStripeInvoice = {
 	status: "open";
 };
 
+/** A Stripe call the site could not complete, or an answer from Stripe the site cannot use. */
+export class StripeProviderError extends Error {}
+
+/**
+ * True when Stripe refused, could not be reached, or answered unusably: an SDK error by its type, or this module's
+ * provider error. A conflict the site raises itself is not one of these.
+ */
+export function isStripeProviderFailure(error: Error): boolean {
+	return (
+		error instanceof StripeProviderError ||
+		error instanceof Stripe.errors.StripeError
+	);
+}
+
 export function stripeAvailable(env: Env): boolean {
 	return env.STRIPE_PAYMENTS_ENABLED === "true" && stripeWebhookAvailable(env);
 }
@@ -57,11 +71,9 @@ export function stripeWebhookAvailable(env: Env): boolean {
 
 export function stripeClient(env: Env, invoiceCreation = true): Stripe {
 	if (invoiceCreation ? !stripeAvailable(env) : !stripeWebhookAvailable(env)) {
-		throw new Error(
-			invoiceCreation
-				? "Stripe invoice creation is unavailable."
-				: "Stripe webhooks are unavailable.",
-		);
+		throw invoiceCreation
+			? new StripeProviderError("Stripe invoice creation is unavailable.")
+			: new Error("Stripe webhooks are unavailable.");
 	}
 
 	return new Stripe(env.STRIPE_SECRET_KEY!, {
@@ -137,7 +149,9 @@ export async function createInvoiceWithClient(
 		sent.status !== "open" ||
 		!sent.hosted_invoice_url?.startsWith("https://")
 	) {
-		throw new Error("Stripe did not return a hosted payment URL.");
+		throw new StripeProviderError(
+			"Stripe did not return a hosted payment URL.",
+		);
 	}
 
 	return {
