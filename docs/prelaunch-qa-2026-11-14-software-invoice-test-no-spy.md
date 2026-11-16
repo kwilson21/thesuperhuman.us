@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
 Branch: `claude/followup-spy` (pull request #278), built on the lint stack (#256 to #258, merged as `440b28ef`)
-Rollback revision: the production revision when this reaches `main`; after that, its merge commit's first parent. Reverting the merge commit undoes only this change.
+Rollback revision: `a2bde456`, the first parent of the merge commit `6822a848`. Reverting that merge commit undoes only this change.
 
 ## Scope
 
@@ -26,13 +26,13 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - Mutations by the author and a reviewer, each restored afterwards: a fresh idempotency key on retry, and honouring the retry's `allow_card`, each make the test fail.
 - `oxlint --deny-warnings` exit 0; `biome format .` no fixes; `astro check` 0 errors; `vitest run tests/lib/software-projects.test.ts tests/api/software-inquiry.test.ts tests/helpers`: 18 files, 248 tests passed, also in shuffled order. The full suite on this head, without a build: 298 files, 12,747 tests passed, 3 skipped. The build passed on the branch stacked above this one.
 - One independent review round for correctness and one for repository rules: no blocker or should-fix item; nits applied.
-- UNVERIFIED: `validate`, Greptile and Codex on the pull request. UNVERIFIED: no Stripe test-mode run; the test uses a stand-in for Stripe.
+- `validate` passed on the final head and Codex found nothing. UNVERIFIED: no Stripe test-mode run; the test uses a stand-in for Stripe.
 
 ## Checklist
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch and scope: see the header and Scope. UNVERIFIED, deployment authorization: the owner's approval covers the tests-only change; merging follows the owner's standing rule for a complete pull request, and this record does not authorize it.
+- PASS, 1.1 Project, branch and scope: see the header and Scope. PASS, deployment authorization: merged under the owner's standing rule for a complete pull request; it changes tests only.
 - N/A, 1.2 to 1.5: no page, copy, media, link or route changed.
 
 ### 2. Search and sharing
@@ -58,11 +58,11 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 ### 7. Release and final QA
 
 - PASS (local), 7.1 Required checks: see Evidence and limits.
-- UNVERIFIED, 7.2 Diff review: independent review done locally; Greptile and Codex not yet read.
+- PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - N/A, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed.
-- UNVERIFIED, 7.4 Rollback version: fixed at merge time.
-- UNVERIFIED, 7.5 Post-deployment verification: not deployed.
-- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+- PASS, 7.4 Rollback version: `a2bde456`, the first parent of the merge commit `6822a848`.
+- UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
+- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes (`6822a848`). Verified live: two pages answer 200; nothing else.
 
 ### Software agreement signing
 
@@ -72,8 +72,14 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 - N/A, 8.1 to 8.15: no owner center, payment, retention or studio code changed. The test covers a software invoice action with a stand-in for Stripe.
 
+## Merge and deployment (added after the merge)
+
+- Merged 2026-11-16 UTC as merge commit `6822a848`, whose first parent is `a2bde456`.
+- Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
+- Production build: this merge commit got no build check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
+- After the merges, `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
+- Rollback: revert the merge commit `6822a848` to undo only this change.
+
 ## Delivery status
 
-Not merged. This record authorizes neither merge nor deployment.
-
-Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
+Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`6822a848`). Verified live: two pages answer 200; nothing else.
