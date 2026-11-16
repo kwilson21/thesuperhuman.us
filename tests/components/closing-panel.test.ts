@@ -99,6 +99,7 @@ it("keeps the global pill button used by the closing panel", () => {
 const quiet = ["src/pages/contact.astro", "src/pages/software/start.astro"];
 
 const invitation = [
+	"src/layouts/ServiceSheet.astro",
 	"src/pages/building.astro",
 	"src/pages/writing/ai-gives-you-speed.astro",
 	"src/layouts/ProjectLayout.astro",
@@ -174,15 +175,17 @@ it("removes page-connect and the compact prop everywhere", () => {
 	}
 });
 
-it("gives Home the quiet panel with the pinned button, ending at its own contact section", () => {
+it("gives Home the shared footer button, keeping its horizon and invitation copy without a duplicate CTA", () => {
 	const home = read("src/pages/index.astro");
-	expect(home).toContain('<Footer variant="quiet" pinned slot="footer" />');
-	expect(home).toMatch(
-		/<section id="contact" class="site-section contact-section"[^>]* data-pinned-end>/,
-	);
-	expect(home).toContain(
+	expect(home).toContain('<Footer slot="footer" />');
+	expect(home).not.toContain("data-pinned-end");
+	expect(home).not.toContain(
 		'<a class="site-button" href="/contact">Get in touch</a>',
 	);
+	expect(home).toContain(
+		"Ideas, opportunities, or a conversation worth having.",
+	);
+	expect(home).toContain('class="horizon"');
 	expect(home).not.toContain("ContactForm");
 });
 

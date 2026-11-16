@@ -1,11 +1,9 @@
 /**
- * Shows the pinned Get in touch button, and marks it data-at-end (which hides it) while the closing
- * panel, a page's own invitation (Home's contact section, marked data-pinned-end) or another filled
- * button in the page (Home's "Start a project", the 404's "Back to home", the audio pages' "Start
- * your song") is on screen, so it is never a second filled button on the screen.
+ * Keep the phone contact action available throughout the page. Only the shared footer replaces it;
+ * page buttons (project choices, players, etc.) are not substitutes for Get in touch.
+ * CSS separately steps aside for the mobile menu and focused form fields.
  */
-export const STEP_ASIDE_FOR =
-	".closing-panel, [data-pinned-end], main .site-button:not(.site-button-outline)";
+export const STEP_ASIDE_FOR = ".compact-footer";
 
 export function setupPinnedContact(): void {
 	const pinned = document.querySelector<HTMLElement>("[data-pinned-contact]");
@@ -14,7 +12,7 @@ export function setupPinnedContact(): void {
 	if (!pinned || !ends.length || typeof IntersectionObserver === "undefined")
 		return;
 	// It starts aside until the observer's first report, so it never flashes over a button that is
-	// already on screen when the page opens.
+	// already on screen when the page opens or its scroll position is restored.
 	pinned.setAttribute("data-at-end", "");
 	pinned.removeAttribute("hidden");
 	const showing = new Set<Element>();
