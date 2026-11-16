@@ -2,12 +2,15 @@
 // request escapes this fake; exercise the actual SDK's serialization and retry.
 import type Stripe from "stripe";
 import { expect, vi } from "vitest";
-import { stripeClient } from "~/lib/stripe-invoicing";
+import {
+	stripeClient,
+	type CreatedStripeInvoice,
+} from "~/lib/stripe-invoicing";
 import { partial } from "./doubles";
 import { stripeFake } from "./stripe-fetch";
 
 export async function verifyStripeRequestContract(
-	run: (client: Stripe) => Promise<unknown>,
+	run: (client: Stripe) => Promise<CreatedStripeInvoice>,
 ) {
 	const fake = stripeFake();
 
