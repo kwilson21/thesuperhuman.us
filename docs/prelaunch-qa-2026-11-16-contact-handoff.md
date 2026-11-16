@@ -38,3 +38,23 @@ for enlarged text. Contact and intake destinations remain quiet.
 - No merge or publication authorized for this refinement. Previous #350
   approval applied only to that release.
 - No data, routes, forms, consent, payments, assets or dependencies changed.
+
+
+## Named Hallmark provenance and follow-up
+
+The project vendors Hallmark v1.1 from Nutlope/hallmark (adopted in #208).
+For the owner's explicit reference, also read the upstream v2 README, SKILL,
+redesign/audit and microinteraction guidance at
+https://github.com/Nutlope/hallmark. This is a component polish, not a new theme:
+keep the locked design.md, typography, terracotta/paper tokens, panel shape,
+copy and routes. Motion clarifies a state change; no autonomous attention loop.
+The existing arrow and instant reduced-motion preference belong to the locked
+site system, not a claim that the entire page passes every upstream v2 gate.
+
+Head7330ad0 passed rendered capture including matching mobile bounds and normal/
+reduced-motion transitions. Two broader reflow source checks caught changed CSS
+expression spellings, not changed geometry. Restored the footer's original
+viewport-capped padding expressions unchanged, preserving those regression tests;
+the pinned gutter uses the identical arithmetic. All component tests are rerun.
+The upstream v2 rendered sloplint has not been run: no whole-site v2 certification
+is claimed, and the scoped hosted browser assertions remain the evidence.
