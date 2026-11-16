@@ -82,13 +82,16 @@ const draftFacts = (action: DraftAction) =>
 
 		yield* draftFront.decide(null, { request, projectStarted });
 
+		// The time is read here, after the front and before the offers, where the route always read it; each try reads it
+		// again, as the route's loop did.
+		const now = action.now();
 		const offers = yield* readOffers(requestId);
 
 		const chosen = yield* chooseDraft.decide(
 			{
 				terms: validateOfferTerms(command.terms),
 				expectedUpdatedAt: command.expectedUpdatedAt,
-				now: action.now(),
+				now,
 			},
 			{ offers },
 		);

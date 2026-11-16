@@ -387,6 +387,55 @@ describe("draft", () => {
 			{ id: "draft-2", version: 2, status: "draft" },
 		]);
 	});
+
+	it("reads the time before the offers, as the route always did: a slow offers read does not move the draft's time", async () => {
+		const { sql, db, action } = world({ owner_requests: [request()] });
+		const LATER = new Date(Date.parse(START) + 5_000).toISOString();
+		let clock = START;
+
+		// The offers read takes five seconds: the clock has moved by the time it answers.
+		const slow = double<D1Database>({
+			prepare: (query: string) => {
+				if (query.startsWith("SELECT * FROM software_offers")) clock = LATER;
+
+				return db.prepare(query);
+			},
+			batch: <T>(items: D1PreparedStatement[]) => db.batch<T>(items),
+		});
+
+		expect(
+			await outcome(
+				saveOfferDraft({
+					...action,
+					now: () => clock,
+					command: {
+						action: "draft",
+						terms: terms(),
+						removedAttachmentKeys: [],
+						expectedUpdatedAt: null,
+					},
+					newId: () => "draft-1",
+				}).pipe(Effect.provideService(MusicDb, slow)),
+			),
+		).toEqual({
+			answered: {
+				version: 1,
+				updatedAt: START,
+				attachmentCleanupPending: false,
+			},
+		});
+		expect(clock).toBe(LATER);
+		expect(
+			sql.prepare("SELECT created_at,updated_at FROM software_offers").all(),
+		).toEqual([{ created_at: START, updated_at: START }]);
+		expect(
+			sql
+				.prepare(
+					"SELECT occurred_at FROM owner_request_audit WHERE action='offer-draft-saved'",
+				)
+				.all(),
+		).toEqual([{ occurred_at: START }]);
+	});
 });
 
 describe("send with signing on", () => {
