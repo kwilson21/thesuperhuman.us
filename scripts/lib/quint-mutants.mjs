@@ -184,6 +184,22 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 };
 
+// verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
+// (src/server/flows/brief-copy.ts). Module name -> the property its change must break.
+export const briefCopyMutants = {
+	briefCopyNoCas: { property: "claimsEligible" },
+	briefCopyCasSkipsOpen: { property: "closedNeverClaimed" },
+	briefCopyCasSkipsAttempt: { property: "uncertainHeld" },
+	briefCopyCasSkipsAddress: { property: "claimsEligible" },
+	briefCopyNoHold: { property: "uncertainHeld" },
+	briefCopyNoConfirm: { property: "uncertainHeld" },
+	briefCopyResendSent: { property: "sentNeverResent" },
+	briefCopyPublicAgain: { property: "publicOnlyFirst" },
+	briefCopyIgnoreClosed: { property: "closedNeverClaimed" },
+	briefCopyNoClaim: { property: "everySendClaimed" },
+	briefCopyFinalUnguarded: { property: "finalOnlyOwn" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
 // mutants, the modules for the manual Apalache search, how many random runs each check makes, and how many steps each run
 // takes (20 unless the model says). The discount model's steps are slower to evaluate, so it makes fewer runs; every
@@ -311,5 +327,13 @@ export const models = [
 		exhaustive: [],
 		samples: "20000",
 		passSamples: "8000",
+	},
+	{
+		file: "verification/brief-copy.qnt",
+		current: ["briefCopy"],
+		mutants: briefCopyMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "100000",
 	},
 ];

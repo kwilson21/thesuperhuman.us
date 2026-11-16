@@ -1,4 +1,5 @@
-import { clientSoftwareLabels } from "./software-inquiry";
+import type { OwnerRequest } from "./owner-model";
+import { clientSoftwareLabels, softwareBrief } from "./software-inquiry";
 import { ownLabel } from "./type-guards";
 import { renderEmail } from "./email-template";
 
@@ -151,5 +152,14 @@ export function softwareBriefEmail(
 			/(<p style="margin:0 0 16px;)/g,
 			"$1white-space:pre-wrap;",
 		),
+	};
+}
+
+/** The client's copy of a stored software brief: to its address, with the subject naming the project and the brief as it was stored. */
+export function briefCopyMessage(request: OwnerRequest) {
+	return {
+		to: request.email,
+		subject: `Your brief: ${request.summary || "your project"}`,
+		...softwareBriefEmail(request.name, softwareBrief(request)),
 	};
 }

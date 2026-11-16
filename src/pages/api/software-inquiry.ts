@@ -18,7 +18,7 @@ import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
 	liveBackground,
-	liveBriefCopy,
+	liveClientCopyMail,
 	liveOwnerAlert,
 	liveSoftwareNotice,
 	liveTurnstileCheck,
@@ -58,9 +58,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 	if (!env?.TURNSTILE_SECRET_KEY) return intakeNotAvailable();
 	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RATE_LIMIT"]);
-	const db = env.MUSIC_DB;
 
-	if (!bindings.ok || !db) return intakeNotAvailable();
+	if (!bindings.ok) return intakeNotAvailable();
 
 	return runRoute(
 		Context.merge(
@@ -69,7 +68,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				liveTurnstileCheck(env.TURNSTILE_SECRET_KEY),
 			),
 			Context.merge(
-				Context.merge(liveOwnerAlert(env), liveBriefCopy(db, env)),
+				Context.merge(liveOwnerAlert(env), liveClientCopyMail(env)),
 				Context.merge(
 					liveSoftwareNotice(env),
 					liveBackground(locals.runtime?.ctx),
@@ -117,7 +116,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
 						),
 					),
 				RateLimitStoreFailed: (failure) => failed(failure.failure),
-				BriefCopyFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's temporary sentence, logged once.

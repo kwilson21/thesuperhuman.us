@@ -574,6 +574,54 @@ flag set at the write from the condition the guard checks.
 None has an Apalache run. Witnesses, by hand: `neverChanges` (messages) and `neverPublishedUpload` (files) with the model
 run as `projectMessages` or `projectFiles`.
 
+## The brief-copy model
+
+File: `verification/brief-copy.qnt`, written before the conversion of the owner brief copy route (module `briefCopy`). The client's copy of a software brief is claimed before the provider is asked, by the public form (the first copy, sent when the brief is stored) and by the owner's resend (`POST /api/owner/requests/[id]/brief-copy`), and the Worker serves several of them at once. A delivery reads the request row once (whether it is open, whether it has an address, the copy's status, the instant of the attempt that recorded it), the rule judges it, a compare-and-set writes status "uncertain" and the delivery's instant only while the row is as it was read (a lost set reads and judges again, three tries), the provider is asked, and a final compare-and-set records the answer only while the row still carries this delivery's instant. The model reads the way the code does: the read and the rule are one step, each write and the provider's call are their own steps, and the clock and a close of the request (resolved or withdrawn) or the loss of its address happen between them. The model starts with a fresh request or with one whose earlier attempt left the copy uncertain.
+
+**State.** The clock, the row (open, has an address, status, instant), three deliveries (phase, mode, whether the owner confirmed, the kept instant, the row as it was read, tries, the provider's answer, how it ended), the claims (who, and the real row each one overwrote), the deliveries that asked the provider, and the final writes that changed a row carrying another delivery's attempt. The claims and overwrites are set from the row each step finds, never from what a delivery believed.
+
+The copy's status moves as drawn. The request's own status (new, reviewed, resolved, withdrawn) is only read here: this area never moves it, so there is no request machine to use until the owner request status area (step 12) defines one.
+
+```mermaid
+stateDiagram-v2
+    [*] --> none: the brief is stored
+    none --> uncertain: a claim, by the public form's first copy or the owner's resend
+    failed --> uncertain: the owner's resend claims it
+    uncertain --> uncertain: the owner confirmed it was not sent, and a minute has passed since the attempt: claimed again
+    uncertain --> sent: the provider sent it
+    uncertain --> failed: the provider refused it, was never asked, or the copy could not be built
+    uncertain --> uncertain: the provider did not answer, or its answer could not be recorded
+    none --> failed: a claim that could not be written, recorded over a copy with no status
+    sent --> [*]: never claimed again
+```
+
+**Properties** (`allProperties`):
+1. `claimsEligible`: every claim was made over a row the rule allows (the master property: a claim from a stale read breaks it).
+2. `closedNeverClaimed`: a resolved or withdrawn request is never claimed.
+3. `sentNeverResent`: a copy that was sent is never claimed again.
+4. `uncertainHeld`: an uncertain copy is claimed again only by an owner who confirmed, and only once the hold has passed since the attempt.
+5. `publicOnlyFirst`: the public form's copy is claimed only while no status is recorded.
+6. `everySendClaimed`: only a delivery that wrote a claim asks the provider.
+7. `finalOnlyOwn`: the final write never changes a row that carries another delivery's attempt.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoCas` | The claim does not re-check the row | `claimsEligible` |
+| `CasSkipsOpen` | The claim re-checks the status and the instant but not whether the request is still open | `closedNeverClaimed` |
+| `CasSkipsAttempt` | The claim re-checks the status, the address and whether the request is open but not the attempt instant | `uncertainHeld` |
+| `CasSkipsAddress` | The claim re-checks the status, the instant and whether the request is open but not the address | `claimsEligible` |
+| `NoHold` | An uncertain copy is claimed again without waiting for the hold | `uncertainHeld` |
+| `NoConfirm` | An uncertain copy is claimed again without the owner's confirmation | `uncertainHeld` |
+| `ResendSent` | The owner's resend claims a copy that was sent | `sentNeverResent` |
+| `PublicAgain` | The public form's copy is claimed again after a failure | `publicOnlyFirst` |
+| `IgnoreClosed` | The rule does not look at whether the request is open | `closedNeverClaimed` |
+| `NoClaim` | A delivery asks the provider without writing a claim | `everySendClaimed` |
+| `FinalUnguarded` | The final write does not check the row still carries this delivery's instant | `finalOnlyOwn` |
+
+**Why it has a model.** The old claim was one atomic statement that held every condition in its WHERE clause. The conversion reads the row and decides in a rule, so the claim becomes a read followed by a compare-and-set, which is the shape the plan's rule on order and timing names. `NoCas` and `CasSkipsOpen` are the two ways that conversion could go wrong silently: the first sends twice, the second sends for a request closed after the read.
+
+**What it does not cover.** The mail keys of a deployment (a delivery that never asks the provider records "failed" at once, the same path as a refusal here), the answers the route gives, and the 10-second limit of the provider's call (the model lets a delivery wait indefinitely between the claim and its record, which is the harder case). There is no Apalache run for it.
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart
@@ -619,8 +667,8 @@ Follow Tally: one file per module listed in `LemmaScript-files.txt`; mark verifi
 
 `.github/workflows/validate.yml` installs Dafny 4.9.0 and Quint's evaluator by version and checksum, then runs `verify:dafny` and one Quint step, "Quint models keep their properties and their mutants fail" (`verify:quint:all`). No new GitHub Action is used.
 
-The Quint runs are independent, so the driver runs them in one pool, up to the number of CPUs (`QUINT_JOBS` sets a smaller number, to see locally what a smaller runner would take). Each run is one process on one core: the evaluator's `--n-threads` made no difference to a single seeded run here. Runs that must pass (the 15 pass runs, one per current module, and the 8 equivalent mutants of the 11 model files) start first, largest sample count first, and the mutants, which stop at their first violation within seconds, fill the free cores. Each printed line ends with that run's time.
+The Quint runs are independent, so the driver runs them in one pool, up to the number of CPUs (`QUINT_JOBS` sets a smaller number, to see locally what a smaller runner would take). Each run is one process on one core: the evaluator's `--n-threads` made no difference to a single seeded run here. Runs that must pass (the 16 pass runs, one per current module, and the 8 equivalent mutants of the 12 model files) start first, largest sample count first, and the mutants, which stop at their first violation within seconds, fill the free cores. Each printed line ends with that run's time.
 
-Why one pool: with the discount model added, two separate steps took 76 s and 125 s on the runner (3 minutes 21 seconds). The second step started the three equivalent mutants (each a full 100,000-run pass) last, so three cores ran long after the rest had finished. One pool removes that tail. Measured since: the Quint step took 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15, which is above the budget of 2 minutes 30 seconds, and 212 to 413 s on the audio pull requests' successful runs on 2026-11-15. The CPU time of `verify:quint:all` (its user time, run locally, which varies by about 20 s between runs) is about 416 to 431 s without the three audio models and about 475 to 512 s with them. The audio models make 37 checks (6 pass runs, 3 equivalent mutants and 28 mutants); the sum of their check times fell from 88 s to 54 s when the mutants that need particular starting points began from the one or two their race needs (`PublishNoStage` from `finalAndReview`, `PublishStaleSupersede` and `RevokeNoFirstStatus` from `twoReviews`, `CompleteNoStage` from `final` and `finalPlus`) and no others, the added pass runs that start only from `finalAndReview` and from `finalPlus` take about 4 s each, and the longest audio check is 4.6 s where the longest check on main is 55 s. Each `quint run` costs about 1.5 CPU-seconds of startup (parsing and checking the model) before it makes any random run, so 37 audio checks cost about 55 CPU-seconds in the pool, which is the floor while every property keeps a mutant. The budget is 2 minutes 30 seconds on a 4-core runner.
+Why one pool: with the discount model added, two separate steps took 76 s and 125 s on the runner (3 minutes 21 seconds). The second step started the three equivalent mutants (each a full 100,000-run pass) last, so three cores ran long after the rest had finished. One pool removes that tail. Measured since: the Quint step took 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15, which is above the budget of 2 minutes 30 seconds, and 212 to 422 s on the audio pull requests' successful runs on 2026-11-15. The CPU time of `verify:quint:all` (its user time, run locally, which varies by about 20 s between runs) is about 416 to 431 s without the three audio models and about 475 to 512 s with them. The audio models make 37 checks (6 pass runs, 3 equivalent mutants and 28 mutants); the sum of their check times fell from 88 s to 54 s when the mutants that need particular starting points began from the one or two their race needs (`PublishNoStage` from `finalAndReview`, `PublishStaleSupersede` and `RevokeNoFirstStatus` from `twoReviews`, `CompleteNoStage` from `final` and `finalPlus`) and no others, the added pass runs that start only from `finalAndReview` and from `finalPlus` take about 4 s each, and the longest audio check is 4.6 s where the longest check on main is 55 s. Each `quint run` costs about 1.5 CPU-seconds of startup (parsing and checking the model) before it makes any random run, so 37 audio checks cost about 55 CPU-seconds in the pool, which is the floor while every property keeps a mutant. The budget is 2 minutes 30 seconds on a 4-core runner.
 
 The discount model's extension (2026-11-15) added time. Measured with `pnpm run verify:quint:all` on a 4-core cloud container, main and the extension one after the other with nothing else running: 232 s on main (94 checks) and 281 s with the extension (98 checks), 21% more. The discount model's own runs went from about 87 CPU-seconds (its pass run 45 s) to about 203 (`discount` 55 s and `discountF10Fix` 66 s at 30 steps, `discountTodayDepositGuard` 27 s, the other twelve mutants 4 to 7 s each). After the review raised the model to 50 steps and added a mutant, the same command took 262 s (99 checks; the discount pass runs 91 s and 109 s), and 338 s in a later run of the same (the machine is shared, so these are rough), against 225 s for the same model at 30 steps in a run just before (see "The discount-offers model" for why 50). On the runner the Quint step had taken 3.5 to 4.5 minutes and `pnpm test` 7 to 9, and two runs were cancelled at the job's 15-minute limit, so the Validate job's `timeout-minutes` was raised (to 30, by #318). F10's fix removed one pass run (`discountF10Fix`) and turned a mutant check into a pass run (`discountSecondBatchNoSendingGuard`, which now makes all 10,000 runs instead of stopping at a violation): 98 checks in 212 s in one run on the same container.
