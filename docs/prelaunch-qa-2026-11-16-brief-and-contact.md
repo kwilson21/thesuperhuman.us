@@ -2,12 +2,12 @@
 
 Date: November 16, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Branch: `claude/festive-lamport-czr07s`, merged with `origin/main` at `d04fcfef` (a merge commit, never a rebase)
+Branch: `claude/festive-lamport-czr07s`, merged with `origin/main` at `5f66acfd` (merge commits, never a rebase), which brings #322's brief copy conversion and #333's sign-in test fix
 Pull request: [#286](https://github.com/kwilson21/thesuperhuman.us/pull/286)
 Revision: the branch head that carries this record.
 Target: production `https://thesuperhuman.us` after merge: `/software/start` (the project brief) and Home's contact form.
 Decisions and merge authorization: Kazon Wilson, in conversation: the copy approved as it is, the AI suggestions fix approved, the hold-and-undo instead of giving out an address for typos, and "yes" to merging on November 16, 2026. Implementation and independent review passes were done with Claude Code.
-Rollback revision: `d04fcfef`, `origin/main`'s tip when it was merged into the branch. Re-check at merge time; the merge message records the actual one. The PR adds no migration, binding, secret or dependency, and changes no server route.
+Rollback revision: `5f66acfd`, `origin/main`'s tip when it was last merged into the branch. Re-check at merge time; the merge message records the actual one. The PR adds no migration, binding, secret or dependency, and changes no server route.
 
 ## Scope
 
@@ -57,7 +57,7 @@ Rollback revision: `d04fcfef`, `origin/main`'s tip when it was merged into the b
 - Type, test, asset and build checks: PASS. See Evidence below.
 - Diff review: see Evidence below.
 - Production bindings and headers: PASS. No change.
-- Rollback: PASS. `d04fcfef`, re-checked at merge time.
+- Rollback: PASS. `5f66acfd`, re-checked at merge time.
 - Live verification after deploy: UNVERIFIED until the deploy; recorded in the pull request once checked.
 - Receipt: this record.
 
@@ -66,6 +66,7 @@ Rollback revision: `d04fcfef`, `origin/main`'s tip when it was merged into the b
 
 ## Evidence and limits
 
-- Local checks on the tree merged with `origin/main` at `d04fcfef`: lint, `pnpm run check` (0 errors), format, design and copy checks pass; `pnpm run build` succeeds; the full `pnpm test` with `REQUIRE_CLIENT_BUNDLE=1` passes (351 files, 14,027 tests, 1 skipped). The only conflict in the merge was `scripts/screenshots/config.mjs`, where both sides added scenario mappings; both are kept.
+- Local checks on the tree merged with `origin/main` at `b6046837` (the branch's first merge, `3eb3fd92`): lint, `pnpm run check` (0 errors), format, design and copy checks pass; `pnpm run build` succeeds; the full `pnpm test` with `REQUIRE_CLIENT_BUNDLE=1` passes (351 files, 14,027 tests, 1 skipped). The only conflict in the merges was `scripts/screenshots/config.mjs`, where both sides added scenario mappings; both are kept. #322 changes no file this pull request changes; it converts the server side of the brief.
+- On the tree merged with `origin/main` at `5f66acfd`: the copy and design checks pass; the full run of the other checks is recorded here when it finishes.
 - Earlier evidence on the branch before the merge: lint, format, copy, design and type checks; the full suite (299 files at the time); real-time browser runs of the hold (sends at 15 seconds, Undo by keyboard, switching away sends within 5 ms, a refused send shows its message, focused); the brief on all three paths at three sizes; a Hallmark audit; independent reviews on every commit up to the last review round, and Codex's.
 - Limits: Chromium only; no real device; no field data; no production delivery test.
