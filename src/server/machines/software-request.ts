@@ -120,7 +120,6 @@ export const EMAIL_LANDING_TIMEOUT = "30 seconds";
  */
 export const hasLanded = (snapshot: {
 	readonly context: RequestContext;
-	readonly matches: (state: never) => boolean;
 	readonly value: unknown;
 }) =>
 	snapshot.context.origin !== null &&
