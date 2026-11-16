@@ -60,7 +60,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - PASS (local), 7.1 Required checks: see Evidence and limits.
 - PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - N/A, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed.
-- UNVERIFIED, 7.4 Rollback: tests only, so production needs none. A plain revert of `6822a848` conflicts, and the resolution was not carried through; see "Merge and deployment". Production before the three merges was `6c30c5d7`.
+- UNVERIFIED, 7.4 Rollback: tests only, so production needs none. A plain revert of `6822a848` conflicts and no procedure that undoes only this change was worked out or tested; see "Merge and deployment". Production before the three merges was `6c30c5d7`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `6822a848`). Verified live: two pages answer 200; nothing else.
 
@@ -78,7 +78,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
 - Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The first `main` commit observed with a Workers Builds check after it is `9eecc5e2` (first-parent order: `a2bde456`, `6822a848`, `85cf0d39`, `9eecc5e2`), which contains this merge; that check completed with success, and `validate` passed on that commit.
 - Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
-- Rollback: tried without committing, `git revert -m 1 6822a848` stops with conflicts in `tests/helpers/stripe-fetch.ts` and `tests/helpers/stripe-fetch.test.ts`, because the later payment merge `85cf0d39` extends those two files, and on this record, which was edited since. To undo this change alone, resolve those two files by keeping the options the payment change added (`invoiceFailure`, `unusableSend`) and dropping `refuseFirstInvoices` and `dueDate`, and restore the earlier test in `tests/lib/software-projects.test.ts`; or revert `85cf0d39` first. Neither path was carried through and tested.
+- Rollback: there is no tested way to undo this change alone. Tried without committing, `git revert -m 1 6822a848` stops with conflicts in `tests/helpers/stripe-fetch.ts` and `tests/helpers/stripe-fetch.test.ts`, because the later payment merge `85cf0d39` extends those two files and its tests use options this change added, and on this record, which was edited since. Undoing it would mean resolving those files by hand so that the payment change and its tests keep working, then running the suite; that was not done. Reverting `85cf0d39` first is not a way to undo only this change, because it also removes the payment route's new statuses. Since this change is tests only, production needs no rollback for it.
 
 ## Delivery status
 
