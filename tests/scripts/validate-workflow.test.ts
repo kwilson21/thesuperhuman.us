@@ -24,6 +24,7 @@ describe("parallel Validate retains every release gate", () => {
 			/continue-on-error|paths-ignore|pull_request_target/,
 		);
 		expect(workflow).toContain("contents: read");
+		expect(workflow).toContain("\ncache-mode: read\n");
 	});
 	it("executes the aggregate predicate against success and every non-success outcome", () => {
 		const predicate = /jq -e '([^']+)'/.exec(job("validate"))?.[1];

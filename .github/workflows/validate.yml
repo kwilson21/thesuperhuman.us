@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+# Dispatched candidate code must never poison default-branch caches.
+cache-mode: read
+
 concurrency:
   group: validate-${{ github.workflow }}-${{ inputs.revision || github.ref }}
   cancel-in-progress: true

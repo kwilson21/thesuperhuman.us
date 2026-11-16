@@ -1,10 +1,10 @@
 name: Link previews
 
-# Renders the link-preview scenes a pull request makes stale, and only those. Runs the pull
+# Renders every scene for preview-affecting pull requests. Runs the pull
 # request's own code, so it gets a read-only token: it uploads the new files only,
 # and link-previews-publish.yml (always main's copy) commits them to the pull request.
-# Most runs end after the stale check, which needs no install and takes seconds. A stale scene is
-# one whose scene file, kit, site tokens (generated from global.css), fonts or images changed.
+# Pull requests cannot suppress review with authored freshness metadata; the trusted publisher
+# independently checks changed Git trees and requires complete review artifacts.
 # Run it by hand with scenes ("home about" or "all") to render scenes that are not stale.
 on:
   pull_request:
