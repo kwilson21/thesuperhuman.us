@@ -418,6 +418,7 @@ describe("a client's and the owner's messages", () => {
           ORDER BY published_at DESC LIMIT 1`,
 			)
 			.get();
+
 		const chosen = String(picked?.id);
 		const other = chosen === "review-a" ? "review-b" : "review-a";
 
