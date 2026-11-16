@@ -264,6 +264,12 @@ function watchClock() {
 	};
 
 	globalThis.Date = new Proxy(watched, {
+		// `Date()` called without `new` ignores its arguments and gives the current time as text.
+		apply: (target) => {
+			read();
+
+			return target();
+		},
 		construct: (target, args) => {
 			if (args.length === 0) read();
 
@@ -731,50 +737,57 @@ describe("withSchedule", () => {
 		}
 	});
 
-	it("fails an ordering in which a request reads the clock after its first batch, and names where", async () => {
-		const watchedBefore = globalThis.Date;
-		const readings: string[] = [];
+	const clockReadings: [string, () => string][] = [
+		["new Date()", () => new Date().toISOString()],
+		["Date.now()", () => String(Date.now())],
+		["Date()", () => Date()],
+	];
 
-		// The request's database reads the clock before its clean-up batch, as a route that stamped its write after its read would.
-		const lateClock = (who: string) => {
-			const database = scripted(who);
+	for (const [form, readClock] of clockReadings)
+		it(`fails an ordering in which a request reads the clock with ${form} after its first batch, and names where`, async () => {
+			const watchedBefore = globalThis.Date;
+			const readings: string[] = [];
 
-			return double<D1Database>({
-				prepare: (query: string) => database.prepare(query),
-				batch: async (items: D1PreparedStatement[]) => {
-					if (kindOf(items) === "c") readings.push(new Date().toISOString());
+			// The request's database reads the clock before its clean-up batch, as a route that stamped its write after its read would.
+			const lateClock = (who: string) => {
+				const database = scripted(who);
 
-					return database.batch(items);
-				},
-			});
-		};
+				return double<D1Database>({
+					prepare: (query: string) => database.prepare(query),
+					batch: async (items: D1PreparedStatement[]) => {
+						if (kindOf(items) === "c") readings.push(readClock());
 
-		await expect(
-			explore({
-				actors: [
-					{
-						steps: ["R.r", "R.c", "R.w"],
-						start: () =>
-							send(
-								"/api/studio/code",
-								{ email: ADDR.client, turnstileToken: "ok" },
-								K1,
-								lateClock("R"),
-								"R.r",
-							),
+						return database.batch(items);
 					},
-				],
-				pairs: [[K1, ADDR.client]],
-				sent: [K1],
-				targets: ["open"],
-			}),
-		).rejects.toThrow(
-			/target open: the clock was read after a request's first gated batch \(request R in .*noninterference\.test\.ts:\d+/,
-		);
-		expect(readings).toHaveLength(1);
-		// The clock is put back when the ordering fails.
-		expect(globalThis.Date).toBe(watchedBefore);
-	});
+				});
+			};
+
+			await expect(
+				explore({
+					actors: [
+						{
+							steps: ["R.r", "R.c", "R.w"],
+							start: () =>
+								send(
+									"/api/studio/code",
+									{ email: ADDR.client, turnstileToken: "ok" },
+									K1,
+									lateClock("R"),
+									"R.r",
+								),
+						},
+					],
+					pairs: [[K1, ADDR.client]],
+					sent: [K1],
+					targets: ["open"],
+				}),
+			).rejects.toThrow(
+				/target open: the clock was read after a request's first gated batch \(request R in .*noninterference\.test\.ts:\d+/,
+			);
+			expect(readings).toHaveLength(1);
+			// The clock is put back when the ordering fails.
+			expect(globalThis.Date).toBe(watchedBefore);
+		});
 });
 
 const attackers = [
