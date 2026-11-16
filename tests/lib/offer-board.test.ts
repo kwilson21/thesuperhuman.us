@@ -546,3 +546,38 @@ describe("found in the offer board's fourteenth review", () => {
 		]);
 	});
 });
+
+describe("found in the offer board's nineteenth review", () => {
+	it.each([
+		"El presupuesto del cliente ronda los 5 mil dólares",
+		"Hosting costs about 2 thousand dollars a year",
+		"Orçamento de cerca de 30 mil reais",
+		"Das Budget liegt bei etwa 8 Tausend Euro",
+		"Около 300 тысяч рублей",
+		"Yaklaşık 10 bin TL",
+		"30 tys. zł",
+		"Budget: 5 mil USD",
+		"Budget around 1.5 million dollars",
+		"Unos 5 millones de pesos",
+		"Environ 2 millions d’euros",
+		"Budget around 5 thousand",
+		"About five thousand dollars",
+		"A few thousand dollars for hosting",
+	])(
+		"drops %s: a scale word or a spelled sum before its currency, or after a money word",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Estimated 5 thousand users a month",
+		"Import 2 million rows of history",
+		"Estimated 3 mil orders",
+		"Five thousand subscribers on the list",
+		"Up to 10 bin products",
+		"About 4 weeks from the start date",
+	])("keeps %s: a count or a duration", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});

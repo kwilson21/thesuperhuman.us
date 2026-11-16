@@ -1219,11 +1219,29 @@ export function setupOfferBoard() {
 
 	const canAsk = () => requests < REQUESTS_PER_PAGE && !inFlight;
 
+	/** What the board says once it has made all its requests for this page. */
+	const PAGE_LIMIT = `The board has made its ${REQUESTS_PER_PAGE} suggestions for this page and no longer follows your draft. Save your draft, then reload the page to ask again; the board starts empty.`;
+
+	/** Whether the board has said that it stopped following the draft at the page's limit (said once a page). */
+	let limitSaid = false;
+
 	/** After the owner has asked once, the board keeps up with the draft; a failure stops that until they ask again. */
 	function schedule(delay = IDLE) {
 		clearTimeout(timer);
 
-		if (!autoAsk || !canAsk() || requestKey() === lastSent) return;
+		if (!autoAsk || requestKey() === lastSent) return;
+
+		// At the page's limit the board stops following the draft, and says so the first time the draft moves on.
+		if (requests >= REQUESTS_PER_PAGE) {
+			if (!limitSaid) {
+				limitSaid = true;
+				say(PAGE_LIMIT);
+			}
+
+			return;
+		}
+
+		if (inFlight) return;
 		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
 	}
 
@@ -1239,10 +1257,10 @@ export function setupOfferBoard() {
 
 	async function ask(pressed = false) {
 		if (!canAsk()) {
-			if (requests >= REQUESTS_PER_PAGE)
-				say(
-					"The board reached its limit for this page. Save your draft, then reload the page to ask again; the board starts empty.",
-				);
+			if (requests >= REQUESTS_PER_PAGE) {
+				limitSaid = true;
+				say(PAGE_LIMIT);
+			}
 
 			return;
 		}
@@ -1374,6 +1392,11 @@ export function setupOfferBoard() {
 				: null;
 
 		if (!target || !root.contains(target)) return;
+
+		// Safari does not focus a button it taps or clicks. Focusing it here keeps focus among the cards for the press, so a
+		// reply arriving after a tapped Use is held as it is everywhere else, rather than moving cards under the finger.
+		if (document.activeElement !== target)
+			target.focus({ preventScroll: true });
 		const node = target.closest<HTMLElement>("[data-card]");
 		const card = cardOf(node?.dataset.card);
 

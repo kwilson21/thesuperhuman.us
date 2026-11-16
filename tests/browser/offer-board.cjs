@@ -659,6 +659,30 @@ function check(name, ok, detail = "") {
 		await contingency.fill(contingencyBefore);
 		await page.unroute("**/api/owner/pricing");
 
+		// In a contrast theme the busy state still shows: the system's colour for inactive text.
+		await page.emulateMedia({ forcedColors: "active" });
+
+		const forcedLooks = await values
+			.getByRole("button", { name: "Save", exact: true })
+			.evaluate((button) => {
+				const rest = getComputedStyle(button).color;
+
+				button.setAttribute("aria-disabled", "true");
+
+				const busy = getComputedStyle(button).color;
+
+				button.removeAttribute("aria-disabled");
+
+				return [rest, busy];
+			});
+
+		await page.emulateMedia({ forcedColors: "none" });
+		check(
+			"in a contrast theme a busy button looks different from one at rest",
+			forcedLooks[0] !== forcedLooks[1],
+			forcedLooks.join(" / "),
+		);
+
 		// A research refusal answered after the box changed is about what was sent: the box is not marked, and the reason
 		// says so.
 		await page.reload();
@@ -1533,6 +1557,39 @@ function check(name, ok, detail = "") {
 		check(
 			"retry-on-fail: no request follows a failure on its own",
 			queue.length === 0,
+		);
+
+		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
+		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
+		await page
+			.getByRole("button", { name: "Suggest an offer with AI" })
+			.click();
+		await release(await next());
+
+		for (let press = 1; press < 12; press++) {
+			await page.waitForFunction(() =>
+				document
+					.querySelector("[data-offer-status]")
+					?.textContent?.startsWith("Up to date"),
+			);
+			await page.getByRole("button", { name: "Suggest again" }).click();
+			await release(await next());
+		}
+
+		await page.waitForFunction(() =>
+			document
+				.querySelector("[data-offer-status]")
+				?.textContent?.startsWith("Up to date"),
+		);
+		await page.mouse.move(2, 2);
+		await page.locator('[name="summary"]').fill("A late change to the draft.");
+		await page.waitForTimeout(500);
+		check(
+			"at the page's limit the board says it no longer follows the draft",
+			/no longer follows your draft/.test(
+				await page.locator("[data-offer-status]").textContent(),
+			) && queue.length === 0,
+			await page.locator("[data-offer-status]").textContent(),
 		);
 		check("no page errors", errors.length === 0, errors.join("; "));
 	} catch (error) {

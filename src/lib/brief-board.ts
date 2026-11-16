@@ -514,12 +514,16 @@ const MONEY = new RegExp(
 // ---- The offer board's money test --------------------------------------------------------------------------------
 // An offer's cards may count things and give durations ("Import up to 2,000 products", "Estimated 6 weeks"), so the
 // offer board reads a number after a money word by what follows it. A large amount (three digits or more, a thousands
-// separator, or "k") is money unless a unit or a counted thing follows ("Fee 3,000 plus VAT" is money; "Estimated 1,500
-// pages" is not). A small one is money only when what follows reads as paying ("a fee of 50", "costs 25/month").
+// separator, "k", or a scale word such as "thousand", "mil" or "Tausend") is money unless a unit or a counted thing
+// follows ("Fee 3,000 plus VAT" and "Budget around 5 thousand" are money; "Estimated 1,500 pages" is not). A small one is
+// money only when what follows reads as paying ("a fee of 50", "costs 25/month"). An amount with its currency after it
+// is money with or without a scale word between them ("5 mil dólares", "2 thousand dollars"), and so is a sum spelled in
+// English words before a currency word ("five thousand dollars").
 // Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"); a large number
 // followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"); money words are listed for English,
 // Spanish, Portuguese, French, German, Italian, Russian, Polish and Turkish only, so another language's money word
-// passes unless a currency is written; a currency code that is also a word ("TRY") is not listed.
+// passes unless a currency is written; a currency code that is also a word ("TRY") is not listed; a sum spelled in
+// words in another language passes ("cinco mil dólares").
 
 /** A money word, in the languages listed above, standing as a word of its own. */
 const OFFER_MONEY_WORD =
@@ -532,9 +536,15 @@ const OFFER_MONEY_WORD =
 const OFFER_CONNECTOR =
 	"\\s*(?:[:：]\\s*)?(?:(?:of|is|at|around|about|under|over|roughly|approximately|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,2}";
 
-/** A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k"). */
-const LARGE_AMOUNT =
-	"(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m)\\b)(?!\\d|[.,]\\d)";
+/** A scale word after a number, in the languages listed above ("thousand", "mil", "millones", "Tausend", "тыс.", "bin"). */
+const SCALE =
+	"(?:thousands?|millions?|billions?|milliards?|mil|mill[oó]n(?:es)?|milh(?:ão|ões|ao|oes)|mille|mila|milion[ei]?|milioni|tausend|millionen|mio\\.?|mrd\\.?|тысяч\\p{L}*|тыс\\.?|миллион\\p{L}*|млн\\.?|tys\\.?|tysięcy|tysiące|milion(?:ów|y)?|bin|milyon)";
+
+/**
+ * A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k",
+ * "5 thousand").
+ */
+const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d)`;
 
 /** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
@@ -568,9 +578,10 @@ const OTHER_CODE_BEFORE = "\\b(?:pln|czk|huf|rub|zar|sgd|hkd)\\s?\\d";
  * ("3 CAD file types").
  */
 const AMOUNT_THEN_CURRENCY = [
-	"\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])",
-	"\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])",
+	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])`,
+	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])`,
 	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
+	"(?<![\\p{L}])(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|a few|few|several|a couple of|couple of)\\s+(?:hundred|thousand|million)\\s+(?:dollars?|euros?|pounds?|bucks|usd|eur|gbp)(?![\\p{L}])",
 	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
 	"\\brs\\.\\s?\\d",
 ];

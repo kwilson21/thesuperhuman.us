@@ -131,4 +131,6 @@ const updated = pricing.updatedAt
      opacity, so the pressed button's focus ring keeps its full accent (design.md, States). */
   .pricing-settings .studio-button[aria-disabled="true"], .pricing-settings .studio-button[aria-disabled="true"]:hover { background: color-mix(in srgb, var(--accent) 50%, var(--paper)); border-color: color-mix(in srgb, var(--accent) 50%, var(--paper)); cursor: wait; }
   .pricing-settings .studio-quiet[aria-disabled="true"] { color: var(--studio-muted); cursor: wait; }
+  /* Contrast themes replace those colours, so the busy state uses the system's own colour for inactive text there. */
+  @media (forced-colors: active) { .pricing-settings [aria-disabled="true"] { color: GrayText; border-color: GrayText; } }
 </style>
