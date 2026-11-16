@@ -20,17 +20,18 @@ into #334 at 02:54:31 UTC as `28261b62` (head `a329c396`), and #334 into `main` 
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). Implementation and the review passes were done with Claude Code; Codex reviewed each
 pull request. Merge authorization: the owner, in conversation on 2026-11-15 ("Do the fixes and yes you can merge", for
-this work's pull requests once reviews pass and CI is green).
+this work's pull requests once reviews pass and CI is green). Two of those conditions were met only after #334 merged;
+section 7, "Reviews".
 Rollback revision: `5022d29c`, the revision of `main` before #334 merged; deploying it rolls the site back. To undo
 the area in git, first revert the merge of [#342](https://github.com/kwilson21/thesuperhuman.us/pull/342) (this
 record's merge facts and the plans marked merged, which edit files the area added or changed), then
 `git revert -m 1 a9f30919`. On a copy of `main` with #342 merged, that sequence applied cleanly;
 `git revert -m 1 a9f30919` alone stops with conflicts in both plans and in this record. A later change to those files
-is reverted first the same way. The revert also takes out three release records that reached `main` only with the
-stack, for work merged on its own: #331's (`docs/prelaunch-qa-2026-11-15-offers-f10.md`), #333's
-(`docs/prelaunch-qa-2026-11-16-signin-clock-race.md`) and the merge facts added to
-`docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.md`. Put them back afterwards with
-`git checkout a9f30919 -- <those three files>`.
+is reverted first the same way. The revert also takes out two release records that reached `main` only with the
+stack, for work merged on its own (#331's `docs/prelaunch-qa-2026-11-15-offers-f10.md` and #333's
+`docs/prelaunch-qa-2026-11-16-signin-clock-race.md`), and a two-line re-wrap in
+`docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.md`. Put the three files back afterwards with
+`git checkout a9f30919 -- <those three files>`; tested, the tree then differs from `5022d29c` only in them.
 
 ## Scope
 
@@ -53,13 +54,12 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
   refused by name; a refused guard is not retried; a UNIQUE failure that backs the draft rule's fact is read and decided
   again; question and decline save their after-email moves through the `@xstate/effect` bridge.
 - **UNVERIFIED, with no owner-accepted exception · The answer when the email's outcome never lands.** Not an owner
-  decision yet:
-  `settled`'s TimeoutError (no landing within 30 seconds) and ActorStoppedError (the machine stopped without one)
-  answer the fixed 500 the route gives a defect ("The change could not be saved. Please try again."), as the design's
-  section 5 says, and are logged once through `logUnexpected`, as every unexpected failure and every defect of a
-  converted route is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs the
-  question's or decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it did,
-  the first batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the
+  decision yet: `settled`'s TimeoutError (no landing within 30 seconds) and ActorStoppedError (the machine stopped
+  without one) answer the fixed 500 the route gives a defect ("The change could not be saved. Please try again."), as
+  the design's section 5 says, and are logged once through `logUnexpected`, as every unexpected failure and every defect
+  of a converted route is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs
+  the question's or decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it
+  did, the first batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the
   after-email answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with the open wording of those
   after-email answers, whether this should also say to reload; a change is a behaviour fix in its own pull request.
 
@@ -213,8 +213,9 @@ UNVERIFIED until checked:
 
 - **PASS · Changes, instructions and audience.** One owner route converted; no answer in the corpus changes (the
   answers that change outside it are listed under "The conversion").
-- **PASS, with exception · Approved decisions.** Quoted above. The exception: the answer when the email's outcome never
-  lands is UNVERIFIED, released without the owner's confirmation (impact and follow-up under "Owner decisions").
+- **PASS, with exception · Approved decisions.** Quoted above. The exception, which the owner has not accepted: the
+  answer when the email's outcome never lands is UNVERIFIED, released without the owner's confirmation (impact and
+  follow-up under "Owner decisions").
 - **N/A · Public copy, first screen, navigation.** No page changes.
 
 ## 2. Search and sharing
@@ -253,23 +254,23 @@ UNVERIFIED until checked:
   the owner's confirmation; impact and follow-up under "Owner decisions".
 - **PASS after the merge · Reviews.** Two of the merge authorization's conditions were not yet met when #334 merged: the
   last code change had not had another review pass, and the Workers preview build on its head had not reported. Both
-  have since passed; the details are the two limits below. The reviews of #334 and #337, and the re-review of the
-  closed-archive fix, found no defect left; their comment corrections are in #341 ("Comments from the closed-archive
-  re-review"). On #341, two independent reviews and Codex found no code defect or security problem; Codex's one process
-  finding (that the fixtures' re-record had no commit of its own) was answered with that commit, `05291d78`. One low
-  behaviour point (the draft's clock read after its offers read) and the record and design corrections are fixed in
-  their own commits. Limit: the last code change (the draft's clock read, `ad1a14d1`) merged without another review
-  pass; its own independent review ran after the merge, on `a9f30919`: the clock is read where the route read it, once
-  per try (a probe logged one read before each offers read across one and three taken versions), no other draft step
-  reads it, and the story fails on the previous flow and passed five runs in a row on a fake clock; it found nothing.
-  Its limit: the story pins "before the offers read", not "after the front checks". CI on each final head: #341
-  `ca6c48d7`, #337 `a329c396` and #334 `922df817`, each with every `validate` lane and `neutrality` (the `conversion`
-  label's golden check) succeeding before its merge. Limit: the Workers preview build on #337's and #334's heads
-  reported after those merges (success at 03:00:58 and 03:10:18 UTC; merges at 02:54:31 and 03:05:38), so those two
-  merged before that check was green; on #341's head it succeeded first. Before the last merge, `main` had moved to
-  `5022d29c` (#326); the stack merged with it locally printed `golden:neutral: NEUTRAL` (80 fixtures, 9,365 cases, the
-  same five software corpora neutral with D1 changes) and the offers, flow, server, rules and architecture tests passed
-  (2,029), with `pnpm run check` 0 errors and lint clean.
+  have since passed; the details are below. The reviews of #334 and #337, and the re-review of the closed-archive fix,
+  found no defect left; their comment corrections are in #341 ("Comments from the closed-archive re-review"). On #341,
+  two independent reviews and Codex found no security problem and one low code defect, a behaviour difference from the
+  old route (the draft's clock read after its offers read); Codex's one process finding (that the fixtures' re-record
+  had no commit of its own) was answered by pointing to `05291d78`, which already held the re-record alone. The clock
+  read and the record and design corrections were fixed in their own commits. Limit: the last code change (the
+  draft's clock read, `ad1a14d1`) merged without another review pass; its own independent review ran after the merge, on
+  `a9f30919`: the clock is read where the route read it, once per try (a probe logged one read before each offers read
+  across one and three taken versions), no other draft step reads it, and the story fails on the previous flow and
+  passed five runs in a row on a fake clock; it found nothing. Its limit: the story pins "before the offers read", not
+  "after the front checks". CI on each final head: #341 `ca6c48d7`, #337 `a329c396` and #334 `922df817`, each with every
+  `validate` lane and `neutrality` (the `conversion` label's golden check) succeeding before its merge. Limit: the
+  Workers preview build on #337's and #334's heads reported after those merges (success at 03:00:58 and 03:10:18 UTC;
+  merges at 02:54:31 and 03:05:38), so those two merged before that check was green; on #341's head it succeeded first.
+  Before the last merge, `main` had moved to `5022d29c` (#326); the stack merged with it locally printed
+  `golden:neutral: NEUTRAL` (80 fixtures, 9,365 cases, the same five software corpora neutral with D1 changes) and the
+  offers, flow, server, rules and architecture tests passed (2,029), with `pnpm run check` 0 errors and lint clean.
 - **PASS, with limits · Production revision and live check.** On `a9f30919`: the Workers build succeeded (03:11:41 UTC)
   and `validate` succeeded (03:08:55 UTC). Live check at 03:11:55 UTC: `https://thesuperhuman.us/` answered 200, and a
   POST to `https://thesuperhuman.us/api/owner/requests/r1/software` without an Access login answered 302 (to the Access
