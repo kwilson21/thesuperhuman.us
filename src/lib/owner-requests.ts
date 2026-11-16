@@ -13,6 +13,7 @@ import {
 } from "./software-offers";
 import {
 	ownerRequestFromRow,
+	requestColumns,
 	ownerRequestKinds,
 	ownerRequestStatuses,
 	type OwnerRequest,
@@ -21,6 +22,8 @@ import {
 	type OwnerRequestStatus,
 	type RequestDetails,
 } from "./owner-model";
+
+export { requestColumns };
 
 export type NewOwnerRequest = {
 	kind: OwnerRequestKind;
@@ -59,9 +62,6 @@ export const projectIncompleteMessage = "Mark the project complete first.";
 
 export const projectStartedMessage =
 	"This project has started. Use the project controls.";
-
-export const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
-  summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
 function validActor(actor: string) {
 	const value = actor.trim().toLowerCase();

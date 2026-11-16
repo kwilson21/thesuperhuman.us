@@ -20,6 +20,13 @@ type OfferResponse = {
 	emailSent: boolean;
 };
 
+/**
+ * Whether a batch writes. The deposit read is a batch of two reads (one snapshot), so a hook that stands for another
+ * writer just before the action's own batch passes it by.
+ */
+const writes = (items: readonly D1PreparedStatement[]) =>
+	items.some((item) => !/^SELECT /.test(boundQuery(item) ?? ""));
+
 /** The token at the end of an offer link. split() always returns at least one segment. */
 function linkToken(link: string): string {
 	return link.split("/").at(-1) ?? "";
@@ -480,6 +487,8 @@ it("loses a concurrent send inside the batch without replacing its link or email
 
 	const winnerHash = await hashOfferToken("w".repeat(43));
 	db.batch = async (items) => {
+		if (!writes(items)) return original(items);
+
 		sql
 			.prepare(
 				"UPDATE software_offers SET status='sent',sent_at='winner',updated_at='winner' WHERE status='draft'",
@@ -774,6 +783,8 @@ it("decline batch rolls back when a project starts after its pre-check", async (
 	vi.mocked(fetch).mockClear();
 	const batch = db.batch.bind(db);
 	db.batch = async (items: D1PreparedStatement[]) => {
+		if (!writes(items)) return batch(items);
+
 		sql.exec(
 			"INSERT INTO software_projects(request_id,offer_id,terms_json,payment_mode,signatures_recorded_at,first_payment_recorded_at,started_at,started_by,created_at,updated_at) SELECT 'software',id,terms_json,'standard','now','now','now','owner','now','now' FROM software_offers WHERE status='sent'",
 		);
@@ -1214,6 +1225,8 @@ it("rolls back a send when another send reserves the link after its pre-check", 
 	const saved = await draft();
 	const batch = db.batch.bind(db);
 	db.batch = async (items) => {
+		if (!writes(items)) return batch(items);
+
 		sql
 			.prepare(
 				"INSERT INTO software_offer_links(request_id,token_hash,created_at) VALUES (?,?,?)",

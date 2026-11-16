@@ -18,15 +18,18 @@ export const term = <G>(
 /** What a refusal carries: its name (`_tag`) and the sentence a person reads. */
 export type Refusal = { readonly _tag: string; readonly say: string };
 
-/** A refusal: unless the term holds, the rule fails with what `refuse` makes. */
+/**
+ * A refusal: unless the term holds, the rule fails with what `refuse` makes. `refuse` is handed the same values the term
+ * read, for a refusal that carries a fact to its answer (the version a page should reload to); most take nothing.
+ */
 export type Unless<G, E extends Refusal> = {
 	readonly unless: Term<G>;
-	readonly refuse: () => E;
+	readonly refuse: (given: G) => E;
 };
 
 export const unless = <G, E extends Refusal>(
 	condition: Term<G>,
-	refuse: () => E,
+	refuse: (given: G) => E,
 ): Unless<G, E> => ({ unless: condition, refuse });
 
 /** Checks the refusals in order, and fails with the first whose term does not hold. */
@@ -38,7 +41,7 @@ export const check = <G, R extends readonly Unless<G, Refusal>[]>(
 
 	// SAFETY: `refuse` of an entry of R makes one of the refusals R's entries make, which is the type named above.
 	return refused
-		? Effect.fail(refused.refuse() as ReturnType<R[number]["refuse"]>)
+		? Effect.fail(refused.refuse(given) as ReturnType<R[number]["refuse"]>)
 		: Effect.void;
 };
 

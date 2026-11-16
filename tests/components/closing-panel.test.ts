@@ -13,10 +13,10 @@ it("keeps the footer landmark, class names and nav label", () => {
 	expect(footer).toContain(".footer-name { font-size: 1.5rem;");
 });
 
-it("defaults to the invitation with one Get in touch button to the contact section", () => {
+it("defaults to the invitation with one Get in touch button to the switchboard", () => {
 	expect(footer).toContain('variant = "invitation"');
 	expect(footer).toContain('buttonLabel = "Get in touch"');
-	expect(footer).toContain('buttonPath = "/#contact"');
+	expect(footer).toContain('buttonPath = "/contact"');
 	expect(footer).not.toMatch(/compact\?: boolean/);
 });
 
@@ -95,18 +95,23 @@ it("keeps the global pill button used by the closing panel", () => {
 	);
 });
 
-const quiet = [
-	"src/pages/index.astro",
-	"src/pages/privacy.astro",
-	"src/pages/404.astro",
-	"src/pages/software/start.astro",
-	"src/components/audio/AudioFooter.astro",
-];
+// The switchboard and the two intake forms are quiet: each is already where Get in touch leads.
+const quiet = ["src/pages/contact.astro", "src/pages/software/start.astro"];
 
 const invitation = [
 	"src/pages/building.astro",
 	"src/pages/writing/ai-gives-you-speed.astro",
 	"src/layouts/ProjectLayout.astro",
+	"src/pages/privacy.astro",
+	"src/pages/404.astro",
+];
+
+const audioPages = [
+	"src/pages/audio/index.astro",
+	"src/pages/audio/portfolio.astro",
+	"src/pages/audio/releases.astro",
+	"src/pages/audio/services.astro",
+	"src/pages/music/[slug].astro",
 ];
 
 it("gives quiet pages the quiet panel", () => {
@@ -119,6 +124,20 @@ it("gives quiet pages the quiet panel", () => {
 it("gives invitation pages the default panel", () => {
 	for (const path of invitation)
 		expect(read(path), path).toContain('<Footer slot="footer" />');
+});
+
+it("ends the audio pages on the Get in touch button, and leaves the song intake quiet", () => {
+	const audioFooter = read("src/components/audio/AudioFooter.astro");
+	expect(audioFooter).toContain(
+		'const { variant = "invitation" } = Astro.props;',
+	);
+	expect(audioFooter).toContain("<Footer variant={variant} />");
+
+	for (const path of audioPages)
+		expect(read(path), path).toMatch(/<AudioFooter slot="footer" \/>/);
+	expect(read("src/pages/audio/start.astro")).toContain(
+		'<AudioFooter variant="quiet" slot="footer" />',
+	);
 });
 
 it("gives Work, About and Writing the default panel with no per-page copy", () => {
@@ -152,6 +171,36 @@ it("removes page-connect and the compact prop everywhere", () => {
 	]) {
 		expect(read(path), path).not.toContain("page-connect");
 		expect(read(path), path).not.toMatch(/<Footer[^>]* compact/);
+	}
+});
+
+it("gives Home the quiet panel with the pinned button, ending at its own contact section", () => {
+	const home = read("src/pages/index.astro");
+	expect(home).toContain('<Footer variant="quiet" pinned slot="footer" />');
+	expect(home).toMatch(
+		/<section id="contact" class="site-section contact-section"[^>]* data-pinned-end>/,
+	);
+	expect(home).toContain(
+		'<a class="site-button" href="/contact">Get in touch</a>',
+	);
+	expect(home).not.toContain("ContactForm");
+});
+
+it("sends every Get in touch link to the switchboard", () => {
+	const links = {
+		"src/components/SiteNav.astro":
+			'{ href: mainHref("/contact"), label: "Get in touch" }',
+		"src/layouts/ServiceSheet.astro":
+			"<a href={href('/contact')}>Get in touch</a>",
+		"src/layouts/ProjectLayout.astro":
+			'<a class="site-link" href="/contact">Get in touch',
+		"src/pages/software/start.astro":
+			"<a href={href('/contact')}>Get in touch</a>",
+	};
+
+	for (const [path, link] of Object.entries(links)) {
+		expect(read(path), path).toContain(link);
+		expect(read(path), path).not.toContain("/#contact");
 	}
 });
 
@@ -196,9 +245,10 @@ it("uses ink for readable footer link hover text on the panel", () => {
 	expect(footer).not.toMatch(/nav a:hover \{ color: var\(--accent\)/);
 });
 
-it("renders the pinned button only on invitation pages, hidden until the script shows it", () => {
+it("renders the pinned button on invitation pages and where a page asks for it, hidden until the script shows it", () => {
+	expect(footer).toContain('pinned = variant === "invitation"');
 	expect(footer).toContain(
-		"{variant === 'invitation' && <div class=\"pinned-contact\" data-pinned-contact hidden>",
+		'{pinned && <div class="pinned-contact" data-pinned-contact hidden>',
 	);
 	expect(footer).toContain(
 		"<script>\n  import { setupPinnedContact } from '~/scripts/pinned-contact';",

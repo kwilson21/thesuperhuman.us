@@ -163,12 +163,17 @@ const visibleDots = () => dots.map((item) => item.hidden);
 /** The silent pass, granted at once unless a test supplies its own. */
 const grantedPass: typeof setupSuggestionPass = () => async () => true;
 
+// requestedPath is the radio checked when the script starts; linkedPath is the path the link named,
+// which the page renders as data-linked-path. They differ when a browser restores a radio on reload.
 async function setup(
 	requestedPath?: string,
 	startSuggestionPass = grantedPass,
+	linkedPath: string | null | undefined = requestedPath,
 ) {
 	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
+
+	if (linkedPath) form.dataset.linkedPath = linkedPath;
 	steps = Array.from({ length: 9 }, () => new Node());
 	controls = [];
 
@@ -575,6 +580,7 @@ it("discloses browser drafts and Workers AI accurately, with reassurance only at
 	expect(privacy).not.toContain("Software brief suggestions use");
 	expect(privacy).not.toContain("While you write a software brief");
 	expect(privacy).not.toContain("Updated October 10, 2026");
+	expect(privacy).not.toContain("Updated October 29, 2026");
 	expect(privacy).not.toContain("approximate counter");
 	expect(
 		readFileSync("src/pages/software/start.astro", "utf8").match(
@@ -965,6 +971,40 @@ it.each(["webapp", "workflow"])(
 it("opens an explicit path at its first question with no draft", async () => {
 	await setup("webapp");
 	expect(current()).toBe(1);
+});
+
+it.each(["website", "webapp", "workflow"])(
+	"opens an explicit %s link at its first question when the draft was left on the choice screen",
+	async (requested) => {
+		choose("path", requested);
+		click("[data-back]");
+		expect(JSON.parse(store.get("software-brief-draft")!).step).toBe(0);
+		await setup(requested);
+		expect(current()).toBe(1);
+		expect(
+			controls.find((node) => node.name === "path" && node.checked)!.value,
+		).toBe(requested);
+	},
+);
+
+it("resumes on the choice screen when the draft was left there and the link names no path", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup();
+	expect(current()).toBe(0);
+});
+
+it("starts on the choice screen when a reload restored a radio without a path link and there is no draft", async () => {
+	await setup("workflow", grantedPass, null);
+	expect(current()).toBe(0);
+	expect(form.dataset.ready).toBe("");
+});
+
+it("resumes on the choice screen after a reload that restored the chosen radio without a path link", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup("workflow", grantedPass, null);
+	expect(current()).toBe(0);
 });
 
 it("clears remapped question errors and invalid markers when switching paths", () => {
