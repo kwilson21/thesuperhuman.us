@@ -194,7 +194,9 @@ export function setupOfferBoard() {
 		lastSendAt = 0,
 		lastSent = "",
 		hovering = false,
+		hoveringPrices = false,
 		pressing = false,
+		pressNumber = 0,
 		lastFailure: string | null = null,
 		timer: ReturnType<typeof setTimeout> | undefined,
 		inFlight: AbortController | null = null,
@@ -266,6 +268,7 @@ export function setupOfferBoard() {
 	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
 	const interacting = () =>
 		hovering ||
+		hoveringPrices ||
 		pressing ||
 		cardsBox.contains(document.activeElement) ||
 		document.activeElement === heldButton ||
@@ -1237,7 +1240,7 @@ export function setupOfferBoard() {
 					: "Reading your latest changes…"
 				: failure
 					? result.added
-						? `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"} from an earlier request. Your latest request failed. ${failure}`
+						? `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"} from an earlier request.${failure.startsWith("The board’s last request") ? "" : " Your latest request failed."} ${failure}`
 						: failure
 					: result.added
 						? `Up to date with your draft. ${added}`
@@ -1255,6 +1258,22 @@ export function setupOfferBoard() {
 				reply.last && !failure ? "Up to date. Page limit reached." : done,
 			);
 	}
+
+	/**
+	 * What of a reply's sizing the market row shows: nothing without research for this kind of work, the size alone when
+	 * the research has no range for it, and the size, figure and their reasons when it has one.
+	 */
+	const marketShown = (shown: OfferSizing | null) =>
+		!shown?.size || !pricing.market || !kind
+			? ""
+			: marketRange(pricing.market, kind, shown.size)
+				? JSON.stringify([
+						shown.size,
+						shown.sizeReason,
+						shown.figureUsd,
+						shown.figureReason,
+					])
+				: shown.size;
 
 	function deliver(reply: Held) {
 		const preview = applyReplyIn(
@@ -1286,13 +1305,11 @@ export function setupOfferBoard() {
 			}).length +
 			(reply.sizing.size &&
 			(pressing ||
+				hoveringPrices ||
 				document.activeElement?.closest(
 					"[data-price-day], [data-price-market]",
 				)) &&
-			(reply.sizing.size !== sizing?.size ||
-				reply.sizing.sizeReason !== sizing?.sizeReason ||
-				reply.sizing.figureUsd !== sizing?.figureUsd ||
-				reply.sizing.figureReason !== sizing?.figureReason)
+			marketShown(reply.sizing) !== marketShown(sizing)
 				? 1
 				: 0);
 
@@ -1362,7 +1379,7 @@ export function setupOfferBoard() {
 			atLimit
 				? "No answer. Page limit reached."
 				: kind === "retry"
-					? "No suggestions. Press Suggest again."
+					? "No answer. Press Suggest again."
 					: kind === "daily"
 						? "Daily limit reached."
 						: kind === "signin"
@@ -1533,6 +1550,8 @@ export function setupOfferBoard() {
 			if (!event.isTrusted) return;
 
 			// The press ends here; focus on the pressed button (below) holds a reply from now where it should.
+			const wasPressing = pressing;
+
 			pressing = false;
 
 			const pressed =
@@ -1540,7 +1559,12 @@ export function setupOfferBoard() {
 					? event.target.closest<HTMLElement>("button")
 					: null;
 
-			if (!pressed || !root.contains(pressed)) return;
+			// A press that ended off a button: what it held is looked at again now.
+			if (!pressed || !root.contains(pressed)) {
+				if (wasPressing) left();
+
+				return;
+			}
 
 			if (document.activeElement !== pressed)
 				pressed.focus({ preventScroll: true });
@@ -1864,6 +1888,16 @@ export function setupOfferBoard() {
 			hovering = true;
 	});
 
+	// The price rows are redrawn by a reply too, so a mouse resting on them holds one.
+	const prices = root
+		.querySelector<HTMLElement>("[data-price-day]")
+		?.closest("dl");
+
+	prices?.addEventListener("pointerenter", (event) => {
+		if (event.pointerType === "mouse" || event.pointerType === "pen")
+			hoveringPrices = true;
+	});
+
 	/** Once the owner leaves the cards: a held reply applies, or a sentence held back while they were there is shown. */
 	const left = () => {
 		if (interacting()) return;
@@ -1883,6 +1917,10 @@ export function setupOfferBoard() {
 		hovering = false;
 		left();
 	});
+	prices?.addEventListener("pointerleave", () => {
+		hoveringPrices = false;
+		left();
+	});
 
 	// A press in progress, from pointer down to its click, holds a reply (Safari and Firefox clear focus on mousedown,
 	// which would otherwise apply a waiting reply before the click lands and could redraw the button being pressed).
@@ -1892,9 +1930,11 @@ export function setupOfferBoard() {
 			if (
 				event.button === 0 &&
 				event.target instanceof Element &&
-				event.target.closest("button")
-			)
+				event.target.closest("button, summary")
+			) {
+				pressNumber++;
 				pressing = true;
+			}
 		},
 		true,
 	);
@@ -1903,8 +1943,11 @@ export function setupOfferBoard() {
 	const released = () => {
 		if (!pressing) return;
 
+		const press = pressNumber;
+
 		setTimeout(() => {
-			if (!pressing) return;
+			// Ended already by its click, or a later press has begun: that one ends itself.
+			if (!pressing || press !== pressNumber) return;
 			pressing = false;
 			left();
 		}, 600);
