@@ -27,7 +27,10 @@ unchanged. Main integration includes #343, #346, #348 and #349.
 - An architecture regression scans runtime JS/TS/JSX/TSX/MTS/CTS/MJS/CJS sources and compiler-converted
   Astro frontmatter, server template expressions and scripts, inventorying SDK constructors/consumers and all ten
   calls, rejecting unpinned calls and client aliases that leave that inventory.
-  New SDK use requires updating this scoped guard and its wire tests. This is
+  Static asset globs use the existing source-graph resolver; runtime-module
+  matches and unresolved glob patterns are rejected. String-named factory
+  import/re-export aliases are rejected too. New SDK use requires updating this
+  scoped guard and its wire tests. This is
   a source-level regression guard, not a general sandbox or security boundary.
 - Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
   test-only entropy from application IDs and restores it after each case; the

@@ -4,6 +4,11 @@ import { globSync, readFileSync } from "node:fs";
 import ts from "typescript";
 import { posix } from "node:path";
 import { convertToTSX } from "@astrojs/compiler/sync";
+import {
+	globPatternsOf,
+	isImportMetaGlob,
+	runtimeGlobFiles,
+} from "../helpers/client-graph";
 import { expect, it } from "vitest";
 
 const adapters = [
@@ -74,6 +79,30 @@ function verifyInventory(inputs: typeof sources) {
 		);
 
 		const visit = (node: ts.Node) => {
+			// Asset globs may not become an alternative runtime module loader. Use the
+			// same alias/glob resolver as the browser graph; broad and eager code globs
+			// are refused even when an `import` option conceals the exported factory.
+			if (ts.isCallExpression(node) && isImportMetaGlob(node.expression)) {
+				const patterns = node.arguments[0] && globPatternsOf(node.arguments[0]);
+				expect(patterns).toBeDefined();
+
+				for (const pattern of patterns ?? []) {
+					expect(runtimeGlobFiles(pattern, path, process.cwd())).toEqual([]);
+				}
+			}
+
+			if (
+				ts.isExportDeclaration(node) &&
+				node.exportClause &&
+				ts.isNamedExports(node.exportClause)
+			) {
+				for (const element of node.exportClause.elements) {
+					expect(["Stripe", "stripeClient"]).not.toContain(
+						(element.propertyName ?? element.name).text,
+					);
+				}
+			}
+
 			// No runtime import-equals consumers are part of the reviewed boundary.
 			if (ts.isImportEqualsDeclaration(node))
 				expect(node.isTypeOnly).toBe(true);
@@ -115,6 +144,20 @@ function verifyInventory(inputs: typeof sources) {
 
 				if (ts.isImportDeclaration(node) && !node.importClause?.isTypeOnly) {
 					expect(node.importClause?.name).toBeUndefined();
+					const bindings = node.importClause?.namedBindings;
+
+					if (bindings && ts.isNamedImports(bindings)) {
+						for (const element of bindings.elements) {
+							if (
+								(element.propertyName ?? element.name).text === "stripeClient"
+							) {
+								expect(path).toBe(adapters[1]);
+								expect(element.propertyName).toBeUndefined();
+								expect(element.name.text).toBe("stripeClient");
+							}
+						}
+					}
+
 					expect(
 						node.importClause?.namedBindings &&
 							ts.isNamedImports(node.importClause.namedBindings),
@@ -309,6 +352,11 @@ it.each([
 	expect(mutated.find((source) => source.path === adapters[0])?.text).not.toBe(
 		sources.find((source) => source.path === adapters[0])?.text,
 	);
+	// Visit the mutation first so the rejection test need not traverse the
+	// unchanged repository before reaching the failing boundary.
+	mutated.sort(
+		(a, b) => Number(b.path === adapters[0]) - Number(a.path === adapters[0]),
+	);
 	expect(() => verifyInventory(mutated)).toThrow();
 });
 
@@ -326,7 +374,7 @@ it.each(["js", "jsx", "mjs", "mts", "cts", "astro"])(
 		);
 
 		expect(text).toContain("import Stripe");
-		expect(() => verifyInventory([...sources, { path, text }])).toThrow();
+		expect(() => verifyInventory([{ path, text }, ...sources])).toThrow();
 	},
 );
 
@@ -379,6 +427,56 @@ it.each([
 	],
 ])("rejects %s", (_name, path, code) => {
 	expect(() =>
-		verifyInventory([...sources, { path, text: runtimeSource(path, code) }]),
+		verifyInventory([{ path, text: runtimeSource(path, code) }, ...sources]),
 	).toThrow();
+});
+
+it.each([
+	[
+		"string-named factory import",
+		'import { "stripeClient" as make } from "~/lib/stripe-invoicing"; make(env).refunds.create({});',
+	],
+	[
+		"string-named factory re-export",
+		'export { "stripeClient" as make } from "~/lib/stripe-invoicing";',
+	],
+	[
+		"eager glob",
+		'const make = import.meta.glob("../lib/stripe-invoicing.ts", {eager:true, import:"stripeClient"});',
+	],
+	[
+		"globEager",
+		'const modules = import.meta.globEager("../lib/stripe-invoicing.ts");',
+	],
+	[
+		"alias glob array",
+		'const modules = import.meta.glob(["~/lib/*.ts", "!~/lib/stripe-invoicing.ts"], {eager:true});',
+	],
+	[
+		"root glob",
+		'const modules = import.meta.glob("/src/lib/stripe-invoicing.ts", {eager:true});',
+	],
+	[
+		"unresolved glob",
+		'const pattern = "../lib/stripe-invoicing.ts"; const modules = import.meta.glob(pattern);',
+	],
+])("rejects %s", (_name, text) => {
+	expect(() =>
+		verifyInventory([{ path: "src/pages/unsafe.ts", text }, ...sources]),
+	).toThrow();
+});
+
+it("rejects string-named re-export of the SDK constructor", () => {
+	const mutated = sources.map((source) =>
+		source.path === adapters[0]
+			? { ...source, text: source.text + '\nexport {"Stripe" as make};' }
+			: source,
+	);
+
+	// Visit the mutation first so the rejection test need not traverse the
+	// unchanged repository before reaching the failing boundary.
+	mutated.sort(
+		(a, b) => Number(b.path === adapters[0]) - Number(a.path === adapters[0]),
+	);
+	expect(() => verifyInventory(mutated)).toThrow();
 });
