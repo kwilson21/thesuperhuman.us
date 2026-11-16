@@ -53,7 +53,8 @@ runMotion(({ signal, onScene, onReveal, cleanup }) => {
 		const width = Number(signalEdge.dataset.width);
 		const mid = Number(signalEdge.dataset.mid);
 
-		// Old News's real waveform when the page gives it, as the resting frame was drawn.
+		// The newest released song's real waveform when the page gives it (src/lib/latest-song.ts), as the resting frame
+		// was drawn; otherwise the drawn phrase.
 		const given = (signalEdge.dataset.peaks ?? "")
 			.split(",")
 			.filter(Boolean)
