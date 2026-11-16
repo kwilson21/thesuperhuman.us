@@ -351,4 +351,83 @@ describe("a client's and the owner's messages", () => {
 
 		expect(await send(world, "Late")).toEqual({ refused: "ClientRateLimited" });
 	});
+
+	it("refuses the write when the session ends between the lookup and the write", async () => {
+		const world = musicWorld();
+		await seeded(world);
+		world.sql
+			.prepare("UPDATE audio_client_sessions SET expires_at=?")
+			.run(new Date(AT.getTime() + 1000).toISOString());
+
+		// The lookup reads the clock first (the session is open); the write and the recount read it again, after the end.
+		const reads = [0, 2000, 2000];
+		const clock = () => new Date(AT.getTime() + (reads.shift() ?? 2000));
+
+		expect(
+			await ended(
+				world,
+				sendClientMessage({
+					id: "song-1",
+					token: TOKEN,
+					body: "Just in time",
+					now: clock,
+				}),
+			),
+		).toEqual({ refused: "MessageNotAccepted" });
+		expect(messages(world)).toEqual([]);
+	});
+
+	it("refuses a review answer when the session ends between the lookup and the write", async () => {
+		const world = musicWorld();
+		await seeded(world);
+		stage(world, "review_ready");
+		publish(world, "review-1", "2026-11-13T11:00:00.000Z");
+		world.sql
+			.prepare("UPDATE audio_client_sessions SET expires_at=?")
+			.run(new Date(AT.getTime() + 1000).toISOString());
+
+		const reads = [0, 2000, 2000];
+		const clock = () => new Date(AT.getTime() + (reads.shift() ?? 2000));
+
+		expect(
+			await ended(
+				world,
+				answerLatestReview({
+					id: "song-1",
+					token: TOKEN,
+					reviewId: "review-1",
+					decision: "approved",
+					body: null,
+					now: clock,
+				}),
+			),
+		).toEqual({ refused: "ReviewNotAnswerable" });
+		expect(messages(world)).toEqual([]);
+	});
+
+	it("takes the answer that the write's own lookup picks among reviews published at the same time, and refuses the other", async () => {
+		const world = musicWorld();
+		await seeded(world);
+		stage(world, "review_ready");
+		publish(world, "review-a", "2026-11-13T11:00:00.000Z");
+		publish(world, "review-b", "2026-11-13T11:00:00.000Z");
+
+		const picked = world.sql
+			.prepare(
+				`SELECT id FROM audio_project_files WHERE request_id='song-1' AND version='review' AND status='published'
+          ORDER BY published_at DESC LIMIT 1`,
+			)
+			.get();
+		const chosen = String(picked?.id);
+		const other = chosen === "review-a" ? "review-b" : "review-a";
+
+		// The rule lets either tied review be named; the write takes only the one it picks, and a refusal of the other is
+		// the same answer as for any review that is not the latest.
+		expect(await answer(world, other, "approved")).toEqual({
+			refused: "ReviewNotAnswerable",
+		});
+		expect(await answer(world, chosen, "approved")).toMatchObject({
+			done: { review_decision: "approved" },
+		});
+	});
 });
