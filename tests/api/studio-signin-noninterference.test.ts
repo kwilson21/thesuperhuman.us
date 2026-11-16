@@ -393,6 +393,40 @@ const requestAtItsTurn = (
 	start: (target) => ask(id, address(target), cookie, true, `${id}.r`),
 });
 
+/**
+ * A request whose handler reads the clock at `at`, set when its first step comes up, however the other requests are ordered. The
+ * scripted clock step moves one clock for everyone; this gives each request its own reading and so covers a request that read the
+ * clock early and does its database work late, which the scripted step cannot produce.
+ */
+const requestAtClock = (
+	id: string,
+	address: (target: string) => string,
+	cookie: string,
+	at: number,
+): Actor => ({
+	steps: [`${id}.r`, `${id}.c`, `${id}.w`],
+	start: async (target) => {
+		const url = `${ORIGIN}/api/studio/code`;
+		const jar = jarOf(cookie);
+
+		const sent = context(
+			"/api/studio/code",
+			{ email: address(target), turnstileToken: "ok" },
+			jar.headerFor(url),
+			scripted(id, true),
+		);
+
+		await gate(`${id}.r`);
+		vi.setSystemTime(at);
+
+		const response = await requestCode(sent);
+
+		jar.apply(response.clone(), url);
+
+		return response;
+	},
+});
+
 const atomic = (
 	id: string,
 	work: (target: string) => Promise<void>,
@@ -506,6 +540,8 @@ async function observe(
 type Scenario = {
 	/** Runs before each run's database is built, for state outside the database (a fake clock) that the run must start from. */
 	reset?: () => void;
+	/** Runs once the actors have finished, before the attacker's observations (a fake clock to set for them). */
+	beforeObserve?: () => void;
 	setup?: (target: string) => Promise<void>;
 	actors: Actor[];
 	pairs: [string, string][];
@@ -541,6 +577,7 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 			);
 
 			await flush();
+			scenario.beforeObserve?.();
 			seen.set(
 				name,
 				await observe(
@@ -914,6 +951,59 @@ describe("a request for one address does not change what an attacker sees of ano
 				vi.useRealTimers();
 			}
 		}, 600_000);
+
+		// Each of the two requests reads the clock at the start or 11 minutes later (all four combinations), whatever the order of
+		// their database steps: a request that read the clock early and writes late, or the reverse. The attacker then looks at 11
+		// minutes, when a code issued at the start has expired and one issued later has not.
+		for (const [clockA, clockB] of [
+			[0, 0],
+			[0, 11],
+			[11, 0],
+			[11, 11],
+		]) {
+			it(`a request and the attacker's own, each reading the clock at its own time (A +${clockA}, B +${clockB} minutes), ${attacker.name}`, async () => {
+				const start = Date.now();
+
+				try {
+					vi.useFakeTimers({ toFake: ["Date"] });
+					vi.setSystemTime(start);
+
+					const result = await explore({
+						reset: () => vi.setSystemTime(start),
+						beforeObserve: () => vi.setSystemTime(start + 11 * 60_000),
+						setup: async (target) => {
+							await setup();
+							await ask("setup", target, K2, false);
+						},
+						actors: [
+							requestAtClock(
+								"B",
+								(target) => target,
+								K1,
+								start + clockB * 60_000,
+							),
+							requestAtClock(
+								"A",
+								() => attacker.own,
+								K1,
+								start + clockA * 60_000,
+							),
+						],
+						pairs: own(),
+						sent: [K1, K2],
+					});
+
+					report(
+						`requests at their own clocks, A +${clockA} B +${clockB}, ${attacker.name}`,
+						result,
+					);
+					expect(result.orderings).toBe(20);
+					expect(result.differing).toBe(0);
+				} finally {
+					vi.useRealTimers();
+				}
+			}, 600_000);
+		}
 	}
 });
 
