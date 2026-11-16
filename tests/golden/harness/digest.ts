@@ -7,7 +7,8 @@
 // in tests/golden/README.md):
 //
 // - Tables are read in primary key order, or rowid order when the table has no primary key (`sqlite_sequence`, which
-//   holds the AUTOINCREMENT counters, in name order). It is part of the state.
+//   holds the AUTOINCREMENT counters, in name order). It is part of the state, except a counter row at 0: the next
+//   id is the same with that row as without it, so the digest leaves it out.
 // - Each table's digest starts with its column names in schema order, so a schema difference cannot hide, even in an
 //   empty table.
 // - Every cell is written with a tag from SQLite's own `typeof()` of the stored value, so 1 and 1.0 differ: NULL as `N;`,
@@ -79,8 +80,14 @@ function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
 		)
 		.join(", ");
 
+	// A counter row at 0 is no state: with it or without it the next id is the same (SQLite takes the larger of the counter
+	// and the table's largest rowid), so no later statement can tell them apart. A refused INSERT ... SELECT creates one.
+	const where = table === "sqlite_sequence" ? "WHERE seq <> 0" : "";
+
 	const rows = sqlite
-		.prepare(`SELECT ${selected} FROM ${quote(table)} ORDER BY ${order}`)
+		.prepare(
+			`SELECT ${selected} FROM ${quote(table)} ${where} ORDER BY ${order}`,
+		)
 		.all();
 
 	const hash = createHash("sha256");

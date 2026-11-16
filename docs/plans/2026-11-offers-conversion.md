@@ -1,11 +1,11 @@
 # Software offers: conversion design
 
-Status: implemented, pending merge, in the stack #334 (the command reader, the machines and the rules), #337 (the store,
-the services and the answers) and #341 (the flows and the route); record `docs/prelaunch-qa-2026-11-16-offers-area.md`.
-Proposed 2026-11-15 and revised the same day after the review of #306, as the design PR for step 1 of
-`docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR changed nothing under `src/`. Every
-claim about today's code cites a file and line on `origin/main` at `68ce7822`; `software.ts` below means
-`src/pages/api/owner/requests/[id]/software.ts`.
+Status: implemented and merged to `main` on 2026-11-16 as `a9f30919`, in the stack #334 (the command reader, the
+machines and the rules), #337 (the store, the services and the answers) and #341 (the flows and the route); record
+`docs/prelaunch-qa-2026-11-16-offers-area.md`. Proposed 2026-11-15 and revised the same day after the review of #306,
+as the design PR for step 1 of `docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR
+changed nothing under `src/`. Every claim about the code before the conversion cites a file and line on `origin/main`
+at `68ce7822`; `software.ts` below means `src/pages/api/owner/requests/[id]/software.ts`.
 
 It assumes `claude/offers-prep-split` (#305) lands first (it moves `softwareGuard`, `softwareAudit`,
 `softwareInvoiceTerms` and the deposit facts into modules of their own, with no behaviour change). The deposit facts are
