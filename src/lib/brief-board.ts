@@ -546,7 +546,7 @@ const SCALE =
  * A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k",
  * "5 thousand").
  */
-const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d|\\s\\d{3}(?!\\d))`;
+const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d|(?<=(?<![\\d,.])\\d{1,3}(?:[,.\\s]\\d{3})*)\\s\\d{3}(?!\\d))`;
 
 /** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";

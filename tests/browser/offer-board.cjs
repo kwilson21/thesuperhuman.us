@@ -935,7 +935,21 @@ function check(name, ok, detail = "") {
 		await timing
 			.locator("[data-card-input]")
 			.fill("About five weeks once the songs are in.");
+		// Enter saves without passing focus through the Save button on its way to the card's Edit.
+		await page.evaluate(() => {
+			window.__focused = [];
+			document.addEventListener("focusin", (event) =>
+				window.__focused.push(event.target.textContent?.trim() ?? ""),
+			);
+		});
 		await timing.locator("[data-card-input]").press("Enter");
+		check(
+			"Enter in a card editor saves without focusing Save on the way",
+			!(await page.evaluate(() => window.__focused)).some((text) =>
+				/^Save/.test(text),
+			),
+			(await page.evaluate(() => window.__focused)).join(" | "),
+		);
 		await timing.getByRole("button", { name: /^Use as timing/ }).click();
 		const usedTiming = await value("timing");
 
@@ -1399,11 +1413,16 @@ function check(name, ok, detail = "") {
 			.getByRole("button", { name: /^Use as the whole-project range/ })
 			.click();
 		check(
-			"the whole-project range is never filled below the offer's total",
+			"the whole-project range is never filled below the offer's total, and says why beside the button, in view",
 			(await page.locator('[name="rangeLow"]').inputValue()) === "" &&
 				/must start at the offer total/.test(
-					await page.locator("[data-offer-status]").textContent(),
-				),
+					await page.locator("[data-price-said]").textContent(),
+				) &&
+				(await page.locator("[data-price-said]").evaluate((line) => {
+					const box = line.getBoundingClientRect();
+
+					return box.height > 0 && box.top >= 0 && box.bottom <= innerHeight;
+				})),
 		);
 
 		// The sixth review's bug: Edit pressed again, or Not this, never drops words typed in the card's open editor.

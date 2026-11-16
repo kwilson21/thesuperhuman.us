@@ -83,6 +83,8 @@ type Held = {
 	refs: string[];
 	sizing: OfferSizing;
 	changes: number;
+	/** The request was the page's last, so applying its reply says the board asks nothing more. */
+	last: boolean;
 };
 
 const dollars = (cents: number) =>
@@ -692,7 +694,26 @@ export function setupOfferBoard() {
 	 * Fills the offer's estimate range, to the cent (past offers can hold cents). The editor's range starts at $1, so a
 	 * researched low end of $0 fills as $1.
 	 */
-	function useRange(lowCents: number, highCents: number) {
+	/**
+	 * What a price row's button did, shown in that row under the button (the board's status line is out of view there),
+	 * and announced. One such line at a time; redrawing the row removes it.
+	 */
+	function sayPrice(text: string, from: HTMLElement) {
+		for (const old of document.querySelectorAll("[data-price-said]"))
+			old.remove();
+
+		const line = document.createElement("p");
+
+		line.className = "offer-price-said";
+		line.dataset.priceSaid = "";
+		line.textContent = text;
+		from.insertAdjacentElement("afterend", line);
+		// Just far enough that it shows, when the button sat at the screen's edge.
+		line.scrollIntoView({ block: "nearest" });
+		announce(text);
+	}
+
+	function useRange(lowCents: number, highCents: number, from: HTMLElement) {
 		const low = Math.max(100, lowCents);
 		const high = Math.max(low, highCents);
 
@@ -704,8 +725,9 @@ export function setupOfferBoard() {
 		}, 0);
 
 		if (total > low) {
-			say(
+			sayPrice(
 				`Your milestone fees add up to ${exactDollars(total)}, more than this range’s low end of ${exactDollars(low)}. The whole-project range must start at the offer total or above, so it was not filled. Change the fees, or type a range in the offer.`,
+				from,
 			);
 
 			return;
@@ -730,8 +752,9 @@ export function setupOfferBoard() {
 			}
 		}
 
-		say(
+		sayPrice(
 			`Filled the whole-project range the client sees as an estimate: ${exactDollars(low)} to ${exactDollars(high)}. Nothing is saved until you save the draft.`,
+			from,
 		);
 	}
 
@@ -833,7 +856,9 @@ export function setupOfferBoard() {
 			);
 		else if (pricing.market && replied)
 			marketParts.push(
-				"The AI did not size this brief, so there is no market range to show. Press Suggest again to ask.",
+				requests < REQUESTS_PER_PAGE
+					? "The AI did not size this brief, so there is no market range to show. Press Suggest again to ask."
+					: "The AI did not size this brief, so there is no market range to show.",
 			);
 		else marketParts.push(...marketDefault.map((node) => node.cloneNode(true)));
 
@@ -1160,14 +1185,19 @@ export function setupOfferBoard() {
 		held = null;
 		render();
 
-		// The reply that reaches the page's limit says so with it: the board asks nothing more on this page.
-		const limit = requests >= REQUESTS_PER_PAGE ? ` ${PAGE_LIMIT}` : "";
+		const done = result.added
+			? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`
+			: "Up to date with your draft.";
 
-		say(
-			result.added
-				? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.${limit}`
-				: `Up to date with your draft.${limit}`,
-		);
+		// The reply to the page's last request says so: the board asks nothing more on this page.
+		const full = reply.last ? `${done} ${PAGE_LIMIT}` : done;
+
+		// While the owner is among the cards the line keeps its height and a short form, so the cards do not move under the
+		// pointer or finger; the whole sentence is still announced, and Suggest says the limit again.
+		if (interacting()) {
+			quietly(reply.last ? "Up to date. This page’s limit is reached." : done);
+			announce(full);
+		} else say(full);
 	}
 
 	function deliver(reply: Held) {
@@ -1241,12 +1271,17 @@ export function setupOfferBoard() {
 
 	function failed(text: string) {
 		autoAsk = false;
-		say(text);
+		// Only the request on its way can fail, so at the limit it was the page's last: Suggest cannot try again.
+		say(
+			requests < REQUESTS_PER_PAGE
+				? text
+				: `${text === AI_FAILED ? "The AI couldn’t answer just now. Your draft is unchanged." : text} ${PAGE_LIMIT}`,
+		);
 	}
 
 	async function ask(pressed = false) {
 		if (!canAsk()) {
-			if (requests >= REQUESTS_PER_PAGE) say(PAGE_LIMIT);
+			if (requests >= REQUESTS_PER_PAGE && !inFlight) say(PAGE_LIMIT);
 
 			return;
 		}
@@ -1260,6 +1295,7 @@ export function setupOfferBoard() {
 		lastSent = key;
 		lastSendAt = Date.now();
 		requests++;
+		const last = requests >= REQUESTS_PER_PAGE;
 
 		if (pressed) say("Reading the brief and your draft…");
 		else quietly("Reading the brief and your draft…");
@@ -1326,6 +1362,7 @@ export function setupOfferBoard() {
 				refs,
 				sizing: reply,
 				changes: 0,
+				last,
 			});
 		} catch {
 			failed(AI_FAILED);
@@ -1377,17 +1414,34 @@ export function setupOfferBoard() {
 	root.addEventListener(
 		"click",
 		(event) => {
+			// Enter and Escape in a card editor press Save or Cancel from the script; focus stays where the handler puts it.
+			if (!event.isTrusted) return;
+
 			const pressed =
 				event.target instanceof Element
 					? event.target.closest<HTMLElement>("button")
 					: null;
 
-			if (
-				pressed &&
-				root.contains(pressed) &&
-				document.activeElement !== pressed
-			)
+			if (!pressed || !root.contains(pressed)) return;
+
+			if (document.activeElement !== pressed)
 				pressed.focus({ preventScroll: true });
+
+			// A reply held while the owner was among the cards lands before a press outside them (Suggest, Undo), not
+			// just after it, so the press's own message is said last and a request includes the waiting cards. Not for
+			// a price row's button, which applying a reply may redraw, and not while a card editor is open.
+			if (
+				held &&
+				pressed !== heldButton &&
+				!cardsBox.contains(pressed) &&
+				!pressed.closest(
+					"[data-price-day], [data-price-market], [data-price-past]",
+				) &&
+				![...cardsBox.querySelectorAll<HTMLElement>("[data-card-editor]")].some(
+					(editor) => !editor.hidden,
+				)
+			)
+				apply(held);
 		},
 		true,
 	);
@@ -1403,7 +1457,7 @@ export function setupOfferBoard() {
 		const card = cardOf(node?.dataset.card);
 
 		if (target.dataset.priceUse !== undefined) {
-			useRange(Number(target.dataset.low), Number(target.dataset.high));
+			useRange(Number(target.dataset.low), Number(target.dataset.high), target);
 
 			return;
 		}

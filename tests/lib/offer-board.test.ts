@@ -625,3 +625,28 @@ describe("found in the offer board's twentieth review", () => {
 		expect(pricesOrLinks("Quote 4 mil poly bags")).toBe(true);
 	});
 });
+
+describe("found in the offer board's twenty-first review", () => {
+	it.each([
+		"Fee 1500 100% upfront",
+		"Budget 2500 100% on signing",
+		"Fee 1500.00 100% upfront",
+		"Budget 5 thousand 100% upfront",
+		"Budget 5k 100% upfront",
+		"Fee 3000 100 percent upfront",
+		"Fee 1200 300 for hosting",
+		"Kosten 1500 100 % bei Auftrag",
+		"Precio 2500 100% por adelantado",
+		"Kosten 1.500,00 100 % bei Auftrag",
+	])("drops %s: an amount then another number is still money", (text) => {
+		expect(pricesOrLinks(text)).toBe(true);
+	});
+
+	it.each([
+		"Estimated 1 000 000 pages",
+		"Estimated 2 500 000 users",
+		"Estimated 120 500 users",
+	])("keeps %s: a space-grouped count", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});
