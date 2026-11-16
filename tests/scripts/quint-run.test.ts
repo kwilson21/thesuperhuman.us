@@ -608,7 +608,7 @@ describe("the brief copy model", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the thirteen models, each with its own registry", () => {
+	it("lists the fourteen models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
@@ -623,6 +623,7 @@ describe("the models the driver runs", () => {
 			"verification/audio-project-files.qnt",
 			"verification/audio-project-notices.qnt",
 			"verification/brief-copy.qnt",
+			"verification/link-previews.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
 		expect(models[1].mutants).toBe(discountMutants);
