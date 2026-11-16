@@ -255,8 +255,8 @@ importers:
         specifier: 0.28.2
         version: 0.28.2
       lemmascript:
-        specifier: 0.6.9
-        version: 0.6.9(supports-color@10.2.2)(zod@4.6.7)
+        specifier: 0.6.6
+        version: 0.6.6(supports-color@10.2.2)(zod@4.6.7)
       oxlint:
         specifier: 1.93.0
         version: 1.93.0
@@ -3268,15 +3268,8 @@ packages:
     peerDependencies:
       lemmascript: '>=0.5.7'
 
-  lemmascript-guard@0.1.0:
-    resolution: {integrity: sha512-f6N9L4gRXXbtlUdKlzy7zs57F/104m23YyzQbSmyX2RjKe+AytmSyXx3AcosYauMlHb8mWxG98Fqe2jEMXzTdw==}
-    engines: {node: '>=22'}
-    hasBin: true
-    peerDependencies:
-      lemmascript: '>=0.6.0 <0.7.0'
-
-  lemmascript@0.6.9:
-    resolution: {integrity: sha512-xllecETK8UjRV7Y9gyI/WFMUixOSTlcChkYwbj9EYGntzb4qOddOM8CFBaYp7HVgibyGJt9E93zHKyYsBYDo8Q==}
+  lemmascript@0.6.6:
+    resolution: {integrity: sha512-FW8XVxnOlxihWtJcAGrI8QqETPCsAdDeUqg23/furrfMXzJ5rZt2XNzAAvyloxCgOcEnzbuUAHyy9HcFFjPOzA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -7522,26 +7515,18 @@ snapshots:
 
   leac@0.6.0: {}
 
-  lemmascript-claimcheck@0.2.1(lemmascript@0.6.9(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7):
+  lemmascript-claimcheck@0.2.1(lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7):
     dependencies:
       claimcheck: 0.6.1(supports-color@10.2.2)(zod@4.6.7)
-      lemmascript: 0.6.9(supports-color@10.2.2)(zod@4.6.7)
+      lemmascript: 0.6.6(supports-color@10.2.2)(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
       - zod
 
-  lemmascript-guard@0.1.0(lemmascript@0.6.9(supports-color@10.2.2)(zod@4.6.7)):
+  lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7):
     dependencies:
-      lemmascript: 0.6.9(supports-color@10.2.2)(zod@4.6.7)
+      lemmascript-claimcheck: 0.2.1(lemmascript@0.6.6(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7)
       ts-morph: 25.0.1
-    optional: true
-
-  lemmascript@0.6.9(supports-color@10.2.2)(zod@4.6.7):
-    dependencies:
-      lemmascript-claimcheck: 0.2.1(lemmascript@0.6.9(supports-color@10.2.2)(zod@4.6.7))(supports-color@10.2.2)(zod@4.6.7)
-      ts-morph: 25.0.1
-    optionalDependencies:
-      lemmascript-guard: 0.1.0(lemmascript@0.6.9(supports-color@10.2.2)(zod@4.6.7))
     transitivePeerDependencies:
       - supports-color
       - zod

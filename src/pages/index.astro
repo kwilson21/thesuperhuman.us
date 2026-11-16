@@ -146,14 +146,14 @@ const jsonLd = {
           </div>
         </article>
       </section>
-      {/* Home's invitation: one Get in touch button to the switchboard (/contact), which offers a message, the resume, a song or a project brief. */}
-      <section id="contact" class="site-section contact-section" aria-labelledby="contact-title" data-scene="horizon" data-start="1" data-end="0.3" data-pinned-end>
+      {/* Keep Home's horizon and invitation; the shared footer below owns the Get in touch button. */}
+      <section id="contact" class="site-section contact-section" aria-labelledby="contact-title" data-scene="horizon" data-start="1" data-end="0.3">
         <div class="horizon" aria-hidden="true"><span class="horizon-sun"></span></div>
-        <div class="contact-intro"><div><h2 id="contact-title">Have something in mind?<br />Let’s talk.</h2><p>Ideas, opportunities, or a conversation worth having.</p></div><a class="site-button" href="/contact">Get in touch</a></div>
+        <div class="contact-intro"><div><h2 id="contact-title">Have something in mind?<br />Let’s talk.</h2><p>Ideas, opportunities, or a conversation worth having.</p></div></div>
       </section>
     </div>
   </div>
-  <Footer variant="quiet" pinned slot="footer" />
+  <Footer slot="footer" />
 </BaseLayout>
 <script>
   import '~/scripts/home-worlds';

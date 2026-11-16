@@ -1687,6 +1687,7 @@ describe("moved client modules", () => {
 		scenarios: [
 			"contact-switchboard",
 			"contact-hold",
+			"mobile-contact",
 			"journal-pagination",
 			"owner-details",
 			"services-print",
@@ -1742,7 +1743,11 @@ describe("moved client modules", () => {
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
 		["payload-review-illustration", TIMELINE_PAGES, []],
-		["pinned-contact", ["home", "work", "audio", "not-found"], []],
+		[
+			"pinned-contact",
+			["home", "work", "audio", "not-found"],
+			["mobile-contact"],
+		],
 		["project-timeline", TIMELINE_PAGES, ["journal-pagination"]],
 		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],

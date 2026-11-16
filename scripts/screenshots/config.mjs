@@ -307,6 +307,9 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/components/Footer.astro": ["mobile-contact"],
+	"src/scripts/pinned-contact.ts": ["mobile-contact"],
+	"src/pages/index.astro": ["mobile-contact"],
 	"src/pages/contact.astro": ["contact-switchboard"],
 	"src/components/Switchboard.astro": ["contact-switchboard"],
 	"src/components/ContactForm.astro": ["contact-switchboard", "contact-hold"],
