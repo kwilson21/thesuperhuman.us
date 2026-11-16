@@ -62,6 +62,7 @@ import type { LinkRow, RevokeWrite } from "./rules/offer-revoke";
 import type { SendWrite } from "./rules/offer-send";
 import type {
 	AttachmentRow,
+	ClosedArchives,
 	NamedAttachment,
 	RequestRead,
 	SigningRetired,
@@ -577,23 +578,36 @@ export const readAttachmentRows = (
 			).results,
 	);
 
+/** No closed archive read: what the draft and send decide from when no attachment is named. */
+const NO_CLOSED_ARCHIVES: ClosedArchives = { keys: [], unreadable: false };
+
 /**
- * Which of these keys an agreement whose archive is closed names in its manifest, with G11's own predicate: an agreement
- * whose archive is open is passed over before its manifest is read, so its manifest is never parsed. A closed archive
- * whose manifest is not JSON fails the read.
+ * The closed archives G11 covers, for these keys: which of them a manifest names, and whether a manifest, or an entry of
+ * one, is not JSON, where G11's `json_each` or `json_extract` raises "malformed JSON" and so refuses its batch. Only the
+ * agreements whose archive is closed count, as in G11's predicate, and `json_valid` passes over every value that is not
+ * JSON before anything parses it, so stored data never fails the read (`json_valid` takes strict JSON, where `json_each`
+ * also takes JSON5, which the site never writes). With no key there is no G11 in the batch, so nothing is read.
  */
-export const readClosedArchives = (keys: readonly string[]) =>
-	asked(
-		async (db): Promise<readonly string[]> =>
-			(
-				await db
+export const readClosedArchives = (
+	keys: readonly string[],
+): Effect.Effect<ClosedArchives, OffersStoreFailed, MusicDb> =>
+	keys.length === 0
+		? Effect.succeed(NO_CLOSED_ARCHIVES)
+		: asked(async (db) => {
+				const { results } = await db
 					.prepare(
-						"SELECT DISTINCT json_extract(m.value,'$.key') AS object_key FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE a.archive_closed_at IS NOT NULL AND json_extract(m.value,'$.key') IN (SELECT value FROM json_each(?))",
+						"SELECT DISTINCT object_key,unreadable FROM (SELECT CASE WHEN json_valid(m.value) THEN json_extract(m.value,'$.key') END AS object_key,NOT json_valid(a.attachment_manifest_json) OR (m.value IS NOT NULL AND NOT json_valid(m.value)) AS unreadable FROM software_agreements a LEFT JOIN json_each(CASE WHEN json_valid(a.attachment_manifest_json) THEN a.attachment_manifest_json END) m WHERE a.archive_closed_at IS NOT NULL) WHERE unreadable OR object_key IN (SELECT value FROM json_each(?))",
 					)
 					.bind(JSON.stringify(keys))
-					.all<{ object_key: string }>()
-			).results.map((row) => row.object_key),
-	);
+					.all<{ object_key: string | null; unreadable: number }>();
+
+				return {
+					keys: results.flatMap((row) =>
+						row.object_key === null ? [] : [row.object_key],
+					),
+					unreadable: results.some((row) => row.unreadable === 1),
+				};
+			});
 
 /** Whether an agreement with this id exists: the MSA a draft reuses, read before the batch and, after a foreign key failure, as evidence of a race. */
 export const readMsaExists = (id: string) =>

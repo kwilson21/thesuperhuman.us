@@ -68,7 +68,9 @@ import type { QuestionWrite } from "../../src/server/rules/offer-question";
 import type { RevokeWrite } from "../../src/server/rules/offer-revoke";
 import type { SendWrite } from "../../src/server/rules/offer-send";
 import {
+	attachmentsUsable,
 	type NamedAttachment,
+	outsideClosedArchives,
 	type RequestRead,
 	retireSigning as retiredAt,
 } from "../../src/server/rules/software-request";
@@ -917,7 +919,7 @@ describe("draft", () => {
 		expect(await world.ok(readMsaExists("a1"))).toBe(false);
 	});
 
-	it("reads the keys a closed archive names, never parsing an open archive's manifest", async () => {
+	it("reads the keys a closed archive names, passing over an open archive's manifest", async () => {
 		const world = seeded();
 
 		world.seed(rows.agreementBase());
@@ -925,7 +927,12 @@ describe("draft", () => {
 			software_agreements: [
 				rows.agreement("a1", "r1", "o1", {
 					status: "executed",
-					attachment_manifest_json: JSON.stringify([{ key: KEY }]),
+					attachment_manifest_json: JSON.stringify([
+						null,
+						1,
+						true,
+						{ key: KEY },
+					]),
 					archive_closed_at: EARLIER,
 				}),
 				rows.agreement("a2", "r1", "o1", {
@@ -935,15 +942,107 @@ describe("draft", () => {
 			],
 		});
 
-		expect(await world.ok(readClosedArchives([KEY, OTHER_KEY]))).toEqual([KEY]);
-		expect(await world.ok(readClosedArchives([]))).toEqual([]);
+		expect(await world.ok(readClosedArchives([KEY, OTHER_KEY]))).toEqual({
+			keys: [KEY],
+			unreadable: false,
+		});
+		expect(await world.ok(readClosedArchives([OTHER_KEY]))).toEqual({
+			keys: [],
+			unreadable: false,
+		});
+	});
 
-		world.sql.exec(
-			"UPDATE software_agreements SET archive_closed_at=created_at WHERE id='a2'",
-		);
-		expect(await world.failed(readClosedArchives([KEY]))).toBeInstanceOf(
-			OffersStoreFailed,
-		);
+	// G11 reads each closed archive's manifest with json_each and each entry with json_extract, which raise "malformed
+	// JSON", the guard's own message, on a value that is not JSON: the batch is refused and answered by the reads after a
+	// refused batch (409), and only when an attachment is named, since with none the batch has no G11.
+	it("reads a closed archive whose manifest, or an entry of it, is not JSON as unreadable, without failing, and reads nothing with no key", async () => {
+		for (const manifest of ["{not json", '["{not json"]', '{"key":"x"}']) {
+			const world = seeded();
+
+			world.seed(rows.agreementBase());
+			world.seed({
+				software_agreements: [
+					rows.agreement("a1", "r1", "o1", {
+						status: "executed",
+						attachment_manifest_json: JSON.stringify([{ key: KEY }]),
+						archive_closed_at: EARLIER,
+					}),
+					rows.agreement("a2", "r1", "o1", {
+						status: "executed",
+						attachment_manifest_json: manifest,
+						archive_closed_at: EARLIER,
+					}),
+				],
+			});
+
+			expect(
+				await world.ok(readClosedArchives([KEY, OTHER_KEY])),
+				manifest,
+			).toEqual({ keys: [KEY], unreadable: true });
+			expect(await world.ok(readClosedArchives([OTHER_KEY])), manifest).toEqual(
+				{ keys: [], unreadable: true },
+			);
+
+			const asked = world.executed.length;
+
+			expect(await world.ok(readClosedArchives([])), manifest).toEqual({
+				keys: [],
+				unreadable: false,
+			});
+			expect(world.executed.length, manifest).toBe(asked);
+
+			// What the old route's guard does with the same row: it raises "malformed JSON", which refuses its batch.
+			expect(() =>
+				world.all(
+					"SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE a.archive_closed_at IS NOT NULL AND json_extract(m.value,'$.key')=?)",
+					OTHER_KEY,
+				),
+			).toThrow(/malformed JSON/);
+		}
+	});
+
+	it("gives the rules an unreadable closed archive to refuse a named attachment on, as the batch's G11 refuses it, and nothing to refuse with none named", async () => {
+		const world = seeded();
+
+		world.seed(rows.agreementBase());
+		world.seed({
+			software_agreement_attachments: [attachmentRow("f1", KEY)],
+			software_agreements: [
+				rows.agreement("a1", "r1", "o1", {
+					status: "executed",
+					attachment_manifest_json: "{not json",
+					archive_closed_at: EARLIER,
+				}),
+			],
+		});
+
+		const read = {
+			rows: await world.ok(readAttachmentRows("r1", [KEY])),
+			closed: await world.ok(readClosedArchives([KEY])),
+		};
+
+		expect(attachmentsUsable([named], read)).toBe(false);
+		expect(outsideClosedArchives(named, read.closed)).toBe(false);
+		expect(
+			await world.failed(
+				saveDraftBatch(
+					newDraft({
+						attachments: [named],
+						details: { json: JSON.stringify({ attachments: [named] }) },
+					}),
+				),
+			),
+		).toBeInstanceOf(GuardRefused);
+
+		const none = {
+			rows: [],
+			closed: await world.ok(readClosedArchives([])),
+		};
+
+		expect(attachmentsUsable([], none)).toBe(true);
+		expect(await world.ok(saveDraftBatch(newDraft()))).toEqual({
+			deletedKeys: [],
+		});
 	});
 
 	it("inserts a new version and deletes a removed attachment's row that nothing names", async () => {
@@ -1512,8 +1611,8 @@ const ADDED = [
 		why: "AttachmentNotUsable's rows, read before the batch that G11 re-checks",
 	},
 	{
-		sql: "SELECT DISTINCT json_extract(m.value,'$.key') AS object_key FROM software_agreements a,json_each(a.attachment_manifest_json) m WHERE a.archive_closed_at IS NOT NULL AND json_extract(m.value,'$.key') IN (SELECT value FROM json_each(?))",
-		why: "AttachmentNotUsable's closed archives, with G11's predicate",
+		sql: "SELECT DISTINCT object_key,unreadable FROM (SELECT CASE WHEN json_valid(m.value) THEN json_extract(m.value,'$.key') END AS object_key,NOT json_valid(a.attachment_manifest_json) OR (m.value IS NOT NULL AND NOT json_valid(m.value)) AS unreadable FROM software_agreements a LEFT JOIN json_each(CASE WHEN json_valid(a.attachment_manifest_json) THEN a.attachment_manifest_json END) m WHERE a.archive_closed_at IS NOT NULL) WHERE unreadable OR object_key IN (SELECT value FROM json_each(?))",
+		why: "AttachmentNotUsable's closed archives, those G11's predicate covers, with any that is not JSON read as a fact",
 	},
 ] as const;
 
