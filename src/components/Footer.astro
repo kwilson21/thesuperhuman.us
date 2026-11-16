@@ -37,11 +37,11 @@ const privacyHref = mainHref("/privacy");
 const homeHref = mainHref("/");
 const year = new Date().getFullYear();
 ---
-{pinned && <div class="contact-track" data-contact-track><div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a></div></div>}
+{pinned && <div class="contact-track" data-contact-track><div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large site-button-trailing" href={mainHref(buttonPath)}>{buttonLabel} <span class="site-button-icon" aria-hidden="true">→</span></a></div></div>}
 <footer class="compact-footer site-shell">
   <div class:list={['closing-panel', { 'closing-panel--quiet': variant === 'quiet' }]} id={id}>
     {variant === 'quiet' && <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>}
-    {variant === 'invitation' && <a class="site-button site-button-large" href={mainHref(buttonPath)} data-closing-button>{buttonLabel} <span aria-hidden="true">→</span></a>}
+    {variant === 'invitation' && <a class="site-button site-button-large site-button-trailing" href={mainHref(buttonPath)} data-closing-button>{buttonLabel} <span class="site-button-icon" aria-hidden="true">→</span></a>}
     <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={hireHref}>Work with me</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
     <p class="closing-legal">The Superhuman Group LLC · {year}</p>
   </div>
