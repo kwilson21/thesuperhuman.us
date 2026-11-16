@@ -1,0 +1,162 @@
+---
+import { contactLines } from "~/data/contact-lines";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
+
+const lines = contactLines.map((line) => ({
+	...line,
+	href: line.audio ? audioPath(host, line.path) : mainSitePath(host, line.path),
+}));
+---
+{/* A patch bay: every line is a plain link, so the board works without JavaScript, with reduced
+    motion and in print. src/scripts/switchboard.ts adds the cable: the visitor's own plug, which
+    reaches toward a line on hover or focus, seats on a click or tap, and can be dragged to a jack. */}
+<div class="switchboard" data-switchboard>
+  <p class="switchboard-hint" data-switchboard-hint><span class="hint-fine">Click a line, or drag your plug onto one.</span><span class="hint-touch">Tap a line, or drag your plug onto one.</span></p>
+  <div class="board" data-board>
+    <div class="board-face">
+      <div class="board-ear" aria-hidden="true"><i></i><i></i></div>
+      <div class="board-you" aria-hidden="true"><span class="you-label">You</span><span class="jack" data-you-jack></span></div>
+      <ul class="board-lines" role="list">
+        {lines.map((line) => <li class="board-line">
+          <a class="line-link" href={line.href} data-line={line.id} data-connecting={line.connecting} draggable="false">
+            <span class="line-title">{line.title}</span>
+            <span class="line-copy">{line.line}</span>
+            <span class="line-hardware" aria-hidden="true"><span class="lamp"></span><span class="jack" data-jack></span></span>
+          </a>
+        </li>)}
+      </ul>
+      <div class="board-ear" aria-hidden="true"><i></i><i></i></div>
+    </div>
+    <svg class="cable-layer" data-cable-layer aria-hidden="true" focusable="false">
+      <path class="cable-shadow" data-cable-shadow />
+      <path class="cable" data-cable />
+      <g class="plug plug-fixed" data-plug-fixed><circle class="plug-boot" r="15" /><circle class="plug-collar" r="13" /><circle class="plug-core" r="4.5" /></g>
+      <circle class="plug-shadow" data-plug-shadow r="15" />
+      <g class="plug" data-plug><circle class="plug-boot" r="15" /><circle class="plug-collar" r="13" /><circle class="plug-core" r="4.5" /></g>
+    </svg>
+    <span class="plug-handle" data-plug-handle aria-hidden="true"></span>
+  </div>
+</div>
+<style>
+  /* Local tokens for the board, all drawn from the site's palette. */
+  .switchboard {
+    --sb-face: var(--paper);
+    --sb-nut: var(--panel);
+    --sb-edge: var(--field-border);
+    --sb-hole: var(--ink);
+    --sb-ring: color-mix(in srgb, var(--muted) 55%, var(--paper));
+    --sb-lamp-off: var(--rule);
+    --sb-lamp-glow: color-mix(in srgb, var(--accent) 50%, transparent);
+    --sb-cable: var(--accent);
+    --sb-cable-shade: color-mix(in srgb, var(--ink) 12%, transparent);
+    /* Room under the jacks for the cable to hang in. */
+    --sb-well: 7rem;
+    /* The script reads which way the board runs: a row of columns, or a column of rows. */
+    --sb-layout: row;
+    position: relative;
+  }
+  .switchboard-hint { margin: 0 0 .9rem; color: var(--muted); font-size: 1rem; line-height: 1.5; overflow-wrap: break-word; }
+  .hint-touch { display: none; }
+  @media not ((hover: hover) and (pointer: fine)) {
+    .hint-fine { display: none; }
+    .hint-touch { display: inline; }
+  }
+
+  .board { position: relative; padding-bottom: var(--sb-well); }
+  .board-face { position: relative; display: grid; grid-template-columns: 36px 80px minmax(0, 1fr) 36px; border: 1px solid var(--rule); border-radius: 3px; background: var(--sb-face); }
+
+  /* Rack ears: a screw at each end, slot turned a little. */
+  .board-ear { display: grid; align-content: space-between; justify-items: center; padding-block: 1.1rem; }
+  .board-ear:first-child { border-right: 1px solid var(--rule); }
+  .board-ear:last-child { border-left: 1px solid var(--rule); }
+  .board-ear i { position: relative; display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--sb-nut); box-shadow: inset 0 0 0 1px var(--sb-edge); }
+  .board-ear i::after { content: ''; position: absolute; left: 2px; right: 2px; top: 50%; height: 1px; background: var(--sb-edge); transform: rotate(-35deg); }
+
+  /* A jack face: the nut, a ring, and the hole. */
+  .jack { display: block; width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; background: radial-gradient(circle closest-side, var(--sb-hole) 0 32%, var(--sb-ring) 33% 44%, var(--sb-nut) 45% 100%); box-shadow: inset 0 0 0 1px var(--sb-edge); }
+
+  .board-you { display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 1.35rem .5rem 1.35rem; border-right: 1px solid var(--rule); }
+  .you-label { font-family: var(--font-sans); font-weight: 500; font-size: .6875rem; letter-spacing: var(--tracking-eyebrow); text-transform: uppercase; color: var(--muted); }
+
+  .board-lines { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+  /* Enlarged text keeps the six columns (no query follows the text size), so a column may break a
+     word that cannot fit its line, and the hardware columns and side padding stay in pixels. */
+  .board-line { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .board-line + .board-line { border-left: 1px solid var(--rule); }
+  .line-link { display: grid; grid-template-rows: auto 1fr auto; gap: .45rem; min-width: 0; padding: 1.35rem 16px; border: 0; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+  .line-title { font-size: 1.2rem; line-height: 1.25; letter-spacing: -.015em; text-wrap: balance; overflow-wrap: anywhere; }
+  .line-copy { color: var(--muted); font-size: .9375rem; line-height: 1.45; text-wrap: pretty; overflow-wrap: anywhere; }
+  .line-hardware { display: grid; justify-items: center; gap: .7rem; margin-top: .75rem; }
+  .lamp { display: block; width: 10px; height: 10px; border-radius: 50%; background: var(--sb-lamp-off); box-shadow: inset 0 0 0 1px var(--sb-edge); }
+  .line-link:active { opacity: .78; }
+
+  /* Without the cable, a fine pointer's hover warms the lamp. With it, the cable reaching is the one signal. */
+  @media (hover: hover) and (pointer: fine) {
+    .switchboard:not(.is-wired) .line-link:hover .lamp { background: color-mix(in srgb, var(--accent) 45%, var(--sb-lamp-off)); }
+  }
+  /* A dragged plug over a jack warms its lamp; a connected line's lamp burns. */
+  .line-link.is-near .lamp { background: color-mix(in srgb, var(--accent) 45%, var(--sb-lamp-off)); }
+  .line-link.is-lit .lamp { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 0 12px 3px var(--sb-lamp-glow); }
+  @media (prefers-reduced-motion: no-preference) {
+    .line-link.is-lit .lamp { animation: lamp-strike 420ms steps(1, end) both; }
+  }
+  @keyframes lamp-strike {
+    0% { background: var(--sb-lamp-off); box-shadow: inset 0 0 0 1px var(--sb-edge); }
+    20% { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 0 12px 3px var(--sb-lamp-glow); }
+    40% { background: var(--sb-lamp-off); box-shadow: inset 0 0 0 1px var(--sb-edge); }
+    60% { background: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 0 12px 3px var(--sb-lamp-glow); }
+  }
+
+  /* The cable and plugs exist only once the script has measured the board. */
+  .cable-layer { display: none; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 1; }
+  .is-wired .cable-layer { display: block; }
+  .cable, .cable-shadow { fill: none; stroke-linecap: round; }
+  .cable { stroke: var(--sb-cable); stroke-width: 4px; }
+  .cable-shadow { stroke: var(--sb-cable-shade); stroke-width: 5px; }
+  .plug-boot { fill: var(--ink); }
+  .plug-collar { fill: none; stroke: var(--sb-cable); stroke-width: 2.5px; }
+  .plug-core { fill: var(--sb-cable); }
+  .plug-shadow { fill: var(--sb-cable-shade); }
+  .plug-handle { display: none; position: absolute; left: 0; top: 0; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%; z-index: 2; touch-action: none; cursor: grab; }
+  .is-wired .plug-handle { display: block; }
+  .is-reaching.is-modifying .plug-handle { pointer-events: none; }
+  .is-dragging .plug-handle, .is-dragging .line-link { cursor: grabbing; }
+
+  /* Narrower screens: the board turns on its side. The ears run across the top and bottom, the
+     jacks run down the left, and the cable hangs from your jack at the top. */
+  @media (max-width: 1099px) {
+    .switchboard { --sb-layout: column; }
+    .switchboard { --sb-well: 0rem; --sb-lane: min(1.75rem, 7vw); }
+    .board-face { grid-template-columns: minmax(0, 1fr); }
+    .board-ear { display: flex; justify-content: space-between; padding: .7rem min(1rem, 4vw); }
+    .board-ear:first-child { border-right: 0; border-bottom: 1px solid var(--rule); }
+    .board-ear:last-child { border-left: 0; border-top: 1px solid var(--rule); }
+    .board-you { display: flex; align-items: center; gap: min(1rem, 4vw); padding: 1rem min(1rem, 4vw) 1rem var(--sb-lane); border-right: 0; border-bottom: 1px solid var(--rule); }
+    .board-you .jack { order: -1; }
+    .board-lines { grid-template-columns: minmax(0, 1fr); }
+    .board-line + .board-line { border-left: 0; border-top: 1px solid var(--rule); }
+    .line-link { grid-template-columns: 40px minmax(0, 1fr); grid-template-rows: auto auto; grid-template-areas: "hardware title" "hardware copy"; column-gap: min(1.1rem, 4.5vw); row-gap: .25rem; align-items: center; padding: 1.1rem min(1rem, 4vw) 1.1rem var(--sb-lane); }
+    .line-title { grid-area: title; align-self: end; }
+    .line-copy { grid-area: copy; align-self: start; max-width: 34rem; }
+    .line-hardware { grid-area: hardware; grid-template-columns: auto; gap: .45rem; margin-top: 0; }
+    .lamp { width: 8px; height: 8px; }
+  }
+  /* The board is laid out for the cable from the first paint, so nothing moves when the script
+     arrives. Your jack holds the cable, so without scripting the board is just its six lines. */
+  @media (scripting: none) {
+    .switchboard { --sb-well: 0rem; }
+    .switchboard-hint, .board-you { display: none; }
+    .board-face { grid-template-columns: 36px minmax(0, 1fr) 36px; }
+  }
+  @media (scripting: none) and (max-width: 1099px) {
+    .board-face { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media print {
+    .switchboard-hint, .cable-layer, .plug-handle { display: none !important; }
+    .board-you { visibility: hidden; }
+    .board { padding-bottom: 0; }
+    .line-link.is-lit .lamp { animation: none; }
+  }
+</style>
