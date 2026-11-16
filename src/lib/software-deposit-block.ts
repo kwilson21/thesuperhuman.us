@@ -1,10 +1,12 @@
-// The deposit decision of the software offers area: whether a first-milestone deposit stops new terms from being sent, or
-// a request from being declined, and which sentence says why. Written for docs/plans/2026-11-offers-conversion.md, section
-// 7, from `depositOfferBlock` (src/lib/software-offer-deposit.ts), which reads the same decision in SQL and stays for the
-// owner request status until that route converts. It imports nothing, so LemmaScript and Dafny check its contracts
-// (LemmaScript-files.txt, docs/verification.md); the rule in src/server/rules/offer-deposit.ts calls it and turns its
-// answer into a refusal, and tests/lib/software-deposit-block.test.ts holds it to the batch guard's SQL
-// (`depositOfferGuard`) and to `depositOfferBlock` for every status, kind, milestone, refund and offer status.
+// The deposit decision of the software offers area: whether a first-milestone deposit stops new terms from being sent,
+// or a request from being declined, and which sentence says why. Written for docs/plans/2026-11-offers-conversion.md,
+// section 7, from `depositOfferBlock` (src/lib/software-offer-deposit.ts), which reads the same decision in SQL and
+// stays for the owner request status until that route converts. It imports nothing, so LemmaScript and Dafny check its
+// contracts (LemmaScript-files.txt, docs/verification.md); the rule in src/server/rules/offer-deposit.ts calls it and
+// turns its answer into a refusal. tests/lib/software-deposit-block.test.ts holds it to the batch guard's SQL
+// (`depositOfferGuard`) for every status, kind, milestone, refund and offer status; tests/rules/offer-deposit.test.ts
+// holds its sentence to `depositOfferBlock` for first-milestone deposits of every status, refund and offer status,
+// singly and in pairs.
 //
 // The rule in sentences (decision 9 of docs/plans/2026-11-discount-flow.md): only a first-milestone deposit that is not
 // refunded counts, on any offer version of the request. Sending new terms is stopped while one is creating, open,

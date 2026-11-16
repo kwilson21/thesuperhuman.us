@@ -118,7 +118,7 @@ new and reviewed, to the same state), QUESTION (from new and reviewed, to `askin
 state the row is saved with. That state is where the invoked work lands: `declining`'s onDone is resolved, `asking`'s
 onDone is the state it came from, and both onError targets are the state it came from. One invoking state serves both
 new and reviewed, so the QUESTION and DECLINE transitions keep the origin (new or reviewed) in the machine's context, and
-each landing on the origin is a pair of guarded targets that read it (new when the origin is new, otherwise reviewed).
+each landing on the origin is one transition whose target is the origin read from the context (new or reviewed).
 The empty email and the started project are not states; they are terms of the rules (section 2).
 
 ### The offer version
@@ -403,10 +403,9 @@ effects; no read moves ahead of a decision that comes before it today. Each buil
   (src/lib/resend.ts:37-54) and would not be neutral.
 - **The mail settings.** A send needs `RESEND_API_KEY`, `CONTACT_FROM_EMAIL` and `OWNER_EMAIL`; without one, no request is
   made (software.ts:155-156). MailNotConfigured is not in `Mail`'s error type. The route passes the settings to the flow
-  as one input (none when any of the three is empty), and the flow checks it at the email step, where `email` checks it
-  today: after the batch (question's reservation, decline's first batch, send's batch) and before the client email. With
-  none, the step fails with MailNotConfigured, the flow's own tagged error, without calling Mail. Question and decline map
-  it to their 502 (F8 proposes to move the check before any write); send records it in the outcome (`emailSent` false).
+  as one input (none when any of the three is empty). Since F8 (#314), question and decline check it after their
+  refusals and before their first write and answer 503 `offersMailNotConfigured` with nothing written; send still checks
+  it at its email step, after its batch, and records it in the outcome (`emailSent` false) without calling Mail.
 - **AttachmentStore**, R2 through the existing `AudioBucket` service (src/server/services.ts:43-46): `remove(key)` for the
   draft and `read(key)` (size and SHA-256, with `hashBytes`) for the send. The route asks `bindingsOrUnavailable` only for
   `MUSIC_DB`, and `boundServices` adds `AudioBucket` only when `env.AUDIO` is set (services.ts:105-125), so a missing
@@ -428,17 +427,19 @@ the order of section 2 and no read runs ahead of one. Then `AttachmentStore.remo
 `restoreAttachment` after a failed one. A failed restore is `OffersStoreFailed` from the store, which the flow turns into
 a tag of its own (the draft is already saved), so that the route can answer it with its own proposed sentence (F3).
 
-**question and decline: the `@xstate/effect` bridge (decided).** Each saves a move only after the client email: decline's
-resolve in its second batch (software.ts:350-372) and question's record of `question-sent` (the same batch, 371). A move
-that waits on outside work goes through the bridge (CLAUDE.md, Back-end rules), so `softwareRequest` gets two states that
-invoke the email, `declining` and `asking`, built with `createEffectLogic` as in
-tests/server/effect-bridge-proof.test.ts:31-61. The flow reads, decides and writes the first batch (decline's withdraw,
-question's reservation); restores the machine at the stored status and sends DECLINE or QUESTION, which moves it to
-`declining` or `asking` (the state `next()` answers for the event) and keeps the origin, new or reviewed, in the context.
-The invoked work sends the client email, then the copy (a copy failure only sets `copySent` false). Its onDone lands on
-resolved from `declining` and on the origin from `asking`; its onError reads MailRefused, MailUncertain or
-MailNotConfigured with `failureOf` (src/server/machines/failure.ts:32) and lands on the origin, with the failure in the
-context. Every landing on the origin is a pair of guarded targets that read the origin from the context (section 1).
+**question and decline: the `@xstate/effect` bridge (decided).** Each saves a move only after the client email:
+decline's resolve in its second batch (software.ts:350-372) and question's record of `question-sent` (the same batch,
+371). A move that waits on outside work goes through the bridge (CLAUDE.md, Back-end rules), so `softwareRequest` gets
+two states that invoke the email, `declining` and `asking`, built with `createEffectLogic` as in
+tests/server/effect-bridge-proof.test.ts:31-61. The flow reads, decides and writes the first batch (decline's
+withdraw, question's reservation); restores the machine at the stored status and sends DECLINE or QUESTION, which
+moves it to `declining` or `asking` (the state `next()` answers for the event) and keeps the origin, new or reviewed,
+in the context. The invoked work sends the client email, then the copy (a copy failure only sets `copySent` false).
+Its onDone lands on resolved from `declining` and on the origin from `asking`; its onError reads MailRefused or
+MailUncertain with `failureOf` (src/server/machines/failure.ts:32) and lands on the origin, with the failure in the
+context. Since F8 the flow checks the mail settings before the first write, so MailNotConfigured never reaches the
+machine; any other failure takes no transition, and `settled` fails the program with it. Every landing on the origin
+is one transition whose target is the origin read from the context (section 1).
 
 The program waits with `settled` (src/server/machines/settled.ts:21-35), whose options carry a timeout: 30 seconds,
 longer than the two emails in a row at their own 10-second timeouts (the client email, then the copy, each with
