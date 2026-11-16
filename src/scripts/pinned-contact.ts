@@ -2,7 +2,7 @@
  * Shows the pinned Get in touch button, and marks it data-at-end (which hides it) while the closing
  * panel, a page's own invitation (Home's contact section, marked data-pinned-end) or another filled
  * button in the page (Home's "Start a project", the 404's "Back to home", the audio pages' "Start
- * your song") is on screen, so a phone screen never shows two filled buttons at once.
+ * your song") is on screen, so it is never a second filled button on the screen.
  */
 export const STEP_ASIDE_FOR =
 	".closing-panel, [data-pinned-end], main .site-button:not(.site-button-outline)";

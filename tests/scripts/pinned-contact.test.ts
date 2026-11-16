@@ -105,7 +105,8 @@ it("also steps aside for a page’s own invitation, until neither end is on scre
 });
 
 // The pinned button and the closing panel sit outside <main>, so the last selector reaches only the
-// page's own filled buttons. A browser check of Home, the 404 and Audio confirms it on the real pages.
+// page's own filled buttons. This only checks the selector's parts; the release record notes the
+// check of Home, the 404 and Audio in the local preview.
 it("steps aside for the closing panel, page invitations and the page's filled buttons", () => {
 	expect(STEP_ASIDE_FOR.split(", ")).toEqual([
 		".closing-panel",

@@ -108,9 +108,10 @@ files; a test checks those literals against `global.css`.
 - Pinned contact button: the only element fixed over page content. On invitation pages
   and on Home, at 600px wide and below, a full-width Get in touch pill stays at the bottom
   of the screen. It steps aside while the closing panel, Home's contact section or another
-  filled button in the page (Home's "Start a project", the 404's "Back to home", the audio
-  pages' "Start your song") is on screen, so a phone screen never shows two filled
-  buttons. It also hides while the phone menu is open or a form field has focus, appears
+  filled button in the page (Home's "Start a project" and its three Work with me doors, the
+  404's "Back to home", the audio pages' "Start your song") is on screen, so it is never a
+  second filled button on the screen. A page's own button and the closing panel's can still
+  share a screen near the end of a page. It also hides while the phone menu is open or a form field has focus, appears
   and goes without motion, and never shows above 600px, in print or without JavaScript.
 - The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
   hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
@@ -315,7 +316,8 @@ review on the pull request:
   five short lines, and the row is what makes it a patch bay.
 - The pinned phone button steps aside while another filled button is on screen, so
   Home's first phone screen shows "Start a project" alone and the pinned button appears
-  once it has scrolled away. The same rule covers the 404 and the audio pages.
+  once it has scrolled away. The same rule hides it through Home's Work with me doors (three
+  filled buttons) and covers the 404 and the audio pages.
 - Home's contact section keeps its approved line ("Ideas, opportunities, or a
   conversation worth having."); the switchboard names the choices one click later.
 

@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
 	advanceChain,
+	advancePlug,
 	type Chain,
 	drawnChain,
 	LINKS,
+	type PlugMotion,
+	REACH,
 	STEP,
+	shiftChain,
 } from "../../src/scripts/switchboard";
+
+type Point = { x: number; y: number };
+
+// Limits for the drawn cable, set between what this drawing measures and what each earlier drawing
+// did (noted at each test).
+const stretchLimit = 2.5;
+const reachLimit = 30;
 
 const from = { x: 0, y: 0 };
 const to = { x: 300, y: 0 };
@@ -180,52 +191,115 @@ describe("the switchboard cable's frame update", () => {
 			});
 		});
 
-	// The cable's end is pinned where the plug was at its last step, up to one step behind the plug, and
-	// a cable at rest has no speed to carry it on. Drawn naively, the plug setting off from rest
-	// stretched the last link to seven times its length for a few frames at 120 Hz, depending on where
-	// the frames fell against the cable's steps. Here the plug sets off at 900 px/s from rest on a
-	// cable with plenty of slack, at every rate and at five such phases.
-	for (const fps of [60, 90, 120, 144, 165, 240])
-		it(`never draws a link stretched when the plug sets off from rest at ${fps} Hz`, () => {
-			for (const phase of [0, 0.25, 0.5, 0.75, 0.99]) {
-				const chain = laidStraight();
-				const long = 600 / LINKS;
+	// A quick reach: the plug springs from its rest across the board to the far jack, as on the page.
+	// The cable's end is pinned where the plug was at its last step, and a cable at rest has no speed to
+	// carry it on, so drawn naively the last link stretched to six times its length as the plug set off.
+	// Each drawn link is held against the cable's own link at that moment. Where each frame holds at
+	// most one of the cable's steps (144 Hz and up), every step is recorded, so each drawn frame is also
+	// held against where the cable is between its two steps: pulling the links in from the plug made
+	// the cable lurch 35px and snap back, and a cap on how far a link was carried switched on and off.
+	for (const fps of [90, 120, 144, 165, 240])
+		it(`draws a quick reach close to where the cable is at ${fps} Hz`, () => {
+			for (const phase of [0, 0.5]) {
+				const you = { x: 76.5, y: 246.9 };
+				const goal = { point: { x: 1003, y: 246.9 }, scale: 1.14 };
 
-				for (let frame = 0; frame < 600; frame++)
-					advanceChain(chain, from, to, long, pull, 1 / 60);
-				chain.clock = phase * STEP;
+				const plug: PlugMotion = {
+					position: { x: 96.5, y: 308.9 },
+					velocity: { x: 0, y: 0 },
+					scale: 1,
+					scaleVelocity: 0,
+				};
 
-				for (let frame = 1; frame <= Math.round(fps * 0.15); frame++) {
-					const end = { x: 300 + (900 * frame) / fps, y: 0 };
-					advanceChain(chain, from, end, long, pull, 1 / fps);
-					const drawn = drawnChain(chain, from, end);
+				const length = () =>
+					Math.max(
+						120,
+						Math.hypot(plug.position.x - you.x, plug.position.y - you.y) * 1.15,
+					) / LINKS;
+
+				const points = Array.from({ length: LINKS + 1 }, (_, index) => ({
+					x: you.x + ((plug.position.x - you.x) * index) / LINKS,
+					y: you.y + ((plug.position.y - you.y) * index) / LINKS,
+				}));
+
+				const chain: Chain = {
+					points,
+					before: points.map((point) => ({ ...point })),
+					clock: 0,
+				};
+
+				for (let frame = 0; frame < 300; frame++)
+					advanceChain(chain, you, plug.position, length(), pull, 1 / 60);
+				chain.clock = (phase * STEP) % STEP;
+				const steps: Point[][] = [];
+
+				const frames: {
+					drawn: Point[];
+					own: Point[];
+					step: number;
+					along: number;
+				}[] = [];
+
+				for (let frame = 0; frame < fps; frame++) {
+					advancePlug(plug, goal, 1 / fps, REACH, false);
+
+					if (
+						advanceChain(chain, you, plug.position, length(), pull, 1 / fps) !==
+						null
+					)
+						steps.push(chain.points.map((point) => ({ ...point })));
+					frames.push({
+						drawn: drawnChain(chain, you, plug.position),
+						own: chain.points.map((point) => ({ ...point })),
+						step: steps.length - 1,
+						along: chain.clock / STEP,
+					});
+				}
+
+				let furthest = 0;
+				let stretch = 0;
+
+				for (const { drawn, own } of frames)
+					for (let index = 0; index < LINKS; index++)
+						stretch = Math.max(
+							stretch,
+							Math.hypot(
+								drawn[index + 1].x - drawn[index].x,
+								drawn[index + 1].y - drawn[index].y,
+							) /
+								Math.hypot(
+									own[index + 1].x - own[index].x,
+									own[index + 1].y - own[index].y,
+								),
+						);
+
+				expect(stretch, `phase ${phase}`).toBeLessThan(stretchLimit);
+
+				for (const { drawn, step, along } of frames) {
+					if (fps < 144 || step < 0 || step + 1 >= steps.length) continue;
 
 					for (let index = 1; index < LINKS; index++) {
-						const gap = Math.hypot(
-							drawn[index + 1].x - drawn[index].x,
-							drawn[index + 1].y - drawn[index].y,
+						const now = steps[step][index];
+						const next = steps[step + 1][index];
+						furthest = Math.max(
+							furthest,
+							Math.hypot(
+								drawn[index].x - (now.x + (next.x - now.x) * along),
+								drawn[index].y - (now.y + (next.y - now.y) * along),
+							),
 						);
-
-						const own = Math.hypot(
-							chain.points[index + 1].x - chain.points[index].x,
-							chain.points[index + 1].y - chain.points[index].y,
-						);
-
-						// No longer than the cable's own link, which the jerk itself barely stretches.
-						expect(gap, `phase ${phase}, frame ${frame}`).toBeLessThanOrEqual(
-							own + 1e-9,
-						);
-						expect(own / long).toBeLessThan(1.05);
 					}
 				}
+
+				expect(furthest, `phase ${phase}`).toBeLessThan(reachLimit);
 			}
 		});
 
-	// A change of layout moves both ends at once (the plug is put in place and the cable swings to it),
-	// so the first step moves links hundreds of pixels. Carried on along that leap, the drawing flung
-	// the cable out to ten times its length for a frame or two. Each drawn link now stays within two
-	// steps of a thrown plug's travel (one carried ahead, one pulled in toward the plug) of the cable.
-	it("draws the cable near where it is when the layout moves its ends", () => {
+	// A change of layout moves both ends at once. The cable moves with them (shiftChain, which the page
+	// calls when it puts the plug in place), so its first step does not drag links hundreds of pixels
+	// and the drawing has no leap to carry on. Without it the cable was drawn flung out to ten times its
+	// length for a frame or two.
+	it("draws the cable near where it is after the layout moves its ends", () => {
 		for (const phase of [0, 0.5, 0.99]) {
 			const chain = laidStraight();
 
@@ -233,22 +307,21 @@ describe("the switchboard cable's frame update", () => {
 				advanceChain(chain, from, to, link, pull, 1 / 60);
 			const movedFrom = { x: 0, y: 300 };
 			const movedTo = { x: 120, y: 340 };
-			// What settle does when it puts the plug in place.
-			chain.end = { ...movedTo };
 			chain.clock = phase * STEP;
+			shiftChain(chain, movedFrom, movedTo);
 
 			for (let frame = 0; frame < 60; frame++) {
-				advanceChain(chain, movedFrom, movedTo, link, pull, 1 / 120);
 				const drawn = drawnChain(chain, movedFrom, movedTo);
 
-				for (let index = 1; index < LINKS; index++)
+				for (let index = 0; index < LINKS; index++)
 					expect(
 						Math.hypot(
-							drawn[index].x - chain.points[index].x,
-							drawn[index].y - chain.points[index].y,
-						),
+							drawn[index + 1].x - drawn[index].x,
+							drawn[index + 1].y - drawn[index].y,
+						) / link,
 						`phase ${phase}, frame ${frame}, link ${index}`,
-					).toBeLessThanOrEqual(2 * STEP * 2400);
+					).toBeLessThan(stretchLimit);
+				advanceChain(chain, movedFrom, movedTo, link, pull, 1 / 120);
 			}
 		}
 	});

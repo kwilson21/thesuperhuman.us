@@ -143,53 +143,62 @@ export type Chain = {
 	end?: Point;
 };
 
-// The furthest a link is drawn ahead of its last step: as far as a thrown plug travels in one step.
-// A link that leapt further in its last step (its ends moved when the layout changed) is drawn where
-// it is, not flung on along that leap.
-const DRAWN_LEAD = TOP_SPEED * STEP;
-
 /**
- * Where to draw the cable now: each link carried forward by the part of a step that has passed since
- * its last step, along the way it was moving, with its ends at `from` and `to`. The cable itself only
- * moves in whole steps, so its resting shape never depends on the frame timing; drawing it this way
- * keeps it moving evenly at 90, 144 or 240 Hz, where some frames fall between its steps and others
- * hold two of them. Then, walking back from the plug, each drawn link is pulled in to no longer than
- * the cable's own link there: the cable's end is pinned where the plug was at its last step, so
- * without this the last link would be drawn stretched to where the plug is now (worst as the plug
- * sets off, before the cable has any speed to carry it). At rest the links do not move and every
- * link has its length, so the drawing is the cable.
+ * Where to draw the cable now: each point carried forward by the part of a step that has passed since
+ * its last step, along the way it was moving. The cable itself only moves in whole steps, so its
+ * resting shape never depends on the frame timing; drawing it this way keeps it moving evenly at 90,
+ * 144 or 240 Hz, where some frames fall between its steps and others hold two of them. The cable's two
+ * ends, carried the same way, can stand off from your jack and the plug: its end is pinned where the
+ * plug was at its last step, and a plug setting off from rest has moved on before the cable has any
+ * speed to carry it. That difference is spread along the cable, all of it at the end it belongs to and
+ * none at the other, so no single link is drawn stretched and nothing snaps between frames. At rest
+ * the points do not move and the ends are where the cable's are, so the drawing is the cable.
  */
 export function drawnChain(chain: Chain, from: Point, to: Point): Point[] {
 	const ahead = chain.clock / STEP;
 
-	const drawn = chain.points.map((point, index) => {
-		if (index === 0) return { ...from };
-
-		if (index === LINKS) return { ...to };
+	const carried = chain.points.map((point, index) => {
 		const last = chain.before[index];
-		const dx = point.x - last.x;
-		const dy = point.y - last.y;
-		const lead = Math.hypot(dx, dy) * ahead;
-		const carry = lead > DRAWN_LEAD ? 0 : ahead;
 
-		return { x: point.x + dx * carry, y: point.y + dy * carry };
+		return {
+			x: point.x + (point.x - last.x) * ahead,
+			y: point.y + (point.y - last.y) * ahead,
+		};
 	});
 
-	for (let index = LINKS - 1; index >= 1; index--) {
-		const point = drawn[index];
-		const next = drawn[index + 1];
-		const own = chain.points[index];
-		const ownNext = chain.points[index + 1];
-		const length = Math.hypot(ownNext.x - own.x, ownNext.y - own.y);
-		const gap = Math.hypot(point.x - next.x, point.y - next.y);
+	const start = { x: from.x - carried[0].x, y: from.y - carried[0].y };
+	const end = { x: to.x - carried[LINKS].x, y: to.y - carried[LINKS].y };
 
-		if (gap > length) {
-			point.x = next.x + ((point.x - next.x) * length) / gap;
-			point.y = next.y + ((point.y - next.y) * length) / gap;
-		}
+	return carried.map((point, index) => {
+		const share = index / LINKS;
+
+		return {
+			x: point.x + start.x * (1 - share) + end.x * share,
+			y: point.y + start.y * (1 - share) + end.y * share,
+		};
+	});
+}
+
+/**
+ * Moves the whole cable with its ends when the layout moves them (a resize, fonts arriving), each
+ * point by its share of the two ends' moves, its speed kept. The cable then swings only from the
+ * change in its own shape, instead of being yanked hundreds of pixels in one step, and a step that
+ * leapt that far would be carried on in the drawing.
+ */
+export function shiftChain(chain: Chain, from: Point, to: Point) {
+	const { points, before } = chain;
+	const start = { x: from.x - points[0].x, y: from.y - points[0].y };
+	const end = { x: to.x - points[LINKS].x, y: to.y - points[LINKS].y };
+
+	for (let index = 0; index <= LINKS; index++) {
+		const share = index / LINKS;
+		const dx = start.x * (1 - share) + end.x * share;
+		const dy = start.y * (1 - share) + end.y * share;
+		points[index] = { x: points[index].x + dx, y: points[index].y + dy };
+		before[index] = { x: before[index].x + dx, y: before[index].y + dy };
 	}
 
-	return drawn;
+	chain.end = { ...to };
 }
 
 /**
@@ -234,6 +243,9 @@ export function advanceChain(
 			point.y += vy + pull.y * STEP * STEP;
 		}
 
+		// The ends' last places, so the drawing can carry them on like the rest.
+		before[0] = points[0];
+		before[LINKS] = points[LINKS];
 		points[0] = { ...from };
 		points[LINKS] = {
 			x: was.x + (to.x - was.x) * share,
@@ -571,12 +583,12 @@ export function setupSwitchboard(
 		position.y = point.y;
 		velocity.x = velocity.y = motion.scaleVelocity = 0;
 		motion.scale = goalScale;
-		// The plug is put here at once, so the cable's end is pinned here from its next step, not
-		// dragged along a path the plug never took.
-		chain.end = { ...position };
 
 		if (relay || !chain.points.length)
 			layRope(dropPending ? waitingRope() : restingRope(youPoint, position));
+		// The plug is put here at once, so the cable moves with its ends instead of being dragged
+		// along a path the plug never took.
+		else shiftChain(chain, youPoint, position);
 		draw();
 	}
 
