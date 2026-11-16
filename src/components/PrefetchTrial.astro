@@ -1,0 +1,21 @@
+<section id="prefetch-trial" hidden aria-label="Navigation prefetch experiment">
+  <strong>Navigation experiment</strong>
+  <p>Move toward a public page link. On touchscreens, tap one.</p>
+  <div><a href="?prefetch=foresight">Prediction</a> · <a href="?prefetch=hover">Hover</a> · <a href="?prefetch=off">Off</a></div>
+  <p id="prefetch-status" role="status" aria-live="polite"></p>
+  <p>At most 3 page hints. A hint does not guarantee a download or faster navigation.</p>
+  <button type="button" id="prefetch-close">Close diagnostics</button>
+</section>
+<script>
+  import { setupPrefetchTrial } from '~/scripts/navigation-prefetch';
+
+  void setupPrefetchTrial();
+</script>
+<style>
+  section { margin: 1rem auto; padding: 1rem; max-width: 40rem; border: 1px solid var(--field-border); background: var(--paper); color: var(--ink); font-size: 1rem; }
+  section[hidden] { display: none; }
+  p { margin-block: .5rem; }
+  a, button { display: inline-flex; align-items: center; min-height: 44px; }
+  a { text-decoration: underline; }
+  button { padding: .5rem 1rem; border: 1px solid var(--field-border); border-radius: var(--radius-button); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; }
+</style>

@@ -10,6 +10,10 @@ import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { changeOwnerRequest } from "~/lib/owner-requests";
+import {
+	failingRetiredCleanup,
+	retiredCleanupLogLine,
+} from "../helpers/retired-codes-failure";
 import { POST as requestPost } from "~/pages/api/owner/requests/[id]";
 import { POST as offerPost } from "~/pages/api/owner/requests/[id]/software";
 import { POST as messagesPost } from "~/pages/api/studio/software/[id]/messages";
@@ -334,7 +338,13 @@ async function draft() {
 async function session(email = "alex@example.com") {
 	const code = await issueClientCode(db, email, secret);
 
-	return (await completeClientCode(db, email, code!, secret))!;
+	return (await completeClientCode(
+		db,
+		email,
+		code!.code,
+		code!.nonce,
+		secret,
+	))!;
 }
 
 async function shareReview(
@@ -1683,9 +1693,15 @@ it("software-only codes and sessions are scoped across both project kinds and re
 		await clientSoftwareProjectForSession(db, token, "software"),
 	).toBeNull();
 	sql.exec("UPDATE owner_requests SET status='new' WHERE id='software'");
+	// A row left in the retired sign-in codes table goes with the access closure, and so does one for another address not.
+	sql.exec(`INSERT INTO audio_client_codes(email,code_hash,created_at,expires_at) VALUES
+    ('alex@example.com','old','2026-01-01','2026-01-01'),('other@example.com','old','2026-01-01','2026-01-01')`);
 	expect(
 		(await call(projectPost, { action: "revoke", confirmed: true })).status,
 	).toBe(200);
+	expect(sql.prepare("SELECT email FROM audio_client_codes").all()).toEqual([
+		{ email: "other@example.com" },
+	]);
 	expect(await clientSoftwareProjectsForSession(db, token)).toBeNull();
 	expect(
 		await clientSoftwareProjectForSession(db, other, "foreign-software"),
@@ -1695,7 +1711,13 @@ it("software-only codes and sessions are scoped across both project kinds and re
 it("refuses sign-in when the only project closes after code issuance, and audits undelivered software codes", async () => {
 	await start();
 	const code = (await issueClientCode(db, "alex@example.com", secret))!;
-	await discardUndeliveredCode(db, "alex@example.com", code, secret);
+	await discardUndeliveredCode(
+		db,
+		"alex@example.com",
+		code.code,
+		code.nonce,
+		secret,
+	);
 	expect(
 		sql
 			.prepare(
@@ -1706,7 +1728,13 @@ it("refuses sign-in when the only project closes after code issuance, and audits
 	const second = (await issueClientCode(db, "alex@example.com", secret))!;
 	sql.exec("UPDATE software_projects SET revoked_at='now'");
 	expect(
-		await completeClientCode(db, "alex@example.com", second, secret),
+		await completeClientCode(
+			db,
+			"alex@example.com",
+			second.code,
+			second.nonce,
+			secret,
+		),
 	).toBeNull();
 });
 
@@ -2163,6 +2191,72 @@ it("withdrawal records access closure and its retention clock in the same transa
 		sql.prepare("SELECT revoked_at FROM audio_client_sessions").get()
 			.revoked_at,
 	).toBeTruthy();
+});
+
+it("withdrawal succeeds and logs a fixed line when the retired-table cleanup fails", async () => {
+	await start();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	await changeOwnerRequest(failingRetiredCleanup(db), {
+		id: "software",
+		action: "withdraw",
+		actor: "owner@example.com",
+	});
+	expect(
+		sql.prepare("SELECT revoked_at FROM software_projects").get().revoked_at,
+	).toBeTruthy();
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	log.mockRestore();
+});
+
+it("a failed withdrawal batch still fails and does not run the retired-table cleanup", async () => {
+	await start();
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	sql.exec("DROP TABLE audio_client_sessions");
+
+	await expect(
+		changeOwnerRequest(failingRetiredCleanup(db), {
+			id: "software",
+			action: "withdraw",
+			actor: "owner@example.com",
+		}),
+	).rejects.toThrow();
+	expect(log).not.toHaveBeenCalled();
+	log.mockRestore();
+});
+
+it("the access revoke route answers success, keeps the revocation and logs a fixed line when the retired-table cleanup fails", async () => {
+	await start();
+	const real = db;
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+	env.MUSIC_DB = failingRetiredCleanup(real);
+
+	const response = await call(projectPost, {
+		action: "revoke",
+		confirmed: true,
+	});
+
+	env.MUSIC_DB = real;
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ ok: true });
+	expect(
+		sql.prepare("SELECT revoked_at FROM software_projects").get().revoked_at,
+	).toBeTruthy();
+	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	log.mockRestore();
+});
+
+it("the access revoke route still answers its error when the revocation batch fails", async () => {
+	await start();
+	sql.exec("DROP TABLE audio_client_sessions");
+
+	const response = await call(projectPost, {
+		action: "revoke",
+		confirmed: true,
+	});
+
+	expect(response.status).not.toBe(200);
 });
 
 it("rejects offer actions after project start before sending any email", async () => {
@@ -3196,12 +3290,10 @@ it("applies ordered software statuses, rejects conflicting identities and replac
 });
 
 it("releases offer blocks only after an explicit full pre-start refund record and lets old absent attempts recover", async () => {
-	const {
-		reserveSoftwareInvoice,
-		depositOfferBlock,
-		paidFirstDeposit,
-		listSoftwareInvoices,
-	} = await import("~/lib/software-invoices");
+	const { reserveSoftwareInvoice, paidFirstDeposit, listSoftwareInvoices } =
+		await import("~/lib/software-invoices");
+
+	const { depositOfferBlock } = await import("~/lib/software-offer-deposit");
 
 	const { reconciliationStatements } = await import(
 		"../../scripts/stripe-reconciliation.mjs"
@@ -3682,6 +3774,9 @@ it.each(["balance", "milestone"])(
 it.each([false, true])(
 	"atomically blocks offer changes or declines for an uncollectible deposit (decline=%s)",
 	async (decline) => {
+		// A decline without the mail settings is refused before any write; with them it reaches the batch under test.
+		env.OWNER_EMAIL = "owner@example.com";
+
 		const saved = await call(offerPost, {
 			action: "draft",
 			terms: { ...terms, summary: "Updated" },

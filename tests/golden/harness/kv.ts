@@ -109,15 +109,19 @@ export function recordingKv(
 	const binding = double<KVNamespace>({
 		// SAFETY: routes call get with a key and, for binary values, "arrayBuffer" or "text"; the fake answers the text or bytes the store holds, as the overload they pick returns.
 		get: (async (key: string, type?: string | { type?: string }) => {
+			const at = await log.start();
 			const kind = isText(type) ? type : (type?.type ?? "text");
 
-			log.push({
-				kind: "kv",
-				namespace: label,
-				op: "get",
-				key,
-				detail: { type: kind },
-			});
+			log.push(
+				{
+					kind: "kv",
+					namespace: label,
+					op: "get",
+					key,
+					detail: { type: kind },
+				},
+				at,
+			);
 
 			failIf("get");
 			const held = live(key);
@@ -146,18 +150,22 @@ export function recordingKv(
 				metadata?: string;
 			},
 		) => {
+			const at = await log.start();
 			const held: Held = isText(value) ? value : viewOf(value);
 
-			log.push({
-				kind: "kv",
-				namespace: label,
-				op: "put",
-				key,
-				detail: {
-					value: plain(held),
-					options: options === undefined ? null : plain(options),
+			log.push(
+				{
+					kind: "kv",
+					namespace: label,
+					op: "put",
+					key,
+					detail: {
+						value: plain(held),
+						options: options === undefined ? null : plain(options),
+					},
 				},
-			});
+				at,
+			);
 
 			failIf("put");
 			store.set(key, {
@@ -167,26 +175,36 @@ export function recordingKv(
 			});
 		},
 		delete: async (key: string) => {
-			log.push({
-				kind: "kv",
-				namespace: label,
-				op: "delete",
-				key,
-				detail: null,
-			});
+			const at = await log.start();
+
+			log.push(
+				{
+					kind: "kv",
+					namespace: label,
+					op: "delete",
+					key,
+					detail: null,
+				},
+				at,
+			);
 
 			failIf("delete");
 			store.delete(key);
 		},
 		// SAFETY: routes call list with a prefix and read keys and list_complete; the fake answers those.
 		list: (async (options?: { prefix?: string }) => {
-			log.push({
-				kind: "kv",
-				namespace: label,
-				op: "list",
-				key: null,
-				detail: { prefix: options?.prefix ?? null },
-			});
+			const at = await log.start();
+
+			log.push(
+				{
+					kind: "kv",
+					namespace: label,
+					op: "list",
+					key: null,
+					detail: { prefix: options?.prefix ?? null },
+				},
+				at,
+			);
 
 			failIf("list");
 

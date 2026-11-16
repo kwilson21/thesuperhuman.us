@@ -1,3 +1,3 @@
-export { publicationOAuthRoute as ALL } from "~/lib/publication/oauth";
+export { publicationOAuthRoute as ALL } from "~/server/publication-oauth";
 
 export const prerender = false;

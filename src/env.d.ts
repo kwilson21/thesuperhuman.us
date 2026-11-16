@@ -66,9 +66,9 @@ interface TurnstileOptions {
 	callback?: (token: string) => void;
 }
 
-// The members of Cloudflare's Turnstile API that the site's scripts call.
+// The members of Cloudflare's Turnstile API that the site's scripts call. Not ready(): the pages load api.js with
+// async or defer, and Turnstile throws from ready() then.
 interface TurnstileApi {
-	ready(callback: () => void): void;
 	render(container: HTMLElement, options: TurnstileOptions): string;
 	remove(id: string): void;
 	reset(): void;

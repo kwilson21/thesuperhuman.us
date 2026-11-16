@@ -11,11 +11,11 @@ Rollback revision: the production revision when this reaches `main`; after that,
 
 Tests only. `tests/lib/software-projects.test.ts` no longer replaces `createSoftwareInvoice` with `vi.spyOn`; the real function runs against the Stripe stand-in (`tests/helpers/stripe-fetch.ts`, which gains two options, `refuseFirstInvoices` and `dueDate`, each with a helper test). Nothing under `src/` or `scripts/` changed.
 
-One module spy remains: `tests/api/software-inquiry.test.ts` replaces `softwareBriefEmail` to make it throw before the email provider is called. No input the application can produce makes the real function throw, and an attempt to reach the same failure through stored data did not reproduce it on that path. Removing the spy needs a small production change (a way to pass the email builder in). That is left for the owner to decide.
+Updated after `main` moved: the other module spy this follow-up was meant to remove, on `softwareBriefEmail` in `tests/api/software-inquiry.test.ts`, is already gone on `main` (pull request #322 converted the brief copy area). After merging `main`, no test under `tests/` replaces a function on one of this repository's modules with `vi.spyOn`.
 
 ## Owner decisions
 
-- The owner approved a tests-only follow-up to remove the two module spies (approval relayed to the pull request author, 2026-11-14; not recorded here in the owner's own words). One test is rewritten here; the second spy is left for the owner's decision.
+- The owner approved a tests-only follow-up to remove the two module spies (approval relayed to the pull request author, 2026-11-14; not recorded here in the owner's own words). One test is rewritten here; the second spy was removed on `main` by #322.
 
 ## Evidence and limits
 

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { z } from "astro/zod";
 import { musicRequest } from "~/lib/music-request";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { stripeAvailable } from "~/lib/stripe-invoicing";
 import {
 	reserveSoftwareInvoice,
