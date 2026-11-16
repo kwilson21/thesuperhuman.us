@@ -530,19 +530,29 @@ export const offersCheckFailedAfterFailedEmail = () =>
 const recentLiveLink =
 	"SELECT 1 FROM software_offer_links WHERE request_id=? AND revoked_at IS NULL AND created_at>?";
 
-export function offerSendingGuard(db: D1Database, requestId: string) {
+// Each of the two reads the clock where it is called, unless the caller passes the start of the window it read itself
+// (the offers store, src/server/offers-store.ts, whose flows read `offerSendingSince()` at the same points).
+
+/** G5: a batch guard that refuses while a live link of the request was made after `since`. */
+export function offerSendingGuard(
+	db: D1Database,
+	requestId: string,
+	since = offerSendingSince(),
+) {
 	return db
 		.prepare(
 			`SELECT CASE WHEN NOT EXISTS(${recentLiveLink}) THEN 1 ELSE json_extract('Offer still sending','$') END`,
 		)
-		.bind(requestId, offerSendingSince());
+		.bind(requestId, since);
 }
 
-export async function offerIsSending(db: D1Database, requestId: string) {
+/** Whether a live link of the request was made after `since`: an offer is still being sent. */
+export async function offerIsSending(
+	db: D1Database,
+	requestId: string,
+	since = offerSendingSince(),
+) {
 	return Boolean(
-		await db
-			.prepare(recentLiveLink)
-			.bind(requestId, offerSendingSince())
-			.first(),
+		await db.prepare(recentLiveLink).bind(requestId, since).first(),
 	);
 }

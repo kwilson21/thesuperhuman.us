@@ -1,7 +1,9 @@
 # Software offers: conversion design
 
-Status: proposed, 2026-11-15, revised the same day after the review of #306. This is the design PR for step 1 of
-`docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code. It changes nothing under `src/`. Every
+Status: implemented, pending merge, in the stack #334 (the command reader, the machines and the rules), #337 (the store,
+the services and the answers) and #341 (the flows and the route); record `docs/prelaunch-qa-2026-11-16-offers-area.md`.
+Proposed 2026-11-15 and revised the same day after the review of #306, as the design PR for step 1 of
+`docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR changed nothing under `src/`. Every
 claim about today's code cites a file and line on `origin/main` at `68ce7822`; `software.ts` below means
 `src/pages/api/owner/requests/[id]/software.ts`.
 
@@ -66,7 +68,7 @@ in the diagrams.
 | G8 | The offer being sent still has the status and `updated_at` read | software.ts:773-776 |
 | G9 | A reissue: the request's link is revoked | software.ts:777-784 |
 | G10 | Revoke: the link with the `created_at` the page showed is still live | software.ts:412-415, and the update's own `revoked_at IS NULL` (417-420) |
-| G11 | Each attachment named in the details has its metadata row, unchanged, in no closed archive | software.ts:194-209; draft 506-508, send 767 |
+| G11 | Each attachment named in the details has its metadata row, unchanged, in no closed archive, or a closed archive whose manifest cannot be read | software.ts:194-209; draft 506-508, send 767 |
 
 The database adds three: `UNIQUE(request_id,version)`, one draft per request and one sent offer per request
 (migrations/music/0020_software_offers.sql:40-43). The first two back facts the draft rule decides (the new version's
@@ -118,7 +120,7 @@ new and reviewed, to the same state), QUESTION (from new and reviewed, to `askin
 state the row is saved with. That state is where the invoked work lands: `declining`'s onDone is resolved, `asking`'s
 onDone is the state it came from, and both onError targets are the state it came from. One invoking state serves both
 new and reviewed, so the QUESTION and DECLINE transitions keep the origin (new or reviewed) in the machine's context, and
-each landing on the origin is a pair of guarded targets that read it (new when the origin is new, otherwise reviewed).
+each landing on the origin is one transition whose target is the origin read from the context (new or reviewed).
 The empty email and the started project are not states; they are terms of the rules (section 2).
 
 ### The offer version
@@ -263,11 +265,13 @@ old row and the guard still refuses, as today: signing "the attachment's metadat
 attachment is named in a closed archive before the batch" (tests/golden/owner-request-software-offer-signing.test.ts:854,
 869); send "a client signs before the batch"; decline "a signed agreement
 appears before the first batch", "an audio project appears before the first batch"; draft "the metadata row is removed
-before an attachment is pinned". The closed-archive read uses the guard's own predicate (software.ts:197-198), so an
-agreement whose archive is open is never parsed (draft "an agreement with a malformed manifest does not break the
-attachment guard" stays 200); a closed archive whose manifest is not JSON would then fail as a read, where today the
-batch's guard message answers 409. No golden case has one. Every new read must match no golden hook pattern (they count
-by `nth`; section 4).
+before an attachment is pinned". The closed-archive read covers the agreements the guard's predicate covers
+(software.ts:197-198), those whose archive is closed, so an agreement whose archive is open never matters (draft "an
+agreement with a malformed manifest does not break the attachment guard" stays 200). It runs only when an attachment is
+named (with none, the batch has no G11), and it never fails on a closed archive whose manifest, or an entry of one, is
+not JSON: it reads that as a fact, and the rule refuses it with AttachmentNotUsable, as today the guard's `json_each` or
+`json_extract` raises "malformed JSON", the guard's own message, and the batch's refusal answers 409. No golden case has
+one. Every new read must match no golden hook pattern (they count by `nth`; section 4).
 
 Where reading a condition first changes a recorded answer, the case is F7 (section 5): revoke's link read, in "a link made
 10 seconds ago and the lookups after the batch fail".
@@ -387,8 +391,11 @@ the write time plus 90 days, today computed inside the statement builder (src/li
 
 ## 3. The flows
 
-`src/server/flows/software-offers.ts`, one program per action. Each keeps today's order of reads, decisions and outside
-effects; no read moves ahead of a decision that comes before it today. Each builds no response text.
+One program per action. As built (#341) they are seven files, not one `software-offers.ts`: `src/server/flows/offer-fit.ts`,
+`offer-question.ts`, `offer-decline.ts`, `offer-revoke.ts`, `offer-draft.ts` and `offer-send.ts`, which mirror the rule
+files, and `offer-request.ts`, what they share (the first read, the reads after a refused batch, the client email through
+the request machine). Each keeps today's order of reads, decisions and outside effects; no read moves ahead of a
+decision that comes before it today. Each builds no response text.
 
 **Services.**
 
@@ -403,10 +410,9 @@ effects; no read moves ahead of a decision that comes before it today. Each buil
   (src/lib/resend.ts:37-54) and would not be neutral.
 - **The mail settings.** A send needs `RESEND_API_KEY`, `CONTACT_FROM_EMAIL` and `OWNER_EMAIL`; without one, no request is
   made (software.ts:155-156). MailNotConfigured is not in `Mail`'s error type. The route passes the settings to the flow
-  as one input (none when any of the three is empty), and the flow checks it at the email step, where `email` checks it
-  today: after the batch (question's reservation, decline's first batch, send's batch) and before the client email. With
-  none, the step fails with MailNotConfigured, the flow's own tagged error, without calling Mail. Question and decline map
-  it to their 502 (F8 proposes to move the check before any write); send records it in the outcome (`emailSent` false).
+  as one input (none when any of the three is empty). Since F8 (#314), question and decline check it after their
+  refusals and before their first write and answer 503 `offersMailNotConfigured` with nothing written; send still checks
+  it at its email step, after its batch, and records it in the outcome (`emailSent` false) without calling Mail.
 - **AttachmentStore**, R2 through the existing `AudioBucket` service (src/server/services.ts:43-46): `remove(key)` for the
   draft and `read(key)` (size and SHA-256, with `hashBytes`) for the send. The route asks `bindingsOrUnavailable` only for
   `MUSIC_DB`, and `boundServices` adds `AudioBucket` only when `env.AUDIO` is set (services.ts:105-125), so a missing
@@ -428,17 +434,19 @@ the order of section 2 and no read runs ahead of one. Then `AttachmentStore.remo
 `restoreAttachment` after a failed one. A failed restore is `OffersStoreFailed` from the store, which the flow turns into
 a tag of its own (the draft is already saved), so that the route can answer it with its own proposed sentence (F3).
 
-**question and decline: the `@xstate/effect` bridge (decided).** Each saves a move only after the client email: decline's
-resolve in its second batch (software.ts:350-372) and question's record of `question-sent` (the same batch, 371). A move
-that waits on outside work goes through the bridge (CLAUDE.md, Back-end rules), so `softwareRequest` gets two states that
-invoke the email, `declining` and `asking`, built with `createEffectLogic` as in
-tests/server/effect-bridge-proof.test.ts:31-61. The flow reads, decides and writes the first batch (decline's withdraw,
-question's reservation); restores the machine at the stored status and sends DECLINE or QUESTION, which moves it to
-`declining` or `asking` (the state `next()` answers for the event) and keeps the origin, new or reviewed, in the context.
-The invoked work sends the client email, then the copy (a copy failure only sets `copySent` false). Its onDone lands on
-resolved from `declining` and on the origin from `asking`; its onError reads MailRefused, MailUncertain or
-MailNotConfigured with `failureOf` (src/server/machines/failure.ts:32) and lands on the origin, with the failure in the
-context. Every landing on the origin is a pair of guarded targets that read the origin from the context (section 1).
+**question and decline: the `@xstate/effect` bridge (decided).** Each saves a move only after the client email:
+decline's resolve in its second batch (software.ts:350-372) and question's record of `question-sent` (the same batch,
+371). A move that waits on outside work goes through the bridge (CLAUDE.md, Back-end rules), so `softwareRequest` gets
+two states that invoke the email, `declining` and `asking`, built with `createEffectLogic` as in
+tests/server/effect-bridge-proof.test.ts:31-61. The flow reads, decides and writes the first batch (decline's
+withdraw, question's reservation); restores the machine at the stored status and sends DECLINE or QUESTION, which
+moves it to `declining` or `asking` (the state `next()` answers for the event) and keeps the origin, new or reviewed,
+in the context. The invoked work sends the client email, then the copy (a copy failure only sets `copySent` false).
+Its onDone lands on resolved from `declining` and on the origin from `asking`; its onError reads MailRefused or
+MailUncertain with `failureOf` (src/server/machines/failure.ts:32) and lands on the origin, with the failure in the
+context. Since F8 the flow checks the mail settings before the first write, so MailNotConfigured never reaches the
+machine; any other failure takes no transition, and `settled` fails the program with it. Every landing on the origin
+is one transition whose target is the origin read from the context (section 1).
 
 The program waits with `settled` (src/server/machines/settled.ts:21-35), whose options carry a timeout: 30 seconds,
 longer than the two emails in a row at their own 10-second timeouts (the client email, then the copy, each with
@@ -504,7 +512,8 @@ when the client email was accepted (835; F9 asks about the other case).
 ## 4. The store
 
 `src/server/offers-store.ts`, over the `MusicDb` service, one function per statement, plain SQL that decides nothing
-beyond its compare-and-set. A read that rejects is `OffersStoreFailed` (no fields). A batch that rejects is:
+beyond its compare-and-set. A read that rejects is `OffersStoreFailed`, whose one field, `failure`, carries what the
+database raised for the route's log (never its answer). A batch that rejects is:
 
 - `GuardRefused` when its message is the JSON guard's (`raisedByJsonGuard`), and for the draft's reused MSA a FOREIGN KEY
   failure with evidence of the race read afterwards (the MSA row gone), as the agreement review recognises `LostRace`
@@ -760,9 +769,9 @@ Properties, each with a mutant that breaks it (the driver fails a property witho
   that mutant is equivalent (a live link always has a sent offer, which the fix refuses), and the fix's PR moved it to
   the equivalents and removed the weakened form.
 - `sendLinkLive` (first `acceptedSendLinkLive`): a send that answers 200 had its link live at the check, whatever became
-  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so the
-  property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is equivalent in
-  the model, which never closes a link during a failed email (docs/verification.md).
+  of its client email. Mutant: the check left out. F9's fix (#314) answers a closed link 409 for any email outcome, so
+  the property dropped "with its client email accepted" in #331, and the old condition became a mutant; it is
+  equivalent in the model, which never closes a link during a failed email (docs/verification.md).
 
 **The deposit decision, a LemmaScript contract (decided).** `depositOfferBlock`'s decision (software-invoices.ts:365-397)
 becomes a pure function with no imports, in its own module listed in `LemmaScript-files.txt`, in the style of

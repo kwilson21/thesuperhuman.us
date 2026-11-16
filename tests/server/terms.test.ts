@@ -70,6 +70,24 @@ describe("check", () => {
 
 		expect(Effect.runSync(Effect.flip(answer))._tag).toBe("Empty");
 	});
+
+	it("hands the refusal the values the term read, for a refusal that carries a fact", () => {
+		class TooLongBy extends Data.TaggedError("TooLongBy")<{
+			readonly over: number;
+		}> {
+			readonly say = "That is too long.";
+		}
+
+		const answer = check({ text: "abcdefgh", already: false }, [
+			unless(notEmpty, () => new Empty()),
+			unless(shortEnough, (g) => new TooLongBy({ over: g.text.length - 5 })),
+		]);
+
+		const refused = Effect.runSync(Effect.flip(answer));
+
+		expect(refused).toBeInstanceOf(TooLongBy);
+		expect(refused instanceof TooLongBy && refused.over).toBe(3);
+	});
 });
 
 describe("rule", () => {
