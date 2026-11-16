@@ -35,7 +35,7 @@ import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
 //   409 {ok:false}       no sent offer for the request
 //   409 "Review the complete pending signing action."   nothing client_signed, or the named documents differ in id,
 //                        hash or number from the client_signed ones
-//   409 "Void or refund the deposit invoice first."     a deposit invoice for milestone 0 that is creating, open,
+//   409 "Void the deposit invoice first, or refund..."  a deposit invoice for milestone 0 that is creating, open,
 //                        payment_failed, uncollectible, or paid and not refunded: before the batch, and after a failed
 //                        batch when one appeared meanwhile
 //   409 "The agreement changed or the operation failed. Reload before retrying."   a guard lost to a race, or the batch

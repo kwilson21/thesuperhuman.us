@@ -10,17 +10,17 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 
 	if (!button || !status || !endpoint) return;
 
-	const failure =
-		selector === "[data-project-invitation]"
-			? "Could not queue the invitation. Please try again."
-			: "Could not send the brief copy. Please try again.";
+	const isInvitation = selector === "[data-project-invitation]";
+
+	const failure = isInvitation
+		? "Could not queue the invitation. Please try again."
+		: "Could not send the brief copy. Please try again.";
 
 	button.addEventListener("click", async () => {
 		button.disabled = true;
-		status.textContent =
-			selector === "[data-project-invitation]"
-				? "Sending the sign-in link…"
-				: "Sending the brief copy…";
+		status.textContent = isInvitation
+			? "Sending the sign-in link…"
+			: "Sending the brief copy…";
 
 		try {
 			const response = await fetch(endpoint, {
@@ -32,7 +32,8 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 				}),
 			});
 
-			if (response.ok) {
+			// A brief copy that answers 500 may already have asked the mail provider, which records what it learned on the request. The page shows that record and offers only the buttons it allows, as it does after a success.
+			if (response.ok || (!isInvitation && response.status === 500)) {
 				location.reload();
 
 				return;
@@ -42,6 +43,13 @@ export function setupProjectInvitation(selector = "[data-project-invitation]") {
 			const result = (await response.json()) as { error?: string };
 			status.textContent = result.error ?? failure;
 		} catch {
+			// A brief copy request that gave no readable answer (the fetch failed, or an edge page that is not JSON came back) may have reached the server and claimed the copy. The page shows the recorded status and only the buttons it allows, as after a 500, so a second click cannot send a second copy.
+			if (!isInvitation) {
+				location.reload();
+
+				return;
+			}
+
 			status.textContent = failure;
 		}
 

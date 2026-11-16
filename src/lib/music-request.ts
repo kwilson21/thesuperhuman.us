@@ -68,3 +68,46 @@ export const musicUnavailable = () =>
 /** A store that failed unexpectedly, or a defect: the same sentence, and 500 because nothing is known to be unavailable. */
 export const musicFailed = () =>
 	Response.json({ ok: false, error: NOT_SAVED }, { status: 500 });
+
+// The fixed sentences of the public intake forms (the audio request and the software brief), which both routes and their
+// refusals show. A route builds the response around them; the status is the route's.
+
+// A refusal's own sentence (a wait, a refused captcha, a captcha outage, a submission id taken) is its `say` in the rule
+// file; what is here is answered for a failure, which is no rule's refusal.
+
+/** An intake's own store or limiter could not answer. */
+export const intakeUnavailable =
+	"Sending is temporarily unavailable. Your details are still here. Please try again later.";
+
+/** The request or brief was not stored. */
+export const intakeNotStored =
+	"We couldn’t confirm delivery. Your details are still here. Try again later or email kazon.wilson@thesuperhuman.us.";
+
+/** The brief's details are too large to store. */
+export const intakeTooLarge = "Keep the brief shorter and try again.";
+
+/** A binding or secret this deployment does not have: a deliberate 503. */
+export const intakeNotAvailable = () =>
+	Response.json(
+		{
+			ok: false,
+			error:
+				"Sending is unavailable right now. Your details are still here. Please email kazon.wilson@thesuperhuman.us.",
+		},
+		{ status: 503 },
+	);
+
+/** The intake's temporary sentence, with the status the route gives it (503 for a known outage, 500 otherwise). */
+export const intakeTemporarilyUnavailable = (status: number) =>
+	Response.json({ ok: false, error: intakeUnavailable }, { status });
+
+// The fixed sentence of the owner's brief copy route, and its answers: the copy could not be sent (a failure of the database or of
+// the mail provider answers 500, a deployment with no mail key or address 503).
+export const briefCopyNotSent =
+	"The brief copy could not be sent. Please try again.";
+
+export const briefCopyFailed = () =>
+	Response.json({ ok: false, error: briefCopyNotSent }, { status: 500 });
+
+export const briefCopyUnavailable = () =>
+	Response.json({ ok: false, error: briefCopyNotSent }, { status: 503 });

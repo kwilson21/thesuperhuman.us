@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
+import { parseShard, selectChecks } from "./lib/quint-shards.mjs";
 import { models } from "./lib/quint-mutants.mjs";
 import {
 	classifyRun,
@@ -21,6 +22,8 @@ import {
 // so they go in parallel, up to the number of CPUs (or QUINT_JOBS), longest first. Each line ends with its run time.
 
 const SEED = "0x1";
+
+// Steps per random run, unless a model sets its own (`steps` in scripts/lib/quint-mutants.mjs).
 const STEPS = "20";
 
 /** Runs `quint` with these arguments to the end, and resolves to its exit status and output. */
@@ -39,7 +42,14 @@ function quint(args) {
 	});
 }
 
-const simulate = (model, main, invariant) =>
+/** How many random runs a check makes: a model may make fewer for the runs that must pass (`passSamples`) than it needs to find its rarest mutant. */
+const samplesFor = (model, kind) =>
+	kind === "pass" ? (model.passSamples ?? model.samples) : model.samples;
+
+/** How many steps each random run of a model takes. */
+const stepsFor = (model) => model.steps ?? STEPS;
+
+const simulate = (model, main, invariant, kind) =>
 	quint([
 		"run",
 		model.file,
@@ -52,9 +62,9 @@ const simulate = (model, main, invariant) =>
 		"--invariant",
 		invariant,
 		"--max-steps",
-		STEPS,
+		stepsFor(model),
 		"--max-samples",
-		model.samples,
+		samplesFor(model, kind),
 		"--seed",
 		SEED,
 	]);
@@ -85,6 +95,10 @@ async function runAll(jobs, limit) {
 }
 
 const mode = process.argv[2] ?? "properties";
+const shard = parseShard(process.env.QUINT_SHARD);
+
+if (shard && mode !== "all")
+	throw new Error("QUINT_SHARD is supported only with all checks");
 
 // How many runs at once: every CPU, or QUINT_JOBS (to see locally what a smaller CI runner would take).
 const jobs = Number(process.env.QUINT_JOBS) || availableParallelism();
@@ -114,20 +128,28 @@ const check = (model, main, invariant, kind, describe) => ({
  * the larger sample counts before the smaller, and the quick mutants fill the cores they leave free; started last, a long
  * run would leave the other cores idle at the end.
  */
-async function runChecks(checks) {
+async function runChecks(allChecks) {
+	const checks = selectChecks(allChecks, shard);
+
+	if (shard)
+		console.log(
+			`Quint shard ${shard.index}/${shard.total}: ${checks.length}/${allChecks.length} checks; global mutant coverage checked before sharding`,
+		);
+
 	const order = checks
 		.map((check, index) => ({ check, index }))
 		.sort(
 			(a, b) =>
 				Number(b.check.kind === "pass") - Number(a.check.kind === "pass") ||
-				Number(b.check.model.samples) - Number(a.check.model.samples),
+				Number(samplesFor(b.check.model, b.check.kind)) -
+					Number(samplesFor(a.check.model, a.check.kind)),
 		);
 
 	const started = await runAll(
 		order.map(
-			({ check: { model, main, invariant } }) =>
+			({ check: { model, main, invariant, kind } }) =>
 				() =>
-					simulate(model, main, invariant),
+					simulate(model, main, invariant, kind),
 		),
 		jobs,
 	);

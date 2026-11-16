@@ -1,10 +1,10 @@
 import type { APIRoute } from "astro";
 import {
 	clearStudioSessionCookie,
-	clientPortalEnabled,
 	revokeClientSession,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 
 export const prerender = false;
 

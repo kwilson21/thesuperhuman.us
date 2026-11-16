@@ -60,6 +60,46 @@ export function waveformPeaks(count: number, seed = 7): number[] {
 	});
 }
 
+/**
+ * A recording's waveform at `count` bars: each bar is the loudest point of its stretch of the song, scaled so the
+ * loudest bar is full height, and rounded to keep the markup small.
+ */
+export function resamplePeaks(values: number[], count: number): number[] {
+	if (values.length === 0) return [];
+
+	const bars = Array.from({ length: count }, (_, index) => {
+		const from = Math.floor((index * values.length) / count);
+
+		const to = Math.max(
+			from + 1,
+			Math.floor(((index + 1) * values.length) / count),
+		);
+
+		return Math.max(...values.slice(from, to));
+	});
+
+	const loudest = Math.max(...bars);
+
+	return bars.map((bar) => (loudest > 0 ? +(bar / loudest).toFixed(3) : 0));
+}
+
+/**
+ * Bar heights while music plays: the waveform rises and falls with the music's live level (0 to 1), never quite to
+ * nothing, and a ripple travels along it with the time in seconds.
+ */
+export function musicFrame(
+	peaks: number[],
+	level: number,
+	time: number,
+): number[] {
+	const strength = 0.2 + 0.8 * clamp01(level);
+
+	return peaks.map(
+		(peak, index) =>
+			peak * strength * (0.78 + 0.22 * Math.sin(index * 0.55 - time * 7)),
+	);
+}
+
 /** Bar heights for scroll progress: silent at either edge of the viewport, loudest crossing the middle. */
 export function signalFrame(peaks: number[], progress: number): number[] {
 	const level = Math.sin(Math.PI * clamp01(progress));

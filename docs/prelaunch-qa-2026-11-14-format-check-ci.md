@@ -9,7 +9,7 @@ Rollback revision: the production revision when this reaches `main`; after that,
 
 ## Scope
 
-One step, `pnpm run format:check`, added to the Validate workflow after `pnpm run lint`, and one line each in `CLAUDE.md` and `README.md`. No source, test, dependency or configuration file changed.
+Updated after `main` moved: pull request #335 restructured the Validate workflow and added the `pnpm run format:check` step itself (in its `quality` job, after `pnpm run lint`), so this pull request no longer changes the workflow. What it still adds is documentation only: one line each in `CLAUDE.md` and `README.md` saying the check exists and what it covers, this record, and the lint record update described below. No source, test, dependency, configuration or workflow file changes.
 
 This pull request also carries a documentation update for the lint stack that merged before it: `docs/prelaunch-qa-2026-11-13-lint-zero.md` gains a "Merge and deployment" section (merge commit, production build, the two pages checked, rollback), and its release statuses and closing lines are brought in line with that. No other part of that record's evidence changed. `pnpm run format:check` is `biome format .`. Biome checks `src`, `scripts`, `tests` and the root config files named in `biome.json` (including `.astro` and `.mjs` files there); it does not check CSS, Markdown, `package.json`, `.github`, `docs`, or the few generated files `biome.json` excludes.
 
@@ -25,8 +25,8 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - A throwaway badly formatted `.ts` file made `biome format .` exit 1; a reviewer saw the same for `.astro` and `.mjs` files and saw `.css` and `.md` files not reported. The files were deleted.
 - `oxlint --deny-warnings`: exit 0.
 - One independent review round for correctness and one for repository rules: no blocker or should-fix item; the wording of the two doc lines was corrected from a nit.
-- UNVERIFIED: `validate` with this step in CI, Greptile and Codex on the pull request.
-- Effect on other work: once merged, every open pull request must be format-clean under `src`, `scripts` and `tests`.
+- The step runs on `main` since #335; this pull request's own `validate` run after the merge with `main` is UNVERIFIED, as are the review bots on that head.
+- Effect on other work: none from this pull request; the check already applies to every pull request through #335.
 
 ## Checklist
 

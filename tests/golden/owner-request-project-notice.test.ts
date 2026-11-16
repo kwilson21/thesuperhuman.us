@@ -70,7 +70,7 @@ const TABLES = [
 	"software_project_audit",
 	"software_project_updates",
 	"audio_client_sessions",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 ];
 
 const act = (body: JsonValue | undefined, extra: Partial<Step> = {}): Step =>
@@ -160,6 +160,7 @@ const session = (
 });
 
 const code = (email: string, hash: string): SeedRow => ({
+	nonce_hash: `nonce-${hash}`,
 	email,
 	code_hash: hash,
 	created_at: EARLIER,
@@ -176,7 +177,7 @@ const sessions = {
 		session("s4", "ada@example.test"),
 		session("s5", "Grace@Example.TEST"),
 	],
-	audio_client_codes: [
+	audio_client_signin_codes: [
 		code("grace@example.test", "c1"),
 		code("ada@example.test", "c2"),
 	],

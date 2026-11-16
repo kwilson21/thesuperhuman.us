@@ -1,4 +1,5 @@
 import { sendStudioSignInNotice } from "./audio-resend";
+import { projectToday, validProjectDate } from "./project-dates";
 
 export type ProjectUpdate = {
 	id: number;
@@ -31,29 +32,6 @@ export type ProjectUpdateCommand =
 	  };
 
 const columns = `id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at,file_id,milestone`;
-
-export function validProjectDate(value: string): boolean {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-	const date = new Date(`${value}T12:00:00Z`);
-
-	return (
-		!Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value
-	);
-}
-
-export function projectToday(now = new Date()): string {
-	const parts = new Intl.DateTimeFormat("en-US", {
-		timeZone: "America/New_York",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-	}).formatToParts(now);
-
-	const number = (type: string) =>
-		parts.find((part) => part.type === type)?.value ?? "";
-
-	return `${number("year")}-${number("month")}-${number("day")}`;
-}
 
 export async function listProjectUpdates(
 	db: D1Database,

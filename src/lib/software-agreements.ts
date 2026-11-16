@@ -1,10 +1,10 @@
 import { agreementEvent } from "./agreement-events";
 import {
 	hashOfferToken,
-	offerTermsSchema,
+	parseOfferTerms,
 	type SoftwareOffer,
 } from "./software-offers";
-import { softwareGuard } from "./software-projects";
+import { softwareGuard } from "./software-guard";
 import {
 	agreementValues,
 	validateAgreementDetails,
@@ -165,7 +165,7 @@ export async function reviewAgreements(
 	input: RawValue,
 ) {
 	const client = parseClientAgreement(input),
-		terms = offerTermsSchema.parse(JSON.parse(offer.terms_json)),
+		terms = parseOfferTerms(JSON.parse(offer.terms_json)),
 		details = validateAgreementDetails(
 			JSON.parse(offer.agreement_details_json!),
 			terms,

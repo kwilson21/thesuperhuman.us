@@ -4,7 +4,7 @@ export type OwnerIncident = {
 	category: "request-storage";
 	route: "/api/audio-intake" | "/api/music-interest" | "/api/software-inquiry";
 	requestId: string;
-	code: "d1-write-failed";
+	code: "d1-write-failed" | "d1-read-failed";
 	occurredAt: string;
 };
 
