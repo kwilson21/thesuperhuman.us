@@ -20,7 +20,7 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 - Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301), the media routes (3 routes: `music/file`, `audio/file` and `og/[name].mp4`; fixes and conversion in one stack, record `docs/prelaunch-qa-2026-11-15-media.md`), and the owner brief copy route (step 8 is complete; the claim of the client's copy is one flow for the public form and the owner).
 - Converted, pending merge: the software offers route (step 1, `owner/requests/[id]/software.ts`), a stack of three
-  PRs (334, 337 and the flows and route; record `docs/prelaunch-qa-2026-11-16-offers-area.md`). The counts below
+  PRs (334, 337 and 341, the flows and the route; record `docs/prelaunch-qa-2026-11-16-offers-area.md`). The counts below
   already leave it out.
 - Not converted: 30 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
   components (all reads), 26 files under `src/` that use Zod (25 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
@@ -66,8 +66,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    emails, and drafts saved while a decline's email is in flight, get a Quint model (an extension of
    `verification/discount-offers.qnt`) before its code. Converted, pending merge: the fixes F1 to F10 merged first
    (PRs 313, 314, 316 and 331, with the model in 317); the conversion is the stack of PRs 334 (the command reader, the
-   machines and the rules), 337 (the store, the services and the answers) and the flows with the route
-   (`src/server/flows/offer-*.ts`; question and decline send their client email through the request machine's bridge),
+   machines and the rules), 337 (the store, the services and the answers) and 341 (the flows and the route,
+   `src/server/flows/offer-*.ts`; question and decline send their client email through the request machine's bridge),
    whose `golden:neutral` against `main` is NEUTRAL (record `docs/prelaunch-qa-2026-11-16-offers-area.md`).
 2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts`, `audio-client-access.ts` and `client-portal.ts`
    (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule

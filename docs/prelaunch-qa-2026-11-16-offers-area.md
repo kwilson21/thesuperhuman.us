@@ -12,11 +12,12 @@ follows"):
 - [#337](https://github.com/kwilson21/thesuperhuman.us/pull/337), `claude/offers-convert-2`, targets #334: the store
   (`src/server/offers-store.ts`), the services (`src/server/offers-services.ts`) and the answers
   (`src/server/offers-answers.ts`).
-- TODO (number), `claude/offers-convert-3`, targets #337: the flows, the route, the route tests, the fixtures
-  re-recorded in a commit of their own, and this record.
+- [#341](https://github.com/kwilson21/thesuperhuman.us/pull/341), `claude/offers-convert-3`, targets #337: the flows,
+  the route, the route tests, the fixtures re-recorded in a commit of their own, and this record.
 
-Merge order: 3 into 2, then 2 into 1 (retargeted by hand after each merge), then 1 into `main`, with the `conversion`
-label. TODO: the merge commits and times.
+The stack merges `main` at `f0709a25` (into #334 as `6c7263e2`, then up through #337 and #341). Merge order: #341 into
+#337, then #337 into #334 (retargeted by hand after each merge), then #334 into `main`, with the `conversion` label.
+TODO: the merge commits and times.
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). Implementation was done with Claude Code. TODO: merge authorization.
 Rollback revision: TODO, the revision of `main` before #334 merges (`git revert -m 1 <merge>` undoes the whole area).
@@ -57,8 +58,10 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
   failure after the email (`OffersStoreFailedAfterEmail`). Each flow calls only the store, the services and the pure
   rules, reads each rule's facts in the order the route always read them, and builds no response text.
 - The clock and ids: `now` and `sendingSince` (`offerSendingSince`) are inputs, read at each point the route always read
-  them (each fresh-link read and each batch carrying G5); `crypto.randomUUID` only for a new draft version, once per try;
-  the link token's hash before the link is built.
+  them (`now` after the front refusals and before the action's next read, once per draft try; `sendingSince` at each
+  fresh-link read and each batch carrying G5); `crypto.randomUUID` only for a new draft version, once per try; the link
+  token's hash before the link is built. The review of #341 found the draft reading `now` after its offers read, where
+  the route read it before (a slow offers read moved the draft's time); fixed in `ad1a14d1`, with a story that pins it.
 - Question and decline: the first batch, then `createEffectActor` restores `softwareRequest` at the stored status and
   sends QUESTION or DECLINE with the two emails; `asking` or `declining` sends the client email, then the owner's copy;
   `settled` waits 30 seconds for the landing. A refused or uncertain client email lands on the stored status and is
@@ -80,6 +83,16 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
   attachment's row that could not be put back; LinkCheckFailed for the send's live-link check, by whether the client
   email was accepted. Each logs its failure once through `logUnexpected` (the console lines in the corpus are
   byte-identical).
+- What the old route answered otherwise, outside the corpus, as the design intends:
+  - A defect inside an action (F2's kind) now answers the fixed 500 through `runRoute` and is logged once, redacted,
+    through `logUnexpected`; the old route answered most of them through the lookups after a refused batch. For
+    example, a `crypto.randomUUID` that throws while a new draft is saved answered 409 DraftChanged and now answers 500
+    (`tests/api/software-offers-outages.test.ts`, "a defect answers the fixed sentence").
+  - `settled`'s timeout or a stopped machine (question, decline) answers the fixed 500 and is logged once; the old route
+    had no such wait.
+  - A failing read that is new (a signed agreement, an audio project, a reissue's link row, the named attachments' rows,
+    the closed archives, the reused MSA's row before a draft that confirms reuse) answers 500 with the fixed sentence and
+    is logged, where the old route made no read there and went on to its batch.
 - Route, `src/pages/api/owner/requests/[id]/software.ts` (1,165 lines to 242): the owner check (403), then
   `bindingsOrUnavailable(env, ["MUSIC_DB"])` (503 with the private header, before the body), `musicRequest`'s answers,
   the command reader's 400, and 404 for a missing or empty id; then `runRoute(services, program, offersDefect)` with
@@ -103,11 +116,13 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
 
 ## Golden neutrality
 
-Run with the base revision of the stack, `01f0433d` (`main` when the stack was cut), and across the re-record commit:
+Three runs at `b392d05c`, quoted as they printed: from `main` (`f0709a25`, which the stack now contains), across the
+re-record commit (`d6e7f5a2`, the commit before it, to `05291d78`, the re-record), and from this PR's base, as CI
+compares it.
 
 ```
-$ pnpm run golden:neutral --all 01f0433d HEAD
-golden:neutral: from 01f0433d (01f0433dc4c9) to HEAD (df4cf0c1fd27)
+$ node scripts/golden-neutral.mjs --all origin/main HEAD
+golden:neutral: from origin/main (f0709a259223) to HEAD (b392d05c07b1)
 owner-request-software-decline: 15 identical, 77 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
 owner-request-software-offer-draft: 183 identical, 15 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
 owner-request-software-offer-send: 40 identical, 91 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
@@ -116,51 +131,56 @@ owner-request-software-question: 61 identical, 1 neutral with D1 changes, 0 NOT 
 compared 80 fixtures and 9347 cases; 5 of 80 fixtures differ
 golden:neutral: NEUTRAL
 
-$ pnpm run golden:neutral --all d6e7f5a2 05291d78   (the commit before the re-record, and the re-record)
-golden:neutral: from 66d941c6~2 (d6e7f5a26c36) to 66d941c6~1 (05291d782b45)
-(the same five lines)
+$ node scripts/golden-neutral.mjs --all d6e7f5a2 05291d78
+golden:neutral: from d6e7f5a2 (d6e7f5a26c36) to 05291d78 (05291d782b45)
+owner-request-software-decline: 15 identical, 77 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-draft: 183 identical, 15 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-send: 40 identical, 91 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-signing: 0 identical, 101 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-question: 61 identical, 1 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
 compared 80 fixtures and 9347 cases; 5 of 80 fixtures differ
 golden:neutral: NEUTRAL
 
-$ pnpm run golden:neutral --all origin/claude/offers-convert-2 HEAD   (this PR's base, as CI compares it)
-(the same five lines)
+$ node scripts/golden-neutral.mjs --all origin/claude/offers-convert-2 HEAD
+golden:neutral: from origin/claude/offers-convert-2 (894ac43b4ec6) to HEAD (b392d05c07b1)
+owner-request-software-decline: 15 identical, 77 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-draft: 183 identical, 15 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-send: 40 identical, 91 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-offer-signing: 0 identical, 101 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
+owner-request-software-question: 61 identical, 1 neutral with D1 changes, 0 NOT neutral, 0 NOT COMPARABLE, 0 added, 0 removed, 0 renamed
 compared 80 fixtures and 9347 cases; 5 of 80 fixtures differ
 golden:neutral: NEUTRAL
 ```
 
 `fit` and `revoke` are byte-identical; every other corpus is identical; no case was added, removed or renamed. The D1
 statements that differ are the store's three changed texts (the deposit read, the withdraw's IN list, mark sent's status
-filter), its five added reads (the rest of each invoice, a signed agreement, an audio project, the named attachments'
-rows, the closed archives) and the batches no longer run when a read refuses first. No response, Resend body, R2 call,
-console line, trigger-hit marker, digest or table set differs.
-
-`golden:neutral --all origin/main HEAD` against `main` as it is now (`9eecc5e2`) gives the same five software lines and
-also lists `owner-request-payment` (200 identical, 21 NOT neutral), so it prints NOT NEUTRAL: those 21 cases are #277
-to #280 on `main` (the payment route answering a Stripe failure by its error type, re-recorded there), which this stack
-has not merged yet, compared backwards. Not this conversion. TODO: rerun after #334 merges `main`; it must then print
-NEUTRAL with only the five software lines.
+filter), its five added reads (the rest of each invoice, in the deposit read's batch of two; a signed agreement; an
+audio project; the named attachments' rows; the closed archives), `readMsaExists` before a draft that confirms reuse,
+and the batches no longer run when a read refuses first. No response, Resend body, R2 call, console line, trigger-hit
+marker, digest or table set differs.
 
 ## Evidence
 
-Run at `df4cf0c1` (the last code commit of the third PR; this record is committed after it and changes documentation
-only), with `origin/claude/offers-convert-2` at `5cc32989` merged in (the closed-archive fix: `readClosedArchives`
-answers `{ keys, unreadable }` and reads nothing for no key), on Node 26.13.1.
+Run at `b392d05c` (#341 after `main` at `f0709a25` was merged through the stack and the review's fixes; this record is
+committed after it and changes documentation only), on Node 26.13.1.
 
-- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`: `Test Files  369 passed (369)`,
-  `Tests  14434 passed | 1 skipped (14435)` (after the build, so the client bundle test ran too).
-- The seven software corpora replayed with both verification flags after the re-record: 724 tests passed.
-- `pnpm run lint`: no findings. `pnpm run format:check`: `Checked 957 files ... No fixes applied.`
+- `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1 pnpm test`, after the build: `Test Files  379 passed (379)`,
+  `Tests  14831 passed | 1 skipped (14832)`. (A first run before the rebuild failed only the client bundle test, which
+  read the `dist/` built before `main`'s merge, where `src/lib/brief-board.ts` was not yet browser code.)
+- `pnpm run lint`: no findings. `pnpm run format:check`: `Checked 983 files in 1543ms. No fixes applied.`
   `pnpm run copy:check`: `copy-check passed: no banned copy patterns found.`
-- `pnpm run check`: `0 errors`, `0 warnings`, `16 hints` (none in this PR's files).
-- `pnpm run verify:quint:all`: exit 0, 111 `ok` lines. No modelled rule changed, so the manual Apalache run was not
+- `pnpm run check`: `0 errors`, `0 warnings`, `18 hints` (none in this PR's files).
+- `pnpm run verify:quint:all`: exit 0, 120 `ok` lines. No modelled rule changed, so the manual Apalache run was not
   repeated.
 - `pnpm run build`: `[build] Complete!` (`publicist-gate passed: 84 entries checked.`); then
   `REQUIRE_CLIENT_BUNDLE=1 pnpm exec vitest run tests/architecture/client-bundle.test.ts`: `Tests  27 passed (27)`.
-- New tests: `tests/flows/software-offers-stories.test.ts` (9 stories: what each flow reads, sends and writes, in
+- `golden:neutral`: NEUTRAL in all three runs above.
+- New tests: `tests/flows/software-offers-stories.test.ts` (10 stories: what each flow reads, sends and writes, in
   order: revoke reads no link for a closed request; a refused revoke reads the link, then the window; a question
   reserves, emails the client, then the copy, then records; a decline with no mail settings reads no agreement or audio
   project and writes nothing; a refused decline email resolves nothing; a landed decline reads the offers left, then
-  resolves; a draft whose version was taken makes a new id per try and saves version 2; an attachment's row, object and
+  resolves; a draft whose version was taken makes a new id per try and saves version 2; with an offers read that takes
+  five seconds, the draft's stored and answered time is the time before the read; an attachment's row, object and
   bytes are read in that order and the bytes once; an object of the wrong size is never read);
   `tests/api/software-offers-outages.test.ts`, "the converted route's own outages" (no `MUSIC_DB`: 503 before the body
   is read; a defect: the fixed 500, logged once with the address redacted, nothing written; a question's and a
@@ -190,8 +210,10 @@ UNVERIFIED until checked:
 
 ## 4. Performance and resilience
 
-- **PASS · Queries.** Five added reads, each before the batch that re-checks it, and one read fewer for every batch a
-  read now refuses before it runs.
+- **PASS · Queries.** Five added reads, each before the batch that re-checks it: the rest of each invoice (so the
+  deposit read is now a batch of two statements), a signed agreement, an audio project, the named attachments' rows and
+  the closed archives. `readMsaExists` now also runs before every draft that confirms an MSA's reuse (before, only after
+  a FOREIGN KEY failure). One batch fewer for every batch a read now refuses before it runs.
 - **PASS · Failures.** Every store, R2 and preflight failure answers its fixed sentence and is logged once; a defect
   answers the fixed 500 through `runRoute`.
 
@@ -202,15 +224,19 @@ UNVERIFIED until checked:
 
 ## 6. Privacy, legal and measurement
 
-- **N/A.** No new data; the log lines are the route's own, byte for byte.
+- **N/A.** No new data. Inside the corpus the log lines are the route's own, byte for byte; outside it, a defect and the
+  bridge's timeout or stop are newly logged, once each, through `logUnexpected`, which redacts addresses and never logs
+  what was sent.
 
 ## 7. Release and final QA
 
 - **PASS · Checks and neutrality.** See "Golden neutrality" and "Evidence".
 - **N/A · Bindings, migrations.** None.
-- **TODO · Reviews.** Independent review of the third PR's head (the reviews of #334 and #337, and the re-review of the
-  closed-archive fix, found no defect left; their comment corrections are in the third PR as "Comments from the
-  closed-archive re-review"), and the `conversion` label's CI.
+- **PASS, with limits · Reviews.** The reviews of #334 and #337, and the re-review of the closed-archive fix, found no
+  defect left; their comment corrections are in #341 ("Comments from the closed-archive re-review"). On #341, two
+  independent reviews and Codex found no code defect, security problem or CLAUDE.md violation; one low behaviour point
+  (the draft's clock read after its offers read) and the record and design corrections are fixed in their own commits.
+  TODO: the review of the final head, and the `conversion` label's CI.
 - **TODO · Production revision and live check.**
 
 ## 8. Private owner center
