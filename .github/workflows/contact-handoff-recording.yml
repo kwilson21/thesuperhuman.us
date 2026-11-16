@@ -31,7 +31,8 @@ jobs:
         with:
           name: contact-handoff-preview
           path: |
-            handoff-recording/contact-handoff.mp4
+            handoff-recording/contact-handoff-original.webm
+            handoff-recording/timing.json
             handoff-recording/*.png
             handoff-recording/README.txt
           retention-days: 7

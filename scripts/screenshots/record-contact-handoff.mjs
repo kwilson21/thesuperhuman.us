@@ -30,5 +30,5 @@ const video=page.video();
 await context.close();
 await video.saveAs("handoff-recording/contact-handoff-original.webm");
 await browser.close();
-execFileSync("ffmpeg",["-y","-ss",String(start),"-i","handoff-recording/contact-handoff-original.webm","-t",String(end-start),"-c:v","libx264","-pix_fmt","yuv420p","-movflags","+faststart","handoff-recording/contact-handoff.mp4"]);
+await writeFile("handoff-recording/timing.json",JSON.stringify({start,duration:end-start}));
 await writeFile("handoff-recording/README.txt","Real Chromium recording of PR351 application code at ad9873f. 390x844, normal motion. Local fixture preview, not production. Scroll down into footer, back up, then down again. No application code modified. Trimmed navigation/loading lead-in only.\n");
