@@ -37,10 +37,10 @@ export const REACH_DAMPING = 53;
 export const REACH = { stiffness: REACH_STIFFNESS, damping: REACH_DAMPING };
 export const SEAT = { stiffness: STIFFNESS, damping: DAMPING };
 
-// The plug and the cable advance in steps of at most 1/120 s. A frame is split into equal steps, so a
-// slow frame (a battery saver's 30 frames a second) takes several short, stable steps instead of one
-// long, unstable one, and a steady frame rate of any kind (60, 90, 120, 144 Hz) takes the same number
-// of steps every frame, so the motion never stalls on one frame and jumps on the next.
+// The plug advances in steps near 1/120 s. A frame is split into equal steps, so a slow frame (a
+// battery saver's 30 frames a second) takes several short, stable steps instead of one long, unstable
+// one, and a steady frame rate of any kind (60, 90, 120, 144 Hz) takes the same number of steps every
+// frame, so the plug never stalls on one frame and jumps on the next.
 export const STEP = 1 / 120;
 
 export function frameSteps(dt: number) {
@@ -112,15 +112,91 @@ const PUT_THROUGH_MS = 560;
 const SNAP = 44;
 
 // The cable is a chain of points under gravity, pinned at your jack and at the plug (Verlet
-// integration with distance constraints, in the same steps as the plug). Its length is the length of the
-// resting curve between its two ends, so it hangs about as drawn, and it whips and sways as the plug
-// moves. Friction settles it within a couple of seconds.
-const LINKS = 16;
+// integration with distance constraints). Its length is the length of the resting curve between its
+// two ends, so it hangs about as drawn, and it whips and sways as the plug moves. Friction settles it
+// within a couple of seconds.
+export const LINKS = 16;
 const ROPE_FRICTION = 0.98;
 const ROPE_PASSES = 12;
 
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
+}
+
+export type Chain = { points: Point[]; before: Point[]; clock: number };
+
+/**
+ * One animation frame of the cable, pinned at `from` and `to`. It always steps exactly 1/120 s and
+ * carries the rest of the frame to the next one: its resting shape depends on the step, so a step that
+ * changed with the frame timing would keep nudging it and it would never come to rest. Returns the
+ * largest distance a link moved in a step this frame, once the links have pulled the chain back into
+ * shape (at rest gravity and the links cancel out and this falls to nothing), or null if no step ran.
+ */
+export function advanceChain(
+	chain: Chain,
+	from: Point,
+	to: Point,
+	link: number,
+	pull: Point,
+	dt: number,
+): number | null {
+	const { points, before } = chain;
+	let moved: number | null = null;
+	chain.clock = Math.min(chain.clock + clamp(dt, 0, 1 / 30), STEP * 8);
+
+	while (chain.clock >= STEP) {
+		chain.clock -= STEP;
+		moved ??= 0;
+
+		for (let index = 1; index < LINKS; index++) {
+			const point = points[index];
+			const last = before[index];
+			const vx = (point.x - last.x) * ROPE_FRICTION;
+			const vy = (point.y - last.y) * ROPE_FRICTION;
+			last.x = point.x;
+			last.y = point.y;
+			point.x += vx + pull.x * STEP * STEP;
+			point.y += vy + pull.y * STEP * STEP;
+		}
+
+		points[0] = { ...from };
+		points[LINKS] = { ...to };
+
+		for (let pass = 0; pass < ROPE_PASSES; pass++)
+			for (let index = 0; index < LINKS; index++) {
+				const a = points[index];
+				const b = points[index + 1];
+				const dx = b.x - a.x;
+				const dy = b.y - a.y;
+				const gap = Math.hypot(dx, dy) || 0.0001;
+				const pullIn = (gap - link) / gap;
+				const share = index === 0 || index === LINKS - 1 ? 1 : 0.5;
+
+				if (index !== 0) {
+					a.x += dx * pullIn * share;
+					a.y += dy * pullIn * share;
+				}
+
+				if (index !== LINKS - 1) {
+					b.x -= dx * pullIn * share;
+					b.y -= dy * pullIn * share;
+				}
+			}
+
+		// Never so far out past the board's left edge that the gutter loses it.
+		for (const point of points) point.x = Math.max(point.x, -14);
+
+		for (let index = 1; index < LINKS; index++)
+			moved = Math.max(
+				moved,
+				Math.hypot(
+					points[index].x - before[index].x,
+					points[index].y - before[index].y,
+				),
+			);
+	}
+
+	return moved;
 }
 
 export function setupSwitchboard(
@@ -176,9 +252,7 @@ export function setupSwitchboard(
 	const velocity: Point = { x: 0, y: 0 };
 	const motion: PlugMotion = { position, velocity, scale: 1, scaleVelocity: 0 };
 	let measured = false;
-	let rope: Point[] = [];
-	let ropeBefore: Point[] = [];
-	let ropeLastStep = STEP;
+	const chain: Chain = { points: [], before: [], clock: 0 };
 	let ropeStirring = 0;
 
 	// Where everything sits on the board, read only when the board's layout changes (measure), so the
@@ -332,9 +406,9 @@ export function setupSwitchboard(
 	}
 
 	function layRope(points: Point[]) {
-		rope = points.map((point) => ({ ...point }));
-		ropeBefore = points.map((point) => ({ ...point }));
-		ropeLastStep = STEP;
+		chain.points = points.map((point) => ({ ...point }));
+		chain.before = points.map((point) => ({ ...point }));
+		chain.clock = 0;
 		// Counts as moving until a step has measured it, so a frame too short for a step never ends the swing.
 		ropeStirring = 1;
 	}
@@ -346,92 +420,38 @@ export function setupSwitchboard(
 	}
 
 	function swing(dt: number) {
-		const from = youPoint;
-		const link = ropeLength(from, position) / LINKS;
-		const pull = gravity();
-		const { count, size } = frameSteps(dt);
-		// Friction is set per 1/120 s; a shorter step takes a proportionally smaller share.
-		const friction = ROPE_FRICTION ** (size / STEP);
+		const moved = advanceChain(
+			chain,
+			youPoint,
+			position,
+			ropeLength(youPoint, position) / LINKS,
+			gravity(),
+			dt,
+		);
 
-		if (count) ropeStirring = 0;
-
-		for (let tick = 0; tick < count; tick++) {
-			// Verlet with a changing step carries the last step's motion scaled to this one.
-			const carry = (size / ropeLastStep) * friction;
-			ropeLastStep = size;
-
-			for (let index = 1; index < LINKS; index++) {
-				const point = rope[index];
-				const before = ropeBefore[index];
-				const vx = (point.x - before.x) * carry;
-				const vy = (point.y - before.y) * carry;
-				before.x = point.x;
-				before.y = point.y;
-				point.x += vx + pull.x * size * size;
-				point.y += vy + pull.y * size * size;
-			}
-
-			rope[0] = { ...from };
-			rope[LINKS] = { ...position };
-
-			for (let pass = 0; pass < ROPE_PASSES; pass++)
-				for (let index = 0; index < LINKS; index++) {
-					const a = rope[index];
-					const b = rope[index + 1];
-					const dx = b.x - a.x;
-					const dy = b.y - a.y;
-					const gap = Math.hypot(dx, dy) || 0.0001;
-					const pullIn = (gap - link) / gap;
-					const share = index === 0 || index === LINKS - 1 ? 1 : 0.5;
-
-					if (index !== 0) {
-						a.x += dx * pullIn * share;
-						a.y += dy * pullIn * share;
-					}
-
-					if (index !== LINKS - 1) {
-						b.x -= dx * pullIn * share;
-						b.y -= dy * pullIn * share;
-					}
-				}
-
-			// Never so far out past the board's left edge that the gutter loses it.
-			for (const point of rope) point.x = Math.max(point.x, -14);
-
-			// How far the cable moved in this step, once the links have pulled it back into shape: at
-			// rest gravity and the links cancel out and this falls to nothing.
-			for (let index = 1; index < LINKS; index++)
-				ropeStirring = Math.max(
-					ropeStirring,
-					Math.hypot(
-						rope[index].x - ropeBefore[index].x,
-						rope[index].y - ropeBefore[index].y,
-					) /
-						(size / STEP),
-				);
-		}
+		if (moved !== null) ropeStirring = moved;
 	}
 
 	// A smooth line through the chain: quadratic curves between the midpoints of its links.
 	function ropePath() {
-		let path = `M ${rope[0].x} ${rope[0].y}`;
+		let path = `M ${chain.points[0].x} ${chain.points[0].y}`;
 
 		for (let index = 1; index < LINKS - 1; index++) {
-			const point = rope[index];
-			const next = rope[index + 1];
+			const point = chain.points[index];
+			const next = chain.points[index + 1];
 			path += ` Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
 		}
 
-		const end = rope[LINKS];
-		path += ` Q ${rope[LINKS - 1].x} ${rope[LINKS - 1].y} ${end.x} ${end.y}`;
+		const end = chain.points[LINKS];
+		path += ` Q ${chain.points[LINKS - 1].x} ${chain.points[LINKS - 1].y} ${end.x} ${end.y}`;
 
 		return path;
 	}
 
 	function draw() {
 		const from = youPoint;
-		rope[0] = { ...from };
-		rope[LINKS] = { ...position };
+		chain.points[0] = { ...from };
+		chain.points[LINKS] = { ...position };
 		const path = ropePath();
 		const lift = clamp((motion.scale - 1) / (LIFTED - 1), 0, 1.4);
 		cable!.setAttribute("d", path);
@@ -472,7 +492,7 @@ export function setupSwitchboard(
 		velocity.x = velocity.y = motion.scaleVelocity = 0;
 		motion.scale = goalScale;
 
-		if (relay || !rope.length)
+		if (relay || !chain.points.length)
 			layRope(dropPending ? waitingRope() : restingRope(youPoint, position));
 		draw();
 	}
@@ -732,7 +752,7 @@ export function setupSwitchboard(
 		);
 
 		if (target.kind === "drag") return;
-		const still = reduced.matches || dropPending || !rope.length;
+		const still = reduced.matches || dropPending || !chain.points.length;
 		settle(still);
 
 		// A change of layout moves the cable's ends; it swings to them rather than jumping.
