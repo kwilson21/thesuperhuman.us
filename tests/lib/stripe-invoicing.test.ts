@@ -1,3 +1,4 @@
+import { verifyStripeRequestContract } from "../helpers/stripe-contract";
 import { describe, expect, it, vi } from "vitest";
 import { partial } from "../helpers/doubles";
 import {
@@ -122,7 +123,10 @@ describe("Stripe invoicing", () => {
 				name: "Artist Name",
 				metadata: { audio_request_id: "request-1" },
 			},
-			{ idempotencyKey: "audio-request:request-1:customer" },
+			{
+				idempotencyKey: "audio-request:request-1:customer",
+				apiVersion: "2026-08-26.dahlia",
+			},
 		);
 		expect(stripe.invoices.create).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -131,7 +135,10 @@ describe("Stripe invoicing", () => {
 				days_until_due: 7,
 				metadata: { audio_request_id: "request-1", installment: "booking" },
 			}),
-			{ idempotencyKey: "audio-request:request-1:booking:attempt-0:invoice" },
+			{
+				idempotencyKey: "audio-request:request-1:booking:attempt-0:invoice",
+				apiVersion: "2026-08-26.dahlia",
+			},
 		);
 		expect(stripe.invoiceItems.create).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -142,7 +149,10 @@ describe("Stripe invoicing", () => {
 				description:
 					"Audio services by Kazon · Two-track vocal mix + master · 50% booking payment",
 			}),
-			{ idempotencyKey: "audio-request:request-1:booking:attempt-0:item" },
+			{
+				idempotencyKey: "audio-request:request-1:booking:attempt-0:item",
+				apiVersion: "2026-08-26.dahlia",
+			},
 		);
 		expect(result).toEqual({
 			stripeCustomerId: "cus_1",
@@ -186,4 +196,10 @@ describe("Stripe invoicing", () => {
 			createInvoiceWithClient(stripe, request, payment, "booking"),
 		).rejects.toThrow("hosted payment URL");
 	});
+});
+
+it("preserves the audio API version and idempotency through real SDK retries", async () => {
+	await verifyStripeRequestContract((client) =>
+		createInvoiceWithClient(client, request, payment, "booking"),
+	);
 });

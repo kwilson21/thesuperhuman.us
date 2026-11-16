@@ -362,6 +362,41 @@ describe("what is recorded", () => {
 		});
 	});
 
+	it("keeps SDK transport UUIDs distinct from application IDs and resets them per case", async () => {
+		const handler: Handler = async (context) => {
+			const first = crypto.randomUUID();
+			const stripe = stripeClient(env(context));
+			await stripe.customers.create({ email: "a@b.test" });
+			await stripe.customers.create({ email: "b@b.test" });
+
+			return Response.json({ first, second: crypto.randomUUID() });
+		};
+
+		const scenario = {
+			...one(),
+			fetches: byHost({
+				stripe: json(200, { id: "cus_1", object: "customer" }),
+			}),
+		};
+
+		const first = await record(handler, scenario);
+		const second = await record(handler, scenario);
+		expect(second).toEqual(first);
+		expect(first.steps[0].answer).toMatchObject({
+			status: 200,
+			body: JSON.stringify({ first: uuidFor(1), second: uuidFor(2) }),
+		});
+
+		const keys = first.effects.flatMap((effect) =>
+			effect.kind === "fetch" ? [effect.headers["idempotency-key"]] : [],
+		);
+
+		expect(keys).toEqual([
+			"stripe-node-retry-10000000-0000-4000-8000-000000000001",
+			"stripe-node-retry-10000000-0000-4000-8000-000000000002",
+		]);
+	});
+
 	it("verifies a webhook signed by signStripeWebhook, and refuses a changed payload", async () => {
 		const payload = JSON.stringify({
 			id: "evt_1",
