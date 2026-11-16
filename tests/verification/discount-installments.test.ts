@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	type SoftwareInvoiceKind,
 	softwareInvoiceTerms,
-} from "~/lib/software-invoices";
+} from "~/lib/software-invoice-terms";
 import type { OfferTerms } from "~/lib/software-offers";
 import {
 	allowedMilestone,

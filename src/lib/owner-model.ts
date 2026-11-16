@@ -67,7 +67,7 @@ export type OwnerRequestRow = {
 
 export function ownerRequestFromRow(row: OwnerRequestRow): OwnerRequest {
 	// SAFETY: details_json only ever holds a JSON object. createOwnerRequest (owner-requests.ts) stores JSON.stringify of a
-	// RequestDetails object or "{}", music-demand.ts stores a JSON object or "{}", software-brief-copy.ts only json_set's
+	// RequestDetails object or "{}", music-demand.ts stores a JSON object or "{}", the brief copy store (src/server/intake-store.ts) only json_set's
 	// keys on it, and scripts/owner-retention.mjs sets it to '{}' (the column default is '{}' too). So the parsed value is an
 	// object, and every value in it is a JSON value (or absent).
 	const details = JSON.parse(row.details_json) as RequestDetails;

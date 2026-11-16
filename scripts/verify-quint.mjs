@@ -21,6 +21,8 @@ import {
 // so they go in parallel, up to the number of CPUs (or QUINT_JOBS), longest first. Each line ends with its run time.
 
 const SEED = "0x1";
+
+// Steps per random run, unless a model sets its own (`steps` in scripts/lib/quint-mutants.mjs).
 const STEPS = "20";
 
 /** Runs `quint` with these arguments to the end, and resolves to its exit status and output. */
@@ -39,7 +41,14 @@ function quint(args) {
 	});
 }
 
-const simulate = (model, main, invariant) =>
+/** How many random runs a check makes: a model may make fewer for the runs that must pass (`passSamples`) than it needs to find its rarest mutant. */
+const samplesFor = (model, kind) =>
+	kind === "pass" ? (model.passSamples ?? model.samples) : model.samples;
+
+/** How many steps each random run of a model takes. */
+const stepsFor = (model) => model.steps ?? STEPS;
+
+const simulate = (model, main, invariant, kind) =>
 	quint([
 		"run",
 		model.file,
@@ -52,9 +61,9 @@ const simulate = (model, main, invariant) =>
 		"--invariant",
 		invariant,
 		"--max-steps",
-		STEPS,
+		stepsFor(model),
 		"--max-samples",
-		model.samples,
+		samplesFor(model, kind),
 		"--seed",
 		SEED,
 	]);
@@ -120,14 +129,15 @@ async function runChecks(checks) {
 		.sort(
 			(a, b) =>
 				Number(b.check.kind === "pass") - Number(a.check.kind === "pass") ||
-				Number(b.check.model.samples) - Number(a.check.model.samples),
+				Number(samplesFor(b.check.model, b.check.kind)) -
+					Number(samplesFor(a.check.model, a.check.kind)),
 		);
 
 	const started = await runAll(
 		order.map(
-			({ check: { model, main, invariant } }) =>
+			({ check: { model, main, invariant, kind } }) =>
 				() =>
-					simulate(model, main, invariant),
+					simulate(model, main, invariant, kind),
 		),
 		jobs,
 	);

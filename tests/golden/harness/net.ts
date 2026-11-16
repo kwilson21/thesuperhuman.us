@@ -206,6 +206,7 @@ export function recordingFetch(
 	const counts = new Map<string, number>();
 
 	return async (input, init) => {
+		const at = await log.start();
 		const request = input instanceof Request ? input : undefined;
 		const url = request?.url ?? String(input);
 		const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
@@ -229,19 +230,22 @@ export function recordingFetch(
 
 		const signal = init?.signal ?? request?.signal;
 
-		log.push({
-			kind: "fetch",
-			host,
-			url,
-			method,
-			headers,
-			body,
-			hasSignal: signal !== undefined && signal !== null,
-			answered:
-				answer.kind === "throws"
-					? `throws ${answer.message}`
-					: String(answer.status),
-		});
+		log.push(
+			{
+				kind: "fetch",
+				host,
+				url,
+				method,
+				headers,
+				body,
+				hasSignal: signal !== undefined && signal !== null,
+				answered:
+					answer.kind === "throws"
+						? `throws ${answer.message}`
+						: String(answer.status),
+			},
+			at,
+		);
 
 		if (answer.kind === "throws") throw new Error(answer.message);
 
@@ -305,12 +309,17 @@ export function recordingAi(
 			input: { [key: string]: JsonValue | undefined },
 			options?: { [key: string]: JsonValue | undefined },
 		) => {
-			log.push({
-				kind: "ai",
-				model,
-				input: plain(input),
-				options: options === undefined ? null : plain(options),
-			});
+			const at = await log.start();
+
+			log.push(
+				{
+					kind: "ai",
+					model,
+					input: plain(input),
+					options: options === undefined ? null : plain(options),
+				},
+				at,
+			);
 
 			const index = n++;
 			const answer = script[index];
@@ -344,22 +353,21 @@ export function recordingRateLimit(
 
 	return double<RateLimit>({
 		limit: async (options: { key: string }) => {
+			const at = await log.start();
 			const success = script[n++];
 
 			if (success === undefined) {
 				const message = "golden harness: no rate-limit answer scripted";
 
-				log.push({
-					kind: "rate-limit",
-					binding,
-					key: options.key,
-					threw: message,
-				});
+				log.push(
+					{ kind: "rate-limit", binding, key: options.key, threw: message },
+					at,
+				);
 
 				throw new Error(message);
 			}
 
-			log.push({ kind: "rate-limit", binding, key: options.key, success });
+			log.push({ kind: "rate-limit", binding, key: options.key, success }, at);
 
 			return { success };
 		},

@@ -1,58 +1,79 @@
 import type { APIRoute } from "astro";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { z } from "zod";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import { mcpObjectSentences, mcpSized } from "~/lib/mcp-readers";
+import { defineTool, serveTools } from "~/lib/mcp-tools";
+import { record } from "~/lib/readers";
+import { runRoute } from "~/server/run";
 
 export const prerender = false;
 
-/** Public connectivity probe only. No credentials, database access, or publication. */
-export const ALL: APIRoute = async ({ request }) => {
-	const server = new McpServer({
-		name: "superhuman-connectivity-probe",
-		version: "1.0.0",
-	});
+/** The MCP transport failed while it read or answered the request. */
+class ProbeFailed extends Data.TaggedError("ProbeFailed") {}
 
-	server.registerTool(
-		"publication_connection_probe",
-		{
-			description:
-				"Test this chat connection by echoing a short nonsecret challenge. Does not publish or read project data.",
-			inputSchema: z.object({ challenge: z.string().min(1).max(80) }).strict(),
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false,
-			},
-		},
-		async (args) => {
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify({
-							service: "thesuperhuman.us",
-							challenge: args.challenge,
-							publishingEnabled: false,
-						}),
+/** What the challenge reader and the published schema both say. */
+const challengeLength = { least: 1, most: 80 };
+
+/** Public connectivity probe only. No credentials, database access, or publication. */
+const probe = (request: Request) =>
+	serveTools(
+		request,
+		{ name: "superhuman-connectivity-probe", version: "1.0.0" },
+		[
+			defineTool({
+				name: "publication_connection_probe",
+				description:
+					"Test this chat connection by echoing a short nonsecret challenge. Does not publish or read project data.",
+				inputSchema: {
+					$schema: "http://json-schema.org/draft-07/schema#",
+					type: "object",
+					properties: {
+						challenge: {
+							type: "string",
+							minLength: challengeLength.least,
+							maxLength: challengeLength.most,
+						},
 					},
-				],
-			};
-		},
+					required: ["challenge"],
+					additionalProperties: false,
+				},
+				annotations: {
+					readOnlyHint: true,
+					destructiveHint: false,
+					idempotentHint: true,
+					openWorldHint: false,
+				},
+				read: record(
+					{ challenge: mcpSized(challengeLength) },
+					{ strict: true, says: mcpObjectSentences },
+				),
+				call: async ({ challenge }) => ({
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify({
+								service: "thesuperhuman.us",
+								challenge,
+								publishingEnabled: false,
+							}),
+						},
+					],
+				}),
+			}),
+		],
 	);
 
-	const transport = new WebStandardStreamableHTTPServerTransport({
-		sessionIdGenerator: undefined,
-		enableJsonResponse: true,
-	});
-
-	try {
-		await server.connect(transport);
-		const response = await transport.handleRequest(request);
-		response.headers.set("Cache-Control", "no-store");
-
-		return response;
-	} finally {
-		await server.close();
-	}
-};
+export const ALL: APIRoute = ({ request }) =>
+	runRoute(
+		Context.empty(),
+		Effect.tryPromise({
+			try: () => probe(request),
+			catch: () => new ProbeFailed(),
+		}).pipe(
+			// The probe has no fixed sentence: a transport failure answers a bare 500, as it did when it threw.
+			Effect.catchTags({
+				ProbeFailed: () => Effect.succeed(new Response(null, { status: 500 })),
+			}),
+		),
+	);

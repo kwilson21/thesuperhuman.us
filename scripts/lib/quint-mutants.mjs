@@ -37,7 +37,9 @@ export const equivalents = [
 export const exhaustive = ["audioExhaustive", "softwareExhaustive"];
 
 // verification/discount-offers.qnt: an offer with a discount revised, sent, superseded, signed and invoiced
-// (docs/plans/2026-11-discount-flow.md, "The model"). Module name -> the property its change must break.
+// (docs/plans/2026-11-discount-flow.md, "The model"), with the offer link, the 20-second sending window, the emails and a
+// clock, so that send and decline are the route's steps (docs/plans/2026-11-offers-conversion.md, section 7). Module name
+// -> the property its change must break.
 export const discountMutants = {
 	discountEditSent: { property: "sentTermsFrozen" },
 	discountLatestTerms: { property: "invoicedMatchesSigned" },
@@ -49,6 +51,33 @@ export const discountMutants = {
 	discountSendAfterSign: { property: "supersededInert" },
 	discountStartCopiesNewest: { property: "invoicedMatchesSigned" },
 	discountStartDropsDiscount: { property: "invoicedMatchesSigned" },
+	discountTodaySecondBatch: { property: "declinedHasNoOffer" },
+	discountNoLiveCheck: { property: "sendLinkLive" },
+	discountFirstBatchKeepsLink: { property: "declinedHasNoOffer" },
+};
+
+// verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can
+// arrive in any order. Module name -> the property its change must break.
+export const signinMutants = {
+	signinSingleRow: { property: "clientNeverLockedOut" },
+	signinEvictOldest: { property: "clientNeverLockedOut" },
+	signinCookieNotRequired: { property: "cookieRequired" },
+	signinAddressAttempts: { property: "othersUntouched" },
+	signinReplaceLive: { property: "othersUntouched" },
+	signinNoAttemptCap: { property: "attemptsBounded" },
+	signinNoAllowance: { property: "emailsBounded" },
+	signinIgnoreExpiry: { property: "deadCodeNeverSignsIn" },
+	signinReuseUsed: { property: "deadCodeNeverSignsIn" },
+	signinNoRowCap: { property: "liveRowsBounded" },
+	signinFreshCookie: { property: "cookieOpensEmailedCode" },
+	signinChargeAnyVersion: { property: "chargeOnlyTheCodeRead" },
+	signinNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinAcceptNoOpenGuard: { property: "noAuditForClosedProject" },
+	signinNoCapGuard: { property: "liveRowsBounded" },
+	signinNoReplace: { property: "outcomeIndependentOfAddress" },
+	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
+	signinDeleteByCookie: { property: "noCrossAddressEffect" },
+	signinEntryByCookie: { property: "noCrossAddressEffect" },
 };
 
 // verification/music-playback.qnt: one playthrough's playback events delivered by a retrying player to concurrent handlers
@@ -61,6 +90,7 @@ export const musicMutants = {
 	musicNoRetry: { property: "sameEventNeverConflicts" },
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
+
 
 // verification/brief-board.qnt: the living brief's board, where late and overlapping replies from the interpreting model
 // meet the visitor's own changes (src/lib/brief-board.ts). Module name -> the property its change must break.
@@ -75,9 +105,73 @@ export const boardMutants = {
 	boardApplyPaused: { property: "pausedHolds" },
 };
 
+// verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
+// name -> the property its change must break.
+export const inquiryMutants = {
+	inquiryNoIndex: { property: "oneBriefPerId" },
+	inquiryNoRetry: { property: "loserNeverFailed" },
+	inquiryLoserGivesBack: { property: "loserKeepsAllowance" },
+	inquiryRetryGivesBack: { property: "keptForStored" },
+	inquiryNeverCounts: { property: "keptForStored" },
+	inquiryAnyAddress: { property: "strangerNeverSeesBrief" },
+	inquiryCopyForAll: { property: "oneCopyPerId" },
+};
+
+// verification/suggestion-budget.qnt: the daily suggestion budget reserved by concurrent requests
+// (src/server/brief-suggest-store.ts `reserve`). Module name -> the property its change must break.
+export const budgetMutants = {
+	budgetUnguardedVisitor: { property: "visitorWithinCap" },
+	budgetUnguardedSite: { property: "siteWithinCap" },
+	budgetReadThenWrite: { property: "countsAreReservations" },
+	budgetIgnoreRefusal: { property: "modelOnlyForReserved" },
+};
+
+// verification/publication-journal.qnt: one project's journal when several deliveries of envelopes reach the Worker at once
+// (src/server/flows/publication-commit.ts). Module name -> the property its change must break.
+export const publicationMutants = {
+	publicationNoRevisionKey: { property: "oneRowPerRevision" },
+	publicationAnyRevision: { property: "contiguousFromOne" },
+	publicationNoWithdrawnRule: { property: "entryNeverResurrected" },
+	publicationNoNewEntryRule: { property: "onePublishPerEntry" },
+	publicationNoTargetRule: { property: "correctionHasTarget" },
+	publicationNoRetry: { property: "retryNeverConflicts" },
+	publicationSplitRead: { property: "retryNeverConflicts" },
+};
+
+// verification/agreement-link.qnt: the archive link's issue (cooldown, executed lookup, the guarded batch) and its single
+// redeem before expiry (src/server/flows/agreement-link.ts, src/lib/agreement-access.ts completeAgreementLink). Module name
+// -> the property its change must break.
+export const agreementLinkMutants = {
+	agreementLinkNoGuard: { property: "oneIssuePerWindow" },
+	agreementLinkSplitGuard: { property: "oneIssuePerWindow" },
+	agreementLinkNoLookup: { property: "issuedOnlyWithAgreement" },
+	agreementLinkRedeemNoGuard: { property: "redeemedOnce" },
+	agreementLinkRedeemNoExpiry: { property: "redeemedUnexpired" },
+	agreementLinkNoCas: { property: "oneCooldownPerWindow" },
+	agreementLinkRetryNewCool: { property: "lostCooldownNeverTakes" },
+	agreementLinkRetryNewAt: { property: "lostGuardNeverStores" },
+};
+
+// verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
+// (src/server/flows/brief-copy.ts). Module name -> the property its change must break.
+export const briefCopyMutants = {
+	briefCopyNoCas: { property: "claimsEligible" },
+	briefCopyCasSkipsOpen: { property: "closedNeverClaimed" },
+	briefCopyCasSkipsAttempt: { property: "uncertainHeld" },
+	briefCopyCasSkipsAddress: { property: "claimsEligible" },
+	briefCopyNoHold: { property: "uncertainHeld" },
+	briefCopyNoConfirm: { property: "uncertainHeld" },
+	briefCopyResendSent: { property: "sentNeverResent" },
+	briefCopyPublicAgain: { property: "publicOnlyFirst" },
+	briefCopyIgnoreClosed: { property: "closedNeverClaimed" },
+	briefCopyNoClaim: { property: "everySendClaimed" },
+	briefCopyFinalUnguarded: { property: "finalOnlyOwn" },
+};
+
 // Every model the driver runs: the file, the modules that must keep every property, the mutants, the equivalent
-// mutants, the modules for the manual Apalache search, and how many random runs each check makes. The discount model's
-// steps are slower to evaluate, so it makes fewer runs; every mutant of it is found well inside that number.
+// mutants, the modules for the manual Apalache search, how many random runs each check makes, and how many steps each run
+// takes (20 unless the model says). The discount model's steps are slower to evaluate, so it makes fewer runs; every
+// mutant of it is found well inside that number.
 export const models = [
 	{
 		file: "verification/invoice-events.qnt",
@@ -89,11 +183,38 @@ export const models = [
 	},
 	{
 		file: "verification/discount-offers.qnt",
+		// The code, with F10's fix (the decline's second batch refuses while an offer is draft or sent).
 		current: ["discount"],
 		mutants: discountMutants,
-		equivalents: [],
+		// The decline's second batch without its sending guard (G5): since F10's fix it refuses nothing more, because a live
+		// link always has a sent offer, which the fix refuses. The live-link check as it was before F9's fix (counted only for
+		// an accepted email): a failed email ends within one tick and every step that closes a link waits two, so the model
+		// never reaches a link closed during a failed email (docs/verification.md, "The discount-offers model").
+		equivalents: [
+			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
+		],
 		exhaustive: ["discount"],
-		samples: "10000",
+		// A send and a decline are three steps each and the sending window takes two clock ticks, so the deepest mutant
+		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
+		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
+		// about 25. At 50 steps, seed 0x1, the mutant is found in about 1,300 runs and the witness's state is reached in
+		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check allows 20,000 and each run that
+		// must pass makes 10,000.
+		steps: "50",
+		samples: "20000",
+		passSamples: "10000",
+	},
+	{
+		file: "verification/signin-codes.qnt",
+		current: ["signin"],
+		mutants: signinMutants,
+		equivalents: [],
+		exhaustive: [],
+		// Its rarest mutant takes about 6,000 random runs to find (the rest a few hundred), so each mutant check allows 12,000; the
+		// run that must pass makes 8,000, which costs about 8 s of one core.
+		samples: "12000",
+		passSamples: "8000",
 	},
 	{
 		file: "verification/music-playback.qnt",
@@ -104,11 +225,54 @@ export const models = [
 		samples: "20000",
 	},
 	{
+
 		file: "verification/brief-board.qnt",
 		current: ["board"],
 		mutants: boardMutants,
 		equivalents: [],
 		exhaustive: ["board"],
 		samples: "20000",
+	},
+	{
+		file: "verification/software-inquiry.qnt",
+		current: ["inquiry"],
+		mutants: inquiryMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
+	},
+	{
+		file: "verification/suggestion-budget.qnt",
+		current: ["budget"],
+		mutants: budgetMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
+		// The run that must pass makes every sample (about 2 s per 6,000); each mutant is found within a few hundred.
+		passSamples: "8000",
+	},
+	{
+		file: "verification/publication-journal.qnt",
+		current: ["publication"],
+		mutants: publicationMutants,
+		equivalents: [],
+		exhaustive: ["publication"],
+		samples: "20000",
+	},
+	{
+		file: "verification/agreement-link.qnt",
+		current: ["agreementLink"],
+		mutants: agreementLinkMutants,
+		equivalents: [],
+		exhaustive: ["agreementLink"],
+		samples: "20000",
+	},
+	{
+		file: "verification/brief-copy.qnt",
+		current: ["briefCopy"],
+		mutants: briefCopyMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "100000",
 	},
 ];

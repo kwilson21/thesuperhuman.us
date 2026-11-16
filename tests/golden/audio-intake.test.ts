@@ -38,12 +38,13 @@ import {
 //   503 "Sending is unavailable"        no MUSIC_DB, no Turnstile secret, no RATE_LIMIT (after validation, so a bad
 //                                       body with a missing binding is still 400)
 //   429 attempt limit                   10 attempts per address, a stored count that is not a number
-//   403 Turnstile                       refused, 5xx, network down, malformed answer, success as text
+//   403 Turnstile                       refused, success as text (a parsed answer without success === true)
 //   429 request limit                   second send from one address; the attempt counter still rose
-//   503 storage failed                  insert batch throws, read-back throws (row stays stored);
-//                                       the request counter is cleared; the urgent alert goes out (200, 5xx, network
-//                                       down, no key, no sender, no owner address) or the delete throws first
-//   503 "temporarily unavailable"       the outer catch: KV read, KV write or KV delete throws
+//   500 storage failed                  insert batch throws (no read-back follows it); the request counter is cleared,
+//                                       and the urgent alert goes out (200, 5xx, network down, no key, no sender, no
+//                                       owner address) even when clearing the counter throws too
+//   503 "temporarily unavailable"       the captcha service cannot answer (network down, timeout, non-2xx, unreadable)
+//   500 "temporarily unavailable"       the outer catch: KV read, KV write or KV delete throws
 //   200 { ok: true }                    all four services, both directions, unicode, markup characters
 //
 //   effects after the 200
@@ -392,6 +393,11 @@ const cases: Case[] = [
 	single("Turnstile answers an error status", good, {
 		fetches: outside(json(500, { success: true })),
 	}),
+	single("Turnstile reports a malformed request", good, {
+		fetches: outside(
+			json(200, { success: false, "error-codes": ["bad-request"] }),
+		),
+	}),
 	single("Turnstile answers unreadable text", good, {
 		fetches: outside(text(200, "<html>")),
 	}),
@@ -425,11 +431,7 @@ const cases: Case[] = [
 		...fails(/INSERT INTO owner_requests/),
 		kv: { RATE_LIMIT: { fails: ["delete"] } },
 	}),
-	single(
-		"the read-back after the insert fails (the row stays stored)",
-		good,
-		fails(/SELECT id,kind,release_id,service_id/),
-	),
+	single("the stored request is answered without reading it back", good),
 	// Control characters swell a stored request six times (each is "\u0001" in JSON). They are refused where the form is
 	// checked, so they never reach storage and never raise the urgent alert.
 	single(
@@ -573,13 +575,6 @@ const cases: Case[] = [
 		steps: [send(good), send(good)],
 		fetches: allGood,
 		...fails(/INSERT INTO owner_requests/),
-		final: FINAL,
-	},
-	{
-		name: "a read-back failure, then the same visitor retries (two rows)",
-		steps: [send(good), send(good)],
-		fetches: allGood,
-		...fails(/SELECT id,kind,release_id,service_id/),
 		final: FINAL,
 	},
 	{

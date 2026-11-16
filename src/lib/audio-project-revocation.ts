@@ -1,3 +1,5 @@
+import { deleteRetiredCodes } from "./audio-client-access";
+
 export async function revokeProjectAccess(
 	db: D1Database,
 	requestId: string,
@@ -19,7 +21,7 @@ export async function revokeProjectAccess(
       WHERE p.request_id=? AND p.access_revocation_id=?)`)
 			.bind(at, requestId, revocationId),
 		db
-			.prepare(`DELETE FROM audio_client_codes WHERE email=(
+			.prepare(`DELETE FROM audio_client_signin_codes WHERE email=(
       SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
       WHERE p.request_id=? AND p.access_revocation_id=?)`)
 			.bind(requestId, revocationId),
@@ -28,6 +30,8 @@ export async function revokeProjectAccess(
       SELECT request_id,'revoked',?,? FROM audio_projects WHERE request_id=? AND access_revocation_id=?`)
 			.bind(actor, at, requestId, revocationId),
 	]);
+
+	if (changed.results.length > 0) await deleteRetiredCodes(db, requestId);
 
 	return changed.results.length > 0;
 }

@@ -6,13 +6,19 @@ import {
 	propertiesWithoutMutant,
 } from "../../scripts/lib/quint-run.mjs";
 import {
+	agreementLinkMutants,
 	boardMutants,
+	briefCopyMutants,
+	budgetMutants,
 	discountMutants,
+	inquiryMutants,
 	musicMutants,
+	publicationMutants,
 	equivalents,
 	exhaustive,
 	models,
 	mutants,
+	signinMutants,
 } from "../../scripts/lib/quint-mutants.mjs";
 
 // Outputs captured from `quint run` 0.33.1.
@@ -168,18 +174,38 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(5);
+		expect(properties.length).toBeGreaterThanOrEqual(7);
 		expect(propertiesWithoutMutant(properties, discountMutants)).toEqual([]);
 	});
 
-	it("every mutant names a module in the model, and every module is listed", () => {
+	it("every mutant and equivalent names a module in the model, and every module is listed", () => {
 		const modules = [
 			...model.matchAll(/^module (\w+) \{ import discountOffers/gm),
 		].map((match) => match[1]);
 
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(discountMutants), "discount"].sort(),
+			[
+				...Object.keys(discountMutants),
+				...models[1].equivalents,
+				"discount",
+			].sort(),
 		);
+	});
+
+	it("checks the code, with F10's and F9's fixes, keeping every property, with two equivalent mutants", () => {
+		expect(models[1].current).toEqual(["discount"]);
+		expect(models[1].exhaustive).toEqual(["discount"]);
+		expect(models[1].equivalents).toEqual([
+			"discountSecondBatchNoSendingGuard",
+			"discountAcceptedOnlyCheck",
+		]);
+		expect(Object.keys(discountMutants)).not.toContain(
+			"discountSecondBatchNoSendingGuard",
+		);
+		// The second batch as it was before the fix stays a mutant, so CI reproduces F10 on every run.
+		expect(discountMutants.discountTodaySecondBatch).toEqual({
+			property: "declinedHasNoOffer",
+		});
 	});
 
 	it("every mutant property is one of allProperties", () => {
@@ -189,6 +215,35 @@ describe("the mutants of verification/discount-offers.qnt", () => {
 			discountMutants,
 		))
 			expect(properties).toContain(property);
+	});
+});
+
+describe("the mutants of verification/signin-codes.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/signin-codes.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(13);
+		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
+
+		for (const { property } of Object.values<{ property: string }>(
+			signinMutants,
+		))
+			expect(properties).toContain(property);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import signinCodes/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(signinMutants), "signin"].sort(),
+		);
 	});
 });
 
@@ -258,17 +313,205 @@ describe("the brief board model's mutant registry", () => {
 	});
 });
 
+describe("the mutants of verification/software-inquiry.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/software-inquiry.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(6);
+		expect(propertiesWithoutMutant(properties, inquiryMutants)).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import softwareInquiry/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(inquiryMutants), "inquiry"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			inquiryMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the mutants of verification/suggestion-budget.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/suggestion-budget.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(4);
+		expect(propertiesWithoutMutant(properties, budgetMutants)).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import suggestionBudget/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(budgetMutants), "budget"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			budgetMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the mutants of verification/publication-journal.qnt", () => {
+	const model = readFileSync(
+		new URL("../../verification/publication-journal.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties.length).toBeGreaterThanOrEqual(6);
+		expect(propertiesWithoutMutant(properties, publicationMutants)).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import publicationJournal/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(publicationMutants), "publication"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			publicationMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the agreement link model", () => {
+	const model = readFileSync(
+		new URL("../../verification/agreement-link.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(7);
+		expect(propertiesWithoutMutant(properties, agreementLinkMutants)).toEqual(
+			[],
+		);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import agreementLinkProtocol/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(agreementLinkMutants), "agreementLink"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			agreementLinkMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the brief copy model", () => {
+	const model = readFileSync(
+		new URL("../../verification/brief-copy.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(7);
+		expect(propertiesWithoutMutant(properties, briefCopyMutants)).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import briefCopyClaim/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[...Object.keys(briefCopyMutants), "briefCopy"].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			briefCopyMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
 describe("the models the driver runs", () => {
-	it("lists the four models, each with its own registry", () => {
+	it("lists the ten models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
+			"verification/signin-codes.qnt",
 			"verification/music-playback.qnt",
 			"verification/brief-board.qnt",
+			"verification/software-inquiry.qnt",
+			"verification/suggestion-budget.qnt",
+			"verification/publication-journal.qnt",
+			"verification/agreement-link.qnt",
+			"verification/brief-copy.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
 		expect(models[1].mutants).toBe(discountMutants);
-		expect(models[2].mutants).toBe(musicMutants);
-		expect(models[3].mutants).toBe(boardMutants);
+		expect(models[2].mutants).toBe(signinMutants);
+		expect(models[3].mutants).toBe(musicMutants);
+		expect(models[4].mutants).toBe(boardMutants);
+		expect(models[5].mutants).toBe(inquiryMutants);
+		expect(models[6].mutants).toBe(budgetMutants);
+		expect(models[7].mutants).toBe(publicationMutants);
+		expect(models[8].mutants).toBe(agreementLinkMutants);
+		expect(models[9].mutants).toBe(briefCopyMutants);
+	});
+
+	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
+		models.forEach((model: { steps?: string }) =>
+			expect(model.steps ?? "20").toMatch(/^[1-9]\d*$/),
+		);
+
+		// The discount model's send and decline are three steps each, so its deepest witness needs about 50.
+		expect(models[1].steps).toBe("50");
 	});
 });
