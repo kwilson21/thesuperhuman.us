@@ -377,7 +377,7 @@ drops the guard and the retry).
 | M4 | UPDATE `audio_projects` revoked WHERE EXISTS the stopped decision, in the stop batch (messages.ts:192) | (d) | (c), in the same batch as M3, and keeping its link: the `EXISTS` of the stopped decision row this request just wrote, as today (not a comparison of `revoked_at` with this request's `now`, which two requests in the same millisecond share) |
 | M5 | INSERT audit `client-stopped` WHERE EXISTS the stopped decision (messages.ts:197) | (d) | (b): written in the stop batch with M4, keeping its link as today: the `EXISTS` of the stopped decision row, which keys on the request, `review_decision='stopped'` and `created_at` equal to this request's `now`. Two stops by the same client in the same millisecond therefore both write a `client-stopped` audit row while the loser answers 409; that is today's behaviour and is kept |
 | M6 | SELECT the rate count (messages.ts:259) | (a), after a refused write | (a), in the read batch and again after a refused write; 429 beats every other refusal after the lookup (section 2) |
-| M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b) |
+| M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b): the rule `markRead` reads the message's actor and `read_at` first; the write keeps its key, the actor and `read_at IS NULL` |
 | M8 | UPDATE the client's read mark WHERE EXISTS(session, project, request) (messages.ts:292) | (d) | (c): the session and access conditions stay as the write's guard (`token_hash`, session not revoked and not expired, project open, request not withdrawn), plus `read_at IS NULL`; the rule `markRead` reads first. The corpus case "read when the session is revoked after the lookup" fires its hook before this statement and records `read_at` null, so an unguarded write would set it |
 | U1 | INSERT a progress note WHERE stage and access (updates.ts) | (d) | (c) |
 | U2, U3, U4 | accept: UPDATE the project (`files_under_review`, `updated_at`, open, request reviewed), INSERT the update, INSERT the audit by `changes()=1` (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b): each insert keeps its link to the guarded update as today, `changes()=1` for the update row and for the audit (as FR4 keeps its link). A comparison of the project's `updated_at` with this request's `now` is not used: two accepts in the same millisecond with the same due date would both match it and both write rows while one answers 409 |
@@ -596,7 +596,11 @@ is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId` (Z
    commits that contain fixture files only. It merged before the conversion.
 3. The conversion, as a stack of three layers, each converting whole routes, standing alone and neutral against the layer
    below (`golden:neutral --all <below> <tip>` prints NEUTRAL, D1 statements changing only):
-   1. `claude/effect-15-audio-projects-messages` (from `main`): the owner and studio messages routes. It creates the
+   0. `claude/golden-sqlite-sequence` (from `main`): the golden corpus rule that a `sqlite_sequence` row at 0 is no state
+      (a counter row at 0 and no row give the same next id), every golden fixture re-recorded under it, and the proof
+      `scripts/golden-sequence-proof.mjs` that the re-record changed only digests. It is the bottom of the stack, so the
+      layers above compare against fixtures recorded under one rule.
+   1. `claude/effect-15-audio-projects-messages` (from `claude/golden-sqlite-sequence`): the owner and studio messages routes. It creates the
       area's store file `src/server/audio-project-store.ts`, the answers module `src/lib/audio-project-answers.ts`, the
       input readers in `src/server/audio-project-input.ts` with their frozen copies and differential tests, and the rules
       and flows for messages, read marks, responses and the rate window. It deletes the five writers of

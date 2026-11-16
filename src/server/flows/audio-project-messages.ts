@@ -26,7 +26,6 @@ import {
 	answerReview,
 	answerText,
 	CLIENT_MESSAGE_LIMIT,
-	CLIENT_MESSAGE_WINDOW_MS,
 	ClientRateLimited,
 	clientLookup,
 	MessageNotAccepted,
@@ -37,11 +36,15 @@ import {
 	ProjectHidden,
 	ReviewNotAnswerable,
 	sendText,
+	windowStart,
 } from "../rules/audio-project-messages";
 import { openStudioSession } from "../rules/agreement-session";
 
-const windowStart = (at: Date) =>
-	new Date(at.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
+/** A write's time, its window and so its session guard, taken from the clock at the write and not at the lookup. */
+const stamped = <Write extends { at: string; windowStart: string }>(
+	write: Write,
+	at: Date,
+): Write => ({ ...write, at: at.toISOString(), windowStart: windowStart(at) });
 
 /** The owner's project, read in one batch: a missing one is a hidden 404. */
 const ownerFacts = (id: string) =>
@@ -153,10 +156,15 @@ export const sendClientMessage = (input: {
 			{ project: seen.project, count },
 		);
 
-		const saved = yield* insertClientMessage(input.id, seen.tokenHash, write);
+		// The write reads the clock again, as the old write did: its session guard and its window use that reading.
+		const saved = yield* insertClientMessage(
+			input.id,
+			seen.tokenHash,
+			stamped(write, input.now()),
+		);
 
 		return yield* saved === null
-			? recount(input.id, seen.at, new MessageNotAccepted())
+			? recount(input.id, input.now(), new MessageNotAccepted())
 			: Effect.succeed(saved);
 	});
 
@@ -190,13 +198,15 @@ export const answerLatestReview = (input: {
 		);
 
 		// Stopping closes this project's access in the same write, so the review stops playing.
+		const written = stamped(write, input.now());
+
 		const saved =
-			write.decision === "stopped"
-				? yield* insertStoppingDecision(input.id, seen.tokenHash, write)
-				: yield* insertDecision(input.id, seen.tokenHash, write);
+			written.decision === "stopped"
+				? yield* insertStoppingDecision(input.id, seen.tokenHash, written)
+				: yield* insertDecision(input.id, seen.tokenHash, written);
 
 		return yield* saved === null
-			? recount(input.id, seen.at, new ReviewNotAnswerable())
+			? recount(input.id, input.now(), new ReviewNotAnswerable())
 			: Effect.succeed(saved);
 	});
 
