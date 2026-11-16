@@ -99,20 +99,17 @@ files; a test checks those literals against `global.css`.
   takes a large radius without an owner decision.
   On invitation pages the panel holds one "Get in touch" button, the footer links and the
   LLC line. On quiet pages it holds the name mark, the footer links and the LLC line.
-- Every Get in touch button and link goes to the switchboard at `/contact` (November 15
-  decision, below). Home's contact section keeps its horizon and ends on its own Get in
-  touch button, so Home's closing panel stays quiet.
-- Every public page with the shared footer is an invitation page except Home (above) and
-  the pages Get in touch leads to, which are quiet: the switchboard and the two intake forms. Privacy, the
-  404 and the audio pages became invitation pages on November 16 (decision below).
-- Pinned contact button: the only element fixed over page content. On invitation pages
-  and on Home, at 600px wide and below, a full-width Get in touch pill stays at the bottom
-  of the screen. It steps aside while the closing panel, Home's contact section or another
-  filled button in the page (Home's "Start a project" and its three Work with me doors, the
-  404's "Back to home", the audio pages' "Start your song") is on screen, so it is never a
-  second filled button on the screen. A page's own button and the closing panel's can still
-  share a screen near the end of a page. It also hides while the phone menu is open or a form field has focus, appears
-  and goes without motion, and never shows above 600px, in print or without JavaScript.
+- Every Get in touch button and link goes to the switchboard at `/contact`.
+  Home keeps its horizon and contact copy; its bottom button lives in the shared footer.
+- Every public page with the shared footer is an invitation page except the contact
+  switchboard and the two intake forms, which are quiet. Private task pages remain quiet.
+- Pinned contact button: the only element fixed over page content. On invitation pages,
+  at 600px wide and below, a full-width Get in touch pill stays at the bottom of the
+  screen through all sections, including other filled buttons. It steps aside when the
+  shared footer enters view and returns when the footer leaves. It also hides while
+  the phone menu is open or a form field has focus. The contact handoff uses a brief
+  token-timed fade with a 4px settle only when reduced motion is not requested,
+  and never shows above 600px, in print or without JavaScript.
 - The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
   hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
   jack. Each line is a plain link to the form that fits; the three project lines open the
@@ -329,3 +326,38 @@ and an amendment here first.
 `src/styles/global.css` (Tailwind v4 `@theme` plus `:root`) is the source of truth.
 Do not write `tokens.css`, DTCG or shadcn exports, or append them here. Another
 project copies the tokens from `global.css` and writes its own `design.md`.
+
+### Mobile contact consistency (November 16, 2026)
+
+Kazon corrected the pinned button's section-by-section disappearance: “The get in touch
+button should be at the bottom of the page and sticky on all pages that make sense on
+mobile then disappear when we get to the footer”. This supersedes the earlier builder
+choice to step aside for every filled button. Invitation pages keep the pinned action
+throughout their content, hiding it only when the shared footer enters view (also while
+the mobile menu or a focused form field needs the space). Home's horizon and invitation
+copy remain, but its bottom Get in touch button is now in the same footer as other pages.
+The new contact switchboard, its message form, software/song intakes and private task
+pages remain quiet; they are already performing the action and must not link back to
+themselves as a competing sticky CTA.
+
+
+### Contact handoff refinement (November 16, 2026)
+The owner requested a Hallmark audit and a smoother, consistently sized mobile
+handoff. Both contact links share the same mobile horizontal bounds and arrow;
+the footer panel and page composition remain unchanged. Use the existing hover
+arrow nudge, not a perpetual pulse, bounce, shimmer or attention loop. Hidden
+pinned contact becomes inert immediately. Reduced motion keeps the handoff instant.
+
+
+### Continuous contact docking, revised after owner preview
+The owner rejected the fade/settle swap after watching it in both directions.
+Use one visible phone action: fixed at the bottom until it meets its exact footer
+slot, then scroll-bound to that slot. Reverse at that same point. The footer
+fallback reserves geometry and becomes inert while proxied. Do not fade, scale,
+or slide the button independently of scrolling. Only the floating background
+wash may fade away; reduced motion makes that wash change instantly. Keep the
+aligned widths, locked typography, colors and pill shape.
+
+The owner approved the continuous docking preview but requested a narrower pill.
+Cap both phone versions at 15rem, centered; allow smaller screens to constrain
+them equally. Keep the existing 52px minimum height and text reflow.
