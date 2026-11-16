@@ -27,6 +27,8 @@ module audioProjectNotices {
   //   "claim-no-status"   the claim does not compare the status, so two deliveries that read `pending` both claim it
   //   "claim-no-open"     the invitation's claim does not compare that the project is still open
   //   "queue-any-status"  the rule lets a retry move a notice that was sent
+  //   "queue-no-cas"      the retry's write does not compare the status it read, so a delivery that claimed the notice between the
+  //                       retry's read and its write is overwritten and a second email can go out
   //   "uncertain-sent"    an uncertain outcome is written as sent
   //   "uncertain-failed"  an uncertain outcome is written as failed
   //   "lookup-no-open"    the recipient read does not filter on the project's access, so a closed project has a recipient (the
@@ -50,6 +52,9 @@ module audioProjectNotices {
   var runs: int -> Run
 
   val RUNS = 1.to(3)
+  // Key 4 of `runs` is the owner's retry: phase "none", "write" (read, about to write) or "done"; its snap is what it read.
+  val RETRY = 4
+  val KEYS = 1.to(4)
   val EPOCHS = 0.to(2)
   val noSnap = { status: "pending", open: true }
 
@@ -69,7 +74,7 @@ module audioProjectNotices {
     epoch' = 0,
     mailed' = EPOCHS.mapBy(e => 0),
     clock' = 0, attempt' = 0, closedAt' = 0,
-    runs' = RUNS.mapBy(r => { phase: "none", snap: noSnap, outcome: "none" }),
+    runs' = KEYS.mapBy(r => { phase: "none", snap: noSnap, outcome: "none" }),
   }
 
   // A delivery begins: it reads the status and whether the project is open, and the rule decides.
@@ -141,22 +146,34 @@ module audioProjectNotices {
     }
   }
 
-  // The owner's retry: a failed or pending notice, or one stuck in `sending` that the owner confirms was not sent (truthfully:
-  // no email went out and no delivery is still working), goes back to pending, while the facts it read still hold.
-  action queue = {
+  // The owner's retry is two steps, as the code is: a read and the rule, then a write that compares the status the read saw (and the
+  // project's access) again. A failed or pending notice, or one stuck in `sending` that the owner confirms was not sent (truthfully: no
+  // email went out and no delivery is still working), goes back to pending.
+  action queueRead = {
     val confirmedNotSent = status == "sending" and mailed.get(epoch) == 0 and not(RUNS.exists(r => alive(runs.get(r).phase)))
     val movable = status == "failed" or status == "pending" or confirmedNotSent or (MUTANT == "queue-any-status" and status == "sent")
     all {
+      runs.get(RETRY).phase == "none",
       movable,
       epoch < 2,
-      // The read and the write are one step here: the retry's compare-and-set (status and access equal to what it read)
-      // holds trivially in one step.
       open,
-      status' = "pending", open' = open,
-      epoch' = epoch + 1,
-      mailed' = mailed,
-      clock' = clock, attempt' = 0, closedAt' = closedAt,
-      runs' = runs,
+      status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
+      runs' = runs.set(RETRY, { phase: "write", snap: { status: status, open: open }, outcome: "none" }),
+    }
+  }
+
+  action queueWrite = {
+    val h = runs.get(RETRY)
+    all {
+      h.phase == "write",
+      if ((MUTANT == "queue-no-cas" or status == h.snap.status) and open) all {
+        status' = "pending", open' = open, epoch' = epoch + 1, mailed' = mailed,
+        clock' = clock, attempt' = 0, closedAt' = closedAt,
+        runs' = runs.set(RETRY, { ...h, phase: "done" }),
+      } else all {
+        status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
+        runs' = runs.set(RETRY, { ...h, phase: "done" }),
+      },
     }
   }
 
@@ -169,7 +186,7 @@ module audioProjectNotices {
     runs' = runs,
   }
 
-  action step = any { begin, claim, lookup, send, finish, queue, closes }
+  action step = any { begin, claim, lookup, send, finish, queueRead, queueWrite, closes }
 
   // ---- Properties (each reads the stored state and the world) ------------------------------------------------------
   // 1. However the owner queues the notice, at most one email goes out in all: two deliveries never both claim it, and a notice
@@ -211,3 +228,4 @@ module projectNoticesQueueAnyStatus { import audioProjectNotices(MUTANT = "queue
 module projectNoticesUncertainSent { import audioProjectNotices(MUTANT = "uncertain-sent", KIND = "invitation").* }
 module projectNoticesUncertainFailed { import audioProjectNotices(MUTANT = "uncertain-failed", KIND = "invitation").* }
 module projectNoticesUpdateLookupNoOpen { import audioProjectNotices(MUTANT = "lookup-no-open", KIND = "update").* }
+module projectNoticesQueueNoCas { import audioProjectNotices(MUTANT = "queue-no-cas", KIND = "invitation").* }

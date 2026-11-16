@@ -149,6 +149,8 @@ export const audioProjectMessagesMutants = {
 	projectMessagesNoAccess: { property: "writtenForOpenAccess" },
 	projectMessagesNoStage: { property: "answeredInReviewStage" },
 	projectMessagesStopSplit: { property: "stopClosesAccess" },
+	projectMessagesSendNoStage: { property: "plainMessageBeforeCompletion" },
+	projectMessagesNoWithdrawn: { property: "noMessageAfterWithdrawal" },
 };
 
 // verification/audio-project-files.qnt: an audio project's uploads, publishes, revokes and completion, while access closes, the
@@ -182,6 +184,7 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUncertainSent: { property: "sentMeansMailed" },
 	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
+	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
