@@ -1,6 +1,6 @@
 import type { APIContext } from "astro";
 import { it, expect, vi } from "vitest";
-import { publicationOAuthRoute } from "~/lib/publication/oauth";
+import { publicationOAuthRoute } from "~/server/publication-oauth";
 import { double, partial, fakeKv } from "../helpers/doubles";
 import { readJson } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";

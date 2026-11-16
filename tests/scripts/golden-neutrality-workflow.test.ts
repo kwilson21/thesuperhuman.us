@@ -299,14 +299,65 @@ describe("golden-neutrality.yml", () => {
 	});
 });
 
+/** Match only the complete test command, and stop before another step or job. */
+function validationTestStep(source: string): string {
+	const lines = source.split("\n");
+
+	const start = lines.findIndex((line) =>
+		/^      - run: pnpm test(?: --shard=(?:[1-9]\d*|\$\{\{ matrix\.shard \}\})\/[1-9]\d*)?$/.test(
+			line,
+		),
+	);
+
+	if (start < 0) return "";
+	const following = lines.slice(start + 1);
+	const end = following.findIndex((line) => /^ {0,6}\S/.test(line));
+
+	return [lines[start], ...following.slice(0, end < 0 ? undefined : end)].join(
+		"\n",
+	);
+}
+
 describe("validate.yml", () => {
-	const testStep = validate.slice(validate.indexOf("      - run: pnpm test\n"));
-
 	it("runs the golden harness's self-checks in the test step", () => {
-		const env = testStep.slice(0, testStep.indexOf("\n      - ", 10));
+		const testStep = validationTestStep(validate);
+		expect(testStep).not.toBe("");
+		expect(testStep).toContain('GOLDEN_VERIFY_DIGESTS: "1"');
+		expect(testStep).toContain('GOLDEN_VERIFY_COUNTS: "1"');
+	});
 
-		expect(env).toContain('GOLDEN_VERIFY_DIGESTS: "1"');
-		expect(env).toContain('GOLDEN_VERIFY_COUNTS: "1"');
+	it.each([
+		"pnpm test",
+		"pnpm test --shard=2/6",
+		"pnpm test --shard=${{ matrix.shard }}/6",
+	])(
+		"recognizes the complete command %s without reading another step's flags",
+		(command) => {
+			const source = `      - run: ${command}\n        env:\n          GOLDEN_VERIFY_DIGESTS: "1"\n      - run: other\n        env:\n          GOLDEN_VERIFY_COUNTS: "1"`;
+			const step = validationTestStep(source);
+			expect(step).toContain('GOLDEN_VERIFY_DIGESTS: "1"');
+			expect(step).not.toContain("GOLDEN_VERIFY_COUNTS");
+		},
+	);
+
+	it("does not borrow flags from another job or recognize a test-like command", () => {
+		const otherJob =
+			'      - run: pnpm test --shard=1/6\n  build:\n    env:\n      GOLDEN_VERIFY_COUNTS: "1"';
+
+		expect(validationTestStep(otherJob)).not.toContain("GOLDEN_VERIFY_COUNTS");
+
+		for (const command of [
+			"pnpm test:watch",
+			"pnpm test || true",
+			"echo pnpm test",
+			"pnpm test --shard=0/6",
+			"pnpm test --shard=1/6 --exclude=tests/golden",
+		])
+			expect(
+				validationTestStep(
+					`      - run: ${command}\n        env:\n          GOLDEN_VERIFY_COUNTS: "1"`,
+				),
+			).toBe("");
 	});
 
 	it("is unchanged by the label: it still runs on pull requests (default types) and on pushes to main only", () => {

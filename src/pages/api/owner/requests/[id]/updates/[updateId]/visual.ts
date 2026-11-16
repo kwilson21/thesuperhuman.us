@@ -1,11 +1,8 @@
 import type { APIRoute } from "astro";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { readBodyWithin } from "~/lib/audio-project-uploads";
-import {
-	softwareAudit,
-	softwareGuard,
-	openSoftwareGuard,
-} from "~/lib/software-projects";
+import { openSoftwareGuard } from "~/lib/software-projects";
+import { softwareAudit, softwareGuard } from "~/lib/software-guard";
 import {
 	softwareVisualLimit,
 	softwareVisualTypes,

@@ -17,6 +17,7 @@ import {
 	request,
 	revokedLink,
 	running,
+	secondsFromNow,
 	sent,
 	unreachable,
 	withOffers,
@@ -51,18 +52,35 @@ import type { JsonValue } from "../helpers/json";
 //   409 "An offer is still being sent..."    a live offer link created in the last 20 seconds (20 seconds exactly and a
 //            revoked link do not count); also from the first batch's guard or the second batch's guard in a race
 //   409 generic "...changed or could not be saved..."  the first batch fails a guard (updated_at, status or email moved; a
-//            signed or executed agreement exists; a deposit invoice opened; an audio project exists) or throws
+//            signed or executed agreement exists; a deposit invoice opened; an audio project exists)
 //   409 project started     the project appears before the first batch or the second batch
-//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain), or not
-//            configured (no key, sender or owner address). The first batch has already run: offers withdrawn, link
-//            revoked, signing retired, updated_at moved; the request is not resolved and no audit row says "declined"
-//   409 "The client email was sent, but..."  the second batch fails a guard or throws after the email
+//   500 {ok:false,message:"The change could not be saved. Please try again."}  a store that fails before the email: the
+//            first read, the project pre-check, the deposit read, the sending read, the first batch (an outage, not a
+//            guard), or a lookup after a refused first batch. Nothing is emailed
+//   500 {ok:false,message:"The email was sent, but saving failed. Reload before you try again."}  the read of the
+//            request's draft and sent offers after the email fails, the second batch throws (an outage, not a guard), or a
+//            lookup after a refused second batch fails
+//   502 {ok:false,uncertain,message}  the client's email refused (not uncertain), answered 5xx or lost (uncertain). The
+//            first batch has already run: offers withdrawn, link revoked, signing retired, updated_at moved; the request is
+//            not resolved and no audit row says "declined"
+//   503 {ok:false,message:"Email isn’t configured. Check RESEND_API_KEY, CONTACT_FROM_EMAIL and OWNER_EMAIL. Nothing was
+//            sent or saved."}  mail not configured (no Resend key, sender or owner address), checked after the refusals
+//            and before the first batch: nothing withdrawn or emailed
+//   409 "The client email was sent, but..."  the second batch fails a guard after the email; or (F10) a draft or sent
+//            offer of the request is found after the email, by the read before the second batch or, when it is saved after
+//            that read, by the batch's guard. Both are answered by the lookups after a refused second batch, so a sent
+//            offer whose link is under 20 seconds old answers "An offer is still being sent..." as the batch's sending
+//            guard does
 //   200 {ok:true,copySent}  both emails sent; the copy refused, answered 5xx or lost (copySent false)
+//   logged   every 500 of a failed store above also logs one console.error line (the route, the error's name and
+//            message), and its answer never carries the error's text
 //   effects: reads (the project pre-check, the open deposit invoices, the sending window), the first batch (signed-agreement
 //   guard, request guard, sending guard, deposit guard, audio guard, no-project guard, withdraw offers, four
 //   signing-retirement statements, revoke links, update updated_at, audit "offer-link-revoked"), Resend POST for the
-//   client and one for the owner's copy, the second batch (request guard at the new time, no-project guard, sending guard,
-//   audio guard, resolve, audit "declined"), and after a rolled-back batch the lookups that choose the 409.
+//   client and one for the owner's copy, the read of the request's draft and sent offers, the second batch (request guard
+//   at the new time, no-project guard, sending guard, audio guard, no-offer-left guard, resolve, audit "declined"), and
+//   after a batch that a guard refused, or an offer found by that read, the lookups that choose the 409 (a batch that
+//   throws for another reason is answered at once, with no lookup).
 
 const decline = (text: JsonValue = "Not a fit right now."): JsonValue => ({
 	action: "decline",
@@ -104,6 +122,38 @@ const signing = (status: string, over: SeedRow = {}) => ({
 const movedUpdatedAt = running(
 	"UPDATE owner_requests SET updated_at='2026-11-13T11:30:00.000Z'",
 );
+
+// F10 (docs/plans/2026-11-offers-conversion.md, section 5): the owner saves a draft, or saves and sends one, in another
+// tab while the decline's email is in flight. The first statement the route makes after the email is the read of the
+// request's draft and sent offers that F10's fix added (before the fix, when these cases were first recorded, it was the
+// second batch), so the pattern names both, and a hook on it runs while the email is in flight.
+const afterTheEmail =
+	/UPDATE owner_requests SET status='resolved'|^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/;
+
+/** A draft the owner saves (version 2, after the first batch withdrew version 1). */
+const savingDraft = inserting(
+	"software_offers",
+	offer("draft", 2, { created_at: NOW, updated_at: NOW }),
+);
+
+/**
+ * A draft the owner saves and sends (version 2), with its live link made `ago` seconds before the frozen clock. The clock
+ * does not move during the email, so a link made when a 20-second email began is written 20 seconds before it: the
+ * boundary the model found, where the second batch's sending guard (created_at > now less 20 seconds) passes.
+ */
+const savingAndSending = (ago: number) => {
+	const at = secondsFromNow(-ago);
+
+	return (sqlite: { exec: (sql: string) => void }) => {
+		inserting(
+			"software_offers",
+			offer("sent", 2, { created_at: at, updated_at: at, sent_at: at }),
+		)(sqlite);
+		running(
+			`UPDATE software_offer_links SET token_hash='hash-r1-v2',created_at='${at}',revoked_at=NULL`,
+		)(sqlite);
+	};
+};
 
 const cases: Case[] = [
 	// who and what
@@ -453,6 +503,47 @@ const cases: Case[] = [
 			},
 		],
 	}),
+	// F10: an offer saved while the email is sent
+	declineCase("a draft is saved while the email is sent", sentSeed(), {
+		interleave: [
+			{ on: afterTheEmail, label: "the owner saves a draft", run: savingDraft },
+		],
+	}),
+	declineCase(
+		"a draft is saved and sent while the email is sent, its link made 20 seconds before",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: afterTheEmail,
+					label: "the owner saves and sends a draft",
+					run: savingAndSending(20),
+				},
+			],
+		},
+	),
+	declineCase(
+		"a draft is saved and sent while the email is sent, its link made a moment ago",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: afterTheEmail,
+					label: "the owner saves and sends a draft",
+					run: savingAndSending(0),
+				},
+			],
+		},
+	),
+	declineCase("a draft is saved just before the second batch", sentSeed(), {
+		interleave: [
+			{
+				on: /UPDATE owner_requests SET status='resolved'/,
+				label: "the owner saves a draft",
+				run: savingDraft,
+			},
+		],
+	}),
 	// outages
 	declineCase("the first read fails", sentSeed(), {
 		failures: [
@@ -466,7 +557,10 @@ const cases: Case[] = [
 	}),
 	declineCase("the deposit read fails", sentSeed(), {
 		failures: [
-			{ on: /SELECT i\.status FROM software_invoices/, message: "D1 is down" },
+			{
+				on: /SELECT i\.status,o\.status AS offer_status FROM software_invoices/,
+				message: "D1 is down",
+			},
 		],
 	}),
 	declineCase("the sending read fails", sentSeed(), {
@@ -490,6 +584,14 @@ const cases: Case[] = [
 			},
 		],
 	}),
+	declineCase("the offers read after the email fails", sentSeed(), {
+		failures: [
+			{
+				on: /^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/,
+				message: "D1 is down",
+			},
+		],
+	}),
 	declineCase(
 		"the second batch fails and so does the project lookup after it",
 		sentSeed(),
@@ -503,6 +605,13 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_projects/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger: "d1 failure on /^SELECT 1 FROM software_projects/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the project lookup after it is never made",
 				},
 			],
 		},
@@ -520,6 +629,54 @@ const cases: Case[] = [
 					on: /^SELECT 1 FROM software_offer_links/,
 					nth: 2,
 					message: "D1 is down again",
+				},
+			],
+			mustNotFire: [
+				{
+					trigger:
+						"d1 failure on /^SELECT 1 FROM software_offer_links/ (match 2)",
+					reason:
+						"a control: the failure before it is a store failure, which answers 500 at once, so the sending lookup after it is never made",
+				},
+			],
+		},
+	),
+	declineCase(
+		"the first batch is refused by a race and the sending lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE software_offers SET status='withdrawn'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_offer_links/,
+					nth: 2,
+					message: "D1 is down",
+				},
+			],
+		},
+	),
+	declineCase(
+		"the second batch is refused by a race and the project lookup after it fails",
+		sentSeed(),
+		{
+			interleave: [
+				{
+					on: /UPDATE owner_requests SET status='resolved'/,
+					label: "another change moves updated_at",
+					run: movedUpdatedAt,
+				},
+			],
+			failures: [
+				{
+					on: /^SELECT 1 FROM software_projects/,
+					nth: 2,
+					message: "D1 is down",
 				},
 			],
 		},

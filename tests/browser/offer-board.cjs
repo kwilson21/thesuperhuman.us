@@ -362,8 +362,8 @@ function check(name, ok, detail = "") {
 				/pricing-values-status/.test(
 					(await contingency.getAttribute("aria-describedby")) ?? "",
 				) &&
-				(await page.evaluate(
-					() => document.activeElement?.getAttribute("name"),
+				(await page.evaluate(() =>
+					document.activeElement?.getAttribute("name"),
 				)) === "contingencyPercent" &&
 				/whole number from 0 to 100/.test(
 					await values.locator("[data-pricing-status]").textContent(),
@@ -473,9 +473,8 @@ function check(name, ok, detail = "") {
 		check(
 			"text typed while a save is on its way is kept, said, and still counts as unsaved",
 			(await dayField.inputValue()) === `${sentDay}9` &&
-				(await dayField.evaluate(
-					(element) => element.defaultValue,
-				)) === sentDay &&
+				(await dayField.evaluate((element) => element.defaultValue)) ===
+					sentDay &&
 				/You changed it since/.test(
 					await values.locator("[data-pricing-status]").textContent(),
 				),
@@ -557,7 +556,7 @@ function check(name, ok, detail = "") {
 			),
 		);
 		check(
-			"a box emptied while a clear was on its way gets only \"Research cleared.\"",
+			'a box emptied while a clear was on its way gets only "Research cleared."',
 			(await page
 				.locator('[data-part="market"] [data-pricing-status]')
 				.textContent()) === "Research cleared.",
@@ -637,7 +636,10 @@ function check(name, ok, detail = "") {
 		await page.keyboard.type("150");
 		await page.keyboard.press("Enter");
 
-		const busySaid = await values.locator("[data-pricing-status]").textContent();
+		const busySaid = await values
+			.locator("[data-pricing-status]")
+			.textContent();
+
 		const busyMarked = await contingency.getAttribute("aria-invalid");
 
 		await page.waitForFunction(() =>
@@ -778,7 +780,9 @@ function check(name, ok, detail = "") {
 			force: true,
 		});
 
-		const busyLine = await values.locator("[data-pricing-status]").textContent();
+		const busyLine = await values
+			.locator("[data-pricing-status]")
+			.textContent();
 
 		await page.waitForFunction(() =>
 			/^Saved/.test(

@@ -1165,7 +1165,9 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 	 */
 	const revealUnlessMouse = (element: HTMLElement, event?: Event) => {
 		const byMouse =
-			event instanceof MouseEvent && event.detail > 0 && lastPointer === "mouse";
+			event instanceof MouseEvent &&
+			event.detail > 0 &&
+			lastPointer === "mouse";
 
 		if (!byMouse) element.scrollIntoView({ block: "nearest" });
 	};
