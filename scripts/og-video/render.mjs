@@ -187,6 +187,18 @@ async function renderIn(browser, key, attempt) {
 			),
 		);
 
+		// Animated text can begin hidden: fonts.ready alone does not request its face.
+		await Promise.all(
+			texts.map((element) => {
+				const style = getComputedStyle(element);
+
+				return document.fonts.load(
+					`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,
+					element.textContent,
+				);
+			}),
+		);
+
 		const families = [
 			...new Set(
 				texts.map((element) =>

@@ -29,7 +29,7 @@ module linkPreviewsProtocol {
     published' = published, badTree' = badTree, lostUpdate' = lostUpdate } }
   val renderedTreeMatches = not(badTree)
   val newerCommitPreserved = not(lostUpdate)
-  val allProperties = renderedTreeMatches and newerCommitPreserved
+  val allProperties = and { renderedTreeMatches, newerCommitPreserved }
 }
 module linkPreviewsCurrent { import linkPreviewsProtocol(MUTANT="none").* }
 module linkPreviewsMovingCheckout { import linkPreviewsProtocol(MUTANT="moving-checkout").* }

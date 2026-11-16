@@ -6,7 +6,7 @@ Branch: `claude/screenshot-render-races`
 Pull request: #280
 Target: production `https://thesuperhuman.us`
 Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: `82e61315dc007e358eb427f0acd05014750dc51d`, the revision of `main` this branch was last merged with when this record was written. If `main` moves before the merge, the rollback point is the merge commit's first parent, and to undo only this change, revert the merge commit.
+Rollback revision: `85cf0d3984fdfc1b270be394356a9bf5fec8a0b4`, the revision of `main` immediately before this PR merged as `9eecc5e2` (its first parent). To undo only this change, revert the merge commit `9eecc5e2`. When this record was first written the rollback point was `82e61315`, which is older and must not be used.
 
 ## Scope
 
@@ -62,7 +62,7 @@ Local runs: macOS arm64, Node 26.13.1, on head `c0bca2c9` (the branch merged wit
 ### Reviews
 
 - Three independent review rounds of the pull request. The first two found code and wording items, all fixed. The third found the code clean and asked for two wording corrections, in the README and the pull request description, both applied.
-- Greptile and Codex had not reviewed when this record was written: UNVERIFIED.
+- Codex's code review and security review of `c0bca2c9` found no issues (observed on GitHub, 2026-11-14). The final head `38a5d8d6` differs from it only by this record. Greptile left no review on this pull request.
 
 ## Checklist
 
@@ -95,11 +95,11 @@ Local runs: macOS arm64, Node 26.13.1, on head `c0bca2c9` (the branch merged wit
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits.
-- PASS, 7.2 Exact diff review: all changes under `scripts/screenshots/`, `tests/scripts/` or this record; no change under `src/`. Independent reviews (see Reviews). Greptile and Codex reviews of the final head: UNVERIFIED when written.
+- PASS, 7.2 Exact diff review: all changes under `scripts/screenshots/`, `tests/scripts/` or this record; no change under `src/`. Independent reviews (see Reviews). Codex found no issues on `c0bca2c9`; Greptile did not review (see Reviews).
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: none changed.
 - PASS, 7.4 Rollback version preserved: see Rollback revision above.
-- UNVERIFIED, 7.5 After authorized deployment: not merged when this record was written.
-- PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes. Verified in CI: yes for the checks and the capture job; no for a run-to-run image comparison. Deployed: no. Verified live: no (nothing about the served site changes).
+- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-16 01:23:59 UTC as `9eecc5e2`. Observed afterwards: the Cloudflare production build for that commit succeeded (01:30 UTC), `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` answered 200, and the first Screenshots run on `main` with this change, 43786042621, succeeded. None of the journeys, sitemap, robots, metadata, missing page, forms or monitoring was rechecked; the change is CI tooling and nothing about the served site changed.
+- PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes. Verified in CI: yes for the checks and the capture job; no for a run-to-run image comparison. Deployed: yes (merged 2026-11-16 01:23:59 UTC as `9eecc5e2`; production build succeeded). Verified live: both hosts answered 200; nothing about the served site changes.
 
 ### 8. Private owner center
 
@@ -113,8 +113,11 @@ Local runs: macOS arm64, Node 26.13.1, on head `c0bca2c9` (the branch merged wit
 
 ## Delivery status
 
-Implemented: yes. Verified locally: yes. Verified in CI: checks and capture job yes, image comparison no. Deployed: no. Verified live: no.
+- Before merge, on the final head `38a5d8d6` (observed on GitHub): `validate`, `capture`, `neutrality` and the Cloudflare build succeeded.
+- Merged 2026-11-16 01:23:59 UTC as `9eecc5e2` by the repository owner's account. The Cloudflare production build for that commit succeeded and both hosts answered 200.
 
-This record does not by itself authorize deployment. Merging to `main` deploys production and needs the owner's authorization.
+Implemented: yes. Verified locally: yes. Verified in CI: checks and capture job yes, image comparison no. Deployed: yes. Verified live: hosts answer; no page change to check.
+
+This record does not by itself authorize deployment.
 
 Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.

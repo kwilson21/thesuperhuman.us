@@ -172,6 +172,28 @@ Audio notes become optional so empty prose is not required to publish a recordin
   printed. Each photo needs an asset review record; the home, about and audio
   link previews follow.
 
+- Migrate the site from Astro 5 to Astro 7 with the matching Cloudflare adapter.
+  This is proposed maintenance and is not scheduled. It requires a migration,
+  not just a dependency bump. The current grouped dependency PR #231 is a
+  migration placeholder, not a release-ready upgrade. Plan and verify:
+  - Replace `Astro.locals.runtime` access to env, cf, caches and context with
+    the adapter's supported APIs across pages, API routes, middleware,
+    libraries and tests. Recount the affected files when work begins.
+  - Verify local development, tests and screenshot scenarios against the
+    Workers runtime and the proposed adapter rather than assuming Node mocks
+    cover runtime behavior.
+  - Preserve the site's existing Tailwind 4 and Vite integration, and compare
+    every changed page visually. The earlier Tailwind 3 migration choice is
+    no longer outstanding.
+  - Review the Worker entrypoint in `wrangler.jsonc`, image service defaults,
+    sitemap integration and Astro checker pairing.
+
+  Deliver reviewable steps following the website deployment gate in
+  `AGENTS.md`: release record, current-head independent review, green CI and
+  production health checks. No database migration is expected; verify that
+  against the implementation. UI changes need screenshots. TypeScript 7
+  remains deferred until the Astro checker supports it and can follow this work.
+
 ## Implementation sequence
 
 1. **Foundations and Home prototype.** Reuse the current palette and type; build

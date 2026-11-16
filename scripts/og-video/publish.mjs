@@ -5,7 +5,11 @@
 //
 // Env: INCOMING (the artifact), TARGET (the pull request checkout), SHEETS_OUT (checked contact
 // sheets), PR_NUMBER, RUN_ID. Writes scenes=<names> to $GITHUB_OUTPUT. Node built-ins only.
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import {
+	mkdtempSync,
 	appendFileSync,
 	copyFileSync,
 	existsSync,
@@ -20,6 +24,12 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withFiles, withNote } from "./record.mjs";
 import { siteTokens } from "./site-tokens.mjs";
+
+const TRUSTED_SCENES = new Set(
+	readdirSync(new URL("./scenes/", import.meta.url))
+		.filter((name) => name.endsWith(".html"))
+		.map((name) => name.slice(0, -5)),
+);
 
 const MB = 1024 * 1024;
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -65,6 +75,14 @@ export function check(path, bytes) {
 		return "is not an MP4 file";
 
 	if (
+		!kind.json &&
+		!kind.css &&
+		createHash("sha256").update(bytes).digest("hex").slice(0, 10) !==
+			path.match(/-([0-9a-f]{10})\./)?.[1]
+	)
+		return "does not match its content hash";
+
+	if (
 		kind.css &&
 		!bytes
 			.toString("utf8")
@@ -94,6 +112,25 @@ export function check(path, bytes) {
 				!/^\/og\/[a-z0-9-]+-[0-9a-f]{10}\.mp4$/.test(entry?.video)
 			)
 				return `has unexpected files for ${scene}`;
+
+			if (
+				entry.width !== 1200 ||
+				entry.height !== 630 ||
+				!Number.isSafeInteger(entry.durationMs) ||
+				entry.durationMs < 100 ||
+				entry.durationMs > 30000 ||
+				!Number.isSafeInteger(entry.imageBytes) ||
+				entry.imageBytes < 1 ||
+				entry.imageBytes > 600 * 1024 ||
+				!Number.isSafeInteger(entry.videoBytes) ||
+				entry.videoBytes < 1 ||
+				entry.videoBytes > 2.5 * MB ||
+				![entry.frames, entry.source, entry.encoding].every((value) =>
+					/^[0-9a-f]{16}$/.test(value ?? ""),
+				) ||
+				(entry.renderer !== undefined && !/^[0-9a-f]{16}$/.test(entry.renderer))
+			)
+				return `has invalid metadata for ${scene}`;
 
 			if (
 				!Array.isArray(entry.inputs) ||
@@ -140,13 +177,52 @@ export function safePath(root, path) {
 	return current;
 }
 
-export function applyArtifact({
-	INCOMING,
-	TARGET,
-	SHEETS_OUT,
-	PR_NUMBER,
-	RUN_ID,
-}) {
+export function deriveSheet(video, durationMs, image) {
+	const directory = mkdtempSync(join(tmpdir(), "trusted-preview-"));
+
+	try {
+		const output = join(directory, "sheet.png");
+		execFileSync(
+			"ffmpeg",
+			[
+				"-v",
+				"error",
+				"-nostdin",
+				"-protocol_whitelist",
+				"file",
+				"-i",
+				video,
+				"-protocol_whitelist",
+				"file",
+				"-i",
+				image,
+				"-an",
+				"-sn",
+				"-dn",
+				"-filter_complex",
+				`[0:v]fps=12/${durationMs / 1000},scale=400:210,tile=3x4[frames];[1:v]scale=1200:630[poster];[poster][frames]vstack=inputs=2`,
+				"-frames:v",
+				"1",
+				output,
+			],
+			{
+				timeout: 30000,
+				maxBuffer: 1024 * 1024,
+				env: { PATH: process.env.PATH },
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		);
+
+		return readFileSync(output);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+export function applyArtifact(
+	{ INCOMING, TARGET, SHEETS_OUT, PR_NUMBER, RUN_ID },
+	makeSheet = deriveSheet,
+) {
 	if (
 		!INCOMING ||
 		!TARGET ||
@@ -164,11 +240,13 @@ export function applyArtifact({
 
 	if (
 		!scenes.length ||
+		scenes.length > 32 ||
 		new Set(scenes).size !== scenes.length ||
 		!scenes.every(
 			(scene) =>
 				typeof scene === "string" &&
 				SCENE.test(scene) &&
+				TRUSTED_SCENES.has(scene) &&
 				existsSync(safePath(TARGET, `scripts/og-video/scenes/${scene}.html`)),
 		)
 	)
@@ -281,15 +359,32 @@ export function applyArtifact({
 	)
 		throw new Error("Tokens differ from site styles");
 
-	// Contact sheets are mandatory. Fail before any write if one is absent or invalid.
+	// Never trust PR-rendered review pixels: derive sheets from the exact accepted video bytes.
+	let sheetBytes = 0;
+
 	const sheets = scenes.map((scene) => {
-		const bytes = readFileSync(safePath(INCOMING, `sheets/${scene}-sheet.png`));
+		const entry = after[scene];
+
+		if (!entry) throw new Error("Missing scene metadata");
+		const video = mediaPaths(entry)[1];
+
+		const bytes = makeSheet(
+			safePath(files.includes(video) ? filesDir : TARGET, video),
+			entry.durationMs,
+			safePath(
+				files.includes(mediaPaths(entry)[0]) ? filesDir : TARGET,
+				mediaPaths(entry)[0],
+			),
+		);
+
+		sheetBytes += bytes.length;
 
 		if (
-			bytes.length > 15 * MB ||
+			bytes.length > 2 * MB ||
+			sheetBytes > 32 * MB ||
 			!PNG.every((byte, index) => bytes[index] === byte)
 		)
-			throw new Error("Invalid contact sheet");
+			throw new Error("Invalid or excessive contact sheets");
 
 		return [scene, bytes];
 	});

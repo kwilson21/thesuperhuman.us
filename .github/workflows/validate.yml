@@ -2,15 +2,20 @@ name: Validate
 
 on:
   pull_request:
-  workflow_dispatch:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Immutable commit to validate without secrets (trusted workflow only)
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: validate-${{ github.workflow }}-${{ github.ref }}
+  group: validate-${{ github.workflow }}-${{ inputs.revision || github.ref }}
   cancel-in-progress: true
 
 # Independent checks run together; validate remains the required, fail-closed aggregate.
@@ -19,8 +24,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.revision || github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -35,8 +45,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.revision || github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -62,8 +77,13 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.revision || github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -95,8 +115,13 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6]
     steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.revision || github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -125,8 +150,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.revision || github.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -136,11 +166,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
         env:
-          PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
+          PUBLICIST_PRIVATE_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || '' }}
       - run: pnpm exec vitest run tests/architecture/client-bundle.test.ts
         env:
           REQUIRE_CLIENT_BUNDLE: "1"
   validate:
+    permissions:
+      statuses: write
     if: ${{ always() }}
     needs: [quality, contracts, quint, tests, build]
     runs-on: ubuntu-latest
@@ -152,3 +184,14 @@ jobs:
         run: |
           # A failed, cancelled or skipped dependency is not a pass. No output is interpolated into shell code.
           jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"
+      - name: Report trusted validation on published commit
+        if: ${{ always() && inputs.revision != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ inputs.revision }}
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          state=failure
+          if jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"; then state=success; fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$REVISION" -f "state=$state" -f context=validate -f description="Trusted secretless validation" -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

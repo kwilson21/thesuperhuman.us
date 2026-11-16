@@ -13,6 +13,7 @@ on:
 
 permissions:
   actions: write
+  statuses: write
   contents: write
   pull-requests: write
 
@@ -66,7 +67,9 @@ jobs:
           SHEETS_OUT: sheets
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-        run: node scripts/og-video/publish.mjs
+        run: |
+          if ! command -v ffmpeg >/dev/null; then sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg; fi
+          node scripts/og-video/publish.mjs
       - name: Commit to the pull request
         if: steps.pr.outputs.number
         id: commit
@@ -84,7 +87,8 @@ jobs:
           # A push that lost a race with a newer commit fails here; that commit gets its own run.
           git push origin "HEAD:refs/heads/$BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          gh workflow run validate.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$(git rev-parse HEAD)" -f state=pending -f context=validate -f description="Waiting for trusted secretless validation"
+          gh workflow run validate.yml --repo "$GITHUB_REPOSITORY" --ref main -f "revision=$(git rev-parse HEAD)"
       - name: Publish the contact sheets
         if: steps.commit.outputs.sha
         id: sheets

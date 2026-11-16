@@ -4,8 +4,8 @@
      at the page's size, the introduction small and muted, and the studio art. Software: the
      camera dives into the monitor and the dark screen world opens from its glass to the frame
      (src/pages/index.astro .world-screen), where "Currently building" and its two real project
-     captures rise in and hold. Sound: the SignalEdge waveform carries the viewer back to paper
-     and the headphones give off rings (StudioLife). Things worth exploring: the notebook sketch
+     captures rise in and hold. Sound: the SignalEdge waveform, Old News's as on Home, carries the
+     viewer back to paper and the headphones give off rings (StudioLife). Things worth exploring: the notebook sketch
      redraws and its sun returns. 7 s, above the 6 s default, because it has three acts and the
      project cards need a readable hold. Copy is verbatim from Hero.astro, index.astro and
      src/data/project-stories/{tally,kaillera-next}.ts. -->
@@ -100,7 +100,10 @@
 <script>
   const { play, ease } = og;
 
-  // home-motion.ts, pasted as-is: seeded rows of code bars and the sung-phrase waveform.
+  // home-motion.ts, pasted as-is: seeded rows of code bars and the waveform frame.
+  // The edge's peaks as Home draws them: the newest released song, Old News, resampled to 110 bars
+  // (src/lib/latest-song.ts, resamplePeaks in home-motion.ts; the data-peaks of the live page's signal edge).
+  const songPeaks = [0.326,0.321,0.345,0.289,0.389,0.295,0.385,0.844,0.874,0.287,0.878,0.884,0.865,0.344,0.81,0.874,0.446,0.306,0.947,0.908,0.438,0.842,0.924,0.83,0.349,1,0.942,0.475,0.908,0.891,0.92,0.336,0.854,0.93,0.826,0.396,0.774,0.342,0.377,0.309,0.348,0.382,0.339,0.368,0.843,0.861,0.257,0.964,0.906,0.395,0.814,0.879,0.889,0.307,0.864,0.865,0.851,0.397,0.879,0.908,0.455,0.331,0.966,0.872,0.371,0.879,0.876,0.827,0.307,0.988,0.913,0.475,0.928,0.812,0.372,0.349,0.335,0.389,0.341,0.351,0.488,0.861,0.45,0.279,0.882,0.85,0.324,0.868,0.886,0.786,0.342,0.97,0.874,0.443,0.833,0.789,0.272,0.296,0.092,0.359,0.301,0.382,0.37,0.316,0.314,0.145,0.339,0.326,0.438,0.257];
   const clamp01 = v => Math.min(1, Math.max(0, v));
   function seeded(seed) { let s = seed >>> 0; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 2 ** 32; }; }
   function codeRows(count, seed = 3, tones = 5) {
@@ -110,15 +113,6 @@
       indent = step < 0.3 ? Math.min(indent + 1, 4) : step < 0.55 ? Math.max(indent - 1, 0) : indent;
       const segments = Array.from({ length: 1 + Math.floor(r() * 4) }, () => ({ width: 4 + Math.floor(r() * 14), tone: Math.floor(r() * tones) }));
       return { indent, segments };
-    });
-  }
-  function waveformPeaks(count, seed = 7) {
-    const r = seeded(seed);
-    return Array.from({ length: count }, (_, i) => {
-      const x = count > 1 ? i / (count - 1) : 0.5;
-      const taper = Math.sin(Math.PI * x) ** 0.7;
-      const swells = 0.62 + 0.38 * Math.sin(Math.PI * (x * 4 - 0.35));
-      return clamp01(taper * swells * (0.42 + 0.58 * r()));
     });
   }
   const signalFrame = (peaks, p) => { const level = Math.sin(Math.PI * clamp01(p)); return peaks.map((pk, i) => pk * level * (0.78 + 0.22 * Math.sin(i * 0.55 - p * 16))); };
@@ -143,7 +137,7 @@
   // SignalEdge with the 70px mid line: the dark band, its paper peaks as holes (even-odd), and the dark peaks below.
   // The band starts 8px inside the panel and runs 4px past each side: the panel's antialiased bottom corners
   // otherwise leave a light dot at the frame edge while the panel moves.
-  const h = signalFrame(waveformPeaks(110), 0.5), lay = { width: 1200, mid: 70, depth: 70 };
+  const h = signalFrame(songPeaks, 0.5), lay = { width: 1200, mid: 70, depth: 70 };
   document.querySelector('.edge path').setAttribute('d', `M-4 -8H1204V70H-4Z${barsPath(h, { ...lay, direction: 'up' })}${barsPath(h, { ...lay, direction: 'down' })}`);
 
   // Act 1, software (600-1400): the camera pushes into the monitor while the screen world opens

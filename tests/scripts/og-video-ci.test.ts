@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { siteTokens } from "../../scripts/og-video/site-tokens.mjs";
@@ -7,6 +8,20 @@ import { check } from "../../scripts/og-video/publish.mjs";
 const PNG = Buffer.from([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13,
 ]);
+
+const hash = (bytes: Buffer) =>
+	createHash("sha256").update(bytes).digest("hex").slice(0, 10);
+
+const metadata = {
+	width: 1200,
+	height: 630,
+	durationMs: 6000,
+	imageBytes: 12,
+	videoBytes: 12,
+	frames: "0123456789abcdef",
+	source: "0123456789abcdef",
+	encoding: "0123456789abcdef",
+};
 
 describe("link-preview site tokens", () => {
 	it("match src/styles/global.css (run node scripts/og-video/site-tokens.mjs)", () => {
@@ -52,10 +67,10 @@ describe("link-preview asset record", () => {
 
 describe("link-preview publish checks", () => {
 	it("accepts preview media at their paths", () => {
-		expect(check("public/og/home-0123456789.png", PNG)).toBeNull();
+		expect(check(`public/og/home-${hash(PNG)}.png`, PNG)).toBeNull();
 		expect(
 			check(
-				"public/og/raw/home-0123456789.mp4",
+				`public/og/raw/home-${hash(Buffer.from("\0\0\0\x20ftypisom"))}.mp4`,
 				Buffer.from("\0\0\0\x20ftypisom"),
 			),
 		).toBeNull();
@@ -71,6 +86,7 @@ describe("link-preview publish checks", () => {
 
 	it("refuses a manifest with unexpected files or inputs", () => {
 		const entry = {
+			...metadata,
 			image: "/og/home-0123456789.png",
 			video: "/og/home-0123456789.mp4",
 			inputs: ["scripts/og-video/kit.css"],
@@ -144,6 +160,7 @@ function fixture() {
 	};
 
 	const entry = (scene: string) => ({
+		...metadata,
 		image: `/og/${scene}-0123456789.png`,
 		video: `/og/${scene}-0123456789.mp4`,
 		inputs: [],
@@ -175,13 +192,16 @@ function fixture() {
 	put(incoming, "sheets/home-sheet.png", PNG);
 
 	const apply = () =>
-		applyArtifact({
-			INCOMING: incoming,
-			TARGET: target,
-			SHEETS_OUT: join(root, "sheets"),
-			PR_NUMBER: "213",
-			RUN_ID: "1",
-		});
+		applyArtifact(
+			{
+				INCOMING: incoming,
+				TARGET: target,
+				SHEETS_OUT: join(root, "sheets"),
+				PR_NUMBER: "213",
+				RUN_ID: "1",
+			},
+			() => PNG,
+		);
 
 	return { root, target, incoming, put, manifest, apply };
 }
@@ -223,18 +243,18 @@ describe("trusted publisher boundaries", () => {
 		const f = fixture();
 
 		try {
-			f.put(f.incoming, "files/public/og/about-0123456789.png", PNG);
+			f.put(f.incoming, `files/public/og/about-${hash(PNG)}.png`, PNG);
 			expect(f.apply).toThrow(/Undeclared media/);
 		} finally {
 			rmSync(f.root, { recursive: true, force: true });
 		}
 	});
-	it("refuses missing contact sheets", () => {
+	it("ignores untrusted contact sheets", () => {
 		const f = fixture();
 
 		try {
 			rmSync(join(f.incoming, "sheets/home-sheet.png"));
-			expect(f.apply).toThrow();
+			expect(f.apply()).toEqual(["home"]);
 		} finally {
 			rmSync(f.root, { recursive: true, force: true });
 		}
@@ -245,8 +265,7 @@ describe("trusted publisher boundaries", () => {
 		try {
 			symlinkSync("/tmp/not-existing-preview-target", join(f.target, "danger"));
 			expect(() => safePath(f.target, "danger/file")).toThrow(/Symbolic/);
-			rmSync(join(f.incoming, "sheets"), { recursive: true });
-			symlinkSync("/tmp", join(f.incoming, "sheets"));
+			symlinkSync("/tmp", join(f.incoming, "files"));
 			expect(f.apply).toThrow(/Symbolic/);
 		} finally {
 			rmSync(f.root, { recursive: true, force: true });
@@ -298,4 +317,93 @@ describe("stale inputs and outputs", () => {
 			rmSync(f.root, { recursive: true, force: true });
 		}
 	});
+});
+
+it("pins rendering and publication to the same workflow head, never a moving branch", () => {
+	const render = readFileSync(".github/workflows/link-previews.yml", "utf8");
+
+	const publish = readFileSync(
+		".github/workflows/link-previews-publish.yml",
+		"utf8",
+	);
+
+	expect(render).toContain(
+		"ref: ${{ github.event.pull_request.head.sha || github.sha }}",
+	);
+	expect(publish).toContain("ref: ${{ github.event.workflow_run.head_sha }}");
+	expect(publish).not.toContain("ref: ${{ steps.pr.outputs.branch }}");
+	expect(publish).not.toContain("git push --force");
+});
+
+it("rejects immutable names whose bytes changed", () => {
+	expect(check("public/og/home-0123456789.png", PNG)).toMatch(/content hash/);
+});
+
+it("rejects invalid dimensions and duration on any scene", () => {
+	for (const invalid of [
+		{ width: 0 },
+		{ height: 0 },
+		{ durationMs: -1 },
+		{ videoBytes: 0 },
+	]) {
+		expect(
+			check(
+				"src/data/og-media.json",
+				Buffer.from(
+					JSON.stringify({
+						about: {
+							...metadata,
+							...invalid,
+							image: "/og/about-0123456789.png",
+							video: "/og/about-0123456789.mp4",
+							inputs: [],
+						},
+					}),
+				),
+			),
+		).toMatch(/metadata/);
+	}
+});
+
+it("rejects scenes absent from trusted inventory and oversized scene sets", () => {
+	const f = fixture();
+
+	try {
+		for (const scenes of [
+			["attacker-scene"],
+			Array.from({ length: 33 }, (_, i) => `scene-${i}`),
+		]) {
+			for (const scene of scenes)
+				f.put(f.target, `scripts/og-video/scenes/${scene}.html`, "scene");
+			f.put(
+				f.incoming,
+				"changes.json",
+				JSON.stringify({ scenes, deleted: [] }),
+			);
+			expect(f.apply).toThrow(/Invalid scenes/);
+		}
+	} finally {
+		rmSync(f.root, { recursive: true, force: true });
+	}
+});
+
+it("dispatches only trusted-main validation and withholds secrets from dispatched code", () => {
+	const publisher = readFileSync(
+		".github/workflows/link-previews-publish.yml",
+		"utf8",
+	);
+
+	const validation = readFileSync(".github/workflows/validate.yml", "utf8");
+	expect(publisher).toContain('--ref main -f "revision=$(git rev-parse HEAD)"');
+	expect(publisher).not.toContain('--ref "$BRANCH"');
+	expect(validation).toContain(
+		"github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || ''",
+	);
+	expect(
+		validation.match(/ref: \$\{\{ inputs.revision \|\| github.sha \}\}/g),
+	).toHaveLength(5);
+	const reporter = validation.split("  validate:\n")[1];
+	expect(reporter).toContain("statuses: write");
+	expect(reporter).not.toContain("actions/checkout");
+	expect(reporter).toContain("statuses/$REVISION");
 });
