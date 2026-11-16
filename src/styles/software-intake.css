@@ -39,6 +39,8 @@
 .software-intake .brief-examples{list-style:none;margin:.75rem 0 0;padding:0;max-width:calc(var(--measure-prose) * .9);font-size:.9rem;line-height:1.5}
 .software-intake .brief-examples li{padding:.6rem 0;border-top:1px solid var(--rule)}
 .software-intake .brief-examples li:last-child{border-bottom:1px solid var(--rule)}
+/* A link that names a path skips the choice screen, so it stays out of sight until the script has moved past it; without scripting it shows, with the page's heading. */
+@media (scripting:enabled){#software-inquiry[data-linked-path]:not([data-ready]) [data-step="0"]{display:none}}
 
 /* The living brief (docs/plans/2026-11-living-brief.md). The board's height is bounded: its head stays put and its cards
    scroll inside .board-scroll, so however many cards arrive the page never grows with them. On a wide screen it is a

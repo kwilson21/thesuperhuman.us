@@ -184,13 +184,17 @@ export function setupSoftwareInquiry(
 	const storageKey = "software-brief-draft";
 	const sentKey = "software-brief-sent";
 	const requestedPath = new FormData(form).get("path");
+
+	// The path the link named, from the server. A browser that restores form state on reload can check
+	// a radio the link did not name, so the checked radio alone cannot tell a path link from a reload.
+	const linkedPath = form.dataset.linkedPath;
 	const answers: Record<string, string> = {};
 	let sentElsewhere = false;
 
 	const sentNotice =
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
 
-	let step = isSoftwarePath(requestedPath) ? 1 : 0,
+	let step = isSoftwarePath(linkedPath) ? 1 : 0,
 		submissionId = crypto.randomUUID();
 
 	const path = (): SoftwarePath => {
@@ -376,11 +380,12 @@ export function setupSoftwareInquiry(
 					);
 			}
 
+			// A link that names a path has already made the choice, so a draft saved on the choice screen resumes at the first question instead.
 			if (
 				validPath &&
 				(!requestedPath || requestedPath === stored.path) &&
 				Number.isInteger(saved.step) &&
-				saved.step >= 0 &&
+				saved.step >= (isSoftwarePath(linkedPath) ? 1 : 0) &&
 				saved.step <= last()
 			)
 				step = saved.step;
@@ -862,6 +867,8 @@ export function setupSoftwareInquiry(
 		attributeFilter: ["aria-invalid"],
 	});
 	showStep(step, false);
+	// The stylesheet keeps a linked brief's choice screen out of sight until now; Back can show it again.
+	form.dataset.ready = "";
 }
 
 const form = document.querySelector<HTMLFormElement>("#software-inquiry");
