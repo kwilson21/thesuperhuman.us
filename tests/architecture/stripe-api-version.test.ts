@@ -169,7 +169,10 @@ function verifyInventory(inputs: typeof sources, resolver = resolveModule) {
 
 				// Package imports maps can resolve an innocuous alias to the SDK.
 				if (resolved.names.some(isStripeModule))
-					expect(isStripeModule(moduleSpecifier)).toBe(true);
+					expect(
+						isStripeModule(moduleSpecifier),
+						"Stripe SDK package aliases are not allowed",
+					).toBe(true);
 
 				// Module imports are not public asset URLs. An unresolved local-looking
 				// path cannot silently leave the inventory (including Vite root paths).
@@ -673,14 +676,19 @@ it.each([
 			posix.join(root, "package.json"),
 			JSON.stringify({ imports: { "#payments-sdk": "stripe" } }),
 		);
-		const resolver = runtimeModuleResolver(root);
+		const fixtureResolver = runtimeModuleResolver(root);
+
+		const resolver: typeof resolveModule = (specifier, from) =>
+			specifier === "#payments-sdk"
+				? fixtureResolver(specifier, from)
+				: resolveModule(specifier, from);
 
 		expect(resolver("#payments-sdk", "src/unsafe.ts").names).toContain(
 			"stripe",
 		);
 		expect(() =>
 			verifyInventory([{ path: "src/unsafe.ts", text }, ...sources], resolver),
-		).toThrow();
+		).toThrow("Stripe SDK package aliases are not allowed");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

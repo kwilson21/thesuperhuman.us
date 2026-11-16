@@ -38,8 +38,16 @@ unchanged. Main integration includes #343, #346, #348 and #349.
   direct REST transports, including constants, URL/Request constructors and
   template prefixes and literal-only concatenation/template folding. Package
   imports-map names are inspected as well as resolved files. Arbitrarily assembled
-  runtime destinations are not proven
-  safe by this syntax check.
+  runtime destinations are not proven safe by this syntax check. Known static
+  limitations: TypeScript `as`/`satisfies`/non-null wrappers are not folded;
+  percent-encoded or Unicode-dot URL hostnames are not canonicalized; npm package
+  aliases are not resolved to their installed package identity. These forms are
+  not part of the reviewed production Stripe integration. The current manifest
+  has no package imports map or npm aliases; the only runtime SDK imports are
+  the reviewed invoice factory and error classifier. No direct Stripe REST
+  transport was found. Introducing any alternative transport or package identity
+  requires a new contract review; this test is not proof that future code cannot
+  bypass the reviewed integration.
 - Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
   test-only entropy from application IDs and restores it after each case; the
   real SDK and fetch behavior still run. No recorded fixtures were rewritten.
