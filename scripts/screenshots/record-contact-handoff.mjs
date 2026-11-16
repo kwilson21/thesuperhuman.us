@@ -24,6 +24,7 @@ for(const [name,engine] of [["chromium",chromium],["webkit",webkit]]) {
   results.push({engine:name,width,geometry:data});
   await writeFile('handoff-recording/rapid-geometry.json',JSON.stringify(results,null,2));
   console.log(`${name} ${width}: ${JSON.stringify(data)}`);
+  assert.ok(data.every(x=>Math.abs(x.error)<1),`${name} ${width}: ${JSON.stringify(data)}`);
   await context.close();
  }
  await browser.close();

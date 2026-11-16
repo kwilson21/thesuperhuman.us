@@ -100,9 +100,15 @@ export function setupPinnedContact(): void {
 	if (typeof ResizeObserver !== "undefined") {
 		const resize = new ResizeObserver(schedule);
 		resize.observe(document.documentElement);
+		// Main can reflow without changing the root viewport box (notably WebKit).
+		const main = document.querySelector("main");
+		if (main) resize.observe(main);
 		resize.observe(footer);
 		resize.observe(pinned);
 	}
+
+	// Cold-font loads can move the footer without resizing the footer itself.
+	void document.fonts?.ready.then(schedule);
 
 	// Establish the initial state before paint, including restored scroll positions.
 	update();
