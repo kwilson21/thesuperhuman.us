@@ -194,6 +194,8 @@ export function setupOfferBoard() {
 		lastSendAt = 0,
 		lastSent = "",
 		hovering = false,
+		pressing = false,
+		lastFailure: string | null = null,
 		timer: ReturnType<typeof setTimeout> | undefined,
 		inFlight: AbortController | null = null,
 		latestN = 0,
@@ -264,6 +266,7 @@ export function setupOfferBoard() {
 	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
 	const interacting = () =>
 		hovering ||
+		pressing ||
 		cardsBox.contains(document.activeElement) ||
 		document.activeElement === heldButton ||
 		// A price row is redrawn when a reply applies, so focus on its buttons holds a reply too.
@@ -724,7 +727,7 @@ export function setupOfferBoard() {
 	 */
 	/**
 	 * What a price row's button did, shown in that row under the button (the board's status line is out of view there),
-	 * and announced. One such line at a time; redrawing the row removes it.
+	 * and announced. One such line at a time; it stays through a redraw of its row until the next price press.
 	 */
 	function sayPrice(text: string, from: HTMLElement) {
 		for (const old of document.querySelectorAll("[data-price-said]"))
@@ -1222,16 +1225,23 @@ export function setupOfferBoard() {
 
 		const added = `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`;
 
-		// A reply that waited while a newer request went out is not the board catching up with the draft.
-		const reading = inFlight !== null && reply.n < latestN;
+		// A reply that waited while a newer request went out is not the board catching up with the draft: the newer one is
+		// still out, or it failed, and its failure stays said.
+		const older = reply.n < latestN;
+		const failure = older && inFlight === null ? lastFailure : null;
 
-		const done = reading
-			? result.added
-				? `${added} Reading your latest changes…`
-				: "Reading your latest changes…"
-			: result.added
-				? `Up to date with your draft. ${added}`
-				: "Up to date with your draft.";
+		const done =
+			older && inFlight !== null
+				? result.added
+					? `${added} Reading your latest changes…`
+					: "Reading your latest changes…"
+				: failure
+					? result.added
+						? `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"} from an earlier request. ${failure}`
+						: failure
+					: result.added
+						? `Up to date with your draft. ${added}`
+						: "Up to date with your draft.";
 
 		// The reply to the page's last request says so: the board asks nothing more on this page.
 		const full = reply.last ? `${done} ${PAGE_LIMIT}` : done;
@@ -1242,7 +1252,11 @@ export function setupOfferBoard() {
 		else
 			sayOrHold(
 				full,
-				reply.last ? "Up to date. This page’s limit is reached." : done,
+				failure
+					? "No answer from the board just now."
+					: reply.last
+						? "Up to date. This page’s limit is reached."
+						: done,
 			);
 	}
 
@@ -1273,7 +1287,14 @@ export function setupOfferBoard() {
 					now === was &&
 					!sameDetail(details.get(id), detail)
 				);
-			}).length;
+			}).length +
+			(reply.sizing.size &&
+			document.activeElement?.closest(
+				"[data-price-day], [data-price-market]",
+			) &&
+			JSON.stringify(reply.sizing) !== JSON.stringify(sizing)
+				? 1
+				: 0);
 
 		if (changes > 0 && interacting()) {
 			const first = !held;
@@ -1315,18 +1336,35 @@ export function setupOfferBoard() {
 	const AI_FAILED =
 		"The AI couldn’t answer just now. Your draft is unchanged; press Suggest to try again.";
 
-	/** A request failed: the route's sentence or the page's own. `daily` is the owner's daily limit (a reload cannot help). */
-	function failed(text: string, daily = false) {
+	/**
+	 * A request failed, with the route's sentence or the page's own. Its kind decides the short form and the page's limit:
+	 * "retry" says to try again (the AI or the store failed, or requests crossed), "answer" is final (the request is
+	 * missing or closed, or the board is off here), "daily" is the owner's daily limit, "signin" a lapsed sign-in.
+	 */
+	function failed(text: string, kind: "retry" | "answer" | "daily" | "signin") {
 		autoAsk = false;
 
-		// Only the request on its way can fail, so at the page's limit it was the last: Suggest cannot try again, and the
-		// route's "try again" would contradict the reload the limit asks for. The daily limit keeps its own sentence.
-		const full =
-			requests < REQUESTS_PER_PAGE || daily
-				? text
-				: `The board’s last request on this page got no answer. ${PAGE_LIMIT}`;
+		// Only the request on its way can fail, so at the page's limit it was the last: a "try again" would contradict the
+		// reload the limit asks for. The other kinds keep their own sentence, which is right at the limit too.
+		const atLimit = requests >= REQUESTS_PER_PAGE && kind === "retry";
 
-		sayOrHold(full, "No answer from the board just now.");
+		const full = atLimit
+			? `The board’s last request on this page got no answer. ${PAGE_LIMIT}`
+			: text;
+
+		lastFailure = full;
+		sayOrHold(
+			full,
+			atLimit
+				? "No answer. This page’s limit is reached."
+				: kind === "retry"
+					? "The AI didn’t answer. Press Suggest to try again."
+					: kind === "daily"
+						? "Today’s limit is reached."
+						: kind === "signin"
+							? "Your sign-in may have lapsed. Reload the page."
+							: text,
+		);
 	}
 
 	async function ask(pressed = false) {
@@ -1339,6 +1377,7 @@ export function setupOfferBoard() {
 		const key = requestKey();
 		const [next, n] = sendRequest(board);
 		latestN = n;
+		lastFailure = null;
 		board = next;
 		const controller = new AbortController();
 		const stop = setTimeout(() => controller.abort(), TIMEOUT);
@@ -1373,7 +1412,15 @@ export function setupOfferBoard() {
 			if (!reply) {
 				const error = field(json, "error");
 
-				if (Predicate.isString(error)) failed(error, response.status === 429);
+				if (Predicate.isString(error))
+					failed(
+						error,
+						response.status === 429
+							? "daily"
+							: /try again/i.test(error)
+								? "retry"
+								: "answer",
+					);
 				else if (
 					json === null ||
 					response.status === 401 ||
@@ -1381,8 +1428,9 @@ export function setupOfferBoard() {
 				)
 					failed(
 						"The answer could not be read, perhaps because your sign-in lapsed. Your draft is unchanged; reload the page, then press Suggest.",
+						"signin",
 					);
-				else failed(AI_FAILED);
+				else failed(AI_FAILED, "retry");
 
 				return;
 			}
@@ -1416,7 +1464,7 @@ export function setupOfferBoard() {
 				last,
 			});
 		} catch {
-			failed(AI_FAILED);
+			failed(AI_FAILED, "retry");
 		} finally {
 			clearTimeout(stop);
 			inFlight = null;
@@ -1802,13 +1850,44 @@ export function setupOfferBoard() {
 		if (interacting()) return;
 
 		if (held) apply(held);
-		else if (pendingFull) say(pendingFull);
+		else if (pendingFull) {
+			const text = pendingFull;
+
+			// Already announced when it came; shown now, not announced twice.
+			pendingFull = null;
+			status.style.minHeight = "";
+			status.textContent = text;
+		}
 	};
 
 	cardsBox.addEventListener("pointerleave", () => {
 		hovering = false;
 		left();
 	});
+
+	// A press in progress, from pointer down to its click, holds a reply (Safari and Firefox clear focus on mousedown,
+	// which would otherwise apply a waiting reply before the click lands and could redraw the button being pressed).
+	root.addEventListener(
+		"pointerdown",
+		(event) => {
+			if (event.target instanceof Element && event.target.closest("button"))
+				pressing = true;
+		},
+		true,
+	);
+
+	const released = () => {
+		if (!pressing) return;
+
+		// After the click, which follows pointerup in the same turn.
+		setTimeout(() => {
+			pressing = false;
+			left();
+		}, 0);
+	};
+
+	document.addEventListener("pointerup", released, true);
+	document.addEventListener("pointercancel", released, true);
 	root.addEventListener("focusout", () => {
 		// Decided once focus has settled: drawing a card can replace the focused button and move focus to its neighbour.
 		setTimeout(left, 0);
