@@ -204,10 +204,12 @@ it("re-resolves provenance inside a per-head lock and rejects target substitutio
 	expect(() => assertTarget(sha, sha)).not.toThrow();
 	expect(() => assertTarget(sha, base)).toThrow(/target changed/);
 	expect(() => assertTarget(undefined, sha)).toThrow(/target changed/);
+
 	const workflow = readFileSync(
 		".github/workflows/validation-finalize.yml",
 		"utf8",
 	);
+
 	expect(workflow).not.toMatch(/^concurrency:/m);
 	expect(workflow).toContain(
 		"group: trusted-validation-${{ needs.resolve.outputs.sha }}",
