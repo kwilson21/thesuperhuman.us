@@ -296,3 +296,19 @@ it("uses the resolved trusted base and an author-immutable check", () => {
 	);
 	expect(publisher).toContain("node scripts/og-video/review-evidence.mjs");
 });
+
+it("maps every terminal workflow conclusion to an accepted failure status", () => {
+	for (const validation of [
+		"cancelled",
+		"timed_out",
+		"stale",
+		"action_required",
+		"neutral",
+		"skipped",
+		"failure",
+	]) {
+		expect(decision({ ...ready, validation })).toBe("failure");
+	}
+
+	expect(decision({ ...ready, validation: null })).toBe("pending");
+});

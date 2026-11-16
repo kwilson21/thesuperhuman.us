@@ -145,16 +145,69 @@ export function check(path, bytes) {
 	return null;
 }
 
-function walk(directory, base = directory) {
-	return readdirSync(directory).flatMap((name) => {
-		const full = join(directory, name);
-		const stat = lstatSync(full);
+// The completed artifact is untrusted data. Bound names, depth, file count and
+// total uncompressed bytes before reading any payload (including metadata).
+export function inspectArtifact(directory) {
+	const files = [];
+	let total = 0;
+	let entries = 0;
 
-		if (stat.isSymbolicLink())
-			throw new Error(`${relative(base, full)} is a symbolic link`);
+	function visit(current, depth) {
+		if (depth > 8) throw new Error("Artifact directory depth exceeded");
 
-		return stat.isDirectory() ? walk(full, base) : [relative(base, full)];
-	});
+		for (const name of readdirSync(current)) {
+			if (++entries > 250) throw new Error("Artifact entry bound exceeded");
+			const full = join(current, name);
+			const stat = lstatSync(full);
+
+			if (stat.isSymbolicLink()) throw new Error("Symbolic link in artifact");
+
+			if (stat.isDirectory()) {
+				visit(full, depth + 1);
+				continue;
+			}
+
+			const path = relative(directory, full);
+
+			const limit =
+				path === "changes.json"
+					? 65536
+					: /^sheets\/[a-z0-9-]{1,80}-sheet\.png$/.test(path)
+						? 2 * MB
+						: path.startsWith("files/")
+							? KINDS.find((kind) => kind.path.test(path.slice(6)))?.max
+							: undefined;
+
+			if (!stat.isFile() || !limit || stat.size > limit)
+				throw new Error(`Invalid or oversized artifact file: ${path}`);
+			total += stat.size;
+			files.push(path);
+
+			if (files.length > 201 || total > 100 * MB)
+				throw new Error("Aggregate artifact bound exceeded");
+		}
+	}
+
+	visit(directory, 0);
+
+	return files;
+}
+
+export function boundedRead(path, max) {
+	const stat = lstatSync(path);
+
+	if (!stat.isFile() || stat.size > max)
+		throw new Error("Invalid or oversized input file");
+
+	return readFileSync(path);
+}
+
+function mediaRead(root, path) {
+	const kind = KINDS.find((candidate) => candidate.path.test(path));
+
+	if (!kind) throw new Error("Unexpected media input");
+
+	return boundedRead(safePath(root, path), kind.max);
 }
 
 // Never traverse a PR-supplied symlink, including a parent directory.
@@ -283,14 +336,22 @@ export function deriveSheet(video, declaredDurationMs, image) {
 			},
 		);
 
-		return readFileSync(output);
+		return boundedRead(output, 2 * MB);
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
 }
 
 export function applyArtifact(
-	{ INCOMING, TARGET, SHEETS_OUT, PR_NUMBER, RUN_ID, REQUIRED_SCENES },
+	{
+		INCOMING,
+		TARGET,
+		SHEETS_OUT,
+		PR_NUMBER,
+		RUN_ID,
+		REQUIRED_SCENES,
+		REMOVED_SCENES,
+	},
 	makeSheet = deriveSheet,
 ) {
 	if (
@@ -302,8 +363,10 @@ export function applyArtifact(
 	)
 		throw new Error("Missing or unexpected environment.");
 
+	const inventory = inspectArtifact(INCOMING);
+
 	const changes = JSON.parse(
-		readFileSync(safePath(INCOMING, "changes.json"), "utf8"),
+		boundedRead(safePath(INCOMING, "changes.json"), 65536).toString("utf8"),
 	);
 
 	const scenes = Array.isArray(changes.scenes) ? changes.scenes : [];
@@ -317,6 +380,19 @@ export function applyArtifact(
 		!required.every((scene) => SCENE.test(scene))
 	)
 		throw new Error("Invalid required scene inventory");
+	const removed = (REMOVED_SCENES ?? "").split(" ").filter(Boolean);
+
+	if (
+		removed.length > 32 ||
+		new Set(removed).size !== removed.length ||
+		!removed.every(
+			(scene) =>
+				SCENE.test(scene) &&
+				!required.includes(scene) &&
+				!existsSync(safePath(TARGET, `scripts/og-video/scenes/${scene}.html`)),
+		)
+	)
+		throw new Error("Invalid authenticated scene removals");
 	const allowedScenes = required.length ? new Set(required) : TRUSTED_SCENES;
 
 	if (
@@ -349,13 +425,16 @@ export function applyArtifact(
 	)
 		throw new Error("Invalid deleted previews");
 	const filesDir = safePath(INCOMING, "files");
-	const files = existsSync(filesDir) ? walk(filesDir) : [];
+
+	const files = inventory
+		.filter((path) => path.startsWith("files/"))
+		.map((path) => path.slice(6));
 
 	if (files.length > 200 || deleted.length > 200)
 		throw new Error("Too many preview files");
 
 	for (const path of files) {
-		const problem = check(path, readFileSync(safePath(filesDir, path)));
+		const problem = check(path, mediaRead(filesDir, path));
 
 		if (problem) throw new Error(`${path} ${problem}`);
 		safePath(TARGET, path);
@@ -363,13 +442,28 @@ export function applyArtifact(
 
 	const manifestPath = "src/data/og-media.json";
 
-	const before = JSON.parse(
-		readFileSync(safePath(TARGET, manifestPath), "utf8"),
+	const before = JSON.parse(mediaRead(TARGET, manifestPath).toString("utf8"));
+
+	const beforeProblem = check(
+		manifestPath,
+		Buffer.from(JSON.stringify(before)),
 	);
 
+	if (beforeProblem) throw new Error(`Original manifest ${beforeProblem}`);
+
+	for (const [scene, entry] of Object.entries(before)) {
+		if (
+			!new RegExp(`^/og/${scene}-[0-9a-f]{10}\\.(png|jpg)$`).test(
+				entry.image,
+			) ||
+			!new RegExp(`^/og/${scene}-[0-9a-f]{10}\\.mp4$`).test(entry.video)
+		)
+			throw new Error("Original scene filename mismatch");
+	}
+
 	const after = files.includes(manifestPath)
-		? JSON.parse(readFileSync(safePath(filesDir, manifestPath), "utf8"))
-		: before;
+		? JSON.parse(mediaRead(filesDir, manifestPath).toString("utf8"))
+		: { ...before };
 
 	const manifestProblem = check(
 		manifestPath,
@@ -380,7 +474,9 @@ export function applyArtifact(
 
 	if (
 		required.length &&
-		Object.keys(after).some((scene) => !required.includes(scene))
+		Object.keys(after).some(
+			(scene) => !required.includes(scene) && !removed.includes(scene),
+		)
 	)
 		throw new Error(
 			"Manifest contains scenes outside the trusted reviewed inventory",
@@ -394,19 +490,28 @@ export function applyArtifact(
 				]
 			: [];
 
+	// Only trusted Git-tree removals can drop a manifest entry and its old media.
+	for (const scene of removed) {
+		delete after[scene];
+
+		for (const path of mediaPaths(before[scene]))
+			if (!deleted.includes(path)) deleted.push(path);
+	}
+
 	for (const scene of new Set([
 		...Object.keys(before),
 		...Object.keys(after),
 	])) {
 		if (
 			!scenes.includes(scene) &&
+			!removed.includes(scene) &&
 			JSON.stringify(before[scene]) !== JSON.stringify(after[scene])
 		)
 			throw new Error(`Undeclared scene ${scene} changed`);
 	}
 
 	const allowedOld = new Set(
-		scenes.flatMap((scene) => mediaPaths(before[scene])),
+		[...scenes, ...removed].flatMap((scene) => mediaPaths(before[scene])),
 	);
 
 	const allowedNew = new Set(
@@ -419,6 +524,7 @@ export function applyArtifact(
 
 	for (const path of deleted) {
 		if (
+			!KINDS.slice(0, 3).some((kind) => kind.path.test(path)) ||
 			!allowedOld.has(path) ||
 			Object.values(after).some((entry) => mediaPaths(entry).includes(path))
 		)
@@ -440,7 +546,11 @@ export function applyArtifact(
 			const location = safePath(files.includes(path) ? filesDir : TARGET, path);
 
 			if (!existsSync(location)) throw new Error(`Missing output ${path}`);
-			const problem = check(path, readFileSync(location));
+
+			const problem = check(
+				path,
+				boundedRead(location, KINDS.find((kind) => kind.path.test(path)).max),
+			);
 
 			if (problem) throw new Error(`${path} ${problem}`);
 		}
@@ -450,9 +560,11 @@ export function applyArtifact(
 
 	if (
 		files.includes(tokens) &&
-		readFileSync(safePath(filesDir, tokens), "utf8") !==
+		mediaRead(filesDir, tokens).toString("utf8") !==
 			siteTokens(
-				readFileSync(safePath(TARGET, "src/styles/global.css"), "utf8"),
+				boundedRead(safePath(TARGET, "src/styles/global.css"), 2 * MB).toString(
+					"utf8",
+				),
 			)
 	)
 		throw new Error("Tokens differ from site styles");
@@ -491,12 +603,8 @@ export function applyArtifact(
 	const note = `CI render (Link previews workflow run ${RUN_ID}, PR #${PR_NUMBER}): ${scenes.join(", ")}. Review the contact sheets in the pull request before merging.`;
 
 	const record = withNote(
-		withFiles(readFileSync(recordPath, "utf8"), after, (path) =>
-			readFileSync(
-				files.includes(path)
-					? safePath(filesDir, path)
-					: safePath(TARGET, path),
-			),
+		withFiles(boundedRead(recordPath, 2 * MB).toString("utf8"), after, (path) =>
+			mediaRead(files.includes(path) ? filesDir : TARGET, path),
 		),
 		note,
 	);
@@ -506,7 +614,13 @@ export function applyArtifact(
 		copyFileSync(safePath(filesDir, path), safePath(TARGET, path));
 	}
 
-	for (const path of deleted) rmSync(safePath(TARGET, path));
+	for (const path of deleted) rmSync(safePath(TARGET, path), { force: true });
+
+	if (removed.length)
+		writeFileSync(
+			safePath(TARGET, manifestPath),
+			`${JSON.stringify(after, null, 2)}\n`,
+		);
 	writeFileSync(recordPath, record);
 	mkdirSync(SHEETS_OUT, { recursive: true });
 

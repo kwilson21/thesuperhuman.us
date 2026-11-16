@@ -283,14 +283,11 @@ async function discover() {
 	if (result) {
 		const main = await api("git/ref/heads/main");
 
-		if (
-			!SHA.test(result.pr.base.sha) ||
-			main.object?.sha !== result.pr.base.sha
-		)
+		if (!SHA.test(main.object?.sha ?? ""))
 			throw new Error("PR base is not the current trusted main commit");
 		appendFileSync(
 			process.env.GITHUB_OUTPUT,
-			`sha=${result.sha}\nbase=${result.pr.base.sha}\n`,
+			`sha=${result.sha}\nbase=${main.object.sha}\n`,
 		);
 	}
 }
@@ -300,12 +297,13 @@ async function resolve() {
 
 	if (!result) return;
 	const { sha, pr, validationWorkflow, publisherWorkflow } = result;
+	const base = (await api("git/ref/heads/main")).object?.sha;
 	let { receipt } = result;
 	assertTarget(process.env.EXPECTED_SHA, sha);
 
 	if (
 		!SHA.test(process.env.EXPECTED_BASE ?? "") ||
-		pr.base.sha !== process.env.EXPECTED_BASE
+		base !== process.env.EXPECTED_BASE
 	)
 		throw new Error("Trusted base changed after resolution");
 	await status(sha, "pending");
@@ -335,7 +333,7 @@ async function resolve() {
 		JSON.stringify({
 			sha,
 			pr: pr.number,
-			base: pr.base.sha,
+			base,
 			validation,
 			receipt,
 			sourceEvent: authority?.event,
@@ -350,6 +348,7 @@ const paths = [
 	"src/styles/global.css",
 	"src/assets",
 	"src/data/og-media.json",
+	"src/lib/og-media.ts",
 	"public/fonts",
 	"public/music",
 	"public/og",
@@ -495,7 +494,10 @@ async function finish() {
 	const state = JSON.parse(readFileSync("validation-state.json", "utf8"));
 	const pr = await api(`pulls/${state.pr}`);
 
-	if (!eligiblePull(pr, state.sha, repository) || pr.base.sha !== state.base)
+	if (
+		!eligiblePull(pr, state.sha, repository) ||
+		(await api("git/ref/heads/main")).object?.sha !== state.base
+	)
 		throw new Error("Pull request head or base moved");
 	const workflow = await api("actions/workflows/validate.yml");
 	const latest = await latestValidation(state.sha, workflow);

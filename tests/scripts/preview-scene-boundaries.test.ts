@@ -15,6 +15,8 @@ import {
 	applyArtifact,
 	deriveSheet,
 	posterDimensions,
+	inspectArtifact,
+	boundedRead,
 } from "../../scripts/og-video/publish.mjs";
 import { sceneInventory } from "../../scripts/og-video/review-required.mjs";
 
@@ -28,11 +30,8 @@ describe("candidate scene inventory is bounded Git data", () => {
 			"new-scene",
 		]);
 	});
-	it("never drops an existing required scene", () => {
-		expect(sceneInventory(["home", "about"], row("home"))).toEqual([
-			"about",
-			"home",
-		]);
+	it("authenticates removals from the committed candidate inventory", () => {
+		expect(sceneInventory(["home", "about"], row("home"))).toEqual(["home"]);
 	});
 	it("rejects symlinks, nested names, traversal, submodules and excessive inventories", () => {
 		for (const bad of [
@@ -80,7 +79,17 @@ describe("candidate scene inventory is bounded Git data", () => {
 				{ cwd: root, encoding: "utf8" },
 			);
 
-			expect(sceneInventory(["home"], tree)).toEqual(["home", "new"]);
+			expect(sceneInventory(["home"], tree)).toEqual(["new"]);
+			const output = join(root, "outputs");
+			execFileSync(
+				process.execPath,
+				["scripts/og-video/review-required.mjs", root],
+				{
+					env: { ...process.env, HAS_ARTIFACT: "true", GITHUB_OUTPUT: output },
+				},
+			);
+			expect(readFileSync(output, "utf8")).toContain("scenes=new\n");
+			expect(readFileSync(output, "utf8")).toMatch(/removed=.*home/);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -145,7 +154,7 @@ function fixture() {
 	);
 	const seen: string[] = [];
 
-	const apply = (required = "home new-scene") =>
+	const apply = (required = "home new-scene", removed = "") =>
 		applyArtifact(
 			{
 				INCOMING: incoming,
@@ -154,6 +163,7 @@ function fixture() {
 				PR_NUMBER: "213",
 				RUN_ID: "123",
 				REQUIRED_SCENES: required,
+				REMOVED_SCENES: removed,
 			},
 			(path: string) => {
 				seen.push(path);
@@ -258,4 +268,111 @@ describe("source poster dimensions cannot be disguised by sheet scaling", () => 
 			}
 		},
 	);
+});
+
+describe("bounded artifact inputs and authenticated removals", () => {
+	it("removes only authenticated absent scenes without requiring deleted media to render", () => {
+		const f = fixture();
+
+		try {
+			rmSync(join(f.target, "scripts/og-video/scenes/new-scene.html"));
+			f.put(
+				f.incoming,
+				"changes.json",
+				JSON.stringify({ scenes: ["home"], deleted: [] }),
+			);
+			expect(f.apply("home", "new-scene")).toEqual(["home"]);
+
+			const manifest = JSON.parse(
+				readFileSync(join(f.target, "src/data/og-media.json"), "utf8"),
+			);
+
+			expect(Object.keys(manifest)).toEqual(["home"]);
+			expect(f.seen).toHaveLength(1);
+		} finally {
+			rmSync(f.root, { recursive: true, force: true });
+		}
+	});
+	it("rejects removals while committed source still exists", () => {
+		const f = fixture();
+
+		try {
+			expect(() => f.apply("home", "new-scene")).toThrow(/removals/);
+		} finally {
+			rmSync(f.root, { recursive: true, force: true });
+		}
+	});
+	it("rejects oversized metadata and media before decoding or reading", () => {
+		const f = fixture();
+
+		try {
+			f.put(f.incoming, "changes.json", Buffer.alloc(65537));
+			expect(() => inspectArtifact(f.incoming)).toThrow(/oversized/);
+			expect(() =>
+				boundedRead(join(f.incoming, "changes.json"), 65536),
+			).toThrow(/oversized/);
+			f.put(f.incoming, "changes.json", "{}");
+			f.put(
+				f.incoming,
+				"files/public/og/home-aaaaaaaaaa.png",
+				Buffer.alloc(600 * 1024 + 1),
+			);
+			expect(() => inspectArtifact(f.incoming)).toThrow(/oversized/);
+			expect(f.seen).toHaveLength(0);
+		} finally {
+			rmSync(f.root, { recursive: true, force: true });
+		}
+	});
+	it("rejects aggregate artifact size even when each file is within its bound", () => {
+		const f = fixture();
+
+		try {
+			for (let i = 0; i < 41; i++)
+				f.put(
+					f.incoming,
+					`files/public/og/raw/scene-${i}-aaaaaaaaaa.mp4`,
+					Buffer.alloc(2.5 * 1024 * 1024),
+				);
+			expect(() => inspectArtifact(f.incoming)).toThrow(/Aggregate/);
+		} finally {
+			rmSync(f.root, { recursive: true, force: true });
+		}
+	});
+});
+
+it("does not use a removed candidate entry to delete arbitrary public files", () => {
+	const f = fixture();
+
+	try {
+		const before = JSON.parse(
+			readFileSync(join(f.target, "src/data/og-media.json"), "utf8"),
+		);
+
+		const after = { home: before.home };
+		before["new-scene"].image = "/unrelated.txt";
+		f.put(f.target, "src/data/og-media.json", JSON.stringify(before));
+		f.put(f.target, "public/unrelated.txt", "preserve");
+		f.put(f.incoming, "files/src/data/og-media.json", JSON.stringify(after));
+		rmSync(join(f.target, "scripts/og-video/scenes/new-scene.html"));
+		f.put(
+			f.incoming,
+			"changes.json",
+			JSON.stringify({ scenes: ["home"], deleted: [] }),
+		);
+		expect(() => f.apply("home", "new-scene")).toThrow(/Original manifest/);
+		expect(readFileSync(join(f.target, "public/unrelated.txt"), "utf8")).toBe(
+			"preserve",
+		);
+	} finally {
+		rmSync(f.root, { recursive: true, force: true });
+	}
+});
+
+it("watches preview routing consistently", () => {
+	for (const path of [
+		".github/workflows/link-previews.yml",
+		"scripts/og-video/review-required.mjs",
+		"scripts/og-video/finalize-validation.mjs",
+	])
+		expect(readFileSync(path, "utf8")).toContain("src/lib/og-media.ts");
 });

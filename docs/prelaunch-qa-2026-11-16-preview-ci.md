@@ -40,3 +40,30 @@ Rollback: revert the merge commit, retaining any already-rendered valid media.
 Postmerge: run one scene through render/publish on a test branch, verify its
 artifact, bot commit, validation and contact sheets.
 Implemented: in progress. Verified locally: focused tests. Deployed: no.
+
+
+## Round 5 follow-up
+
+Validation resolves the current main ref independently of the PR API's cached
+base SHA and waits a bounded interval for the authenticated merge commit. The
+trusted finalizer checks that same live ref at resolution and completion.
+Publication pins its workflow-run default-branch SHA for deterministic replay;
+if main subsequently changes, the old-base receipt is not sufficient for success
+and fresh rendering/validation is required. The old publication can still be
+replayed to finish its exact generated head without silently adopting new code.
+
+Scene removals are authenticated from the candidate Git inventory. Only absent
+scene names supplied by the trusted inventory comparison can be removed from the
+manifest, and both old manifest paths and final deletion paths remain restricted
+to scene-matching OG media. Routing changes require review as well. Artifact
+metadata, individual payloads, file count/depth, and aggregate uncompressed bytes
+are bounded before file reads; candidate-provided sheets remain ignored.
+
+**Still blocked:** command-definition maintenance and first trusted-flow bootstrap
+must not be solved by relaxing the script equality guard or inventing a passing
+status. A future trusted-main harness can run the existing mandatory script map
+against the candidate merge in a secretless job, with candidate-defined checks
+as additional evidence. That harness has not been implemented or executed here.
+The privileged finalizer and private gate remain unverified until a safe staged
+bootstrap is established. No deployment or merge is authorized by these local
+checks alone.

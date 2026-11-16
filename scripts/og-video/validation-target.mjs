@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const SHA = /^[0-9a-f]{40}$/;
 
-export function mergedTarget(pr, commit, sha, repository) {
+export function mergedTarget(pr, commit, sha, repository, base = pr.base.sha) {
 	if (
 		!SHA.test(sha) ||
 		pr.state !== "open" ||
@@ -18,18 +18,53 @@ export function mergedTarget(pr, commit, sha, repository) {
 		pr.head.repo.full_name !== repository ||
 		pr.base.repo.full_name !== repository ||
 		pr.base.ref !== "main" ||
-		!SHA.test(pr.base.sha) ||
+		!SHA.test(base) ||
 		!SHA.test(pr.merge_commit_sha) ||
 		commit.sha !== pr.merge_commit_sha ||
 		commit.parents?.length !== 2 ||
-		commit.parents[0].sha !== pr.base.sha ||
+		commit.parents[0].sha !== base ||
 		commit.parents[1].sha !== sha
 	)
 		throw new Error(
 			"No exact head/base merge is available; rerun after GitHub prepares it",
 		);
 
-	return { sha, base: pr.base.sha, merge: commit.sha, pr: String(pr.number) };
+	return { sha, base, merge: commit.sha, pr: String(pr.number) };
+}
+
+// GitHub's PR base.sha can lag the branch ref. Authenticate both merge parents
+// against the live main ref, and retry only the bounded merge-preparation race.
+export async function resolveMerge(
+	api,
+	number,
+	sha,
+	repository,
+	pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+) {
+	for (let attempt = 0; attempt < 6; attempt++) {
+		const pr = await api(`pulls/${number}`);
+		const base = (await api("git/ref/heads/main")).object?.sha;
+
+		if (pr.state !== "open" || pr.head.sha !== sha)
+			throw new Error("Validation target moved or closed");
+
+		if (SHA.test(pr.merge_commit_sha ?? "") && SHA.test(base ?? "")) {
+			const commit = await api(`git/commits/${pr.merge_commit_sha}`);
+
+			try {
+				const target = mergedTarget(pr, commit, sha, repository, base);
+
+				if ((await api("git/ref/heads/main")).object?.sha === base)
+					return target;
+			} catch {
+				// Never fall back to validating the raw head or a stale base.
+			}
+		}
+
+		if (attempt < 5) await pause(2000);
+	}
+
+	throw new Error("No exact head/base merge is available after bounded retry");
 }
 
 async function main() {
@@ -73,16 +108,7 @@ async function main() {
 		);
 
 		if (pulls.length !== 1) throw new Error("Ambiguous validation PR");
-		const pr = await api(`pulls/${pulls[0].number}`);
-
-		if (!SHA.test(pr.merge_commit_sha ?? ""))
-			throw new Error("Merge not ready");
-		target = mergedTarget(
-			pr,
-			await api(`git/commits/${pr.merge_commit_sha}`),
-			sha,
-			repository,
-		);
+		target = await resolveMerge(api, pulls[0].number, sha, repository);
 	}
 
 	mkdirSync("result", { recursive: true });

@@ -8,6 +8,7 @@ const paths = [
 	"src/styles/global.css",
 	"src/assets",
 	"src/data/og-media.json",
+	"src/lib/og-media.ts",
 	"public/fonts",
 	"public/music",
 	"public/og",
@@ -28,7 +29,14 @@ const tree = (cwd) =>
 // source is never loaded or executed by the privileged publisher. All additions
 // become mandatory media + independently decoded contact-sheet evidence.
 export function sceneInventory(trusted, candidateTree) {
-	const scenes = new Set(trusted);
+	const scenes = new Set();
+
+	if (
+		!Array.isArray(trusted) ||
+		trusted.length > 32 ||
+		!trusted.every((name) => /^[a-z0-9-]{1,80}$/.test(name))
+	)
+		throw new Error("Invalid trusted scene inventory");
 
 	for (const row of candidateTree.split("\0").filter(Boolean)) {
 		const match =
@@ -68,10 +76,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 		},
 	);
 
-	const scenes = sceneInventory(
-		Object.keys(JSON.parse(readFileSync("src/data/og-media.json", "utf8"))),
-		candidateTree,
+	const trusted = Object.keys(
+		JSON.parse(readFileSync("src/data/og-media.json", "utf8")),
 	);
+
+	const scenes = sceneInventory(trusted, candidateTree);
 
 	if (required && process.env.HAS_ARTIFACT !== "true")
 		throw new Error("Preview inputs changed without review artifacts");
@@ -79,7 +88,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	if (process.env.GITHUB_OUTPUT)
 		appendFileSync(
 			process.env.GITHUB_OUTPUT,
-			`scenes=${required ? scenes.join(" ") : ""}\n`,
+			`scenes=${required ? scenes.join(" ") : ""}\nremoved=${required ? trusted.filter((name) => !scenes.includes(name)).join(" ") : ""}\n`,
 		);
 
 	console.log(

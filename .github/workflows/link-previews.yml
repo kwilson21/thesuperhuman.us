@@ -13,6 +13,7 @@ on:
       - 'src/styles/global.css'
       - 'src/assets/**'
       - 'src/data/og-media.json'
+      - 'src/lib/og-media.ts'
       - 'public/fonts/**'
       - 'public/music/**'
       - 'public/og/**'

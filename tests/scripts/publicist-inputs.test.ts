@@ -187,6 +187,11 @@ it("requires artifacts for changed preview trees even when manifest hashes claim
 
 	try {
 		mkdirSync(join(trusted, "src/data"), { recursive: true });
+		mkdirSync(join(trusted, "scripts/og-video/scenes"), { recursive: true });
+		writeFileSync(
+			join(trusted, "scripts/og-video/scenes/home.html"),
+			"fixture",
+		);
 		writeFileSync(
 			join(trusted, "src/data/og-media.json"),
 			JSON.stringify({ home: { source: "trusted" } }),

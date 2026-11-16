@@ -51,11 +51,15 @@ jobs:
           encoded=$(jq -rn --arg branch "$BRANCH" '$branch | @uri')
           protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded" --jq '.protected')
           [[ "$protected" == false ]] || { echo "Protected destination rejected."; exit 1; }
-          { echo "number=$number"; echo "branch=$BRANCH"; echo "base=$(jq -r .base.sha <<< "$pr")"; echo "date=$(jq -r .created_at <<< "$run")"; } >> "$GITHUB_OUTPUT"
+          # workflow_run GITHUB_SHA pins the trusted default-branch code across reruns.
+          # A newer main invalidates this receipt in the finalizer, never changes replay.
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          { echo "number=$number"; echo "branch=$BRANCH"; echo "base=$GITHUB_SHA"; echo "date=$(jq -r .created_at <<< "$run")"; } >> "$GITHUB_OUTPUT"
           jq -e '.conclusion == "success"' <<< "$run" >/dev/null
       - if: steps.pr.outputs.number
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ steps.pr.outputs.base }}
           persist-credentials: false
       - if: steps.pr.outputs.number
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,6 +84,7 @@ jobs:
         id: apply
         env:
           REQUIRED_SCENES: ${{ steps.required.outputs.scenes }}
+          REMOVED_SCENES: ${{ steps.required.outputs.removed }}
           INCOMING: incoming
           TARGET: pr
           SHEETS_OUT: sheets
