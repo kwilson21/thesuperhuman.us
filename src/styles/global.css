@@ -324,7 +324,7 @@
 .site-form [data-form-error] { color: var(--accent); font-size: .875rem; margin-top: .5rem; }
 .site-form [data-form-status] { font-size: .9rem; margin-top: .75rem; }
 .site-form .form-hint { font-size: .875rem; line-height: 1.6; overflow-wrap: anywhere; }
-.site-form button:disabled { opacity: .5; cursor: not-allowed; }
+.site-form button:disabled, .form-hold button:disabled { opacity: .5; cursor: not-allowed; }
 .site-form[hidden], .form-success[hidden], .form-hold[hidden], .site-form [hidden] { display: none; }
 .form-success h3, .form-hold h3 { font-size: 2rem; margin-bottom: .75rem; }
 .form-success, .form-hold { padding-block: 1rem; }
