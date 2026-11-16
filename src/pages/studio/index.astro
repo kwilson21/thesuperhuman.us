@@ -4,12 +4,12 @@ export const prerender = false;
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import StageTrack from "~/components/StageTrack.astro";
 import {
-	clientPortalEnabled,
 	clientProjectsForSession,
 	clientSoftwareProjectsForSession,
 	groupStudioProjects,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { projectTerms, softwareStateSentence } from "~/lib/software-projects";
 
 const env = Astro.locals.runtime?.env;

@@ -6,7 +6,7 @@ Branch: `claude/closing-legal-balance`, from `origin/main` at `88551410`
 Commits: `2d29fd93` (test), `1e9c1085` (change), `ded6b517` (release record), `676cbad3` (review, audit and design note) and this record update
 Pull request: [#260](https://github.com/kwilson21/thesuperhuman.us/pull/260)
 Target: production `https://thesuperhuman.us` after merge. The shared footer also renders on `audio.thesuperhuman.us`.
-Reviewer: Claude Haiku 5.5 subagent, test first. The coordinating session owns the review, the Hallmark audit and the browser checks listed as UNVERIFIED. This record does not certify them.
+Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex reviewed on the pull request. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `c357a1ca`, the revision of `main` immediately before this PR merged as `c786f38b` (its first parent). Later changes have merged since, so to undo only this change, revert the merge commit `c786f38b`. When the branch was cut `origin/main` was `88551410`, which is 22 commits older and must not be used. The PR adds no migration and writes no stored data.
 
 ## Scope
@@ -35,15 +35,15 @@ Local runs on macOS arm64, Node 26.13.1, pnpm 12.20.0, on the branch after the t
 - `pnpm test`: 258 files, 11,812 passed, 3 skipped.
 - `pnpm run design:check`: passed, 6 gates.
 - `pnpm run build`: exit 0, "Complete!". The built CSS (`dist/_astro/index.*.css`) contains `text-wrap: balance`.
-- Rendering on this branch at head `676cbad3`, 2026-11-13, by the coordinating session: the branch was served locally with the screenshots preview config (`pnpm run screenshots:preview`, then `astro dev --config scripts/screenshots/dev.config.mjs` on 127.0.0.1) and the Work page (`/work`) was opened in headless Chromium (Playwright's Chromium 153), with requests to other hosts blocked. On the legal line, computed `text-wrap` is `balance` at all three widths. At 320px wide it is two lines of 116px and 117px ("The Superhuman" / "Group LLC · 2026"), document width 320px, no horizontal overflow. At 390px wide it is one line of 236px, document width 390px. At 1280px wide it is one line of 236px, document width 1280px. The 320px render was looked at as an image: the two lines are centred and even, and the dot stays with the year.
+- Rendering on this branch at head `676cbad3`, 2026-11-13: the branch was served locally with the screenshots preview config (`pnpm run screenshots:preview`, then `astro dev --config scripts/screenshots/dev.config.mjs` on 127.0.0.1) and the Work page (`/work`) was opened in headless Chromium (Playwright's Chromium 153), with requests to other hosts blocked. On the legal line, computed `text-wrap` is `balance` at all three widths. At 320px wide it is two lines of 116px and 117px ("The Superhuman" / "Group LLC · 2026"), document width 320px, no horizontal overflow. At 390px wide it is one line of 236px, document width 390px. At 1280px wide it is one line of 236px, document width 1280px. The 320px render was looked at as an image: the two lines are centred and even, and the dot stays with the year.
 - The PR's Screenshots workflow run 43493217578 on head `676cbad3` succeeded. It captures 390px and 1280px; at both the line is a single line, so it is unchanged there.
-- Independent review on head `ded6b517` by two Claude Sonnet subagents on 2026-11-13. Correctness review: clean (the rule is scoped to the one paragraph by Astro; both footer variants and the audio host wrapper render it; the global `p { text-wrap: pretty }` in `src/styles/global.css` is overridden by the scoped class; a browser without support wraps as before; the built CSS keeps the declaration). Rules review: found no code or rule defect and asked for the documentation changes made in this commit.
+- Independent reviews of head `ded6b517` on 2026-11-13. The correctness review was clean (the rule is scoped to the one paragraph by Astro; both footer variants and the audio host wrapper render it; the global `p { text-wrap: pretty }` in `src/styles/global.css` is overridden by the scoped class; a browser without support wraps as before; the built CSS keeps the declaration). The rules review found no code or rule defect and asked for the documentation changes made in this commit.
 
-Merge, reviews and live check, observed by the coordinating session:
+Merge, reviews and live check, observed on 2026-11-13:
 
 - Before merge, on the final head `34c2a16a`: `validate` and `capture` succeeded, the Greptile check succeeded, and Codex's code and security reviews of that head found no issues.
 - The owner authorized merging in conversation on 2026-11-13 ("Yes"). Merged 2026-11-13 20:27:49 UTC as `c786f38b`. The production build succeeded (checked on `fad7694e`, the merge commit that followed seconds later and contains it).
-- Live check on 2026-11-13, a few minutes after the merges, in Chromium (the coordinating session's built-in browser) at 320px wide: on `https://thesuperhuman.us/work` and on `https://audio.thesuperhuman.us/` the legal line's computed `text-wrap` is `balance`, it renders as two lines of 116px and 117px ("The Superhuman" / "Group LLC · 2026"), and the document is 320px wide (no horizontal scroll). `https://thesuperhuman.us/` and `/work` returned 200 and a missing page returned 404.
+- Live check on 2026-11-13, a few minutes after the merges, in Chromium at 320px wide: on `https://thesuperhuman.us/work` and on `https://audio.thesuperhuman.us/` the legal line's computed `text-wrap` is `balance`, it renders as two lines of 116px and 117px ("The Superhuman" / "Group LLC · 2026"), and the document is 320px wide (no horizontal scroll). `https://thesuperhuman.us/` and `/work` returned 200 and a missing page returned 404.
 
 UNVERIFIED until checked:
 
@@ -70,8 +70,8 @@ UNVERIFIED until checked:
 - **N/A · Image alternatives, form labels and errors.** No images or forms change.
 - **PASS · Keyboard and focus.** The line is not focusable; no focus behavior changes.
 - **PASS, with limits · Contrast and touch targets.** Colour and size are unchanged. Muted text on the panel is 7.6:1 at 14px; this rests on unchanged tokens, not a new measurement. Text wrapping does not change contrast.
-- **UNVERIFIED · 200% text zoom and reduced motion.** Not checked by this subagent. The change has no motion.
-- **PASS · Widths.** Checked by the coordinating session on this branch in Chromium: 320px (two even lines of 116px and 117px, "The Superhuman" / "Group LLC · 2026"), 390px (one line, 236px) and 1280px (one line, 236px). Computed `text-wrap` is `balance` at all three.
+- **UNVERIFIED · 200% text zoom and reduced motion.** Not checked. The change has no motion.
+- **PASS · Widths.** Checked on this branch in Chromium: 320px (two even lines of 116px and 117px, "The Superhuman" / "Group LLC · 2026"), 390px (one line, 236px) and 1280px (one line, 236px). Computed `text-wrap` is `balance` at all three.
 - **PASS · No horizontal overflow** at 320px, 390px and 1280px (document width equals viewport width).
 - **UNVERIFIED · Second browser engine, a real phone, and a browser without `text-wrap: balance`.** Not checked.
 
@@ -109,5 +109,5 @@ UNVERIFIED until checked:
 - Done: CI green on the final head `34c2a16a`, and Greptile and Codex reviews with no findings (see Evidence).
 - A second browser engine, a real phone, a browser without `text-wrap: balance` support and 200% text size at the time of this PR (UNVERIFIED above; a later PR, #263, addressed enlarged text in the closing panel).
 - The rest of the production check (section 7): served revision header, main journeys, sitemap and robots, metadata and OG images, forms, monitoring. UNVERIFIED.
-- The branch preview is behind Cloudflare Access, so the coordinating session could not open it.
+- The branch preview is behind Cloudflare Access, so it could not be opened for this record.
 - Note for design: `design.md` says "Headings balance; prose wraps `pretty`". The legal line is a paragraph, not a heading, and is now balanced. The owner approved this. `design.md` now records the one exception: the closing panel's LLC line balances (Nov 13 decision). It grants no general permission.

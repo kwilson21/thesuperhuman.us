@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/screenshot-ci-speed-db66c3`
 Pull request: #243
 Target: production `https://thesuperhuman.us`
-Reviewer: built by Claude Haiku subagents, tests first; reviewed by independent Claude Opus and Sonnet subagents over four rounds (the last two clean). This record does not certify the checks listed as UNVERIFIED.
+Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex reviewed on the pull request. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `c786f38bc6f43f2eaabee9a7a9394984509bf6c1`, the revision of `main` immediately before this PR merged as `fad7694e` (its first parent). Later changes have merged since, so to undo only this change, revert the merge commit `fad7694e`. When this record was first written the rollback point was `e22d01f1`, which is 37 commits older and must not be used.
 
 ## Scope
@@ -77,13 +77,13 @@ The unit tests in `tests/scripts/screenshot-cache.test.ts` compute scenario inpu
 
 ### Reviews
 
-Four rounds by independent Claude subagents.
+Independent reviews of the pull request's history.
 
-- Round 1 (Opus correctness, Sonnet rules and docs): not clean. It found that the pinned clock still ran at the real rate, that a second local run broke owner pages, and that the settle cap skipped the widget check. All fixed.
-- Round 2: Opus clean with hardening suggestions (applied); Sonnet asked for README corrections (applied).
-- Round 3 (Opus): clean, small test and wording items (applied).
-- Round 4 (Opus): clean, nothing to change; two wording notes applied in `5642ec53`.
-- Greptile and Codex had not reviewed the final head when this section was first written (the pull request was a draft). On the final head `851de05c`, the coordinating session observed on GitHub before the merge (2026-11-13): the Greptile check succeeded with no actionable findings (confidence 5/5), and Codex's code review and security review of that head found no issues.
+- An early review was not clean. It found that the pinned clock still ran at the real rate, that a second local run broke owner pages, and that the settle cap skipped the widget check. All fixed.
+- The next review was clean with hardening suggestions (applied), and asked for README corrections (applied).
+- A further review was clean, with small test and wording items (applied).
+- The last review was clean, with nothing to change; two wording notes were applied in `5642ec53`.
+- Greptile and Codex had not reviewed the final head when this section was first written (the pull request was a draft). On the final head `851de05c`, observed on GitHub before the merge (2026-11-13): the Greptile check succeeded with no actionable findings (confidence 5/5), and Codex's code review and security review of that head found no issues.
 
 ## Checklist
 
@@ -119,13 +119,13 @@ Four rounds by independent Claude subagents.
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits (`pnpm run check` 561 files, 0 errors; `pnpm test` 2,053 passed, 1 skipped; `pnpm run build` complete; format check clean; lint shows only the 66 deferred findings, none in a touched file; publicist gate 84 entries with the private note lookup skipped).
-- PASS, 7.2 Exact diff review: 18 files changed, 2,970 insertions, 171 deletions, all under `scripts/screenshots/`, `tests/scripts/` or `.github/workflows/screenshots.yml`; no change under `src/`. Four rounds of independent Claude review. On the final head `851de05c`, Greptile succeeded with no actionable findings and Codex's code and security reviews found no issues (see Reviews).
+- PASS, 7.2 Exact diff review: 18 files changed, 2,970 insertions, 171 deletions, all under `scripts/screenshots/`, `tests/scripts/` or `.github/workflows/screenshots.yml`; no change under `src/`. Independent reviews (see Reviews). On the final head `851de05c`, Greptile succeeded with no actionable findings and Codex's code and security reviews found no issues (see Reviews).
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: no binding, secret or migration changed, and nothing about the deployed site changed.
 - PASS, 7.4 Rollback version preserved: `c786f38b`, the revision of `main` immediately before the merge commit `fad7694e`. To undo only this change, revert `fad7694e`.
-- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-13 20:28:03 UTC as `fad7694e`, and the coordinating session observed that the Cloudflare production build for that commit succeeded. No live check of the served site was made for this record; the change is CI tooling and nothing about the served site changed.
+- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-13 20:28:03 UTC as `fad7694e`, and it was observed that the Cloudflare production build for that commit succeeded. No live check of the served site was made for this record; the change is CI tooling and nothing about the served site changed.
 - PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes (unit tests and local checks). Verified in CI: yes (the runs in the table above, and the first run on `main`, 43501821328, below). Deployed: yes (merged 2026-11-13 20:28:03 UTC as `fad7694e`; production build succeeded; no site change). Verified live: no (not checked; CI tooling only).
 
-First run on `main` with the new tooling, observed by the coordinating session on 2026-11-13: run 43501821328 on `fad7694e` succeeded. The job took 7 min 48 s, with 375.6 s inside `pnpm run screenshots`. It was a full capture (the capture code changed): 0 of 54 pages reused, nine scenarios run. It waited in the queue behind the run for the previous merge commit instead of cancelling it, which is the new concurrency behaviour.
+First run on `main` with the new tooling, observed on 2026-11-13: run 43501821328 on `fad7694e` succeeded. The job took 7 min 48 s, with 375.6 s inside `pnpm run screenshots`. It was a full capture (the capture code changed): 0 of 54 pages reused, nine scenarios run. It waited in the queue behind the run for the previous merge commit instead of cancelling it, which is the new concurrency behaviour.
 
 ### 8. Private owner center
 
@@ -133,7 +133,7 @@ First run on `main` with the new tooling, observed by the coordinating session o
 
 ## Remaining work and follow-ups
 
-Done since this record was first written (observed by the coordinating session, 2026-11-13):
+Done since this record was first written (observed 2026-11-13):
 
 - Greptile and Codex reviews of the final head `851de05c`: clean (see Reviews).
 - Merged on 2026-11-13 20:28:03 UTC as `fad7694e`. The first run on `main`, 43501821328, was a full capture and queued behind the previous run (see section 7.6).
@@ -152,7 +152,7 @@ Follow-ups not in this pull request:
 
 ## Delivery status
 
-- Before merge, on the final head `851de05c` (observed by the coordinating session, 2026-11-13): `validate` and `capture` succeeded, the Greptile check succeeded with no actionable findings (confidence 5/5), and Codex's code and security reviews found no issues.
+- Before merge, on the final head `851de05c` (observed 2026-11-13): `validate` and `capture` succeeded, the Greptile check succeeded with no actionable findings (confidence 5/5), and Codex's code and security reviews found no issues.
 - The owner authorized merging in conversation on 2026-11-13 ("Yes"). Merged 2026-11-13 20:28:03 UTC as `fad7694e`. The Cloudflare production build for that commit succeeded.
 - UNVERIFIED: post-deployment live verification. Nothing about the served site changed and no live check was made.
 
@@ -160,4 +160,4 @@ This record does not by itself authorize deployment; the owner authorized the me
 
 Implemented: yes. Verified locally: yes. Verified in CI: yes. Deployed: yes (merged and built 2026-11-13). Verified live: no.
 
-Built by Claude Haiku subagents, tests first; reviewed by independent Claude Opus and Sonnet subagents over four rounds (the last two clean). This record does not certify the checks listed as UNVERIFIED.
+Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex reviewed on the pull request. This record does not certify the checks listed as UNVERIFIED.

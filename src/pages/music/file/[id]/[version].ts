@@ -1,28 +1,69 @@
 import type { APIRoute } from "astro";
-import { loadMusicCatalog } from "~/lib/music-content";
-import { streamMusic } from "~/lib/music-media";
+import * as Effect from "effect/Effect";
+import { mediaFailed, mediaUnavailable } from "~/lib/media-answers";
+import { loggedAnswer } from "~/server/answers";
+import { readMusicFile } from "~/server/flows/music-file";
+import { readVersion } from "~/server/media-input";
+import { runRoute } from "~/server/run";
+import { liveMediaObjects } from "~/server/services";
 
 export const prerender = false;
 
-const serve: APIRoute = async ({ params, request, locals }) => {
-	const { recordings } = await loadMusicCatalog();
-	const track = recordings.find((r) => r.id === params.id);
-	const version = params.version;
+const ROUTE = "/music/file/[id]/[version]";
 
-	if (!track || !version || !isVersion(version))
-		return new Response("Not found", { status: 404 });
-	const asset = track.versions[version];
+/** A failure the route logs once, without what it carries beyond the cause, and answers with its fixed 500. */
+const failed = loggedAnswer(ROUTE, mediaFailed);
 
-	if (!asset) return new Response("Not found", { status: 404 });
+const text = (say: string, status: number) => new Response(say, { status });
 
-	return streamMusic(request, locals.runtime.env.AUDIO, asset);
-};
+const serve: APIRoute = ({ params, request, locals }) =>
+	runRoute(
+		// The bucket is read when the first read starts, after the file is found, as the route always has.
+		liveMediaObjects(() => locals.runtime.env.AUDIO),
+		readMusicFile({
+			id: params.id,
+			version: readVersion(params.version),
+			method: request.method,
+			range: request.headers.get("range"),
+		}).pipe(
+			Effect.map(({ type, size, slice, body }) => {
+				const headers = new Headers({
+					"content-type": type,
+					"accept-ranges": "bytes",
+					"content-length": String(slice?.length ?? size),
+					"cache-control": "public, max-age=3600, s-maxage=3600",
+					"x-content-type-options": "nosniff",
+					"content-disposition": "inline",
+				});
 
-const versions = ["master", "mix", "unmixed", "video"] as const;
+				if (slice)
+					headers.set(
+						"content-range",
+						`bytes ${slice.offset}-${slice.offset + slice.length - 1}/${size}`,
+					);
 
-function isVersion(value: string): value is (typeof versions)[number] {
-	return versions.some((version) => version === value);
-}
+				return body === null
+					? new Response(null, { headers })
+					: new Response(body, { status: slice ? 206 : 200, headers });
+			}),
+			Effect.catchTags({
+				MusicFileNotFound: (refusal) => Effect.succeed(text(refusal.say, 404)),
+				MusicFileWithheld: (refusal) => Effect.succeed(text(refusal.say, 404)),
+				MusicObjectMissing: (refusal) => Effect.succeed(text(refusal.say, 404)),
+				RangeOutsideFile: (refusal) =>
+					Effect.succeed(
+						new Response(null, {
+							status: 416,
+							headers: { "content-range": `bytes */${refusal.size}` },
+						}),
+					),
+				MediaBucketNotBound: () => Effect.succeed(mediaUnavailable()),
+				MediaObjectFailed: (failure) => failed(failure.failure),
+				MediaCatalogFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		{ route: ROUTE, answer: mediaFailed },
+	);
 
 export const GET = serve;
 export const HEAD = serve;

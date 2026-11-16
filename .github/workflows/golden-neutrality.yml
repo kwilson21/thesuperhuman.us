@@ -79,3 +79,8 @@ jobs:
             echo "::error::This pull request has the conversion label, so every golden case must be neutral."
             exit 1
           fi
+          # Without the label a change may legitimately change what the cases record (a behaviour fix, or a fixture
+          # re-record that changes the format). The job passes, and says so where the checks are listed.
+          if [ "$status" -ne 0 ]; then
+            echo "::notice::Not neutral or not comparable (exit $status). This pull request has no conversion label, so the job passes. Label it conversion only for a change that must keep every case neutral."
+          fi
