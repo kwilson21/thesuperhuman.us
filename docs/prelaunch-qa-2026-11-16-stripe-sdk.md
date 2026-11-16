@@ -1,0 +1,58 @@
+# Stripe SDK 23, existing invoice API contract
+
+Scope: update Stripe Node 22.6.2 to 23.1.0, not the external API contract.
+The old SDK used `2026-08-26.dahlia`; the new SDK defaults to
+`2026-10-28.endive`. Both invoice adapters now use the supported per-request
+`RequestOptions.apiVersion` override to retain Dahlia on every network call.
+No casts, type suppression, account changes, feature activation, new webhook
+endpoint or real transaction. Existing idempotency keys and golden fixtures stay
+unchanged. Main integration includes #343, #346, #348 and #349.
+
+## Compatibility evidence
+
+- One factory and ten network call sites: customer creation, invoice creation,
+  invoice-item creation, finalization and send in each audio/software adapter.
+  All use the shared typed options helper. The only other client operation is
+  local signature verification, which makes no HTTP request and does not change
+  the configured webhook endpoint's snapshot API version.
+- The SDK's public `RequestOptions.apiVersion` is a string. Its constructor's
+  version option is latest-version-only; no suppression is used to bypass that.
+- Compared 27 consumed request/response fields in the installed old/new generated
+  declarations. Their signatures and optionality are unchanged. The shared
+  endpoint/response subset does not use the removed Endive fields.
+- New wire-level tests run both adapters through the real SDK against local fake
+  fetch. All six requests (including an invoice-create 503 retry) must retain
+  the exact Dahlia header, the existing explicit idempotency keys, a stable key
+  on retry and distinct keys between operations.
+- An architecture regression inventories SDK constructors/consumers and all ten
+  calls, rejecting unpinned calls and client aliases that leave that inventory.
+  New SDK use requires updating this scoped guard and its wire tests. This is
+  a source-level regression guard, not a general sandbox or security boundary.
+- Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
+  test-only entropy from application IDs and restores it after each case; the
+  real SDK and fetch behavior still run. No recorded fixtures were rewritten.
+
+## Deployment checklist disposition
+
+- Scope, ownership and rollback: PASS. Dependency-only SDK upgrade plus contract
+  preservation; rollback is the previous main revision. No data migrations.
+- Content, SEO, responsive design, accessibility, media and legal copy: N/A,
+  unchanged by this server-only dependency scope.
+- Forms/sensitive flows: local regressions cover invoice and signed-webhook
+  behavior, idempotency and retries. No live transaction or delivery claimed.
+- Privacy/security: no credentials or customer records used; dummy test inputs
+  only. No external settings, accounts or webhook registrations changed.
+- Performance/client bundles: final-head CI build and browser-boundary checks
+  remain required; no intentional browser dependency change.
+- Quality/release: focused tests and independent review are recorded in the PR;
+  final exact-head CI must be green before merge.
+- External verification: UNVERIFIED. Stripe connector requires reauthentication;
+  no sandbox or live API check was performed. This SDK-only upgrade retains the
+  already-used API version, rather than claiming an Endive migration pass.
+- Post-deploy smoke/monitoring: pending merge; verify the deployment separately.
+
+A future Endive API migration still needs authorized sandbox invoice and webhook
+verification. Read-only requests or fake responses cannot prove create/finalize/
+send behavior. See [Stripe versioning](https://docs.stripe.com/api/versioning),
+[SDK upgrade guidance](https://docs.stripe.com/upgrades) and
+[webhook versioning](https://docs.stripe.com/webhooks/versioning).

@@ -1,3 +1,4 @@
+import { verifyStripeRequestContract } from "../helpers/stripe-contract";
 import { createRequire } from "node:module";
 import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
@@ -114,7 +115,10 @@ describe("software invoice amounts and Stripe adapter", () => {
 			expect.objectContaining({
 				metadata: { software_request_id: "software" },
 			}),
-			{ idempotencyKey: "software-request:software:customer" },
+			{
+				idempotencyKey: "software-request:software:customer",
+				apiVersion: "2026-08-26.dahlia",
+			},
 		);
 		expect(client.invoices.create).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -131,6 +135,7 @@ describe("software invoice amounts and Stripe adapter", () => {
 				},
 			}),
 			{
+				apiVersion: "2026-08-26.dahlia",
 				idempotencyKey:
 					"software-request:software:offer-offer:milestone-0:deposit:attempt-0:invoice",
 			},
@@ -165,6 +170,7 @@ describe("software invoice amounts and Stripe adapter", () => {
 				payment_settings: { payment_method_types: ["us_bank_account", "card"] },
 			}),
 			{
+				apiVersion: "2026-08-26.dahlia",
 				idempotencyKey:
 					"software-request:software:offer-offer:milestone-0:deposit:attempt-2:invoice",
 			},
@@ -457,4 +463,15 @@ it("blocks partial latest delivery and scope changes during invoice reservation"
 	);
 	expect((await reserveSoftwareInvoice(db, input)).kind).toBe("balance");
 	sql.close();
+});
+
+it("preserves the software API version and idempotency through real SDK retries", async () => {
+	await verifyStripeRequestContract((client) =>
+		createSoftwareInvoiceWithClient(
+			client,
+			{ name: "Client", email: "client@example.test" },
+			terms,
+			invoice,
+		),
+	);
 });
