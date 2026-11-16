@@ -297,8 +297,9 @@ describe("the switchboard cable's frame update", () => {
 
 	// A change of layout moves both ends at once. The cable moves with them (shiftChain, which the page
 	// calls when it puts the plug in place), so its first step does not drag links hundreds of pixels
-	// and the drawing has no leap to carry on. Without it the cable was drawn flung out to ten times its
-	// length for a frame or two.
+	// and the drawing has no leap to carry on. Without it the earlier drawing flung the cable out to ten
+	// times its length for a frame or two, and this one still draws a link over three times its length.
+	// This calls shiftChain itself; that settle() calls it was checked in the browser (release record).
 	it("draws the cable near where it is after the layout moves its ends", () => {
 		for (const phase of [0, 0.5, 0.99]) {
 			const chain = laidStraight();
