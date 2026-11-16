@@ -1594,6 +1594,44 @@ function check(name, ok, detail = "") {
 			queue.length === 0,
 		);
 
+		// A reply never scrolls the page: Chromium's scroll anchoring would follow a card inside the cards' box and move the
+		// prices the owner is reading off screen (the twenty-sixth review).
+		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
+		await page.mouse.move(2, 2);
+		await page.evaluate(() => {
+			const heading = document.querySelector("#offer-pricing-title");
+
+			window.scrollBy(
+				0,
+				heading.getBoundingClientRect().top - innerHeight * 0.3,
+			);
+			document
+				.querySelector("[data-offer-ask]")
+				?.focus({ preventScroll: true });
+		});
+
+		const headingTop = () =>
+			page.evaluate(
+				() =>
+					document.querySelector("#offer-pricing-title").getBoundingClientRect()
+						.top,
+			);
+
+		const readingAt = await headingTop();
+
+		await page.keyboard.press("Enter");
+		await release(await next());
+		await page.waitForFunction(() =>
+			document
+				.querySelector("[data-offer-status]")
+				?.textContent?.startsWith("Up to date"),
+		);
+		check(
+			"a reply never scrolls the page away from the prices the owner is reading",
+			Math.abs((await headingTop()) - readingAt) < 5,
+			`${readingAt} -> ${await headingTop()}`,
+		);
+
 		// A reply held while focus is among the cards lands before a mouse press on Suggest, so the request that press
 		// sends carries the held card (the twenty-fourth review: a press in progress kept it waiting until after).
 		await fresh();

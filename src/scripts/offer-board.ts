@@ -1269,9 +1269,9 @@ export function setupOfferBoard() {
 			: marketRange(pricing.market, kind, shown.size)
 				? JSON.stringify([
 						shown.size,
-						shown.sizeReason,
+						clause(shown.sizeReason),
 						shown.figureUsd,
-						shown.figureReason,
+						shown.figureUsd === null ? "" : clause(shown.figureReason),
 					])
 				: shown.size;
 
@@ -1930,7 +1930,7 @@ export function setupOfferBoard() {
 			if (
 				event.button === 0 &&
 				event.target instanceof Element &&
-				event.target.closest("button, summary")
+				event.target.closest("button, summary, a")
 			) {
 				pressNumber++;
 				pressing = true;

@@ -27,8 +27,11 @@ presses Suggest again, so a failure never spends the day's allowance by itself.
 The board's height is bounded (the page never grows with it): the heading, the status line and the controls stay put,
 and the lanes scroll inside a box no taller than about two thirds of the screen. The pricing panel sits below that box,
 so prices that fill in never move a card under the pointer, and a price row is redrawn only when what it says changes,
-so a focused button in it stays. A reply waits only while the owner's pointer or focus is among the cards, where it
-would move something; a press of Suggest is not that. Its button ("Show N updates") sits beside Undo in the header, so
+so a focused button in it stays. A reply waits while it would move something under the owner: while their pointer
+rests on the cards or the price rows, while focus is among the cards or on a price row's button, during a press of any
+board button (from pointer down to its click), and while a card editor is open. A reply that changes only the size or
+figure waits only where the market row would show the change. A press of Suggest or Undo outside the cards is not
+that: a waiting reply lands before it, so the press's own message is said last. Its button ("Show N updates") sits beside Undo in the header, so
 it moves nothing either, focusing it does not apply the reply, and its arrival is announced once. The board is not
 saved across a reload: the offer editor's own draft is, and Suggest asks again.
 
