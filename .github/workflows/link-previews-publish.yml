@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,10 +37,18 @@ jobs:
         run: |
           [[ "$SHA" =~ ^[0-9a-f]{40}$ && "$BRANCH" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "Unexpected branch or commit."; exit 1; }
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts" --jq '.artifacts[].name' | grep -qx link-previews || { echo "No scene was stale; nothing to publish."; exit 0; }
-          number=$(gh api "repos/$GITHUB_REPOSITORY/pulls?state=open&head=$GITHUB_REPOSITORY_OWNER:$BRANCH" --jq '.[0].number // empty')
-          [[ "$number" =~ ^[0-9]+$ ]] || { echo "No open pull request for $BRANCH."; exit 0; }
-          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number" --jq '.head.sha')
-          [[ "$head" == "$SHA" ]] || { echo "#$number has moved on to $head; a newer run renders it."; exit 0; }
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN")
+          workflow=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/link-previews.yml" --jq '.id')
+          default=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.default_branch')
+          [[ "$BRANCH" != "$default" && "$default" == main ]] || { echo "Ineligible destination."; exit 1; }
+          jq -e --argjson workflow "$workflow" --arg sha "$SHA" '.event == "pull_request" and .workflow_id == $workflow and .head_sha == $sha and (.pull_requests | length) == 1' <<< "$run" >/dev/null
+          number=$(jq -r '.pull_requests[0].number' <<< "$run")
+          [[ "$number" =~ ^[0-9]+$ ]] || exit 1
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number")
+          jq -e --arg sha "$SHA" --arg branch "$BRANCH" --arg repo "$GITHUB_REPOSITORY" '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.ref == $branch and .head.sha == $sha' <<< "$pr" >/dev/null || { echo "Pull request moved or has an ineligible base."; exit 1; }
+          encoded=$(jq -rn --arg branch "$BRANCH" '$branch | @uri')
+          protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded" --jq '.protected')
+          [[ "$protected" == false ]] || { echo "Protected destination rejected."; exit 1; }
           { echo "number=$number"; echo "branch=$BRANCH"; } >> "$GITHUB_OUTPUT"
       - if: steps.pr.outputs.number
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -210,6 +210,12 @@ async function renderIn(browser, key, attempt) {
 			),
 		];
 
+		// The family-level check below uses the default 400 face; request it even
+		// when the scene only draws the 500 weight (for example diagram labels).
+		await Promise.all(
+			families.map((family) => document.fonts.load(`16px "${family}"`)),
+		);
+
 		const missing = families.filter(
 			(family) =>
 				!document.fonts.check(`16px "${family}"`) ||

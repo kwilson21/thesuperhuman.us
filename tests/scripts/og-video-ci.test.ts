@@ -407,3 +407,20 @@ it("dispatches only trusted-main validation and withholds secrets from dispatche
 	expect(reporter).not.toContain("actions/checkout");
 	expect(reporter).toContain("statuses/$REVISION");
 });
+
+it("publishes only the run-associated feature PR targeting main", () => {
+	const workflow = readFileSync(
+		".github/workflows/link-previews-publish.yml",
+		"utf8",
+	);
+
+	expect(workflow).toContain(
+		"github.event.workflow_run.event == 'pull_request'",
+	);
+	expect(workflow).toContain(".pull_requests | length) == 1");
+	expect(workflow).toContain('.base.ref == "main"');
+	expect(workflow).toContain(".head.repo.full_name == $repo");
+	expect(workflow).toContain('[[ "$BRANCH" != "$default"');
+	expect(workflow).toContain('[[ "$protected" == false ]]');
+	expect(workflow).not.toContain("pulls?state=open&head=");
+});
