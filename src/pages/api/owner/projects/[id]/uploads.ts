@@ -127,6 +127,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	} catch (error) {
 		if (objectStoreUnavailable(error))
 			return fail("The upload could not be saved. Please try again.", 503);
+
 		logUnexpected(ROUTE, error);
 
 		return fail("The upload could not be saved. Please try again.", 500);
@@ -190,6 +191,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 
 		if (objectStoreUnavailable(error))
 			return fail("This part could not be uploaded. Please try again.", 503);
+
 		logUnexpected(ROUTE, error);
 
 		return fail("This part could not be uploaded. Please try again.", 500);

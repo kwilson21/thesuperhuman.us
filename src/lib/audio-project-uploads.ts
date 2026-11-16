@@ -288,20 +288,20 @@ export async function finishProjectUpload(
 export function multipartUploadGone(error: RawValue): boolean {
 	return (
 		error instanceof Error &&
-		/\b10024\b|multipart upload does not exist/i.test(error.message)
+		/\(10024\)$|multipart upload does not exist/i.test(error.message)
 	);
 }
 
 /** R2 reports two writes to one key at once, which the losing completion of two can get, as error 10058. */
 export function concurrentWriteToKey(error: RawValue): boolean {
-	return error instanceof Error && /\b10058\b/.test(error.message);
+	return error instanceof Error && /\(10058\)$/.test(error.message);
 }
 
 /** R2 reports a completion with a missing part, or a part whose entity tag does not match, as error 10025 (invalid part). */
 export function multipartPartInvalid(error: RawValue): boolean {
 	return (
 		error instanceof Error &&
-		/\b10025\b|specified parts could not be found/i.test(error.message)
+		/\(10025\)$|specified parts could not be found/i.test(error.message)
 	);
 }
 
