@@ -437,7 +437,6 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
-
 ## The brief-board model
 
 File: `verification/brief-board.qnt` (module `board`), written from the design in `docs/plans/2026-11-living-brief.md` before the code. The living brief's board shows the interpreting model's cards beside the brief's answers while the visitor keeps writing and keeps, edits, answers, sets aside, brings back and undoes cards, and pauses the board. Requests are numbered; replies arrive late, out of order and overlapping (the page sends one at a time, but the model does not rely on it); and the model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or set-aside ideas. The code modelled is `applyReply`, the visitor's actions and `briefOutline` in `src/lib/brief-board.ts`.

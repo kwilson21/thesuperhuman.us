@@ -91,7 +91,6 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
-
 // verification/brief-board.qnt: the living brief's board, where late and overlapping replies from the interpreting model
 // meet the visitor's own changes (src/lib/brief-board.ts). Module name -> the property its change must break.
 export const boardMutants = {
@@ -225,7 +224,6 @@ export const models = [
 		samples: "20000",
 	},
 	{
-
 		file: "verification/brief-board.qnt",
 		current: ["board"],
 		mutants: boardMutants,

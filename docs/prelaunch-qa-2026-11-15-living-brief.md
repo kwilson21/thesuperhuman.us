@@ -4,17 +4,31 @@ The project brief at `/software/start` gains a board beside its written question
 Workers AI sketches an outline (what it is for, who it is for, pages or features or steps, open questions), and the
 visitor keeps, edits, answers, sets aside or adds cards while it works. Design: `docs/plans/2026-11-living-brief.md`.
 
-Date: November 15, 2026
+Date: November 15, 2026, updated November 16, 2026 for the merge to `main`
 Repository: the personal website repository
-Branch: `claude/fervent-edison-51jxrn`, stacked on `claude/festive-lamport-czr07s` (PR #286, example answers and the
-contact confirmation), which it builds on and does not change.
+Branch: `claude/fervent-edison-51jxrn`, first stacked on PR #286 (example answers and the contact confirmation), which
+merged on November 16, 2026; then merged with `origin/main` at `01f0433d` (merge commits, never a rebase). `main` had
+converted `/api/software-inquiry` to the Effect form in the meantime, so the outline now reaches the store through
+`submitInquiry` (`src/server/flows/software-inquiry.ts`), which adds it to the brief's details only when there is one.
 Target: production, behind `SOFTWARE_BOARD_ENABLED` (`"false"` in `wrangler.jsonc`). With the switch off, the page,
 the inquiry route and the privacy notice behave for visitors as before, except the privacy paragraph's new sentences
 about the board.
 Reviewer: built by Claude Code (the owner's agent); independent Claude reviews on the diff (below).
-Rollback revision: the head of PR #286 (`02074f87`), or turn the switch off.
+Rollback revision: `01f0433d` (`main` before this merge; re-check at merge time), or turn the switch off.
 
-## Owner decisions this needs
+## Owner decisions
+
+Decided November 16, 2026: the owner, in conversation, told Claude Code to decide the open questions on this stack
+and to merge it. The decisions taken:
+
+- **The switch stays off.** The board is not turned on until the model has been measured against the route's 8 s
+  timeout on real requests. That needs a Cloudflare token with Workers AI permission; the environment's token has none
+  (a Workers AI run answers 401), so nothing has been measured yet.
+- **The model stays `@cf/meta/llama-3.3-70b-instruct-fp8-fast` for now**, to be revisited with the measurements.
+- **The design choices below stay as built**, and so does showing a suggestion that arrives without a reason (the open
+  Codex finding).
+
+The questions as they were first put to the owner:
 
 1. **The AI spending envelope** (plan, section 6), and then the switch. Live interpretation calls
    `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON Mode: about 120 neurons a call, at most about 231. Limits: 40 a
@@ -51,11 +65,12 @@ Rollback revision: the head of PR #286 (`02074f87`), or turn the switch off.
 | 5. Approval-gated flows intact, explicit review and submission | PASS | Nothing is sent until Send brief; the review lists the outline; no price, booking or commitment is made. |
 | 6. Data inventory and privacy notice | PASS | The privacy paragraph now says what the board sends to Workers AI (written answers and board cards, never contact details, timing, budget, link or existing-content notes), that it is saved in the browser with the draft, and that its outline is stored only with a sent brief. Same IP-derived daily counters. |
 | 6. New paid service or account | N/A | Workers AI is already used; the spending envelope is decision 1. |
-| 7. Type, test, lint, build | PASS | `pnpm run check` 0 errors 0 warnings; `pnpm test` 302 files, 12,845 passed, 3 skipped (before the last reader rewrite; the affected files were rerun after it); `pnpm run lint` no findings; `pnpm run build` passes; `client-bundle.test.ts` with `REQUIRE_CLIENT_BUNDLE=1` passes; `verify:quint:all` passes with the new model. |
+| 7. Type, test, lint, build | PASS | After the merge with `main` (`e1b14b2b`, Node 26): `pnpm run check` 0 errors 0 warnings; `pnpm test` 360 files, 14,482 passed (its one failure was `client-bundle.test.ts` reading an older `dist/`; after `pnpm run build` it passes, 27 tests, with `REQUIRE_CLIENT_BUNDLE=1`); `pnpm run lint` no findings; `copy:check` and `design:check` pass; `verify:quint:all` passes with the brief-board model registered beside `main`'s. An independent review of the merge found no correctness defect. |
 | 7. Diff, generated files, secrets | PASS | No secrets, no generated assets; local preview files stay in gitignored folders. |
 | 7. Production bindings | UNVERIFIED | Uses existing bindings (`AI`, `MUSIC_DB`, the two rate limits, the Turnstile secret) and the existing `brief_suggestion_budget` table; no migration. Not checked against production. |
 | 7. Deploy and live verification | UNVERIFIED | Not deployed. Merging deploys production; the switch keeps the board off. |
-| Live model behaviour | UNVERIFIED | No Workers AI call was made: the container has no Cloudflare credentials. Quality, latency, JSON Mode reliability and real cost are unmeasured. Browser tests and screenshots use a scripted stand-in (`scripts/screenshots/brief-board-script.mjs`). |
+| Live model behaviour | UNVERIFIED | No Workers AI call was made: the environment's Cloudflare token has no Workers AI permission (checked November 16, 2026). Quality, latency, JSON Mode reliability and real cost are unmeasured. Browser tests and screenshots use a scripted stand-in (`scripts/screenshots/brief-board-script.mjs`). |
+| Size of a brief with an outline | Known limit | A brief's details are capped at 16,000 characters (`src/server/intake-store.ts`). With the switch on, the largest valid answers plus a full outline can pass the cap, and the visitor is told to keep the brief shorter. `main`'s test that a valid body never reaches that answer holds with the switch off only. To settle before the switch is turned on. |
 
 ## Verification
 
