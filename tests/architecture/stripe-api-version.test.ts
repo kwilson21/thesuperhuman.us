@@ -17,9 +17,17 @@ const methods = [
 	"stripe.invoices.sendInvoice",
 ];
 
-const sources = globSync("src/**/*.ts").map((path) => ({
+function runtimeSource(path: string, text: string) {
+	// Astro server code lives in frontmatter; browser scripts have a separate
+	// client-graph guard. Other runtime source files are parsed directly.
+	return path.endsWith(".astro")
+		? (text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "")
+		: text;
+}
+
+const sources = globSync("src/**/*.{ts,tsx,js,mjs,cjs,astro}").map((path) => ({
 	path,
-	text: readFileSync(path, "utf8"),
+	text: runtimeSource(path, readFileSync(path, "utf8")),
 }));
 
 function verifyInventory(inputs: typeof sources) {
@@ -224,3 +232,21 @@ it.each([
 	);
 	expect(() => verifyInventory(mutated)).toThrow();
 });
+
+it.each(["js", "mjs", "astro"])(
+	"rejects a new %s SDK consumer outside the reviewed boundary",
+	(extension) => {
+		const code =
+			'import Stripe from "stripe"; new Stripe("sk_test_guard").refunds.create({});';
+
+		const path = `src/new-consumer.${extension}`;
+
+		const text = runtimeSource(
+			path,
+			extension === "astro" ? `---\n${code}\n---\n<p>Example</p>` : code,
+		);
+
+		expect(text).toContain("import Stripe");
+		expect(() => verifyInventory([...sources, { path, text }])).toThrow();
+	},
+);
