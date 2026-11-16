@@ -1,5 +1,7 @@
 // What CI screenshots and how the images reach a PR description. Pure; shared by the scripts beside it.
 
+import { WAVE_SCENE_SEED } from "./random.mjs";
+
 /** Every public page. tests/scripts/screenshots.test.ts fails when a page file is missing here. */
 export const PAGES = [
 	{ name: "home", path: "/" },
@@ -35,6 +37,13 @@ export const PAGES = [
 	{ name: "music-old-news", path: "/music/old-news" },
 	{ name: "studio-sign-in", path: "/studio/sign-in" },
 	{ name: "not-found", path: "/this-page-does-not-exist", status: 404 },
+	// The same page with a seed whose first draw picks the other scene (see random.mjs).
+	{
+		name: "not-found-wave",
+		path: "/this-page-does-not-exist",
+		status: 404,
+		seed: WAVE_SCENE_SEED,
+	},
 	{ name: "owner-today", path: "/owner", owner: true },
 	{ name: "owner-requests", path: "/owner/requests", owner: true },
 	{ name: "owner-campaigns", path: "/owner/campaigns", owner: true },
@@ -42,7 +51,8 @@ export const PAGES = [
 
 /** Page files that are covered another way. */
 export const NOT_PAGES = {
-	"src/pages/404.astro": "Captured through not-found.",
+	"src/pages/404.astro":
+		"Captured through not-found-desktop (horizon scene) and not-found-wave-desktop (wave scene), two seeded captures of the one page.",
 	"src/pages/music/[slug].astro": "Captured through music-old-news.",
 };
 
@@ -319,7 +329,16 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["brief-examples", "website-brief"],
+	"src/pages/software/start.astro": [
+		"brief-examples",
+		"website-brief",
+		"software-board",
+	],
+	"src/components/BriefBoard.astro": ["software-board"],
+	"src/scripts/brief-board.ts": ["software-board"],
+	"src/lib/brief-board.ts": ["software-board"],
+	"src/pages/api/software/brief/board.ts": ["software-board"],
+	"scripts/screenshots/brief-board-script.mjs": ["software-board"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -374,25 +393,37 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-brief",
 		"services-print",
 		"website-brief",
+		"software-board",
 	],
-	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
+	"src/scripts/brief-autocomplete.ts": [
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
 	"src/scripts/software-inquiry.ts": [
 		"brief-examples",
 		"software-brief",
 		"website-brief",
+		"software-board",
 	],
-	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/pages/api/software-inquiry.ts": [
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
 	"src/styles/software-intake.css": [
 		"brief-examples",
 		"software-brief",
 		"website-brief",
+		"software-board",
 	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",
 		"software-project",
 		"website-brief",
+		"software-board",
 	],
 	"src/pages/owner/requests/index.astro": ["software-brief", "website-brief"],
 	"src/components/owner/RequestList.astro": ["software-brief", "website-brief"],
@@ -552,6 +583,9 @@ export const PREVIEW_OVERRIDES = {
 	AUDIO_CLIENT_CODE_KEY: "screenshots-only-code-key-0123456789abcdef",
 	// Gated pages stay reviewable in PRs before launch.
 	AUDIO_CLIENT_PORTAL_ENABLED: "true",
+	// The brief board too. The preview has no AI binding, so its route answers that interpretation is off; scenarios that
+	// show cards answer the route locally with scripts/screenshots/brief-board-script.mjs.
+	SOFTWARE_BOARD_ENABLED: "true",
 };
 
 /** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */

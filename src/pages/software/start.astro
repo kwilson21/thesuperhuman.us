@@ -3,6 +3,7 @@ export const prerender = false;
 
 import BaseLayout from "~/layouts/BaseLayout.astro";
 import Footer from "~/components/Footer.astro";
+import BriefBoard from "~/components/BriefBoard.astro";
 import { mainSitePath } from "~/lib/host-routing";
 import {
 	softwareBriefKickers,
@@ -20,6 +21,9 @@ const siteKey = env?.PUBLIC_TURNSTILE_SITE_KEY ?? "";
 const available = Boolean(
 	siteKey && env?.MUSIC_DB && env.TURNSTILE_SECRET_KEY && env.RATE_LIMIT,
 );
+
+// The living brief's board (docs/plans/2026-11-living-brief.md). Off unless the deployment turns it on: it calls Workers AI.
+const boardEnabled = env?.SOFTWARE_BOARD_ENABLED === "true";
 
 const requested = Astro.url.searchParams.get("path");
 
@@ -45,7 +49,8 @@ const href = (path: string) =>
     <p class="intake-return"><a class="site-link" href={href('/services#software')}>Back to Work with me <span aria-hidden="true">←</span></a></p>
     <p class="intake-muted" data-brief-kicker>{selected ? softwareBriefKickers[selected] : 'Project brief'}</p>
     <ol data-intake-progress class="intake-progress brief-dots" aria-label="Your progress">{Array.from({ length: 8 }, (_, i) => <li aria-current={i === 0 ? 'step' : undefined} hidden={i === 7 && selected !== 'website'}><span class="step-number"><span class="sr-only">{`Question ${i + 1} of ${count}`}</span></span></li>)}</ol>
-    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} novalidate>
+    <div class="brief-workspace" data-board-enabled={boardEnabled ? "true" : undefined}>
+    <form id="software-inquiry" data-available={available} data-suggestion-sitekey={siteKey} data-board={boardEnabled ? "true" : undefined} novalidate>
       <noscript><p>Please enable JavaScript to use this form, or email <a href="mailto:kazon.wilson@thesuperhuman.us">kazon.wilson@thesuperhuman.us</a>.</p></noscript>
       <section data-step="0">
         <h1 tabindex="-1">What are you working on?</h1>
@@ -68,8 +73,9 @@ const href = (path: string) =>
         <div id={`brief-help-${index}`}>
           <p class="intake-muted" data-accept-hint hidden></p>
           <button type="button" class="sr-only" data-accept hidden></button>
-          <p class="intake-muted"><span data-suggestions-disclosure>Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes. <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
+          <p class="intake-muted"><span data-suggestions-disclosure>{boardEnabled ? 'Suggestions and the outline use Cloudflare’s AI, which sees only your written answers and your outline.' : 'Suggestions come from Cloudflare’s AI, which sees only what you type in the answer boxes.'} <a href={href('/privacy#software-briefs')}>Privacy</a> · </span><span data-suggestions-off hidden>Suggestions are off. </span><button type="button" data-suggestions-toggle>Turn off</button></p>
         </div>
+        {boardEnabled && <p class="intake-muted board-links"><a href="#brief-board-title" data-board-pulse hidden></a><button type="button" data-board-show hidden>Show the outline</button></p>}
         <p data-form-error={index === 1 ? 'today' : 'firstResult'} hidden></p>
         <button type="button" data-skip hidden={index !== 2}>Skip</button>
       </section>)}
@@ -99,6 +105,7 @@ const href = (path: string) =>
         <div class="intake-review"><dl data-review></dl></div>
         {available ? <div class="cf-turnstile" data-sitekey={siteKey}></div> : <p class="intake-unavailable">This preview isn’t connected to delivery yet. You can try every step; sending is unavailable.</p>}
         <p data-form-error="turnstileToken" hidden></p>
+        {boardEnabled && <p data-form-error="outline" hidden></p>}
       </section>
       {/* Website-only screens. The script's step plan for each path sets their order. */}
       <section data-step="7" hidden>
@@ -109,6 +116,7 @@ const href = (path: string) =>
         <label class="intake-field">What you already have (optional)<textarea name="existing" rows="4" maxlength="2000" placeholder="A logo and about 30 class photos. The About and Pricing pages are still accurate. I like how calm the Example Ceramics site feels."></textarea></label>
         <p data-form-error="existing" hidden></p>
         <button type="button" data-skip>Skip</button>
+        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
       <section data-step="8" hidden>
         <h1 tabindex="-1">Who will keep it up to date?</h1>
@@ -118,11 +126,14 @@ const href = (path: string) =>
         </fieldset>
         <p data-form-error="updates" hidden></p>
         <p class="intake-footnote">Updates after launch are quoted separately, at a fixed price.</p>
+        {boardEnabled && <p class="intake-muted board-links"><button type="button" data-board-show hidden>Show the outline</button></p>}
       </section>
       <p data-form-status role="status" tabindex="-1"></p>
       <div class="intake-actions"><button type="button" data-back hidden>Back</button><button type="button" class="site-button" data-next>Next</button><button type="submit" class="site-button" hidden disabled>Send brief</button></div>
       <p class="intake-reassurance" data-send-reassurance hidden>No booking or payment at this stage.</p>
     </form>
+    {boardEnabled && <BriefBoard privacyHref={href('/privacy#software-briefs')} />}
+    </div>
     <section id="software-success" hidden tabindex="-1" role="status">
       <p class="intake-muted">Project brief · sent</p><h1>Your brief is in.</h1><p class="intake-intro" data-receipt-thanks></p>
       <div class="intake-link-panel max-w-content" data-copy-card>
