@@ -21,8 +21,12 @@ Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). Implementation and the review passes were done with Claude Code; Codex reviewed each
 pull request. Merge authorization: the owner, in conversation on 2026-11-15 ("Do the fixes and yes you can merge", for
 this work's pull requests once reviews pass and CI is green).
-Rollback revision: `5022d29c`, the revision of `main` before #334 merged; `git revert -m 1 a9f30919` undoes the
-whole area.
+Rollback revision: `5022d29c`, the revision of `main` before #334 merged; deploying it rolls the site back. To undo
+the area in git, first revert the merge of [#342](https://github.com/kwilson21/thesuperhuman.us/pull/342) (this
+record's merge facts and the plans marked merged, which edit files the area added or changed), then
+`git revert -m 1 a9f30919`. On a copy of `main` with #342 merged, that sequence applied cleanly;
+`git revert -m 1 a9f30919` alone stops with conflicts in both plans and in this record. A later change to those files
+is reverted first the same way.
 
 ## Scope
 
@@ -44,11 +48,15 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
 - Decided in the review of #306 (design, section 2 and 3): the four conditions only a guard checked are read first and
   refused by name; a refused guard is not retried; a UNIQUE failure that backs the draft rule's fact is read and decided
   again; question and decline save their after-email moves through the `@xstate/effect` bridge.
-- Judgment call in this PR, for the owner to confirm: `settled`'s TimeoutError (no landing within 30 seconds) and
-  ActorStoppedError (the machine stopped without one) answer the fixed 500 the route gives a defect
-  ("The change could not be saved. Please try again."), as the design's section 5 says, and are logged once through
-  `logUnexpected`, as every unexpected failure and every defect of a converted route is. Neither can happen in the
-  corpus: each email has its own 10-second timeout, and the corpus answers every email at once.
+- **UNVERIFIED, accepted exception · The answer when the email's outcome never lands.** Not an owner decision yet:
+  `settled`'s TimeoutError (no landing within 30 seconds) and ActorStoppedError (the machine stopped without one)
+  answer the fixed 500 the route gives a defect ("The change could not be saved. Please try again."), as the design's
+  section 5 says, and are logged once through `logUnexpected`, as every unexpected failure and every defect of a
+  converted route is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs the
+  question's or decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it did,
+  the first batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the
+  after-email answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with the open wording of those
+  after-email answers, whether this should also say to reload; a change is a behaviour fix in its own pull request.
 
 ## The conversion (the third PR)
 
@@ -234,6 +242,8 @@ UNVERIFIED until checked:
 
 - **PASS · Checks and neutrality.** See "Golden neutrality" and "Evidence".
 - **N/A · Bindings, migrations.** None.
+- **UNVERIFIED, accepted exception · The answer when the email's outcome never lands.** Released without the owner's
+  confirmation; impact and follow-up under "Owner decisions".
 - **PASS, with limits · Reviews.** The reviews of #334 and #337, and the re-review of the closed-archive fix, found no
   defect left; their comment corrections are in #341 ("Comments from the closed-archive re-review"). On #341, two
   independent reviews and Codex found no code defect, security problem or CLAUDE.md violation; one low behaviour point
