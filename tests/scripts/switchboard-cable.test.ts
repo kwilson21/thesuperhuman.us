@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { advanceChain, type Chain, LINKS } from "../../src/scripts/switchboard";
+import {
+	advanceChain,
+	type Chain,
+	drawnChain,
+	LINKS,
+} from "../../src/scripts/switchboard";
 
 const from = { x: 0, y: 0 };
 const to = { x: 300, y: 0 };
@@ -141,4 +146,36 @@ describe("the switchboard cable's frame update", () => {
 
 		expect(furthest).toBeLessThan(0.5);
 	});
+
+	// The plug moves away at a steady 60 px/s with plenty of slack, and the cable is drawn every frame.
+	// Once the first swing has died away the cable is dragged along smoothly, so each frame should move
+	// its middle about as far as the frames either side of it. On 90, 144, 165 and 240 Hz displays some
+	// frames fall between the cable's steps and others hold two of them; drawn naively, those frames
+	// stand still or jump.
+	for (const fps of [60, 90, 120, 144, 165, 240])
+		it(`draws the cable moving evenly at ${fps} Hz while the plug moves steadily`, () => {
+			const chain = laidStraight();
+			const long = 600 / LINKS;
+			const moves: number[] = [];
+			let previous = drawnChain(chain, from, to)[LINKS / 2];
+
+			for (let frame = 1; frame <= 3 * fps; frame++) {
+				const end = { x: 300 + (60 * frame) / fps, y: 0 };
+				advanceChain(chain, from, end, long, pull, 1 / fps);
+				const middle = drawnChain(chain, from, end)[LINKS / 2];
+				moves.push(Math.hypot(middle.x - previous.x, middle.y - previous.y));
+				previous = middle;
+			}
+
+			const last = moves.slice(-fps / 2);
+
+			last.forEach((move, index) => {
+				expect(move).toBeGreaterThan(0);
+
+				if (index === 0 || index === last.length - 1) return;
+				const neighbours = (last[index - 1] + last[index + 1]) / 2;
+
+				expect(Math.abs(move - neighbours) / neighbours).toBeLessThan(0.05);
+			});
+		});
 });

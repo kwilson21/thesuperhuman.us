@@ -123,14 +123,46 @@ function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
 }
 
-export type Chain = { points: Point[]; before: Point[]; clock: number };
+// The cable's own clock lags the frame by `clock` (under one step); `end` is where the plug was when
+// the last frame ended, so a step can pin the cable where the plug was at that step's own moment.
+export type Chain = {
+	points: Point[];
+	before: Point[];
+	clock: number;
+	end?: Point;
+};
+
+/**
+ * Where to draw the cable now: each link carried forward by the part of a step that has passed since
+ * its last step, along the way it was moving, with its ends at `from` and `to`. The cable itself only
+ * moves in whole steps, so its resting shape never depends on the frame timing; drawing it this way
+ * keeps it moving on the frames that fall between steps (at 90, 144 or 240 Hz) instead of freezing
+ * while the plug moves on. At rest the links do not move, so neither does the drawing.
+ */
+export function drawnChain(chain: Chain, from: Point, to: Point): Point[] {
+	const ahead = chain.clock / STEP;
+
+	return chain.points.map((point, index) => {
+		if (index === 0) return { ...from };
+
+		if (index === LINKS) return { ...to };
+		const last = chain.before[index];
+
+		return {
+			x: point.x + (point.x - last.x) * ahead,
+			y: point.y + (point.y - last.y) * ahead,
+		};
+	});
+}
 
 /**
  * One animation frame of the cable, pinned at `from` and `to`. It always steps exactly 1/120 s and
  * carries the rest of the frame to the next one: its resting shape depends on the step, so a step that
- * changed with the frame timing would keep nudging it and it would never come to rest. Returns the
- * largest distance a link moved in a step this frame, once the links have pulled the chain back into
- * shape (at rest gravity and the links cancel out and this falls to nothing), or null if no step ran.
+ * changed with the frame timing would keep nudging it and it would never come to rest. Each step pins
+ * the plug's end where the plug was at that step's moment, between the last frame's end and this one's,
+ * so two steps in one frame do not both jump to where the plug is now. Returns the largest distance a
+ * link moved in a step this frame, once the links have pulled the chain back into shape (at rest
+ * gravity and the links cancel out and this falls to nothing), or null if no step ran.
  */
 export function advanceChain(
 	chain: Chain,
@@ -142,11 +174,17 @@ export function advanceChain(
 ): number | null {
 	const { points, before } = chain;
 	let moved: number | null = null;
-	chain.clock = Math.min(chain.clock + clamp(dt, 0, 1 / 30), STEP * 8);
+	const time = clamp(dt, 0, 1 / 30);
+	const behind = chain.clock;
+	const was = chain.end ?? to;
+	let taken = 0;
+	chain.clock = Math.min(behind + time, STEP * 8);
 
 	while (chain.clock >= STEP) {
 		chain.clock -= STEP;
+		taken += 1;
 		moved ??= 0;
+		const share = time > 0 ? clamp((taken * STEP - behind) / time, 0, 1) : 1;
 
 		for (let index = 1; index < LINKS; index++) {
 			const point = points[index];
@@ -160,7 +198,10 @@ export function advanceChain(
 		}
 
 		points[0] = { ...from };
-		points[LINKS] = { ...to };
+		points[LINKS] = {
+			x: was.x + (to.x - was.x) * share,
+			y: was.y + (to.y - was.y) * share,
+		};
 
 		for (let pass = 0; pass < ROPE_PASSES; pass++)
 			for (let index = 0; index < LINKS; index++) {
@@ -195,6 +236,8 @@ export function advanceChain(
 				),
 			);
 	}
+
+	chain.end = { ...to };
 
 	return moved;
 }
@@ -409,6 +452,7 @@ export function setupSwitchboard(
 		chain.points = points.map((point) => ({ ...point }));
 		chain.before = points.map((point) => ({ ...point }));
 		chain.clock = 0;
+		chain.end = undefined;
 		// Counts as moving until a step has measured it, so a frame too short for a step never ends the swing.
 		ropeStirring = 1;
 	}
@@ -434,24 +478,23 @@ export function setupSwitchboard(
 
 	// A smooth line through the chain: quadratic curves between the midpoints of its links.
 	function ropePath() {
-		let path = `M ${chain.points[0].x} ${chain.points[0].y}`;
+		const drawn = drawnChain(chain, youPoint, position);
+		let path = `M ${drawn[0].x} ${drawn[0].y}`;
 
 		for (let index = 1; index < LINKS - 1; index++) {
-			const point = chain.points[index];
-			const next = chain.points[index + 1];
+			const point = drawn[index];
+			const next = drawn[index + 1];
 			path += ` Q ${point.x} ${point.y} ${(point.x + next.x) / 2} ${(point.y + next.y) / 2}`;
 		}
 
-		const end = chain.points[LINKS];
-		path += ` Q ${chain.points[LINKS - 1].x} ${chain.points[LINKS - 1].y} ${end.x} ${end.y}`;
+		const end = drawn[LINKS];
+		path += ` Q ${drawn[LINKS - 1].x} ${drawn[LINKS - 1].y} ${end.x} ${end.y}`;
 
 		return path;
 	}
 
 	function draw() {
 		const from = youPoint;
-		chain.points[0] = { ...from };
-		chain.points[LINKS] = { ...position };
 		const path = ropePath();
 		const lift = clamp((motion.scale - 1) / (LIFTED - 1), 0, 1.4);
 		cable!.setAttribute("d", path);
@@ -554,6 +597,9 @@ export function setupSwitchboard(
 	function setTarget(next: Target) {
 		target = next;
 		dropPending = false;
+		// A new target counts as motion until the cable has taken a step toward it, so a frame or two
+		// with no cable step can never end the loop before the cable has seen where its end went.
+		ropeStirring = 1;
 		root.classList.toggle("is-reaching", next.kind === "reach");
 		move();
 	}
