@@ -53,6 +53,19 @@ export type RevokeWrite = {
 	readonly audit: { readonly action: "offer-link-revoked"; readonly note: "" };
 };
 
+/**
+ * Before the link is read: the request is open (it has an email; revoke is allowed from every status). The route has
+ * always answered RequestClosed before it read the link, so the flow asks this first and reads the link only after it;
+ * `revokeLink` checks it again with the rest.
+ */
+export const revokeFront = alwaysWrites({
+	name: "revoke: the request is open",
+	given: (_request: null, facts: Requested) => facts,
+	refusals: [requestOpen("REVOKE")],
+	writes: () => ({}),
+	writesText: "nothing: the request's link is read next",
+});
+
 export const revokeLink = alwaysWrites({
 	name: "close the client's offer link",
 	given: (
