@@ -339,7 +339,10 @@ function sendWords(given: SendGiven): EmailWords {
 	};
 }
 
-/** Stage 6: no signed agreement, a reissue's link revoked, and the pinned attachments in no closed archive. */
+/**
+ * Stage 6: no signed agreement, a reissue's link revoked, and the pinned attachments in no closed archive, or a closed
+ * archive whose manifest cannot be read.
+ */
 export const sendOffer = alwaysWrites({
 	name: "send the offer to the client",
 	given: (command: SendRequest, facts: SendFacts): SendGiven => ({

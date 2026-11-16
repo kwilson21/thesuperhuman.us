@@ -66,7 +66,7 @@ in the diagrams.
 | G8 | The offer being sent still has the status and `updated_at` read | software.ts:773-776 |
 | G9 | A reissue: the request's link is revoked | software.ts:777-784 |
 | G10 | Revoke: the link with the `created_at` the page showed is still live | software.ts:412-415, and the update's own `revoked_at IS NULL` (417-420) |
-| G11 | Each attachment named in the details has its metadata row, unchanged, in no closed archive | software.ts:194-209; draft 506-508, send 767 |
+| G11 | Each attachment named in the details has its metadata row, unchanged, in no closed archive, or a closed archive whose manifest cannot be read | software.ts:194-209; draft 506-508, send 767 |
 
 The database adds three: `UNIQUE(request_id,version)`, one draft per request and one sent offer per request
 (migrations/music/0020_software_offers.sql:40-43). The first two back facts the draft rule decides (the new version's
