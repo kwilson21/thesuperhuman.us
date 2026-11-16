@@ -304,7 +304,7 @@ it("aligns phone contact widths and limits handoff motion to visitors who allow 
 		"calc(var(--contact-gutter) + var(--contact-panel-inset))",
 	);
 	expect(footer).toContain(
-		".closing-panel [data-closing-button] { width: 100%; box-sizing: border-box;",
+		".closing-panel [data-closing-button] { width: min(100%, var(--contact-action-max)); box-sizing: border-box;",
 	);
 	expect(footer).toContain("@media (prefers-reduced-motion: no-preference)");
 	expect(footer).toContain(
@@ -314,4 +314,13 @@ it("aligns phone contact widths and limits handoff motion to visitors who allow 
 		"[data-closing-button][data-contact-proxy] { visibility: hidden; }",
 	);
 	expect(footer).not.toContain("animation:");
+});
+
+it("keeps the owner-selected narrower contact pill equal in both positions", () => {
+	expect(footer).toContain("--contact-action-max: 15rem");
+	expect(
+		footer.match(/width: min\(100%, var\(--contact-action-max\)\)/g),
+	).toHaveLength(2);
+	expect(footer).toContain("margin-inline: auto;");
+	expect(global).toContain("min-height: 52px");
 });

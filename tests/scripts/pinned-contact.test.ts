@@ -64,7 +64,12 @@ const page = ({
 	});
 
 	const link = {
+		focus: vi.fn(),
 		getBoundingClientRect: () => ({
+			bottom:
+				fixedTop +
+				parseFloat(pinned.properties.get("--contact-dock-offset") ?? "0") +
+				52,
 			top:
 				fixedTop +
 				parseFloat(pinned.properties.get("--contact-dock-offset") ?? "0"),
@@ -80,6 +85,8 @@ const page = ({
 
 	const footerNode = {
 		...footer,
+		focus: vi.fn(),
+		scrollIntoView: vi.fn(),
 		getBoundingClientRect: () => ({ top: footerTop }),
 	};
 
@@ -93,10 +100,19 @@ const page = ({
 		return null;
 	});
 
-	vi.stubGlobal("document", {
+	type FakeDocument = {
+		querySelector: typeof documentQuery;
+		documentElement: typeof root;
+		activeElement: typeof link | typeof footerNode | null;
+	};
+
+	const fakeDocument: FakeDocument = {
 		querySelector: documentQuery,
 		documentElement: root,
-	});
+		activeElement: null,
+	};
+
+	vi.stubGlobal("document", fakeDocument);
 	vi.stubGlobal("requestAnimationFrame", requestFrame);
 	vi.stubGlobal(
 		"matchMedia",
@@ -104,6 +120,7 @@ const page = ({
 	);
 	vi.stubGlobal("window", {
 		...events,
+		innerHeight: 844,
 		requestAnimationFrame: requestFrame,
 		matchMedia: vi.fn(() => media),
 		visualViewport: viewportAvailable ? viewport : undefined,
@@ -124,6 +141,14 @@ const page = ({
 	);
 
 	return {
+		link,
+		footerNode,
+		focusLink: () => {
+			fakeDocument.activeElement = link;
+		},
+		focusFooter: () => {
+			fakeDocument.activeElement = footerNode;
+		},
 		pinned,
 		footer,
 		root,
@@ -299,4 +324,55 @@ it("ignores suppressed mobile geometry and recovers after focus leaves a field",
 	p.events.fire("focusout");
 	p.flush();
 	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-276px");
+});
+
+it("updates the dock after closing a menu that hid the proxy during scrolling", () => {
+	const p = page();
+	setupPinnedContact();
+	p.flush();
+	p.setRendered(false);
+	p.setFooterTop(600);
+	p.events.fire("scroll");
+	p.flush();
+	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("0px");
+	p.setRendered(true);
+	p.events.fire("toggle");
+	p.flush();
+	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-176px");
+});
+
+it("brings an offscreen focused docked action into view without smooth motion", () => {
+	const p = page();
+	p.setFooterTop(-100);
+	setupPinnedContact();
+	p.flush();
+	p.focusLink();
+	p.events.fire("focusin");
+	expect(p.footerNode.scrollIntoView).toHaveBeenCalledWith({
+		block: "center",
+		behavior: "instant",
+	});
+	p.flush();
+	p.footerNode.scrollIntoView.mockClear();
+	p.setFooterTop(600);
+	p.events.fire("scroll");
+	p.flush();
+	p.events.fire("focusin");
+	expect(p.footerNode.scrollIntoView).not.toHaveBeenCalled();
+});
+
+it("preserves focus across responsive ownership changes", () => {
+	const p = page();
+	setupPinnedContact();
+	p.flush();
+	p.focusLink();
+	p.media.matches = false;
+	p.media.fire("change");
+	p.flush();
+	expect(p.footerNode.focus).toHaveBeenCalledWith({ preventScroll: true });
+	p.focusFooter();
+	p.media.matches = true;
+	p.media.fire("change");
+	p.flush();
+	expect(p.link.focus).toHaveBeenCalledWith({ preventScroll: true });
 });

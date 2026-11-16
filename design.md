@@ -357,3 +357,7 @@ fallback reserves geometry and becomes inert while proxied. Do not fade, scale,
 or slide the button independently of scrolling. Only the floating background
 wash may fade away; reduced motion makes that wash change instantly. Keep the
 aligned widths, locked typography, colors and pill shape.
+
+The owner approved the continuous docking preview but requested a narrower pill.
+Cap both phone versions at 15rem, centered; allow smaller screens to constrain
+them equally. Keep the existing 52px minimum height and text reflow.
