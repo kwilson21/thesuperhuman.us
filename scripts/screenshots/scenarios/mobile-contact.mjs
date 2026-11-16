@@ -21,6 +21,23 @@ const waitForPinned = (page, visible) =>
 		{ selector: pinned, visible },
 	);
 
+const waitForDock = (page) =>
+	page.waitForFunction(() => {
+		const proxy = document.querySelector("[data-pinned-contact]");
+		const slot = document.querySelector("[data-closing-button]");
+
+		if (innerWidth > 600) return !slot.hasAttribute("inert");
+		const action = proxy.querySelector("a").getBoundingClientRect();
+		const target = slot.getBoundingClientRect();
+
+		return (
+			proxy.hasAttribute("data-docked") &&
+			Math.abs(action.top - target.top) < 1 &&
+			Math.abs(action.width - target.width) < 1 &&
+			slot.hasAttribute("inert")
+		);
+	});
+
 export default {
 	title: "Mobile contact and footer handoff",
 	async run({ capture }) {
@@ -58,8 +75,44 @@ export default {
 							),
 							`Home must not overflow at ${width}px`,
 						);
+
+						if (width <= 600) {
+							const dockScroll = await page.evaluate(() => {
+								const slot = document
+									.querySelector("[data-closing-button]")
+									.getBoundingClientRect();
+
+								const action = document
+									.querySelector("[data-pinned-contact] a")
+									.getBoundingClientRect();
+
+								return scrollY + slot.top - action.top;
+							});
+
+							for (const step of [-8, -2, 2, 8, 2, -2, -8]) {
+								await page.evaluate((y) => scrollTo(0, y), dockScroll + step);
+								await page.waitForFunction(() => {
+									const slot = document
+										.querySelector("[data-closing-button]")
+										.getBoundingClientRect();
+
+									const action = document
+										.querySelector("[data-pinned-contact] a")
+										.getBoundingClientRect();
+
+									const bottom = innerHeight - 16;
+
+									return (
+										Math.abs(
+											action.top - Math.min(slot.top, bottom - action.height),
+										) < 1
+									);
+								});
+							}
+						}
+
 						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
-						await waitForPinned(page, false);
+						await waitForDock(page);
 						await page.evaluate(() => window.scrollTo(0, 0));
 						await waitForPinned(page, width <= 600);
 					}
@@ -74,7 +127,8 @@ export default {
 						const duration = await page
 							.locator(pinned)
 							.evaluate(
-								(element) => getComputedStyle(element).transitionDuration,
+								(element) =>
+									getComputedStyle(element, "::before").transitionDuration,
 							);
 
 						assert.equal(
@@ -82,8 +136,11 @@ export default {
 							reducedMotion === "reduce",
 						);
 						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
-						await waitForPinned(page, false);
-						assert.equal(await page.locator(pinned).getAttribute("inert"), "");
+						await waitForDock(page);
+						assert.equal(
+							await page.locator("[data-closing-button]").getAttribute("inert"),
+							"",
+						);
 						await page.evaluate(() => window.scrollTo(0, 0));
 						await waitForPinned(page, true);
 						assert.equal(
@@ -117,7 +174,7 @@ export default {
 					selector: ".compact-footer",
 					prepare: async (page) => {
 						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
-						await waitForPinned(page, false);
+						await waitForDock(page);
 						assert.equal(
 							await page.locator("footer [data-closing-button]").count(),
 							1,
@@ -125,7 +182,7 @@ export default {
 						await page.evaluate(() => window.scrollTo(0, 0));
 						await waitForPinned(page, true);
 						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
-						await waitForPinned(page, false);
+						await waitForDock(page);
 					},
 				}),
 				caption: `${name}: the footer replaces the pinned action, including after scrolling back`,

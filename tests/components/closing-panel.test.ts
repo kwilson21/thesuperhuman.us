@@ -272,7 +272,7 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
 	expect(mobile).toContain("position: fixed");
 	expect(mobile).toContain(
-		".pinned-contact[data-at-end] { opacity: 0; visibility: hidden; }",
+		"transform: translateY(var(--contact-dock-offset, 0px))",
 	);
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
@@ -287,7 +287,7 @@ it("hides the pinned button by default and shows it only on phones", () => {
 
 it("hides the pinned button in print", () => {
 	expect(footer).toContain(
-		"@media print { .pinned-contact { display: none !important; } }",
+		"@media print { .pinned-contact { display: none !important; } [data-closing-button][data-contact-proxy] { visibility: visible; } }",
 	);
 });
 
@@ -307,9 +307,11 @@ it("aligns phone contact widths and limits handoff motion to visitors who allow 
 		".closing-panel [data-closing-button] { width: 100%; box-sizing: border-box;",
 	);
 	expect(footer).toContain("@media (prefers-reduced-motion: no-preference)");
-	expect(footer).toContain("transition-delay: 0s, 0s, var(--dur-hover)");
 	expect(footer).toContain(
-		".pinned-contact[data-at-end] .site-button { pointer-events: none; }",
+		".pinned-contact::before { transition: opacity var(--dur-hover) var(--ease-site); }",
+	);
+	expect(footer).toContain(
+		"[data-closing-button][data-contact-proxy] { visibility: hidden; }",
 	);
 	expect(footer).not.toContain("animation:");
 });

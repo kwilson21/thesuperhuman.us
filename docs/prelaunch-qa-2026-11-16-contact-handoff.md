@@ -58,3 +58,20 @@ viewport-capped padding expressions unchanged, preserving those regression tests
 the pinned gutter uses the identical arithmetic. All component tests are rerun.
 The upstream v2 rendered sloplint has not been run: no whole-site v2 certification
 is claimed, and the scoped hosted browser assertions remain the evidence.
+
+## Revision after owner watched the clip
+
+The owner found both directions of the fade swap unsatisfactory. Replaced the
+swap with continuous docking: one visible phone link stays fixed until it meets
+the real footer slot, then follows that slot pixel-for-pixel. On reverse scroll
+it becomes fixed at the same position. The button itself has no independent
+fade/settle; only its floating background wash fades, instant with reduced motion.
+The original footer link remains a sized, inert/hidden placeholder on mobile,
+and the real no-JS/desktop/print link. Focus transfers between proxy and original
+on breakpoint changes. Scroll work is coalesced to animation frames; resize,
+restored scroll and text/layout changes update the docking position.
+
+Regression coverage now checks positions just before/after the crossing in
+both directions, mobile widths and desktop, normal/reduced motion, and only
+one interactive link. A new real browser recording is required before approval.
+Previous clip and fade-only observations are superseded. No publication approved.
