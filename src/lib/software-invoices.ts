@@ -2,17 +2,18 @@ import type Stripe from "stripe";
 import type { OfferTerms } from "./software-offers";
 import {
 	projectTerms,
-	softwareGuard,
-	softwareAudit,
 	deliveredIndexes,
 	type ClientSoftwareUpdate,
 } from "./software-projects";
+import { softwareGuard, softwareAudit } from "./software-guard";
+import {
+	softwareInvoiceTerms,
+	type SoftwareInvoiceKind,
+} from "./software-invoice-terms";
 import { guardTime } from "./invoice-event-order";
 import { stripeClient } from "./stripe-invoicing";
 import type { CreatedStripeInvoice } from "./stripe-invoicing";
 import { ReaderMessage } from "./reader-message";
-
-export type SoftwareInvoiceKind = "deposit" | "balance" | "milestone";
 
 export type SoftwareInvoice = {
 	id: string;
@@ -93,42 +94,6 @@ export const softwareInvoiceStatusLabels = {
 	void: "Void",
 	uncollectible: "Uncollectible",
 };
-
-export function softwareInvoiceTerms(
-	terms: OfferTerms,
-	milestone: number,
-	kind: SoftwareInvoiceKind,
-) {
-	const item = terms.milestones[milestone];
-
-	if (
-		!["deposit", "balance", "milestone"].includes(kind) ||
-		!Number.isInteger(milestone) ||
-		milestone < 0 ||
-		!item ||
-		(terms.paymentMode === "standard"
-			? kind === "milestone"
-			: kind !== "milestone")
-	) {
-		throw new ReaderMessage(
-			"Choose an invoice from the agreed milestone payment schedule.",
-		);
-	}
-
-	const deposit = Math.floor(item.feeCents / 2);
-
-	const daysUntilDue = kind === "deposit" ? 7 : kind === "balance" ? 15 : 30;
-
-	return {
-		amountCents:
-			kind === "deposit"
-				? deposit
-				: kind === "balance"
-					? item.feeCents - deposit
-					: item.feeCents,
-		daysUntilDue,
-	};
-}
 
 type InvoiceResult = {
 	id: string;
@@ -354,46 +319,6 @@ export const paidFirstDeposit = (
 			invoice.kind === "deposit" &&
 			invoice.status === "paid" &&
 			!invoice.refunded_at,
-	);
-
-export async function depositOfferBlock(
-	db: D1Database,
-	id: string,
-	decline = false,
-) {
-	const rows = await db
-		.prepare(`SELECT i.status FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
-    WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? "" : "AND o.status='sent'"}
-    AND i.refunded_at IS NULL AND i.status IN ('creating','open','payment_failed','uncollectible','paid')`)
-		.bind(id)
-		.all<{ status: string }>();
-
-	if (
-		rows.results.some((row) =>
-			["creating", "open", "payment_failed", "uncollectible"].includes(
-				row.status,
-			),
-		)
-	)
-		return "Void the open deposit invoice in Stripe first, then send the new offer.";
-
-	if (!decline && rows.results.some((row) => row.status === "paid"))
-		return "A deposit is already paid for this offer. Start the project, or refund it in Stripe before sending new terms.";
-
-	return null;
-}
-
-export const depositOfferGuard = (
-	db: D1Database,
-	id: string,
-	decline = false,
-) =>
-	softwareGuard(
-		db,
-		`SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
-   WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? "" : "AND o.status='sent'"}
-   AND i.refunded_at IS NULL AND i.status IN (${decline ? "'creating','open','payment_failed','uncollectible'" : "'creating','open','payment_failed','uncollectible','paid'"}))`,
-		[id],
 	);
 
 export function invoiceDelivered(

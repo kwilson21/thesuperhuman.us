@@ -3,10 +3,22 @@ import { readFileSync } from "node:fs";
 import * as Effect from "effect/Effect";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { APIContext } from "astro";
-import { issueAgreementLink } from "~/lib/agreement-access";
+import * as Context from "effect/Context";
+import { newOfferToken } from "~/lib/software-offers";
 import { POST as musicInterest } from "~/pages/api/music-interest";
+import {
+	liveAgreementAllowance,
+	liveAgreementMail,
+} from "~/server/agreement-services";
+import { requestArchiveLink } from "~/server/flows/agreement-link";
 import { passGuards } from "~/server/flows/guards";
-import { RateLimit, Turnstile, TurnstileFailed } from "~/server/services";
+import {
+	liveTurnstile,
+	MusicDb,
+	RateLimit,
+	Turnstile,
+	TurnstileFailed,
+} from "~/server/services";
 import { fakeKv, partial } from "../helpers/doubles";
 import { answerOfRun, done, refuse } from "../helpers/rule-answers";
 import type { TestRuntime } from "../helpers/runtime";
@@ -188,27 +200,37 @@ beforeEach(() => {
 	sql.exec(readFileSync("db/music.sql", "utf8"));
 });
 
-function linkRequest() {
-	return new Request("https://thesuperhuman.us/api/agreements/link", {
-		method: "POST",
-		headers: {
-			"content-type": "application/json",
-			origin: "https://thesuperhuman.us",
-			"cf-connecting-ip": IP,
-		},
-		body: "{}",
-	});
-}
+const CODE_KEY = "k".repeat(40);
 
-const linkEnv = () =>
-	partial<Env>({
-		MUSIC_DB: sqliteD1(sql, /^SELECT|RETURNING/),
-		AUDIO_CLIENT_CODE_KEY: "k".repeat(40),
-		RESEND_API_KEY: "re_key",
-		CONTACT_FROM_EMAIL: "site@example.test",
-		TURNSTILE_SECRET_KEY: "secret",
-		SITE_ORIGIN: "https://thesuperhuman.us",
-	});
+/** Asks for an archive link through the flow, on the real schema, as a visitor from the test address. */
+const askForLink = (email: string) => {
+	const db = sqliteD1(sql, /^SELECT|RETURNING/);
+
+	return Effect.runPromise(
+		requestArchiveLink({
+			email,
+			turnstileToken: "t",
+			ip: IP,
+			from: "site@example.test",
+			origin: "https://thesuperhuman.us",
+			now: () => new Date(),
+			newId: () => crypto.randomUUID(),
+			newToken: newOfferToken,
+		}).pipe(
+			Effect.match({
+				onFailure: (refusal) => ({ refused: refusal._tag }),
+				onSuccess: () => ({ receipt: true }),
+			}),
+			Effect.provideContext(
+				Context.make(MusicDb, db).pipe(
+					Context.merge(liveTurnstile("secret")),
+					Context.merge(liveAgreementAllowance(db, CODE_KEY)),
+					Context.merge(liveAgreementMail("re_key")),
+				),
+			),
+		),
+	);
+};
 
 const allowanceRows = () =>
 	sql.prepare("SELECT count(*) AS n FROM audio_client_allowances").get().n;
@@ -216,12 +238,9 @@ const allowanceRows = () =>
 it("agreement link: a failed captcha counts the address allowance and not the email's", async () => {
 	answerCaptcha(false);
 
-	const response = await issueAgreementLink(linkEnv(), linkRequest(), {
-		turnstileToken: "t",
-		email: "client@example.com",
+	expect(await askForLink("client@example.com")).toEqual({
+		refused: "SecurityCheckFailed",
 	});
-
-	expect(response.status).toBe(403);
 	expect(allowanceRows()).toBe(1);
 });
 
@@ -229,17 +248,11 @@ it("agreement link: the address allowance refuses before the captcha is asked", 
 	answerCaptcha(true);
 
 	for (let use = 0; use < 20; use++)
-		await issueAgreementLink(linkEnv(), linkRequest(), {
-			turnstileToken: "t",
-			email: `client${use}@example.com`,
-		});
+		await askForLink(`client${use}@example.com`);
 	captcha.mockClear();
 
-	const response = await issueAgreementLink(linkEnv(), linkRequest(), {
-		turnstileToken: "t",
-		email: "client@example.com",
+	expect(await askForLink("client@example.com")).toEqual({
+		refused: "TooManyLinks",
 	});
-
-	expect(response.status).toBe(429);
 	expect(captcha).not.toHaveBeenCalled();
 });

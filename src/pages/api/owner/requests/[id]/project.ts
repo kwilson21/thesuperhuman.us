@@ -1,3 +1,4 @@
+import { deleteRetiredCodes } from "~/lib/audio-client-access";
 import { agreementEvent } from "~/lib/agreement-events";
 import type { APIRoute } from "astro";
 import { z } from "astro/zod";
@@ -6,15 +7,13 @@ import {
 	executedOfferAgreement,
 	offerAgreements,
 } from "~/lib/software-agreements";
-import { projectToday, validProjectDate } from "~/lib/audio-project-updates";
+import { projectToday, validProjectDate } from "~/lib/project-dates";
 import { musicRequest } from "~/lib/music-request";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	getSoftwareProject,
 	projectTerms,
 	projectDate,
-	softwareAudit,
-	softwareGuard,
 	openSoftwareGuard,
 	deliverSoftwareNotice,
 	queueSoftwareNotice,
@@ -24,6 +23,7 @@ import {
 	priorMilestonePaymentGuard,
 	milestoneDepositGuard,
 } from "~/lib/software-projects";
+import { softwareAudit, softwareGuard } from "~/lib/software-guard";
 import {
 	manualSoftwarePaymentGuard,
 	manualPaymentReminder,
@@ -373,6 +373,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 				openSoftwareGuard(db, id),
 				...softwareAccessRevocation(db, id, actor, at),
 			]);
+			await deleteRetiredCodes(db, id);
 
 			return json({ ok: true });
 		}

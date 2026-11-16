@@ -3,7 +3,7 @@ import {
 	type OwnerRequest,
 	type OwnerRequestRow,
 } from "./owner-model";
-import { projectToday } from "./audio-project-updates";
+import { projectToday } from "./project-dates";
 
 export type ListeningSummary = {
 	reportedStarts: number;

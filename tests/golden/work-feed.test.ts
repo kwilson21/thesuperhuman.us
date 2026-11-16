@@ -56,7 +56,7 @@ import {
 //   400 rejected                              expectedRevision of Number.MAX_SAFE_INTEGER (valid shape, refused by the journal)
 //   503 {"error":"Delivery pending. Retry the same event."}   the journal batch throws
 //
-// Journal paths (D1PublicationJournal.commit): the insert guards (revision, event id, tombstone, operation), the
+// Journal paths (the commit rule and store): the insert guards (revision, event id, tombstone, operation), the
 // withdraw erase, the receipt select, the tombstone select; and the outbox trigger that clears queued prose.
 // Multi-step sequences are named "sequence: ...".
 
@@ -115,9 +115,7 @@ const reading: Case[] = [
 		{ publication: { missing: true } },
 	),
 	feed("read: the read batch fails", [read("threadline")], {
-		failures: [
-			{ on: /SELECT COALESCE\(MAX\(revision\),0\)/, message: "d1 down" },
-		],
+		failures: [{ on: /SELECT MAX\(revision\)/, message: "d1 down" }],
 	}),
 	feed("read: one published entry", [read("threadline")], seeded([entryOne])),
 	feed(
@@ -1326,7 +1324,7 @@ const races: Case[] = [
 			...seeded(published),
 			interleave: [
 				{
-					on: /SELECT COALESCE\(MAX\(revision\),0\)/,
+					on: /SELECT MAX\(revision\)/,
 					label: "a second entry is stored before the first read",
 					run: (sqlite) => {
 						const row = raceRow({ expectedRevision: 1 }, 2);

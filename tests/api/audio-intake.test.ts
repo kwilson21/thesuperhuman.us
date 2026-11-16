@@ -183,7 +183,7 @@ describe("intake endpoint", () => {
 		sql.exec(
 			"CREATE TRIGGER reject_request_storage BEFORE INSERT ON owner_requests BEGIN SELECT RAISE(ABORT,'database unavailable'); END;",
 		);
-		expect((await POST(context())).status).toBe(503);
+		expect((await POST(context())).status).toBe(500);
 
 		expect(emails).toHaveLength(1);
 		expect(emails[0]).toMatchObject({
@@ -192,6 +192,60 @@ describe("intake endpoint", () => {
 		});
 		expect(emails[0].text).toContain("Category: request-storage");
 		expect(emails[0].text).toContain("Route: /api/audio-intake");
+	});
+	it("still sends the owner alert when giving back the allowance fails", async () => {
+		const ctx = context();
+		ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+			get: rateLimitGet,
+			put: vi.fn(async () => {}),
+			delete: vi.fn(async () => {
+				throw new Error("kv down");
+			}),
+		});
+		sql.exec(
+			"CREATE TRIGGER reject_request_storage BEFORE INSERT ON owner_requests BEGIN SELECT RAISE(ABORT,'database unavailable'); END;",
+		);
+		const response = await POST(ctx);
+		expect(response.status).toBe(500);
+		expect(emails).toHaveLength(1);
+		expect(emails[0].subject).toBe("Urgent: website request storage failed");
+	});
+	it("answers 503 with the temporary sentence when the captcha service cannot be reached", async () => {
+		vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+		const ctx = context();
+		const put = vi.fn(async () => {});
+		const remove = vi.fn(async () => {});
+		ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+			get: rateLimitGet,
+			put,
+			delete: remove,
+		});
+		const response = await POST(ctx);
+		// The attempt is counted before the captcha is asked and is not given back: it stays consumed (see the record).
+		expect(put).toHaveBeenCalledWith("rl:audio-attempt:0.0.0.0", "1", {
+			expirationTtl: 300,
+		});
+		expect(remove).not.toHaveBeenCalledWith("rl:audio-attempt:0.0.0.0");
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual({
+			ok: false,
+			error:
+				"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+		});
+		expect(sql.prepare("SELECT id FROM owner_requests").all()).toEqual([]);
+	});
+	it("answers 500 with the temporary sentence when the rate limit store fails", async () => {
+		const ctx = context();
+		ctx.locals.runtime.env.RATE_LIMIT = fakeKv({
+			get: vi.fn(async () => {
+				throw new Error("kv down");
+			}),
+			put: vi.fn(async () => {}),
+			delete: vi.fn(async () => {}),
+		});
+		const response = await POST(ctx);
+		expect(response.status).toBe(500);
+		expect(sql.prepare("SELECT id FROM owner_requests").all()).toEqual([]);
 	});
 	it("rejects empty specific direction before external calls", async () => {
 		const response = await POST(

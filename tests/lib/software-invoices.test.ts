@@ -3,9 +3,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
 	createSoftwareInvoiceWithClient,
-	softwareInvoiceTerms,
 	type SoftwareInvoice,
 } from "~/lib/software-invoices";
+import { softwareInvoiceTerms } from "~/lib/software-invoice-terms";
 import type { OfferTerms } from "~/lib/software-offers";
 import { fakeD1 } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";

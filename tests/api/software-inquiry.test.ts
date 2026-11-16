@@ -16,7 +16,6 @@ import {
 	updateLabels,
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
-import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
 import type { OwnerRequest } from "~/lib/owner-model";
 import type { RawValue } from "~/lib/fields";
 import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
@@ -374,6 +373,116 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 	).toHaveLength(0);
 });
 
+it("keeps the allowance spent when a rival stored the same submission first", async () => {
+	const racing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			sql
+				.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at,submission_id)
+      VALUES ('raced','software','workflow','Alex','alex@example.com','Stored summary',?,'new','now','now',?)`)
+				.run(JSON.stringify({ path: "workflow", today: "Stored answer" }), id);
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+
+	const response = await POST(context(base, { db: racing }));
+	expect(response.status).toBe(200);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(0);
+	// The rival's request is the same visitor's same submission, so the address-wide count is left as it is.
+	expect(kv.delete).not.toHaveBeenCalled();
+	expect(stored.get("rl:software:0.0.0.0")).toBe("1");
+	// Only the rival's request is stored: the loser stored nothing.
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{
+			n: 1,
+		},
+	);
+});
+
+/** The text of every console.error line the route wrote, with nothing else from the call. */
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+	return JSON.stringify(spy.mock.calls);
+}
+
+it("logs the rival lookup failure once without the visitor's details", async () => {
+	let lookups = 0;
+
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.includes("FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	// One line for the failed save and one for the rival lookup that could not be made.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+});
+
+it("answers 500 and still alerts when the lookup after a failed save also throws", async () => {
+	let lookups = 0;
+
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.includes("FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			// Only the second lookup, the one after the failed save, throws.
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	// The failed save and the failed lookup are each logged once, without the visitor's details.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
+});
+
 it("preserves input and clears success limit after a storage failure", async () => {
 	const failing = fakeD1({
 		prepare: db.prepare.bind(db),
@@ -383,7 +492,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -526,7 +635,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -540,9 +649,53 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
+	// A failed read is reported as a read, so the owner is not told that a write was lost.
+	expect(JSON.parse(String(alertCall[1]?.body)).text).toContain(
+		"Failure code: d1-read-failed",
+	);
 	expect(JSON.stringify(JSON.parse(String(alertCall[1]?.body)))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
+});
+
+it("answers 503 with the temporary sentence when the captcha service cannot be reached", async () => {
+	vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+	const response = await POST(context());
+	expect(response.status).toBe(503);
+	expect(await readJson<{ error: string }>(response)).toEqual({
+		ok: false,
+		error:
+			"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+	});
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{ n: 0 },
+	);
+});
+
+it("still alerts the owner when clearing the counter fails after a storage failure", async () => {
+	const failing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+
+	const rate = fakeKv({
+		get: async () => null,
+		put: async () => {},
+		delete: async () => {
+			throw new Error("kv down");
+		},
+	});
+
+	const response = await POST(context(base, { db: failing, rate }));
+
+	expect(response.status).toBe(500);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
 });
 
 it("rejects overlength and line breaks in every text field", () => {
@@ -666,27 +819,6 @@ it("omits approver role from the API receipt when approver is self", async () =>
 	expect(
 		(await readJson<{ brief: Record<string, string> }>(response)).brief,
 	).not.toHaveProperty("approverRole");
-});
-
-it("treats an oversized saved detail as a field error without an urgent alert", async () => {
-	const oversized = fakeD1({
-		prepare: db.prepare.bind(db),
-		batch: async () => {
-			throw new RequestDetailsTooLargeError();
-		},
-	});
-
-	const response = await POST(context(base, { db: oversized }));
-	expect(response.status).toBe(400);
-	expect(
-		(await readJson<{ errors: Record<string, string> }>(response)).errors,
-	).toEqual({ _form: "Keep the brief shorter and try again." });
-	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
-	expect(
-		vi
-			.mocked(fetch)
-			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
-	).toHaveLength(0);
 });
 
 it("emails only answered fields to the client with the saved title and configured contact Reply-To", async () => {
@@ -1630,4 +1762,22 @@ it("words the client copy of a website brief in the client’s voice", () => {
 	);
 	expect(copy.text).toContain("Current website\nhttps://jordanclay.example");
 	expect(`${copy.text}${copy.html}`).not.toContain("What they already have");
+});
+
+it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
+	const response = await POST(
+		context({
+			...websiteInput,
+			purpose: `${'"'.repeat(1999)}x`,
+			currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
+			existing: '"'.repeat(2000),
+			company: '"'.repeat(120),
+			timingReason: '"'.repeat(500),
+			budgetNote: '"'.repeat(200),
+			approver: "other",
+			approverRole: '"'.repeat(120),
+		}),
+	);
+
+	expect(response.status).toBe(200);
 });

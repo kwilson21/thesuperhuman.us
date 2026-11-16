@@ -5,7 +5,7 @@ import type { JsonObject } from "../helpers/json";
 import { testRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
 import { freshMusicDb, rows, seed, type SeedRow } from "../golden/harness";
-import { hashValue } from "~/lib/audio-client-access";
+import { hashValue } from "~/lib/client-portal";
 import { POST } from "~/pages/api/studio/projects/[id]/messages";
 
 // Seeded times are relative to the run, so the test does not depend on the date it runs on.

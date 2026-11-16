@@ -439,6 +439,10 @@ const authorizeCases: Case[] = [
 		]),
 	),
 	oc(
+		"authorize: a client id too long to be a key",
+		run((_f, c) => [c.register(), c.authorize({ client_id: "a".repeat(600) })]),
+	),
+	oc(
 		"authorize: no client id",
 		run((_f, c) => [c.register(), c.authorize({ client_id: null })]),
 	),
@@ -761,6 +765,39 @@ const callbackCases: Case[] = [
 		]),
 	),
 	oc(
+		"callback: GitHub reports application_suspended and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=application_suspended&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
+		"callback: GitHub reports redirect_uri_mismatch and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=redirect_uri_mismatch&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
+		"callback: GitHub reports an error nobody documented and no code",
+		run((_f, c) => [
+			c.register(),
+			c.authorize(),
+			c.consent(),
+			c.callback({
+				path: "/api/publication/callback?error=some_code_nobody_documented&state=~nonce~",
+			}),
+		]),
+	),
+	oc(
 		"callback: GitHub answers the code exchange with an error body",
 		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
 		{
@@ -789,6 +826,113 @@ const callbackCases: Case[] = [
 			fetches: github({
 				token: networkDown("getaddrinfo ENOTFOUND github.com"),
 			}),
+		},
+	),
+	oc(
+		"callback: GitHub refuses the code exchange with an HTML 403",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ token: text(403, "<html>forbidden</html>") }) },
+	),
+	oc(
+		"callback: GitHub rate-limits the code exchange with 429",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ token: text(429, "<html>slow down</html>") }) },
+	),
+	oc(
+		"callback: GitHub's user lookup answers an HTML 403",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ user: text(403, "<html>forbidden</html>") }) },
+	),
+	oc(
+		"callback: GitHub rate-limits the code exchange with a JSON 403 and retry-after",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				token: json(403, { message: "rate limit" }, { "retry-after": "60" }),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub rate-limits the code exchange with a JSON 403 and no requests remaining",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				token: json(
+					403,
+					{ message: "rate limit" },
+					{ "x-ratelimit-remaining": "0" },
+				),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub refuses the code exchange with a JSON 403 and no rate-limit header",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{ fetches: github({ token: json(403, { message: "forbidden" }) }) },
+	),
+	oc(
+		"callback: GitHub rate-limits the user lookup with a JSON 403 and retry-after",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				user: json(403, { message: "rate limit" }, { "retry-after": "60" }),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub rate-limits the user lookup with a JSON 403 and no requests remaining",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				user: json(
+					403,
+					{ message: "rate limit" },
+					{ "x-ratelimit-remaining": "0" },
+				),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub refuses the user lookup with a JSON 403 and requests remaining",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				user: json(
+					403,
+					{ message: "forbidden" },
+					{ "x-ratelimit-remaining": "40" },
+				),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub answers the code exchange with the error incorrect_client_credentials",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({
+				token: json(200, { error: "incorrect_client_credentials" }),
+			}),
+		},
+	),
+	oc(
+		"callback: GitHub answers the code exchange with the error redirect_uri_mismatch",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({ token: json(200, { error: "redirect_uri_mismatch" }) }),
+		},
+	),
+	oc(
+		"callback: GitHub answers the code exchange with the error application_suspended",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({ token: json(200, { error: "application_suspended" }) }),
+		},
+	),
+	oc(
+		"callback: GitHub answers the code exchange with the error unverified_user_email",
+		run((_f, c) => [c.register(), c.authorize(), c.consent(), c.callback()]),
+		{
+			fetches: github({ token: json(200, { error: "unverified_user_email" }) }),
 		},
 	),
 	oc(

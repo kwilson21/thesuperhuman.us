@@ -2,7 +2,7 @@ import type { APIContext, MiddlewareNext } from "astro";
 import {
 	canonicalAgreementRequest,
 	agreementHeaders,
-} from "~/lib/agreement-access";
+} from "~/lib/agreement-host";
 import { defineMiddleware } from "astro:middleware";
 import { mainSitePath, rewritePathForHost } from "~/lib/host-routing";
 import { verifyOwnerAccess } from "~/lib/owner-access";

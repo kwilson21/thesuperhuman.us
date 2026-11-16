@@ -3,7 +3,7 @@ import { agreementDownload } from "~/lib/agreement-download";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ locals, request, params }) =>
+export const GET: APIRoute = async ({ locals, params }) =>
 	locals.owner
-		? agreementDownload(locals.runtime.env, request, params.id!, true)
+		? agreementDownload(locals.runtime.env, params.id ?? "")
 		: new Response("Owner access required.", { status: 403 });

@@ -152,6 +152,10 @@ files; a test checks those literals against `global.css`.
   stop: the studio picture no longer lifts or leans toward the pointer, and the code
   rows, notebook and terrain sit still (D2.1-D). Nothing else drifts or parallaxes.
   The project-card lean on Home is a hover state, kept by D2.2-B (see States).
+- Home's waveform edge draws the newest released song. While the A/B comparison plays,
+  the edge rises and falls with the music's level and a ring of light around the
+  horizon sun glows with it; both rest when the music stops, and only a visitor's
+  Play starts them (owner decision, 2026-11-15, PR #320).
 - Building drawings arrive with their row, then play once in reading order (D3.3-C).
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
@@ -207,6 +211,9 @@ timings and local colour tokens.
   clearance, and never a personal address. Gate 46 (no invented metrics) applies.
 - Design-choice findings go to the owner as alternatives. They are never silently
   fixed, flattened or "brought into line"; only defects are fixed directly.
+- The studio's labels and phone pins are frosted glass pills (owner decision, November
+  15, 2026), against Hallmark's editorial default of no glass. They are overlays over
+  the picture, the one case Hallmark's anti-patterns allow.
 
 ## Owner decisions (October 22, 2026)
 All picks are quoted in `docs/design-concepts/README.md` ("Owner's picks"), with
@@ -238,6 +245,21 @@ record). A width where it needs three lines is not yet approved and is an owner 
 At enlarged text on phone widths the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
 
 Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
+
+## Owner decisions (November 15, 2026)
+Kazon's picks on the round-two decision page, given in conversation: frosted glass for the
+studio's labels and for its phone pins, "Play Kaillera Next" for the controller's label, and
+the Combo for its scene, with the note "Frosted glass looks the best but let's improve upon
+what we have with that". Built from those picks and that note, and shown to Kazon in the
+PR: paper glass that blurs the desk behind it, in pill corners like the buttons, with a
+bright top edge, a hairline and a soft shadow; dark glass for the monitor's pin over its
+screen; an accent dot on each pin; the headphones' pin near their top and the controller's
+just above it, so both stay in view; plain paper where a browser cannot blur. Its colours are local tokens mixed from the
+site's own (`--glass-*` in `src/components/Hero.astro`). The controller's pin is "Play",
+and it opens the game itself at kaillera-next.thesuperhuman.us, its label ending in ↗ as a
+link that leaves the site ("yes straight to the game").
+Pointing at the controller or focusing it plays the Combo: the D-pad glints, then the four
+face buttons light in turn, resting within two seconds.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

@@ -4,7 +4,7 @@ export const prerender = false;
 import ProjectLayout from "~/layouts/ProjectLayout.astro";
 import preview from "~/assets/projects/daily-preview.webp";
 import ProjectUpdates from "~/components/ProjectUpdates.astro";
-import { websiteFeed } from "~/lib/publication/website";
+import { websiteFeed } from "~/server/publication-feed";
 import story from "~/data/project-stories/the-engineers-daily.json";
 
 const feed = await websiteFeed(Astro.locals.runtime.env, story.projectId);

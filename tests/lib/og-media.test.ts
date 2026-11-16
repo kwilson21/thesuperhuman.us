@@ -3,14 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import rendered from "../../src/data/og-media.json";
-import { double } from "../helpers/doubles";
-import {
-	DEFAULT_OG_SCENE,
-	OG_SCENES,
-	ogMedia,
-	ogSceneFor,
-	serveOgVideo,
-} from "~/lib/og-media";
+import { OG_SCENES, ogMedia, ogSceneFor } from "~/lib/og-media";
 import { keysOf } from "../helpers/keys";
 
 const scenes = keysOf(OG_SCENES);
@@ -18,82 +11,6 @@ const scenes = keysOf(OG_SCENES);
 const sceneFiles = readdirSync("scripts/og-video/scenes")
 	.filter((name) => name.endsWith(".html"))
 	.map((name) => name.slice(0, -5));
-
-const { video } = ogMedia(DEFAULT_OG_SCENE);
-const name = video.slice("/og/".length, -".mp4".length);
-const bytes = new Uint8Array(Array.from({ length: 200 }, (_, index) => index));
-
-const assets = double<Fetcher>({
-	fetch: async (input: RequestInfo | URL) =>
-		String(input).endsWith(`/og/raw/${name}.mp4`)
-			? new Response(bytes)
-			: new Response("Not found", { status: 404 }),
-});
-
-const request = (headers: Record<string, string> = {}, method = "GET") =>
-	new Request(`https://thesuperhuman.us${video}`, { method, headers });
-
-describe("link-preview video route", () => {
-	it("serves the whole file with range support advertised", async () => {
-		const response = await serveOgVideo(request(), name, assets);
-		expect(response.status).toBe(200);
-		expect(response.headers.get("content-type")).toBe("video/mp4");
-		expect(response.headers.get("accept-ranges")).toBe("bytes");
-		expect(response.headers.get("content-length")).toBe("200");
-		expect(response.headers.get("cache-control")).toBe(
-			"public, max-age=31536000, immutable",
-		);
-		expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
-	});
-
-	it.each([
-		["bytes=0-99", 0, 99],
-		["bytes=150-", 150, 199],
-		["bytes=-20", 180, 199],
-		["bytes=190-999", 190, 199],
-	])(
-		"answers %s with 206 and exactly those bytes",
-		async (range, start, end) => {
-			const response = await serveOgVideo(request({ range }), name, assets);
-			expect(response.status).toBe(206);
-			expect(response.headers.get("content-range")).toBe(
-				`bytes ${start}-${end}/200`,
-			);
-			expect(response.headers.get("content-length")).toBe(
-				String(end - start + 1),
-			);
-			expect(new Uint8Array(await response.arrayBuffer())).toEqual(
-				bytes.slice(start, end + 1),
-			);
-		},
-	);
-
-	it("refuses unsatisfiable ranges with the file size", async () => {
-		const response = await serveOgVideo(
-			request({ range: "bytes=200-" }),
-			name,
-			assets,
-		);
-
-		expect(response.status).toBe(416);
-		expect(response.headers.get("content-range")).toBe("bytes */200");
-	});
-
-	it("answers HEAD with headers and no body", async () => {
-		const response = await serveOgVideo(request({}, "HEAD"), name, assets);
-		expect(response.status).toBe(200);
-		expect(response.headers.get("content-length")).toBe("200");
-		expect(await response.text()).toBe("");
-	});
-
-	it.each([undefined, "missing-0000000000", "../raw/x"])(
-		"serves only rendered videos, not %s",
-		async (value) => {
-			const response = await serveOgVideo(request(), value, assets);
-			expect(response.status).toBe(404);
-		},
-	);
-});
 
 describe("scene routing", () => {
 	it("prefers an exact route, then the longest family, else nothing", () => {

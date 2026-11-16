@@ -108,7 +108,7 @@ const softwareTables = [
 	"software_project_audit",
 	"software_agreements",
 	"audio_client_sessions",
-	"audio_client_codes",
+	"audio_client_signin_codes",
 ];
 
 const softwareStep = (action: string, extra: Partial<Step> = {}): Step => ({
@@ -453,8 +453,9 @@ const cases: Case[] = [
 					last_seen_at: EARLIER,
 				},
 			],
-			audio_client_codes: [
+			audio_client_signin_codes: [
 				{
+					nonce_hash: "nonce-c1",
 					email: "grace@example.test",
 					code_hash: "c1",
 					created_at: EARLIER,
