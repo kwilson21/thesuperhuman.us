@@ -102,13 +102,11 @@ const draftFacts = (action: DraftAction) =>
 
 		const keys = attachments.map((attachment) => attachment.key);
 
-		const named =
-			keys.length > 0
-				? {
-						rows: yield* readAttachmentRows(requestId, keys),
-						closedKeys: yield* readClosedArchives(keys),
-					}
-				: { rows: [], closedKeys: [] };
+		// With no attachment named, the batch has no G11 and nothing is read (the closed archives read nothing either).
+		const named = {
+			rows: keys.length > 0 ? yield* readAttachmentRows(requestId, keys) : [],
+			closed: yield* readClosedArchives(keys),
+		};
 
 		const msaId = reusedMsaOf(command);
 		const reusedMsaFound = msaId === null ? null : yield* readMsaExists(msaId);

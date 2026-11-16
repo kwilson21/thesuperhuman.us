@@ -263,12 +263,10 @@ export const sendSoftwareOffer = (action: SendAction) =>
 		const linkRow =
 			choice.move === "REISSUE" ? yield* readLinkRow(requestId) : null;
 
-		const pinnedKeys = pin?.attachments.map((attachment) => attachment.key);
-
-		const closedKeys =
-			pinnedKeys !== undefined && pinnedKeys.length > 0
-				? yield* readClosedArchives(pinnedKeys)
-				: [];
+		// With nothing pinned, or no attachment pinned, the batch has no G11 and the closed archives read nothing.
+		const closed = yield* readClosedArchives(
+			pin?.attachments.map((attachment) => attachment.key) ?? [],
+		);
 
 		const write = yield* sendOffer.decide(
 			{
@@ -278,7 +276,7 @@ export const sendSoftwareOffer = (action: SendAction) =>
 				signingEnabled,
 				actor: action.actor,
 			},
-			{ request, signedAgreement, linkRow, closedKeys },
+			{ request, signedAgreement, linkRow, closed },
 		);
 
 		yield* saveSend(write, action.sendingSince()).pipe(
