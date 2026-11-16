@@ -188,7 +188,7 @@ const INSERT_FILE = /INSERT INTO audio_project_files/;
 const SELECT_UPLOAD =
 	/FROM audio_project_uploads WHERE request_id=\? AND id=\?/;
 
-const CAN_UPLOAD = /SELECT 1 WHERE EXISTS/;
+const CAN_UPLOAD = /SELECT request_id,stage,revoked_at FROM audio_projects/;
 
 const DISCARD = /UPDATE audio_project_uploads SET state='discarding'/;
 
