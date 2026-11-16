@@ -1237,7 +1237,7 @@ export function setupOfferBoard() {
 					: "Reading your latest changes…"
 				: failure
 					? result.added
-						? `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"} from an earlier request. ${failure}`
+						? `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"} from an earlier request. Your latest request failed. ${failure}`
 						: failure
 					: result.added
 						? `Up to date with your draft. ${added}`
@@ -1252,11 +1252,7 @@ export function setupOfferBoard() {
 		else
 			sayOrHold(
 				full,
-				failure
-					? "No answer from the board just now."
-					: reply.last
-						? "Up to date. This page’s limit is reached."
-						: done,
+				reply.last && !failure ? "Up to date. Page limit reached." : done,
 			);
 	}
 
@@ -1289,10 +1285,14 @@ export function setupOfferBoard() {
 				);
 			}).length +
 			(reply.sizing.size &&
-			document.activeElement?.closest(
-				"[data-price-day], [data-price-market]",
-			) &&
-			JSON.stringify(reply.sizing) !== JSON.stringify(sizing)
+			(pressing ||
+				document.activeElement?.closest(
+					"[data-price-day], [data-price-market]",
+				)) &&
+			(reply.sizing.size !== sizing?.size ||
+				reply.sizing.sizeReason !== sizing?.sizeReason ||
+				reply.sizing.figureUsd !== sizing?.figureUsd ||
+				reply.sizing.figureReason !== sizing?.figureReason)
 				? 1
 				: 0);
 
@@ -1341,7 +1341,11 @@ export function setupOfferBoard() {
 	 * "retry" says to try again (the AI or the store failed, or requests crossed), "answer" is final (the request is
 	 * missing or closed, or the board is off here), "daily" is the owner's daily limit, "signin" a lapsed sign-in.
 	 */
-	function failed(text: string, kind: "retry" | "answer" | "daily" | "signin") {
+	function failed(
+		text: string,
+		kind: "retry" | "answer" | "daily" | "signin",
+		short = text,
+	) {
 		autoAsk = false;
 
 		// Only the request on its way can fail, so at the page's limit it was the last: a "try again" would contradict the
@@ -1356,14 +1360,14 @@ export function setupOfferBoard() {
 		sayOrHold(
 			full,
 			atLimit
-				? "No answer. This page’s limit is reached."
+				? "No answer. Page limit reached."
 				: kind === "retry"
-					? "The AI didn’t answer. Press Suggest to try again."
+					? "No suggestions. Press Suggest again."
 					: kind === "daily"
-						? "Today’s limit is reached."
+						? "Daily limit reached."
 						: kind === "signin"
-							? "Your sign-in may have lapsed. Reload the page."
-							: text,
+							? "Reload: sign-in may have lapsed."
+							: short,
 		);
 	}
 
@@ -1420,6 +1424,13 @@ export function setupOfferBoard() {
 							: /try again/i.test(error)
 								? "retry"
 								: "answer",
+						response.status === 404
+							? "No such request."
+							: response.status === 409
+								? "This request is closed."
+								: response.status === 503
+									? "The board is off here."
+									: error,
 					);
 				else if (
 					json === null ||
@@ -1459,7 +1470,12 @@ export function setupOfferBoard() {
 						: [],
 				),
 				refs,
-				sizing: reply,
+				sizing: {
+					size: reply.size,
+					sizeReason: reply.sizeReason,
+					figureUsd: reply.figureUsd,
+					figureReason: reply.figureReason,
+				},
 				changes: 0,
 				last,
 			});
@@ -1515,6 +1531,9 @@ export function setupOfferBoard() {
 		(event) => {
 			// Enter and Escape in a card editor press Save or Cancel from the script; focus stays where the handler puts it.
 			if (!event.isTrusted) return;
+
+			// The press ends here; focus on the pressed button (below) holds a reply from now where it should.
+			pressing = false;
 
 			const pressed =
 				event.target instanceof Element
@@ -1682,7 +1701,7 @@ export function setupOfferBoard() {
 					say("Saved your words on the card. Undo puts the old ones back.");
 					schedule();
 				}
-			}
+			} else say("Kept the card as it was.");
 
 			const drawn = nodes.get(card.id);
 
@@ -1870,24 +1889,36 @@ export function setupOfferBoard() {
 	root.addEventListener(
 		"pointerdown",
 		(event) => {
-			if (event.target instanceof Element && event.target.closest("button"))
+			if (
+				event.button === 0 &&
+				event.target instanceof Element &&
+				event.target.closest("button")
+			)
 				pressing = true;
 		},
 		true,
 	);
 
+	/** A press that ends without a click (dragged off, cancelled, or a tap whose click comes later) ends here. */
 	const released = () => {
 		if (!pressing) return;
 
-		// After the click, which follows pointerup in the same turn.
 		setTimeout(() => {
+			if (!pressing) return;
 			pressing = false;
 			left();
-		}, 0);
+		}, 600);
+	};
+
+	const dropped = () => {
+		pressing = false;
+		left();
 	};
 
 	document.addEventListener("pointerup", released, true);
 	document.addEventListener("pointercancel", released, true);
+	document.addEventListener("contextmenu", dropped, true);
+	window.addEventListener("blur", dropped);
 	root.addEventListener("focusout", () => {
 		// Decided once focus has settled: drawing a card can replace the focused button and move focus to its neighbour.
 		setTimeout(left, 0);

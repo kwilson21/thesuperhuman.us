@@ -1594,6 +1594,45 @@ function check(name, ok, detail = "") {
 			queue.length === 0,
 		);
 
+		// A reply held while focus is among the cards lands before a mouse press on Suggest, so the request that press
+		// sends carries the held card (the twenty-fourth review: a press in progress kept it waiting until after).
+		await fresh();
+		await card("outcome")
+			.getByRole("button", { name: /^Use as outcome/ })
+			.click();
+		await page.mouse.move(2, 2);
+
+		const waiting = await next(20000);
+		const heldReply = scriptedOfferReply(waiting.request().postData());
+
+		heldReply.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Will the band sell tickets on the site?",
+			reason: "",
+			detail: null,
+		});
+		await release(waiting, heldReply);
+		await page.waitForFunction(
+			() =>
+				!document.querySelector("[data-offer-held]")?.hasAttribute("data-idle"),
+		);
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const pressedRequest = await next();
+
+		check(
+			"a held reply lands before a mouse press on Suggest, so its request carries the held card",
+			Boolean(
+				pressedRequest
+					?.request()
+					.postData()
+					?.includes("Will the band sell tickets on the site?"),
+			),
+		);
+
+		if (pressedRequest) await release(pressedRequest);
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page
