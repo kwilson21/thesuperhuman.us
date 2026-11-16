@@ -29,8 +29,9 @@ module audioProjectNotices {
   //   "queue-any-status"  the rule lets a retry move a notice that was sent
   //   "queue-no-cas"      the retry's write compares neither the status nor the attempt it read, so a delivery that claimed the notice
   //                       between the retry's read and its write is overwritten and a second email can go out
-  //   "queue-status-only" the retry's write compares the status it read but not the attempt: with two retries at once, a retry that read
-  //                       `sending` still passes after the other requeued it and a later delivery went uncertain in `sending` again
+  //   "queue-status-only" the retry's write does not compare the attempt: with two retries at once, both read the notice stuck in
+  //                       `sending`, one requeues it, a later delivery claims it again (still in flight, or left `sending` by an
+  //                       uncertain answer), and the other retry's write requeues over that claim, so a second email can go out
   //   "uncertain-sent"    an uncertain outcome is written as sent
   //   "uncertain-failed"  an uncertain outcome is written as failed
   //   "lookup-no-open"    the recipient read does not filter on the project's access, so a closed project has a recipient (the
@@ -177,9 +178,13 @@ module audioProjectNotices {
   action queueWrite = {
     nondet r = RETRIES.filter(i => runs.get(i).phase == "write").oneOf()
     val h = runs.get(r)
-    val statusHolds = MUTANT == "queue-no-cas" or status == h.snap.status
-    val attemptHolds = MUTANT == "queue-no-cas" or MUTANT == "queue-status-only" or h.snap.status != "sending" or attempt <= h.snap.attempt
-    if (statusHolds and attemptHolds and open) all {
+    // Today's condition, exactly: `status IN ('pending','failed')`, or `sending` when the owner confirmed it (the retry read it as
+    // `sending`) and its attempt is not newer than the one read (`attempted_at<=?`). The mutants drop the attempt, or every condition.
+    val holds =
+      MUTANT == "queue-no-cas" or status == "failed" or status == "pending" or
+      (MUTANT == "queue-any-status" and status == "sent") or
+      (h.snap.status == "sending" and status == "sending" and (MUTANT == "queue-status-only" or attempt <= h.snap.attempt))
+    if (holds and open) all {
       status' = "pending", open' = open, epoch' = epoch + 1, mailed' = mailed,
       clock' = clock, attempt' = 0, closedAt' = closedAt,
       runs' = runs.set(r, { ...h, phase: "done" }),
