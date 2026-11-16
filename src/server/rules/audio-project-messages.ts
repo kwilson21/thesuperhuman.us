@@ -298,7 +298,8 @@ type ClientSendFacts = {
 	readonly count: number;
 };
 
-const windowStart = (at: Date) =>
+/** The start of the window the client's messages are counted over, as the stored text compares it. */
+export const windowStart = (at: Date) =>
 	new Date(at.getTime() - CLIENT_MESSAGE_WINDOW_MS).toISOString();
 
 const notFull = term(

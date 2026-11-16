@@ -66,7 +66,7 @@ import {
 //     409 {ok:false}              project complete, lost races
 //   503 "could not be saved"      any database step that throws: project lookup, insert, stop batch, rate-limit count,
 //                                 read update
-//   postClientReviewDecision      stage x decision (21 cases), rounds 0/1/2/3, the stopped batch, the answer window
+//   answerReview and the store's insert  stage x decision (21 cases), rounds 0/1/2/3, the stopped batch, the answer window
 //                                 (decision before publish, at publish), two reviews published (latest only)
 //   owner notification            none: the route sends no email. Every case records no outgoing fetch.
 //
