@@ -106,10 +106,12 @@ describe("parallel Validate retains every release gate", () => {
 		expect(workflow).not.toContain("PUBLICIST_PRIVATE_TOKEN");
 		expect(workflow).not.toContain("statuses: write");
 		expect(job("candidate-checks")).not.toContain("actions/checkout");
+
 		const trusted = readFileSync(
 			".github/workflows/validation-finalize.yml",
 			"utf8",
 		);
+
 		expect(trusted).toContain(
 			"PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}",
 		);
