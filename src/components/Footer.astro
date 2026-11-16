@@ -37,7 +37,7 @@ const privacyHref = mainHref("/privacy");
 const homeHref = mainHref("/");
 const year = new Date().getFullYear();
 ---
-{pinned && <div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a></div>}
+{pinned && <div class="contact-track" data-contact-track><div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel} <span aria-hidden="true">→</span></a></div></div>}
 <footer class="compact-footer site-shell">
   <div class:list={['closing-panel', { 'closing-panel--quiet': variant === 'quiet' }]} id={id}>
     {variant === 'quiet' && <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>}
@@ -74,9 +74,11 @@ const year = new Date().getFullYear();
   .closing-panel .site-button-large { white-space: normal; text-align: center; }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } .closing-panel [data-closing-button] { width: min(100%, var(--contact-action-max)); box-sizing: border-box; } }
+  .contact-track { display: none; }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
-    .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); transform: translateY(var(--contact-dock-offset, 0px)); pointer-events: none; }
+    .contact-track { display: block; position: absolute; inset: 0 0 auto; height: var(--contact-track-height, 0px); pointer-events: none; z-index: 4; }
+    .pinned-contact:not([hidden]) { display: flex; position: sticky; top: max(0px, calc(100dvh - var(--contact-height, 0px))); z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); pointer-events: none; }
     .pinned-contact::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); }
     .pinned-contact .site-button { pointer-events: auto; width: min(100%, var(--contact-action-max)); margin-inline: auto; box-sizing: border-box; white-space: normal; text-align: center; }
     /* Keep the slot's geometry while the same visible link docks into it. */

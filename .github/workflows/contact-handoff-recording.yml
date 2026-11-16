@@ -20,7 +20,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm run screenshots:preview
       - name: Start local fixture preview
         run: |
@@ -35,6 +35,7 @@ jobs:
             handoff-recording/timing.json
             handoff-recording/*.png
             handoff-recording/README.txt
+            handoff-recording/rapid-geometry.json
           retention-days: 7
           if-no-files-found: error
       - if: failure()

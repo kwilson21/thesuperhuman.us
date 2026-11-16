@@ -1,6 +1,6 @@
 /**
  * One visible action: the phone link stays fixed until it meets the footer slot,
- * then follows that slot in both directions. The footer link preserves layout
+ * then follows that slot in both directions using native sticky positioning. The footer link preserves layout
  * and the no-JS/desktop fallback, but is inert while its phone proxy is active.
  */
 export function setupPinnedContact(): void {
@@ -11,19 +11,29 @@ export function setupPinnedContact(): void {
 	);
 
 	const link = pinned?.querySelector<HTMLElement>("a");
+	const track = document.querySelector<HTMLElement>("[data-contact-track]");
 
 	if (
 		!pinned ||
 		!footer ||
 		!link ||
+		!track ||
 		typeof requestAnimationFrame === "undefined"
 	)
 		return;
 	const phone = matchMedia("(max-width: 600px)");
-	let offset = 0;
 	let pending = false;
 
 	pinned.removeAttribute("hidden");
+
+	// Only the backdrop changes on scroll. Native sticky geometry does not wait
+	// for this callback, including when scroll events are delayed or coalesced.
+	const updateBackdrop = () => {
+		if (!phone.matches) return;
+		const target = footer.getBoundingClientRect();
+		const action = link.getBoundingClientRect();
+		pinned.toggleAttribute("data-docked", target.top <= action.top + 1);
+	};
 
 	const update = () => {
 		pending = false;
@@ -36,25 +46,28 @@ export function setupPinnedContact(): void {
 				footer.focus({ preventScroll: true });
 			pinned.setAttribute("inert", "");
 			pinned.removeAttribute("data-docked");
-			offset = 0;
-			pinned.style.setProperty("--contact-dock-offset", "0px");
 
 			return;
 		}
 
 		if (!pinned.getClientRects().length) return;
-		// Subtract the last translation to recover the stable fixed-bottom position.
-		const restingTop = link.getBoundingClientRect().top - offset;
-		offset = Math.min(0, footer.getBoundingClientRect().top - restingTop);
-		pinned.style.setProperty("--contact-dock-offset", `${offset}px`);
-
-		if (offset < 0) pinned.setAttribute("data-docked", "");
-		else pinned.removeAttribute("data-docked");
+		// Layout-only measurements: the browser, not a scroll-event transform,
+		// constrains the sticky action to this document-space track. It therefore
+		// follows fast/compositor scrolling even while the main thread is busy.
+		const box = pinned.getBoundingClientRect();
+		const action = link.getBoundingClientRect();
+		const target = footer.getBoundingClientRect();
+		track.style.setProperty(
+			"--contact-track-height",
+			`${target.top + window.scrollY + box.bottom - action.top}px`,
+		);
+		pinned.style.setProperty("--contact-height", `${box.height}px`);
 		footer.setAttribute("data-contact-proxy", "");
 		pinned.removeAttribute("inert");
 
 		if (document.activeElement === footer) link.focus({ preventScroll: true });
 		footer.setAttribute("inert", "");
+		updateBackdrop();
 	};
 
 	const schedule = () => {
@@ -63,7 +76,7 @@ export function setupPinnedContact(): void {
 		requestAnimationFrame(update);
 	};
 
-	window.addEventListener("scroll", schedule, { passive: true });
+	window.addEventListener("scroll", updateBackdrop, { passive: true });
 	window.addEventListener("resize", schedule);
 	window.addEventListener("pageshow", schedule);
 	window.addEventListener("focusin", () => {
@@ -82,13 +95,16 @@ export function setupPinnedContact(): void {
 	window.addEventListener("toggle", schedule, true);
 	phone.addEventListener("change", schedule);
 	window.visualViewport?.addEventListener("resize", schedule);
-	window.visualViewport?.addEventListener("scroll", schedule);
+	window.visualViewport?.addEventListener("scroll", updateBackdrop);
 
 	if (typeof ResizeObserver !== "undefined") {
 		const resize = new ResizeObserver(schedule);
 		resize.observe(document.documentElement);
+		resize.observe(footer);
+		resize.observe(pinned);
 	}
 
 	// Establish the initial state before paint, including restored scroll positions.
 	update();
+	updateBackdrop();
 }

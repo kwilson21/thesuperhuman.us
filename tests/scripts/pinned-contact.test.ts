@@ -15,6 +15,8 @@ const element = (initial: Record<string, string> = {}) => {
 		hasAttribute: (name: string) => attributes.has(name),
 		setAttribute: (name: string, value: string) => attributes.set(name, value),
 		removeAttribute: (name: string) => attributes.delete(name),
+		toggleAttribute: (name: string, on: boolean) =>
+			on ? attributes.set(name, "") : attributes.delete(name),
 		style: {
 			setProperty: (name: string, value: string) => properties.set(name, value),
 			removeProperty: (name: string) => properties.delete(name),
@@ -42,6 +44,7 @@ const page = ({
 } = {}) => {
 	const pinned = element({ hidden: "" });
 	const footer = element();
+	const track = element();
 	const root = element();
 	let footerTop = 1000;
 	let fixedTop = 776;
@@ -78,6 +81,11 @@ const page = ({
 
 	const pinnedNode = {
 		...pinned,
+		getBoundingClientRect: () => ({
+			top: fixedTop - 12,
+			bottom: fixedTop + 68,
+			height: 80,
+		}),
 		getClientRects: () => (rendered ? [{ top: fixedTop }] : []),
 		querySelector: (selector: string) =>
 			selector === "a" && missing !== "link" ? link : null,
@@ -91,6 +99,9 @@ const page = ({
 	};
 
 	const documentQuery = vi.fn((selector: string) => {
+		if (selector === "[data-contact-track]")
+			return missing === "track" ? null : track;
+
 		if (selector === "[data-pinned-contact]")
 			return missing === "pinned" ? null : pinnedNode;
 
@@ -121,6 +132,7 @@ const page = ({
 	vi.stubGlobal("window", {
 		...events,
 		innerHeight: 844,
+		scrollY: 0,
 		requestAnimationFrame: requestFrame,
 		matchMedia: vi.fn(() => media),
 		visualViewport: viewportAvailable ? viewport : undefined,
@@ -150,6 +162,7 @@ const page = ({
 			fakeDocument.activeElement = footerNode;
 		},
 		pinned,
+		track,
 		footer,
 		root,
 		media,
@@ -175,109 +188,90 @@ const page = ({
 	};
 };
 
-it("keeps one interactive mobile action and preserves the footer as its layout target", () => {
+it("uses a layout track and keeps one interactive mobile action", () => {
 	const p = page();
 	setupPinnedContact();
 	p.flush();
 	expect(p.pinned.hasAttribute("hidden")).toBe(false);
-	expect(p.pinned.hasAttribute("inert")).toBe(false);
-	expect(p.footer.hasAttribute("data-contact-proxy")).toBe(true);
 	expect(p.footer.hasAttribute("inert")).toBe(true);
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("0px");
-	expect(p.pinned.hasAttribute("data-docked")).toBe(false);
+	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+	expect(p.pinned.properties.get("--contact-height")).toBe("80px");
+	expect(p.pinned.properties.has("--contact-dock-offset")).toBe(false);
 });
 
-it("docks continuously and reverses at the same position without accumulating transforms", () => {
+it("fast scroll never writes positional styles or queues animation frames", () => {
 	const p = page();
 	setupPinnedContact();
 	p.flush();
+	const track = [...p.track.properties];
+	const pinned = [...p.pinned.properties];
 
-	for (const [top, offset] of [
-		[800, 0],
-		[776, 0],
-		[760, -16],
-		[600, -176],
-		[760, -16],
-		[776, 0],
-		[800, 0],
-	]) {
-		p.setFooterTop(top);
+	for (const y of [760, 300, -100, 600, 900, 500, 1000]) {
+		p.setFooterTop(y);
 		p.events.fire("scroll");
-		p.flush();
-		expect(p.pinned.properties.get("--contact-dock-offset")).toBe(
-			`${offset}px`,
-		);
-		expect(p.pinned.hasAttribute("data-docked")).toBe(offset < 0);
-		expect(p.pinned.hasAttribute("inert")).toBe(false);
-		expect(p.footer.hasAttribute("inert")).toBe(true);
+		p.viewport.fire("scroll");
+		expect(p.frames).toHaveLength(0);
+		expect([...p.track.properties]).toEqual(track);
+		expect([...p.pinned.properties]).toEqual(pinned);
 	}
 });
 
-it("lands correctly when opening at an already-scrolled footer", () => {
+it("updates layout bounds after reflow and coalesces resize events", () => {
 	const p = page();
-	p.setFooterTop(550);
 	setupPinnedContact();
 	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-226px");
-	expect(p.pinned.hasAttribute("data-docked")).toBe(true);
+	p.setFooterTop(800);
+	p.events.fire("resize");
+	p.viewport.fire("resize");
+	p.resizeObservers[0].callback();
+	expect(p.frames).toHaveLength(1);
+	p.flush();
+	expect(p.track.properties.get("--contact-track-height")).toBe("868px");
+	expect(p.resizeObservers[0].targets).toContain(p.root);
 });
 
-it("restores the original footer link on desktop and resumes docking on mobile", () => {
+it("restored scroll uses document-space target bounds", () => {
 	const p = page();
+	p.setFooterTop(550);
+	window.scrollY = 450;
 	setupPinnedContact();
 	p.flush();
-	p.setFooterTop(600);
-	p.events.fire("scroll");
+	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+});
+
+it("restores footer ownership on desktop and resumes mobile", () => {
+	const p = page();
+	setupPinnedContact();
 	p.flush();
 	p.media.matches = false;
 	p.media.fire("change");
 	p.flush();
-	expect(p.footer.hasAttribute("data-contact-proxy")).toBe(false);
 	expect(p.footer.hasAttribute("inert")).toBe(false);
 	expect(p.pinned.hasAttribute("inert")).toBe(true);
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("0px");
 	p.media.matches = true;
 	p.media.fire("change");
 	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-176px");
 	expect(p.footer.hasAttribute("inert")).toBe(true);
 	expect(p.pinned.hasAttribute("inert")).toBe(false);
 });
 
-it("coalesces scroll and resize events into a single frame", () => {
+it("recovers after menu or form suppression without measuring hidden geometry", () => {
 	const p = page();
 	setupPinnedContact();
 	p.flush();
-	p.events.fire("scroll");
-	p.events.fire("scroll");
-	p.events.fire("resize");
-	p.viewport.fire("resize");
-	expect(p.frames).toHaveLength(1);
+	p.setRendered(false);
+	p.setFooterTop(500);
+	p.events.fire("focusin");
 	p.flush();
-	expect(p.frames).toHaveLength(0);
+	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+	p.setRendered(true);
+	p.events.fire("toggle");
+	p.flush();
+	expect(p.track.properties.get("--contact-track-height")).toBe("568px");
 });
 
-it("recalculates docking for restored pages, viewport changes and page reflow", () => {
-	const p = page();
-	setupPinnedContact();
-	p.flush();
-	p.setFooterTop(700);
-	p.events.fire("pageshow");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-76px");
-	p.setFixedTop(720);
-	p.viewport.fire("resize");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-20px");
-	expect(p.resizeObservers[0].targets).toContain(p.root);
-	p.setFooterTop(650);
-	p.resizeObservers[0].callback();
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-70px");
-});
-
-it.each(["pinned", "footer", "link"])(
-	"leaves the fallback alone when %s is absent",
+it.each(["pinned", "footer", "link", "track"])(
+	"keeps fallback when %s absent",
 	(missing) => {
 		const p = page({ missing });
 		setupPinnedContact();
@@ -287,81 +281,15 @@ it.each(["pinned", "footer", "link"])(
 	},
 );
 
-it("keeps the no-animation-frame fallback unchanged", () => {
-	const p = page();
-	vi.stubGlobal("requestAnimationFrame", undefined);
-	setupPinnedContact();
-	expect(p.pinned.hasAttribute("hidden")).toBe(true);
-	expect(p.footer.hasAttribute("inert")).toBe(false);
-});
-
-it("does not require ResizeObserver or a visual viewport", () => {
+it("supports missing observer and visual viewport", () => {
 	const p = page({ viewportAvailable: false });
 	vi.stubGlobal("ResizeObserver", undefined);
 	setupPinnedContact();
 	p.flush();
-	p.setFooterTop(700);
-	p.events.fire("scroll");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-76px");
+	expect(p.footer.hasAttribute("inert")).toBe(true);
 });
 
-it("ignores suppressed mobile geometry and recovers after focus leaves a field", () => {
-	const p = page();
-	setupPinnedContact();
-	p.flush();
-	p.setFooterTop(600);
-	p.events.fire("scroll");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-176px");
-	p.setRendered(false);
-	p.setFooterTop(500);
-	p.events.fire("focusin");
-	p.events.fire("scroll");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-176px");
-	p.setRendered(true);
-	p.events.fire("focusout");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-276px");
-});
-
-it("updates the dock after closing a menu that hid the proxy during scrolling", () => {
-	const p = page();
-	setupPinnedContact();
-	p.flush();
-	p.setRendered(false);
-	p.setFooterTop(600);
-	p.events.fire("scroll");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("0px");
-	p.setRendered(true);
-	p.events.fire("toggle");
-	p.flush();
-	expect(p.pinned.properties.get("--contact-dock-offset")).toBe("-176px");
-});
-
-it("brings an offscreen focused docked action into view without smooth motion", () => {
-	const p = page();
-	p.setFooterTop(-100);
-	setupPinnedContact();
-	p.flush();
-	p.focusLink();
-	p.events.fire("focusin");
-	expect(p.footerNode.scrollIntoView).toHaveBeenCalledWith({
-		block: "center",
-		behavior: "instant",
-	});
-	p.flush();
-	p.footerNode.scrollIntoView.mockClear();
-	p.setFooterTop(600);
-	p.events.fire("scroll");
-	p.flush();
-	p.events.fire("focusin");
-	expect(p.footerNode.scrollIntoView).not.toHaveBeenCalled();
-});
-
-it("preserves focus across responsive ownership changes", () => {
+it("preserves keyboard focus across responsive ownership changes", () => {
 	const p = page();
 	setupPinnedContact();
 	p.flush();
@@ -375,4 +303,17 @@ it("preserves focus across responsive ownership changes", () => {
 	p.media.fire("change");
 	p.flush();
 	expect(p.link.focus).toHaveBeenCalledWith({ preventScroll: true });
+});
+
+it("brings an offscreen focused link into view without smooth motion", () => {
+	const p = page();
+	setupPinnedContact();
+	p.flush();
+	p.setFixedTop(-100);
+	p.focusLink();
+	p.events.fire("focusin");
+	expect(p.footerNode.scrollIntoView).toHaveBeenCalledWith({
+		block: "center",
+		behavior: "instant",
+	});
 });
