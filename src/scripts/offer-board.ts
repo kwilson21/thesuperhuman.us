@@ -66,6 +66,9 @@ const MILESTONE_FIELDS = [
 /** Requests one page may make. */
 const REQUESTS_PER_PAGE = 12;
 
+/** What the board says at its page limit, with the reply that reaches it and on a press of Suggest after. */
+const PAGE_LIMIT = `The board has asked the AI ${REQUESTS_PER_PAGE} times on this page, its limit, so it no longer follows your draft. Save your draft, then reload the page to ask again; the board starts empty.`;
+
 /** How long the page waits for an answer (the route gives the model 30 seconds). */
 const TIMEOUT = 35000;
 
@@ -1156,10 +1159,14 @@ export function setupOfferBoard() {
 		sizing = reply.sizing.size ? reply.sizing : sizing;
 		held = null;
 		render();
+
+		// The reply that reaches the page's limit says so with it: the board asks nothing more on this page.
+		const limit = requests >= REQUESTS_PER_PAGE ? ` ${PAGE_LIMIT}` : "";
+
 		say(
 			result.added
-				? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`
-				: "Up to date with your draft.",
+				? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.${limit}`
+				: `Up to date with your draft.${limit}`,
 		);
 	}
 
@@ -1219,29 +1226,11 @@ export function setupOfferBoard() {
 
 	const canAsk = () => requests < REQUESTS_PER_PAGE && !inFlight;
 
-	/** What the board says once it has made all its requests for this page. */
-	const PAGE_LIMIT = `The board has made its ${REQUESTS_PER_PAGE} suggestions for this page and no longer follows your draft. Save your draft, then reload the page to ask again; the board starts empty.`;
-
-	/** Whether the board has said that it stopped following the draft at the page's limit (said once a page). */
-	let limitSaid = false;
-
 	/** After the owner has asked once, the board keeps up with the draft; a failure stops that until they ask again. */
 	function schedule(delay = IDLE) {
 		clearTimeout(timer);
 
-		if (!autoAsk || requestKey() === lastSent) return;
-
-		// At the page's limit the board stops following the draft, and says so the first time the draft moves on.
-		if (requests >= REQUESTS_PER_PAGE) {
-			if (!limitSaid) {
-				limitSaid = true;
-				say(PAGE_LIMIT);
-			}
-
-			return;
-		}
-
-		if (inFlight) return;
+		if (!autoAsk || !canAsk() || requestKey() === lastSent) return;
 		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
 	}
 
@@ -1257,10 +1246,7 @@ export function setupOfferBoard() {
 
 	async function ask(pressed = false) {
 		if (!canAsk()) {
-			if (requests >= REQUESTS_PER_PAGE) {
-				limitSaid = true;
-				say(PAGE_LIMIT);
-			}
+			if (requests >= REQUESTS_PER_PAGE) say(PAGE_LIMIT);
 
 			return;
 		}
@@ -1385,6 +1371,27 @@ export function setupOfferBoard() {
 		schedule();
 	}
 
+	// Safari does not focus a button it taps or clicks. Focusing it before any handler runs (in the capture phase) keeps
+	// focus among the cards for the press, so a reply arriving after a tapped Use is held as it is everywhere else, and a
+	// handler that moves focus on (to an editor's error, a card's next button) still has the last word.
+	root.addEventListener(
+		"click",
+		(event) => {
+			const pressed =
+				event.target instanceof Element
+					? event.target.closest<HTMLElement>("button")
+					: null;
+
+			if (
+				pressed &&
+				root.contains(pressed) &&
+				document.activeElement !== pressed
+			)
+				pressed.focus({ preventScroll: true });
+		},
+		true,
+	);
+
 	root.addEventListener("click", (event) => {
 		const target =
 			event.target instanceof Element
@@ -1392,11 +1399,6 @@ export function setupOfferBoard() {
 				: null;
 
 		if (!target || !root.contains(target)) return;
-
-		// Safari does not focus a button it taps or clicks. Focusing it here keeps focus among the cards for the press, so a
-		// reply arriving after a tapped Use is held as it is everywhere else, rather than moving cards under the finger.
-		if (document.activeElement !== target)
-			target.focus({ preventScroll: true });
 		const node = target.closest<HTMLElement>("[data-card]");
 		const card = cardOf(node?.dataset.card);
 

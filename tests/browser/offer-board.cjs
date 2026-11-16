@@ -662,9 +662,12 @@ function check(name, ok, detail = "") {
 		// In a contrast theme the busy state still shows: the system's colour for inactive text.
 		await page.emulateMedia({ forcedColors: "active" });
 
-		const forcedLooks = await values
-			.getByRole("button", { name: "Save", exact: true })
-			.evaluate((button) => {
+		const forcedLooks = await page.evaluate(() =>
+			[
+				...document.querySelectorAll(
+					'[data-pricing-form] button[type="submit"], [data-pricing-clear]',
+				),
+			].map((button) => {
 				const rest = getComputedStyle(button).color;
 
 				button.setAttribute("aria-disabled", "true");
@@ -673,14 +676,16 @@ function check(name, ok, detail = "") {
 
 				button.removeAttribute("aria-disabled");
 
-				return [rest, busy];
-			});
+				return [button.textContent, rest, busy];
+			}),
+		);
 
 		await page.emulateMedia({ forcedColors: "none" });
 		check(
-			"in a contrast theme a busy button looks different from one at rest",
-			forcedLooks[0] !== forcedLooks[1],
-			forcedLooks.join(" / "),
+			"in a contrast theme every busy button looks different from one at rest",
+			forcedLooks.length === 3 &&
+				forcedLooks.every(([, rest, busy]) => rest !== busy),
+			forcedLooks.map((look) => look.join(" ")).join("; "),
 		);
 
 		// A research refusal answered after the box changed is about what was sent: the box is not marked, and the reason
@@ -1351,6 +1356,13 @@ function check(name, ok, detail = "") {
 				(await card("outcome").locator("[data-card-input]").inputValue()) ===
 					"A band site that books shows, in our words." &&
 				(await card("outcome").locator("[data-card-error]").isVisible()),
+		);
+		check(
+			"a refused Undo leaves focus on the field that needs attention, not on Undo",
+			broughtBack &&
+				(await card("outcome")
+					.locator("[data-card-input]")
+					.evaluate((input) => document.activeElement === input)),
 		);
 
 		if (broughtBack)

@@ -518,9 +518,11 @@ const MONEY = new RegExp(
 // follows ("Fee 3,000 plus VAT" and "Budget around 5 thousand" are money; "Estimated 1,500 pages" is not). A small one is
 // money only when what follows reads as paying ("a fee of 50", "costs 25/month"). An amount with its currency after it
 // is money with or without a scale word between them ("5 mil dólares", "2 thousand dollars"), and so is a sum spelled in
-// English words before a currency word ("five thousand dollars").
+// English words before a currency word ("five thousand dollars", "fifteen hundred dollars", "two hundred thousand
+// dollars"). A range after a money word may end in a scale word ("Budget of 5 to 10 thousand").
 // Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"); a large number
-// followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"); money words are listed for English,
+// followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"), and so is a number before a short
+// scale word that is also an English word ("Quote 4 mil poly bags", "Price 2 bin sizes"); money words are listed for English,
 // Spanish, Portuguese, French, German, Italian, Russian, Polish and Turkish only, so another language's money word
 // passes unless a currency is written; a currency code that is also a word ("TRY") is not listed; a sum spelled in
 // words in another language passes ("cinco mil dólares").
@@ -538,19 +540,19 @@ const OFFER_CONNECTOR =
 
 /** A scale word after a number, in the languages listed above ("thousand", "mil", "millones", "Tausend", "тыс.", "bin"). */
 const SCALE =
-	"(?:thousands?|millions?|billions?|milliards?|mil|mill[oó]n(?:es)?|milh(?:ão|ões|ao|oes)|mille|mila|milion[ei]?|milioni|tausend|millionen|mio\\.?|mrd\\.?|тысяч\\p{L}*|тыс\\.?|миллион\\p{L}*|млн\\.?|tys\\.?|tysięcy|tysiące|milion(?:ów|y)?|bin|milyon)";
+	"(?:thousands?|millions?|billions?|milliards?|mil|mill[oó]n(?:es)?|milh(?:ão|ões|ao|oes)|mille|mila|milion[ei]?|milioni|tausend|millionen|mio(?:\\.|(?!\\.))|mrd(?:\\.|(?!\\.))|тысяч\\p{L}*|тыс(?:\\.|(?!\\.))|миллион\\p{L}*|млн(?:\\.|(?!\\.))|tys(?:\\.|(?!\\.))|tysięcy|tysiące|milion(?:ów|y)?|bin|milyon)";
 
 /**
  * A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k",
  * "5 thousand").
  */
-const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d)`;
+const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d|\\s\\d{3}(?!\\d))`;
 
 /** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
 
 /** A range after an amount ("to 6", "- 8", "– 1,200"). */
-const OFFER_RANGE = "(?:\\s*(?:to|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?k)?)?";
+const OFFER_RANGE = `(?:\\s*(?:to|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?(?:k|${SCALE})(?![\\p{L}]))?)?`;
 
 /** Units of time, and things an offer counts, in the languages listed above. */
 const OFFER_UNITS =
@@ -581,7 +583,7 @@ const AMOUNT_THEN_CURRENCY = [
 	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])`,
 	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])`,
 	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
-	"(?<![\\p{L}])(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|a few|few|several|a couple of|couple of)\\s+(?:hundred|thousand|million)\\s+(?:dollars?|euros?|pounds?|bucks|usd|eur|gbp)(?![\\p{L}])",
+	"(?<![\\p{L}])(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|a few|few|several|a couple of|couple of)(?:[-\\s](?:one|two|three|four|five|six|seven|eight|nine))?\\s+(?:hundred|thousand|million)(?:\\s+(?:thousand|million))?\\s+(?:dollars?|euros?|pounds?|bucks|usd|eur|gbp)(?![\\p{L}])",
 	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
 	"\\brs\\.\\s?\\d",
 ];

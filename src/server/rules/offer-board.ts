@@ -28,7 +28,7 @@ export class OfferNotOfferable extends Data.TaggedError("OfferNotOfferable") {
 
 export class OfferDailyLimit extends Data.TaggedError("OfferDailyLimit") {
 	readonly say =
-		"The offer board reached today’s limit of 40 suggestions. It resets at midnight UTC.";
+		"The offer board reached today’s limit of 40 requests to the AI. It resets at midnight UTC.";
 }
 
 /** What the rule reads about the request; `found` is false when there is no software request with this id. */

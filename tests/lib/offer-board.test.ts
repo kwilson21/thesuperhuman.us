@@ -581,3 +581,47 @@ describe("found in the offer board's nineteenth review", () => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
+
+describe("found in the offer board's twentieth review", () => {
+	it.each([
+		"Sixty thousand dollars for the build",
+		"Ninety thousand euros",
+		"Eighty thousand pounds",
+		"Fifteen hundred dollars a month",
+		"Twelve hundred dollars upfront",
+		"Two hundred thousand dollars",
+		"A hundred thousand dollars in all",
+		"Twenty-five thousand dollars",
+		"Budget of 5 to 10 thousand",
+		"Budget of 5-10 thousand",
+		"Fee 2 to 3 thousand",
+		"Presupuesto de 5 a 10 mil",
+		"Orçamento de 20 a 30 mil",
+		"Budget 2 Mio.",
+	])(
+		"drops %s: a spelled sum, a range ending in a scale word, or a dotted scale",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Estimated 2 Mio. pages",
+		"Estimated 2 Mio. Seiten",
+		"Estimated 10 tys. stron",
+		"Estimated 3 млн. страниц",
+		"Estimated 10 тыс. страниц",
+		"Estimated 1 000 000 pages",
+		"Estimated 2 500 000 users",
+		"Estimated 5 to 10 thousand users",
+	])(
+		"keeps %s: a count after a dotted scale, a space-grouped amount or a range",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(false);
+		},
+	);
+
+	it("drops a count before a short scale word that is also an English word (a listed limit)", () => {
+		expect(pricesOrLinks("Quote 4 mil poly bags")).toBe(true);
+	});
+});
