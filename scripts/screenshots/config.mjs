@@ -250,6 +250,11 @@ const PAGE_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": COMPARISON_PAGES,
 	"src/scripts/comparison-player.ts": COMPARISON_PAGES,
 	"src/lib/waveform.ts": COMPARISON_PAGES,
+	"src/lib/loudness-meter.ts": COMPARISON_PAGES,
+	"src/components/home/SignalEdge.astro": ["home"],
+	"src/scripts/home-worlds.ts": ["home"],
+	"src/scripts/home-signal.ts": ["home"],
+	"src/scripts/comparison-signal.ts": ["home"],
 	"src/components/audio/PlayIcon.astro": [
 		"audio-portfolio",
 		"audio-releases",
@@ -397,6 +402,10 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/lib/navigation-prefetch.ts": ["prefetch-trial"],
 	"src/scripts/project-timeline.ts": ["journal-pagination"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
+	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
+	"src/scripts/comparison-player.ts": ["loop-desk"],
+	"src/scripts/comparison-transport.ts": ["loop-desk"],
+	"src/lib/loudness-meter.ts": ["loop-desk"],
 };
 
 function routeForPageFile(file) {

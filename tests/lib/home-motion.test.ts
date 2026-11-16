@@ -6,7 +6,9 @@ import {
 	codeRows,
 	easeOutCubic,
 	formatFigure,
+	musicFrame,
 	parseFigure,
+	resamplePeaks,
 	signalFrame,
 	waveformPeaks,
 } from "~/lib/home-motion";
@@ -103,5 +105,29 @@ describe("code rows", () => {
 					),
 			),
 		).toBe(true);
+	});
+});
+
+describe("a recording's waveform on the edge", () => {
+	it("takes the loudest point of each stretch, scaled so the loudest bar is full height", () => {
+		expect(resamplePeaks([0.1, 0.4, 0.2, 0.8, 0.3, 0.2], 3)).toEqual([
+			0.5, 1, 0.375,
+		]);
+		expect(resamplePeaks([0.5, 0.25], 4)).toEqual([1, 1, 0.5, 0.5]);
+		expect(resamplePeaks([0, 0], 2)).toEqual([0, 0]);
+		expect(resamplePeaks([], 3)).toEqual([]);
+	});
+
+	it("rises and falls with the music's level, and never quite to nothing", () => {
+		const peaks = [1, 0.5];
+
+		const loud = musicFrame(peaks, 1, 0);
+		const quiet = musicFrame(peaks, 0, 0);
+
+		expect(loud[0]).toBeGreaterThan(quiet[0] * 4.9);
+		expect(quiet[0]).toBeGreaterThan(0);
+		// The ripple moves along the bars with time.
+		expect(musicFrame(peaks, 1, 0.3)[0]).not.toBe(loud[0]);
+		expect(Math.max(...loud)).toBeLessThanOrEqual(1);
 	});
 });

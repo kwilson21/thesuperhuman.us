@@ -21,6 +21,7 @@ export const BROWSER_MODULES: readonly string[] = [
 	"src/lib/line-diff.ts",
 	"src/lib/navigation-prefetch.ts",
 	"src/lib/link-check.ts",
+	"src/lib/loudness-meter.ts",
 	"src/lib/project-story.ts",
 	"src/lib/scroll-scenes.ts",
 	"src/lib/software-inquiry.ts",
