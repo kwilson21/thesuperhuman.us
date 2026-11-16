@@ -1,17 +1,4 @@
 import { POST } from "~/pages/api/software-inquiry";
-import {
-	asVisitor,
-	byHost,
-	defineCorpus,
-	json,
-	networkDown,
-	rows,
-	text,
-	type Case,
-	type Dump,
-	type SeedRow,
-	type Step,
-} from "./harness";
 import type { JsonObject, JsonValue } from "../helpers/json";
 import {
 	allGood,
@@ -22,6 +9,19 @@ import {
 	resend,
 	visit,
 } from "./areas/public";
+import {
+	asVisitor,
+	byHost,
+	type Case,
+	type Dump,
+	defineCorpus,
+	json,
+	networkDown,
+	rows,
+	type SeedRow,
+	type Step,
+	text,
+} from "./harness";
 
 // The golden corpus for POST /api/software-inquiry: a visitor sends a project brief. The route stores a software
 // owner request keyed by the visitor's submission id, emails the visitor a copy of the brief, and tells the owner.
@@ -29,7 +29,7 @@ import {
 // Every response branch and effect path, and the cases that reach them:
 //
 //   musicRequest (src/lib/music-request.ts)
-//   403 / 415 / 400 / 413 / 400        the same five guards as audio-intake: Origin, content type, no body, over 32768
+//   403 / 415 / 400 / 413 / 400        the same five guards as audio-intake: Origin, content type, no body, over 72000
 //                                      bytes, text that is not JSON
 //   400 { errors }  validateSoftwareInquiry (src/lib/software-inquiry.ts)
 //     path                             missing, unknown, not text, each of the four paths valid
@@ -415,6 +415,11 @@ const cases: Case[] = [
 	raw(
 		"a body over 32768 bytes",
 		JSON.stringify({ ...workflow, today: "x".repeat(33_000) }),
+		jsonHeaders,
+	),
+	raw(
+		"a body over 72000 bytes",
+		JSON.stringify({ ...workflow, today: "x".repeat(72_001) }),
 		jsonHeaders,
 	),
 	raw("text that is not JSON", "{not json", jsonHeaders),
