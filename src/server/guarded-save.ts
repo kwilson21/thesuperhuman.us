@@ -128,6 +128,29 @@ export const decideAndSave = <F, W, E, S, E0, E2, R1, R2>(steps: {
 	);
 
 /**
+ * `decideAndSave` for a rule that always writes or refuses (`alwaysWrites`): it answers the write the rule made, not an
+ * `Option` of one, and has no "nothing to do" outcome. The read, the retry on a raised guard and `SaveKeptChanging` are
+ * the same.
+ */
+export const alwaysDecideAndSave = <F, W, E, S, E0, E2, R1, R2>(steps: {
+	facts: Effect.Effect<F, E0, R1>;
+	decide: (facts: F) => Effect.Effect<W, E>;
+	save: (write: W) => Effect.Effect<S, ChangedSinceRead | E2, R2>;
+}) =>
+	Effect.gen(function* () {
+		const facts = yield* steps.facts;
+		const decided = yield* steps.decide(facts);
+		const saved = yield* steps.save(decided);
+
+		return { facts, decided, saved };
+	}).pipe(
+		Effect.retry({ times: 2, while: Predicate.isTagged("ChangedSinceRead") }),
+		Effect.catchTag("ChangedSinceRead", () =>
+			Effect.fail(new SaveKeptChanging()),
+		),
+	);
+
+/**
  * Runs a save and says what its failure was: a failed batch guard (`isGuard`, per call; `raisedByJsonGuard` is the default) becomes ChangedSinceRead, a name the
  * unique indexes refuse becomes the refusal `whenNameTaken` makes (for a save that stores a name), and anything else is
  * a defect, so the request fails as it would have.
