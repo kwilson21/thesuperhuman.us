@@ -77,8 +77,8 @@ describe("immutable review evidence", () => {
 				verifyEvidence(receipt, async (path: string) => {
 					const result = await read(path);
 
-					if (path === `git/trees/${leaf}`)
-						return { tree: [{ ...result.tree![0], ...change }] };
+					if (path === `git/trees/${leaf}` && Array.isArray(result.tree))
+						return { tree: [{ ...result.tree[0], ...change }] };
 
 					return result;
 				}),
