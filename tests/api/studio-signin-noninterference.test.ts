@@ -233,8 +233,8 @@ function context(
  * request's first step is due, and that step lasts until its first gated batch ends. So the route's work before that batch (the
  * allowance batches, which prune counters by the clock, the Turnstile check, and the reading of the clock that stamps the code or the
  * attempt) happens at the step's place in the schedule. Taken up at once, that work ran while earlier steps did, and whether it read
- * the clock before or after an `atomic` clock step depended on how fast its hashing ran, not on the schedule. After its first batch
- * a request reads no clock (`watchClock` fails an ordering in which it does) and writes only in its gated batches (the stubbed
+ * the clock before or after an `atomic` clock step depended on how fast its hashing ran, not on the schedule. After its first gated
+ * batch a request reads no clock (`watchClock` fails an ordering in which it does) and writes only in its gated batches (the stubbed
  * email is always accepted, so no code is discarded).
  */
 async function arrive(first: string) {
@@ -270,10 +270,10 @@ function watchClock() {
 
 			return target();
 		},
-		construct: (target, args) => {
+		construct: (target, args, newTarget) => {
 			if (args.length === 0) read();
 
-			return Reflect.construct(target, args, target);
+			return Reflect.construct(target, args, newTarget);
 		},
 		get: (target, property) => {
 			if (property === "now")
@@ -737,14 +737,19 @@ describe("withSchedule", () => {
 		}
 	});
 
+	// Named, so the failure must name the reading itself: the watcher's own traps are in this file too.
+	const readWithNew = () => new Date().toISOString();
+	const readWithNow = () => String(Date.now());
+	const readWithCall = () => Date();
+
 	const clockReadings: [string, () => string][] = [
-		["new Date()", () => new Date().toISOString()],
-		["Date.now()", () => String(Date.now())],
-		["Date()", () => Date()],
+		["new Date()", readWithNew],
+		["Date.now()", readWithNow],
+		["Date()", readWithCall],
 	];
 
 	for (const [form, readClock] of clockReadings)
-		it(`fails an ordering in which a request reads the clock with ${form} after its first batch, and names where`, async () => {
+		it(`fails an ordering in which a request reads the clock with ${form} after its first scheduled batch, and names where`, async () => {
 			const watchedBefore = globalThis.Date;
 			const readings: string[] = [];
 
@@ -782,7 +787,10 @@ describe("withSchedule", () => {
 					targets: ["open"],
 				}),
 			).rejects.toThrow(
-				/target open: the clock was read after a request's first gated batch \(request R in .*noninterference\.test\.ts:\d+/,
+				// Exactly one reading, named by the function that made it and its line.
+				new RegExp(
+					`target open: the clock was read after a request's first gated batch \\(request R in ${readClock.name} \\(tests/api/studio-signin-noninterference\\.test\\.ts:\\d+:\\d+\\)\\)\\. Schedule \\[R\\.r R\\.c R\\.w\\]\\.`,
+				),
 			);
 			expect(readings).toHaveLength(1);
 			// The clock is put back when the ordering fails.
