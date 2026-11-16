@@ -1,16 +1,26 @@
+import type { RawValue } from "./fields";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
-import { draftSchema, states } from "./agreement-draft-fields";
+import { parseDraft, states } from "./agreement-draft-fields";
 import { sessionGuard } from "./software-agreements";
 import type { SoftwareOffer } from "./software-offers";
 import type { OwnerRequest } from "./owner-model";
+import type { JsonValue } from "./json-value";
+
+/** Client answers saved with an earlier agreement, read back from stored JSON; parseDraft checks each value before use. */
+export type PreviousClientDetails = Partial<
+	Record<
+		"jurisdiction" | "legal_name" | "entity_type" | "business_address",
+		JsonValue
+	>
+>;
 
 export function prefillAgreementDraft(
 	request: OwnerRequest,
-	previous?: Record<string, unknown>,
+	previous?: PreviousClientDetails,
 ) {
 	const jurisdiction = String(previous?.jurisdiction ?? "");
 
-	return draftSchema.parse({
+	return parseDraft({
 		legal_name: previous?.legal_name ?? request.details.company ?? "",
 		signer_name: request.name,
 		entity_type: previous?.entity_type ?? "",
@@ -36,16 +46,17 @@ export async function loadAgreementDraft(
 		.bind(offerId, email)
 		.first<{ values_json: string }>();
 
-	return saved ? draftSchema.parse(JSON.parse(saved.values_json)) : null;
+	return saved ? parseDraft(JSON.parse(saved.values_json)) : null;
 }
 
+/** The values a visitor's draft or review request carries (already read from the body); parseDraft is the first read of them. */
 export async function saveAgreementDraft(
 	db: D1Database,
 	offer: SoftwareOffer,
 	session: AgreementSession,
-	input: unknown,
+	input: RawValue,
 ) {
-	const draft = draftSchema.parse(input);
+	const draft = parseDraft(input);
 	await db.batch([
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),

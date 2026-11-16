@@ -50,7 +50,7 @@ it("makes the shared button a pill that defaults to one line", () => {
 
 it("adds the large size used in the closing panel", () => {
 	expect(global).toMatch(
-		/\.site-button-large \{[^}]*min-height: 52px;[^}]*font-size: 1\.0625rem;[^}]*padding-inline: 1\.75rem;/,
+		/\.site-button-large \{[^}]*min-height: 52px;[^}]*font-size: 1\.0625rem;[^}]*padding-inline: min\(1\.75rem, 8\.75vw\);/,
 	);
 });
 

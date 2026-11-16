@@ -9,11 +9,8 @@ import { transform } from "@astrojs/compiler";
 import { experimental_AstroContainer as AstroContainer } from "astro/container";
 import { beforeAll, afterAll, expect, it, vi } from "vitest";
 import { hashOfferToken, type OfferTerms } from "~/lib/software-offers";
-import {
-	agreementValues,
-	agreementDetailsSchema,
-} from "~/lib/agreement-fields";
-import { projectToday } from "~/lib/audio-project-updates";
+import { agreementValues, parseAgreementDetails } from "~/lib/agreement-fields";
+import { projectToday } from "~/lib/project-dates";
 import { double, fakeD1 } from "../helpers/doubles";
 import { fakeLocals } from "../helpers/runtime";
 import { sqliteD1 } from "../helpers/sqlite-d1";
@@ -2046,7 +2043,7 @@ it("reads immutable agreed fees, dates and complete legal text without enabling 
 		],
 	};
 
-	const owner = agreementDetailsSchema.parse({
+	const owner = parseAgreementDetails({
 		planned_start: "2026-10-01",
 		planned_end: "2026-10-20",
 		environment: "Synthetic browser environment",
@@ -2284,7 +2281,7 @@ it.each(
 				)
 				.run(JSON.stringify(terms));
 
-			const owner = agreementDetailsSchema.parse({
+			const owner = parseAgreementDetails({
 				correction_calendar_days: days,
 				planned_start: "2026-10-01",
 				planned_end: "2026-10-20",
@@ -4331,10 +4328,10 @@ it("renders the AI disclosure beside both answer boxes and the dated retention n
 		request: new Request("https://thesuperhuman.us/privacy"),
 	});
 
-	expect(notice).toContain("Updated October 29, 2026");
+	expect(notice).toContain("Updated November 15, 2026");
 	expect(notice).toContain('id="software-briefs"');
 	expect(notice).toContain(
-		"a counter derived from your IP address, kept for up to two days",
+		"Suggestion limits, and the outline’s own limits, use counters derived from your IP address, kept for up to two days",
 	);
 	expect(notice).toContain(
 		"Neither are a website brief’s link and notes on what you already have; those boxes show no suggestions.",

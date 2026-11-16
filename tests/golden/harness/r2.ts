@@ -5,7 +5,8 @@
 // clock. An object holds what was put; a read gives back a copy.
 import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
-import type { EffectLog } from "./log";
+import type { EffectLog, Ticket } from "./log";
+import type { Triggers } from "./triggers";
 import {
 	byteRecord,
 	concat,
@@ -32,6 +33,10 @@ export type R2Setup = {
 	readonly seed?: R2Seed;
 	/** A listed operation rejects with an Error. Multipart calls are named createMultipartUpload and so on. */
 	readonly fails?: readonly string[];
+	/** A listed operation rejects with R2's error for a concurrent write to the same key (10058), as the losing completion of two can. */
+	readonly concurrentWrites?: readonly string[];
+	/** A listed operation rejects with R2's error for an unavailable service (10043). */
+	readonly unavailable?: readonly string[];
 	/**
 	 * Multipart uploads already started before the case: upload id to the key, or to the key and the parts already
 	 * uploaded (part number to its content) and the metadata the upload was created with.
@@ -174,9 +179,12 @@ export function recordingR2(
 	log: EffectLog,
 	now: () => Date,
 	nextId: () => string,
+	triggers: Triggers,
 ): RecordedR2 {
 	const store = new Map<string, Held>();
 	const fails = new Set(setup.fails ?? []);
+	const concurrentWrites = new Set(setup.concurrentWrites ?? []);
+	const unavailable = new Set(setup.unavailable ?? []);
 
 	const uploads = new Map<
 		string,
@@ -222,11 +230,37 @@ export function recordingR2(
 		});
 	}
 
-	const note = (op: string, key: string | null, detail: Recorded) =>
-		log.push({ kind: "r2", bucket: label, op, key, detail });
+	const note = (at: Ticket, op: string, key: string | null, detail: Recorded) =>
+		log.push({ kind: "r2", bucket: label, op, key, detail }, at);
+
+	for (const op of fails) triggers.declare(`r2 ${label} fails ${op}`);
+
+	for (const op of concurrentWrites)
+		triggers.declare(`r2 ${label} concurrent write ${op}`);
+
+	for (const op of unavailable)
+		triggers.declare(`r2 ${label} unavailable ${op}`);
 
 	const failIf = (op: string) => {
-		if (fails.has(op)) throw new Error(`r2 ${op} failed`);
+		if (unavailable.has(op)) {
+			triggers.see(`r2 ${label} unavailable ${op}`);
+
+			throw new Error("The service is unavailable, try again later. (10043)");
+		}
+
+		if (concurrentWrites.has(op)) {
+			triggers.see(`r2 ${label} concurrent write ${op}`);
+
+			throw new Error(
+				"There was a conflict with a concurrent write to the same key. (10058)",
+			);
+		}
+
+		if (!fails.has(op)) return;
+
+		triggers.see(`r2 ${label} fails ${op}`);
+
+		throw new Error(`r2 ${op} failed`);
 	};
 
 	const info = (key: string, held: Held) => ({
@@ -350,9 +384,10 @@ export function recordingR2(
 			key: found.key,
 			uploadId: id,
 			uploadPart: async (partNumber: number, value: R2PutValue) => {
+				const at = await log.start();
 				const bytes = await bytesOf(value);
 
-				note("uploadPart", found.key, {
+				note(at, "uploadPart", found.key, {
 					uploadId: id,
 					partNumber,
 					body: byteRecord(bytes),
@@ -365,13 +400,15 @@ export function recordingR2(
 				return { partNumber, etag: etagOf(bytes) };
 			},
 			abort: async () => {
-				note("abort", found.key, { uploadId: id });
+				const at = await log.start();
+				note(at, "abort", found.key, { uploadId: id });
 				failIf("abort");
 				upload(id);
 				uploads.delete(id);
 			},
 			complete: async (parts: R2UploadedPart[]) => {
-				note("complete", found.key, {
+				const at = await log.start();
+				note(at, "complete", found.key, {
 					uploadId: id,
 					parts: parts.map((part) => ({
 						partNumber: part.partNumber,
@@ -388,7 +425,7 @@ export function recordingR2(
 
 						if (!bodyPart || etagOf(bodyPart) !== part.etag)
 							throw new Error(
-								"r2: multipart part is missing or its etag differs",
+								"One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag. (10025)",
 							);
 
 						return bodyPart;
@@ -414,9 +451,10 @@ export function recordingR2(
 	const binding = double<R2Bucket>({
 		// SAFETY: get(), put() and list() are overloaded or generic, so one signature cannot be typed as the member; each fake answers what the real bucket returns for the call the route makes.
 		get: (async (key: string, options?: R2GetOptions) => {
+			const at = await log.start();
 			const held = store.get(key);
 
-			note("get", key, {
+			note(at, "get", key, {
 				options: optionsRecord(options),
 				found: held !== undefined,
 				size: held?.bytes.length ?? null,
@@ -431,9 +469,10 @@ export function recordingR2(
 			return bodyOf(key, held, rangeOf(options?.range));
 		}) as R2Bucket["get"],
 		head: async (key: string) => {
+			const at = await log.start();
 			const held = store.get(key);
 
-			note("head", key, {
+			note(at, "head", key, {
 				found: held !== undefined,
 				size: held?.bytes.length ?? null,
 			});
@@ -443,7 +482,7 @@ export function recordingR2(
 
 			if (held && vanishing.has(key)) {
 				store.delete(key);
-				note("vanish", key, null);
+				note(at, "vanish", key, null);
 			}
 
 			return answer;
@@ -454,9 +493,10 @@ export function recordingR2(
 			value: R2PutValue | null,
 			options?: R2PutOptions,
 		) => {
+			const at = await log.start();
 			const bytes = await bytesOf(value);
 
-			note("put", key, {
+			note(at, "put", key, {
 				body: byteRecord(bytes),
 				options: optionsRecord(options),
 			});
@@ -468,15 +508,17 @@ export function recordingR2(
 			return objectOf(key, await write(key, bytes, metaOf(options)));
 		}) as R2Bucket["put"],
 		delete: async (keys: string | string[]) => {
+			const at = await log.start();
 			const list = Array.isArray(keys) ? keys : [keys];
 
-			note("delete", list.length === 1 ? list[0] : null, { keys: list });
+			note(at, "delete", list.length === 1 ? list[0] : null, { keys: list });
 			failIf("delete");
 
 			for (const key of list) store.delete(key);
 		},
 		// SAFETY: as for get().
 		list: (async (options?: R2ListOptions) => {
+			const at = await log.start();
 			const prefix = options?.prefix ?? "";
 			const limit = options?.limit ?? 1000;
 			const after = options?.cursor ?? options?.startAfter ?? "";
@@ -499,7 +541,7 @@ export function recordingR2(
 			const page = keys.slice(0, limit);
 			const truncated = keys.length > limit;
 
-			note("list", null, {
+			note(at, "list", null, {
 				options: optionsRecord(options),
 				keys: page,
 				truncated,
@@ -522,9 +564,10 @@ export function recordingR2(
 			key: string,
 			options?: R2MultipartOptions,
 		) => {
+			const at = await log.start();
 			const id = `upload-${nextId()}`;
 
-			note("createMultipartUpload", key, {
+			note(at, "createMultipartUpload", key, {
 				options: optionsRecord(options),
 				uploadId: id,
 			});
@@ -535,16 +578,20 @@ export function recordingR2(
 			return handle(id);
 		},
 		resumeMultipartUpload: (key: string, uploadId: string) => {
-			note("resumeMultipartUpload", key, { uploadId });
+			// It returns at once, so it cannot wait at the gate: it takes the log's own phase.
+			const at = log.ticket();
+
+			note(at, "resumeMultipartUpload", key, { uploadId });
 
 			if (!uploads.has(uploadId))
 				return double<R2MultipartUpload>({
 					key,
 					uploadId,
 					uploadPart: async (partNumber: number, value: R2PutValue) => {
+						const at = await log.start();
 						const bytes = await bytesOf(value);
 
-						note("uploadPart", key, {
+						note(at, "uploadPart", key, {
 							uploadId,
 							partNumber,
 							body: byteRecord(bytes),
@@ -553,12 +600,14 @@ export function recordingR2(
 						throw new Error(UPLOAD_GONE);
 					},
 					abort: async () => {
-						note("abort", key, { uploadId });
+						const at = await log.start();
+						note(at, "abort", key, { uploadId });
 
 						throw new Error(UPLOAD_GONE);
 					},
 					complete: async (parts: R2UploadedPart[]) => {
-						note("complete", key, {
+						const at = await log.start();
+						note(at, "complete", key, {
 							uploadId,
 							parts: parts.map((part) => ({
 								partNumber: part.partNumber,

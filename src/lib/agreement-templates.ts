@@ -10,6 +10,7 @@ import { templateFields } from "./agreement-template-fields.mjs";
 import coverage from "../assets/agreement-fonts/Inter-coverage.json";
 import { lineDiff } from "./line-diff";
 import { isText } from "./type-guards";
+import { ReaderMessage } from "./reader-message";
 
 export { templateFields } from "./agreement-template-fields.mjs";
 
@@ -117,7 +118,9 @@ export function agreementCertificateText(json: string) {
 export function validateAgreementCharacters(text: string) {
 	for (const character of text) {
 		if (!agreementCharacterSupported(character))
-			throw new Error("Unsupported character. Arrange outside-site signing.");
+			throw new ReaderMessage(
+				"Unsupported character. Arrange outside-site signing.",
+			);
 	}
 }
 
@@ -129,16 +132,16 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 		!text.trim() ||
 		/[<>]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\p{Cs}/u.test(text)
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"Use plain text up to 100 KiB, without HTML or control characters.",
 		);
 
 	if (/\[[^\]\n]+\]|_{3,}/.test(text))
-		throw new Error("Replace every blank with a named field.");
+		throw new ReaderMessage("Replace every blank with a named field.");
 	const tokens = [...text.matchAll(/{{([^{}]+)}}/g)];
 
 	if (text.replace(/{{[^{}]+}}/g, "").match(/[{}]/))
-		throw new Error("Malformed field.");
+		throw new ReaderMessage("Malformed field.");
 
 	let loop = false,
 		loops = 0;
@@ -151,7 +154,7 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 
 		if (field === "#milestones") {
 			if (kind !== "sow" || loop || loops++)
-				throw new Error(
+				throw new ReaderMessage(
 					`Line ${line}: only one non-nested milestone loop is allowed.`,
 				);
 			loop = true;
@@ -159,7 +162,7 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 		}
 
 		if (field === "/milestones") {
-			if (!loop) throw new Error(`Line ${line}: unexpected loop end.`);
+			if (!loop) throw new ReaderMessage(`Line ${line}: unexpected loop end.`);
 			loop = false;
 			continue;
 		}
@@ -169,17 +172,17 @@ export function validateTemplate(kind: AgreementKind, text: string) {
 				!optionalFields.includes(field)) ||
 			(field.startsWith("milestone.") && !loop)
 		)
-			throw new Error(
+			throw new ReaderMessage(
 				`Line ${line}: unknown field ${field}. Use the field reference.`,
 			);
 		found.add(field);
 	}
 
-	if (loop) throw new Error("Close the milestone loop.");
+	if (loop) throw new ReaderMessage("Close the milestone loop.");
 	const missing = templateFields[kind].filter((f) => !found.has(f));
 
 	if (missing.length)
-		throw new Error(`Missing required fields: ${missing.join(", ")}.`);
+		throw new ReaderMessage(`Missing required fields: ${missing.join(", ")}.`);
 
 	return text.replace(/\r\n?/g, "\n");
 }
@@ -193,7 +196,7 @@ function lookup(values: TemplateValues, path: string): string {
 		value = isTemplateGroup(value) ? value[part] : undefined;
 
 	if (!isText(value) || !value.trim())
-		throw new Error(`Missing value: ${path}.`);
+		throw new ReaderMessage(`Missing value: ${path}.`);
 
 	return value.normalize("NFC");
 }
@@ -219,7 +222,7 @@ export function renderAgreement(
 				milestones.length < 1 ||
 				milestones.length > 3
 			)
-				throw new Error("Use one to three milestones.");
+				throw new ReaderMessage("Use one to three milestones.");
 
 			return milestones
 				.map((m) => fill(block, { ...values, milestone: m }))
@@ -236,7 +239,7 @@ export function renderAgreement(
 			.trimEnd() + "\n";
 
 	if (bytes(text) > 262144 || /{{|}}|\[[^\]\n]+\]|_{3,}/.test(text))
-		throw new Error(
+		throw new ReaderMessage(
 			"The filled agreement has unresolved blanks or exceeds 256 KiB.",
 		);
 	validateAgreementCharacters(text);
@@ -320,13 +323,13 @@ export async function publishTemplate(
 		labelUsed = `${versionLabel} is already used for the ${kind.toUpperCase()}. Choose another label.`;
 
 	if (!versionLabelPattern.test(versionLabel))
-		throw new Error(
+		throw new ReaderMessage(
 			"Use letters, digits, dots and dashes for the version label, up to 40 characters.",
 		);
 	const current = await currentTemplate(db, kind);
 
 	if (current?.sha256 === sha)
-		throw new Error(
+		throw new ReaderMessage(
 			`This text matches ${templateVersionLabel(current)}. Nothing to publish.`,
 		);
 
@@ -338,7 +341,7 @@ export async function publishTemplate(
 			.bind(kind, versionLabel)
 			.first()
 	)
-		throw new Error(labelUsed);
+		throw new ReaderMessage(labelUsed);
 
 	try {
 		await db.batch([
@@ -370,7 +373,7 @@ export async function publishTemplate(
 			error instanceof Error &&
 			/UNIQUE constraint failed.*version_label/.test(error.message)
 		)
-			throw new Error(labelUsed);
+			throw new ReaderMessage(labelUsed);
 		throw error;
 	}
 

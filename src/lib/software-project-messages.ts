@@ -1,17 +1,16 @@
-import { hashValue } from "./audio-client-access";
+import { hashValue } from "./client-portal";
 import type { ProjectMessage } from "./audio-project-messages";
 import { z } from "astro/zod";
 import {
 	deliveredIndexes,
 	getSoftwareProject,
 	projectTerms,
-	softwareAudit,
-	softwareGuard,
 	softwareClientRevisionBody,
 	softwareVersionLabel,
 	softwareVersionNumber,
 	softwareRevisionHistoryBody,
 } from "./software-projects";
+import { softwareAudit, softwareGuard } from "./software-guard";
 import type { SoftwareDecision, SoftwareUpdate } from "./software-projects";
 
 export type SoftwareProjectMessage = Omit<ProjectMessage, "review_decision"> & {

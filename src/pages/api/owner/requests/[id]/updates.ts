@@ -1,14 +1,13 @@
 import type { APIRoute } from "astro";
+import { safeHttpsUrl } from "~/lib/link-check";
 import { z } from "astro/zod";
 import { musicRequest } from "~/lib/music-request";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	updateInput,
 	getSoftwareProject,
 	projectTerms,
 	projectAgreementDetails,
-	softwareAudit,
-	softwareGuard,
 	openSoftwareGuard,
 	deliverSoftwareNotice,
 	recordMilestonePayment,
@@ -17,6 +16,7 @@ import {
 	milestoneDepositGuard,
 } from "~/lib/software-projects";
 import type { SoftwareUpdate } from "~/lib/software-projects";
+import { softwareAudit, softwareGuard } from "~/lib/software-guard";
 import {
 	listSoftwareInvoices,
 	payableSoftwareInvoice,
@@ -268,19 +268,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		if (
 			share &&
-			value.links.some((reference) => {
-				if (!reference.label.trim()) return true;
-
-				try {
-					const url = new URL(reference.url);
-
-					return (
-						url.protocol !== "https:" || Boolean(url.username || url.password)
-					);
-				} catch {
-					return true;
-				}
-			})
+			value.links.some(
+				(reference) => !reference.label.trim() || !safeHttpsUrl(reference.url),
+			)
 		)
 			return json(
 				{

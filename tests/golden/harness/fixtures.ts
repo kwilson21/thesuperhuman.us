@@ -5,7 +5,8 @@
 // fixed operating-system byte), so recording unchanged behaviour again produces the same bytes. A change to a fixture
 // is reviewed with `pnpm run golden:diff` (see tests/golden/README.md), because GitHub cannot show a diff of it.
 //
-// A fixture is the answer of a route as it was before its conversion. A test compares against it and never writes it.
+// A fixture is the answer of a route as it was before its conversion. A test compares against it and never writes it
+// (a re-record happens only under UPDATE_GOLDEN=1, and for a conversion only when `pnpm run golden:neutral` passes).
 // The comparison is on JSON: the record is round-tripped through JSON first, so what is compared is exactly what a
 // fixture file can hold, and a field the code stopped producing is a difference, not an absence that `toEqual` skips.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";

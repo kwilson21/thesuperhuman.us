@@ -1,4 +1,6 @@
-import { isText } from "./type-guards";
+import type { RawValue } from "./fields";
+import type { JsonValue } from "./json-value";
+import { safeHttpsUrl } from "./link-check";
 
 export const ownerRequestKinds = [
 	"purchase",
@@ -18,16 +20,11 @@ export type OwnerRequestKind = (typeof ownerRequestKinds)[number];
 
 export type OwnerRequestStatus = (typeof ownerRequestStatuses)[number];
 
-export function safeExternalUrl(value: unknown) {
-	if (!isText(value)) return null;
+/** A request's submitted details: a JSON object whose values are JSON values, or absent. */
+export type RequestDetails = { [name: string]: JsonValue | undefined };
 
-	try {
-		const url = new URL(value);
-
-		return url.protocol === "https:" ? url.href : null;
-	} catch {
-		return null;
-	}
+export function safeExternalUrl(value: RawValue) {
+	return safeHttpsUrl(value);
 }
 
 export type OwnerRequest = {
@@ -40,7 +37,7 @@ export type OwnerRequest = {
 	email: string;
 	cityRegion: string;
 	summary: string;
-	details: Record<string, unknown>;
+	details: RequestDetails;
 	status: OwnerRequestStatus;
 	privateNote: string;
 	createdAt: string;
@@ -48,6 +45,10 @@ export type OwnerRequest = {
 	resolvedAt: string | null;
 	contactDeleteAfter: string | null;
 };
+
+/** Every column of an owner request, in the order of `OwnerRequestRow`: what a read selects and an update returns. */
+export const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
+  summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
 
 export type OwnerRequestRow = {
 	id: string;
@@ -69,6 +70,12 @@ export type OwnerRequestRow = {
 };
 
 export function ownerRequestFromRow(row: OwnerRequestRow): OwnerRequest {
+	// SAFETY: details_json only ever holds a JSON object. createOwnerRequest (owner-requests.ts) stores JSON.stringify of a
+	// RequestDetails object or "{}", music-demand.ts stores a JSON object or "{}", the brief copy store (src/server/intake-store.ts) only json_set's
+	// keys on it, and scripts/owner-retention.mjs sets it to '{}' (the column default is '{}' too). So the parsed value is an
+	// object, and every value in it is a JSON value (or absent).
+	const details = JSON.parse(row.details_json) as RequestDetails;
+
 	return {
 		id: row.id,
 		kind: row.kind,
@@ -79,7 +86,7 @@ export function ownerRequestFromRow(row: OwnerRequestRow): OwnerRequest {
 		email: row.email,
 		cityRegion: row.city_region,
 		summary: row.summary,
-		details: JSON.parse(row.details_json) as Record<string, unknown>,
+		details,
 		status: row.status,
 		privateNote: row.private_note,
 		createdAt: row.created_at,

@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	MSA_ID,
@@ -33,8 +32,6 @@ import {
 	text,
 	type Case,
 } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "retry-copy": the owner asks the site to send the
 // signed copies (and the signing notices of an agreement still waiting for the countersignature) again. Failed

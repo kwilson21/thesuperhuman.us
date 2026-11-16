@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	BOTH,
@@ -28,8 +27,6 @@ import {
 	type Scene,
 } from "./areas/signing";
 import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "countersign": the owner signs the MSA and SOW
 // the client already signed. The signatures commit in one batch; the signed packet and its emailed copies are then

@@ -305,6 +305,17 @@ const cases: Case[] = [
 		steps: [send(good), send(good)],
 		fetches: turnstile(ok({ success: false })),
 	},
+	{
+		name: "Turnstile fails once and the same address then sends with a good check",
+		steps: [send(good), send(good)],
+		fetches: ({ host, n }) =>
+			host === "turnstile" ? ok({ success: n >= 1 }) : ok({ id: "em_1" }),
+	},
+	{
+		name: "ten failed checks from one address and the eleventh is refused before the check",
+		steps: Array.from({ length: 11 }, () => send(good)),
+		fetches: turnstile(ok({ success: false })),
+	},
 
 	// Mail.
 	{

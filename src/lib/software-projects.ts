@@ -1,6 +1,7 @@
 import { z } from "astro/zod";
-import { offerTermsSchema } from "./software-offers";
-import { validProjectDate } from "./audio-project-updates";
+import { safeHttpsUrl } from "./link-check";
+import { parseOfferTerms } from "./software-offers";
+import { validProjectDate } from "./project-dates";
 import { sendAudioMessage } from "./audio-resend";
 import {
 	softwareInvitationEmail,
@@ -9,6 +10,7 @@ import {
 	softwareHandoffEmail,
 } from "./client-emails";
 import { isText } from "./type-guards";
+import { softwareGuard } from "./software-guard";
 
 export const projectStates = {
 	preparing: "Preparing",
@@ -60,17 +62,10 @@ export const updateInput = z.object({
 		"handoff",
 	]),
 	visual_alt: text(300),
-	preview_url: text(2000).refine((value) => {
-		if (!value) return true;
-
-		try {
-			const url = new URL(value);
-
-			return url.protocol === "https:" && !url.username && !url.password;
-		} catch {
-			return false;
-		}
-	}, "Use an HTTPS link the client is allowed to open."),
+	preview_url: text(2000).refine(
+		(value) => !value || safeHttpsUrl(value) !== null,
+		"Use an HTTPS link the client is allowed to open.",
+	),
 	what_changed: text(1000),
 	checks_limitations: text(1000),
 	next_step: text(300),
@@ -139,7 +134,7 @@ export type SoftwareUpdate = Omit<
 };
 
 export const projectTerms = (project: { terms_json: string }) =>
-	offerTermsSchema.parse(JSON.parse(project.terms_json));
+	parseOfferTerms(JSON.parse(project.terms_json));
 
 function isNumber<T>(value: T): value is T & number {
 	return typeof value === "number";
@@ -469,20 +464,6 @@ export async function sharedSoftwareUpdates(db: D1Database, id: string) {
 	).results;
 }
 
-export const softwareAudit = (
-	db: D1Database,
-	id: string,
-	action: string,
-	actor: string,
-	at: string,
-	note = "",
-) =>
-	db
-		.prepare(
-			"INSERT INTO software_project_audit(request_id,action,actor,occurred_at,note) VALUES (?,?,?,?,?)",
-		)
-		.bind(id, action, actor, at, note);
-
 export function recordMilestonePayment(
 	db: D1Database,
 	id: string,
@@ -557,18 +538,6 @@ export const acceptedDeliveryGuard = (
      AND latest.kind='delivery_review' AND latest.status='shared' ORDER BY latest.shared_at DESC,latest.id DESC LIMIT 1)`,
 		[id, milestone],
 	);
-
-/** Same atomic assertion as software offers: a stale write rolls back its whole batch. */
-export const softwareGuard = (
-	db: D1Database,
-	query: string,
-	values: (string | number | null)[],
-) =>
-	db
-		.prepare(
-			`SELECT CASE WHEN EXISTS(${query}) THEN 1 ELSE json_extract('Project changed. Reload and try again.','$') END`,
-		)
-		.bind(...values);
 
 export const priorMilestonePaymentGuard = (
 	db: D1Database,
@@ -726,7 +695,9 @@ export function softwareAccessRevocation(
 			)
 			.bind(at, id, at),
 		db
-			.prepare(`DELETE FROM audio_client_codes WHERE email=(${closedEmail})`)
+			.prepare(
+				`DELETE FROM audio_client_signin_codes WHERE email=(${closedEmail})`,
+			)
 			.bind(id, at),
 	];
 }

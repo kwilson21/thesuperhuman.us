@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	BOTH,
@@ -23,8 +22,6 @@ import {
 	type Case,
 	type Step,
 } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for what POST /api/owner/requests/[id]/agreement does before any action runs: the owner check, the
 // bindings, the two wire formats (agreementRequest and nativeAgreementRoute in agreement-request.ts) and the action

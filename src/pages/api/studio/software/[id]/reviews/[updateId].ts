@@ -1,9 +1,9 @@
 import type { APIRoute } from "astro";
 import {
-	clientPortalEnabled,
 	clientSoftwareProjectForSession,
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	softwareDecisionInput,
 	postSoftwareReviewDecision,

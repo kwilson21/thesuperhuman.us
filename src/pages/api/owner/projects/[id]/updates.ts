@@ -1,15 +1,17 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	deliverProjectUpdateNotice,
 	queueProjectNoticeForDelivery,
 	saveProjectUpdate,
-	validProjectDate,
 } from "~/lib/audio-project-updates";
+import { validProjectDate } from "~/lib/project-dates";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/updates";
 const note = z.string().trim().min(1).max(1000);
 const date = z.string().refine(validProjectDate);
 
@@ -105,13 +107,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true, update });
-	} catch {
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The project update could not be saved. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

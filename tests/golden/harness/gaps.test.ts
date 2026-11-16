@@ -306,6 +306,16 @@ describe("hooks during sign-in", () => {
 					},
 				},
 			],
+			optionalTriggers: [
+				{
+					trigger: "d1 failure on /studio_/i",
+					reason: "the test shows the sign-in does not fire it",
+				},
+				{
+					trigger: 'd1 interleave "other request" on /studio_/i',
+					reason: "the test shows the sign-in does not fire it",
+				},
+			],
 		});
 
 		expect(interleaved).toBe(0);
@@ -518,6 +528,7 @@ describe("console output", () => {
 				args: ["failed", "Error: boom", { id: 1 }],
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 			{
 				kind: "console",
@@ -525,6 +536,7 @@ describe("console output", () => {
 				args: ["careful"],
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 		]);
 	});
@@ -917,6 +929,7 @@ describe("a rate limit with no scripted answer", () => {
 				success: false,
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 			{
 				kind: "rate-limit",
@@ -925,6 +938,7 @@ describe("a rate limit with no scripted answer", () => {
 				threw: "golden harness: no rate-limit answer scripted",
 				step: 0,
 				phase: "request",
+				state: expect.any(Object),
 			},
 		]);
 	});

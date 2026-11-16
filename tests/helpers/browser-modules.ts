@@ -9,13 +9,20 @@
  * Adding a name is a review decision: read the file for server work first.
  */
 export const BROWSER_MODULES: readonly string[] = [
+	"src/data/navigation-inventory.json",
+	"src/lib/host-routing.ts",
 	"src/lib/agreement-client-fields.ts",
 	"src/lib/agreement-draft-fields.ts",
 	"src/lib/audio-intake.ts",
 	"src/lib/audio-peaks.ts",
+	"src/lib/brief-board.ts",
 	"src/lib/business-days.ts",
+	"src/lib/fields.ts",
 	"src/lib/home-motion.ts",
 	"src/lib/line-diff.ts",
+	"src/lib/navigation-prefetch.ts",
+	"src/lib/link-check.ts",
+	"src/lib/loudness-meter.ts",
 	"src/lib/project-story.ts",
 	"src/lib/scroll-scenes.ts",
 	"src/lib/software-inquiry.ts",
@@ -25,22 +32,31 @@ export const BROWSER_MODULES: readonly string[] = [
 ];
 
 /**
- * Every installed package the client build puts in browser code (by package name, not by import specifier: the
- * source walker sees `astro/zod`, the bundler sees the `zod` v3 that astro ships). Zod v3 only: Zod v4, Effect and
- * the other server packages are forbidden in client-manifest.ts. Remove `zod` when the Zod to Effect Schema work
- * removes `astro/zod` from the browser. To let `effect/Schema` in later, allow the whole `effect` package here and in
- * ALLOWED_FORBIDDEN_PREFIXES (prefix "npm:effect@"): `effect/dist/Schema.js` imports about 68 other effect modules,
- * so a prefix for Schema alone would still fail. Which effect modules browser code may IMPORT is a source-level rule
- * that the walker (client-graph.test.ts) carries; the manifest check can only allow or forbid the package.
+ * Every installed package the client build puts in browser code (by package name, not by import specifier).
+ * The opt-in navigation experiment additionally loads js.foresight and its browser-only position-observer/tabbable dependencies.
+ * These packages calculate DOM geometry and focus order, with no server imports or telemetry. Effect remains allowed only
+ * for Effect Schema through the shared field helpers (src/lib/fields.ts). `effect/dist/Schema.js` imports about 68 other
+ * effect modules, so the manifest check can only allow or forbid the whole package (ALLOWED_FORBIDDEN_PREFIXES in
+ * client-manifest.ts, prefix "npm:effect@"); which effect modules browser SOURCE may import is a source-level rule that
+ * the walker (client-graph.test.ts, ALLOWED_BROWSER_EFFECT_MODULES) carries, and the text markers in client-bundle.test.ts
+ * catch the runtime parts a Schema-only bundle does not hold (Layer, Scope, Deferred). Zod, in either version, is gone
+ * from the browser and forbidden outright; `@effect/*`, `@xstate/effect` and `xstate` stay forbidden.
  */
-export const BROWSER_PACKAGES: readonly string[] = ["zod"];
+export const BROWSER_PACKAGES: readonly string[] = [
+	"effect",
+	"js.foresight",
+	"position-observer",
+	"tabbable",
+];
 
 /**
- * Every virtual module id (`\0...`, `astro:...`, `virtual:...`) the client build puts in browser code. None today:
- * the browser bundle holds only repository files and the `zod` package. A virtual module can carry code a plugin
- * generates, so each id added here is reviewed for what it supplies.
+ * Reviewed Vite dynamic-import helper: preloads emitted local chunks/CSS only when
+ * the explicit trial import runs, propagates CSP nonces and dispatches load errors.
+ * No server code, telemetry, or eager import of the prediction package.
  */
-export const BROWSER_VIRTUAL_MODULES: readonly string[] = [];
+export const BROWSER_VIRTUAL_MODULES: readonly string[] = [
+	"\0vite/preload-helper.js",
+];
 
 /**
  * Scripts copied from public/ into dist/ unbundled (a `<script src="/x.js">`), by path under dist/ and the sha256

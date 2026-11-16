@@ -1,6 +1,6 @@
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { runRoute } from "../../src/server/run";
 import { RateLimit, bindingsOrUnavailable } from "../../src/server/services";
 import { double, fakeKv } from "../helpers/doubles";
@@ -87,5 +87,41 @@ describe("runRoute", () => {
 		const attempt = () => runRoute(locals(), unmapped);
 
 		expect(attempt).toBeTypeOf("function");
+	});
+
+	it("rejects with a defect when the route gives no answer for one, as the contact and resume routes do", async () => {
+		await expect(
+			runRoute(locals(), Effect.die(new Error("boom"))),
+		).rejects.toThrow("boom");
+	});
+
+	it("answers a defect with the route's own Response, and logs it once through logUnexpected", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const response = await runRoute(locals(), Effect.die(new Error("boom")), {
+			route: "/api/example",
+			answer: () => Response.json({ ok: false }, { status: 500 }),
+		});
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({ ok: false });
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(String(log.mock.calls[0][0])).toBe(
+			"/api/example failed unexpectedly:",
+		);
+		log.mockRestore();
+	});
+
+	it("does not touch a refusal the route already mapped", async () => {
+		const response = await runRoute(
+			locals(),
+			Effect.succeed(Response.json({ ok: true })),
+			{
+				route: "/api/example",
+				answer: () => new Response(null, { status: 500 }),
+			},
+		);
+
+		expect(response.status).toBe(200);
 	});
 });

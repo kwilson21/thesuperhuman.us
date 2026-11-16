@@ -1,6 +1,8 @@
-// The two checks every public form runs after its body has been read: the visitor has not just submitted, and the
-// captcha passed. This is a flow, not a rule: it counts, then checks, and the count is kept even when the captcha fails. Contact and resume request share them, in this order (the rate limit counts a submission even when the
-// captcha then fails, as it always has). Each refusal carries the sentence the form shows.
+// The checks every public form runs after its body has been read, in this order: a coarse limit on the visitor's
+// address, the captcha, and the visitor's own allowance. This is a flow, not a rule: it counts, checks, then counts again.
+// The coarse limit comes first so the captcha service is not asked without bound; the allowance comes last so a request
+// that fails the captcha never uses up the allowance of the visitor who sends the real one. Contact and resume request
+// share them. Each refusal carries the sentence the form shows.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { checkRateLimit } from "../../lib/rate-limit";
@@ -20,24 +22,35 @@ export type Visitor = {
 	readonly turnstileToken: string;
 };
 
+/** How many captcha attempts one address may make in a window; the same count the audio and software forms allow. */
+const ATTEMPTS = 10;
+
 /**
- * Counts the submission against the visitor's address and checks the captcha. A rate limit store that cannot be read or
- * written is a defect, not a refusal: the route answers 500 as it did.
+ * Counts the attempt against the visitor's address, checks the captcha, then counts the submission against the
+ * visitor's allowance. A rate limit store that cannot be read or written is a defect, not a refusal: the route answers
+ * 500 as it did.
  */
 export const passGuards = (visitor: Visitor) =>
 	Effect.gen(function* () {
 		const rateLimit = yield* RateLimit;
 
 		// A defect is intended here, not a refusal: the old route let a KV failure escape as an unanswered 500, and the golden corpus proves it.
-		const counted = yield* Effect.promise(() =>
-			checkRateLimit(rateLimit, visitor.ip),
+		const attempt = yield* Effect.promise(() =>
+			checkRateLimit(rateLimit, visitor.ip, "rl:attempt:", ATTEMPTS),
 		);
 
-		if (!counted.allowed) return yield* Effect.fail(new RateLimited());
+		if (!attempt.allowed) return yield* Effect.fail(new RateLimited());
 
 		const turnstile = yield* Turnstile;
 
 		yield* turnstile
 			.verify(visitor.turnstileToken, visitor.ip)
 			.pipe(Effect.mapError(() => new CaptchaFailed()));
+
+		// The same intended defect as the count above.
+		const counted = yield* Effect.promise(() =>
+			checkRateLimit(rateLimit, visitor.ip),
+		);
+
+		if (!counted.allowed) return yield* Effect.fail(new RateLimited());
 	});

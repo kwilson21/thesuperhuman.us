@@ -2,29 +2,25 @@ import { expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, stat, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setUpMusicPreview } from "../../scripts/music-preview.mjs";
 
-const { dispose, spawnSync } = vi.hoisted(() => ({
-	dispose: vi.fn(),
-	spawnSync: vi.fn((..._args: unknown[]) => ({
-		status: 0,
-		stdout: "",
-		stderr: "",
-	})),
+const dispose = vi.fn();
+
+const spawnSync = vi.fn((..._args: unknown[]) => ({
+	status: 0,
+	stdout: "",
+	stderr: "",
 }));
 
-vi.mock("node:child_process", () => ({ spawnSync }));
-
-vi.mock("wrangler", () => ({
-	getPlatformProxy: async () => ({
-		env: {
-			MUSIC_DB: {
-				prepare: () => ({ first: async () => ({ name: "owner_requests" }) }),
-			},
-			AUDIO: {},
+const getPlatformProxy = async () => ({
+	env: {
+		MUSIC_DB: {
+			prepare: () => ({ first: async () => ({ name: "owner_requests" }) }),
 		},
-		dispose,
-	}),
-}));
+		AUDIO: {},
+	},
+	dispose,
+});
 
 it("sets up an empty checkout without any imported music assets", async () => {
 	const root = await mkdtemp(join(tmpdir(), "music-preview-"));
@@ -34,7 +30,7 @@ it("sets up an empty checkout without any imported music assets", async () => {
 		await mkdir(join(root, "db"));
 		await writeFile(join(root, "db/music.sql"), "CREATE TABLE demo (id TEXT);");
 		process.chdir(root);
-		await import("../../scripts/music-preview.mjs");
+		await setUpMusicPreview({ spawnSync, getPlatformProxy });
 		expect(
 			(await stat(join(root, ".private/music-assets"))).isDirectory(),
 		).toBe(true);

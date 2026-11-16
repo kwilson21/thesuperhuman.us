@@ -106,8 +106,8 @@ export class SaveKeptChanging extends Data.TaggedError("SaveKeptChanging") {}
  * count; it then fails with `SaveKeptChanging`. Answers with the facts it decided on, what the rule decided (nothing,
  * when what was asked is already true), and what the save answered, which is there only when something was saved.
  */
-export const decideAndSave = <F, W, E, S, E2, R1, R2>(steps: {
-	facts: Effect.Effect<F, never, R1>;
+export const decideAndSave = <F, W, E, S, E0, E2, R1, R2>(steps: {
+	facts: Effect.Effect<F, E0, R1>;
 	decide: (facts: F) => Effect.Effect<Option.Option<W>, E>;
 	save: (write: W) => Effect.Effect<S, ChangedSinceRead | E2, R2>;
 }) =>
@@ -118,6 +118,29 @@ export const decideAndSave = <F, W, E, S, E2, R1, R2>(steps: {
 		const saved = Option.isSome(decided)
 			? yield* steps.save(decided.value)
 			: undefined;
+
+		return { facts, decided, saved };
+	}).pipe(
+		Effect.retry({ times: 2, while: Predicate.isTagged("ChangedSinceRead") }),
+		Effect.catchTag("ChangedSinceRead", () =>
+			Effect.fail(new SaveKeptChanging()),
+		),
+	);
+
+/**
+ * `decideAndSave` for a rule that always writes or refuses (`alwaysWrites`): it answers the write the rule made, not an
+ * `Option` of one, and has no "nothing to do" outcome. The read, the retry on a raised guard and `SaveKeptChanging` are
+ * the same.
+ */
+export const alwaysDecideAndSave = <F, W, E, S, E0, E2, R1, R2>(steps: {
+	facts: Effect.Effect<F, E0, R1>;
+	decide: (facts: F) => Effect.Effect<W, E>;
+	save: (write: W) => Effect.Effect<S, ChangedSinceRead | E2, R2>;
+}) =>
+	Effect.gen(function* () {
+		const facts = yield* steps.facts;
+		const decided = yield* steps.decide(facts);
+		const saved = yield* steps.save(decided);
 
 		return { facts, decided, saved };
 	}).pipe(

@@ -2,16 +2,18 @@ import type Stripe from "stripe";
 import type { OfferTerms } from "./software-offers";
 import {
 	projectTerms,
-	softwareGuard,
-	softwareAudit,
 	deliveredIndexes,
 	type ClientSoftwareUpdate,
 } from "./software-projects";
+import { softwareGuard, softwareAudit } from "./software-guard";
+import {
+	softwareInvoiceTerms,
+	type SoftwareInvoiceKind,
+} from "./software-invoice-terms";
 import { guardTime } from "./invoice-event-order";
 import { stripeClient } from "./stripe-invoicing";
 import type { CreatedStripeInvoice } from "./stripe-invoicing";
-
-export type SoftwareInvoiceKind = "deposit" | "balance" | "milestone";
+import { ReaderMessage } from "./reader-message";
 
 export type SoftwareInvoice = {
 	id: string;
@@ -93,42 +95,6 @@ export const softwareInvoiceStatusLabels = {
 	uncollectible: "Uncollectible",
 };
 
-export function softwareInvoiceTerms(
-	terms: OfferTerms,
-	milestone: number,
-	kind: SoftwareInvoiceKind,
-) {
-	const item = terms.milestones[milestone];
-
-	if (
-		!["deposit", "balance", "milestone"].includes(kind) ||
-		!Number.isInteger(milestone) ||
-		milestone < 0 ||
-		!item ||
-		(terms.paymentMode === "standard"
-			? kind === "milestone"
-			: kind !== "milestone")
-	) {
-		throw new Error(
-			"Choose an invoice from the agreed milestone payment schedule.",
-		);
-	}
-
-	const deposit = Math.floor(item.feeCents / 2);
-
-	const daysUntilDue = kind === "deposit" ? 7 : kind === "balance" ? 15 : 30;
-
-	return {
-		amountCents:
-			kind === "deposit"
-				? deposit
-				: kind === "balance"
-					? item.feeCents - deposit
-					: item.feeCents,
-		daysUntilDue,
-	};
-}
-
 type InvoiceResult = {
 	id: string;
 	status?: string | null;
@@ -187,7 +153,9 @@ export async function createSoftwareInvoiceWithClient(
 		!Number.isSafeInteger(invoice.attempt) ||
 		invoice.attempt < 0
 	) {
-		throw new Error("Invoice does not match the project payment terms.");
+		throw new ReaderMessage(
+			"Invoice does not match the project payment terms.",
+		);
 	}
 
 	const customerKey = `software-request:${invoice.request_id}`;
@@ -353,46 +321,6 @@ export const paidFirstDeposit = (
 			!invoice.refunded_at,
 	);
 
-export async function depositOfferBlock(
-	db: D1Database,
-	id: string,
-	decline = false,
-) {
-	const rows = await db
-		.prepare(`SELECT i.status FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
-    WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? "" : "AND o.status='sent'"}
-    AND i.refunded_at IS NULL AND i.status IN ('creating','open','payment_failed','uncollectible','paid')`)
-		.bind(id)
-		.all<{ status: string }>();
-
-	if (
-		rows.results.some((row) =>
-			["creating", "open", "payment_failed", "uncollectible"].includes(
-				row.status,
-			),
-		)
-	)
-		return "Void the open deposit invoice in Stripe first, then send the new offer.";
-
-	if (!decline && rows.results.some((row) => row.status === "paid"))
-		return "A deposit is already paid for this offer. Start the project, or refund it in Stripe before sending new terms.";
-
-	return null;
-}
-
-export const depositOfferGuard = (
-	db: D1Database,
-	id: string,
-	decline = false,
-) =>
-	softwareGuard(
-		db,
-		`SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM software_invoices i JOIN software_offers o ON o.id=i.offer_id
-   WHERE i.request_id=? AND i.milestone_index=0 AND i.kind='deposit' ${decline ? "" : "AND o.status='sent'"}
-   AND i.refunded_at IS NULL AND i.status IN (${decline ? "'creating','open','payment_failed','uncollectible'" : "'creating','open','payment_failed','uncollectible','paid'"}))`,
-		[id],
-	);
-
 export function invoiceDelivered(
 	update:
 		| Pick<ClientSoftwareUpdate, "delivered_deliverables_json" | "decision">
@@ -436,7 +364,7 @@ export async function reserveSoftwareInvoice(
 			request_updated_at: string;
 		}>();
 
-	if (!offer) throw new Error("Choose the current offer.");
+	if (!offer) throw new ReaderMessage("Choose the current offer.");
 
 	const project = await db
 		.prepare("SELECT * FROM software_projects WHERE request_id=?")
@@ -457,7 +385,7 @@ export async function reserveSoftwareInvoice(
 				project.content_deleted_at
 			: offer.status !== "sent"
 	)
-		throw new Error("Choose the current offer.");
+		throw new ReaderMessage("Choose the current offer.");
 
 	const terms = projectTerms(offer),
 		agreed = softwareInvoiceTerms(terms, milestone, kind);
@@ -498,16 +426,16 @@ export async function reserveSoftwareInvoice(
 			.bind(id, milestone)
 			.first())
 	)
-		throw new Error("This installment is already paid.");
+		throw new ReaderMessage("This installment is already paid.");
 
 	if (
 		!invoiceAvailable(terms, milestone, kind, project, delivered, paid) &&
 		!input.retryId
 	)
-		throw new Error("This invoice is not available at this milestone.");
+		throw new ReaderMessage("This invoice is not available at this milestone.");
 
 	if (invoices.some((row) => row.status === "paid" && !row.refunded_at))
-		throw new Error("This installment is already paid.");
+		throw new ReaderMessage("This installment is already paid.");
 	const at = new Date().toISOString();
 
 	const guards = [
@@ -570,7 +498,7 @@ export async function reserveSoftwareInvoice(
 			previous.external_refs_deleted_at ||
 			Date.parse(previous.created_at) < Date.now() - 23 * 3600_000
 		)
-			throw new Error(
+			throw new ReaderMessage(
 				"Check Stripe and reconcile this invoice before retrying.",
 			);
 		await db.batch([
@@ -596,10 +524,10 @@ export async function reserveSoftwareInvoice(
 		input.replaceId &&
 		(!previous || !["void", "uncollectible"].includes(previous.status))
 	)
-		throw new Error("Void the invoice in Stripe before replacing it.");
+		throw new ReaderMessage("Void the invoice in Stripe before replacing it.");
 
 	if (input.replaceId && previous?.status === "uncollectible")
-		throw new Error(
+		throw new ReaderMessage(
 			"Void the uncollectible invoice in Stripe first; it can still be paid.",
 		);
 
@@ -607,7 +535,7 @@ export async function reserveSoftwareInvoice(
 		!input.replaceId &&
 		invoices.some((row) => ["void", "uncollectible"].includes(row.status))
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"Use Replace invoice after voiding the original in Stripe.",
 		);
 

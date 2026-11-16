@@ -11,7 +11,8 @@ import {
 	nativeAgreementResponse,
 } from "~/lib/agreement-request";
 import { agreementJson, cleanupAgreementAccess } from "~/lib/agreement-access";
-import { contractorSchema } from "~/lib/agreement-fields";
+import { classifyFailure, logUnexpected } from "~/server/failure";
+import { readContractor } from "~/lib/agreement-fields";
 import {
 	compareWithPrevious,
 	currentTemplate,
@@ -64,7 +65,18 @@ const schema = z.discriminatedUnion("action", [
 	}),
 	z.object({
 		action: z.literal("config"),
-		values: contractorSchema,
+		// The contractor's details are read with Effect Schema; a failure fails the whole body, as the Zod object did.
+		values: z.unknown().transform((value, context) => {
+			const read = readContractor(value);
+
+			if (read.ok) return read.value;
+			context.addIssue({
+				code: "custom",
+				message: "Invalid contractor details.",
+			});
+
+			return z.NEVER;
+		}),
 		expectedCurrentVersion: z.coerce.number().int().min(0),
 	}),
 ]);
@@ -238,15 +250,19 @@ const post: APIRoute = async ({ request, locals }) => {
 			"/owner/agreements",
 		);
 	} catch (error) {
+		const failure = classifyFailure(error);
+
+		if (failure.kind === "unexpected") logUnexpected("Owner agreements", error);
+
 		return agreementJson(
 			{
 				ok: false,
 				error:
-					error instanceof Error
-						? error.message
+					failure.kind === "sentence"
+						? failure.say
 						: "The agreement could not be saved.",
 			},
-			409,
+			failure.kind === "unexpected" ? 500 : 409,
 		);
 	}
 };

@@ -1,7 +1,22 @@
-import { z } from "astro/zod";
+import * as Schema from "effect/Schema";
+import {
+	type Body,
+	choiceField,
+	emailPattern,
+	type Mutable,
+	plainErrors,
+	type RawValue,
+	readVariants,
+	refuseEveryKind,
+	stringField,
+	uuidPattern,
+	type VariantValues,
+} from "./fields";
 import type { NewOwnerRequest } from "./owner-requests";
 import type { OwnerRequest } from "./owner-model";
-import { isText, isObject } from "./type-guards";
+import type { JsonValue } from "./json-value";
+import { isText } from "./type-guards";
+import { outlineText, storedOutline } from "./brief-board";
 
 export const softwarePaths = {
 	website: "Website design",
@@ -89,13 +104,14 @@ export const softwareLabels = {
 	existing: "What they already have",
 	updates: "Who will keep it up to date?",
 	appGoal: "What should the app let people do?",
+	outline: "Brief outline",
 } as const;
 
 // The client reads their own answers, so "they" becomes "you".
-export const clientSoftwareLabels: Record<string, string> = {
+export const clientSoftwareLabels = {
 	...softwareLabels,
 	existing: "What you already have",
-};
+} satisfies Record<string, string>;
 
 export const softwareQuestions = {
 	website: ["purpose", "currentUrl", "existing", "updates"],
@@ -144,7 +160,7 @@ export const updateLabels = {
 	unsure: "Not sure yet",
 } as const;
 
-export function currentSiteHref(value: unknown): string | null {
+export function currentSiteHref(value: RawValue): string | null {
 	if (!isText(value) || !/^https?:\/\//i.test(value) || /\s/.test(value))
 		return null;
 
@@ -189,171 +205,202 @@ export const currentUrlMessage = (value: string) =>
 
 const currentUrlMax = 2048;
 
-const single = (max: number) =>
-	z.string().trim().max(max, `Keep this under ${max} characters.`);
-
-const required = (max: number) =>
-	single(max).min(1, "This answer is required.");
-
-const common = {
-	name: single(100).min(1, "Add your name."),
-	email: single(120).email("Add a valid email address."),
-	company: single(120).default(""),
-	timing: z.enum(["flexible", "month", "quarter", "date", "asap"], {
-		errorMap: () => ({ message: "Choose one." }),
-	}),
-	timingDate: z
-		.string()
-		.regex(/^$|^\d{4}-\d{2}-\d{2}$/, "Add a date.")
-		.default(""),
-	timingReason: single(500).default(""),
-	budgetStatus: z
-		.enum(["", "approved", "pending", "exploring", "unsure"], {
-			errorMap: () => ({ message: "Choose one." }),
-		})
-		.default(""),
-	budgetNote: single(200).default(""),
-	approver: z
-		.enum(["", "self", "other", "unsure"], {
-			errorMap: () => ({ message: "Choose one." }),
-		})
-		.default(""),
-	approverRole: single(120).default(""),
-	turnstileToken: z
-		.string()
-		.min(1, "Complete the security check.")
-		.max(2048, "Keep this under 2048 characters."),
-	submissionId: z.string().uuid("Invalid submission ID."),
+// The inquiry's validator, written to answer exactly as the Zod 3 schema it replaced did (tests/server/validators-differential.test.ts
+// holds it to that on thousands of inputs): the same sentences, the first sentence of a field wins, one set of fields
+// per `path`, and the error keys follow the order of the fields.
+const required = {
+	missing: "This answer is required.",
+	wrongType: () => "This answer is required.",
 };
 
-const schema = z.discriminatedUnion("path", [
-	z.object({
-		...common,
-		path: z.literal("workflow"),
-		today: required(2000),
-		audience: single(1000).default(""),
-		firstResult: single(2000).default(""),
-	}),
-	z.object({
-		...common,
-		path: z.literal("idea"),
-		idea: required(1000),
-		audienceToday: single(1000).default(""),
-		firstVersion: single(1000).default(""),
-		signal: single(500).default(""),
-	}),
-	// Over-long values skip the link checks: max already reports them, and URL parsing of a long international host is slow.
-	z.object({
-		...common,
-		path: z.literal("website"),
-		purpose: required(2000),
-		currentUrl: single(currentUrlMax)
-			.default("")
-			.refine(
-				(value) =>
-					value.length > currentUrlMax ||
-					value === "" ||
-					currentSiteHref(value) !== null,
-				(value) => ({ message: currentUrlMessage(value) }),
-			),
-		existing: single(2000).default(""),
-		updates: z.enum(["self", "help", "unsure"], { message: "Choose one." }),
-	}),
-	z.object({
-		...common,
-		path: z.literal("webapp"),
-		appGoal: required(1000),
-		firstVersion: single(1000).default(""),
-	}),
-]);
+const tooLong = (max: number) =>
+	Schema.isMaxLength(max, { message: `Keep this under ${max} characters.` });
 
-export type SoftwareInput = z.infer<typeof schema>;
+const single = (max: number) => stringField(required, tooLong(max));
+
+const needed = (max: number) =>
+	stringField(
+		required,
+		tooLong(max),
+		Schema.isMinLength(1, { message: "This answer is required." }),
+	);
+
+const chooseOne = <const V extends readonly [string, ...string[]]>(values: V) =>
+	choiceField(values, {
+		missing: "Choose one.",
+		wrongType: () => "Choose one.",
+		notOneOf: () => "Choose one.",
+	});
+
+const common = {
+	name: stringField(
+		required,
+		tooLong(100),
+		Schema.isMinLength(1, { message: "Add your name." }),
+	),
+	email: stringField(
+		required,
+		tooLong(120),
+		Schema.isPattern(emailPattern, { message: "Add a valid email address." }),
+	),
+	company: single(120),
+	timing: chooseOne(["flexible", "month", "quarter", "date", "asap"]),
+	timingDate: stringField(
+		{ ...required, trim: false },
+		Schema.isPattern(/^$|^\d{4}-\d{2}-\d{2}$/, { message: "Add a date." }),
+	),
+	timingReason: single(500),
+	budgetStatus: chooseOne(["", "approved", "pending", "exploring", "unsure"]),
+	budgetNote: single(200),
+	approver: chooseOne(["", "self", "other", "unsure"]),
+	approverRole: single(120),
+	turnstileToken: stringField(
+		{ ...required, trim: false },
+		Schema.isMinLength(1, { message: "Complete the security check." }),
+		tooLong(2048),
+	),
+	submissionId: stringField(
+		{ ...required, trim: false },
+		Schema.isPattern(uuidPattern, { message: "Invalid submission ID." }),
+	),
+};
+
+const variants = {
+	workflow: {
+		...common,
+		today: needed(2000),
+		audience: single(1000),
+		firstResult: single(2000),
+	},
+	idea: {
+		...common,
+		idea: needed(1000),
+		audienceToday: single(1000),
+		firstVersion: single(1000),
+		signal: single(500),
+	},
+	website: {
+		...common,
+		purpose: needed(2000),
+		// Over-long values skip the link checks: max already reports them, and URL parsing of a long international host is slow.
+		currentUrl: stringField(
+			required,
+			tooLong(currentUrlMax),
+			Schema.makeFilter((value: string) =>
+				value.length > currentUrlMax ||
+				value === "" ||
+				currentSiteHref(value) !== null
+					? true
+					: currentUrlMessage(value),
+			),
+		),
+		existing: single(2000),
+		updates: chooseOne(["self", "help", "unsure"]),
+	},
+	webapp: {
+		...common,
+		appGoal: needed(1000),
+		firstVersion: single(1000),
+	},
+};
+
+// The optional answers an absent field gives as empty.
+const optional = {
+	company: "",
+	timingDate: "",
+	timingReason: "",
+	budgetStatus: "",
+	budgetNote: "",
+	approver: "",
+	approverRole: "",
+} as const;
+
+const defaults = {
+	workflow: { ...optional, audience: "", firstResult: "" },
+	idea: { ...optional, audienceToday: "", firstVersion: "", signal: "" },
+	website: { ...optional, currentUrl: "", existing: "" },
+	webapp: { ...optional, firstVersion: "" },
+};
+
+export type SoftwareInput = Mutable<VariantValues<"path", typeof variants>>;
+
+/** The body's own value for a key: what a Map built from its entries read. */
+const own = (input: Body, key: string) =>
+	Object.hasOwn(input, key) ? input[key] : undefined;
+
+/**
+ * The checks made on the raw body, before and besides the fields: a date that is not a date, a line break where one line
+ * is asked for, a control character in an answer. A later entry for a key replaces an earlier one and keeps its place.
+ */
+function lineErrors(input: Body): Record<string, string> {
+	const entries: [string, string][] = [];
+	const timingDate = own(input, "timingDate");
+
+	if (
+		Object.hasOwn(input, "timingDate") &&
+		own(input, "timing") === "date" &&
+		(!isText(timingDate) ||
+			!/^\d{4}-\d{2}-\d{2}$/.test(timingDate) ||
+			!Number.isFinite(Date.parse(timingDate)) ||
+			new Date(timingDate).toISOString().slice(0, 10) !== timingDate)
+	)
+		entries.push(["timingDate", "Add a valid date."]);
+
+	for (const key of [
+		"name",
+		"email",
+		"company",
+		"timingReason",
+		"budgetNote",
+		"approverRole",
+	]) {
+		const value = own(input, key);
+
+		if (isText(value) && /[\r\n]/.test(value))
+			entries.push([key, "Use one line."]);
+	}
+
+	const currentUrl = own(input, "currentUrl");
+
+	if (
+		own(input, "path") === "website" &&
+		isText(currentUrl) &&
+		/[\r\n]/.test(currentUrl)
+	)
+		entries.push(["currentUrl", "Use one line."]);
+
+	const path = own(input, "path");
+
+	const questions =
+		isText(path) && hasKey(softwareQuestions, path)
+			? softwareQuestions[path]
+			: [];
+
+	for (const key of [...questions, ...softwareDetailKeys]) {
+		const value = own(input, key);
+
+		if (isText(value) && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value))
+			entries.push([key, "Remove control characters."]);
+	}
+
+	return Object.fromEntries(entries);
+}
 
 export function validateSoftwareInquiry(
-	input: unknown,
+	input: RawValue,
 ):
 	| { ok: true; value: SoftwareInput }
 	| { ok: false; errors: Record<string, string> } {
-	const lineErrors: Record<string, string> = {};
-
-	if (isObject(input)) {
-		const raw = new Map<string, unknown>(Object.entries(input));
-		const timingDate = raw.get("timingDate");
-
-		if (
-			raw.has("timingDate") &&
-			raw.get("timing") === "date" &&
-			(!isText(timingDate) ||
-				!/^\d{4}-\d{2}-\d{2}$/.test(timingDate) ||
-				!Number.isFinite(Date.parse(timingDate)) ||
-				new Date(timingDate).toISOString().slice(0, 10) !== timingDate)
-		)
-			lineErrors.timingDate = "Add a valid date.";
-
-		for (const key of [
-			"name",
-			"email",
-			"company",
-			"timingReason",
-			"budgetNote",
-			"approverRole",
-		]) {
-			const value = raw.get(key);
-
-			if (isText(value) && /[\r\n]/.test(value))
-				lineErrors[key] = "Use one line.";
-		}
-
-		const currentUrl = raw.get("currentUrl");
-
-		if (
-			raw.get("path") === "website" &&
-			isText(currentUrl) &&
-			/[\r\n]/.test(currentUrl)
-		)
-			lineErrors.currentUrl = "Use one line.";
-
-		const path = raw.get("path");
-
-		const questions =
-			isText(path) && hasKey(softwareQuestions, path)
-				? softwareQuestions[path]
-				: [];
-
-		for (const key of [...questions, ...softwareDetailKeys]) {
-			const value = raw.get(key);
-
-			if (isText(value) && /[\x00-\x08\x0b\x0c\x0e-\x1f]|\p{Cs}/u.test(value))
-				lineErrors[key] = "Remove control characters.";
-		}
-	}
-
-	const parsed = schema.safeParse(input, {
-		errorMap: (issue, context) => ({
-			message:
-				issue.code === "invalid_type" &&
-				!["path", "timing", "budgetStatus", "approver", "updates"].includes(
-					String(issue.path[0]),
-				)
-					? issue.path.length
-						? "This answer is required."
-						: "Please send the form again."
-					: context.defaultError,
-		}),
+	const read = readVariants("path", variants, input, {
+		unknownVariant: "Choose a starting point.",
+		notObject: refuseEveryKind("Please send the form again."),
+		defaults,
+		alongside: lineErrors,
 	});
 
-	if (!parsed.success || Object.keys(lineErrors).length) {
-		const errors: Record<string, string> = {};
+	if (!read.ok) return { ok: false, errors: plainErrors(read.errors) };
 
-		if (!parsed.success)
-			for (const issue of parsed.error.issues)
-				errors[String(issue.path[0] ?? "_form")] ??=
-					issue.path[0] === "path" ? "Choose a starting point." : issue.message;
-
-		return { ok: false, errors: { ...errors, ...lineErrors } };
-	}
-
-	const value = parsed.data;
+	const value: SoftwareInput = read.value;
 
 	if (value.approver !== "other") value.approverRole = "";
 
@@ -361,7 +408,7 @@ export function validateSoftwareInquiry(
 }
 
 export function softwareRequest(input: SoftwareInput): NewOwnerRequest {
-	const fields = new Map<string, unknown>(Object.entries(input));
+	const fields = new Map<string, JsonValue | undefined>(Object.entries(input));
 
 	const firstLine = String(fields.get(softwareQuestions[input.path][0]))
 		.trim()
@@ -403,7 +450,10 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 			? details.path
 			: "workflow";
 
-	return Object.fromEntries(
+	// The living brief's outline (src/lib/brief-board.ts), when one was sent: one line an item, with where it came from.
+	const outline = path === "idea" ? [] : storedOutline(details.outline ?? null);
+
+	const rows = Object.fromEntries(
 		["path", ...softwareQuestions[path], ...softwareDetailKeys].flatMap(
 			(key): [string, string][] => {
 				if (key === "approverRole" && details.approver !== "other") return [];
@@ -439,4 +489,8 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 			},
 		),
 	);
+
+	return outline.length && path !== "idea"
+		? { ...rows, outline: outlineText(outline, path) }
+		: rows;
 }

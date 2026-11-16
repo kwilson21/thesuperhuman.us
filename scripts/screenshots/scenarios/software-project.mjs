@@ -125,7 +125,7 @@ export default {
 				),
 			)[0]?.results?.[0]?.updated_at ?? "";
 
-		const shot = async (title, path, name, options = {}) => {
+		const shot = async (title, path, name, { note, ...options } = {}) => {
 			const images = [];
 
 			for (const viewport of ["desktop", "phone"])
@@ -136,7 +136,7 @@ export default {
 						viewport,
 						...options,
 					}),
-					caption: `Fictional data: ${title}`,
+					caption: `Fictional data: ${title}${note ? `. ${note}` : ""}`,
 				});
 			steps.push({ title, images });
 		};
@@ -342,6 +342,20 @@ export default {
 			cookie,
 		});
 		await shot("Software sign-in", "/studio/sign-in?for=software", "signin");
+		// The step after a code is requested needs Turnstile and an emailed code, so it is shown by revealing the form that the
+		// page script shows once a code has been sent. Fictional, local data only; nothing is sent.
+		await shot(
+			"Software sign-in, check your email step (the form shown as after a code is sent)",
+			"/studio/sign-in?for=software",
+			"signin-check-email",
+			{
+				prepare: async (page) => {
+					await page.evaluate(() => {
+						document.querySelector("#studio-code-verify").hidden = false;
+					});
+				},
+			},
+		);
 		await shot(
 			"Unknown project unavailable",
 			"/studio/software/unavailable",

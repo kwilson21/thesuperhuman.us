@@ -1,3 +1,4 @@
+import { safeHttpsUrl } from "~/lib/link-check";
 import { evidenceTypes, softwareDate } from "~/lib/software-project-display";
 import { addBusinessDays } from "~/lib/business-days";
 
@@ -316,18 +317,8 @@ export function setupSoftwareComposer() {
 							"[name=link_url]",
 						)!.value;
 
-				let href = "";
-
-				try {
-					const parsed = new URL(url);
-
-					if (
-						parsed.protocol === "https:" &&
-						!parsed.username &&
-						!parsed.password
-					)
-						href = parsed.href;
-				} catch {}
+				// The server trims each field before it checks it, so the preview does too.
+				const href = safeHttpsUrl(url.trim()) ?? "";
 
 				row.hidden = linkRows[index].hidden || !href;
 				const anchor = row.querySelector("a")!;
@@ -369,16 +360,8 @@ export function setupSoftwareComposer() {
 			if (scope) scope.hidden = !delivery;
 			deliveryLinkList.replaceChildren(
 				...deliveryReferences.flatMap((reference) => {
-					let href = "";
-
-					try {
-						const url = new URL(reference.url);
-
-						if (url.protocol === "https:" && !url.username && !url.password)
-							href = url.href;
-					} catch {
-						/* Ignore until a valid HTTPS link is entered. */
-					}
+					// Nothing is shown until a valid HTTPS link is entered.
+					const href = safeHttpsUrl(reference.url.trim());
 
 					if (!href) return [];
 
@@ -437,16 +420,8 @@ export function setupSoftwareComposer() {
 			)!.hidden = !value(key);
 		}
 
-		let href = "";
-
-		try {
-			const url = new URL(value("preview_url"));
-
-			if (url.protocol === "https:" && !url.username && !url.password)
-				href = url.href;
-		} catch {
-			/* No preview until the URL is valid. */
-		}
+		// No preview until the URL is valid.
+		const href = safeHttpsUrl(value("preview_url").trim()) ?? "";
 
 		const link = preview.querySelector<HTMLAnchorElement>(
 			"[data-preview-link]",

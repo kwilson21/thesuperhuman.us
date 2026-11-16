@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import type { JsonValue } from "../helpers/json";
 import { POST as webhook } from "~/pages/api/stripe/webhook";
 import { POST } from "~/pages/api/owner/requests/[id]/payment";
@@ -38,7 +37,6 @@ import {
 } from "./harness";
 
 // The Stripe SDK waits about a second between retries of a network failure or a 5xx without a stop header.
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/payment: the owner approves the price of an audio request, records
 // a payment that arrived outside Stripe, or has the site create (or replace a void) booking and balance invoice in Stripe.
@@ -70,9 +68,10 @@ vi.setConfig({ testTimeout: 60_000 });
 //   503 {ok:false}                 payments flag off or missing, no secret key, no webhook secret
 //   409 {ok:false}                 no payment row, balance before the booking is paid, creation already reserved, paid
 //                                  outside Stripe, references deleted, a reserved row left by a failed earlier try
-//   409 or 502 {ok:false}          a Stripe refusal or outage at each of the five calls. The status is 502 only when the
-//                                  error text contains "Stripe" or "hosted payment URL", so a 4xx whose message does not
-//                                  say Stripe is a 409
+//   409 or 502 {ok:false}          a Stripe refusal or outage at each of the five calls. The status is 502 when the error
+//                                  is a Stripe SDK error (by its type: refused, unreachable, or answered with a 4xx) or
+//                                  this code's own unusable-response error; any other error, such as a state conflict
+//                                  the site raises itself, is a 409. The error's wording does not decide it
 //   502                            malformed send answers (draft, no url, http url, not JSON)
 //   503 {ok:false,recoveryPending:true}  the record batch fails or another invoice took the slot
 //   replace-booking-invoice and replace-balance-invoice

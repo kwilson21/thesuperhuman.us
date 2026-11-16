@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	MSA_ID,
@@ -33,8 +32,6 @@ import {
 	text,
 	type Case,
 } from "./harness";
-
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "retry-artifact": the owner asks the site to
 // prepare the signed packet of an executed agreement again (and, once it is ready, to send the copies). The packet is

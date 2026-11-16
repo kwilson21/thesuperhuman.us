@@ -23,8 +23,9 @@ export type ClientManifest = {
 export { MANIFEST_PATH };
 
 /**
- * Packages the browser must never load, by name or `name/...`. Zod is checked by version separately (v3 ships as
- * `astro/zod`; v4 is a server validator).
+ * Packages the browser must never load, by name or `name/...`. Zod is on the list in both versions (v3 shipped as
+ * `astro/zod`, v4 is a server validator): the browser validators are Effect Schema now. `effect` is on it too, and
+ * exempt through ALLOWED_FORBIDDEN_PREFIXES below.
  */
 export const FORBIDDEN_PACKAGES: readonly string[] = [
 	"stripe",
@@ -34,17 +35,17 @@ export const FORBIDDEN_PACKAGES: readonly string[] = [
 	"@xstate",
 	"effect",
 	"@effect",
+	"zod",
 ];
 
 /**
  * A module id with one of these prefixes is exempt from the forbidden-package check (but still needs its package in
- * the reviewed list). This is where Effect goes when the browser is allowed to load it, and the prefix is the whole
- * package, "npm:effect@" (a prefix may name a version: "npm:effect@4.1.4/"): `effect/dist/Schema.js` imports about 68
+ * the reviewed list). Effect is exempt as a whole package, "npm:effect@": `effect/dist/Schema.js` imports about 68
  * other effect modules, so a prefix for Schema alone would still fail. Which effect modules browser code may import
- * is a source-level rule the walker (client-graph.test.ts) carries, not something this check can express. Add the
- * package to BROWSER_PACKAGES in browser-modules.ts as well.
+ * is a source-level rule the walker (client-graph.test.ts) carries, and the runtime parts a Schema-only bundle does not
+ * hold (Layer, Scope, Deferred) are caught by the text markers in client-bundle.test.ts. `@effect/*` is not exempt.
  */
-export const ALLOWED_FORBIDDEN_PREFIXES: readonly string[] = [];
+export const ALLOWED_FORBIDDEN_PREFIXES: readonly string[] = ["npm:effect@"];
 
 const NPM = "npm:";
 
@@ -94,13 +95,9 @@ const isRepoFile = (module: string) =>
 	!module.startsWith("outside:") &&
 	!isVirtual(module);
 
-/** True when `name` at `version` is a package browser code must not hold. */
-function forbidden(name: string, version: string | undefined): boolean {
-	if (FORBIDDEN_PACKAGES.some((f) => name === f || name.startsWith(`${f}/`)))
-		return true;
-
-	// Zod v3 (astro/zod) is allowed; v4, or a version the label does not carry, is not.
-	return name === "zod" && !(version && Number(version.split(".")[0]) < 4);
+/** True when `name` is a package browser code must not hold. */
+function forbidden(name: string): boolean {
+	return FORBIDDEN_PACKAGES.some((f) => name === f || name.startsWith(`${f}/`));
 }
 
 /**
@@ -195,7 +192,7 @@ export function bundleViolations(
 
 		const version = versionOf(module);
 
-		if (forbidden(name, version))
+		if (forbidden(name))
 			problems.push(
 				`forbidden package in browser code: ${name}${version ? `@${version}` : ""}`,
 			);

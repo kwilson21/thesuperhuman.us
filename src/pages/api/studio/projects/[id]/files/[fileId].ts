@@ -1,15 +1,17 @@
 import type { APIRoute } from "astro";
-import {
-	clientPortalEnabled,
-	studioSessionFromRequest,
-} from "~/lib/audio-client-access";
+import { studioSessionFromRequest } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	clientProjectFile,
 	recordProjectFileAccess,
+	sizeMismatchResponse,
 	streamClientProjectFile,
 } from "~/lib/audio-project-files";
+import { objectStoreUnavailable } from "~/lib/object-store-errors";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/studio/projects/[id]/files/[fileId]";
 
 const hidden = () =>
 	new Response("File not found", {
@@ -49,6 +51,15 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 			download,
 		);
 
+		if (response === "size-mismatch") {
+			logUnexpected(
+				ROUTE,
+				new Error("The stored object has another size than the file row."),
+			);
+
+			return sizeMismatchResponse();
+		}
+
 		if (
 			request.method === "GET" &&
 			(response.status === 200 || response.status === 206)
@@ -57,9 +68,13 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 		}
 
 		return response;
-	} catch {
+	} catch (error) {
+		const unavailable = objectStoreUnavailable(error);
+
+		if (!unavailable) logUnexpected(ROUTE, error);
+
 		return new Response("Private audio is temporarily unavailable", {
-			status: 503,
+			status: unavailable ? 503 : 500,
 			headers: { "cache-control": "private, no-store" },
 		});
 	}

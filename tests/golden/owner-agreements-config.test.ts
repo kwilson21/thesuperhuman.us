@@ -18,7 +18,7 @@ import {
 // The golden corpus for POST /api/owner/agreements, action "config": the owner records the contractor details every new
 // agreement carries. Each save is a new version (max version + 1) guarded by expectedCurrentVersion, in one batch.
 //
-// Every response branch of the handler, contractorSchema (src/lib/agreement-fields.ts) and agreementRequest's flat-form branch, and
+// Every response branch of the handler, readContractor (src/lib/agreement-fields.ts) and agreementRequest's flat-form branch, and
 // its cases:
 //
 //   200 {ok:true} / form 303   the first save (version 1), a second and third in sequence, values lower-cased, trimmed and composed, text

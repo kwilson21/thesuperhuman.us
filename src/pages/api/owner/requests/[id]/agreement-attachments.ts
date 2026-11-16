@@ -1,15 +1,10 @@
 import type { APIRoute } from "astro";
-import { z } from "astro/zod";
-import { cleanText } from "~/lib/agreement-client-fields";
-import { validProjectDate } from "~/lib/audio-project-updates";
+import { readAttachmentQuery } from "~/lib/agreement-owner-input";
 import { readBodyWithin } from "~/lib/audio-project-uploads";
 import { hashBytes } from "~/lib/agreement-artifacts";
-import {
-	agreementJson,
-	agreementHeaders,
-	signingEnabled,
-} from "~/lib/agreement-access";
-import { softwareGuard } from "~/lib/software-projects";
+import { agreementJson, signingEnabled } from "~/lib/agreement-access";
+import { agreementHeaders } from "~/lib/agreement-host";
+import { softwareGuard } from "~/lib/software-guard";
 
 export const prerender = false;
 
@@ -26,16 +21,10 @@ export const PUT: APIRoute = async ({ locals, request, params, url }) => {
 
 	if (!(await signingEnabled(db))) return agreementJson({ ok: false }, 404);
 
-	const parsed = z
-		.object({
-			filename: cleanText(200).refine((v) => Boolean(v) && !/[\\/]/.test(v)),
-			version: cleanText(80).refine(Boolean),
-			date: z.string().refine(validProjectDate),
-		})
-		.safeParse(Object.fromEntries(url.searchParams));
+	const parsed = readAttachmentQuery(Object.fromEntries(url.searchParams));
 
 	if (
-		!parsed.success ||
+		!parsed.ok ||
 		request.headers.get("content-type") !== "application/pdf" ||
 		!request.body
 	)
@@ -94,9 +83,9 @@ export const PUT: APIRoute = async ({ locals, request, params, url }) => {
 				.bind(
 					id,
 					params.id,
-					parsed.data.filename,
-					parsed.data.version,
-					parsed.data.date,
+					parsed.value.filename,
+					parsed.value.version,
+					parsed.value.date,
 					key,
 					sha256,
 					bytes.byteLength,
@@ -108,9 +97,9 @@ export const PUT: APIRoute = async ({ locals, request, params, url }) => {
 		return agreementJson({
 			ok: true,
 			attachment: {
-				filename: parsed.data.filename,
-				version: parsed.data.version,
-				date: parsed.data.date,
+				filename: parsed.value.filename,
+				version: parsed.value.version,
+				date: parsed.value.date,
 				sha256,
 				key,
 				bytes: bytes.byteLength,

@@ -6,6 +6,7 @@ import {
 	softwareVersionNumber,
 	softwareVersionLabel,
 } from "~/lib/software-projects";
+import { safeHttpsUrl, safeReferences } from "~/lib/link-check";
 import { evidenceTypes, softwareDate } from "~/lib/software-project-display";
 import type { ClientSoftwareUpdate } from "~/lib/software-projects";
 
@@ -47,27 +48,9 @@ const partialDelivery =
 	update.kind === "delivery_review" &&
 	deliverables.some((_, index) => !includedIndexes.includes(index));
 
-const references: { label: string; url: string }[] = JSON.parse(
-	update.links_json ?? "[]",
-);
-
-const deliveryReferences =
-	update.kind === "delivery_review"
-		? references.filter((reference) => {
-				try {
-					const url = new URL(reference.url);
-
-					return (
-						url.protocol === "https:" &&
-						!url.username &&
-						!url.password &&
-						Boolean(reference.label.trim())
-					);
-				} catch {
-					return false;
-				}
-			})
-		: [];
+const references = safeReferences(update.links_json);
+const previewHref = safeHttpsUrl(update.preview_url);
+const deliveryReferences = update.kind === "delivery_review" ? references : [];
 ---
 <article class="software-update" data-software-update>
   {workFirst ? <>
@@ -76,11 +59,11 @@ const deliveryReferences =
     {showExplanation && update.client_request && <p>I need from you: {update.client_request}</p>}
     {visualUrl ? <figure><img src={visualUrl} alt={update.visual_alt} /></figure> : <div class="work-frame">{projectName}</div>}
     {update.evidence_type==='concept' && <p class="access-note">Sketch, not built yet</p>}
-    {update.preview_url && <p><a class="studio-button" href={update.preview_url} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
+    {previewHref && <p><a class="studio-button" href={previewHref} target="_blank" rel="noopener noreferrer">Open {softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗</a></p>}
     {partialDelivery && <p>This version doesn't include everything we agreed yet.</p>}
     {update.kind==='delivery_review' && <details id={`included-${update.id}`}><summary>See what's included</summary><h3>Included in this delivery</h3><ul>{includedDeliverables.map(item=><li>{item}</li>)}</ul><section data-preview-delivery-scope><h3>Full agreed scope · Milestone {(update.milestone_index ?? 0)+1}</h3><ul>{deliverables.map(item=><li>{item}</li>)}</ul></section>
       {!hideChecks && checks.length>0 && <SoftwareAcceptanceChecks checks={checks} evidence={evidence} />}
-      {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.url} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
+      {deliveryReferences.length>0 && <><h3>Supporting links</h3><ul>{deliveryReferences.map(link=><li><a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a></li>)}</ul></>}
       {update.checks_limitations && <><h3>Not included yet</h3><p>{update.checks_limitations}</p></>}
     </details>}
     {update.next_step && <p>Next from me: {update.next_step}</p>}
@@ -93,8 +76,8 @@ const deliveryReferences =
     <img src={visualUrl} alt={update.visual_alt} data-preview-image loading={preview ? 'eager' : 'lazy'} />
     <figcaption data-preview-caption>{preview ? update.evidence_type === 'concept' ? 'Illustrative concept' : update.artifact_version : historyLabel}</figcaption>
   </figure>
-  <p hidden={!update.preview_url} data-preview-link-row><a href={update.preview_url || undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗`}</a></p>
-  <p class="delivery-preview-links access-note" hidden={!update.preview_url} data-preview-access-note>Client access to this preview link is not verified by the site.</p>
+  <p hidden={!previewHref} data-preview-link-row><a href={previewHref ?? undefined} data-preview-link target="_blank" rel="noopener noreferrer">{preview ? 'Open preview ↗' : `Open ${softwareVersionNumber(update) ? softwareVersionLabel(update).toLowerCase() : update.artifact_version || 'work'} ↗`}</a></p>
+  <p class="delivery-preview-links access-note" hidden={!previewHref} data-preview-access-note>Client access to this preview link is not verified by the site.</p>
   {!preview && update.kind==='delivery_review' && deliverables.length>0 && <section class="delivery-included" aria-labelledby={`delivery-included-${update.id}`}>
     <h3 id={`delivery-included-${update.id}`}>Included in this delivery</h3>
     <ul>{includedDeliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
@@ -105,11 +88,11 @@ const deliveryReferences =
     <ul>{deliverables.map(deliverable=><li>{deliverable}</li>)}</ul>
   </section>}
   {!preview && update.kind==='handoff' && <ul>{references.map(link=>{
-    const external=new URL(link.url).origin!==Astro.url.origin;
-    return <li><a class="studio-button" href={link.url} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
+    const external=new URL(link.href).origin!==Astro.url.origin;
+    return <li><a class="studio-button" href={link.href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}>{link.label} <span aria-hidden="true">{external ? '↗' : '→'}</span></a></li>;
   })}</ul>}
   {(update.kind==='delivery_review' || preview) && <section class="delivery-preview-links" data-preview-delivery-links hidden={preview ? update.kind!=='delivery_review' || deliveryReferences.length===0 : deliveryReferences.length===0}>
-    <h3>Supporting links</h3><ul data-preview-delivery-link-list>{deliveryReferences.map(reference=><li><a href={reference.url} target="_blank" rel="noopener noreferrer">{reference.label}</a></li>)}</ul>
+    <h3>Supporting links</h3><ul data-preview-delivery-link-list>{deliveryReferences.map(reference=><li><a href={reference.href} target="_blank" rel="noopener noreferrer">{reference.label}</a></li>)}</ul>
     <p class="access-note">The owner provided these HTTPS links. The site does not verify that each recipient can open them.</p>
   </section>}
   {(['what_changed','checks_limitations','client_request'] as const).map((key, index) => <section data-preview-section={key} hidden={!update[key]}><h3>{index === 0 ? 'What changed' : index === 1 ? preview ? 'Checks and limitations' : update.kind==='handoff' ? 'Not included' : 'Not included yet' : 'What I need from you'}</h3><p data-preview-text={key}>{update[key]}</p></section>)}

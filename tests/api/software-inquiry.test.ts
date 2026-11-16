@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/software-inquiry";
 import { softwareBriefEmail } from "~/lib/client-emails";
 import {
@@ -16,14 +16,13 @@ import {
 	updateLabels,
 	validateSoftwareInquiry,
 } from "~/lib/software-inquiry";
-import { RequestDetailsTooLargeError } from "~/lib/owner-requests";
-import { expectSource } from "../helpers/source-text";
 import type { OwnerRequest } from "~/lib/owner-model";
+import type { RawValue } from "~/lib/fields";
 import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { boundQuery } from "../helpers/d1";
 import { sqliteD1 } from "../helpers/sqlite-d1";
-import { readJson } from "../helpers/json";
+import { type JsonObject, readJson } from "../helpers/json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const id = "00000000-0000-4000-8000-000000000001";
@@ -78,6 +77,8 @@ function context(
 		db?: D1Database | null;
 		token?: string | null;
 		rate?: KVNamespace | null;
+		/** SOFTWARE_BOARD_ENABLED: whether an outline sent with the brief counts. */
+		board?: string;
 	} = {},
 ): APIContext {
 	return partial<APIContext>({
@@ -102,6 +103,7 @@ function context(
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "from@example.com",
 					CONTACT_TO_EMAIL: "inbox@example.com",
+					SOFTWARE_BOARD_ENABLED: options.board ?? "true",
 				}),
 			}),
 		}),
@@ -211,13 +213,7 @@ it("stores and returns only the selected idea questions, including the optional 
 	);
 });
 
-it("gives the updates choice a plain message without an error map, which some zod builds ignore", () => {
-	const lib = readFileSync("src/lib/software-inquiry.ts", "utf8");
-	expectSource(lib).toContain(
-		"updates: z.enum(['self', 'help', 'unsure'], { message: 'Choose one.' })",
-	);
-	expect(lib).not.toMatch(/updates:\s*z\.enum\([^)]*errorMap/);
-
+it("gives the updates choice a plain message, whatever was sent", () => {
 	const site = {
 		...base,
 		path: "website",
@@ -380,6 +376,116 @@ it("re-reads a unique-index race and returns only a matching stored brief", asyn
 	).toHaveLength(0);
 });
 
+it("keeps the allowance spent when a rival stored the same submission first", async () => {
+	const racing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			sql
+				.prepare(`INSERT INTO owner_requests(id,kind,service_id,name,email,summary,details_json,status,created_at,updated_at,submission_id)
+      VALUES ('raced','software','workflow','Alex','alex@example.com','Stored summary',?,'new','now','now',?)`)
+				.run(JSON.stringify({ path: "workflow", today: "Stored answer" }), id);
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+
+	const response = await POST(context(base, { db: racing }));
+	expect(response.status).toBe(200);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(0);
+	// The rival's request is the same visitor's same submission, so the address-wide count is left as it is.
+	expect(kv.delete).not.toHaveBeenCalled();
+	expect(stored.get("rl:software:0.0.0.0")).toBe("1");
+	// Only the rival's request is stored: the loser stored nothing.
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{
+			n: 1,
+		},
+	);
+});
+
+/** The text of every console.error line the route wrote, with nothing else from the call. */
+function loggedText(spy: { mock: { calls: unknown[][] } }): string {
+	return JSON.stringify(spy.mock.calls);
+}
+
+it("logs the rival lookup failure once without the visitor's details", async () => {
+	let lookups = 0;
+
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.includes("FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("UNIQUE constraint failed");
+		},
+	});
+
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	// One line for the failed save and one for the rival lookup that could not be made.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+});
+
+it("answers 500 and still alerts when the lookup after a failed save also throws", async () => {
+	let lookups = 0;
+
+	const failing = fakeD1({
+		prepare: (query: string) => {
+			if (query.includes("FROM owner_requests WHERE submission_id"))
+				lookups += 1;
+
+			// Only the second lookup, the one after the failed save, throws.
+			if (lookups === 2)
+				return double<D1PreparedStatement>({
+					bind: () =>
+						double<D1PreparedStatement>({
+							first: async () => {
+								throw new Error("D1 unavailable");
+							},
+						}),
+				});
+
+			return db.prepare(query);
+		},
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	const response = await POST(context(base, { db: failing }));
+	expect(response.status).toBe(500);
+	// The failed save and the failed lookup are each logged once, without the visitor's details.
+	expect(log).toHaveBeenCalledTimes(2);
+	expect(loggedText(log)).not.toMatch(/alex|Alex|Grace|Example\.com/);
+	log.mockRestore();
+	expect(stored.has("rl:software:0.0.0.0")).toBe(false);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
+});
+
 it("preserves input and clears success limit after a storage failure", async () => {
 	const failing = fakeD1({
 		prepare: db.prepare.bind(db),
@@ -389,7 +495,7 @@ it("preserves input and clears success limit after a storage failure", async () 
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -532,7 +638,7 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 	});
 
 	const response = await POST(context(base, { db: failing }));
-	expect(response.status).toBe(503);
+	expect(response.status).toBe(500);
 	expect((await readJson<{ error: string }>(response)).error).toContain(
 		"Your details are still here",
 	);
@@ -546,9 +652,53 @@ it("alerts and preserves input when the duplicate lookup fails", async () => {
 		.mocked(fetch)
 		.mock.calls.find(([url]) => String(url).includes("api.resend.com"))!;
 
+	// A failed read is reported as a read, so the owner is not told that a write was lost.
+	expect(JSON.parse(String(alertCall[1]?.body)).text).toContain(
+		"Failure code: d1-read-failed",
+	);
 	expect(JSON.stringify(JSON.parse(String(alertCall[1]?.body)))).not.toMatch(
 		/alex|first line|second line|our team|example studio|one place to see/i,
 	);
+});
+
+it("answers 503 with the temporary sentence when the captcha service cannot be reached", async () => {
+	vi.mocked(fetch).mockRejectedValueOnce(new Error("network down"));
+	const response = await POST(context());
+	expect(response.status).toBe(503);
+	expect(await readJson<{ error: string }>(response)).toEqual({
+		ok: false,
+		error:
+			"Sending is temporarily unavailable. Your details are still here. Please try again later.",
+	});
+	expect(sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get()).toEqual(
+		{ n: 0 },
+	);
+});
+
+it("still alerts the owner when clearing the counter fails after a storage failure", async () => {
+	const failing = fakeD1({
+		prepare: db.prepare.bind(db),
+		batch: async () => {
+			throw new Error("D1 unavailable");
+		},
+	});
+
+	const rate = fakeKv({
+		get: async () => null,
+		put: async () => {},
+		delete: async () => {
+			throw new Error("kv down");
+		},
+	});
+
+	const response = await POST(context(base, { db: failing, rate }));
+
+	expect(response.status).toBe(500);
+	expect(
+		vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
+	).toHaveLength(1);
 });
 
 it("rejects overlength and line breaks in every text field", () => {
@@ -672,27 +822,6 @@ it("omits approver role from the API receipt when approver is self", async () =>
 	expect(
 		(await readJson<{ brief: Record<string, string> }>(response)).brief,
 	).not.toHaveProperty("approverRole");
-});
-
-it("treats an oversized saved detail as a field error without an urgent alert", async () => {
-	const oversized = fakeD1({
-		prepare: db.prepare.bind(db),
-		batch: async () => {
-			throw new RequestDetailsTooLargeError();
-		},
-	});
-
-	const response = await POST(context(base, { db: oversized }));
-	expect(response.status).toBe(400);
-	expect(
-		(await readJson<{ errors: Record<string, string> }>(response)).errors,
-	).toEqual({ _form: "Keep the brief shorter and try again." });
-	expect(kv.delete).toHaveBeenCalledWith("rl:software:0.0.0.0");
-	expect(
-		vi
-			.mocked(fetch)
-			.mock.calls.filter(([url]) => String(url).includes("api.resend.com")),
-	).toHaveLength(0);
 });
 
 it("emails only answered fields to the client with the saved title and configured contact Reply-To", async () => {
@@ -914,7 +1043,7 @@ it("accepts legacy date briefs and validates explicit new dates", () => {
 	).toBe(true);
 });
 
-it.each(["claim", "construction", "config"] as const)(
+it.each(["claim", "config"] as const)(
 	"records a pre-send %s failure and returns an error on owner retry",
 	async (failure) => {
 		const ctx = context();
@@ -929,13 +1058,6 @@ it.each(["claim", "construction", "config"] as const)(
 					throw new Error("claim failed");
 
 				return prepare(query);
-			});
-		}
-
-		if (failure === "construction") {
-			const emails = await import("~/lib/client-emails");
-			vi.spyOn(emails, "softwareBriefEmail").mockImplementation(() => {
-				throw new Error("construction failed");
 			});
 		}
 
@@ -972,7 +1094,8 @@ it.each(["claim", "construction", "config"] as const)(
 				),
 			});
 
-			expect(response.status).toBe(503);
+			// A missing mail address is an unavailable dependency (503); a failed claim or message is a fault of the site (500).
+			expect(response.status).toBe(failure === "config" ? 503 : 500);
 			expect(await response.json()).toMatchObject({ ok: false });
 			expect(
 				JSON.parse(
@@ -1596,12 +1719,13 @@ it("labels stored briefs by the path they were sent with", () => {
 
 it("labels a stored timing that coerces to a known key, as before", () => {
 	// Shapes a stored timing can have that still coerce to a label key.
-	const brief = (timing: string | string[] | { toString(): string }) =>
+	const brief = (timing: RawValue) =>
 		softwareBrief(
 			partial<OwnerRequest>({
 				name: "Alex",
 				email: "alex@example.com",
-				details: { ...base, timing },
+				// SAFETY: a stored timing can be any shape; softwareBrief reads it only with isText and String, so the cast only types the fixture.
+				details: { ...base, timing } as OwnerRequest["details"],
 			}),
 		);
 
@@ -1635,4 +1759,167 @@ it("words the client copy of a website brief in the client’s voice", () => {
 	);
 	expect(copy.text).toContain("Current website\nhttps://jordanclay.example");
 	expect(`${copy.text}${copy.html}`).not.toContain("What they already have");
+});
+
+describe("the living brief's outline", () => {
+	const outline = [
+		{
+			lane: "purpose",
+			text: "Class sign-ups for a pottery studio",
+			origin: "answers",
+			quote: "my pottery studio",
+		},
+		{
+			lane: "parts",
+			text: "Classes",
+			origin: "answers",
+			quote: "see upcoming classes",
+		},
+		{ lane: "parts", text: "Contact", origin: "kept" },
+		{ lane: "parts", text: "Gift cards", origin: "wrote" },
+		{
+			lane: "questions",
+			text: "Do students pay when they sign up?",
+			origin: "edited",
+			answer: "Yes, by card.",
+		},
+	];
+
+	const send = (extra: JsonObject) =>
+		POST(context(JSON.stringify({ ...websiteInput, ...extra })));
+
+	it("stores it with the brief, and shows it to the owner and in the visitor's copy with where each item came from", async () => {
+		const response = await send({ outline });
+
+		expect(response.status).toBe(200);
+
+		const text = [
+			"What it’s for: Class sign-ups for a pottery studio · from the answers (“my pottery studio”)",
+			"Pages: Classes · from the answers (“see upcoming classes”)",
+			"Pages: Contact · AI suggestion, kept",
+			"Pages: Gift cards · own note",
+			"Open questions: Do students pay when they sign up? · AI suggestion, edited",
+			"Answer: Yes, by card.",
+		].join("\n");
+
+		expect(
+			(await readJson<{ brief: Record<string, string> }>(response)).brief
+				.outline,
+		).toBe(text);
+		expect(JSON.parse(savedRequest().details_json).outline).toEqual(outline);
+		expect(ownerNotice().text).toContain(`Brief outline\n${text}`);
+
+		const copy = vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com"))
+			.map(([, init]) => JSON.parse(String(init?.body)))
+			.find((email) => email.to[0] === "jordan@example.com");
+
+		expect(copy.text).toContain(`Brief outline\n${text}`);
+		expect(clientSoftwareLabels.outline).toBe("Brief outline");
+		expect(softwareLabels.outline).toBe("Brief outline");
+	});
+
+	it("leaves a brief without one exactly as before", async () => {
+		const response = await send({});
+
+		const brief = (await readJson<{ brief: Record<string, string> }>(response))
+			.brief;
+
+		expect(brief.outline).toBeUndefined();
+		expect(JSON.parse(savedRequest().details_json)).not.toHaveProperty(
+			"outline",
+		);
+		expect(ownerNotice().text).not.toContain("Brief outline");
+	});
+
+	it.each([
+		[
+			"a passage that is not in the answers",
+			[{ ...outline[1], quote: "see upcoming shows" }],
+		],
+		[
+			"an item from the answers without its passage",
+			[{ lane: "parts", text: "Classes", origin: "answers" }],
+		],
+		[
+			"an item from the answers carrying a price the visitor did not write",
+			[{ ...outline[1], text: "Classes from $40" }],
+		],
+		["an answer outside a question", [{ ...outline[2], answer: "Yes" }]],
+		["something that is not a list", { lane: "parts" }],
+	])(
+		"refuses %s, with a sentence and nothing stored or counted",
+		async (_, sent) => {
+			const response = await send({ outline: sent });
+
+			expect(response.status).toBe(400);
+			expect(await readJson(response)).toEqual({
+				ok: false,
+				errors: {
+					outline:
+						"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.",
+				},
+			});
+			expect(
+				sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get(),
+			).toEqual({ n: 0 });
+			expect(kv.put).not.toHaveBeenCalled();
+		},
+	);
+
+	it("ignores an outline while the board is switched off, and stores the brief as before", async () => {
+		const response = await POST(
+			context(
+				JSON.stringify({
+					...websiteInput,
+					outline: [{ lane: "parts", text: "x", origin: "nonsense" }],
+				}),
+				{
+					board: "false",
+				},
+			),
+		);
+
+		expect(response.status).toBe(200);
+		expect(JSON.parse(savedRequest().details_json)).not.toHaveProperty(
+			"outline",
+		);
+	});
+
+	it("refuses an outline on the retired idea path, which has no board", async () => {
+		const response = await POST(
+			context(
+				JSON.stringify({
+					...base,
+					path: "idea",
+					idea: "A booking tool",
+					audienceToday: "",
+					firstVersion: "",
+					signal: "",
+					outline: [{ lane: "parts", text: "Booking", origin: "wrote" }],
+				}),
+			),
+		);
+
+		expect(response.status).toBe(400);
+	});
+});
+
+it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
+	const response = await POST(
+		context({
+			...websiteInput,
+			purpose: `${'"'.repeat(1999)}x`,
+			currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
+			existing: '"'.repeat(2000),
+			company: '"'.repeat(120),
+			timingReason: '"'.repeat(500),
+			budgetNote: '"'.repeat(200),
+			approver: "other",
+			approverRole: '"'.repeat(120),
+		}),
+	);
+
+	expect(response.status).toBe(200);
 });

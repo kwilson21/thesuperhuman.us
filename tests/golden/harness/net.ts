@@ -7,6 +7,7 @@ import { isText } from "~/lib/type-guards";
 import { double } from "../../helpers/doubles";
 import type { JsonValue } from "../../helpers/json";
 import type { EffectLog } from "./log";
+import type { Triggers } from "./triggers";
 import { byteRecord, plain, viewOf, type ByteRecord } from "./plain";
 
 /** What an outgoing fetch gets back, or that it fails the way a dead network does. */
@@ -65,7 +66,7 @@ export type Responder = (call: FetchCall) => FetchAnswer;
 export function byHost(answers: {
 	readonly [host: string]: FetchAnswer | readonly FetchAnswer[];
 }): Responder {
-	return ({ host, n }) => {
+	const responder: Responder = ({ host, n }) => {
 		const given = answers[host];
 
 		if (given === undefined)
@@ -74,6 +75,58 @@ export function byHost(answers: {
 		if (!Array.isArray(given)) return given;
 
 		return given[Math.min(n, given.length - 1)] ?? networkDown();
+	};
+
+	scripted.set(responder, answers);
+
+	return responder;
+}
+
+const scripted = new WeakMap<
+	Responder,
+	{ readonly [host: string]: FetchAnswer | readonly FetchAnswer[] }
+>();
+
+const throwsId = (host: string, answer: FetchAnswer, index: number | null) =>
+	`fetch ${host} answer${index === null ? "" : ` ${index + 1}`} throws "${answer.kind === "throws" ? answer.message : ""}"`;
+
+/**
+ * The responder, tracked: every answer a `byHost` script gives that throws is a declared outage, and counts as fired
+ * when a call gets it. A responder written by hand has no declared answers to track.
+ */
+export function trackedResponder(
+	responder: Responder,
+	triggers: Triggers,
+): Responder {
+	const answers = scripted.get(responder);
+
+	const isList = (
+		given: FetchAnswer | readonly FetchAnswer[],
+	): given is readonly FetchAnswer[] => Array.isArray(given);
+
+	for (const [host, given] of Object.entries(answers ?? {}))
+		if (isList(given))
+			for (const [index, answer] of given.entries()) {
+				if (answer.kind === "throws")
+					triggers.declare(throwsId(host, answer, index));
+			}
+		else if (given.kind === "throws")
+			triggers.declare(throwsId(host, given, null));
+
+	return (call) => {
+		const answer = responder(call);
+		const given = answers?.[call.host];
+
+		if (answer.kind === "throws" && given !== undefined && given === answer)
+			triggers.see(throwsId(call.host, answer, null));
+		else if (answer.kind === "throws" && Array.isArray(given)) {
+			const index = Math.min(call.n, given.length - 1);
+
+			if (given[index] === answer)
+				triggers.see(throwsId(call.host, answer, index));
+		}
+
+		return answer;
 	};
 }
 
@@ -153,6 +206,7 @@ export function recordingFetch(
 	const counts = new Map<string, number>();
 
 	return async (input, init) => {
+		const at = await log.start();
 		const request = input instanceof Request ? input : undefined;
 		const url = request?.url ?? String(input);
 		const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
@@ -176,19 +230,22 @@ export function recordingFetch(
 
 		const signal = init?.signal ?? request?.signal;
 
-		log.push({
-			kind: "fetch",
-			host,
-			url,
-			method,
-			headers,
-			body,
-			hasSignal: signal !== undefined && signal !== null,
-			answered:
-				answer.kind === "throws"
-					? `throws ${answer.message}`
-					: String(answer.status),
-		});
+		log.push(
+			{
+				kind: "fetch",
+				host,
+				url,
+				method,
+				headers,
+				body,
+				hasSignal: signal !== undefined && signal !== null,
+				answered:
+					answer.kind === "throws"
+						? `throws ${answer.message}`
+						: String(answer.status),
+			},
+			at,
+		);
 
 		if (answer.kind === "throws") throw new Error(answer.message);
 
@@ -229,8 +286,21 @@ export const aiThrows = (message = "ai failed"): AiAnswer => ({
 });
 
 /** An AI binding whose n-th run answers with the n-th item of the script. */
-export function recordingAi(script: readonly AiAnswer[], log: EffectLog): Ai {
+export function recordingAi(
+	script: readonly AiAnswer[],
+	log: EffectLog,
+	triggers: Triggers,
+): Ai {
 	let n = 0;
+
+	const idOf = (answer: AiAnswer, index: number) =>
+		answer.kind === "throws"
+			? `ai answer ${index + 1} throws "${answer.message}"`
+			: `ai answer ${index + 1} never answers`;
+
+	for (const [index, answer] of script.entries())
+		if (answer.kind === "throws" || answer.kind === "never")
+			triggers.declare(idOf(answer, index));
 
 	return double<Ai>({
 		// SAFETY: routes call run(model, input, options) and read the answer as the model's output; the fake answers the scripted JSON, which is what a test of that route supplies for that model.
@@ -239,16 +309,25 @@ export function recordingAi(script: readonly AiAnswer[], log: EffectLog): Ai {
 			input: { [key: string]: JsonValue | undefined },
 			options?: { [key: string]: JsonValue | undefined },
 		) => {
-			log.push({
-				kind: "ai",
-				model,
-				input: plain(input),
-				options: options === undefined ? null : plain(options),
-			});
+			const at = await log.start();
 
-			const answer = script[n++];
+			log.push(
+				{
+					kind: "ai",
+					model,
+					input: plain(input),
+					options: options === undefined ? null : plain(options),
+				},
+				at,
+			);
+
+			const index = n++;
+			const answer = script[index];
 
 			if (!answer) throw new Error("golden harness: no AI answer scripted");
+
+			if (answer.kind === "throws" || answer.kind === "never")
+				triggers.see(idOf(answer, index));
 
 			if (answer.kind === "throws") throw new Error(answer.message);
 
@@ -274,22 +353,21 @@ export function recordingRateLimit(
 
 	return double<RateLimit>({
 		limit: async (options: { key: string }) => {
+			const at = await log.start();
 			const success = script[n++];
 
 			if (success === undefined) {
 				const message = "golden harness: no rate-limit answer scripted";
 
-				log.push({
-					kind: "rate-limit",
-					binding,
-					key: options.key,
-					threw: message,
-				});
+				log.push(
+					{ kind: "rate-limit", binding, key: options.key, threw: message },
+					at,
+				);
 
 				throw new Error(message);
 			}
 
-			log.push({ kind: "rate-limit", binding, key: options.key, success });
+			log.push({ kind: "rate-limit", binding, key: options.key, success }, at);
 
 			return { success };
 		},

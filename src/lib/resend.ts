@@ -2,6 +2,7 @@ import type { ContactInput } from "../server/contact-input";
 import type { MailMessage } from "../server/services";
 import type { StoredResumeRequest } from "./resume-requests";
 import { contactReplyEmail, resumeDeliveryEmail } from "./client-emails";
+import { headerText, stripControls } from "./mail-header";
 
 const ENDPOINT = "https://api.resend.com/emails";
 
@@ -35,15 +36,15 @@ function primaryBody(input: ContactInput): string {
 
 function payloadOf(message: MailMessage): ResendPayload {
 	const payload: ResendPayload = {
-		from: message.from,
-		to: [...message.to],
-		subject: message.subject,
+		from: stripControls(message.from),
+		to: message.to.map(stripControls),
+		subject: headerText(message.subject),
 		text: message.text,
 	};
 
 	if (message.html) payload.html = message.html;
 
-	if (message.reply_to) payload.reply_to = message.reply_to;
+	if (message.reply_to) payload.reply_to = stripControls(message.reply_to);
 
 	if (message.attachments && message.attachments.length > 0) {
 		payload.attachments = message.attachments.map((a) => ({ ...a }));

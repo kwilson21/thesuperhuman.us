@@ -15,8 +15,10 @@ import type { AnyActorRef, SnapshotFrom } from "xstate";
  * inside `onError`: the original error survives only on the actor's snapshot. Left as it is, every route would have to
  * map `ActorStoppedError` to a response, which would turn a bug into a handled 409 or 502. This helper reads the
  * snapshot instead: when its status is "error", the program dies with the original error (an error the bridge wrapped in
- * an `EffectFailure` fails with the original Cause), so the request rejects with the bug itself. A stop that is not an
- * error stays the typed `ActorStoppedError`; a timeout stays the typed `TimeoutError`.
+ * an `EffectFailure` fails with the original Cause, its defects and interruptions as they were), so the request rejects
+ * with the bug itself. A typed failure in that Cause is one the machine's `onError` did not land on a state: that is a bug
+ * in the machine too, so it is a defect, and the program's error type stays exactly the two below rather than `unknown`.
+ * A stop that is not an error stays the typed `ActorStoppedError`; a timeout stays the typed `TimeoutError`.
  */
 export const settled = <TActor extends AnyActorRef>(
 	actor: TActor,
@@ -30,7 +32,7 @@ export const settled = <TActor extends AnyActorRef>(
 			if (snapshot.status !== "error") return Effect.fail(stopped);
 
 			return EffectFailure.is(snapshot.error)
-				? Effect.failCause(snapshot.error.cause)
+				? Effect.failCause(snapshot.error.cause).pipe(Effect.orDie)
 				: Effect.die(snapshot.error);
 		}),
 	);

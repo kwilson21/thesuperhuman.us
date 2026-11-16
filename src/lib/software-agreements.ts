@@ -1,17 +1,17 @@
 import { agreementEvent } from "./agreement-events";
 import {
 	hashOfferToken,
-	offerTermsSchema,
+	parseOfferTerms,
 	type SoftwareOffer,
 } from "./software-offers";
-import { softwareGuard } from "./software-projects";
+import { softwareGuard } from "./software-guard";
 import {
 	agreementValues,
 	validateAgreementDetails,
-	contractorSchema,
+	parseContractor,
 } from "./agreement-fields";
 import {
-	clientAgreementSchema,
+	parseClientAgreement,
 	consentText,
 	intentText,
 } from "./agreement-client-fields";
@@ -23,6 +23,8 @@ import {
 } from "./agreement-templates";
 import { liveSigningGuard, type AgreementSession } from "./agreement-access";
 import casefold from "./agreement-casefold.json";
+import type { RawValue } from "./fields";
+import { LostRace, ReaderMessage } from "./reader-message";
 
 export const legalNameKey = (value: string) =>
 	[...value.trim().normalize("NFC")]
@@ -112,19 +114,63 @@ export function sessionGuard(db: D1Database, s: AgreementSession) {
 	);
 }
 
+/**
+ * Positive evidence that another request changed the client row this review named, read after the batch failed with a
+ * foreign key error. For a client that was new to this review, a row with the same natural key (the table's unique key:
+ * recipient email, legal name key, entity type and jurisdiction) now exists under another id, so this batch's insert of
+ * its own row was skipped. For a client that already existed, that row is gone. Anything else, and any failure to read,
+ * is no evidence: the caller rethrows the original error, which is then a fault.
+ */
+async function otherRequestChangedClient(
+	db: D1Database,
+	earlierId: string | undefined,
+	clientId: string,
+	key: {
+		recipient_email: string;
+		legal_name_key: string;
+		entity_type: string;
+		jurisdiction: string;
+	},
+) {
+	try {
+		if (earlierId)
+			return !(await db
+				.prepare("SELECT 1 FROM software_agreement_clients WHERE id=?")
+				.bind(earlierId)
+				.first());
+
+		return Boolean(
+			await db
+				.prepare(
+					"SELECT id FROM software_agreement_clients WHERE recipient_email=? AND legal_name_key=? AND entity_type=? AND jurisdiction=? AND id<>?",
+				)
+				.bind(
+					key.recipient_email,
+					key.legal_name_key,
+					key.entity_type,
+					key.jurisdiction,
+					clientId,
+				)
+				.first(),
+		);
+	} catch {
+		return false;
+	}
+}
+
 export async function reviewAgreements(
 	db: D1Database,
 	offer: SoftwareOffer,
 	session: AgreementSession,
-	input: unknown,
+	input: RawValue,
 ) {
-	const client = clientAgreementSchema.parse(input),
-		terms = offerTermsSchema.parse(JSON.parse(offer.terms_json)),
+	const client = parseClientAgreement(input),
+		terms = parseOfferTerms(JSON.parse(offer.terms_json)),
 		details = validateAgreementDetails(
 			JSON.parse(offer.agreement_details_json!),
 			terms,
 		),
-		contractor = contractorSchema.parse(
+		contractor = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),
@@ -133,7 +179,7 @@ export async function reviewAgreements(
 	const existing = await offerAgreements(db, offer.id);
 
 	if (existing.some((a) => a.status !== "review"))
-		throw new Error(
+		throw new ReaderMessage(
 			"A signature is already saved. These documents cannot change.",
 		);
 
@@ -179,7 +225,7 @@ export async function reviewAgreements(
 		: null;
 
 	if (offer.reused_msa_id && !reused)
-		throw new Error(
+		throw new ReaderMessage(
 			"The confirmed MSA does not match this legal party. Ask Kazon for a new offer.",
 		);
 
@@ -194,7 +240,7 @@ export async function reviewAgreements(
 		.first<AgreementTemplate>();
 
 	if (!msaTemplate || !sowTemplate)
-		throw new Error("The pinned templates are unavailable.");
+		throw new ReaderMessage("The pinned templates are unavailable.");
 
 	const msaId = reused?.id ?? crypto.randomUUID(),
 		sowId = crypto.randomUUID();
@@ -254,10 +300,11 @@ export async function reviewAgreements(
 		.first<Agreement>();
 
 	if (pending)
-		throw new Error(
+		throw new ReaderMessage(
 			"Another offer has a pending MSA for this party. Ask Kazon to resolve it.",
 		);
-	await db.batch([
+
+	const batch = [
 		liveSigningGuard(db, offer.id, session.link_hash!, session.recipient_email),
 		sessionGuard(db, session),
 		softwareGuard(
@@ -318,7 +365,20 @@ export async function reviewAgreements(
 				]
 			: []),
 		agreementEvent(db, "reviewed", session.token_hash, at, null, offer.id),
-	]);
+	];
+
+	try {
+		await db.batch(batch);
+	} catch (error) {
+		if (
+			error instanceof Error &&
+			/FOREIGN KEY/.test(error.message) &&
+			(await otherRequestChangedClient(db, previous?.id, clientId, identity))
+		)
+			throw new LostRace("Another request changed the client row.");
+
+		throw error;
+	}
 
 	return {
 		documents,
@@ -350,7 +410,9 @@ export async function signAgreements(
 		signatureIds(toSign.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
 			signatureIds(documents)
 	)
-		throw new Error("The reviewed documents changed. Review them again.");
+		throw new ReaderMessage(
+			"The reviewed documents changed. Review them again.",
+		);
 
 	if (toSign.every((a) => a.status === "client_signed")) {
 		const saved = await db
@@ -361,13 +423,13 @@ export async function signAgreements(
 			.first<{ receipt_id: string; session_token_hash: string }>();
 
 		if (saved?.session_token_hash !== session.token_hash)
-			throw new Error("A different signing action is already saved.");
+			throw new ReaderMessage("A different signing action is already saved.");
 
 		return saved.receipt_id;
 	}
 
 	const values = JSON.parse(toSign[0].values_json),
-		client = clientAgreementSchema.parse(values.client),
+		client = parseClientAgreement(values.client),
 		at = new Date().toISOString(),
 		receipt = crypto.randomUUID();
 
@@ -390,7 +452,9 @@ export async function signAgreements(
 			!resolved.ok ||
 			JSON.stringify(resolved.client) !== JSON.stringify(client)
 		)
-			throw new Error("Your details changed. Review the agreement again.");
+			throw new ReaderMessage(
+				"Your details changed. Review the agreement again.",
+			);
 	}
 
 	await db.batch([
@@ -514,7 +578,7 @@ function signatureInsert(
 		ua = request.headers.get("user-agent") ?? "";
 
 	if (ip.length > 100 || ua.length > 2000 || /[\x00-\x1f\x7f]/.test(ip + ua))
-		throw new Error("Browser evidence exceeds its limits.");
+		throw new ReaderMessage("Browser evidence exceeds its limits.");
 
 	return db
 		.prepare(
@@ -593,13 +657,13 @@ export async function countersignAgreements(
 		signatureIds(pending.map((a) => ({ id: a.id, hash: a.text_sha256 }))) !==
 			signatureIds(documents)
 	)
-		throw new Error(
+		throw new ReaderMessage(
 			"The pending documents changed. Reload before countersigning.",
 		);
 
 	const at = new Date().toISOString(),
 		receipt = crypto.randomUUID(),
-		config = contractorSchema.parse(
+		config = parseContractor(
 			(({ config_version, ...values }) => values)(
 				JSON.parse(offer.contractor_snapshot_json!),
 			),

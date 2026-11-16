@@ -1,9 +1,12 @@
+import type { RawValue } from "./fields";
 import { z } from "astro/zod";
 
-export const musicId = z
-	.string()
-	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-	.max(100);
+/** What a release, recording, campaign, channel or creative id looks like (the music API reads it with the same pattern). */
+export const musicIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+export const musicIdMaxLength = 100;
+
+export const musicId = z.string().regex(musicIdPattern).max(musicIdMaxLength);
 
 export const methodologySchema = z.enum([
 	"two-track-vocals",
@@ -160,7 +163,13 @@ export type MusicCatalog = {
 	examples: z.infer<typeof exampleSchema>[];
 };
 
-export function validateCatalog(input: unknown): MusicCatalog {
+/**
+ * Callers pass `input` as whatever they hold, and nothing types it for them: src/lib/music-content.ts passes Astro
+ * collection data (already typed by the schemas in src/content/config.ts), scripts/prepare-music.mjs passes JSON
+ * parsed from the catalog files, and tests/lib/music-catalog.test.ts passes deliberately malformed shapes. The schema
+ * below is the only reader of `input`; anything that does not match it throws.
+ */
+export function validateCatalog(input: RawValue): MusicCatalog {
 	const catalog = z
 		.object({
 			recordings: z.array(recordingSchema),
@@ -258,6 +267,22 @@ export function visibleCatalog(
 		releases: catalog.releases.filter(visible),
 		examples: catalog.examples.filter(visible),
 	};
+}
+
+/** The mix and master comparison Home plays (src/pages/index.astro), which the headphones on Home's desk start. */
+export const homeComparisonExample = "old-news-mastering";
+
+/** The newest released song: the release with the latest date among those released. */
+export function latestRelease(catalog: MusicCatalog): Release | undefined {
+	return catalog.releases
+		.filter((release) => release.status === "released")
+		.reduce<Release | undefined>(
+			(newest, release) =>
+				!newest || (release.date ?? "") > (newest.date ?? "")
+					? release
+					: newest,
+			undefined,
+		);
 }
 
 export function musicFile(id: string, version: keyof Recording["versions"]) {

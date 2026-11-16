@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST as webhook } from "~/pages/api/stripe/webhook";
 import { POST } from "~/pages/api/owner/requests/[id]/invoices";
 import type { JsonValue } from "../helpers/json";
@@ -36,7 +35,6 @@ import {
 } from "./harness";
 
 // The Stripe SDK waits about a second between retries of a network failure or a 5xx without a stop header.
-vi.setConfig({ testTimeout: 60_000 });
 
 // The golden corpus for POST /api/owner/requests/[id]/invoices: the owner reserves a software invoice (a deposit, a balance
 // or a full milestone price) and the site creates it in Stripe, or retries or replaces an earlier attempt. The real Stripe

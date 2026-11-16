@@ -1,13 +1,15 @@
 import type { APIRoute } from "astro";
 import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/audio-client-access";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import {
 	deliverProjectInvitation,
 	queueProjectInvitation,
 } from "~/lib/audio-project-invitations";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/invitation";
 
 const inputSchema = z.object({
 	action: z.literal("send"),
@@ -61,13 +63,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true });
-	} catch {
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The invitation could not be queued. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

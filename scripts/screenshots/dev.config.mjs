@@ -1,6 +1,9 @@
-// The site's Astro config plus one dev-only endpoint for screenshots: /__screenshots/deps lists the
+// The site's Astro config plus two dev-only endpoints for screenshots. /__screenshots/deps lists the
 // server's module graph, so capture.mjs knows which source files each scenario's routes loaded.
+// POST /__screenshots/clock sets the server's frozen clock to a step's instant (see clock.mjs). Capture moves it.
 // Start the preview with `astro dev --config scripts/screenshots/dev.config.mjs`. Never deployed.
+import { clock } from "./clock-install.mjs";
+import { clockMiddleware } from "./clock-endpoint.mjs";
 import config from "../../astro.config.mjs";
 
 const moduleGraph = {
@@ -21,6 +24,7 @@ const moduleGraph = {
 			response.setHeader("content-type", "application/json");
 			response.end(JSON.stringify(graph));
 		});
+		server.middlewares.use("/__screenshots/clock", clockMiddleware(clock));
 	},
 };
 

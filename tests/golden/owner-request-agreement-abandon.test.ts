@@ -1,4 +1,3 @@
-import { vi } from "vitest";
 import { POST } from "~/pages/api/owner/requests/[id]/agreement";
 import {
 	BOTH,
@@ -26,8 +25,6 @@ import {
 } from "./areas/signing";
 import { asOwner, asVisitor, defineCorpus, type Case } from "./harness";
 
-vi.setConfig({ testTimeout: 60_000 });
-
 // The golden corpus for POST /api/owner/requests/[id]/agreement, action "abandon": the owner abandons the signing action
 // the client already signed. One batch abandons the documents, supersedes the offer, revokes the client's link and
 // sessions and deletes the saved draft. A deposit invoice that still counts blocks it. Names starting "form:" send the
@@ -38,7 +35,7 @@ vi.setConfig({ testTimeout: 60_000 });
 //   409 {ok:false}       no sent offer for the request
 //   409 "Review the complete pending signing action."   nothing client_signed, or the named documents differ in id,
 //                        hash or number from the client_signed ones
-//   409 "Void or refund the deposit invoice first."     a deposit invoice for milestone 0 that is creating, open,
+//   409 "Void the deposit invoice first, or refund..."  a deposit invoice for milestone 0 that is creating, open,
 //                        payment_failed, uncollectible, or paid and not refunded: before the batch, and after a failed
 //                        batch when one appeared meanwhile
 //   409 "The agreement changed or the operation failed. Reload before retrying."   a guard lost to a race, or the batch

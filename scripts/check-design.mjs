@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join, relative, sep } from "node:path";
 
 // Design check: a few objective gates from Hallmark, the design standard this site
 // follows (docs/design-standard.md). Hallmark is made by Together AI and the Hallmark
@@ -1226,9 +1225,6 @@ function main() {
 	);
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(resolve(process.argv[1])).href
-) {
+if (import.meta.main) {
 	main();
 }

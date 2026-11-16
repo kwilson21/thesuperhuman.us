@@ -1,9 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-
-vi.mock("~/scripts/brief-suggestion-pass", () => ({
-	setupSuggestionPass: () => async () => true,
-}));
+import type { setupSuggestionPass } from "~/scripts/brief-suggestion-pass";
 
 class Node extends EventTarget {
 	dataset: Record<string, string> = {};
@@ -45,8 +42,8 @@ class Node extends EventTarget {
 
 		return node;
 	}
-	replaceChildren() {
-		this.children = [];
+	replaceChildren(...nodes: Node[]) {
+		this.children = nodes;
 	}
 	contains(node: Node) {
 		return Object.values(this.nodes).includes(node);
@@ -163,9 +160,20 @@ const backToStart = () => {
 
 const visibleDots = () => dots.map((item) => item.hidden);
 
-async function setup(requestedPath?: string) {
+/** The silent pass, granted at once unless a test supplies its own. */
+const grantedPass: typeof setupSuggestionPass = () => async () => true;
+
+// requestedPath is the radio checked when the script starts; linkedPath is the path the link named,
+// which the page renders as data-linked-path. They differ when a browser restores a radio on reload.
+async function setup(
+	requestedPath?: string,
+	startSuggestionPass = grantedPass,
+	linkedPath: string | null | undefined = requestedPath,
+) {
 	form = Object.assign(new Node(), { elements: [] });
 	form.dataset.available = "false";
+
+	if (linkedPath) form.dataset.linkedPath = linkedPath;
 	steps = Array.from({ length: 9 }, () => new Node());
 	controls = [];
 
@@ -191,9 +199,15 @@ async function setup(requestedPath?: string) {
 			"[data-suggestions-off]",
 			"[data-ghost-prefix]",
 			"[data-ghost-text]",
+			"[data-examples-list]",
 		])
 			section.nodes[selector] = new Node();
 		section.nodes["[data-ghost-prefix]"].parentElement = new Node();
+		section.nodes["[data-examples-list]"].hidden = true;
+		section.nodes["[data-examples-toggle]"] = Object.assign(new Node(), {
+			section,
+			textContent: "See example answers",
+		});
 		section.nodes["[data-answer]"] = box;
 		section.nodes.textarea = box;
 		section.inputs = [box];
@@ -313,6 +327,9 @@ async function setup(requestedPath?: string) {
 					node.nodes["[data-ghost-text]"],
 				]);
 
+		if (selector === "[data-examples-toggle]")
+			return steps.slice(1, 3).map((node) => node.nodes[selector]);
+
 		if (selector === "[data-accept]" || selector === "[data-accept-hint]")
 			return steps.slice(1, 3).map((node) => node.nodes[selector]);
 
@@ -384,7 +401,7 @@ async function setup(requestedPath?: string) {
 	);
 	const { setupSoftwareInquiry } = await import("~/scripts/software-inquiry");
 	// SAFETY: setupSoftwareInquiry and the helpers it passes form to read only dataset, id, elements, getAttribute, querySelector, querySelectorAll and addEventListener from form; the fake Node supplies each except id, which reads undefined, and its elements is a plain array, so form cannot be typed as an HTMLFormElement.
-	setupSoftwareInquiry(form as never);
+	setupSoftwareInquiry(form as never, startSuggestionPass);
 }
 
 // Every flow can schedule suggestions; keep old forms from calling the next test's fetch.
@@ -553,7 +570,7 @@ it("discloses browser drafts and Workers AI accurately, with reassurance only at
 		"You can turn suggestions off",
 		"in your browser",
 		"strictly necessary security cookie that expires after 30 minutes",
-		"Updated October 29, 2026",
+		"Updated November 15, 2026",
 		"kept for up to two days",
 		"Project brief suggestions use",
 		"While you write a project brief,",
@@ -563,6 +580,7 @@ it("discloses browser drafts and Workers AI accurately, with reassurance only at
 	expect(privacy).not.toContain("Software brief suggestions use");
 	expect(privacy).not.toContain("While you write a software brief");
 	expect(privacy).not.toContain("Updated October 10, 2026");
+	expect(privacy).not.toContain("Updated October 29, 2026");
 	expect(privacy).not.toContain("approximate counter");
 	expect(
 		readFileSync("src/pages/software/start.astro", "utf8").match(
@@ -783,34 +801,19 @@ it.each(["different", "invalid", "missing"])(
 );
 
 it("offers no suggestion when the silent pass requires interaction", async () => {
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(async () => false);
-
-	await setup();
+	await setup(undefined, () => async () => false);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	fill("today", "We track new clients");
 	await vi.advanceTimersByTimeAsync(400);
 	expect(fetch).not.toHaveBeenCalled();
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(true);
-	mock.mockRestore();
 });
 
 it("renews an expired pass once and retries the current suggestion", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
 
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(pass);
-
-	await setup();
+	await setup(undefined, () => pass);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	vi.mocked(fetch).mockResolvedValueOnce(
@@ -821,20 +824,12 @@ it("renews an expired pass once and retries the current suggestion", async () =>
 	expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 	expect(fetch).toHaveBeenCalledTimes(2);
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
-	mock.mockRestore();
 });
 
 it("allows a later suggestion after typing cancels a successfully renewed retry", async () => {
 	const pass = vi.fn(async (_renew = false) => true);
 
-	const mock = vi
-		.spyOn(
-			await import("~/scripts/brief-suggestion-pass"),
-			"setupSuggestionPass",
-		)
-		.mockReturnValue(pass);
-
-	await setup();
+	await setup(undefined, () => pass);
 	vi.useFakeTimers();
 	choose("path", "workflow");
 	vi.mocked(fetch)
@@ -859,7 +854,6 @@ it("allows a later suggestion after typing cancels a successfully renewed retry"
 	expect(fetch).toHaveBeenCalledTimes(3);
 	expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 	expect(steps[1].nodes["[data-accept]"].hidden).toBe(false);
-	mock.mockRestore();
 });
 
 it.each(["check fails", "retry still expired", "retry throws"])(
@@ -869,14 +863,7 @@ it.each(["check fails", "retry still expired", "retry throws"])(
 			async (renew = false) => !renew || failure !== "check fails",
 		);
 
-		const mock = vi
-			.spyOn(
-				await import("~/scripts/brief-suggestion-pass"),
-				"setupSuggestionPass",
-			)
-			.mockReturnValue(pass);
-
-		await setup();
+		await setup(undefined, () => pass);
 		vi.useFakeTimers();
 		choose("path", "workflow");
 		vi.mocked(fetch).mockImplementation(async () =>
@@ -898,7 +885,6 @@ it.each(["check fails", "retry still expired", "retry throws"])(
 		expect(pass.mock.calls.filter((args) => args[0] === true)).toHaveLength(1);
 		expect(steps[1].nodes["[data-accept]"].hidden).toBe(true);
 		expect(form.nodes["[data-form-status]"].textContent).toBe("");
-		mock.mockRestore();
 	},
 );
 
@@ -985,6 +971,40 @@ it.each(["webapp", "workflow"])(
 it("opens an explicit path at its first question with no draft", async () => {
 	await setup("webapp");
 	expect(current()).toBe(1);
+});
+
+it.each(["website", "webapp", "workflow"])(
+	"opens an explicit %s link at its first question when the draft was left on the choice screen",
+	async (requested) => {
+		choose("path", requested);
+		click("[data-back]");
+		expect(JSON.parse(store.get("software-brief-draft")!).step).toBe(0);
+		await setup(requested);
+		expect(current()).toBe(1);
+		expect(
+			controls.find((node) => node.name === "path" && node.checked)!.value,
+		).toBe(requested);
+	},
+);
+
+it("resumes on the choice screen when the draft was left there and the link names no path", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup();
+	expect(current()).toBe(0);
+});
+
+it("starts on the choice screen when a reload restored a radio without a path link and there is no draft", async () => {
+	await setup("workflow", grantedPass, null);
+	expect(current()).toBe(0);
+	expect(form.dataset.ready).toBe("");
+});
+
+it("resumes on the choice screen after a reload that restored the chosen radio without a path link", async () => {
+	choose("path", "workflow");
+	click("[data-back]");
+	await setup("workflow", grantedPass, null);
+	expect(current()).toBe(0);
 });
 
 it("clears remapped question errors and invalid markers when switching paths", () => {
@@ -1487,6 +1507,65 @@ it("shows the web app brief with seven screens, its own first question and no ti
 	expect(form.nodes["[data-timing-hint]"].hidden).toBe(true);
 });
 
+it("lists example answers under each written question and swaps them with the path", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	const listed = (index: number) =>
+		steps[index].nodes["[data-examples-list]"].children.map(
+			(item) => item.textContent,
+		);
+
+	for (const path of ["workflow", "webapp", "website"] as const) {
+		backToStart();
+		choose("path", path);
+		briefQuestions[path].forEach((question, i) => {
+			expect(listed(i + 1)).toEqual(question.examples);
+			expect(field(question.key).placeholder).toBe(question.placeholder);
+		});
+	}
+});
+
+it("opens and closes each question's example answers from its own toggle", () => {
+	choose("path", "workflow");
+
+	const toggle = steps[1].nodes["[data-examples-toggle]"],
+		list = steps[1].nodes["[data-examples-list]"];
+
+	fire(toggle, "click");
+	expect(list.hidden).toBe(false);
+	expect(toggle.attrs["aria-expanded"]).toBe("true");
+	expect(toggle.textContent).toBe("Hide example answers");
+	expect(steps[2].nodes["[data-examples-list]"].hidden).toBe(true);
+	fire(toggle, "click");
+	expect(list.hidden).toBe(true);
+	expect(toggle.attrs["aria-expanded"]).toBe("false");
+	expect(toggle.textContent).toBe("See example answers");
+});
+
+it("gives every written question a placeholder and a few different examples, kept within its limit", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	for (const question of Object.values(briefQuestions).flat()) {
+		expect(question.placeholder).not.toBe("");
+		expect(question.examples.length).toBeGreaterThanOrEqual(2);
+		expect(new Set(question.examples).size).toBe(question.examples.length);
+		expect(question.examples).not.toContain(question.placeholder);
+
+		for (const text of [question.placeholder, ...question.examples])
+			expect(text.length).toBeLessThanOrEqual(question.max);
+	}
+
+	const page = readFileSync("src/pages/software/start.astro", "utf8");
+
+	expect(page).toContain(
+		'<button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>',
+	);
+	expect(page).toContain(
+		'<ul class="brief-examples" id={`brief-examples-${index}`} role="list" aria-label="Example answers" data-examples-list hidden></ul>',
+	);
+	expect(page).toContain("Amount in US dollars (optional)");
+});
+
 it("restores an old idea draft as a web app brief with its idea as the first answer", async () => {
 	store.set(
 		"software-brief-draft",
@@ -1739,7 +1818,7 @@ it("sends each website review Edit button to its plan position", () => {
 		["What you already have", 2],
 		["Who will keep it up to date?", 3],
 		["Timing", 4],
-		["Budget", 5],
+		["Budget (USD)", 5],
 		["Your name", 6],
 		["Email", 6],
 		["Company, if you have one", 6],

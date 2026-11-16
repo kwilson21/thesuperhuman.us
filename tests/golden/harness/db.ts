@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import type { SQLInputValue, SQLOutputValue } from "node:sqlite";
 import { DatabaseSync, type SqliteDatabase } from "../../helpers/sqlite-d1";
+import { START } from "./determinism";
 import { isBigint, plain, type Recorded } from "./plain";
 
 const ROOT = new URL("../../../", import.meta.url);
@@ -10,6 +11,14 @@ const ROOT = new URL("../../../", import.meta.url);
 export function freshMusicDb(): SqliteDatabase {
 	const sqlite = new DatabaseSync(":memory:");
 	sqlite.exec(readFileSync(new URL("db/music.sql", ROOT), "utf8"));
+
+	// The schema script seeds this row with SQLite's own wall clock, which no case controls. It is fixed here so the
+	// digest of the database (digest.ts) is the same on every run.
+	sqlite
+		.prepare(
+			"UPDATE software_signing_settings SET updated_at = ? WHERE updated_by = 'migration'",
+		)
+		.run(START);
 
 	return sqlite;
 }
