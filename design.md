@@ -102,11 +102,16 @@ files; a test checks those literals against `global.css`.
 - Every Get in touch button and link goes to the switchboard at `/contact` (November 15
   decision, below). Home's contact section keeps its horizon and ends on its own Get in
   touch button, so Home's closing panel stays quiet.
+- Every public page with the shared footer is an invitation page except Home (above) and
+  the pages Get in touch leads to, which are quiet: the switchboard and the two intake forms. Privacy, the
+  404 and the audio pages became invitation pages on November 16 (decision below).
 - Pinned contact button: the only element fixed over page content. On invitation pages
   and on Home, at 600px wide and below, a full-width Get in touch pill stays at the bottom
-  of the screen until the closing panel, or Home's contact section, comes into view. It
-  hides while the phone menu is open or a form field has focus, appears and goes without
-  motion, and never shows above 600px, in print or without JavaScript.
+  of the screen. It steps aside while the closing panel, Home's contact section or another
+  filled button in the page (Home's "Start a project", the 404's "Back to home", the audio
+  pages' "Start your song") is on screen, so a phone screen never shows two filled
+  buttons. It also hides while the phone menu is open or a form field has focus, appears
+  and goes without motion, and never shows above 600px, in print or without JavaScript.
 - The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
   hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
   jack. Each line is a plain link to the form that fits; the three project lines open the
@@ -294,6 +299,25 @@ be very very creative in re-envisioning this, let's make it fun for the user to 
 selection". The switchboard, its patch bay look, and the split of "Discuss your project" into
 its two briefs (web app, workflow) are the builder's answer to that request, recorded above
 and waiting for Kazon's review on the pull request.
+
+## Owner decisions (November 16, 2026)
+Kazon asked, in conversation: "Are there any other screens that are missing the get in
+touch button? Be sure to address those, idk how to answer the other design choices".
+Privacy, the 404 and the audio pages (Audio, Portfolio, Releases, Services and each song
+page) had the quiet panel; they now end on the Get in touch button. On the audio site it
+opens the switchboard on the main site, whose song line leads back to the song intake. The
+switchboard and the two intake forms stay quiet, since each is where Get in touch leads.
+
+The builder's calls on the three design choices put to Kazon on November 15, for Kazon's
+review on the pull request:
+
+- The switchboard keeps its six columns from 1100px: at 1280px each line reads in four or
+  five short lines, and the row is what makes it a patch bay.
+- The pinned phone button steps aside while another filled button is on screen, so
+  Home's first phone screen shows "Start a project" alone and the pinned button appears
+  once it has scrolled away. The same rule covers the 404 and the audio pages.
+- Home's contact section keeps its approved line ("Ideas, opportunities, or a
+  conversation worth having."); the switchboard names the choices one click later.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

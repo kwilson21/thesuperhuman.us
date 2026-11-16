@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { setupPinnedContact } from "../../src/scripts/pinned-contact";
+import {
+	STEP_ASIDE_FOR,
+	setupPinnedContact,
+} from "../../src/scripts/pinned-contact";
 
 afterEach(() => {
 	vi.unstubAllGlobals();
@@ -27,7 +30,8 @@ const element = (initial: Record<string, string> = {}) => {
 
 type FakeElement = ReturnType<typeof element>;
 
-// The ends: the closing panel and any page invitation marked data-pinned-end, in page order.
+// What it steps aside for: the closing panel, a page invitation marked data-pinned-end and the page's
+// filled buttons, in page order.
 const stubPage = (
 	elements: Record<string, FakeElement>,
 	ends: FakeElement[] = elements[".closing-panel"]
@@ -37,7 +41,7 @@ const stubPage = (
 	vi.stubGlobal("document", {
 		querySelector: (selector: string) => elements[selector] ?? null,
 		querySelectorAll: (selector: string) =>
-			selector === ".closing-panel, [data-pinned-end]" ? ends : [],
+			selector === STEP_ASIDE_FOR ? ends : [],
 	});
 };
 
@@ -70,6 +74,10 @@ it("shows the pinned button and marks it at the end while the closing panel is o
 	expect(pinned.hasAttribute("hidden")).toBe(false);
 	expect(observers).toHaveLength(1);
 	expect(observers[0].observed).toEqual([panel]);
+	// Aside until the first report, then shown once the report says nothing is on screen.
+	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	observers[0].callback([{ isIntersecting: false, target: panel }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 	observers[0].callback([{ isIntersecting: true, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
 	observers[0].callback([{ isIntersecting: false, target: panel }]);
@@ -96,7 +104,31 @@ it("also steps aside for a page’s own invitation, until neither end is on scre
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 });
 
-it("stays hidden when there is no closing panel or page invitation", () => {
+// The pinned button and the closing panel sit outside <main>, so the last selector reaches only the
+// page's own filled buttons. A browser check of Home, the 404 and Audio confirms it on the real pages.
+it("steps aside for the closing panel, page invitations and the page's filled buttons", () => {
+	expect(STEP_ASIDE_FOR.split(", ")).toEqual([
+		".closing-panel",
+		"[data-pinned-end]",
+		"main .site-button:not(.site-button-outline)",
+	]);
+});
+
+it("does not show over a button already on screen when the page opens", () => {
+	const pinned = element({ hidden: "" });
+	const button = element();
+	stubPage({ "[data-pinned-contact]": pinned }, [button]);
+	const observers = stubObserver();
+	setupPinnedContact();
+	expect(pinned.hasAttribute("hidden")).toBe(false);
+	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	observers[0].callback([{ isIntersecting: true, target: button }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	observers[0].callback([{ isIntersecting: false, target: button }]);
+	expect(pinned.hasAttribute("data-at-end")).toBe(false);
+});
+
+it("stays hidden when there is no closing panel, page invitation or filled button", () => {
 	const pinned = element({ hidden: "" });
 	stubPage({ "[data-pinned-contact]": pinned });
 	const observers = stubObserver();

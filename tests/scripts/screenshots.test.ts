@@ -1741,7 +1741,7 @@ describe("moved client modules", () => {
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
 		["payload-review-illustration", TIMELINE_PAGES, []],
-		["pinned-contact", ["home", "work"], []],
+		["pinned-contact", ["home", "work", "audio", "not-found"], []],
 		["project-timeline", TIMELINE_PAGES, ["journal-pagination"]],
 		["project-updates-feed", BUILDING_PROJECT_PAGES, []],
 		["release-interest", ["music-old-news"], []],

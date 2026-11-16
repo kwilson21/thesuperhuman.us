@@ -510,6 +510,10 @@ was left on the brief's choice screen. The hub's "Discuss your project" door and
 Home's "Start a project" button still open the brief's first screen, where the
 visitor names the path.
 
+On November 16 Privacy, the 404 and the audio pages gained the closing panel's Get in
+touch button, so every public page ends on it except the switchboard and the two intake
+forms, which are where it leads (owner request quoted in `design.md`).
+
 ## Copy: explain the action when visitors need to understand the work
 
 Current rule, September 30, 2026: when explaining an offer, capability or project,

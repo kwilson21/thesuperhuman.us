@@ -95,18 +95,23 @@ it("keeps the global pill button used by the closing panel", () => {
 	);
 });
 
-const quiet = [
-	"src/pages/contact.astro",
-	"src/pages/privacy.astro",
-	"src/pages/404.astro",
-	"src/pages/software/start.astro",
-	"src/components/audio/AudioFooter.astro",
-];
+// The switchboard and the two intake forms are quiet: each is already where Get in touch leads.
+const quiet = ["src/pages/contact.astro", "src/pages/software/start.astro"];
 
 const invitation = [
 	"src/pages/building.astro",
 	"src/pages/writing/ai-gives-you-speed.astro",
 	"src/layouts/ProjectLayout.astro",
+	"src/pages/privacy.astro",
+	"src/pages/404.astro",
+];
+
+const audioPages = [
+	"src/pages/audio/index.astro",
+	"src/pages/audio/portfolio.astro",
+	"src/pages/audio/releases.astro",
+	"src/pages/audio/services.astro",
+	"src/pages/music/[slug].astro",
 ];
 
 it("gives quiet pages the quiet panel", () => {
@@ -119,6 +124,20 @@ it("gives quiet pages the quiet panel", () => {
 it("gives invitation pages the default panel", () => {
 	for (const path of invitation)
 		expect(read(path), path).toContain('<Footer slot="footer" />');
+});
+
+it("ends the audio pages on the Get in touch button, and leaves the song intake quiet", () => {
+	const audioFooter = read("src/components/audio/AudioFooter.astro");
+	expect(audioFooter).toContain(
+		'const { variant = "invitation" } = Astro.props;',
+	);
+	expect(audioFooter).toContain("<Footer variant={variant} />");
+
+	for (const path of audioPages)
+		expect(read(path), path).toMatch(/<AudioFooter slot="footer" \/>/);
+	expect(read("src/pages/audio/start.astro")).toContain(
+		'<AudioFooter variant="quiet" slot="footer" />',
+	);
 });
 
 it("gives Work, About and Writing the default panel with no per-page copy", () => {

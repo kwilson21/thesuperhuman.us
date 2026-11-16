@@ -279,7 +279,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/contact-message.ts": ["contact"],
 	"src/scripts/contact-page.ts": ["contact"],
 	"src/scripts/switchboard.ts": ["contact"],
-	"src/scripts/pinned-contact.ts": ["home", "work"],
+	"src/scripts/pinned-contact.ts": ["home", "work", "audio", "not-found"],
 	"src/scripts/music-detail-links.ts": ["music-old-news"],
 	"src/scripts/release-interest.ts": ["music-old-news"],
 	"src/scripts/resume-request-form.ts": ["about"],
