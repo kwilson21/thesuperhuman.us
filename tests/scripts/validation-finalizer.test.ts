@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
 	authenticRun,
+	assertTarget,
+	selectAuthority,
+	sameAuthority,
+	assertValidationScripts,
+	VALIDATION_COMMANDS,
 	validMarker,
 	eligiblePull,
 	decision,
@@ -117,6 +122,9 @@ describe("trusted validation provenance", () => {
 
 		expect(candidate).not.toContain("PRIVATE_TOKEN");
 		expect(candidate).not.toContain("cache: pnpm");
+		expect(candidate).toContain(
+			"inputs.revision || github.event.pull_request.head.sha || github.sha",
+		);
 		expect(candidate).not.toContain("statuses: write");
 		expect(candidate).not.toContain("  validate:");
 		expect(trusted).toContain("workflow_run:");
@@ -125,4 +133,90 @@ describe("trusted validation provenance", () => {
 		expect(trusted).not.toContain("cache:");
 		expect(trusted).toContain("persist-credentials: false");
 	});
+});
+
+describe("latest validation authority", () => {
+	const older = {
+		id: 100,
+		run_attempt: 1,
+		status: "completed",
+		created_at: "2026-11-16T01:00:00Z",
+		run_started_at: "2026-11-16T01:00:00Z",
+		conclusion: "success",
+	};
+
+	const newer = {
+		...older,
+		id: 101,
+		created_at: "2026-11-16T02:00:00Z",
+		run_started_at: "2026-11-16T02:00:00Z",
+		conclusion: "failure",
+	};
+
+	it("a late older completion cannot replace a newer failure", () => {
+		expect(selectAuthority([newer, older])).toEqual(newer);
+		expect(sameAuthority(older, selectAuthority([older, newer]))).toBe(false);
+	});
+	it("runner queue delay cannot make an older request authoritative", () => {
+		expect(
+			selectAuthority([
+				{ ...older, run_started_at: "2026-11-16T04:00:00Z" },
+				newer,
+			]),
+		).toEqual(newer);
+	});
+	it("a newer rerun attempt invalidates the old attempt", () => {
+		const retry = {
+			...older,
+			run_attempt: 2,
+			run_started_at: "2026-11-16T03:00:00Z",
+			status: "in_progress",
+			conclusion: null,
+		};
+
+		expect(selectAuthority([older, newer, retry])).toEqual(retry);
+		expect(sameAuthority(older, retry)).toBe(false);
+	});
+	it("unknown newer dispatch targets hold rather than recycling old green", () => {
+		const unbound = { ...newer, unbound: true, conclusion: null };
+		expect(selectAuthority([older, unbound])).toEqual(unbound);
+		expect(sameAuthority(unbound, unbound)).toBe(false);
+	});
+	it("pins every invoked package command and lifecycle hooks", () => {
+		const trusted = Object.fromEntries(
+			VALIDATION_COMMANDS.map((name) => [name, `trusted ${name}`]),
+		);
+
+		expect(() =>
+			assertValidationScripts(trusted, { ...trusted }),
+		).not.toThrow();
+
+		for (const name of VALIDATION_COMMANDS) {
+			for (const key of [name, `pre${name}`, `post${name}`])
+				expect(() =>
+					assertValidationScripts(trusted, { ...trusted, [key]: "true" }),
+				).toThrow(/validation command differs/);
+		}
+	});
+});
+
+it("re-resolves provenance inside a per-head lock and rejects target substitution", () => {
+	expect(() => assertTarget(sha, sha)).not.toThrow();
+	expect(() => assertTarget(sha, base)).toThrow(/target changed/);
+	expect(() => assertTarget(undefined, sha)).toThrow(/target changed/);
+	const workflow = readFileSync(
+		".github/workflows/validation-finalize.yml",
+		"utf8",
+	);
+	expect(workflow).not.toMatch(/^concurrency:/m);
+	expect(workflow).toContain(
+		"group: trusted-validation-${{ needs.resolve.outputs.sha }}",
+	);
+	expect(workflow).toContain("EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}");
+	const discover = workflow.split("  resolve:\n")[1].split("  finalize:\n")[0];
+	expect(discover).not.toContain("statuses: write");
+	expect(discover).toContain("finalize-validation.mjs discover");
+	expect(workflow.split("  finalize:\n")[1]).toContain(
+		"finalize-validation.mjs resolve",
+	);
 });

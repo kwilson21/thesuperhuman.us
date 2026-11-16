@@ -140,7 +140,78 @@ async function status(sha, state) {
 	});
 }
 
-async function resolve() {
+export function runOrder(run) {
+	// First attempts are ordered by request creation, not runner queue latency.
+	// A rerun reuses its ID/creation time, so its current attempt needs a fresh timestamp.
+	let timestamp = run.created_at;
+
+	if (run.run_attempt > 1)
+		timestamp = run.status === "queued" ? run.updated_at : run.run_started_at;
+	const time = Date.parse(timestamp);
+
+	if (
+		!Number.isFinite(time) ||
+		!Number.isSafeInteger(run.id) ||
+		!Number.isSafeInteger(run.run_attempt)
+	)
+		throw new Error("Invalid run order");
+
+	return [time, run.id, run.run_attempt];
+}
+
+export function selectAuthority(runs) {
+	return [...runs].sort((a, b) => {
+		const left = runOrder(a),
+			right = runOrder(b);
+
+		return right[0] - left[0] || right[1] - left[1] || right[2] - left[2];
+	})[0];
+}
+
+export function sameAuthority(a, b) {
+	return Boolean(
+		a &&
+			b &&
+			!a.unbound &&
+			!b.unbound &&
+			a.id === b.id &&
+			a.run_attempt === b.run_attempt,
+	);
+}
+
+async function latestValidation(sha, workflow) {
+	const pulls = await api(
+		`actions/workflows/${workflow.id}/runs?event=pull_request&head_sha=${sha}&per_page=100`,
+	);
+
+	const dispatches = await api(
+		`actions/workflows/${workflow.id}/runs?event=workflow_dispatch&branch=main&per_page=100`,
+	);
+
+	const candidates = [];
+
+	for (let run of [...pulls.workflow_runs, ...dispatches.workflow_runs]) {
+		if (!authenticRun(run, workflow, repository, "validation")) continue;
+		// Query the current attempt rather than accepting the triggering completion's stale snapshot.
+		run = await api(`actions/runs/${run.id}`);
+
+		if (!authenticRun(run, workflow, repository, "validation")) continue;
+
+		if (run.event === "pull_request") {
+			if (run.head_sha === sha) candidates.push(run);
+		} else {
+			const value = await marker(run, "validation-target", "result.json");
+
+			if (value?.sha === sha) candidates.push(run);
+			else if (!value)
+				candidates.push({ ...run, unbound: true, conclusion: null });
+		}
+	}
+
+	return selectAuthority(candidates);
+}
+
+async function target() {
 	const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
 	const source = await api(`actions/runs/${event.workflow_run.id}`);
 	const validationWorkflow = await api("actions/workflows/validate.yml");
@@ -150,13 +221,11 @@ async function resolve() {
 	);
 
 	let sha;
-	let validation;
 	let receipt;
 
 	if (authenticRun(source, validationWorkflow, repository, "validation")) {
 		if (source.event === "pull_request") sha = source.head_sha;
 		else sha = (await marker(source, "validation-target", "result.json"))?.sha;
-		validation = source.conclusion;
 	} else if (
 		authenticRun(source, publisherWorkflow, repository, "publisher") &&
 		source.conclusion === "success"
@@ -172,7 +241,28 @@ async function resolve() {
 	);
 
 	if (pulls.length !== 1) return;
-	const pr = pulls[0];
+
+	return { sha, pr: pulls[0], receipt, validationWorkflow, publisherWorkflow };
+}
+
+export function assertTarget(expected, actual) {
+	if (!SHA.test(expected ?? "") || expected !== actual)
+		throw new Error("Finalizer target changed after concurrency resolution");
+}
+
+async function discover() {
+	const result = await target();
+
+	if (result) appendFileSync(process.env.GITHUB_OUTPUT, `sha=${result.sha}\n`);
+}
+
+async function resolve() {
+	const result = await target();
+
+	if (!result) return;
+	const { sha, pr, validationWorkflow, publisherWorkflow } = result;
+	let { receipt } = result;
+	assertTarget(process.env.EXPECTED_SHA, sha);
 	await status(sha, "pending");
 
 	if (!receipt) {
@@ -192,22 +282,8 @@ async function resolve() {
 		}
 	}
 
-	if (validation === undefined) {
-		const runs = await api(
-			`actions/workflows/${validationWorkflow.id}/runs?event=workflow_dispatch&branch=main&per_page=100`,
-		);
-
-		for (const run of runs.workflow_runs) {
-			if (!authenticRun(run, validationWorkflow, repository, "validation"))
-				continue;
-			const value = await marker(run, "validation-target", "result.json");
-
-			if (value?.sha === sha) {
-				validation = run.conclusion;
-				break;
-			}
-		}
-	}
+	const authority = await latestValidation(sha, validationWorkflow);
+	const validation = authority?.conclusion;
 
 	writeFileSync(
 		"validation-state.json",
@@ -217,7 +293,8 @@ async function resolve() {
 			base: pr.base.sha,
 			validation,
 			receipt,
-			sourceEvent: source.event,
+			sourceEvent: authority?.event,
+			authority,
 		}),
 	);
 	appendFileSync(process.env.GITHUB_OUTPUT, `sha=${sha}\n`);
@@ -243,6 +320,32 @@ function tree(cwd, selected) {
 		["ls-tree", "-r", "-z", "HEAD", "--", ...selected],
 		{ cwd, encoding: "utf8", maxBuffer: 8 * 1024 * 1024 },
 	);
+}
+
+export const VALIDATION_COMMANDS = [
+	"test",
+	"lint",
+	"format:check",
+	"check",
+	"verify:dafny",
+	"verify:quint:all",
+	"build",
+	"navigation:generate",
+	"assets:check",
+	"copy:check",
+	"design:check",
+	"publicist:gate",
+];
+
+export function assertValidationScripts(trusted, candidate) {
+	for (const key of VALIDATION_COMMANDS.flatMap((name) => [
+		name,
+		`pre${name}`,
+		`post${name}`,
+	])) {
+		if (trusted[key] !== candidate[key])
+			throw new Error(`Candidate validation command differs: ${key}`);
+	}
 }
 
 async function verify() {
@@ -271,30 +374,19 @@ async function verify() {
 		return;
 	}
 
-	execFileSync(
-		process.execPath,
-		["scripts/og-video/publicist-inputs.mjs", "candidate"],
-		{ stdio: "inherit" },
-	);
-	const trusted = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+	const scriptsAt = (cwd) =>
+		JSON.parse(
+			execFileSync("git", ["show", "HEAD:package.json"], {
+				cwd,
+				encoding: "utf8",
+				maxBuffer: 2 * 1024 * 1024,
+			}),
+		).scripts;
 
-	const candidate = JSON.parse(
-		readFileSync("candidate/package.json", "utf8"),
-	).scripts;
+	const trusted = scriptsAt(".");
+	const candidate = scriptsAt("candidate");
 
-	for (const key of [
-		"build",
-		"prebuild",
-		"postbuild",
-		"navigation:generate",
-		"assets:check",
-		"copy:check",
-		"design:check",
-		"publicist:gate",
-	]) {
-		if (trusted[key] !== candidate[key])
-			throw new Error(`Candidate build command differs: ${key}`);
-	}
+	assertValidationScripts(trusted, candidate);
 
 	appendFileSync(process.env.GITHUB_OUTPUT, "ready=true\n");
 }
@@ -305,6 +397,23 @@ async function finish() {
 
 	if (!eligiblePull(pr, state.sha, repository) || pr.base.sha !== state.base)
 		throw new Error("Pull request head or base moved");
+	const workflow = await api("actions/workflows/validate.yml");
+	const latest = await latestValidation(state.sha, workflow);
+
+	if (
+		!sameAuthority(state.authority, latest) ||
+		latest?.conclusion !== "success"
+	) {
+		await status(
+			state.sha,
+			latest?.conclusion && latest.conclusion !== "success"
+				? "failure"
+				: "pending",
+		);
+
+		return;
+	}
+
 	await status(
 		state.sha,
 		process.env.GATE_RESULT === "success" ? "success" : "failure",
@@ -312,7 +421,8 @@ async function finish() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-	if (process.argv[2] === "resolve") await resolve();
+	if (process.argv[2] === "discover") await discover();
+	else if (process.argv[2] === "resolve") await resolve();
 	else if (process.argv[2] === "verify") await verify();
 	else if (process.argv[2] === "finish") await finish();
 	else throw new Error("Unknown finalizer operation");

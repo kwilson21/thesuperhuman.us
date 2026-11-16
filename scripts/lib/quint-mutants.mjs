@@ -373,6 +373,7 @@ export const models = [
 			"linkPreviewsCurrent",
 			"previewReviewCurrent",
 			"previewFinalizerCurrent",
+			"validationAuthorityCurrent",
 		],
 		mutants: {
 			linkPreviewsMovingCheckout: { property: "renderedTreeMatches" },
@@ -381,12 +382,14 @@ export const models = [
 			previewFinalizerForged: { property: "authenticatedReview" },
 			previewFinalizerPrivate: { property: "privateApproved" },
 			previewFinalizerMoved: { property: "exactHead" },
+			validationAuthorityStale: { property: "authoritativeSuccess" },
 		},
 		equivalents: [],
 		exhaustive: [
 			"linkPreviewsCurrent",
 			"previewReviewCurrent",
 			"previewFinalizerCurrent",
+			"validationAuthorityCurrent",
 		],
 		samples: "1000",
 		steps: "8",

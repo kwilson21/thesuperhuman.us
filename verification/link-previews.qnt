@@ -84,3 +84,22 @@ module previewFinalizerCurrent { import previewFinalizer(MUTANT="none").* }
 module previewFinalizerForged { import previewFinalizer(MUTANT="forged-receipt").* }
 module previewFinalizerPrivate { import previewFinalizer(MUTANT="private-skipped").* }
 module previewFinalizerMoved { import previewFinalizer(MUTANT="moved-head").* }
+
+// An older successful completion cannot overwrite a newer failure or retry.
+module validationAuthority {
+  const STALE: bool
+  var newer: bool
+  var checkedLatest: bool
+  var green: bool
+  action init = all { newer' = false, checkedLatest' = true, green' = false }
+  action step = any {
+    all { not(green), newer' = true, checkedLatest' = false, green' = false },
+    all { not(newer), checkedLatest' = true, newer' = newer, green' = green },
+    all { checkedLatest or STALE, newer' = newer, checkedLatest' = checkedLatest, green' = true },
+    all { newer' = newer, checkedLatest' = checkedLatest, green' = green },
+  }
+  val authoritativeSuccess = not(green) or not(newer)
+  val allProperties = authoritativeSuccess
+}
+module validationAuthorityCurrent { import validationAuthority(STALE=false).* }
+module validationAuthorityStale { import validationAuthority(STALE=true).* }

@@ -2,17 +2,37 @@ name: Trusted validation finalizer
 on:
   workflow_run:
     workflows: [Validate, Publish link previews]
-    types: [completed]
+    types: [in_progress, completed]
 permissions:
   contents: read
   actions: read
   pull-requests: read
-  statuses: write
-concurrency:
-  group: trusted-validation-${{ github.event.workflow_run.head_branch }}
-  cancel-in-progress: false
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Discover exact target with trusted read-only code
+        id: target
+        run: node scripts/og-video/finalize-validation.mjs discover
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   finalize:
+    needs: resolve
+    if: needs.resolve.outputs.sha != ''
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      statuses: write
+    concurrency:
+      group: trusted-validation-${{ needs.resolve.outputs.sha }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -25,6 +45,7 @@ jobs:
         run: node scripts/og-video/finalize-validation.mjs resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
       - if: steps.resolve.outputs.sha
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -40,7 +61,7 @@ jobs:
       - name: Check private approvals with trusted code only
         id: gate
         if: steps.verify.outputs.ready == 'true'
-        run: node scripts/publicist/gate.mjs
+        run: node scripts/og-video/publicist-inputs.mjs candidate
         env:
           PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
       - name: Complete exact-head validation

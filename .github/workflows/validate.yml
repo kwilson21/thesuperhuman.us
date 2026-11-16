@@ -18,7 +18,7 @@ permissions:
 cache-mode: read
 
 concurrency:
-  group: validate-${{ github.workflow }}-${{ inputs.revision || github.ref }}
+  group: validate-${{ github.workflow }}-${{ inputs.revision || github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 # Independent checks run together; validate remains the required, fail-closed aggregate.

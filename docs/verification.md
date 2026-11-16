@@ -738,10 +738,32 @@ receipts bind run/attempt, PR, base and exact resulting head. Validation dispatc
 markers are accepted only from the known Validate workflow dispatched on main.
 Artifacts and runs are bounded to the latest 100 per query; an expired/missing
 receipt remains pending rather than guessing provenance. Re-run publication to
-recover such a candidate. Changes to publicist inputs, build commands, or a
-PR-owned validation workflow cannot self-approve through this path.
+recover such a candidate. Changes to publicist policy/config/validators, validation commands (including
+lifecycle hooks), or a PR-owned validation workflow cannot self-approve through
+this path. Candidate story, queue and AGENTS data are read from regular Git blobs
+into isolated staging and checked by the unchanged trusted private gate.
 
 Rollout is intentionally not self-certifying: the new workflow_run code must
 already be on trusted main before it can certify a candidate. Its initial landing
 requires independent review and an explicit bootstrap decision; a PR test run is
 not evidence that its proposed privileged workflow executed.
+
+
+`validationAuthorityCurrent` models a newer failed/in-progress validation
+superseding an older success before publication. The stale-completion mutant
+violates `authoritativeSuccess`. The finalizer obtains the latest run/attempt
+across PR and main-dispatch events both at resolution and immediately before
+posting success; an unbound newer dispatch is pending, never presumed unrelated.
+A read-only trusted job discovers the exact head, then finalizer jobs serialize
+per head and re-resolve provenance within that group. A changed target fails before
+any status write, so independent PRs cannot evict each other from a shared pending
+slot. In-progress notifications invalidate
+prior success where the target is already known. First attempts use request creation time so queue delay cannot revive an older
+request; reruns use their current attempt start (queued retries use update time),
+then run ID and attempt as tie-breakers.
+
+PR and dispatched candidate checks share concurrency by immutable head SHA.
+The final API recheck is a race reduction, not an atomic GitHub transaction:
+GitHub provides no compare-and-set for commit status writes. A new run starting
+between that read and status write is handled by its in-progress/completion
+notification and by checking current runs again before any actual merge.
