@@ -1,54 +1,73 @@
-// Where the owner's pricing reference is kept (docs/plans/2026-11-offer-board.md, section 4): one JSON record under
-// PRICING_KEY in the RESUME_STORE KV namespace, which already holds the owner's private records (approval tokens, resume
-// PDFs). Not in MUSIC_DB: a new table would change the digest every golden case records. A read decides nothing; the
-// rule in src/server/rules/pricing.ts decides. Any KV failure is a PricingStoreFailed, which the route answers with its
-// fixed sentence.
+// The owner pricing reference lives in one MUSIC_DB row. The rule decides what to save; SQL only guards
+// the expected version atomically. Missing migrations and corrupt records fail closed, never reset a saved value.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import {
 	type PricingReference,
 	readPricingReference,
 } from "../lib/pricing-reference";
-import { ResumeStore } from "./services";
+import { PricingChanged } from "./rules/pricing";
+import { MusicDb } from "./services";
 
-/** The key the reference is stored under. */
-export const PRICING_KEY = "owner:pricing";
-
-/** KV failed. The error carries no text. */
+/** A storage failure, without database text in the response. */
 export class PricingStoreFailed extends Data.TaggedError(
 	"PricingStoreFailed",
 ) {}
 
-/** The stored reference, for an owner page that renders it (not an Effect program). Unreadable reads as never saved. */
-export async function loadPricing(kv: KVNamespace): Promise<PricingReference> {
-	const text = await kv.get(PRICING_KEY);
+/** Reads the singleton; a missing row is the unsaved version, not a missing table. */
+export async function loadPricing(db: D1Database): Promise<PricingReference> {
+	const row = await db
+		.prepare("SELECT version, reference_json FROM owner_pricing WHERE id = 1")
+		.first<{ version: number; reference_json: string }>();
 
-	if (text === null) return readPricingReference(null);
+	if (!row) return readPricingReference(null);
+	const reference = readPricingReference(JSON.parse(row.reference_json));
 
-	try {
-		return readPricingReference(JSON.parse(text));
-	} catch {
-		return readPricingReference(null);
-	}
+	if (reference.version !== row.version || row.version < 1)
+		throw new Error("Invalid pricing record");
+
+	return reference;
 }
 
-/** The stored reference, read defensively: a missing or unreadable record reads as never saved. */
+/** Reads the facts the pricing rule uses. */
 export const readPricing = Effect.gen(function* () {
-	const kv = yield* ResumeStore;
+	const db = yield* MusicDb;
 
 	return yield* Effect.tryPromise({
-		try: () => loadPricing(kv),
+		try: () => loadPricing(db),
 		catch: () => new PricingStoreFailed(),
 	});
 });
 
-/** Stores the reference the rule answered. */
-export const writePricing = (reference: PricingReference) =>
+/** One guarded statement: a stale read, including two first saves, cannot overwrite the winner. */
+export const writePricing = (
+	reference: PricingReference,
+	expectedVersion: number,
+) =>
 	Effect.gen(function* () {
-		const kv = yield* ResumeStore;
+		const db = yield* MusicDb;
 
-		yield* Effect.tryPromise({
-			try: () => kv.put(PRICING_KEY, JSON.stringify(reference)),
+		const result = yield* Effect.tryPromise({
+			try: () =>
+				expectedVersion === 0
+					? db
+							.prepare(
+								"INSERT INTO owner_pricing (id, version, reference_json) VALUES (1, ?, ?) ON CONFLICT(id) DO NOTHING",
+							)
+							.bind(reference.version, JSON.stringify(reference))
+							.run()
+					: db
+							.prepare(
+								"UPDATE owner_pricing SET version = ?, reference_json = ? WHERE id = 1 AND version = ?",
+							)
+							.bind(
+								reference.version,
+								JSON.stringify(reference),
+								expectedVersion,
+							)
+							.run(),
 			catch: () => new PricingStoreFailed(),
 		});
+
+		if (result.meta.changes !== 1) return yield* new PricingChanged();
 	});

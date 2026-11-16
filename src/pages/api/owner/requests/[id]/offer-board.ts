@@ -43,7 +43,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!read.ok || !params.id)
 		return Response.json({ ok: false }, { status: 400, headers: noStore });
 	const env = locals.runtime.env;
-	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "RESUME_STORE"]);
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
 	if (!bindings.ok || !env.AI)
 		return say(503, "The offer board is unavailable here.");

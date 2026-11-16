@@ -6,16 +6,13 @@
 //   load:  src/pages/owner/pricing.astro (the page reads the record) and src/scripts/owner-pricing.ts (a saved form takes
 //          the new version, so the next save from the same page is not refused)
 //   save:  src/pages/api/owner/pricing.ts with src/server/rules/pricing.ts `savePricing` and src/server/pricing-store.ts
-// The module that must keep every property (`pricing`) is the intended design: the version is checked and the record
-// written in one step against the latest record (a compare-and-set, which D1 gives and KV does not). The code today keeps
-// the record in KV, whose reads may be up to about a minute old and whose read and write are separate steps: that is the
-// `pricingTodayKv` mutant, and the properties it breaks are what today's code allows (docs/verification.md, "The
-// pricing-save model"). Moving the record to D1 is the owner's decision; until then this model describes the intended code.
+// The checked module models the atomic D1 version guard in src/server/pricing-store.ts. The historical
+// pricingTodayKv mutant retains the old split read/write and cached-read bug as a regression check.
 // A save's answer is its own step: it can be lost after the write (a timeout at the edge, a cut connection), and the page
 // cannot tell whether the save was written, so it asks for a reload before another save. A reload is a new page: an
 // answer to the page it replaced is never read.
 // What is left out, on purpose: the contents of a part (a part is the number of the save that wrote it), the reload a new
-// research file triggers, KV failures (a failed save writes nothing), and a request the page gave up on that the route
+// research file triggers, store failures (a failed save writes nothing), and a request the page gave up on that the route
 // still runs after the reload (the reloaded page could then be refused, and reloads again).
 //
 // Run (from the repo root):  pnpm run verify:quint   and   pnpm run verify:quint:mutants
@@ -24,7 +21,7 @@ module pricingSaveModel {
   //   "no-version-check"  a save is written without comparing versions
   //   "split-read-write"  the record is read, then written in a later step (a save in between is overwritten)
   //   "stale-read"        the version is compared against a record that may be up to a few saves old
-  //   "today-kv"          both: the code as it is today, on KV
+  //   "today-kv"          both: the historical KV implementation
   //   "parallel-saves"    a page sends a second save before the first answers, carrying the version the first replaces
   //                       (the second review: Save the values, then the research, from one tab)
   //   "retry-after-lost"  after a lost answer the page lets the owner save again without a reload, with the version from

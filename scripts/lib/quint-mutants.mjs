@@ -136,7 +136,7 @@ export const allowanceMutants = {
 };
 
 // verification/pricing-save.qnt: saving the owner's pricing reference from two forms and two tabs. `pricingTodayKv` is
-// the code as it is today on KV (docs/verification.md, "The pricing-save model"). Module name -> the property its change
+// the historical KV implementation (docs/verification.md, "The pricing-save model"). Module name -> the property its change
 // must break.
 export const pricingMutants = {
 	pricingNoVersionCheck: { property: "noBlindOverwrite" },

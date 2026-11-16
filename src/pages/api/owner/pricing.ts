@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ ok: false, error: read.error },
 			{ status: 400, headers: noStore },
 		);
-	const bindings = bindingsOrUnavailable(locals.runtime.env, ["RESUME_STORE"]);
+	const bindings = bindingsOrUnavailable(locals.runtime.env, ["MUSIC_DB"]);
 
 	if (!bindings.ok)
 		return Response.json(
@@ -57,7 +57,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				stored,
 			);
 
-			yield* writePricing(next);
+			yield* writePricing(next, read.value.expectedVersion);
 
 			return Response.json(
 				{ ok: true, version: next.version },

@@ -217,3 +217,12 @@ appear as entered), and nothing it suggests reaches the client unless the owner 
   that the model never receives the fields it must not see.
 - Browser checks and a screenshot scenario: start, Use on each lane, Undo of a Use, a stale reply after a Use, the three
   prices, the bounded height at both widths, keyboard and axe.
+
+
+## Pricing persistence correction, 2026-11-16
+
+The original KV design below is superseded for pricing saves: the prepared implementation uses
+`MUSIC_DB.owner_pricing`, a singleton with an atomic version guard. No new service or binding is needed.
+Migration 0028 must be reconciled and applied before deploying this feature. Any existing `owner:pricing`
+record from a preview or prior test must be privately backed up and explicitly imported; the implementation
+never deletes that KV key or silently treats a missing D1 table as an empty reference. See the release gate.

@@ -1,7 +1,7 @@
 ---
 // The owner's private pricing reference (docs/plans/2026-11-offer-board.md, section 4): the day value and contingency
 // the offer board turns the AI's day estimates into money with, and the market research its market figure is held
-// inside. Stored in KV (src/server/pricing-store.ts); never shown to a client, never in the repository.
+// inside. Stored in D1 (src/server/pricing-store.ts); never shown to a client, never in the repository.
 import OwnerLayout from "~/layouts/OwnerLayout.astro";
 import {
 	type PricingKind,
@@ -15,13 +15,13 @@ import { loadPricing } from "~/server/pricing-store";
 
 export const prerender = false;
 
-const kv = Astro.locals.runtime.env.RESUME_STORE;
+const db = Astro.locals.runtime.env.MUSIC_DB;
 // A read that fails says so, and the forms stay out, so nothing is saved over what could not be read.
 
 let readFailed = false;
 
-const pricing = kv
-	? await loadPricing(kv).catch(() => {
+const pricing = db
+	? await loadPricing(db).catch(() => {
 			readFailed = true;
 
 			return emptyPricing();
@@ -55,7 +55,7 @@ const updated = pricing.updatedAt
 <OwnerLayout title="Pricing" current="pricing" newRequestCount={0} ownerEmail={Astro.locals.owner!.email}>
   <p class="owner-breadcrumb"><a href="/owner">Owner center</a> <span aria-hidden="true">/</span> Pricing</p>
   <header class="owner-page-heading compact"><div><p class="owner-kicker">Owner / Pricing</p><h1>Pricing.</h1><p>What your offer board prices with. Private: stored for you only, never shown to a client and never kept in the website’s code. Offers stay fixed-price per milestone. The offer board shows the AI your research for a brief’s kind of work so its figure stays in range; it never sees your day value or contingency.</p></div></header>
-  {!kv && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
+  {!db && <p class="rail-muted">The pricing store is not bound here, so nothing can be saved.</p>}
   {readFailed ? <p class="rail-muted" role="alert">Your pricing could not be read just now. Reload the page to try again; nothing has changed.</p> : <div class="software-rail pricing-settings">
     <section class="rail-section wide" aria-labelledby="pricing-values-heading"><h2 id="pricing-values-heading">Day value and contingency</h2>
       <form data-pricing-form data-part="values" data-version={pricing.version} novalidate>

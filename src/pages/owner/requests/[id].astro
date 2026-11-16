@@ -272,15 +272,14 @@ const offerBoardOpen = Boolean(
 	brief && offerKind && !closed && !softwareProject,
 );
 
-const resumeStore = Astro.locals.runtime.env.RESUME_STORE;
 
 // The board still works without the owner's numbers. A store that fails is said as such in the price rows, not as
 // nothing saved.
 let offerPricingUnreadable = false;
 
 const offerPricing =
-	offerBoardOpen && resumeStore
-		? await loadPricing(resumeStore).catch(() => {
+	offerBoardOpen && db
+		? await loadPricing(db).catch(() => {
 				offerPricingUnreadable = true;
 
 				return emptyPricing();

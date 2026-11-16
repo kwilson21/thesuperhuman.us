@@ -16,8 +16,7 @@ import { POST } from "~/pages/api/owner/requests/[id]/offer-board";
 import { withheldFrom } from "~/server/offer-board-model";
 import { readPricingReference } from "~/lib/pricing-reference";
 import { pastOffers } from "~/server/offer-board-store";
-import { PRICING_KEY } from "~/server/pricing-store";
-import { fakeKv, partial } from "../helpers/doubles";
+import { partial } from "../helpers/doubles";
 import { readJson, type JsonObject } from "../helpers/json";
 import type { JsonValue } from "~/lib/json-value";
 import type { TestRuntime } from "../helpers/runtime";
@@ -130,9 +129,6 @@ function context(
 			runtime: partial<TestRuntime>({
 				env: partial<TestRuntime["env"]>({
 					MUSIC_DB: sqliteD1(db),
-					RESUME_STORE: fakeKv({
-						get: async (key: string) => (key === PRICING_KEY ? pricing : null),
-					}),
 					AI: partial<Ai>({ run }),
 					...env,
 				}),
@@ -182,6 +178,7 @@ beforeEach(() => {
 		},
 		updatedAt: NOW.toISOString(),
 	});
+	db.prepare("INSERT INTO owner_pricing VALUES (1, 1, ?)").run(pricing);
 	seed();
 });
 
@@ -567,7 +564,7 @@ describe("the offer board's route", () => {
 	});
 
 	it("still suggests without saved research", async () => {
-		pricing = null;
+		db.exec("DELETE FROM owner_pricing");
 		const response = await POST(context());
 
 		expect(response.status).toBe(200);

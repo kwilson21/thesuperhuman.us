@@ -1,33 +1,27 @@
 // The owner's pricing route (docs/plans/2026-11-offer-board.md, section 4). Every figure is made up for the test.
 import type { APIContext } from "astro";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "~/pages/api/owner/pricing";
-import { PRICING_KEY } from "~/server/pricing-store";
-import { fakeKv, partial } from "../helpers/doubles";
+import { readFileSync } from "node:fs";
+import {
+	DatabaseSync,
+	type SqliteDatabase,
+	sqliteD1,
+} from "../helpers/sqlite-d1";
+import { partial } from "../helpers/doubles";
 import { readJson } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";
 import type { JsonObject } from "../helpers/json";
 
-let store: Map<string, string>;
+let db: SqliteDatabase;
 let failing: boolean;
-
-const kv = () =>
-	fakeKv({
-		get: async (key: string) => {
-			if (failing) throw new Error("KV is down");
-
-			return store.get(key) ?? null;
-		},
-		put: async (key: string, value: string) => {
-			if (failing) throw new Error("KV is down");
-			store.set(key, value);
-		},
-	});
 
 function post(
 	body: JsonObject,
 	{ owner = true, bound = true }: { owner?: boolean; bound?: boolean } = {},
 ) {
+	if (failing) db.exec("DROP TABLE IF EXISTS owner_pricing");
+
 	return POST(
 		partial<APIContext>({
 			request: new Request("https://thesuperhuman.us/api/owner/pricing", {
@@ -41,14 +35,22 @@ function post(
 			locals: {
 				owner: owner ? { email: "owner@example.com" } : undefined,
 				runtime: partial<TestRuntime>({
-					env: partial<TestRuntime["env"]>(bound ? { RESUME_STORE: kv() } : {}),
+					env: partial<TestRuntime["env"]>(
+						bound ? { MUSIC_DB: sqliteD1(db) } : {},
+					),
 				}),
 			},
 		}),
 	);
 }
 
-const stored = () => JSON.parse(store.get(PRICING_KEY) ?? "null");
+const stored = () => {
+	const row = db
+		.prepare("SELECT reference_json FROM owner_pricing WHERE id=1")
+		.get();
+
+	return JSON.parse(String(row?.reference_json ?? "null"));
+};
 
 const research = {
 	researchedOn: "2026-11-15",
@@ -66,9 +68,12 @@ const research = {
 };
 
 beforeEach(() => {
-	store = new Map();
+	db = new DatabaseSync(":memory:");
+	db.exec(readFileSync("migrations/music/0028_owner_pricing.sql", "utf8"));
 	failing = false;
 });
+
+afterEach(() => db.close());
 
 describe("the owner's pricing route", () => {
 	it("refuses anyone but the owner", async () => {
@@ -83,7 +88,7 @@ describe("the owner's pricing route", () => {
 		);
 
 		expect(response.status).toBe(403);
-		expect(store.size).toBe(0);
+		expect(stored()).toBeNull();
 	});
 
 	it("saves the day value and contingency, then the research, each as the next version", async () => {
@@ -185,7 +190,7 @@ describe("the owner's pricing route", () => {
 			ok: false,
 			error: expect.any(String),
 		});
-		expect(store.size).toBe(0);
+		expect(stored()).toBeNull();
 	});
 
 	it("answers 503 without the store, and 500 with its fixed sentence when the store fails", async () => {
@@ -205,5 +210,68 @@ describe("the owner's pricing route", () => {
 			ok: false,
 			error: "Your pricing could not be saved. Try again.",
 		});
+	});
+	it("allows only one of two simultaneous first saves", async () => {
+		const results = await Promise.all(
+			[100, 200].map((dayValue) =>
+				post({
+					action: "values",
+					dayValue,
+					contingencyPercent: 10,
+					expectedVersion: 0,
+				}),
+			),
+		);
+
+		expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+		expect(stored().version).toBe(1);
+		expect([10000, 20000]).toContain(stored().dayValueCents);
+	});
+
+	it("rejects a write that loses a race after reading the same existing version", async () => {
+		await post({
+			action: "values",
+			dayValue: 100,
+			contingencyPercent: 10,
+			expectedVersion: 0,
+		});
+
+		const results = await Promise.all([
+			post({
+				action: "values",
+				dayValue: 200,
+				contingencyPercent: 20,
+				expectedVersion: 1,
+			}),
+			post({ action: "market", market: research, expectedVersion: 1 }),
+		]);
+
+		expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+		const reference = stored();
+		expect(reference.version).toBe(2);
+
+		if (results[0].status === 200) {
+			expect(reference.dayValueCents).toBe(20000);
+			expect(reference.market).toBeNull();
+		} else {
+			expect(reference.dayValueCents).toBe(10000);
+			expect(reference.market.researchedOn).toBe("2026-11-15");
+		}
+	});
+
+	it("fails closed on corrupt stored pricing without overwriting it", async () => {
+		db.prepare("INSERT INTO owner_pricing VALUES (1, 4, ?)").run("{}");
+
+		const response = await post({
+			action: "values",
+			dayValue: 100,
+			contingencyPercent: 10,
+			expectedVersion: 0,
+		});
+
+		expect(response.status).toBe(500);
+		expect(db.prepare("SELECT version FROM owner_pricing").get()?.version).toBe(
+			4,
+		);
 	});
 });
