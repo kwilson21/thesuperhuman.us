@@ -437,6 +437,40 @@ File: `verification/music-playback.qnt`, written for the conversion of the publi
 
 **What it does not cover.** The clock rule (seconds against the server's time) and the listen and completion rules, which are pure functions of the event and what was read (`tests/rules/playback.test.ts`); retention deleting old events; the rate limits and the campaign tag. The witness `neverRaced` (negated by hand) reaches a state where one delivery stored an event and another answered duplicate.
 
+## The brief-board model
+
+File: `verification/brief-board.qnt` (module `board`), written from the design in `docs/plans/2026-11-living-brief.md` before the code. The living brief's board shows the interpreting model's cards beside the brief's answers while the visitor keeps writing and keeps, edits, answers, sets aside, brings back and undoes cards, and pauses the board. Requests are numbered; replies arrive late, out of order and overlapping (the page sends one at a time, but the model does not rely on it); and the model is adversarial: a reply may mention any idea, claim any idea was read from the answers, and name owned or set-aside ideas. The code modelled is `applyReply`, the visitor's actions and `briefOutline` in `src/lib/brief-board.ts`.
+
+**State.** One lane of three ideas (two can be read from a passage of the answers, one only inferred), each a card with a status, a basis and `since` (how many requests had been sent when it last became unowned); the passages in the answers; the requests (what they showed); the number of the newest reply applied; Pause; the Undo history; and ghosts for what the visitor set aside and when Undo last made each card unowned.
+
+**Properties** (`allProperties`):
+1. `ownedUntouched`: a reply never changes a card the visitor owns (kept, edited, set aside, or their own note).
+2. `rejectedStaysRejected`: an idea the visitor set aside stays set aside until they bring it back or undo setting it aside.
+3. `undoRespected`: a reply never changes or withdraws a card that Undo made unowned after that reply's request was sent.
+4. `groundedOnApply`: a reply never makes a card "from your answers" from a passage that is not in the answers now.
+5. `outlineGrounded`: everything the outline sends as read from the answers is in the answers being sent.
+6. `newestWins`: an older reply never changes the board after a newer one has applied.
+7. `pausedHolds`: nothing a reply says changes the board while it is paused.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `SnapshotStatus` | A reply judges a card by its status when the request was sent, not now (a Keep made while the request was in flight is overwritten) | `ownedUntouched` |
+| `SeenOnly` | A reply may change any card it was shown that is unowned now: the first design | `undoRespected` |
+| `WithdrawUnseen` | A reply withdraws every unowned card it leaves out, even one its request never showed | `undoRespected` |
+| `NoAvoid` | A set-aside idea can be added again by a reply | `rejectedStaysRejected` |
+| `SnapshotQuote` | A passage is checked against the answers as they were sent, so a stale reply brings back words the visitor deleted | `groundedOnApply` |
+| `OutlineQuote` | The outline marks a card as read from the answers without checking its passage again | `outlineGrounded` |
+| `NoNumberGuard` | A reply older than the last applied is applied | `newestWins` |
+| `ApplyPaused` | A reply applies while the board is paused | `pausedHolds` |
+
+**Found by writing it.** The first design let a reply change or withdraw any unowned card its request had shown the model. If the visitor sets such a card aside and then undoes it while the request is in flight, the reply silently reverts the Undo. The design now stamps each card with `since`, and a reply may change it only if its request was sent after that. `SeenOnly` keeps the first design as a mutant.
+
+**Tied to the code.** `tests/lib/brief-board-walk.test.ts` checks the same seven properties on the real `applyReply` and actions over 400 seeded random walks of 80 steps with an adversarial reply generator, and reports how often each interesting case was reached. Planting `SeenOnly` or `NoNumberGuard` in the real code makes it fail with a seed that reproduces the failure (checked by hand while writing it). It also checks an eighth property the model leaves out, that no lane ever holds more than its limit; its walks stay in one lane with a high limit, so the two ways the second review found to break it (a reply that withdrew a full lane's cards after checking the limit, and an Undo into a lane a reply had filled) are held by unit tests in `tests/lib/brief-board.test.ts`.
+
+**Exhaustive.** Run by hand before the third round of review fixes changed `applyReply` (withdrawals before additions, and `refs`, which the model reads as the reply naming a card): `quint verify verification/brief-board.qnt --main board --init init --step stepOrEnd --invariant allProperties --max-steps N` (2026-11-15, the Apalache that `quint` 0.33.1 downloads, one core, a cloud container): no violation at 5 steps (21 seconds) or 7 steps (2 minutes 15 seconds). Run again at 7 steps after the fifth round removed moves between lanes (2 minutes 25 seconds): no violation.
+
+**What it does not cover.** Lanes and lane limits (each lane is reconciled on its own, and cards never move between lanes; a reply card naming a card in another lane only keeps it, which the model's replies cover by naming any idea; see above), a reply naming a card whose new version is dropped (the card stays while its passage is in the answers; unit tested), the similarity of two wordings (`sameIdea`), and a reply rewording one card into another card's idea (an idea is one key here, so the model cannot express it; review found it, and `tests/lib/brief-board.test.ts` holds the fix), holding a reply while the visitor is in the board (the same as a later delivery), and the scheduler's timing.
+
 ## The software-inquiry model
 
 File: `verification/software-inquiry.qnt`, written for the conversion of the public intake routes (module `inquiry`). The software brief form makes its submission id when it opens, so a retry or a second tab sends the same id again, to a Worker that serves several requests at once. Each delivery is separate steps, as the code makes them: deliver; look up the brief stored under the id (ONE statement, one step); count the address against its request limit (a KV key per address, made once however many passes there are, in two steps as the code makes them: the key is read, and a later step writes it; a delivery that read the key as set is refused with 429, any other sets it); insert, guarded by the unique index on the submission id; and, after a stored brief, send the client's copy. A brief found by the look-up is answered at once with nothing counted. A delivery whose insert meets the index looks up again (`decideAndSave`): it finds the other brief and answers with it, and keeps the allowance it spent (the key is not deleted); when the look-up finds nothing, the try ends on the lost-brief path (no second insert, the key is given back, the visitor is told the brief was not stored).

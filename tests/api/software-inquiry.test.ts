@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
-import { beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/software-inquiry";
 import { softwareBriefEmail } from "~/lib/client-emails";
 import {
@@ -22,7 +22,7 @@ import { double, partial, fakeD1, fakeKv } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 import { boundQuery } from "../helpers/d1";
 import { sqliteD1 } from "../helpers/sqlite-d1";
-import { readJson } from "../helpers/json";
+import { type JsonObject, readJson } from "../helpers/json";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 const id = "00000000-0000-4000-8000-000000000001";
@@ -77,6 +77,8 @@ function context(
 		db?: D1Database | null;
 		token?: string | null;
 		rate?: KVNamespace | null;
+		/** SOFTWARE_BOARD_ENABLED: whether an outline sent with the brief counts. */
+		board?: string;
 	} = {},
 ): APIContext {
 	return partial<APIContext>({
@@ -101,6 +103,7 @@ function context(
 					RESEND_API_KEY: "test",
 					CONTACT_FROM_EMAIL: "from@example.com",
 					CONTACT_TO_EMAIL: "inbox@example.com",
+					SOFTWARE_BOARD_ENABLED: options.board ?? "true",
 				}),
 			}),
 		}),
@@ -1756,6 +1759,151 @@ it("words the client copy of a website brief in the client’s voice", () => {
 	);
 	expect(copy.text).toContain("Current website\nhttps://jordanclay.example");
 	expect(`${copy.text}${copy.html}`).not.toContain("What they already have");
+});
+
+describe("the living brief's outline", () => {
+	const outline = [
+		{
+			lane: "purpose",
+			text: "Class sign-ups for a pottery studio",
+			origin: "answers",
+			quote: "my pottery studio",
+		},
+		{
+			lane: "parts",
+			text: "Classes",
+			origin: "answers",
+			quote: "see upcoming classes",
+		},
+		{ lane: "parts", text: "Contact", origin: "kept" },
+		{ lane: "parts", text: "Gift cards", origin: "wrote" },
+		{
+			lane: "questions",
+			text: "Do students pay when they sign up?",
+			origin: "edited",
+			answer: "Yes, by card.",
+		},
+	];
+
+	const send = (extra: JsonObject) =>
+		POST(context(JSON.stringify({ ...websiteInput, ...extra })));
+
+	it("stores it with the brief, and shows it to the owner and in the visitor's copy with where each item came from", async () => {
+		const response = await send({ outline });
+
+		expect(response.status).toBe(200);
+
+		const text = [
+			"What it’s for: Class sign-ups for a pottery studio · from the answers (“my pottery studio”)",
+			"Pages: Classes · from the answers (“see upcoming classes”)",
+			"Pages: Contact · AI suggestion, kept",
+			"Pages: Gift cards · own note",
+			"Open questions: Do students pay when they sign up? · AI suggestion, edited",
+			"Answer: Yes, by card.",
+		].join("\n");
+
+		expect(
+			(await readJson<{ brief: Record<string, string> }>(response)).brief
+				.outline,
+		).toBe(text);
+		expect(JSON.parse(savedRequest().details_json).outline).toEqual(outline);
+		expect(ownerNotice().text).toContain(`Brief outline\n${text}`);
+
+		const copy = vi
+			.mocked(fetch)
+			.mock.calls.filter(([url]) => String(url).includes("api.resend.com"))
+			.map(([, init]) => JSON.parse(String(init?.body)))
+			.find((email) => email.to[0] === "jordan@example.com");
+
+		expect(copy.text).toContain(`Brief outline\n${text}`);
+		expect(clientSoftwareLabels.outline).toBe("Brief outline");
+		expect(softwareLabels.outline).toBe("Brief outline");
+	});
+
+	it("leaves a brief without one exactly as before", async () => {
+		const response = await send({});
+
+		const brief = (await readJson<{ brief: Record<string, string> }>(response))
+			.brief;
+
+		expect(brief.outline).toBeUndefined();
+		expect(JSON.parse(savedRequest().details_json)).not.toHaveProperty(
+			"outline",
+		);
+		expect(ownerNotice().text).not.toContain("Brief outline");
+	});
+
+	it.each([
+		[
+			"a passage that is not in the answers",
+			[{ ...outline[1], quote: "see upcoming shows" }],
+		],
+		[
+			"an item from the answers without its passage",
+			[{ lane: "parts", text: "Classes", origin: "answers" }],
+		],
+		[
+			"an item from the answers carrying a price the visitor did not write",
+			[{ ...outline[1], text: "Classes from $40" }],
+		],
+		["an answer outside a question", [{ ...outline[2], answer: "Yes" }]],
+		["something that is not a list", { lane: "parts" }],
+	])(
+		"refuses %s, with a sentence and nothing stored or counted",
+		async (_, sent) => {
+			const response = await send({ outline: sent });
+
+			expect(response.status).toBe(400);
+			expect(await readJson(response)).toEqual({
+				ok: false,
+				errors: {
+					outline:
+						"Your brief outline no longer matches your answers. Go back to your first answer, check the outline and send again.",
+				},
+			});
+			expect(
+				sql.prepare("SELECT COUNT(*) AS n FROM owner_requests").get(),
+			).toEqual({ n: 0 });
+			expect(kv.put).not.toHaveBeenCalled();
+		},
+	);
+
+	it("ignores an outline while the board is switched off, and stores the brief as before", async () => {
+		const response = await POST(
+			context(
+				JSON.stringify({
+					...websiteInput,
+					outline: [{ lane: "parts", text: "x", origin: "nonsense" }],
+				}),
+				{
+					board: "false",
+				},
+			),
+		);
+
+		expect(response.status).toBe(200);
+		expect(JSON.parse(savedRequest().details_json)).not.toHaveProperty(
+			"outline",
+		);
+	});
+
+	it("refuses an outline on the retired idea path, which has no board", async () => {
+		const response = await POST(
+			context(
+				JSON.stringify({
+					...base,
+					path: "idea",
+					idea: "A booking tool",
+					audienceToday: "",
+					firstVersion: "",
+					signal: "",
+					outline: [{ lane: "parts", text: "Booking", origin: "wrote" }],
+				}),
+			),
+		);
+
+		expect(response.status).toBe(400);
+	});
 });
 
 it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {

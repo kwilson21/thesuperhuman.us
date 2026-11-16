@@ -176,7 +176,7 @@ export async function sendSoftwareRequestNotice(args: {
 				.map((key) => `${softwareLabels[key]}\n${args.brief[key]}`)
 				.join(
 					"\n\n",
-				)}\n\n${new URL(`/owner/requests/${args.requestId}`, args.origin ?? "https://thesuperhuman.us").href}`,
+				)}${args.brief.outline ? `\n\n${softwareLabels.outline}\n${args.brief.outline}` : ""}\n\n${new URL(`/owner/requests/${args.requestId}`, args.origin ?? "https://thesuperhuman.us").href}`,
 		},
 	});
 }
