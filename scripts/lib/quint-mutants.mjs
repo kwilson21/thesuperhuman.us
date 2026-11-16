@@ -203,6 +203,7 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
+	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
@@ -338,6 +339,7 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
+		// InsertNoState, AbortNoCas and PartNoStateGuard start only from fresh (the upload protocol alone).
 		// The mutants whose race needs particular starting points (PublishNoStage from finalAndReview, PublishStaleSupersede and
 		// RevokeNoFirstStatus from twoReviews, CompleteNoStage from final and finalPlus) begin from the one or two starting points
 		// their race needs and no others, and are found within a few thousand random runs. Three runs must pass, each of 8,000 runs:

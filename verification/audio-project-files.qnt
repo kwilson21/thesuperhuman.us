@@ -83,7 +83,6 @@ module audioProjectFiles {
     reopenedAt: int,         // the stamp of the request's reopening to `new` (0 while reviewed or resolved)
     updatedAt: int,          // the stamp of the project's last update: `updated_at`
     touches: List[int],      // the stamps of the progress and revise-date updates that leave the stage alone
-    parts: int -> bool,      // R2: a part is held for the multipart upload
     discardAt: int -> int,   // the stamp of the abort's marking the upload row discarding (0 for none)
   }
   var w: World
@@ -200,7 +199,7 @@ module audioProjectFiles {
         mp: IDS.mapBy(i => false),
         obj: IDS.mapBy(i => scenario != "fresh" and (i == 1 or scenario == "reviewPlus" or scenario == "finalPlus" or scenario == "finalBoth" or scenario == "twoReviews" or scenario == "reviewFinal" or scenario == "finalAndReview")),
         seq: 1, revokedAt: 0, withdrawnAt: 0, bookingVoidAt: 0, balanceVoidAt: if (paidBalance) 0 else 1,
-        reopenedAt: 0, updatedAt: 0, touches: List(), parts: IDS.mapBy(i => false), discardAt: IDS.mapBy(i => 0),
+        reopenedAt: 0, updatedAt: 0, touches: List(), discardAt: IDS.mapBy(i => 0),
         stage: if (scenario == "review" or scenario == "reviewPlus" or scenario == "reviewFinal") "review_ready"
                else if (scenario == "finalAndReview") "in_progress"
                else if (paidBalance) "final_files_ready" else "in_progress",
@@ -247,7 +246,7 @@ module audioProjectFiles {
         // The status the first read saw is carried into every retry: a file whose status moved since (a draft that was
         // published in between) is refused, as today's statement compares the status read earlier in the same request.
         (s.fileStatus == "uploaded" or s.fileStatus == "published") and (h.tries == 0 or MUTANT == "revoke-no-first-status" or s.fileStatus == h.first)
-      else s.stage == "final_files_ready" and s.finalLive > 0 and s.booking and s.balance and not(s.revoked) and not(s.withdrawn)
+      else s.stage == "final_files_ready" and s.finalLive > 0 and s.booking and s.balance and s.reqReviewed and not(s.revoked) and not(s.withdrawn)
     all {
       w' = w,
       runs' = runs.set(r, { ...h, snap: s, version: version, first: if (h.tries == 0) s.fileStatus else h.first, phase: if (go) (if (h.kind == "upload") "createMultipart" else "write") else "refused" }),
@@ -350,7 +349,7 @@ module audioProjectFiles {
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all {
-      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false) },
+      w' = { ...w, mp: w.mp.set(h.id, false) },
       runs' = runs.set(r, { ...h, phase: "conflict" }),
     }
   }
@@ -369,7 +368,7 @@ module audioProjectFiles {
     val h = runs.get(r)
     // R2 can complete a multipart upload only while it is alive; an aborted one is gone (the call fails).
     if (w.mp.get(h.id) or w.obj.get(h.id)) all {
-      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false), obj: w.obj.set(h.id, true) },
+      w' = { ...w, mp: w.mp.set(h.id, false), obj: w.obj.set(h.id, true) },
       runs' = runs.set(r, { ...h, phase: "fileRow" }),
     }
     else all { w' = w, runs' = runs.set(r, { ...h, phase: "failed" }) }
@@ -413,7 +412,7 @@ module audioProjectFiles {
     nondet r = RUNS.filter(i => runs.get(i).phase == "abortR2").oneOf()
     val h = runs.get(r)
     all {
-      w' = { ...w, mp: w.mp.set(h.id, false), parts: w.parts.set(h.id, false), obj: w.obj.set(h.id, false) },
+      w' = { ...w, mp: w.mp.set(h.id, false), obj: w.obj.set(h.id, false) },
       runs' = runs.set(r, { ...h, phase: "abortRow" }),
     }
   }
@@ -442,7 +441,8 @@ module audioProjectFiles {
     nondet r = RUNS.filter(i => runs.get(i).phase == "partPut").oneOf()
     val h = runs.get(r)
     if (w.mp.get(h.id)) all {
-      w' = { ...w, parts: w.parts.set(h.id, true) },
+      // The part is acknowledged: the run is `done`, and the property reads it with the stamp of the abort's mark.
+      w' = w,
       runs' = runs.set(r, { ...h, phase: "done" }),
     }
     else all { w' = w, runs' = runs.set(r, { ...h, phase: "conflict" }) }
