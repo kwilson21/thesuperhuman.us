@@ -13,8 +13,8 @@
 // indexes (one version number per request, one open draft) back stage 2's numbering, so their violation is
 // ChangedSinceRead, three tries in all (F7, #316). Re-checked at write time by G1 (the request as read), G2 (no project),
 // G7 (the open draft's status and the page's updated_at, and the update's own `status IN` the SAVE list) and G11 per
-// named attachment (its row unchanged, in no closed archive); the reused MSA by the foreign key. A refused batch, and the
-// refusals of stages 3 and 4, are answered by the reads in src/server/rules/offer-refused-batch.ts. After the batch, each
+// named attachment (its row unchanged, in no closed archive, or a closed archive whose manifest cannot be read); the
+// reused MSA by the foreign key. A refused batch, and the refusals of stages 3 and 4, are answered by the reads in src/server/rules/offer-refused-batch.ts. After the batch, each
 // removed attachment the batch deleted has its R2 object removed (attachmentsToClean).
 import * as Data from "effect/Data";
 import * as Predicate from "effect/Predicate";
