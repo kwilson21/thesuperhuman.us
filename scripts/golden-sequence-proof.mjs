@@ -97,6 +97,7 @@ function main() {
 	const namesBefore = fixtureNames(from);
 	const namesAfter = fixtureNames(to);
 	const refused = missingFixtures(namesBefore, namesAfter);
+
 	const fixtures = [...namesBefore]
 		.filter((name) => namesAfter.has(name))
 		.sort();

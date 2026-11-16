@@ -88,6 +88,7 @@ describe("the counter-row proof", () => {
 
 	it("accepts a re-record that changed only digests and dropped the counter record", () => {
 		const before = fixtureCase();
+
 		const after = fixtureCase((value) => {
 			value.steps[0].digest.music = OTHER;
 			value.steps[0].digest.atResponse.music = OTHER;
@@ -123,6 +124,7 @@ describe("the counter-row proof", () => {
 		const after = fixtureCase((value) => {
 			value.steps[0].state.music.audio_project_messages = [];
 		});
+
 		const found = refusals("f", "case", fixtureCase(), after);
 
 		expect(found.length).toBeGreaterThan(0);
@@ -146,6 +148,7 @@ describe("the counter-row proof", () => {
 				sha256: HASH,
 			};
 		});
+
 		const after = fixtureCase((value) => {
 			value.finalState.music.tables.sqlite_sequence = {
 				rows: 1,
