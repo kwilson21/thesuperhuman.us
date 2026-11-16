@@ -30,12 +30,11 @@ const element = (initial: Record<string, string> = {}) => {
 
 type FakeElement = ReturnType<typeof element>;
 
-// What it steps aside for: the closing panel, a page invitation marked data-pinned-end and the page's
-// filled buttons, in page order.
+// Only the shared footer is an end marker. Other page buttons never hide the pinned CTA.
 const stubPage = (
 	elements: Record<string, FakeElement>,
-	ends: FakeElement[] = elements[".closing-panel"]
-		? [elements[".closing-panel"]]
+	ends: FakeElement[] = elements[".compact-footer"]
+		? [elements[".compact-footer"]]
 		: [],
 ) => {
 	vi.stubGlobal("document", {
@@ -68,7 +67,7 @@ const stubObserver = () => {
 it("shows the pinned button and marks it at the end while the closing panel is on screen", () => {
 	const pinned = element({ hidden: "" });
 	const panel = element();
-	stubPage({ "[data-pinned-contact]": pinned, ".closing-panel": panel });
+	stubPage({ "[data-pinned-contact]": pinned, ".compact-footer": panel });
 	const observers = stubObserver();
 	setupPinnedContact();
 	expect(pinned.hasAttribute("hidden")).toBe(false);
@@ -84,52 +83,42 @@ it("shows the pinned button and marks it at the end while the closing panel is o
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 });
 
-it("also steps aside for a page’s own invitation, until neither end is on screen", () => {
+it("does not observe page invitations or filled buttons", () => {
+	expect(STEP_ASIDE_FOR).toBe(".compact-footer");
 	const pinned = element({ hidden: "" });
-	const invitation = element();
-	const panel = element();
-	stubPage({ "[data-pinned-contact]": pinned, ".closing-panel": panel }, [
-		invitation,
-		panel,
-	]);
+	const footer = element();
+	stubPage({
+		"[data-pinned-contact]": pinned,
+		".compact-footer": footer,
+		"[data-pinned-end]": element(),
+		"main .site-button:not(.site-button-outline)": element(),
+	});
 	const observers = stubObserver();
 	setupPinnedContact();
-	expect(observers[0].observed).toEqual([invitation, panel]);
-	observers[0].callback([{ isIntersecting: true, target: invitation }]);
-	expect(pinned.hasAttribute("data-at-end")).toBe(true);
-	observers[0].callback([{ isIntersecting: true, target: panel }]);
-	observers[0].callback([{ isIntersecting: false, target: invitation }]);
-	expect(pinned.hasAttribute("data-at-end")).toBe(true);
-	observers[0].callback([{ isIntersecting: false, target: panel }]);
+	expect(observers[0].observed).toEqual([footer]);
+	observers[0].callback([{ isIntersecting: false, target: footer }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 });
 
-// The pinned button and the closing panel sit outside <main>, so the last selector reaches only the
-// page's own filled buttons. This only checks the selector's parts; the release record notes the
-// check of Home, the 404 and Audio in the local preview.
-it("steps aside for the closing panel, page invitations and the page's filled buttons", () => {
-	expect(STEP_ASIDE_FOR.split(", ")).toEqual([
-		".closing-panel",
-		"[data-pinned-end]",
-		"main .site-button:not(.site-button-outline)",
-	]);
-});
-
-it("does not show over a button already on screen when the page opens", () => {
+it("stays aside on a deep link or restored page already at the footer", () => {
 	const pinned = element({ hidden: "" });
-	const button = element();
-	stubPage({ "[data-pinned-contact]": pinned }, [button]);
+	const footer = element();
+	stubPage({ "[data-pinned-contact]": pinned, ".compact-footer": footer });
 	const observers = stubObserver();
 	setupPinnedContact();
-	expect(pinned.hasAttribute("hidden")).toBe(false);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
-	observers[0].callback([{ isIntersecting: true, target: button }]);
+	observers[0].callback([{ isIntersecting: true, target: footer }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
-	observers[0].callback([{ isIntersecting: false, target: button }]);
-	expect(pinned.hasAttribute("data-at-end")).toBe(false);
 });
 
-it("stays hidden when there is no closing panel, page invitation or filled button", () => {
+it("does nothing on a quiet contact or intake page without a pinned button", () => {
+	stubPage({ ".compact-footer": element() });
+	const observers = stubObserver();
+	setupPinnedContact();
+	expect(observers).toHaveLength(0);
+});
+
+it("stays hidden when there is no footer", () => {
 	const pinned = element({ hidden: "" });
 	stubPage({ "[data-pinned-contact]": pinned });
 	const observers = stubObserver();
@@ -140,7 +129,7 @@ it("stays hidden when there is no closing panel, page invitation or filled butto
 
 it("stays hidden when IntersectionObserver is not available", () => {
 	const pinned = element({ hidden: "" });
-	stubPage({ "[data-pinned-contact]": pinned, ".closing-panel": element() });
+	stubPage({ "[data-pinned-contact]": pinned, ".compact-footer": element() });
 	vi.stubGlobal("IntersectionObserver", undefined);
 	setupPinnedContact();
 	expect(pinned.hasAttribute("hidden")).toBe(true);
