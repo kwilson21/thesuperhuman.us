@@ -60,6 +60,9 @@ export type PlugMotion = {
 	scaleVelocity: number;
 };
 
+// A thrown plug's top speed, in px/s.
+const TOP_SPEED = 2400;
+
 /**
  * One animation frame of the plug. A carried plug stays under the pointer and keeps its speed, so a
  * plug let go mid-swing is thrown; otherwise its springs pull it toward the goal. Its lift (scale)
@@ -76,8 +79,16 @@ export function advancePlug(
 	const { stiffness, damping } = spring;
 
 	if (carried && dt > 0) {
-		plug.velocity.x = clamp((goal.point.x - plug.position.x) / dt, -2400, 2400);
-		plug.velocity.y = clamp((goal.point.y - plug.position.y) / dt, -2400, 2400);
+		plug.velocity.x = clamp(
+			(goal.point.x - plug.position.x) / dt,
+			-TOP_SPEED,
+			TOP_SPEED,
+		);
+		plug.velocity.y = clamp(
+			(goal.point.y - plug.position.y) / dt,
+			-TOP_SPEED,
+			TOP_SPEED,
+		);
 		plug.position.x = goal.point.x;
 		plug.position.y = goal.point.y;
 	}
@@ -132,27 +143,53 @@ export type Chain = {
 	end?: Point;
 };
 
+// The furthest a link is drawn ahead of its last step: as far as a thrown plug travels in one step.
+// A link that leapt further in its last step (its ends moved when the layout changed) is drawn where
+// it is, not flung on along that leap.
+const DRAWN_LEAD = TOP_SPEED * STEP;
+
 /**
  * Where to draw the cable now: each link carried forward by the part of a step that has passed since
  * its last step, along the way it was moving, with its ends at `from` and `to`. The cable itself only
  * moves in whole steps, so its resting shape never depends on the frame timing; drawing it this way
- * keeps it moving on the frames that fall between steps (at 90, 144 or 240 Hz) instead of freezing
- * while the plug moves on. At rest the links do not move, so neither does the drawing.
+ * keeps it moving evenly at 90, 144 or 240 Hz, where some frames fall between its steps and others
+ * hold two of them. Then, walking back from the plug, each drawn link is pulled in to no longer than
+ * the cable's own link there: the cable's end is pinned where the plug was at its last step, so
+ * without this the last link would be drawn stretched to where the plug is now (worst as the plug
+ * sets off, before the cable has any speed to carry it). At rest the links do not move and every
+ * link has its length, so the drawing is the cable.
  */
 export function drawnChain(chain: Chain, from: Point, to: Point): Point[] {
 	const ahead = chain.clock / STEP;
 
-	return chain.points.map((point, index) => {
+	const drawn = chain.points.map((point, index) => {
 		if (index === 0) return { ...from };
 
 		if (index === LINKS) return { ...to };
 		const last = chain.before[index];
+		const dx = point.x - last.x;
+		const dy = point.y - last.y;
+		const lead = Math.hypot(dx, dy) * ahead;
+		const carry = lead > DRAWN_LEAD ? 0 : ahead;
 
-		return {
-			x: point.x + (point.x - last.x) * ahead,
-			y: point.y + (point.y - last.y) * ahead,
-		};
+		return { x: point.x + dx * carry, y: point.y + dy * carry };
 	});
+
+	for (let index = LINKS - 1; index >= 1; index--) {
+		const point = drawn[index];
+		const next = drawn[index + 1];
+		const own = chain.points[index];
+		const ownNext = chain.points[index + 1];
+		const length = Math.hypot(ownNext.x - own.x, ownNext.y - own.y);
+		const gap = Math.hypot(point.x - next.x, point.y - next.y);
+
+		if (gap > length) {
+			point.x = next.x + ((point.x - next.x) * length) / gap;
+			point.y = next.y + ((point.y - next.y) * length) / gap;
+		}
+	}
+
+	return drawn;
 }
 
 /**
@@ -534,6 +571,9 @@ export function setupSwitchboard(
 		position.y = point.y;
 		velocity.x = velocity.y = motion.scaleVelocity = 0;
 		motion.scale = goalScale;
+		// The plug is put here at once, so the cable's end is pinned here from its next step, not
+		// dragged along a path the plug never took.
+		chain.end = { ...position };
 
 		if (relay || !chain.points.length)
 			layRope(dropPending ? waitingRope() : restingRope(youPoint, position));

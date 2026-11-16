@@ -4,6 +4,7 @@ import {
 	type Chain,
 	drawnChain,
 	LINKS,
+	STEP,
 } from "../../src/scripts/switchboard";
 
 const from = { x: 0, y: 0 };
@@ -149,9 +150,9 @@ describe("the switchboard cable's frame update", () => {
 
 	// The plug moves away at a steady 60 px/s with plenty of slack, and the cable is drawn every frame.
 	// Once the first swing has died away the cable is dragged along smoothly, so each frame should move
-	// its middle about as far as the frames either side of it. On 90, 144, 165 and 240 Hz displays some
-	// frames fall between the cable's steps and others hold two of them; drawn naively, those frames
-	// stand still or jump.
+	// its middle about as far as the frames either side of it. Drawn naively, it moves unevenly at 90 Hz,
+	// where a frame holds one of the cable's steps or two, and at 144, 165 and 240 Hz the frames that
+	// fall between its steps stand still while others jump.
 	for (const fps of [60, 90, 120, 144, 165, 240])
 		it(`draws the cable moving evenly at ${fps} Hz while the plug moves steadily`, () => {
 			const chain = laidStraight();
@@ -178,4 +179,77 @@ describe("the switchboard cable's frame update", () => {
 				expect(Math.abs(move - neighbours) / neighbours).toBeLessThan(0.05);
 			});
 		});
+
+	// The cable's end is pinned where the plug was at its last step, up to one step behind the plug, and
+	// a cable at rest has no speed to carry it on. Drawn naively, the plug setting off from rest
+	// stretched the last link to seven times its length for a few frames at 120 Hz, depending on where
+	// the frames fell against the cable's steps. Here the plug sets off at 900 px/s from rest on a
+	// cable with plenty of slack, at every rate and at five such phases.
+	for (const fps of [60, 90, 120, 144, 165, 240])
+		it(`never draws a link stretched when the plug sets off from rest at ${fps} Hz`, () => {
+			for (const phase of [0, 0.25, 0.5, 0.75, 0.99]) {
+				const chain = laidStraight();
+				const long = 600 / LINKS;
+
+				for (let frame = 0; frame < 600; frame++)
+					advanceChain(chain, from, to, long, pull, 1 / 60);
+				chain.clock = phase * STEP;
+
+				for (let frame = 1; frame <= Math.round(fps * 0.15); frame++) {
+					const end = { x: 300 + (900 * frame) / fps, y: 0 };
+					advanceChain(chain, from, end, long, pull, 1 / fps);
+					const drawn = drawnChain(chain, from, end);
+
+					for (let index = 1; index < LINKS; index++) {
+						const gap = Math.hypot(
+							drawn[index + 1].x - drawn[index].x,
+							drawn[index + 1].y - drawn[index].y,
+						);
+
+						const own = Math.hypot(
+							chain.points[index + 1].x - chain.points[index].x,
+							chain.points[index + 1].y - chain.points[index].y,
+						);
+
+						// No longer than the cable's own link, which the jerk itself barely stretches.
+						expect(gap, `phase ${phase}, frame ${frame}`).toBeLessThanOrEqual(
+							own + 1e-9,
+						);
+						expect(own / long).toBeLessThan(1.05);
+					}
+				}
+			}
+		});
+
+	// A change of layout moves both ends at once (the plug is put in place and the cable swings to it),
+	// so the first step moves links hundreds of pixels. Carried on along that leap, the drawing flung
+	// the cable out to ten times its length for a frame or two. Each drawn link now stays within two
+	// steps of a thrown plug's travel (one carried ahead, one pulled in toward the plug) of the cable.
+	it("draws the cable near where it is when the layout moves its ends", () => {
+		for (const phase of [0, 0.5, 0.99]) {
+			const chain = laidStraight();
+
+			for (let frame = 0; frame < 600; frame++)
+				advanceChain(chain, from, to, link, pull, 1 / 60);
+			const movedFrom = { x: 0, y: 300 };
+			const movedTo = { x: 120, y: 340 };
+			// What settle does when it puts the plug in place.
+			chain.end = { ...movedTo };
+			chain.clock = phase * STEP;
+
+			for (let frame = 0; frame < 60; frame++) {
+				advanceChain(chain, movedFrom, movedTo, link, pull, 1 / 120);
+				const drawn = drawnChain(chain, movedFrom, movedTo);
+
+				for (let index = 1; index < LINKS; index++)
+					expect(
+						Math.hypot(
+							drawn[index].x - chain.points[index].x,
+							drawn[index].y - chain.points[index].y,
+						),
+						`phase ${phase}, frame ${frame}, link ${index}`,
+					).toBeLessThanOrEqual(2 * STEP * 2400);
+			}
+		}
+	});
 });
