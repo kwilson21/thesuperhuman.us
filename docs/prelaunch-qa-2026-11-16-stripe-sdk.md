@@ -3,7 +3,7 @@
 Scope: update Stripe Node 22.6.2 to 23.1.0, not the external API contract.
 The old SDK used `2026-08-26.dahlia`; the new SDK defaults to
 `2026-10-28.endive`. Both invoice adapters now use the supported per-request
-`RequestOptions.apiVersion` override to retain Dahlia on every network call.
+`RequestOptions.apiVersion` override to retain Dahlia on all ten reviewed SDK network call sites.
 No casts, type suppression, account changes, feature activation, new webhook
 endpoint or real transaction. Existing idempotency keys and golden fixtures stay
 unchanged. Main integration includes #343, #346, #348 and #349.
@@ -33,7 +33,11 @@ unchanged. Main integration includes #343, #346, #348 and #349.
   covers alias dot segments; local executable imports outside the scanned src
   boundary and escaping CommonJS loader values are rejected. New SDK use requires updating this
   scoped guard and its wire tests. This is
-  a source-level regression guard, not a general sandbox or security boundary.
+  a source-level SDK regression guard, not a general sandbox or network security
+  boundary. Static Stripe API hostname literals are rejected to catch common
+  direct REST transports, including constants, URL/Request constructors and
+  template prefixes. Arbitrarily assembled runtime destinations are not proven
+  safe by this syntax check.
 - Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
   test-only entropy from application IDs and restores it after each case; the
   real SDK and fetch behavior still run. No recorded fixtures were rewritten.

@@ -1,4 +1,4 @@
-// Keep the complete Stripe SDK call inventory small and reviewed. New adapters,
+// Keep the reviewed Stripe SDK call inventory small. New adapters,
 // aliases or endpoints must extend this guard and the wire-header regression.
 import { globSync, readFileSync } from "node:fs";
 import ts from "typescript";
@@ -76,6 +76,17 @@ function verifyInventory(inputs: typeof sources) {
 		);
 
 		const visit = (node: ts.Node) => {
+			// Direct REST transports are outside the reviewed SDK adapters. Reject
+			// static API-host literals even through constants, URL/Request constructors,
+			// concatenation or template prefixes. This is not arbitrary dataflow analysis.
+			if (
+				ts.isStringLiteralLike(node) ||
+				ts.isTemplateHead(node) ||
+				ts.isTemplateMiddle(node) ||
+				ts.isTemplateTail(node)
+			)
+				expect(node.text).not.toMatch(/\bapi\.stripe\.com\b/i);
+
 			// Loader values must not escape under aliases; only direct calls are reviewed.
 			if (ts.isExpression(node) && isRequire(node)) {
 				const owner = node.parent;
@@ -372,7 +383,7 @@ function verifyInventory(inputs: typeof sources) {
 	);
 }
 
-it("pins every production Stripe network call and confines SDK construction/consumers", () => {
+it("pins reviewed production Stripe SDK calls and confines SDK construction/consumers", () => {
 	verifyInventory(sources);
 });
 
@@ -573,6 +584,20 @@ it.each([
 	'import helper from "./missing-helper.mjs";',
 	'import helper from "~/missing-helper.mjs";',
 ])("rejects unresolved local module %s", (text) => {
+	expect(() =>
+		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
+	).toThrow();
+});
+
+it.each([
+	'fetch("https://api.stripe.com/v1/refunds", {method:"POST"});',
+	'const endpoint = "https://api.stripe.com/v1/refunds"; fetch(endpoint);',
+	'fetch(new URL("/v1/refunds", "https://api.stripe.com"));',
+	'fetch(new Request("https://api.stripe.com/v1/refunds"));',
+	'const host = "api.stripe.com"; fetch("https://" + host + "/v1/refunds");',
+	"fetch(`https://api.stripe.com/v1/${resource}`);",
+	'fetch("https://API.STRIPE.COM/v1/refunds");',
+])("rejects statically named direct Stripe REST transport %s", (text) => {
 	expect(() =>
 		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
 	).toThrow();
