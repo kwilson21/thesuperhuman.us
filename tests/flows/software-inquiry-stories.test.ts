@@ -1,7 +1,6 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { OwnerRequest } from "../../src/lib/owner-model";
 import {
 	type SoftwareInput,
 	validateSoftwareInquiry,
@@ -10,8 +9,8 @@ import type { OwnerIncident } from "../../src/lib/owner-alerts";
 import { submitInquiry } from "../../src/server/flows/software-inquiry";
 import {
 	Background,
-	BriefCopy,
-	BriefCopyFailed,
+	ClientCopyMail,
+	type ClientCopyOutcome,
 	MusicDb,
 	OwnerAlert,
 	RateLimit,
@@ -77,7 +76,7 @@ type Options = {
 	input?: SoftwareInput;
 	captcha?: "passed" | "refused" | "unavailable";
 	alertFails?: boolean;
-	copyFails?: boolean;
+	copy?: ClientCopyOutcome;
 	noticeFails?: boolean;
 	kv?: KVNamespace;
 };
@@ -112,15 +111,13 @@ const send = async (
 								told.alerts.push(incident);
 							}),
 					}),
-					Context.add(BriefCopy, {
-						deliver: (request: OwnerRequest) =>
-							options.copyFails
-								? Effect.fail(new BriefCopyFailed({ failure: "down" }))
-								: Effect.sync(() => {
-										told.copies.push(request.id);
+					Context.add(ClientCopyMail, {
+						send: (copy) =>
+							Effect.sync(() => {
+								told.copies.push(copy.to);
 
-										return "sent";
-									}),
+								return options.copy ?? "sent";
+							}),
 					}),
 					Context.add(SoftwareNotice, {
 						send: ({ requestId }) =>
@@ -219,13 +216,49 @@ describe("a visitor's brief", () => {
 		]);
 	});
 
-	it("fails with the copy's name when the client copy cannot be delivered, after the brief is stored", async () => {
-		const world = musicWorld();
+	it.each([
+		["refused", "failed"],
+		["uncertain", "uncertain"],
+		["unconfigured", "failed"],
+	] as const)(
+		"is stored and answered with the copy's status when the provider %s the copy",
+		async (copy, status) => {
+			const world = musicWorld();
+			const { answer } = await send(world, { copy });
 
-		expect((await send(world, { copyFails: true })).answer).toEqual({
-			kind: "BriefCopyFailed",
+			expect(answer).toMatchObject({ kind: "sent", clientCopyStatus: status });
+			expect(requests(world)).toHaveLength(1);
+			expect(
+				JSON.parse(
+					String(
+						world.sql.prepare("SELECT details_json FROM owner_requests").get()
+							?.details_json,
+					),
+				).clientCopyStatus,
+			).toBe(status);
+		},
+	);
+
+	it("is stored and answered as failed when the claim of the copy cannot be written", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const world = musicWorld({
+			beforeStatement: [
+				/clientCopyStatus','uncertain'/,
+				() => {
+					throw new Error("d1 down");
+				},
+			],
 		});
+
+		const { answer, told } = await send(world);
+
+		expect(answer).toMatchObject({ kind: "sent", clientCopyStatus: "failed" });
+		expect(told.copies).toEqual([]);
 		expect(requests(world)).toHaveLength(1);
+		expect(logged.mock.calls).toContainEqual([
+			"Client brief copy state is failed.",
+		]);
 	});
 });
 

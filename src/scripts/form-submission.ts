@@ -1,5 +1,15 @@
 import { openMessages } from "./form-messages";
 
+/** The first word of a name for a sent form's greeting, without punctuation that would double the sentence's own ("Dr." gives "Dr"). */
+export function greetingName(name: string | undefined) {
+	return (
+		(name ?? "")
+			.trim()
+			.split(/\s+/)[0]
+			.replace(/[.,;:!?]+$/, "") || "there"
+	);
+}
+
 /** Shared interaction states; each form retains its own payload and server rules. */
 export function setupFormSubmission<Payload, Result>({
 	form,
@@ -9,6 +19,8 @@ export function setupFormSubmission<Payload, Result>({
 	onSuccess,
 	onConflict,
 	onSendingChange,
+	hold,
+	keepalive = false,
 }: {
 	form: HTMLFormElement;
 	endpoint: string;
@@ -17,6 +29,10 @@ export function setupFormSubmission<Payload, Result>({
 	onSuccess?: (result: Result) => void;
 	onConflict?: () => void;
 	onSendingChange?: (sending: boolean) => void;
+	/** Runs before anything is sent. Resolving false sends nothing and leaves the form as it was, to be sent again. */
+	hold?: () => Promise<boolean>;
+	/** Lets the request finish after the page is left, for a send that starts as the visitor leaves. */
+	keepalive?: boolean;
 }) {
 	const button = form.querySelector<HTMLButtonElement>(
 		'button[type="submit"]',
@@ -52,6 +68,19 @@ export function setupFormSubmission<Payload, Result>({
 
 		if (pending || button.disabled) return;
 		pending = true;
+
+		if (hold) {
+			let send = false;
+
+			try {
+				send = await hold();
+			} finally {
+				if (!send) pending = false;
+			}
+
+			if (!send) return;
+		}
+
 		button.disabled = true;
 		button.textContent = "Sending…";
 		form.setAttribute("aria-busy", "true");
@@ -80,6 +109,7 @@ export function setupFormSubmission<Payload, Result>({
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body,
+				keepalive,
 				signal: AbortSignal.timeout(30_000),
 			});
 
@@ -140,6 +170,8 @@ export function setupFormSubmission<Payload, Result>({
 				(firstInvalid ?? status).focus();
 			});
 		} catch {
+			// As after an answer: the form is restored before its message shows, so the message can take focus.
+			onSendingChange?.(false);
 			openMessages(form, button, () => {
 				status.textContent =
 					"We couldn’t confirm your message was sent. Your text is still here. Try again or use email.";

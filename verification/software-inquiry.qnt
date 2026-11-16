@@ -12,7 +12,7 @@
 //                        already sent a brief in the window and the next one is refused; the loser of a race for the same
 //                        submission id answers with the stored brief and keeps the allowance it spent, so the key is
 //                        never deleted by a delivery that finds a brief stored
-//   the client's copy:   src/lib/software-brief-copy.ts, sent once for the request this delivery stored
+//   the client's copy:   src/server/flows/brief-copy.ts, sent once for the request this delivery stored (its claim is modelled in verification/brief-copy.qnt)
 // A delivery that finds its submission already stored keeps its key, whatever its address, so a stored brief keeps its
 // address's key and `keptForStored` holds without an exception: no modelled step deletes a key after a stored brief. The code
 // has one deletion the model leaves out, which predates the conversion: a failed insert (the database failing) gives back the

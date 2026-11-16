@@ -18,23 +18,24 @@ import { BASE, owner, resendOk, running } from "./areas/software-projects";
 // The golden corpus for POST /api/owner/requests/[id]/brief-copy: the owner sends (or re-sends) a software client a copy
 // of the brief they submitted, by email.
 //
-// Every response branch of the handler and of deliverSoftwareBriefCopy (src/lib/software-brief-copy.ts), and the cases:
+// Every response branch of the handler and of the brief copy flow (src/server/flows/brief-copy.ts), and the cases:
 //
 //   handler
 //   403 {ok:false}              a visitor, a signed-in client
-//   503 {ok:false}              no MUSIC_DB, no id param, empty id param
+//   503 {ok:false}              no MUSIC_DB
 //   musicRequest (1024 bytes)   403 no or foreign Origin; 415 text/plain, form, no content type; 400 no body; 413 over
 //                               1024 bytes; 400 Invalid JSON (bad JSON, empty body)
 //   400 {ok:false}              null, array, string, number body; no action, other action, non-text action;
 //                               confirmedNotSent not a boolean
-//   404 {ok:false}              unknown id, a request that is not software (service)
+//   404 {ok:false}              unknown id, no id param, empty id param, a request that is not software (service)
 //   409 "cannot be sent again"  the claim finds nothing: status sent, uncertain without confirmation, uncertain and too
 //                               recent even with confirmation, resolved, withdrawn, blank email
-//   503 "could not be sent"     the provider refused (failed), the network or 5xx (uncertain is still a 200), no
-//                               RESEND_API_KEY / CONTACT_FROM_EMAIL / CONTACT_TO_EMAIL, the claim throws, the lookup
-//                               throws (route catch), stored details that are not JSON (route catch)
-//   200 {ok:true}               sent, uncertain (network down, 5xx, a timeout) because "uncertain" is truthy
-//   deliverSoftwareBriefCopy    claim states: absent, failed, uncertain at 60s, uncertain at 61s with confirmation;
+//   503 "could not be sent"     no RESEND_API_KEY / CONTACT_FROM_EMAIL / CONTACT_TO_EMAIL (nothing was asked of the
+//                               provider)
+//   500 "could not be sent"     the provider refused (failed), the network or 5xx (uncertain), the claim throws, a status
+//                               write throws, the lookup throws, stored details that are not JSON or not an object
+//   200 {ok:true}               sent
+//   the brief copy flow         claim states: absent, failed, uncertain at 60s, uncertain at 61s with confirmation;
 //                               status write: normal, throws after the provider started (uncertain, no second write),
 //                               throws with no provider call (second write, failed), both writes throw (console.error),
 //                               another writer changed the attempt time (write finds no row, status still returned)
@@ -274,13 +275,13 @@ const cases: Case[] = [
 		steps: [send(GOOD)],
 	},
 	{
-		name: "the provider answers 500: uncertain, and the route says ok",
+		name: "the provider answers 500: uncertain, and the route answers 500",
 		music: { seed: withCopy(null) },
 		fetches: resend(json(500, {})),
 		steps: [send(GOOD)],
 	},
 	{
-		name: "the network is down: uncertain, and the route says ok",
+		name: "the network is down: uncertain, and the route answers 500",
 		music: { seed: withCopy(null) },
 		fetches: resend(networkDown()),
 		steps: [send(GOOD)],

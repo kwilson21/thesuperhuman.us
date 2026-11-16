@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { describe, expect, it } from "vitest";
 import {
+	alwaysDecideAndSave,
 	ChangedSinceRead,
 	decideAndSave,
 	guardedSave,
@@ -304,5 +305,72 @@ describe("the caller's recogniser", () => {
 		);
 
 		expect(failure._tag).toBe("ChangedSinceRead");
+	});
+});
+
+describe("alwaysDecideAndSave", () => {
+	it("reads, decides and saves, and answers what was decided without an option", async () => {
+		const answer = await Effect.runPromise(
+			alwaysDecideAndSave({
+				facts: Effect.succeed(1),
+				decide: (facts) => Effect.succeed(`w${facts}`),
+				save: (write) => Effect.succeed(`saved ${write}`),
+			}),
+		);
+
+		expect(answer).toEqual({ facts: 1, decided: "w1", saved: "saved w1" });
+	});
+
+	it("asks again on fresh facts when the guard raised, three tries in all", async () => {
+		let reads = 0;
+		let saves = 0;
+
+		const answer = await Effect.runPromise(
+			alwaysDecideAndSave({
+				facts: Effect.sync(() => ++reads),
+				decide: (facts) => Effect.succeed(facts),
+				save: (write) =>
+					++saves < 3
+						? Effect.fail(new ChangedSinceRead())
+						: Effect.succeed(write),
+			}),
+		);
+
+		expect(reads).toBe(3);
+		expect(answer.saved).toBe(3);
+
+		const failure = await Effect.runPromise(
+			Effect.flip(
+				alwaysDecideAndSave({
+					facts: Effect.sync(() => ++reads),
+					decide: (facts) => Effect.succeed(facts),
+					save: () => Effect.fail(new ChangedSinceRead()),
+				}),
+			),
+		);
+
+		expect(failure).toBeInstanceOf(SaveKeptChanging);
+	});
+
+	it("does not save when the rule refuses", async () => {
+		let saves = 0;
+
+		const failure = await Effect.runPromise(
+			Effect.flip(
+				alwaysDecideAndSave({
+					facts: Effect.succeed(1),
+					decide: () => Effect.fail("refused"),
+					save: () =>
+						Effect.sync(() => {
+							saves += 1;
+
+							return "x";
+						}),
+				}),
+			),
+		);
+
+		expect(failure).toBe("refused");
+		expect(saves).toBe(0);
 	});
 });

@@ -250,6 +250,11 @@ const PAGE_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": COMPARISON_PAGES,
 	"src/scripts/comparison-player.ts": COMPARISON_PAGES,
 	"src/lib/waveform.ts": COMPARISON_PAGES,
+	"src/lib/loudness-meter.ts": COMPARISON_PAGES,
+	"src/components/home/SignalEdge.astro": ["home"],
+	"src/scripts/home-worlds.ts": ["home"],
+	"src/scripts/home-signal.ts": ["home"],
+	"src/scripts/comparison-signal.ts": ["home"],
 	"src/components/audio/PlayIcon.astro": [
 		"audio-portfolio",
 		"audio-releases",
@@ -266,6 +271,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/audio-portfolio-filter.ts": ["audio-portfolio"],
 	"src/scripts/audio-releases-filter.ts": ["audio-releases"],
 	"src/scripts/audio-services-links.ts": ["audio-services"],
+	"src/components/ContactForm.astro": ["home"],
 	"src/scripts/contact-form.ts": ["home"],
 	"src/scripts/home-contact.ts": ["home"],
 	"src/scripts/music-detail-links.ts": ["music-old-news"],
@@ -285,8 +291,16 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/components/ContactForm.astro": ["home-contact"],
+	"src/scripts/contact-form.ts": ["home-contact"],
+	"src/scripts/home-contact.ts": ["home-contact"],
+	"src/components/Hero.astro": ["studio-objects"],
+	"src/components/home/StudioLife.astro": ["studio-objects"],
+	"src/scripts/studio-objects.ts": ["studio-objects"],
 	"src/data/work-with-me.ts": ["services-print"],
 	"src/data/project-stories/tally.ts": ["services-print"],
+	"src/data/writing.ts": ["studio-objects"],
+	"src/lib/music-catalog.ts": ["studio-objects"],
 	"src/data/project-stories/kaillera-next.ts": ["services-print"],
 	"src/components/SoftwareOffer.astro": ["software-offer"],
 	"src/components/owner/SoftwareOfferEditor.astro": [
@@ -305,7 +319,7 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief"],
+	"src/pages/software/start.astro": ["brief-examples", "website-brief"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -363,9 +377,17 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
-	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/styles/software-intake.css": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",
@@ -392,6 +414,10 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/lib/navigation-prefetch.ts": ["prefetch-trial"],
 	"src/scripts/project-timeline.ts": ["journal-pagination"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
+	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
+	"src/scripts/comparison-player.ts": ["loop-desk"],
+	"src/scripts/comparison-transport.ts": ["loop-desk"],
+	"src/lib/loudness-meter.ts": ["loop-desk"],
 };
 
 function routeForPageFile(file) {
