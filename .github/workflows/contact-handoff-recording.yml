@@ -27,7 +27,8 @@ jobs:
           MUSIC_PREVIEW_CONFIG=.screenshots/wrangler.json pnpm exec astro dev --config scripts/screenshots/dev.config.mjs --port 4321 --host 127.0.0.1 > astro.log 2>&1 &
           for i in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:4321/ && break; sleep 2; done
       - run: node scripts/screenshots/record-contact-handoff.mjs
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: contact-handoff-preview
           path: |
