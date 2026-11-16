@@ -112,7 +112,16 @@ function verifyInventory(inputs: typeof sources) {
 				moduleSpecifier = node.arguments[0].text;
 
 			if (moduleSpecifier !== undefined) {
-				for (const file of resolveModule(moduleSpecifier, path).files) {
+				const resolved = resolveModule(moduleSpecifier, path);
+
+				// Module imports are not public asset URLs. An unresolved local-looking
+				// path cannot silently leave the inventory (including Vite root paths).
+				if (/^(?:\.|~\/|\/)/.test(moduleSpecifier)) {
+					expect(resolved.unresolved).toBeUndefined();
+					expect(resolved.files.length).toBeGreaterThan(0);
+				}
+
+				for (const file of resolved.files) {
 					if (/\.(?:[cm]?[jt]sx?|astro)$/.test(file))
 						expect(posix.relative(process.cwd(), file).startsWith("src/")).toBe(
 							true,
@@ -551,6 +560,19 @@ it.each([
 	],
 	["outside reexport", 'export * from "../scripts/build-icons.mjs";'],
 ])("rejects %s", (_name, text) => {
+	expect(() =>
+		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
+	).toThrow();
+});
+
+it.each([
+	'import helper from "/scripts/build-icons.mjs";',
+	'const helper = await import("/scripts/build-icons.mjs");',
+	'export * from "/scripts/build-icons.mjs";',
+	'import helper from "/missing-helper.mjs";',
+	'import helper from "./missing-helper.mjs";',
+	'import helper from "~/missing-helper.mjs";',
+])("rejects unresolved local module %s", (text) => {
 	expect(() =>
 		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
 	).toThrow();
