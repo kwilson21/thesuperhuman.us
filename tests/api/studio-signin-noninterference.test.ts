@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -112,6 +113,9 @@ const waiters = new Map<string, () => void>();
 /** First steps granted to a request the route has taken up (see `arrive`); its first gated batch runs in that step without waiting. */
 const arrived = new Set<string>();
 
+/** The scheduled request whose route is running, and whether its first gated batch has ended (see `watchClock`). */
+const running = new AsyncLocalStorage<{ who: string; pastFirst: boolean }>();
+
 function pump() {
 	const waiting = waiters.get(script[0]);
 
@@ -162,6 +166,9 @@ function scripted(who: string, gated = true) {
 			try {
 				return await db.batch(items);
 			} finally {
+				const request = running.getStore();
+
+				if (request) request.pastFirst = true;
 				done();
 			}
 		},
@@ -227,11 +234,60 @@ function context(
  * allowance batches, which prune counters by the clock, the Turnstile check, and the reading of the clock that stamps the code or the
  * attempt) happens at the step's place in the schedule. Taken up at once, that work ran while earlier steps did, and whether it read
  * the clock before or after an `atomic` clock step depended on how fast its hashing ran, not on the schedule. After its first batch
- * a request reads no clock and writes only in its gated batches (the stubbed email is always accepted, so no code is discarded).
+ * a request reads no clock (`watchClock` fails an ordering in which it does) and writes only in its gated batches (the stubbed
+ * email is always accepted, so no code is discarded).
  */
 async function arrive(first: string) {
 	await gate(first);
 	arrived.add(first);
+}
+
+/**
+ * Records every reading of the clock made by a scheduled request's route after its first gated batch, until the returned function
+ * is called; that call puts the clock back and returns the readings. `arrive` places a request's clock readings only up to that
+ * batch: a later reading lands before or after an `atomic` clock step depending on how fast the request's own work runs, not on the
+ * schedule, so the ordering no longer tests what it names and the targets can differ by chance. A reading like that can pass every
+ * run unnoticed, so `explore` fails every ordering in which one happens.
+ */
+function watchClock() {
+	const watched = globalThis.Date;
+	const late: string[] = [];
+
+	const read = () => {
+		const request = running.getStore();
+
+		// The stack is Error, `read`, the trap, then the code that read the clock.
+		if (request?.pastFirst)
+			late.push(
+				`request ${request.who} in ${(new Error().stack ?? "").split("\n")[3]?.trim().replace(/^at /, "").replace(`${process.cwd()}/`, "")}`,
+			);
+	};
+
+	globalThis.Date = new Proxy(watched, {
+		construct: (target, args) => {
+			if (args.length === 0) read();
+
+			return Reflect.construct(target, args, target);
+		},
+		get: (target, property) => {
+			if (property === "now")
+				return () => {
+					read();
+
+					return target.now();
+				};
+
+			// SAFETY: every other property (`prototype`, `UTC`, `parse`, a symbol) is passed through unread; the key type only lets the
+			// constructor be indexed.
+			return target[property as keyof DateConstructor];
+		},
+	});
+
+	return () => {
+		globalThis.Date = watched;
+
+		return late;
+	};
 }
 
 async function send(
@@ -248,7 +304,11 @@ async function send(
 
 	if (first) await arrive(first);
 
-	const response = await handler(sent);
+	const response = first
+		? await running.run({ who: first.split(".")[0], pastFirst: false }, () =>
+				handler(sent),
+			)
+		: await handler(sent);
 
 	jar?.apply(response.clone(), url);
 
@@ -537,14 +597,26 @@ async function explore(scenario: Scenario, sampleEvery = 1) {
 			await flush();
 			resetAllowances();
 
-			const result = await withSchedule(
-				`${expect.getState().currentTestName}, target ${name}`,
-				schedule,
-				() =>
-					Promise.all(scenario.actors.map((actor) => actor.start(ADDR[name]))),
-			);
+			const run = `${expect.getState().currentTestName}, target ${name}`;
+			const stopWatching = watchClock();
+			let late: string[] = [];
+			let result: (Response | void)[];
 
-			await flush();
+			// The background work (the email) is watched too: it continues the request that started it.
+			try {
+				result = await withSchedule(run, schedule, () =>
+					Promise.all(scenario.actors.map((actor) => actor.start(ADDR[name]))),
+				);
+				await flush();
+			} finally {
+				late = stopWatching();
+			}
+
+			if (late.length)
+				throw new Error(
+					`${run}: the clock was read after a request's first gated batch (${late.join("; ")}). Schedule [${schedule.join(" ")}]. A request reads the clock at its first step's place in the schedule (see \`arrive\`); a later reading falls before or after a clock step by timing alone. Read the time before the first batch, or give the later reading a step of its own.`,
+				);
+
 			seen.set(
 				name,
 				await observe(
@@ -657,6 +729,51 @@ describe("withSchedule", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("fails an ordering in which a request reads the clock after its first batch, and names where", async () => {
+		const watchedBefore = globalThis.Date;
+		const readings: string[] = [];
+
+		// The request's database reads the clock before its clean-up batch, as a route that stamped its write after its read would.
+		const lateClock = (who: string) => {
+			const database = scripted(who);
+
+			return double<D1Database>({
+				prepare: (query: string) => database.prepare(query),
+				batch: async (items: D1PreparedStatement[]) => {
+					if (kindOf(items) === "c") readings.push(new Date().toISOString());
+
+					return database.batch(items);
+				},
+			});
+		};
+
+		await expect(
+			explore({
+				actors: [
+					{
+						steps: ["R.r", "R.c", "R.w"],
+						start: () =>
+							send(
+								"/api/studio/code",
+								{ email: ADDR.client, turnstileToken: "ok" },
+								K1,
+								lateClock("R"),
+								"R.r",
+							),
+					},
+				],
+				pairs: [[K1, ADDR.client]],
+				sent: [K1],
+				targets: ["open"],
+			}),
+		).rejects.toThrow(
+			/target open: the clock was read after a request's first gated batch \(request R in .*noninterference\.test\.ts:\d+/,
+		);
+		expect(readings).toHaveLength(1);
+		// The clock is put back when the ordering fails.
+		expect(globalThis.Date).toBe(watchedBefore);
 	});
 });
 
