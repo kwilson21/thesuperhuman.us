@@ -72,9 +72,7 @@ describe("a project's stage", () => {
 
 	it("reads each move's list from the machine, and each move sets one stage", () => {
 		for (const event of PROJECT_EVENTS) {
-			expect(PROJECT_MOVES[event].from).toEqual(
-				sourcesOf(audioProject, event),
-			);
+			expect(PROJECT_MOVES[event].from).toEqual(sourcesOf(audioProject, event));
 
 			for (const stage of PROJECT_MOVES[event].from)
 				expect(next(audioProject, stage, event)).toBe(PROJECT_MOVES[event].to);

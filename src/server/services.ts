@@ -10,6 +10,7 @@ import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { IntakeInput } from "../lib/audio-intake";
 import { deliverProjectInvitation } from "../lib/audio-project-invitations";
+import { deliverProjectUpdateNotice } from "../lib/audio-project-updates";
 import {
 	sendAudioMessage,
 	sendOwnerRequestNotice,
@@ -618,6 +619,34 @@ export const liveProjectInvitation = (db: D1Database, env: Env) =>
 			Effect.tryPromise({
 				try: () => deliverProjectInvitation(db, requestId, env),
 				catch: () => new ProjectInvitationFailed(),
+			}),
+	});
+
+/** The studio update notice could not be delivered or its state is uncertain. */
+export class ProjectUpdateNoticeFailed extends Data.TaggedError(
+	"ProjectUpdateNoticeFailed",
+) {}
+
+/**
+ * The email of one stored update to the client (src/lib/audio-project-updates.ts `deliverProjectUpdateNotice`, which claims
+ * the notice, finds the recipient and sends). A file's publish and revoke start it in the background.
+ */
+export class ProjectUpdateNotice extends Context.Service<
+	ProjectUpdateNotice,
+	{
+		readonly deliver: (
+			updateId: number,
+		) => Effect.Effect<void, ProjectUpdateNoticeFailed>;
+	}
+>()("site/ProjectUpdateNotice") {}
+
+/** The update notice through the project store in `db` and Resend, with the env the request gives. */
+export const liveProjectUpdateNotice = (db: D1Database, env: Env) =>
+	Context.make(ProjectUpdateNotice, {
+		deliver: (updateId) =>
+			Effect.tryPromise({
+				try: () => deliverProjectUpdateNotice(db, updateId, env),
+				catch: () => new ProjectUpdateNoticeFailed(),
 			}),
 	});
 

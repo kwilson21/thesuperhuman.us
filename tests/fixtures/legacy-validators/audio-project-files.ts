@@ -38,7 +38,9 @@ const complete = z.object({
 });
 
 const abort = z.object({ action: z.literal("abort"), uploadId: id });
+
 const recover = z.object({ action: z.literal("recover"), uploadId: id });
+
 const uploadInput = z.discriminatedUnion("action", [
 	start,
 	complete,

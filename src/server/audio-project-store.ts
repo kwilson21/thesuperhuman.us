@@ -10,13 +10,38 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { REVISION_ROUNDS, roundsUsed } from "../lib/audio-project-messages";
+import {
+	concurrentWriteToKey,
+	multipartPartInvalid,
+	multipartUploadGone,
+	objectStoreUnavailable,
+} from "../lib/object-store-errors";
+import { ChangedSinceRead, raisedByJsonGuard } from "./guarded-save";
+import {
+	PROJECT_MOVES,
+	PROJECT_STAGES,
+	type ProjectStage,
+} from "./machines/audio-project";
+import {
+	FILE_MOVES,
+	FILE_STATUSES,
+	type FileStatus,
+} from "./machines/project-file";
+import type {
+	PublishedFile,
+	StoredDraftFile,
+	StoredPayment,
+	StoredRevokeFile,
+} from "./rules/audio-project-files";
+import type { StoredUpload } from "./rules/audio-project-uploads";
+import type { StoredClientFile } from "./rules/studio-project-file";
 import type {
 	StoredDecision,
 	StoredFile,
 	StoredMessage,
 	StoredUpdate,
 } from "./rules/audio-project-messages";
-import { MusicDb } from "./services";
+import { AudioBucket, MusicDb } from "./services";
 
 /** A D1 call failed, or a row was not the shape its table has. The cause is for the route's log. */
 export class AudioProjectStoreFailed extends Data.TaggedError(
@@ -117,20 +142,33 @@ const batched = (statements: (db: D1Database) => D1PreparedStatement[]) =>
 		(await db.batch(statements(db))).map((result) => result.results),
 	);
 
+const projectStatement = (db: D1Database, requestId: string) =>
+	db
+		.prepare(
+			"SELECT request_id,stage,revoked_at FROM audio_projects WHERE request_id=?",
+		)
+		.bind(requestId);
+
+const requestStatement = (db: D1Database, requestId: string) =>
+	db
+		.prepare("SELECT status,email FROM owner_requests WHERE id=?")
+		.bind(requestId);
+
+const paymentStatement = (db: D1Database, requestId: string) =>
+	db
+		.prepare(
+			"SELECT booking_status,balance_status FROM audio_payments WHERE request_id=?",
+		)
+		.bind(requestId);
+
 /**
  * Plain reads in ONE batch (one snapshot): the project, and the request it belongs to. Neither is filtered, so a project the
  * client may not see reads like one it may.
  */
 export const readProjectFacts = (requestId: string) =>
 	batched((db) => [
-		db
-			.prepare(
-				"SELECT request_id,stage,revoked_at FROM audio_projects WHERE request_id=?",
-			)
-			.bind(requestId),
-		db
-			.prepare("SELECT status,email FROM owner_requests WHERE id=?")
-			.bind(requestId),
+		projectStatement(db, requestId),
+		requestStatement(db, requestId),
 	]).pipe(
 		Effect.flatMap(([projects, requests]) =>
 			Effect.all({
@@ -419,3 +457,731 @@ export const markOwnerMessageRead = (
 			.bind(at, messageId, requestId, "owner", tokenHash, at)
 			.run(),
 	).pipe(Effect.asVoid);
+
+// ---- the files, the uploads and the objects (docs/plans/2026-11-audio-projects-conversion.md, sections 3 and 4) ----
+
+const PaymentRow = Schema.Struct({
+	booking_status: text,
+	balance_status: text,
+});
+
+const Version = Schema.Literals(["review", "final"]);
+
+const MediaType = Schema.Literals(["audio/mpeg", "audio/wav"]);
+
+const DraftFileRow = Schema.Struct({
+	id: text,
+	request_id: text,
+	version: Version,
+	object_key: text,
+	media_type: MediaType,
+	byte_size: Schema.Number,
+	status: text,
+});
+
+const RevokeFileRow = Schema.Struct({ version: Version, status: text });
+
+const PublishedFileRow = Schema.Struct({ id: text, version: Version });
+
+const IdRow = Schema.Struct({ id: Schema.Number });
+
+const TextIdRow = Schema.Struct({ id: text });
+
+const UploadRow = Schema.Struct({
+	id: text,
+	request_id: text,
+	upload_id: text,
+	object_key: text,
+	version: Version,
+	display_name: text,
+	media_type: MediaType,
+	byte_size: Schema.Number,
+	state: Schema.Literals(["pending", "discarding"]),
+	created_at: text,
+});
+
+const ClientFileRow = Schema.Struct({
+	id: text,
+	request_id: text,
+	version: Version,
+	object_key: text,
+	display_name: text,
+	media_type: MediaType,
+	byte_size: Schema.Number,
+	downloadable: Schema.Number,
+	status: text,
+	published_at: maybeText,
+	expires_at: maybeText,
+	revoked_at: maybeText,
+});
+
+/** A stage the machine names, written into SQL as a literal; anything else is a bug, never a value from a request. */
+function stageLiteral(stage: ProjectStage): string {
+	if (!PROJECT_STAGES.includes(stage))
+		throw new Error(`Not a stage the machine names: ${stage}`);
+
+	return `'${stage}'`;
+}
+
+/** A status the machine names, written into SQL as a literal. */
+function statusLiteral(status: FileStatus): string {
+	if (!FILE_STATUSES.includes(status))
+		throw new Error(`Not a status the machine names: ${status}`);
+
+	return `'${status}'`;
+}
+
+/** `p.stage IN ('a','b')`, the stages a move is allowed from, as the machine lists them. */
+const stageIn = (stages: readonly ProjectStage[]) =>
+	`p.stage IN (${stages.map(stageLiteral).join(",")})`;
+
+/** `status IN ('a','b')` for the statuses a move is allowed from. */
+const statusIn = (statuses: readonly FileStatus[]) =>
+	`status IN (${statuses.map(statusLiteral).join(",")})`;
+
+/** Runs one batch whose guards raise ("malformed JSON") when what a rule read has changed: a raised guard is `ChangedSinceRead`. */
+const guardedBatch = (statements: (db: D1Database) => D1PreparedStatement[]) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		return yield* Effect.tryPromise({
+			try: () => db.batch(statements(db)),
+			catch: (cause) =>
+				cause instanceof Error && raisedByJsonGuard(cause)
+					? new ChangedSinceRead()
+					: new AudioProjectStoreFailed({ failure: cause }),
+		});
+	});
+
+/** The batch guard: the batch rolls back, and `decideAndSave` decides again, unless `condition` holds. */
+const batchGuard = (db: D1Database, condition: string) =>
+	db.prepare(
+		`SELECT CASE WHEN ${condition} THEN 1 ELSE json_extract('Project files changed','$') END`,
+	);
+
+/** What the facts of a project's readiness for a file hold, read in ONE batch (one snapshot). */
+export type ProjectPaymentFacts = {
+	readonly project: typeof ProjectRow.Type | null;
+	readonly request: typeof RequestRow.Type | null;
+	readonly payment: StoredPayment | null;
+};
+
+/** Plain reads in ONE batch: the project, its request and its payment. */
+export const readProjectWithPayment = (requestId: string) =>
+	batched((db) => [
+		projectStatement(db, requestId),
+		requestStatement(db, requestId),
+		paymentStatement(db, requestId),
+	]).pipe(
+		Effect.flatMap(([projects, requests, payments]) =>
+			Effect.all({
+				project: rowsOf(ProjectRow, projects ?? []),
+				request: rowsOf(RequestRow, requests ?? []),
+				payment: rowsOf(PaymentRow, payments ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): ProjectPaymentFacts => ({
+				project: rows.project[0] ?? null,
+				request: rows.request[0] ?? null,
+				payment: rows.payment[0] ?? null,
+			}),
+		),
+	);
+
+/** What a publish reads: the file, the project, the request, the payment and the project's live review files. */
+export type PublishFacts = ProjectPaymentFacts & {
+	readonly file: StoredDraftFile | null;
+	readonly live: readonly PublishedFile[];
+};
+
+/** P1: plain reads in ONE batch (one snapshot): the file, the project, the request, the payment and the published files. */
+export const readPublishFacts = (requestId: string, fileId: string) =>
+	batched((db) => [
+		db
+			.prepare(`SELECT id,request_id,version,object_key,media_type,byte_size,status
+    FROM audio_project_files WHERE id=? AND request_id=?`)
+			.bind(fileId, requestId),
+		projectStatement(db, requestId),
+		requestStatement(db, requestId),
+		paymentStatement(db, requestId),
+		db
+			.prepare(
+				"SELECT id,version FROM audio_project_files WHERE request_id=? AND status='published'",
+			)
+			.bind(requestId),
+	]).pipe(
+		Effect.flatMap(([files, projects, requests, payments, published]) =>
+			Effect.all({
+				file: rowsOf(DraftFileRow, files ?? []),
+				project: rowsOf(ProjectRow, projects ?? []),
+				request: rowsOf(RequestRow, requests ?? []),
+				payment: rowsOf(PaymentRow, payments ?? []),
+				live: rowsOf(PublishedFileRow, published ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): PublishFacts => ({
+				file: rows.file[0] ?? null,
+				project: rows.project[0] ?? null,
+				request: rows.request[0] ?? null,
+				payment: rows.payment[0] ?? null,
+				live: rows.live,
+			}),
+		),
+	);
+
+/** What a publish writes. */
+export type PublishWrite = {
+	readonly fileId: string;
+	readonly requestId: string;
+	readonly version: "review" | "final";
+	readonly downloadable: boolean;
+	readonly at: string;
+	readonly expiresAt: string | null;
+	readonly publicationId: string;
+	readonly note: string;
+	readonly actor: string;
+	readonly targetStage: ProjectStage;
+	readonly supersedes: readonly string[];
+};
+
+/**
+ * P2 to P5 in ONE batch. The guard comes first and raises when the live review files are no longer the ones the rule read, so
+ * the batch rolls back and the rule decides again. P2 is the compare-and-set: the file is still uploaded, the project is open,
+ * the request is not withdrawn, the booking is paid (a final also the balance) and the stage allows the version; P3 revokes the
+ * live review files this decision named, P4 sets the stage and P5 writes the client's update, each linked to P2 by the
+ * publication id. The id of the update, or null when P2 changed nothing (the answer is 409 at once).
+ */
+export const publishFileBatch = (write: PublishWrite) =>
+	guardedBatch((db) => {
+		const stages = stageIn(
+			write.version === "review"
+				? PROJECT_MOVES.PUBLISH_REVIEW.from
+				: PROJECT_MOVES.PUBLISH_FINAL.from,
+		);
+
+		const settled =
+			write.version === "final" ? " AND pay.balance_status='paid'" : "";
+
+		return [
+			batchGuard(
+				db,
+				`(SELECT json_group_array(id) FROM (SELECT id FROM audio_project_files WHERE request_id=? AND version='review' AND status='published' AND id<>? ORDER BY id))=?`,
+			).bind(
+				write.requestId,
+				write.fileId,
+				JSON.stringify([...write.supersedes].sort()),
+			),
+			db
+				.prepare(`UPDATE audio_project_files SET status='published',downloadable=?,published_at=?,expires_at=?,publication_id=?
+      WHERE id=? AND request_id=? AND ${statusIn(FILE_MOVES.PUBLISH)}
+        AND EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+          JOIN audio_payments pay ON pay.request_id=p.request_id
+          WHERE p.request_id=audio_project_files.request_id AND p.revoked_at IS NULL AND r.status<>'withdrawn'
+            AND pay.booking_status='paid' AND ${stages}${settled})
+      RETURNING id`)
+				.bind(
+					write.downloadable ? 1 : 0,
+					write.at,
+					write.expiresAt,
+					write.publicationId,
+					write.fileId,
+					write.requestId,
+				),
+			...(write.supersedes.length === 0
+				? []
+				: [
+						db
+							.prepare(`UPDATE audio_project_files SET status='revoked',revoked_at=?
+      WHERE request_id=? AND version='review' AND ${statusIn(FILE_MOVES.SUPERSEDE)} AND id<>? AND id IN (${write.supersedes.map(() => "?").join(",")})
+        AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=? AND publication_id=?)`)
+							.bind(
+								write.at,
+								write.requestId,
+								write.fileId,
+								...write.supersedes,
+								write.fileId,
+								write.publicationId,
+							),
+					]),
+			db
+				.prepare(`UPDATE audio_projects SET stage=?,updated_at=? WHERE request_id=?
+      AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=? AND publication_id=?)`)
+				.bind(
+					write.targetStage,
+					write.at,
+					write.requestId,
+					write.fileId,
+					write.publicationId,
+				),
+			db
+				.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,file_id)
+      SELECT request_id,'progress',?,?,?,id FROM audio_project_files
+      WHERE id=? AND publication_id=? AND status='published' RETURNING id`)
+				.bind(
+					write.note,
+					write.actor,
+					write.at,
+					write.fileId,
+					write.publicationId,
+				),
+		];
+	}).pipe(
+		Effect.flatMap((results) => {
+			const changed = results[1]?.results ?? [];
+			const update = results[results.length - 1]?.results ?? [];
+
+			return changed.length === 0
+				? Effect.succeed(null)
+				: rowsOf(IdRow, update).pipe(Effect.map((rows) => rows[0]?.id ?? null));
+		}),
+	);
+
+/** What a revoke reads: the file, the project and the project's published files. */
+export type RevokeFacts = {
+	readonly file: StoredRevokeFile | null;
+	readonly project: typeof ProjectRow.Type | null;
+	readonly published: readonly PublishedFile[];
+};
+
+/** FR1: plain reads in ONE batch (one snapshot): the file, the project and the project's published files. */
+export const readRevokeFacts = (requestId: string, fileId: string) =>
+	batched((db) => [
+		db
+			.prepare(
+				`SELECT version,status FROM audio_project_files WHERE request_id=? AND id=?`,
+			)
+			.bind(requestId, fileId),
+		projectStatement(db, requestId),
+		db
+			.prepare(
+				"SELECT id,version FROM audio_project_files WHERE request_id=? AND status='published'",
+			)
+			.bind(requestId),
+	]).pipe(
+		Effect.flatMap(([files, projects, published]) =>
+			Effect.all({
+				file: rowsOf(RevokeFileRow, files ?? []),
+				project: rowsOf(ProjectRow, projects ?? []),
+				published: rowsOf(PublishedFileRow, published ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): RevokeFacts => ({
+				file: rows.file[0] ?? null,
+				project: rows.project[0] ?? null,
+				published: rows.published,
+			}),
+		),
+	);
+
+/** What a revoke writes. */
+export type RevokeWrite = {
+	readonly requestId: string;
+	readonly fileId: string;
+	readonly actor: string;
+	readonly note: string;
+	readonly at: string;
+	readonly revocationId: string;
+	/** The status the file was read in, which the write compares. */
+	readonly status: string;
+	readonly version: "review" | "final";
+	/** The stage the rule read, and the version's other published files it read: the batch guard compares both. */
+	readonly stage: string;
+	readonly others: readonly string[];
+	readonly reset: boolean;
+};
+
+/**
+ * FR2 to FR5 in ONE batch. The guard comes first and raises when the stage or the version's other published files are no
+ * longer the ones the rule decided the reset from, so the batch rolls back and the rule decides again. FR2 is the
+ * compare-and-set (the file still has the status read, the project is open); FR3 resets the stage only when the rule decided
+ * it and FR2 landed (the revocation id links them); FR4 writes its audit row only when FR3 changed the stage (`changes()`
+ * right after FR3); FR5 writes the client's note for a published file. Null when FR2 changed nothing (the answer is 409 at
+ * once), otherwise the update's id, or null inside when no note was written.
+ */
+export const revokeFileBatch = (write: RevokeWrite) =>
+	guardedBatch((db) => {
+		const back =
+			PROJECT_MOVES[
+				write.version === "review" ? "REVOKE_REVIEW" : "REVOKE_FINAL"
+			].to;
+
+		const published = write.status === "published";
+
+		return [
+			batchGuard(
+				db,
+				`(SELECT stage FROM audio_projects WHERE request_id=?)=? AND (SELECT json_group_array(id) FROM (SELECT id FROM audio_project_files WHERE request_id=? AND version=? AND status='published' AND id<>? ORDER BY id))=?`,
+			).bind(
+				write.requestId,
+				write.stage,
+				write.requestId,
+				write.version,
+				write.fileId,
+				JSON.stringify([...write.others].sort()),
+			),
+			db
+				.prepare(`UPDATE audio_project_files SET status='revoked',revoked_at=?,revoked_by=?,revocation_id=?
+      WHERE request_id=? AND id=? AND status=?
+        AND EXISTS(SELECT 1 FROM audio_projects WHERE request_id=? AND revoked_at IS NULL)
+      RETURNING id`)
+				.bind(
+					write.at,
+					write.actor,
+					write.revocationId,
+					write.requestId,
+					write.fileId,
+					write.status,
+					write.requestId,
+				),
+			...(write.reset
+				? [
+						db
+							.prepare(`UPDATE audio_projects SET stage=?,completed_at=NULL,updated_at=? WHERE request_id=?
+      AND stage=? AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=? AND revocation_id=?)`)
+							.bind(
+								back,
+								write.at,
+								write.requestId,
+								write.stage,
+								write.fileId,
+								write.revocationId,
+							),
+						db
+							.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'stage-changed',?,? FROM audio_projects
+      WHERE request_id=? AND stage=? AND updated_at=? AND changes()=1`)
+							.bind(write.actor, write.at, write.requestId, back, write.at),
+					]
+				: []),
+			...(published
+				? [
+						db
+							.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
+    SELECT request_id,'progress',?,?,? FROM audio_project_files WHERE id=? AND revocation_id=?
+    RETURNING id`)
+							.bind(
+								write.note,
+								write.actor,
+								write.at,
+								write.fileId,
+								write.revocationId,
+							),
+					]
+				: []),
+		];
+	}).pipe(
+		Effect.flatMap(
+			(
+				results,
+			): Effect.Effect<
+				{ readonly updateId: number | null } | null,
+				AudioProjectStoreFailed
+			> => {
+				const changed = results[1]?.results ?? [];
+
+				if (changed.length === 0) return Effect.succeed(null);
+
+				return write.status === "published"
+					? rowsOf(IdRow, results[results.length - 1]?.results ?? []).pipe(
+							Effect.map((rows) => ({ updateId: rows[0]?.id ?? null })),
+						)
+					: Effect.succeed({ updateId: null });
+			},
+		),
+	);
+
+/** S3: plain read: the upload of the project with this id, or null. */
+export const readUpload = (requestId: string, id: string) =>
+	readAll(UploadRow, (db) =>
+		db
+			.prepare(`SELECT id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at
+    FROM audio_project_uploads WHERE request_id=? AND id=?`)
+			.bind(requestId, id),
+	).pipe(Effect.map((rows): StoredUpload | null => rows[0] ?? null));
+
+/** The project takes a file of `version` (SQL guard of S2 and S4): open, request not withdrawn, booking paid, stage the machine lists. */
+const takesFile = (
+	version: "review" | "final",
+) => `EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+  LEFT JOIN audio_payments pay ON pay.request_id=p.request_id
+  WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn'
+    AND ${stageIn(version === "review" ? PROJECT_MOVES.PUBLISH_REVIEW.from : PROJECT_MOVES.PUBLISH_FINAL.from)}
+    AND pay.booking_status='paid')`;
+
+/** What a new upload writes. */
+export type UploadWrite = {
+	readonly id: string;
+	readonly requestId: string;
+	readonly uploadId: string;
+	readonly key: string;
+	readonly version: "review" | "final";
+	readonly displayName: string;
+	readonly mediaType: "audio/mpeg" | "audio/wav";
+	readonly byteSize: number;
+	readonly at: string;
+};
+
+/** S2, compare-and-set: the upload row, written while the project takes a file of its version. Null when it no longer does. */
+export const insertUpload = (write: UploadWrite) =>
+	returned(UploadRow, (db) =>
+		db
+			.prepare(`INSERT INTO audio_project_uploads(id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,created_at)
+      SELECT ?,?,?,?,?,?,?,?,? WHERE ${takesFile(write.version)}
+      RETURNING id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at`)
+			.bind(
+				write.id,
+				write.requestId,
+				write.uploadId,
+				write.key,
+				write.version,
+				write.displayName,
+				write.mediaType,
+				write.byteSize,
+				write.at,
+				write.requestId,
+			),
+	);
+
+/**
+ * S4, compare-and-set: the file row of a finished upload, written while the upload is still pending and the project takes a
+ * file of its version; a file row that already exists is left as it is. The file's id, or null when nothing was written.
+ */
+export const insertFileFromUpload = (
+	upload: StoredUpload,
+	peaks: readonly number[] | null,
+	at: string,
+) =>
+	returned(TextIdRow, (db) =>
+		db
+			.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,uploaded_at,peaks)
+    SELECT id,request_id,version,object_key,display_name,media_type,byte_size,?,?
+    FROM audio_project_uploads WHERE id=? AND request_id=? AND state='pending' AND ${takesFile(upload.version)}
+    ON CONFLICT(id) DO NOTHING RETURNING id`)
+			.bind(
+				at,
+				peaks ? JSON.stringify(peaks) : null,
+				upload.id,
+				upload.request_id,
+				upload.request_id,
+			),
+	).pipe(Effect.map((row) => row?.id ?? null));
+
+/** S5: plain read: the id of the project's file with this id, or null. */
+export const readFileId = (requestId: string, id: string) =>
+	readAll(TextIdRow, (db) =>
+		db
+			.prepare("SELECT id FROM audio_project_files WHERE id=? AND request_id=?")
+			.bind(id, requestId),
+	).pipe(Effect.map((rows) => rows[0]?.id ?? null));
+
+/** S6 and S8, write guarded by key: the upload row is deleted. */
+export const deleteUploadRow = (requestId: string, id: string) =>
+	asked((db) =>
+		db
+			.prepare("DELETE FROM audio_project_uploads WHERE id=? AND request_id=?")
+			.bind(id, requestId)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** S7, compare-and-set: the upload is marked discarding while no file row exists for it. The upload's id, or null. */
+export const markUploadDiscarding = (requestId: string, id: string) =>
+	returned(TextIdRow, (db) =>
+		db
+			.prepare(`UPDATE audio_project_uploads SET state='discarding'
+    WHERE id=? AND request_id=? AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?) RETURNING id`)
+			.bind(id, requestId, id),
+	).pipe(Effect.map((row) => row?.id ?? null));
+
+/** S9, compare-and-set: the discarding upload row is deleted while no file row exists for it. */
+export const deleteDiscardedUpload = (requestId: string, id: string) =>
+	asked((db) =>
+		db
+			.prepare(`DELETE FROM audio_project_uploads WHERE id=? AND request_id=? AND state='discarding'
+    AND NOT EXISTS(SELECT 1 FROM audio_project_files WHERE id=?)`)
+			.bind(id, requestId, id)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** What the client's read of a file reads: the file, the project, the request and the payment, in ONE batch (one snapshot). */
+export type ClientFileFacts = ProjectPaymentFacts & {
+	readonly file: StoredClientFile | null;
+};
+
+/** C1 and C2: plain reads in ONE batch: the file (whatever its status), the project, the request and the payment. */
+export const readClientFileFacts = (requestId: string, fileId: string) =>
+	batched((db) => [
+		db
+			.prepare(`SELECT f.id,f.request_id,f.version,f.object_key,f.display_name,f.media_type,f.byte_size,f.downloadable,f.status,f.published_at,f.expires_at,f.revoked_at
+    FROM audio_project_files f WHERE f.request_id=? AND f.id=?`)
+			.bind(requestId, fileId),
+		projectStatement(db, requestId),
+		requestStatement(db, requestId),
+		paymentStatement(db, requestId),
+	]).pipe(
+		Effect.flatMap(([files, projects, requests, payments]) =>
+			Effect.all({
+				file: rowsOf(ClientFileRow, files ?? []),
+				project: rowsOf(ProjectRow, projects ?? []),
+				request: rowsOf(RequestRow, requests ?? []),
+				payment: rowsOf(PaymentRow, payments ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): ClientFileFacts => ({
+				file: rows.file[0] ?? null,
+				project: rows.project[0] ?? null,
+				request: rows.request[0] ?? null,
+				payment: rows.payment[0] ?? null,
+			}),
+		),
+	);
+
+/** FA1, write guarded by key: the first and the last time this session streamed or downloaded the file. */
+export const recordFileAccess = (
+	fileId: string,
+	tokenHash: string,
+	download: boolean,
+	at: string,
+) =>
+	asked((db) =>
+		db
+			.prepare(`INSERT INTO audio_project_file_access(file_id,session_token_hash,access_kind,first_at,last_at)
+    VALUES (?,?,?,?,?) ON CONFLICT(file_id,session_token_hash,access_kind) DO UPDATE SET last_at=excluded.last_at`)
+			.bind(fileId, tokenHash, download ? "download" : "stream", at, at)
+			.run(),
+	).pipe(Effect.asVoid);
+
+// ---- the objects in R2 ----
+
+/** R2 is unavailable (error 10043). A known outage: the route answers 503 with its sentence and logs nothing. */
+export class ObjectStoreUnavailable extends Data.TaggedError(
+	"ObjectStoreUnavailable",
+) {}
+
+/** An R2 call failed for another reason. The cause is for the route's log. */
+export class ObjectStoreFailed extends Data.TaggedError("ObjectStoreFailed")<{
+	readonly failure: unknown;
+}> {}
+
+/** R2 no longer has the multipart upload (error 10024): an abort or the incomplete-upload lifecycle got there first. */
+export class MultipartGone extends Data.TaggedError("MultipartGone")<{
+	readonly failure: unknown;
+}> {}
+
+/** R2 refused a completion for a part it lists as missing or with another entity tag (error 10025). */
+export class MultipartPartInvalid extends Data.TaggedError(
+	"MultipartPartInvalid",
+) {}
+
+/** R2 refused a completion for writing one key too often (error 10058): temporary, and another completion may have won. */
+export class ConcurrentWrite extends Data.TaggedError("ConcurrentWrite") {}
+
+/** The failure of an R2 call that has no code of its own to read. */
+const objectFailure = (cause: unknown) =>
+	objectStoreUnavailable(cause)
+		? new ObjectStoreUnavailable()
+		: new ObjectStoreFailed({ failure: cause });
+
+const withBucket = <A, E>(
+	run: (bucket: R2Bucket) => Promise<A>,
+	failure: (cause: unknown) => E,
+) =>
+	Effect.gen(function* () {
+		const bucket = yield* AudioBucket;
+
+		return yield* Effect.tryPromise({
+			try: () => run(bucket),
+			catch: failure,
+		});
+	});
+
+/** Plain read: the object's metadata, or null when there is none. */
+export const headObject = (key: string) =>
+	withBucket((bucket) => bucket.head(key), objectFailure);
+
+/** Plain read: the object, or the part of it a range names, or null when there is none. */
+export const getObject = (
+	key: string,
+	range: { readonly offset: number; readonly length: number } | null,
+) =>
+	withBucket(
+		(bucket) => bucket.get(key, range ? { range } : undefined),
+		objectFailure,
+	);
+
+/** The object is removed. */
+export const deleteObject = (key: string) =>
+	withBucket((bucket) => bucket.delete(key), objectFailure);
+
+/** A multipart upload is opened for the key. */
+export const createMultipart = (
+	key: string,
+	mediaType: "audio/mpeg" | "audio/wav",
+) =>
+	withBucket(
+		(bucket) =>
+			bucket.createMultipartUpload(key, {
+				httpMetadata: { contentType: mediaType },
+			}),
+		objectFailure,
+	);
+
+/** A multipart upload this request opened is dropped; the caller ignores a failure, as the cleanup is best effort. */
+export const abortOpened = (opened: R2MultipartUpload) =>
+	Effect.tryPromise({
+		try: () => opened.abort(),
+		catch: objectFailure,
+	});
+
+/** One part of a multipart upload. R2 no longer having the upload is `MultipartGone`. */
+export const uploadPart = (
+	upload: StoredUpload,
+	partNumber: number,
+	body: ArrayBuffer,
+) =>
+	withBucket(
+		(bucket) =>
+			bucket
+				.resumeMultipartUpload(upload.object_key, upload.upload_id)
+				.uploadPart(partNumber, body),
+		(cause) =>
+			multipartUploadGone(cause)
+				? new MultipartGone({ failure: cause })
+				: objectFailure(cause),
+	);
+
+/** The multipart upload is completed with these parts. The refusals R2 gives for a lost or contested upload have names. */
+export const completeMultipart = (
+	upload: StoredUpload,
+	parts: readonly R2UploadedPart[],
+) =>
+	withBucket(
+		(bucket) =>
+			bucket
+				.resumeMultipartUpload(upload.object_key, upload.upload_id)
+				.complete([...parts]),
+		(cause) => {
+			if (multipartPartInvalid(cause)) return new MultipartPartInvalid();
+
+			if (multipartUploadGone(cause))
+				return new MultipartGone({ failure: cause });
+
+			return concurrentWriteToKey(cause)
+				? new ConcurrentWrite()
+				: objectFailure(cause);
+		},
+	);
+
+/** The multipart upload is aborted. R2 no longer having it is `MultipartGone`. */
+export const abortMultipart = (upload: StoredUpload) =>
+	withBucket(
+		(bucket) =>
+			bucket.resumeMultipartUpload(upload.object_key, upload.upload_id).abort(),
+		(cause) =>
+			multipartUploadGone(cause)
+				? new MultipartGone({ failure: cause })
+				: objectFailure(cause),
+	);

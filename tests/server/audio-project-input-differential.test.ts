@@ -361,7 +361,9 @@ function partLists(random: Random): RawValue {
 		const entry: { [name: string]: RawValue } = {};
 
 		if (!random.chance(0.1)) entry.partNumber = random.pick(partNumbers);
+
 		if (!random.chance(0.1)) entry.etag = random.pick(etags);
+
 		if (random.chance(0.1)) entry.stray = 1;
 
 		return entry;
@@ -415,6 +417,7 @@ function uploadBody(random: Random): RawValue {
 		: random.pick(actions);
 
 	const entries: [string, RawValue][] = [["action", action]];
+
 	const maybe = (name: string, value: RawValue) => {
 		if (!random.chance(0.1)) entries.push([name, value]);
 	};
@@ -427,6 +430,7 @@ function uploadBody(random: Random): RawValue {
 	} else if (action === "complete") {
 		maybe("uploadId", random.pick(uploadIds));
 		maybe("parts", partLists(random));
+
 		if (random.chance(0.6)) entries.push(["peaks", peakLists(random)]);
 		else if (random.chance(0.3)) entries.push(["peaks", undefined]);
 	} else maybe("uploadId", random.pick(uploadIds));
