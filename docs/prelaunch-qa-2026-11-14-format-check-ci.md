@@ -76,9 +76,9 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 - Merged 2026-11-16 at about 01:22 UTC (the evening of 2026-11-15, US Eastern) as merge commit `a2bde456`, whose first parent is `6c30c5d7`.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
-- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
+- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The first `main` commit observed with a Workers Builds check after it is `9eecc5e2` (first-parent order: `a2bde456`, `6822a848`, `85cf0d39`, `9eecc5e2`), which contains this merge; that check completed with success, and `validate` passed on that commit.
 - Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
-- Rollback: revert the merge commit `a2bde456` to undo only this change.
+- Rollback: this change is documentation only, so production needs no rollback for it. `git revert -m 1 a2bde456` undoes it; tried without committing after this record update, the revert stops on the record files that were edited since, which are kept or removed by hand.
 
 ## Delivery status
 

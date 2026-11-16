@@ -84,7 +84,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - PASS (local), 7.1 Required checks: see Evidence and limits.
 - PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed; not observed live.
-- PASS, 7.4 Rollback: a git revert of the merge commit `85cf0d39`. Production before the three merges was `6c30c5d7`.
+- PASS (tried without committing), 7.4 Rollback: a git revert of the merge commit `85cf0d39` applies to the code, tests and fixture; see "Merge and deployment". Production before the three merges was `6c30c5d7`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
 
@@ -109,7 +109,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - This is the one behaviour change of the three: from this deployment the owner payment route answers 502 for the Stripe refusals listed in the table. No invoice action was exercised live and no Stripe test-mode run was made, so the new statuses are unobserved in production.
 - Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
 - Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
-- Rollback: revert the merge commit `85cf0d39` to undo only this change.
+- Rollback: `git revert -m 1 85cf0d39` undoes only this change. Tried without committing after this record update: the route, the library, the tests and the fixture revert cleanly, and the revert stops only on this record, which was edited since and is kept by hand. The reverted state was not built or tested.
 
 ## Delivery status
 

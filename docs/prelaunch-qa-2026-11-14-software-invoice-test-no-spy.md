@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
 Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
 Branch: `claude/followup-spy` (pull request #278), built on the lint stack (#256 to #258, merged as `440b28ef`)
-Rollback: revert the merge commit `6822a848` (first parent `a2bde456`) to undo only this change. That first parent was not built or deployed on its own; production before these three merges was `6c30c5d7`.
+Rollback: this change is tests only, so production needs no rollback for it. A plain `git revert -m 1 6822a848` does not apply cleanly (see "Merge and deployment"). The first parent `a2bde456` was not built or deployed on its own; production before these three merges was `6c30c5d7`.
 
 ## Scope
 
@@ -60,7 +60,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - PASS (local), 7.1 Required checks: see Evidence and limits.
 - PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - N/A, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed.
-- PASS, 7.4 Rollback: a git revert of the merge commit `6822a848`. Production before the three merges was `6c30c5d7`.
+- UNVERIFIED, 7.4 Rollback: tests only, so production needs none. A plain revert of `6822a848` conflicts, and the resolution was not carried through; see "Merge and deployment". Production before the three merges was `6c30c5d7`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
 - PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `6822a848`). Verified live: two pages answer 200; nothing else.
 
@@ -76,9 +76,9 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 - Merged 2026-11-16 at about 01:22 UTC (the evening of 2026-11-15, US Eastern) as merge commit `6822a848`, whose first parent is `a2bde456`.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
-- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
+- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The first `main` commit observed with a Workers Builds check after it is `9eecc5e2` (first-parent order: `a2bde456`, `6822a848`, `85cf0d39`, `9eecc5e2`), which contains this merge; that check completed with success, and `validate` passed on that commit.
 - Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
-- Rollback: revert the merge commit `6822a848` to undo only this change.
+- Rollback: tried without committing, `git revert -m 1 6822a848` stops with conflicts in `tests/helpers/stripe-fetch.ts` and `tests/helpers/stripe-fetch.test.ts`, because the later payment merge `85cf0d39` extends those two files, and on this record, which was edited since. To undo this change alone, resolve those two files by keeping the options the payment change added (`invoiceFailure`, `unusableSend`) and dropping `refuseFirstInvoices` and `dueDate`, and restore the earlier test in `tests/lib/software-projects.test.ts`; or revert `85cf0d39` first. Neither path was carried through and tested.
 
 ## Delivery status
 
