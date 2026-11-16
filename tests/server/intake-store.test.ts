@@ -44,19 +44,27 @@ describe("insertRequest", () => {
 		expect(await run(world, request("a"))).toBeInstanceOf(SubmissionIdClash);
 	});
 
-	it("refuses details over the limit before anything is sent", async () => {
-		const world = musicWorld();
+	it.each([
+		["software", 48_000],
+		["service", 16_000],
+		["purchase", 16_000],
+		["merchandise", 16_000],
+	] as const)(
+		"refuses %s details over its limit before anything is sent",
+		async (kind, limit) => {
+			const world = musicWorld();
 
-		const failure = await run(
-			world,
-			request(undefined, { note: "x".repeat(16_000) }),
-		);
+			const failure = await run(world, {
+				...request(undefined, { note: "x".repeat(limit) }),
+				kind,
+			});
 
-		expect(failure).toBeInstanceOf(BriefTooLarge);
-		expect(world.sql.prepare("SELECT id FROM owner_requests").all()).toEqual(
-			[],
-		);
-	});
+			expect(failure).toBeInstanceOf(BriefTooLarge);
+			expect(world.sql.prepare("SELECT id FROM owner_requests").all()).toEqual(
+				[],
+			);
+		},
+	);
 
 	it("maps any other refusal to an IntakeStoreFailed", async () => {
 		const world = musicWorld({
