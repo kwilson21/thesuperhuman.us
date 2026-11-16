@@ -301,7 +301,7 @@ describe("owner insights schema", () => {
 				readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 			);
 
-		expect(packageJson.devDependencies?.wrangler).toBe("4.146.0");
+		expect(packageJson.devDependencies?.wrangler).toBe("4.151.1");
 	});
 
 	it("keeps publication and music migrations in database-specific directories", () => {
