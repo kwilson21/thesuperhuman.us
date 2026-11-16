@@ -107,7 +107,8 @@ files; a test checks those literals against `global.css`.
   at 600px wide and below, a full-width Get in touch pill stays at the bottom of the
   screen through all sections, including other filled buttons. It steps aside when the
   shared footer enters view and returns when the footer leaves. It also hides while
-  the phone menu is open or a form field has focus, appears and goes without motion,
+  the phone menu is open or a form field has focus. The contact handoff uses a brief
+  token-timed fade with a 4px settle only when reduced motion is not requested,
   and never shows above 600px, in print or without JavaScript.
 - The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
   hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
@@ -338,3 +339,11 @@ copy remain, but its bottom Get in touch button is now in the same footer as oth
 The new contact switchboard, its message form, software/song intakes and private task
 pages remain quiet; they are already performing the action and must not link back to
 themselves as a competing sticky CTA.
+
+
+### Contact handoff refinement (November 16, 2026)
+The owner requested a Hallmark audit and a smoother, consistently sized mobile
+handoff. Both contact links share the same mobile horizontal bounds and arrow;
+the footer panel and page composition remain unchanged. Use the existing hover
+arrow nudge, not a perpetual pulse, bounce, shimmer or attention loop. Hidden
+pinned contact becomes inert immediately. Reduced motion keeps the handoff instant.

@@ -75,12 +75,16 @@ it("shows the pinned button and marks it at the end while the closing panel is o
 	expect(observers[0].observed).toEqual([panel]);
 	// Aside until the first report, then shown once the report says nothing is on screen.
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	expect(pinned.hasAttribute("inert")).toBe(true);
 	observers[0].callback([{ isIntersecting: false, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
+	expect(pinned.hasAttribute("inert")).toBe(false);
 	observers[0].callback([{ isIntersecting: true, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	expect(pinned.hasAttribute("inert")).toBe(true);
 	observers[0].callback([{ isIntersecting: false, target: panel }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
+	expect(pinned.hasAttribute("inert")).toBe(false);
 });
 
 it("does not observe page invitations or filled buttons", () => {
@@ -98,6 +102,7 @@ it("does not observe page invitations or filled buttons", () => {
 	expect(observers[0].observed).toEqual([footer]);
 	observers[0].callback([{ isIntersecting: false, target: footer }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(false);
+	expect(pinned.hasAttribute("inert")).toBe(false);
 });
 
 it("stays aside on a deep link or restored page already at the footer", () => {
@@ -107,8 +112,10 @@ it("stays aside on a deep link or restored page already at the footer", () => {
 	const observers = stubObserver();
 	setupPinnedContact();
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	expect(pinned.hasAttribute("inert")).toBe(true);
 	observers[0].callback([{ isIntersecting: true, target: footer }]);
 	expect(pinned.hasAttribute("data-at-end")).toBe(true);
+	expect(pinned.hasAttribute("inert")).toBe(true);
 });
 
 it("does nothing on a quiet contact or intake page without a pinned button", () => {

@@ -14,6 +14,7 @@ export function setupPinnedContact(): void {
 	// It starts aside until the observer's first report, so it never flashes over a button that is
 	// already on screen when the page opens or its scroll position is restored.
 	pinned.setAttribute("data-at-end", "");
+	pinned.setAttribute("inert", "");
 	pinned.removeAttribute("hidden");
 	const showing = new Set<Element>();
 
@@ -22,8 +23,13 @@ export function setupPinnedContact(): void {
 			if (entry.isIntersecting) showing.add(entry.target);
 			else showing.delete(entry.target);
 
-		if (showing.size) pinned.setAttribute("data-at-end", "");
-		else pinned.removeAttribute("data-at-end");
+		if (showing.size) {
+			pinned.setAttribute("data-at-end", "");
+			pinned.setAttribute("inert", "");
+		} else {
+			pinned.removeAttribute("data-at-end");
+			pinned.removeAttribute("inert");
+		}
 	});
 
 	for (const end of ends) observer.observe(end);

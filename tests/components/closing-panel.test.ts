@@ -71,7 +71,7 @@ it("draws the panel from tokens with no border, shadow or motion", () => {
 	expect(footer).toMatch(/\.closing-panel \{[^}]*padding: 3rem 2rem 2\.25rem;/);
 	expect(footer).not.toContain(".closing-panel--quiet { padding-top");
 	expect(footer).toMatch(
-		/@media \(max-width: 600px\) \{[^@]*\.closing-panel \{[^}]*border-radius: 28px;[^}]*padding: 3rem min\(1\.25rem, 6\.25vw\) 1\.75rem;/,
+		/@media \(max-width: 600px\) \{[^@]*\.closing-panel \{[^}]*border-radius: 28px;[^}]*padding: 3rem var\(--contact-panel-inset\) 1\.75rem;/,
 	);
 	expect(footer).not.toMatch(
 		/border-top|box-shadow|data-reveal|animation|#[0-9a-fA-F]{3,6}\b/,
@@ -271,7 +271,9 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	const mobile = footer.slice(mobileStart, footer.indexOf("@media print"));
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
 	expect(mobile).toContain("position: fixed");
-	expect(mobile).toContain(".pinned-contact[data-at-end] { display: none; }");
+	expect(mobile).toContain(
+		".pinned-contact[data-at-end] { opacity: 0; visibility: hidden; }",
+	);
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
 	);
@@ -295,4 +297,19 @@ it("leaves the essay with one invitation, the panel button", () => {
 		'<nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a></nav>',
 	);
 	expect(essay).not.toContain("Get in touch");
+});
+
+it("aligns phone contact widths and limits handoff motion to visitors who allow it", () => {
+	expect(footer).toContain(
+		"calc(var(--contact-gutter) + var(--contact-panel-inset))",
+	);
+	expect(footer).toContain(
+		".closing-panel [data-closing-button] { width: 100%; box-sizing: border-box;",
+	);
+	expect(footer).toContain("@media (prefers-reduced-motion: no-preference)");
+	expect(footer).toContain("transition-delay: 0s, 0s, var(--dur-hover)");
+	expect(footer).toContain(
+		".pinned-contact[data-at-end] .site-button { pointer-events: none; }",
+	);
+	expect(footer).not.toContain("animation:");
 });

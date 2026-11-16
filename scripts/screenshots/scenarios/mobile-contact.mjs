@@ -9,7 +9,14 @@ const waitForPinned = (page, visible) =>
 		({ selector, visible }) => {
 			const bar = document.querySelector(selector);
 
-			return !!bar && (getComputedStyle(bar).display !== "none") === visible;
+			if (!bar) return false;
+			const style = getComputedStyle(bar);
+
+			return (
+				(style.display !== "none" &&
+					style.visibility !== "hidden" &&
+					Number(style.opacity) > 0) === visible
+			);
 		},
 		{ selector: pinned, visible },
 	);
@@ -28,6 +35,21 @@ export default {
 						await page.setViewportSize({ width, height: 844 });
 						await page.evaluate(() => window.scrollTo(0, 0));
 						await waitForPinned(page, width <= 600);
+
+						if (width <= 600) {
+							const bounds = await page
+								.locator("[data-pinned-contact] a, [data-closing-button]")
+								.evaluateAll((elements) =>
+									elements.map((element) => ({
+										x: element.getBoundingClientRect().x,
+										width: element.getBoundingClientRect().width,
+									})),
+								);
+
+							assert.ok(Math.abs(bounds[0].x - bounds[1].x) < 1);
+							assert.ok(Math.abs(bounds[0].width - bounds[1].width) < 1);
+						}
+
 						await page.locator(".hire-section").scrollIntoViewIfNeeded();
 						await waitForPinned(page, width <= 600);
 						assert.ok(
@@ -43,6 +65,34 @@ export default {
 					}
 
 					await page.setViewportSize({ width: 390, height: 844 });
+
+					for (const reducedMotion of ["reduce", "no-preference"]) {
+						await page.emulateMedia({ reducedMotion });
+						await page.evaluate(() => window.scrollTo(0, 0));
+						await waitForPinned(page, true);
+
+						const duration = await page
+							.locator(pinned)
+							.evaluate(
+								(element) => getComputedStyle(element).transitionDuration,
+							);
+
+						assert.equal(
+							duration.split(",").every((value) => parseFloat(value) === 0),
+							reducedMotion === "reduce",
+						);
+						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
+						await waitForPinned(page, false);
+						assert.equal(await page.locator(pinned).getAttribute("inert"), "");
+						await page.evaluate(() => window.scrollTo(0, 0));
+						await waitForPinned(page, true);
+						assert.equal(
+							await page.locator(pinned).getAttribute("inert"),
+							null,
+						);
+					}
+
+					await page.emulateMedia({ reducedMotion: "reduce" });
 					await page.locator(".hire-section").scrollIntoViewIfNeeded();
 					await waitForPinned(page, true);
 					assert.equal(
