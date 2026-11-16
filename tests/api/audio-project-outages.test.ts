@@ -32,6 +32,7 @@ const LEAK = "D1 exploded with a secret";
 type Seed = {
 	stage?: string;
 	files?: boolean;
+	draft?: boolean;
 	upload?: "pending" | "discarding";
 };
 
@@ -68,6 +69,12 @@ function world(seed: Seed = {}) {
 			.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,downloadable,status,uploaded_at,published_at)
       VALUES ('file-1','song-1','review','studio/projects/song-1/file-1.mp3','Mix.mp3','audio/mpeg',10,1,'published',?,?)`)
 			.run(past, past);
+
+	if (seed.draft)
+		sql
+			.prepare(`INSERT INTO audio_project_files(id,request_id,version,object_key,display_name,media_type,byte_size,downloadable,status,uploaded_at)
+      VALUES ('file-1','song-1','review','studio/projects/song-1/file-1.mp3','Mix.mp3','audio/mpeg',10,1,'uploaded',?)`)
+			.run(past);
 
 	if (seed.upload)
 		sql
@@ -411,18 +418,58 @@ describe("an upload that R2 no longer has, or a completion it refuses, is a lost
 		expect(await response.json()).toEqual({ ok: true, fileId: UPLOAD });
 	});
 
-	it("a completion that loses a concurrent write to the same key answers 409 when no object is there", async () => {
+	it("a completion that keeps losing a concurrent write to the same key is tried three times, then answers 503", async () => {
+		let completes = 0;
+
+		const bucket = double<R2Bucket>({
+			head: async () => null,
+			resumeMultipartUpload: () =>
+				double<R2MultipartUpload>({
+					complete: async () => {
+						completes++;
+						throw CONCURRENT;
+					},
+				}),
+		});
+
 		const response = await uploads(
 			context(world({ upload: "pending" }), completeUpload(), {
-				AUDIO: bucketCompleting(CONCURRENT, null),
+				AUDIO: bucket,
 			}),
 		);
 
-		expect(response.status).toBe(409);
+		expect(completes).toBe(3);
+		expect(response.status).toBe(503);
 		expect(await response.json()).toEqual({
 			ok: false,
-			error: "This upload cannot be finished now.",
+			error: "The upload could not be saved. Please try again.",
 		});
+	});
+
+	it("a completion that loses a concurrent write once and wins the second try is saved", async () => {
+		let completes = 0;
+
+		const bucket = double<R2Bucket>({
+			head: async () => null,
+			resumeMultipartUpload: () =>
+				double<R2MultipartUpload>({
+					complete: async () => {
+						if (completes++ === 0) throw CONCURRENT;
+
+						return double<R2Object>({ size: 10 });
+					},
+				}),
+		});
+
+		const response = await uploads(
+			context(world({ upload: "pending" }), completeUpload(), {
+				AUDIO: bucket,
+			}),
+		);
+
+		expect(completes).toBe(2);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ ok: true, fileId: UPLOAD });
 	});
 
 	it("a completion that loses a concurrent write to the same key finishes when the object is there", async () => {
@@ -486,6 +533,149 @@ describe("a stored state that disagrees with R2 is not an unavailable service", 
 		expect(String(logged.mock.calls[0])).toContain(
 			"/api/studio/projects/[id]/files/[fileId] failed unexpectedly",
 		);
+		logged.mockRestore();
+	});
+});
+
+const UNAVAILABLE = new Error(
+	"The service is unavailable, try again later. (10043)",
+);
+
+const down = (over: Partial<R2Bucket> = {}) =>
+	double<R2Bucket>({
+		head: async () => {
+			throw UNAVAILABLE;
+		},
+		createMultipartUpload: async () => {
+			throw UNAVAILABLE;
+		},
+		get: async () => {
+			throw UNAVAILABLE;
+		},
+		resumeMultipartUpload: () =>
+			double<R2MultipartUpload>({
+				complete: async () => {
+					throw UNAVAILABLE;
+				},
+				uploadPart: async () => {
+					throw UNAVAILABLE;
+				},
+			}),
+		...over,
+	});
+
+describe("R2 reports itself unavailable (10043): a known dependency outage answers 503 with the route's sentence and no unexpected-failure log", () => {
+	const startUpload = () =>
+		post(`${owner}/uploads`, {
+			action: "start",
+			version: "review",
+			displayName: "Mix.wav",
+			mediaType: "audio/wav",
+			byteSize: 10,
+		});
+
+	const putPart = () =>
+		new Request(
+			`https://thesuperhuman.us${owner}/uploads?uploadId=${UPLOAD}&part=1`,
+			{
+				method: "PUT",
+				headers: { "content-length": "10" },
+				body: new Uint8Array(10),
+			},
+		);
+
+	const cases: {
+		name: string;
+		handler: Handler;
+		request: () => Request;
+		seed: Seed;
+		bucket: R2Bucket;
+		sentence: string;
+		owner?: boolean;
+		fileId?: string;
+	}[] = [
+		{
+			name: "starting an upload",
+			handler: uploads,
+			request: startUpload,
+			seed: {},
+			bucket: down(),
+			sentence: "The upload could not be saved. Please try again.",
+		},
+		{
+			name: "finishing an upload, at the head",
+			handler: uploads,
+			request: completeUpload,
+			seed: { upload: "pending" },
+			bucket: down(),
+			sentence: "The upload could not be saved. Please try again.",
+		},
+		{
+			name: "finishing an upload, at the completion",
+			handler: uploads,
+			request: completeUpload,
+			seed: { upload: "pending" },
+			bucket: down({ head: async () => null }),
+			sentence: "The upload could not be saved. Please try again.",
+		},
+		{
+			name: "putting a part",
+			handler: part,
+			request: putPart,
+			seed: { upload: "pending" },
+			bucket: down(),
+			sentence: "This part could not be uploaded. Please try again.",
+		},
+		{
+			name: "publishing a file, at the head",
+			handler: ownerFile,
+			request: () =>
+				post(`${owner}/files/file-1`, {
+					action: "publish",
+					note: "Ready",
+					downloadable: true,
+				}),
+			seed: { draft: true },
+			bucket: down(),
+			sentence: "The file could not be published. Please try again.",
+		},
+	];
+
+	for (const one of cases)
+		it(one.name, async () => {
+			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			const response = await one.handler(
+				context(world(one.seed), one.request(), { AUDIO: one.bucket }),
+			);
+
+			const text = await response.text();
+
+			expect(response.status).toBe(503);
+			expect(text).toContain(one.sentence);
+			expect(logged).not.toHaveBeenCalled();
+			logged.mockRestore();
+		});
+
+	it("a client's file, at the head", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const response = await studioFile(
+			context(
+				world({ stage: "review_ready", files: true }),
+				new Request(`https://thesuperhuman.us${studio}/files/file-1`, {
+					headers: cookie,
+				}),
+				{ owner: false, AUDIO: down() },
+			),
+		);
+
+		expect(response.status).toBe(503);
+		expect(await response.text()).toBe(
+			"Private audio is temporarily unavailable",
+		);
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
+		expect(logged).not.toHaveBeenCalled();
 		logged.mockRestore();
 	});
 });
