@@ -306,6 +306,8 @@ type DepositColumns = {
  * each ordered by the invoice's id: the first keeps the text the golden hooks name
  * (`SELECT i.status,o.status AS offer_status FROM software_invoices`), which leaves no room for a third column in its
  * list, and the second reads the milestone, kind and refund of the same rows in the same order.
+ * tests/server/offers-store.test.ts feeds what this reads to the rule and holds the answer to `depositOfferBlock` for
+ * every invoice the columns allow and every pair of first deposits.
  */
 export const readDepositInvoices = (requestId: string) =>
 	asked(async (db): Promise<readonly DepositInvoice[]> => {
