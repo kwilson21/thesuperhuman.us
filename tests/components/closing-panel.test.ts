@@ -271,7 +271,7 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	const mobile = footer.slice(mobileStart, footer.indexOf("@media print"));
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
 	expect(mobile).toContain("position: sticky");
-	expect(mobile).toContain("height: var(--contact-track-height, 0px)");
+	expect(mobile).toContain("inset: 0 0 var(--contact-track-bottom, 0px)");
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
 	);

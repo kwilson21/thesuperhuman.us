@@ -103,9 +103,11 @@ export function setupPinnedContact(): void {
 		resize.observe(document.documentElement);
 		// Main can reflow without changing the root viewport box (notably WebKit).
 		const main = document.querySelector("main");
+
 		if (main) resize.observe(main);
 		resize.observe(footer);
 		const footerContainer = document.querySelector("footer");
+
 		if (footerContainer) resize.observe(footerContainer);
 		resize.observe(pinned);
 	}

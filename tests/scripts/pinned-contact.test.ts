@@ -46,7 +46,9 @@ const page = ({
 	const footer = element();
 	const track = element();
 	const root = element();
+	const main = element();
 	let footerTop = 1000;
+	let bodyBottom = 1300;
 	let fixedTop = 776;
 	let rendered = true;
 	const frames: FrameRequestCallback[] = [];
@@ -99,6 +101,8 @@ const page = ({
 	};
 
 	const documentQuery = vi.fn((selector: string) => {
+		if (selector === "main") return main;
+
 		if (selector === "[data-contact-track]")
 			return missing === "track" ? null : track;
 
@@ -114,12 +118,14 @@ const page = ({
 	type FakeDocument = {
 		querySelector: typeof documentQuery;
 		documentElement: typeof root;
+		body: { getBoundingClientRect: () => { bottom: number } };
 		activeElement: typeof link | typeof footerNode | null;
 	};
 
 	const fakeDocument: FakeDocument = {
 		querySelector: documentQuery,
 		documentElement: root,
+		body: { getBoundingClientRect: () => ({ bottom: bodyBottom }) },
 		activeElement: null,
 	};
 
@@ -165,6 +171,7 @@ const page = ({
 		track,
 		footer,
 		root,
+		main,
 		media,
 		viewport,
 		events,
@@ -173,6 +180,9 @@ const page = ({
 		documentQuery,
 		setRendered: (value: boolean) => {
 			rendered = value;
+		},
+		setBodyBottom: (value: number) => {
+			bodyBottom = value;
 		},
 		setFooterTop: (value: number) => {
 			footerTop = value;
@@ -194,7 +204,7 @@ it("uses a layout track and keeps one interactive mobile action", () => {
 	p.flush();
 	expect(p.pinned.hasAttribute("hidden")).toBe(false);
 	expect(p.footer.hasAttribute("inert")).toBe(true);
-	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("232px");
 	expect(p.pinned.properties.get("--contact-height")).toBe("80px");
 	expect(p.pinned.properties.has("--contact-dock-offset")).toBe(false);
 });
@@ -226,17 +236,19 @@ it("updates layout bounds after reflow and coalesces resize events", () => {
 	p.resizeObservers[0].callback();
 	expect(p.frames).toHaveLength(1);
 	p.flush();
-	expect(p.track.properties.get("--contact-track-height")).toBe("868px");
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("432px");
 	expect(p.resizeObservers[0].targets).toContain(p.root);
+	expect(p.resizeObservers[0].targets).toContain(p.main);
 });
 
-it("restored scroll uses document-space target bounds", () => {
+it("restored scroll measures clearance relative to the body", () => {
 	const p = page();
 	p.setFooterTop(550);
 	window.scrollY = 450;
+	p.setBodyBottom(850);
 	setupPinnedContact();
 	p.flush();
-	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("232px");
 });
 
 it("restores footer ownership on desktop and resumes mobile", () => {
@@ -263,11 +275,11 @@ it("recovers after menu or form suppression without measuring hidden geometry", 
 	p.setFooterTop(500);
 	p.events.fire("focusin");
 	p.flush();
-	expect(p.track.properties.get("--contact-track-height")).toBe("1068px");
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("232px");
 	p.setRendered(true);
 	p.events.fire("toggle");
 	p.flush();
-	expect(p.track.properties.get("--contact-track-height")).toBe("568px");
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("732px");
 });
 
 it.each(["pinned", "footer", "link", "track"])(
@@ -316,4 +328,25 @@ it("brings an offscreen focused link into view without smooth motion", () => {
 		block: "center",
 		behavior: "instant",
 	});
+});
+
+it("refreshes track bounds after cold fonts finish loading", async () => {
+	const p = page();
+	let loaded: () => void = () => {};
+
+	Object.defineProperty(document, "fonts", {
+		value: {
+			ready: new Promise<void>((resolve) => {
+				loaded = resolve;
+			}),
+		},
+	});
+	setupPinnedContact();
+	p.flush();
+	p.setFooterTop(700);
+	loaded();
+	await Promise.resolve();
+	expect(p.frames).toHaveLength(1);
+	p.flush();
+	expect(p.track.properties.get("--contact-track-bottom")).toBe("532px");
 });
