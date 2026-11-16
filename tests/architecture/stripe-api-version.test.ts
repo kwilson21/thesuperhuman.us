@@ -2,6 +2,8 @@
 // aliases or endpoints must extend this guard and the wire-header regression.
 import { globSync, readFileSync } from "node:fs";
 import ts from "typescript";
+import { posix } from "node:path";
+import { convertToTSX } from "@astrojs/compiler/sync";
 import { expect, it } from "vitest";
 
 const adapters = [
@@ -18,17 +20,42 @@ const methods = [
 ];
 
 function runtimeSource(path: string, text: string) {
-	// Astro server code lives in frontmatter; browser scripts have a separate
-	// client-graph guard. Other runtime source files are parsed directly.
+	// Compiler output retains executable frontmatter, template expressions and
+	// scripts, rather than treating an Astro template as inert markup.
 	return path.endsWith(".astro")
-		? (text.match(/^---\r?\n([\s\S]*?)\r?\n---/)?.[1] ?? "")
+		? convertToTSX(text, { filename: path, includeScripts: true }).code
 		: text;
 }
 
-const sources = globSync("src/**/*.{ts,tsx,js,mjs,cjs,astro}").map((path) => ({
-	path,
-	text: runtimeSource(path, readFileSync(path, "utf8")),
-}));
+function isInvoiceModule(path: string, specifier: string) {
+	const resolved = specifier.startsWith("~/")
+		? `src/${specifier.slice(2)}`
+		: specifier.startsWith(".")
+			? posix.normalize(posix.join(posix.dirname(path), specifier))
+			: specifier;
+
+	return (
+		resolved.replace(/\.(?:[cm]?[jt]sx?)$/, "") === "src/lib/stripe-invoicing"
+	);
+}
+
+const isStripeModule = (specifier: string) =>
+	specifier === "stripe" || specifier.startsWith("stripe/");
+
+const isRequire = (expression: ts.Expression) =>
+	(ts.isIdentifier(expression) && expression.text === "require") ||
+	(ts.isPropertyAccessExpression(expression) &&
+		expression.name.text === "require") ||
+	(ts.isElementAccessExpression(expression) &&
+		ts.isStringLiteralLike(expression.argumentExpression) &&
+		expression.argumentExpression.text === "require");
+
+const sources = globSync("src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,astro}").map(
+	(path) => ({
+		path,
+		text: runtimeSource(path, readFileSync(path, "utf8")),
+	}),
+);
 
 function verifyInventory(inputs: typeof sources) {
 	const found: string[] = [];
@@ -41,17 +68,69 @@ function verifyInventory(inputs: typeof sources) {
 			text,
 			ts.ScriptTarget.Latest,
 			true,
+			path.endsWith(".astro") || /\.[jt]sx$/.test(path)
+				? ts.ScriptKind.TSX
+				: ts.ScriptKind.TS,
 		);
 
 		const visit = (node: ts.Node) => {
+			// No runtime import-equals consumers are part of the reviewed boundary.
+			if (ts.isImportEqualsDeclaration(node))
+				expect(node.isTypeOnly).toBe(true);
+
+			// Dynamic loads must be statically named and cannot obtain the SDK/factory.
+			// This intentionally rejects unresolved expressions rather than guessing.
 			if (
-				ts.isStringLiteral(node) &&
-				node.text === "stripe" &&
+				ts.isCallExpression(node) &&
+				(node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+					isRequire(node.expression))
+			) {
+				const module = node.arguments[0];
+				expect(
+					module &&
+						(ts.isStringLiteral(module) ||
+							ts.isNoSubstitutionTemplateLiteral(module)),
+				).toBe(true);
+
+				if (
+					module &&
+					(ts.isStringLiteral(module) ||
+						ts.isNoSubstitutionTemplateLiteral(module))
+				) {
+					expect(
+						isStripeModule(module.text) || isInvoiceModule(path, module.text),
+					).toBe(false);
+				}
+			}
+
+			if (
+				(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+				node.moduleSpecifier &&
+				ts.isStringLiteral(node.moduleSpecifier) &&
+				isInvoiceModule(path, node.moduleSpecifier.text)
+			) {
+				// Only explicit named imports can consume this module. Namespace/default
+				// imports and re-exports could conceal a computed or aliased factory use.
+				expect(ts.isImportDeclaration(node)).toBe(true);
+
+				if (ts.isImportDeclaration(node) && !node.importClause?.isTypeOnly) {
+					expect(node.importClause?.name).toBeUndefined();
+					expect(
+						node.importClause?.namedBindings &&
+							ts.isNamedImports(node.importClause.namedBindings),
+					).toBe(true);
+				}
+			}
+
+			if (
+				(ts.isStringLiteral(node) ||
+					ts.isNoSubstitutionTemplateLiteral(node)) &&
+				isStripeModule(node.text) &&
 				(ts.isImportDeclaration(node.parent) ||
 					ts.isExportDeclaration(node.parent) ||
 					(ts.isCallExpression(node.parent) &&
 						(node.parent.expression.kind === ts.SyntaxKind.ImportKeyword ||
-							node.parent.expression.getText(source) === "require")))
+							isRequire(node.parent.expression))))
 			) {
 				expect(ts.isImportDeclaration(node.parent)).toBe(true);
 				const declaration = node.parent;
@@ -233,7 +312,7 @@ it.each([
 	expect(() => verifyInventory(mutated)).toThrow();
 });
 
-it.each(["js", "mjs", "astro"])(
+it.each(["js", "jsx", "mjs", "mts", "cts", "astro"])(
 	"rejects a new %s SDK consumer outside the reviewed boundary",
 	(extension) => {
 		const code =
@@ -250,3 +329,56 @@ it.each(["js", "mjs", "astro"])(
 		expect(() => verifyInventory([...sources, { path, text }])).toThrow();
 	},
 );
+
+it.each([
+	[
+		"Astro template",
+		"src/unsafe.astro",
+		"<div>{(await import(`stripe`)).default}</div>",
+	],
+	[
+		"namespace computed factory",
+		"src/unsafe.ts",
+		'import * as billing from "~/lib/stripe-invoicing"; billing["stripeClient"](env).refunds.create({});',
+	],
+	[
+		"namespace dynamic factory key",
+		"src/unsafe.ts",
+		'import * as billing from "./lib/stripe-invoicing.js"; const key = "stripeClient"; billing[key](env).refunds.create({});',
+	],
+	[
+		"template-literal import",
+		"src/unsafe.ts",
+		'const SDK = (await import(`stripe`)).default; new SDK("sk_test_guard").refunds.create({});',
+	],
+	[
+		"template-literal require",
+		"src/unsafe.cts",
+		'const SDK = require(`stripe`); new SDK("sk_test_guard").refunds.create({});',
+	],
+	[
+		"module.require",
+		"src/unsafe.cjs",
+		'const SDK = module.require(`stripe`); new SDK("sk_test_guard").refunds.create({});',
+	],
+	[
+		"import equals",
+		"src/unsafe.cts",
+		'import SDK = require("stripe"); new SDK("sk_test_guard").refunds.create({});',
+	],
+
+	[
+		"unresolved dynamic import",
+		"src/unsafe.ts",
+		'const module = "stripe"; const SDK = await import(module);',
+	],
+	[
+		"dynamic factory import",
+		"src/unsafe.ts",
+		'const billing = await import("~/lib/stripe-invoicing"); billing["stripeClient"](env);',
+	],
+])("rejects %s", (_name, path, code) => {
+	expect(() =>
+		verifyInventory([...sources, { path, text: runtimeSource(path, code) }]),
+	).toThrow();
+});

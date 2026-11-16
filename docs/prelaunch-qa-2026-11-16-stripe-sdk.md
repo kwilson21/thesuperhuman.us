@@ -24,8 +24,8 @@ unchanged. Main integration includes #343, #346, #348 and #349.
   fetch. All six requests (including an invoice-create 503 retry) must retain
   the exact Dahlia header, the existing explicit idempotency keys, a stable key
   on retry and distinct keys between operations.
-- An architecture regression scans runtime JS/TS sources and Astro server
-  frontmatter, inventorying SDK constructors/consumers and all ten
+- An architecture regression scans runtime JS/TS/JSX/TSX/MTS/CTS/MJS/CJS sources and compiler-converted
+  Astro frontmatter, server template expressions and scripts, inventorying SDK constructors/consumers and all ten
   calls, rejecting unpinned calls and client aliases that leave that inventory.
   New SDK use requires updating this scoped guard and its wire tests. This is
   a source-level regression guard, not a general sandbox or security boundary.
