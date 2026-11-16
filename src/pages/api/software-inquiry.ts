@@ -85,7 +85,10 @@ function readOutline(body: JsonValue, input: SoftwareInput): OutlineRead {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	const body = await musicRequest(request, 32768);
+	// Validated answers/contact occupy under 7,500 UTF-16 units (at most 3 UTF-8 bytes each), outline text
+	// at most 5,240 (up to 6 JSON escape bytes each), and the token at most 2,048 (also up to 6 each).
+	// 72,000 leaves room for the fixed keys/punctuation without removing the request-body bound.
+	const body = await musicRequest(request, 72_000);
 
 	if (body instanceof Response) return body;
 	const result = validateSoftwareInquiry(body);

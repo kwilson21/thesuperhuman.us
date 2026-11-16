@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import type { APIContext } from "astro";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "~/pages/api/software-inquiry";
+import {
+	LANES,
+	laneLimits,
+	textLimits,
+	type OutlineItem,
+	ANSWER_MAX,
+	QUOTE_MAX,
+} from "~/lib/brief-board";
 import { softwareBriefEmail } from "~/lib/client-emails";
 import {
 	clientSoftwareLabels,
@@ -580,7 +588,7 @@ it("guards origin, content type, size, and missing bindings", async () => {
 		(await POST(context(base, { origin: "https://evil.example" }))).status,
 	).toBe(403);
 	expect((await POST(context("{}", { type: "text/plain" }))).status).toBe(415);
-	expect((await POST(context({ padding: "x".repeat(33000) }))).status).toBe(
+	expect((await POST(context({ padding: "x".repeat(72_000) }))).status).toBe(
 		413,
 	);
 	expect((await POST(context(base, { db: null }))).status).toBe(503);
@@ -1906,7 +1914,7 @@ describe("the living brief's outline", () => {
 	});
 });
 
-it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
+it("stores the largest form answers without an outline", async () => {
 	const response = await POST(
 		context({
 			...websiteInput,
@@ -1922,4 +1930,105 @@ it("stores the largest brief the form allows: its details stay under the cap, so
 	);
 
 	expect(response.status).toBe(200);
+});
+
+// Fill every lane, not only the form: the old 16,000-character storage guard rejected valid combined briefs.
+it.each(["website", "webapp", "workflow"] as const)(
+	"stores maximal %s answers and a full outline with JSON escaping and Unicode",
+	async (path) => {
+		for (const character of ['"', "\\", "界", "😀"]) {
+			const fill = (length: number) => {
+				const suffix = " build useful pages";
+				const remaining = length - suffix.length;
+
+				return (
+					character.repeat(Math.floor(remaining / character.length)) +
+					"x".repeat(remaining % character.length) +
+					suffix
+				);
+			};
+
+			const fullOutline = LANES.flatMap((lane) =>
+				Array.from({ length: laneLimits[lane] }, () => {
+					const item: OutlineItem = {
+						lane,
+						text: fill(textLimits[lane]),
+						origin: "answers",
+						quote: fill(QUOTE_MAX),
+					};
+
+					return lane === "questions"
+						? { ...item, answer: fill(ANSWER_MAX) }
+						: item;
+				}),
+			);
+
+			const fields =
+				path === "website"
+					? {
+							purpose: fill(2000),
+							existing: fill(2000),
+							currentUrl:
+								"https://a.example.test/?" + fill(2024).replaceAll(" ", "x"),
+							updates: "self",
+						}
+					: path === "webapp"
+						? { appGoal: fill(1000), firstVersion: fill(1000) }
+						: {
+								today: fill(2000),
+								audience: fill(1000),
+								firstResult: fill(2000),
+							};
+
+			const response = await POST(
+				context(
+					JSON.stringify({
+						...base,
+						...fields,
+						path,
+						submissionId: crypto.randomUUID(),
+						company: fill(120),
+						timingReason: fill(500),
+						budgetNote: fill(200),
+						approver: "other",
+						approverRole: fill(120),
+						name: fill(100),
+						turnstileToken: "\u0000".repeat(2048),
+						outline: fullOutline,
+					}),
+				),
+			);
+
+			expect(response.status, await response.clone().text()).toBe(200);
+
+			const rows = sql
+				.prepare(
+					"SELECT details_json FROM owner_requests ORDER BY rowid DESC LIMIT 1",
+				)
+				.get();
+
+			expect(JSON.parse(rows.details_json).outline).toEqual(fullOutline);
+			stored.clear();
+		}
+	},
+);
+
+it("still refuses overlong fields and lanes before storage", async () => {
+	for (const extra of [
+		{ purpose: "x".repeat(2001) },
+		{
+			outline: Array.from({ length: 3 }, () => ({
+				lane: "purpose",
+				text: "A page",
+				origin: "wrote",
+			})),
+		},
+	]) {
+		const response = await POST(
+			context(JSON.stringify({ ...websiteInput, ...extra })),
+		);
+
+		expect(response.status).toBe(400);
+		expect(sql.prepare("SELECT id FROM owner_requests").all()).toEqual([]);
+	}
 });
