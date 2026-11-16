@@ -91,6 +91,19 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/brief-board.qnt: the living brief's board, where late and overlapping replies from the interpreting model
+// meet the visitor's own changes (src/lib/brief-board.ts). Module name -> the property its change must break.
+export const boardMutants = {
+	boardSnapshotStatus: { property: "ownedUntouched" },
+	boardSeenOnly: { property: "undoRespected" },
+	boardWithdrawUnseen: { property: "undoRespected" },
+	boardNoAvoid: { property: "rejectedStaysRejected" },
+	boardSnapshotQuote: { property: "groundedOnApply" },
+	boardOutlineQuote: { property: "outlineGrounded" },
+	boardNoNumberGuard: { property: "newestWins" },
+	boardApplyPaused: { property: "pausedHolds" },
+};
+
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
 // name -> the property its change must break.
 export const inquiryMutants = {
@@ -136,6 +149,61 @@ export const agreementLinkMutants = {
 	agreementLinkNoCas: { property: "oneCooldownPerWindow" },
 	agreementLinkRetryNewCool: { property: "lostCooldownNeverTakes" },
 	agreementLinkRetryNewAt: { property: "lostGuardNeverStores" },
+};
+
+// verification/audio-project-messages.qnt: a client's messages and review decisions on one audio project, to several requests
+// at once and the owner's moves in between (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectMessagesMutants = {
+	projectMessagesNoCount: { property: "clientRateBounded" },
+	projectMessagesNoDecision: { property: "oneDecisionPerReview" },
+	projectMessagesNoReview: { property: "decisionNamesLatestReview" },
+	projectMessagesRuleNoRounds: { property: "changesWithinRounds" },
+	projectMessagesNoAccess: { property: "writtenForOpenAccess" },
+	projectMessagesNoStage: { property: "answeredInReviewStage" },
+	projectMessagesStopSplit: { property: "stopClosesAccess" },
+	projectMessagesSendNoStage: { property: "plainMessageBeforeCompletion" },
+	projectMessagesNoWithdrawn: { property: "noMessageAfterWithdrawal" },
+};
+
+// verification/audio-project-files.qnt: an audio project's uploads, publishes, revokes and completion, while access closes, the
+// request is withdrawn or a payment is voided (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectFilesMutants = {
+	projectFilesStartNoAccess: { property: "uploadsOnlyForOpenProject" },
+	projectFilesInsertNoAccess: { property: "filesOnlyForOpenProject" },
+	projectFilesInsertNoState: { property: "fileHasObject" },
+	projectFilesAbortNoCas: { property: "fileHasObject" },
+	projectFilesPublishNoAccess: { property: "publishedOnlyWhenPaidAndOpen" },
+	projectFilesPublishNoPayment: { property: "publishedOnlyWhenPaidAndOpen" },
+	projectFilesPublishNoStage: { property: "stageCoherent" },
+	projectFilesNoSupersede: { property: "oneLiveReview" },
+	projectFilesRevokeStaleReset: { property: "readyStagesHaveFiles" },
+	projectFilesCompleteNoStage: { property: "readyStagesHaveFiles" },
+	projectFilesCompleteNoPayment: { property: "completedOnlyWhenPaid" },
+	projectFilesPublishStaleSupersede: { property: "oneLiveReview" },
+	projectFilesResetNoLink: { property: "stageCoherent" },
+	projectFilesFinalNoSupersede: { property: "finalStageHasNoLiveReview" },
+	projectFilesRevokeNoFirstStatus: { property: "revokeKeepsFirstRead" },
+	projectFilesCompleteNoRequestStatus: {
+		property: "completedOnlyWhenReviewed",
+	},
+	projectFilesCompleteNoUpdatedAt: { property: "completeSawEveryUpdate" },
+	projectFilesPartNoStateGuard: { property: "noPartAfterDiscard" },
+};
+
+// verification/audio-project-notices.qnt: one email notice of an audio project (the studio invitation or an update notice):
+// queue, claim, send and write the outcome (docs/plans/2026-11-audio-projects-conversion.md, section 6). Module name -> the
+// property its change must break.
+export const audioProjectNoticesMutants = {
+	projectNoticesClaimNoStatus: { property: "oneEmailInTotal" },
+	projectNoticesClaimNoOpen: { property: "claimOnlyWhileOpen" },
+	projectNoticesQueueAnyStatus: { property: "oneEmailInTotal" },
+	projectNoticesUncertainSent: { property: "sentMeansMailed" },
+	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
+	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
+	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
+	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
@@ -185,8 +253,8 @@ export const models = [
 		// (discountTodayDepositGuard: a deposit paid, a decline, a reopen, a new version sent and its deposit invoiced) needs
 		// at least 17 steps, and the deepest witness of the pass run (neverStandardPaidAfterSentRevision, docs/verification.md)
 		// about 25. At 50 steps, seed 0x1, the mutant is found in about 1,300 runs and the witness's state is reached in
-		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check allows 20,000 and each run that
-		// must pass makes 10,000.
+		// about 320 since F10's fix (at 40 about 9,300 and at 30 not in 100,000, measured before it), so each mutant check
+		// allows 20,000 and each run that must pass makes 10,000.
 		steps: "50",
 		samples: "20000",
 		passSamples: "10000",
@@ -208,6 +276,14 @@ export const models = [
 		mutants: musicMutants,
 		equivalents: [],
 		exhaustive: ["music"],
+		samples: "20000",
+	},
+	{
+		file: "verification/brief-board.qnt",
+		current: ["board"],
+		mutants: boardMutants,
+		equivalents: [],
+		exhaustive: ["board"],
 		samples: "20000",
 	},
 	{
@@ -243,6 +319,45 @@ export const models = [
 		equivalents: [],
 		exhaustive: ["agreementLink"],
 		samples: "20000",
+	},
+	{
+		file: "verification/audio-project-messages.qnt",
+		current: ["projectMessages"],
+		mutants: audioProjectMessagesMutants,
+		equivalents: ["projectMessagesWriteNoRounds", "projectMessagesRuleNoCount"],
+		exhaustive: [],
+		samples: "20000",
+		passSamples: "8000",
+	},
+	{
+		file: "verification/audio-project-files.qnt",
+		current: [
+			"projectFiles",
+			"projectFilesFinalAndReview",
+			"projectFilesFinalPlus",
+		],
+		mutants: audioProjectFilesMutants,
+		equivalents: ["projectFilesCompleteNoFile"],
+		exhaustive: [],
+		// InsertNoState, AbortNoCas and PartNoStateGuard start only from fresh (the upload protocol alone).
+		// The mutants whose race needs particular starting points (PublishNoStage from finalAndReview, PublishStaleSupersede and
+		// RevokeNoFirstStatus from twoReviews, CompleteNoStage from final and finalPlus) begin from the one or two starting points
+		// their race needs and no others, and are found within a few thousand random runs. Three runs must pass, each of 8,000 runs:
+		// projectFiles takes every starting point; projectFilesFinalAndReview takes only finalAndReview, where a review publish
+		// whose stage guard is false in a race is reached (the first run reaches it only between 8,000 and 12,000 runs); and
+		// projectFilesFinalPlus takes only finalPlus, where a final publish whose stage guard is false in a race is reached
+		// (a fault that lets the final branch also admit a completed project passes the first two runs).
+		samples: "20000",
+		passSamples: "8000",
+	},
+	{
+		file: "verification/audio-project-notices.qnt",
+		current: ["projectNotices", "projectNoticesUpdate"],
+		mutants: audioProjectNoticesMutants,
+		equivalents: [],
+		exhaustive: [],
+		samples: "20000",
+		passSamples: "8000",
 	},
 	{
 		file: "verification/brief-copy.qnt",

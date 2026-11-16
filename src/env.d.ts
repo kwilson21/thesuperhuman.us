@@ -17,6 +17,8 @@ interface Env {
 	BRIEF_SUGGEST_RATE_LIMIT?: RateLimit;
 	BRIEF_SUGGEST_SITE_LIMIT?: RateLimit;
 	SOFTWARE_SUGGESTIONS_ENABLED?: string;
+	// "true" shows the living brief's board and lets its route ask Workers AI (docs/plans/2026-11-living-brief.md).
+	SOFTWARE_BOARD_ENABLED?: string;
 	// Deployment-controlled email origin. Never populated from request headers.
 	SITE_ORIGIN?: string;
 	MUSIC_DB?: D1Database;
@@ -66,9 +68,9 @@ interface TurnstileOptions {
 	callback?: (token: string) => void;
 }
 
-// The members of Cloudflare's Turnstile API that the site's scripts call.
+// The members of Cloudflare's Turnstile API that the site's scripts call. Not ready(): the pages load api.js with
+// async or defer, and Turnstile throws from ready() then.
 interface TurnstileApi {
-	ready(callback: () => void): void;
 	render(container: HTMLElement, options: TurnstileOptions): string;
 	remove(id: string): void;
 	reset(): void;

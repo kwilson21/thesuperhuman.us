@@ -1,4 +1,6 @@
 import { setupBriefAutocomplete } from "./brief-autocomplete";
+import { type BriefBoardHandle, setupBriefBoard } from "./brief-board";
+import { boardAnswerKeys, laneLabels, originLabels } from "../lib/brief-board";
 import { setupSuggestionPass } from "./brief-suggestion-pass";
 import {
 	clientSoftwareLabels,
@@ -10,7 +12,7 @@ import {
 	type SoftwarePath,
 } from "../lib/software-inquiry";
 import { ownLabel } from "../lib/type-guards";
-import { setupFormSubmission } from "./form-submission";
+import { greetingName, setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
@@ -26,12 +28,90 @@ const pathFields = {
 	workflow: ["today", "firstResult"],
 } as const;
 
-const questionLimits = {
-	today: 2000,
-	firstResult: 2000,
-	purpose: 2000,
-	appGoal: 1000,
-	firstVersion: 1000,
+type BriefQuestion = {
+	key: string;
+	title: string;
+	hint: string;
+	/** One example answer, shown in the empty box. */
+	placeholder: string;
+	max: number;
+	/** Further example answers from other situations, shown under the footnote by its "See example answers" toggle. */
+	examples: readonly string[];
+};
+
+// Each path's written questions, in the order of data-step 1 and 2. Examples are fictional answers a visitor might give.
+export const briefQuestions: Record<SoftwarePath, readonly BriefQuestion[]> = {
+	website: [
+		{
+			key: "purpose",
+			title: "What’s the website for?",
+			hint: "Who it’s for, and what you want visitors to do when they get there.",
+			placeholder:
+				"A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.",
+			max: 2000,
+			examples: [
+				"I’m a wedding photographer. Couples should see my work and packages, then ask whether I’m free on their date.",
+				"Our food pantry needs a site where volunteers can sign up for a shift and neighbors can check opening hours.",
+				"A home for my band: new music, show dates and a way to join the mailing list.",
+			],
+		},
+	],
+	webapp: [
+		{
+			key: "appGoal",
+			title: "What should the app let people do?",
+			hint: "Who it’s for, and the one thing they’d come back for.",
+			placeholder:
+				"Let my students book and pay for lessons without emailing me.",
+			max: 1000,
+			examples: [
+				"Give our volunteers one place to see their shifts and swap them with each other.",
+				"Let customers check on a repair without calling the shop.",
+				"Help members of our running club find a group run at their pace and sign up.",
+			],
+		},
+		{
+			key: "firstVersion",
+			title: "Have a first version in mind?",
+			hint: "If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.",
+			placeholder:
+				"Students see my open times and book one. Payment can wait for a later version.",
+			max: 1000,
+			examples: [
+				"We track shifts in a spreadsheet. A first version could show each volunteer their own shifts on a phone.",
+				"A page where a customer types their order number and sees where the repair is.",
+				"No real idea yet. I’d like to hear what you would build first.",
+			],
+		},
+	],
+	workflow: [
+		{
+			key: "today",
+			title: "What happens today?",
+			hint: "Who does it, what’s slow or error-prone, and what it costs you.",
+			placeholder:
+				"We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.",
+			max: 2000,
+			examples: [
+				"Every Friday I copy orders from our online shop into the accounting tool by hand. It takes about two hours, and typos turn into refunds.",
+				"New hires are set up from a checklist in a shared document. Steps get missed, and nobody knows who did what.",
+				"Customers email photos to get a quote. I retype the details into a spreadsheet before I can price the job.",
+			],
+		},
+		{
+			key: "firstResult",
+			title: "Have a first result in mind?",
+			hint: "If you have a hunch. Otherwise I’ll propose one.",
+			placeholder:
+				"Each Monday, a list of clients whose follow-up is overdue, sent to the person who owns each one.",
+			max: 2000,
+			examples: [
+				"Orders reach the accounting tool on their own, and I only check the ones that don’t match.",
+				"One page that shows which setup steps are done for each new hire.",
+				"Not sure yet. Something small we could try for a few weeks.",
+			],
+		},
+	],
 };
 
 // The success body of /api/software-inquiry, as renderSoftwareReceipt reads it.
@@ -63,7 +143,7 @@ export function renderSoftwareReceipt(
 ) {
 	const brief = isBriefRecord(result.brief) ? result.brief : {};
 
-	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
+	const firstName = greetingName(brief.name);
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
 		`Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
 	document.querySelector<HTMLElement>("[data-intake-progress]")!.hidden = true;
@@ -104,13 +184,17 @@ export function setupSoftwareInquiry(
 	const storageKey = "software-brief-draft";
 	const sentKey = "software-brief-sent";
 	const requestedPath = new FormData(form).get("path");
+
+	// The path the link named, from the server. A browser that restores form state on reload can check
+	// a radio the link did not name, so the checked radio alone cannot tell a path link from a reload.
+	const linkedPath = form.dataset.linkedPath;
 	const answers: Record<string, string> = {};
 	let sentElsewhere = false;
 
 	const sentNotice =
 		"This brief was already sent from another tab. Your changes here will be sent as a new brief.";
 
-	let step = isSoftwarePath(requestedPath) ? 1 : 0,
+	let step = isSoftwarePath(linkedPath) ? 1 : 0,
 		submissionId = crypto.randomUUID();
 
 	const path = (): SoftwarePath => {
@@ -204,69 +288,35 @@ export function setupSoftwareInquiry(
 	}
 
 	function configureQuestions() {
-		const questions =
-			path() === "website"
-				? [
-						[
-							"purpose",
-							"What’s the website for?",
-							"Who it’s for, and what you want visitors to do when they get there.",
-							"A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.",
-							2000,
-						],
-					]
-				: path() === "webapp"
-					? [
-							[
-								"appGoal",
-								"What should the app let people do?",
-								"Who it’s for, and the one thing they’d come back for.",
-								"Let my students book and pay for lessons without emailing me.",
-								1000,
-							],
-							[
-								"firstVersion",
-								"Have a first version in mind?",
-								"If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.",
-								"",
-								1000,
-							],
-						]
-					: [
-							[
-								"today",
-								"What happens today?",
-								"Who does it, what’s slow or error-prone, and what it costs you.",
-								"We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.",
-								2000,
-							],
-							[
-								"firstResult",
-								"Have a first result in mind?",
-								"If you have a hunch. Otherwise I’ll propose one.",
-								"",
-								2000,
-							],
-						];
+		const questions = briefQuestions[path()];
 
 		const footnote =
 			path() === "website"
 				? "Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details."
 				: "Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.";
 
-		questions.forEach(([key, title, hint, placeholder, max], i) => {
+		questions.forEach(({ key, title, hint, placeholder, max, examples }, i) => {
 			const section = steps[i + 1],
 				box = section.querySelector<HTMLTextAreaElement>("[data-answer]")!;
 
-			box.name = String(key);
-			box.maxLength = Number(max);
-			box.placeholder = String(placeholder);
-			section.querySelector("h1")!.textContent = String(title);
-			section.querySelector("[data-answer-label]")!.textContent = String(title);
-			section.querySelector("[data-question-hint]")!.textContent = String(hint);
+			box.name = key;
+			box.maxLength = max;
+			box.placeholder = placeholder;
+			section.querySelector("h1")!.textContent = title;
+			section.querySelector("[data-answer-label]")!.textContent = title;
+			section.querySelector("[data-question-hint]")!.textContent = hint;
 			section.querySelector("[data-question-footnote]")!.textContent = footnote;
+			// More answers in other situations, read-only, for a visitor who doesn't know what to write. The placeholder holds one more.
+			section.querySelector("[data-examples-list]")?.replaceChildren(
+				...examples.map((text) => {
+					const item = document.createElement("li");
+					item.textContent = text;
+
+					return item;
+				}),
+			);
 			const error = section.querySelector<HTMLElement>("[data-form-error]")!;
-			error.dataset.formError = String(key);
+			error.dataset.formError = key;
 			error.textContent = "";
 			error.hidden = true;
 			// form-submission links an error to its box only when the box is named at setup. Link it now if the error already has an id.
@@ -295,7 +345,8 @@ export function setupSoftwareInquiry(
 
 			const validPath = isSoftwarePath(stored.path);
 
-			for (const [key, max] of Object.entries(questionLimits)) {
+			// Every path's written answers, each cut to its question's limit.
+			for (const { key, max } of Object.values(briefQuestions).flat()) {
 				const value = stored[key];
 
 				if (isString(value)) answers[key] = value.slice(0, max);
@@ -329,11 +380,12 @@ export function setupSoftwareInquiry(
 					);
 			}
 
+			// A link that names a path has already made the choice, so a draft saved on the choice screen resumes at the first question instead.
 			if (
 				validPath &&
 				(!requestedPath || requestedPath === stored.path) &&
 				Number.isInteger(saved.step) &&
-				saved.step >= 0 &&
+				saved.step >= (isSoftwarePath(linkedPath) ? 1 : 0) &&
 				saved.step <= last()
 			)
 				step = saved.step;
@@ -350,6 +402,30 @@ export function setupSoftwareInquiry(
 
 	configureQuestions();
 
+	// Each written question's example answers open under its footnote and stay open through a path switch.
+	form
+		.querySelectorAll<HTMLButtonElement>("[data-examples-toggle]")
+		.forEach((toggle) =>
+			toggle.addEventListener("click", () => {
+				const list = toggle
+					.closest("[data-step]")
+					?.querySelector<HTMLElement>("[data-examples-list]");
+
+				if (!list) return;
+
+				const open = list.hidden;
+				list.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				toggle.textContent = open
+					? "Hide example answers"
+					: "See example answers";
+			}),
+		);
+
+	// One Turnstile pass serves the autocomplete and the brief board: the same cookie, sent to the same path.
+	const startPass = startSuggestionPass(form);
+	let briefBoard: BriefBoardHandle | null = null;
+
 	const suggestions = setupBriefAutocomplete(
 		form,
 		() =>
@@ -359,8 +435,38 @@ export function setupSoftwareInquiry(
 						[pathFields[path()][0]]: payload()[pathFields[path()][0]],
 					}
 				: { path: path() },
-		startSuggestionPass,
+		() => startPass,
+		() => briefBoard?.aiChanged(),
 	);
+
+	// The written answers the board reads: the boxes the autocomplete reads, never the contact details.
+	const writtenAnswers = () => {
+		const values = payload(false);
+
+		return Object.fromEntries(
+			boardAnswerKeys[path()].map((key) => [key, values[key] ?? ""]),
+		);
+	};
+
+	const boardRoot =
+		form.dataset.board === "true"
+			? document.querySelector<HTMLElement>("[data-brief-board]")
+			: null;
+
+	briefBoard = boardRoot
+		? setupBriefBoard({
+				root: boardRoot,
+				form,
+				path,
+				answers: writtenAnswers,
+				startPass,
+				aiEnabled: () => suggestions.isEnabled(),
+				live: boardRoot.dataset.live !== "false",
+				onChange: () => {
+					if (step === last()) renderSummary();
+				},
+			})
+		: null;
 
 	function renderSummary() {
 		const list = form.querySelector<HTMLDListElement>("[data-review]")!;
@@ -368,7 +474,7 @@ export function setupSoftwareInquiry(
 		const values = payload();
 
 		const labels = {
-			budgetNote: "Budget",
+			budgetNote: "Budget (USD)",
 			firstResult: "First result",
 			firstVersion: "First version",
 		};
@@ -404,6 +510,51 @@ export function setupSoftwareInquiry(
 			list.appendChild(dt);
 			list.appendChild(dd);
 		}
+
+		// The board's outline, as it will be sent: each item with where it came from. Suggestions not kept are not listed.
+		const outline = briefBoard?.outline();
+
+		if (outline) {
+			const dt = document.createElement("dt"),
+				dd = document.createElement("dd"),
+				items = document.createElement("ul"),
+				edit = document.createElement("button");
+
+			dt.textContent = "Brief outline";
+			items.className = "review-outline";
+			items.setAttribute("role", "list");
+
+			for (const item of outline) {
+				const entry = document.createElement("li"),
+					origin = document.createElement("span");
+
+				origin.className = "review-outline-origin";
+				// An answered question reads as it did on the board.
+				origin.textContent = ` · ${item.answer && item.origin === "kept" ? "You answered" : originLabels[item.origin]}`;
+				// Each item with its lane, as the outline is grouped on the board ("Pages: Shows").
+				entry.appendChild(
+					document.createTextNode(
+						`${laneLabels[path()][item.lane]}: ${item.text}`,
+					),
+				);
+				entry.appendChild(origin);
+
+				if (item.answer)
+					entry.appendChild(
+						document.createTextNode(` · Your answer: ${item.answer}`),
+					);
+				items.appendChild(entry);
+			}
+
+			edit.type = "button";
+			edit.textContent = "Edit";
+			edit.setAttribute("aria-label", "Edit Brief outline");
+			edit.addEventListener("click", () => showStep(1));
+			dd.appendChild(items);
+			dd.appendChild(edit);
+			list.appendChild(dt);
+			list.appendChild(dd);
+		}
 	}
 
 	function showStep(index: number, focus = true) {
@@ -413,6 +564,8 @@ export function setupSoftwareInquiry(
 		steps.forEach((node, i) => (node.hidden = i !== section));
 
 		if (section === 1 || section === 2) suggestions.start();
+		// The board sits beside the written questions and the website's extra screens, not the contact or review steps.
+		briefBoard?.show([1, 2, 7, 8].includes(section));
 		document
 			.querySelectorAll<HTMLElement>(".intake-progress li")
 			.forEach((item, i) => {
@@ -507,6 +660,13 @@ export function setupSoftwareInquiry(
 	}
 
 	form.addEventListener("input", save);
+	form.addEventListener("input", (event) => {
+		if (
+			event.target instanceof HTMLTextAreaElement &&
+			event.target.hasAttribute("data-answer")
+		)
+			briefBoard?.answersChanged();
+	});
 	// Only a pointer choice moves on by itself. Arrow keys step through the radio group, so keyboard and screen-reader users
 	// reach every starting point and continue with Next, as they do after any other answer.
 	let pointerChoice = false;
@@ -532,6 +692,7 @@ export function setupSoftwareInquiry(
 
 				if (box.name) box.value = answers[box.name] ?? "";
 			});
+			briefBoard?.pathChanged();
 
 			if (pointerChoice) continueStep();
 			else {
@@ -629,7 +790,14 @@ export function setupSoftwareInquiry(
 		form,
 		endpoint: "/api/software-inquiry",
 		success: document.getElementById("software-success")!,
-		payload: () => ({ ...payload(), submissionId }),
+		payload: () => {
+			const outline = briefBoard?.outline();
+
+			// The outline is sent only when the board holds something to send, so a brief without one is sent as before.
+			return outline
+				? { ...payload(), submissionId, outline }
+				: { ...payload(), submissionId };
+		},
 		onSendingChange: (sending) => {
 			if (sending) {
 				form
@@ -650,6 +818,8 @@ export function setupSoftwareInquiry(
 		},
 		onSuccess: (result: SoftwareReceiptResult) => {
 			suggestions.clear();
+			briefBoard?.show(false);
+			briefBoard?.sent();
 
 			try {
 				localStorage.setItem(sentKey, submissionId);
@@ -697,6 +867,8 @@ export function setupSoftwareInquiry(
 		attributeFilter: ["aria-invalid"],
 	});
 	showStep(step, false);
+	// The stylesheet keeps a linked brief's choice screen out of sight until now; Back can show it again.
+	form.dataset.ready = "";
 }
 
 const form = document.querySelector<HTMLFormElement>("#software-inquiry");

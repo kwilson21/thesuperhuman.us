@@ -102,12 +102,19 @@ export async function clientProjectFile(
 	return file && fileAvailable(file, requestId, now) ? file : null;
 }
 
+/** The answer for an object whose size differs from its row: a stored state that disagrees with R2, not an unavailable service. */
+export const sizeMismatchResponse = () =>
+	new Response("File unavailable", {
+		status: 500,
+		headers: { "cache-control": "private, no-store" },
+	});
+
 export async function streamClientProjectFile(
 	request: Request,
 	bucket: R2Bucket,
 	file: ProjectFile,
 	download: boolean,
-): Promise<Response> {
+): Promise<Response | "size-mismatch"> {
 	const headers = new Headers({
 		"cache-control": "private, no-store",
 		vary: "Cookie",
@@ -128,11 +135,7 @@ export async function streamClientProjectFile(
 			headers: { "cache-control": "private, no-store" },
 		});
 
-	if (head.size !== file.byte_size)
-		return new Response("File unavailable", {
-			status: 503,
-			headers: { "cache-control": "private, no-store" },
-		});
+	if (head.size !== file.byte_size) return "size-mismatch";
 
 	const range =
 		request.method === "HEAD"

@@ -61,44 +61,42 @@ export function setupSuggestionPass(form: HTMLFormElement) {
 					return;
 				}
 
-				api.ready(() => {
-					if (finished) return;
+				// No api.ready(): the brief loads api.js with defer, and Turnstile throws "Remove async/defer" from ready()
+				// then. The API is usable once window.turnstile exists, which this waits for below.
+				try {
+					widget = api.render(container, {
+						sitekey,
+						appearance: "interaction-only",
+						"response-field": false,
+						retry: "never",
+						"refresh-expired": "never",
+						"before-interactive-callback": () => finish(false),
+						"error-callback": () => finish(false),
+						"unsupported-callback": () => finish(false),
+						callback: async (token: string) => {
+							if (finished) return;
 
-					try {
-						widget = api.render(container, {
-							sitekey,
-							appearance: "interaction-only",
-							"response-field": false,
-							retry: "never",
-							"refresh-expired": "never",
-							"before-interactive-callback": () => finish(false),
-							"error-callback": () => finish(false),
-							"unsupported-callback": () => finish(false),
-							callback: async (token: string) => {
-								if (finished) return;
+							try {
+								const response = await fetch("/api/software/brief/pass", {
+									method: "POST",
+									headers: { "content-type": "application/json" },
+									body: JSON.stringify({ token }),
+									signal: AbortSignal.timeout(6000),
+								});
 
-								try {
-									const response = await fetch("/api/software/brief/pass", {
-										method: "POST",
-										headers: { "content-type": "application/json" },
-										body: JSON.stringify({ token }),
-										signal: AbortSignal.timeout(6000),
-									});
+								// SAFETY: the pass endpoint answers with JSON; ok is optional and is compared with === true, so a missing or non-true value counts as not passed.
+								const result = (await response.json()) as { ok?: boolean };
+								finish(response.ok && result.ok === true);
+							} catch {
+								finish(false);
+							}
+						},
+					});
 
-									// SAFETY: the pass endpoint answers with JSON; ok is optional and is compared with === true, so a missing or non-true value counts as not passed.
-									const result = (await response.json()) as { ok?: boolean };
-									finish(response.ok && result.ok === true);
-								} catch {
-									finish(false);
-								}
-							},
-						});
-
-						if (finished && widget) api.remove(widget);
-					} catch {
-						finish(false);
-					}
-				});
+					if (finished && widget) api.remove(widget);
+				} catch {
+					finish(false);
+				}
 			};
 
 			if (turnstile()) render();

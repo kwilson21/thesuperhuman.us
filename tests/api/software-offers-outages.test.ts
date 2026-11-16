@@ -1204,3 +1204,101 @@ describe("what failed is logged once, and never answered", () => {
 		expect(logs()).toEqual([]);
 	});
 });
+
+// The route is an Effect program (src/server/flows/offer-*.ts, run by `runRoute`), so what the old route could not answer
+// has an answer of its own: a missing database binding is a 503 before the body is read (`bindingsOrUnavailable`), a
+// defect anywhere in the program is the fixed sentence (the `DefectAnswer` the route passes to `runRoute`), and the request
+// machine that carries a question's or a decline's client email (`settled`, 30 seconds) can fail to land.
+describe("the converted route's own outages", () => {
+	it("no MUSIC_DB binding: 503 with no message and the private header, before the body is read", async () => {
+		const request = new Request(
+			"https://thesuperhuman.us/api/owner/requests/r1/software",
+			{
+				method: "POST",
+				headers: {
+					origin: "https://thesuperhuman.us",
+					"content-type": "application/json",
+				},
+				body: "{not json",
+			},
+		);
+
+		const response = await POST(
+			partial<APIContext>({
+				params: { id: "r1" },
+				request,
+				locals: partial<APIContext["locals"]>({
+					owner: { email: "owner@example.test" },
+					runtime: testRuntime({}),
+				}),
+			}),
+		);
+
+		expect(await read(response)).toEqual({
+			status: 503,
+			body: { ok: false },
+			private: true,
+		});
+		expect(request.bodyUsed).toBe(false);
+		expect(logs()).toEqual([]);
+	});
+
+	it("a defect answers the fixed sentence, logged once, with nothing written", async () => {
+		const { sql, call } = setUp({ seed: plain });
+		const before = written(sql);
+
+		vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
+			throw new Error("no ids for owner@example.test");
+		});
+
+		expect(await read(await call(draft))).toEqual(answer(500, FAILED));
+		expect(written(sql)).toEqual(before);
+		expect(logs()).toEqual([
+			[
+				"/api/owner/requests/[id]/software failed unexpectedly:",
+				"Error",
+				"no ids for [email]",
+			],
+		]);
+	});
+
+	it.each<[string, JsonObject, Seed]>([
+		["question", question, plain],
+		["decline", decline, withSent],
+	])(
+		"a %s whose client email has not landed in 30 seconds answers the fixed sentence, logged once, and sends nothing more",
+		async (_name, body, start) => {
+			const { sql, call } = setUp({ seed: start });
+
+			vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+			vi.setSystemTime(new Date(START));
+			// Resend never answers, and the request ignores its own abort: only the machine's 30 seconds can end the wait.
+			vi.mocked(fetch).mockImplementation(() => new Promise(() => undefined));
+
+			const pending = call(body);
+
+			// A second at a time, as real time passes, so the email is under way before the 30 seconds run out.
+			for (let second = 0; second < 31; second += 1)
+				await vi.advanceTimersByTimeAsync(1_000);
+
+			expect(await read(await pending)).toEqual(answer(500, FAILED));
+			expect(emails()).toHaveLength(1);
+			expect(logs()).toHaveLength(1);
+			expect(logs()[0]?.slice(0, 2)).toEqual([
+				"/api/owner/requests/[id]/software failed unexpectedly:",
+				"TimeoutError",
+			]);
+			// Nothing after the email is saved: no question-sent or declined audit, and the request is not resolved.
+			expect(
+				sql
+					.prepare(
+						"SELECT action FROM owner_request_audit WHERE action IN ('question-sent','declined')",
+					)
+					.all(),
+			).toEqual([]);
+			expect(
+				sql.prepare("SELECT status FROM owner_requests WHERE id='r1'").get(),
+			).toEqual({ status: "reviewed" });
+		},
+	);
+});

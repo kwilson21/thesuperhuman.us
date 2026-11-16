@@ -1,5 +1,7 @@
 // What CI screenshots and how the images reach a PR description. Pure; shared by the scripts beside it.
 
+import { WAVE_SCENE_SEED } from "./random.mjs";
+
 /** Every public page. tests/scripts/screenshots.test.ts fails when a page file is missing here. */
 export const PAGES = [
 	{ name: "home", path: "/" },
@@ -24,6 +26,7 @@ export const PAGES = [
 	{ name: "writing", path: "/writing" },
 	{ name: "writing-ai-gives-you-speed", path: "/writing/ai-gives-you-speed" },
 	{ name: "about", path: "/about" },
+	{ name: "contact", path: "/contact" },
 	{ name: "services", path: "/services" },
 	{ name: "privacy", path: "/privacy" },
 	{ name: "audio", path: "/audio" },
@@ -35,6 +38,13 @@ export const PAGES = [
 	{ name: "music-old-news", path: "/music/old-news" },
 	{ name: "studio-sign-in", path: "/studio/sign-in" },
 	{ name: "not-found", path: "/this-page-does-not-exist", status: 404 },
+	// The same page with a seed whose first draw picks the other scene (see random.mjs).
+	{
+		name: "not-found-wave",
+		path: "/this-page-does-not-exist",
+		status: 404,
+		seed: WAVE_SCENE_SEED,
+	},
 	{ name: "owner-today", path: "/owner", owner: true },
 	{ name: "owner-requests", path: "/owner/requests", owner: true },
 	{ name: "owner-campaigns", path: "/owner/campaigns", owner: true },
@@ -42,7 +52,8 @@ export const PAGES = [
 
 /** Page files that are covered another way. */
 export const NOT_PAGES = {
-	"src/pages/404.astro": "Captured through not-found.",
+	"src/pages/404.astro":
+		"Captured through not-found-desktop (horizon scene) and not-found-wave-desktop (wave scene), two seeded captures of the one page.",
 	"src/pages/music/[slug].astro": "Captured through music-old-news.",
 };
 
@@ -213,6 +224,9 @@ const PAGE_NAMES_BY_FILE = {
 	"src/layouts/BaseLayout.astro": SHARED_SITE_PAGES,
 	"src/components/ExperienceRow.astro": ["work"],
 	"src/components/Hero.astro": ["home"],
+	"src/components/Switchboard.astro": ["contact"],
+	"src/components/ContactForm.astro": ["contact"],
+	"src/data/contact-lines.ts": ["contact"],
 	"src/components/WorkWithMe.astro": ["home", "services"],
 	"src/data/work-with-me.ts": ["home", "services"],
 	"src/layouts/ServiceSheet.astro": ["services"],
@@ -271,8 +285,11 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/audio-portfolio-filter.ts": ["audio-portfolio"],
 	"src/scripts/audio-releases-filter.ts": ["audio-releases"],
 	"src/scripts/audio-services-links.ts": ["audio-services"],
-	"src/scripts/contact-form.ts": ["home"],
-	"src/scripts/home-contact.ts": ["home"],
+	"src/scripts/contact-form.ts": ["contact"],
+	"src/scripts/contact-message.ts": ["contact"],
+	"src/scripts/contact-page.ts": ["contact"],
+	"src/scripts/switchboard.ts": ["contact"],
+	"src/scripts/pinned-contact.ts": ["home", "work", "audio", "not-found"],
 	"src/scripts/music-detail-links.ts": ["music-old-news"],
 	"src/scripts/release-interest.ts": ["music-old-news"],
 	"src/scripts/resume-request-form.ts": ["about"],
@@ -290,6 +307,14 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/pages/contact.astro": ["contact-switchboard"],
+	"src/components/Switchboard.astro": ["contact-switchboard"],
+	"src/components/ContactForm.astro": ["contact-switchboard", "contact-hold"],
+	"src/data/contact-lines.ts": ["contact-switchboard"],
+	"src/scripts/switchboard.ts": ["contact-switchboard"],
+	"src/scripts/contact-page.ts": ["contact-switchboard"],
+	"src/scripts/contact-message.ts": ["contact-switchboard"],
+	"src/scripts/contact-form.ts": ["contact-hold"],
 	"src/components/Hero.astro": ["studio-objects"],
 	"src/components/home/StudioLife.astro": ["studio-objects"],
 	"src/scripts/studio-objects.ts": ["studio-objects"],
@@ -315,7 +340,16 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief"],
+	"src/pages/software/start.astro": [
+		"brief-examples",
+		"website-brief",
+		"software-board",
+	],
+	"src/components/BriefBoard.astro": ["software-board"],
+	"src/scripts/brief-board.ts": ["software-board"],
+	"src/lib/brief-board.ts": ["software-board"],
+	"src/pages/api/software/brief/board.ts": ["software-board"],
+	"scripts/screenshots/brief-board-script.mjs": ["software-board"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -370,17 +404,37 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-brief",
 		"services-print",
 		"website-brief",
+		"software-board",
 	],
-	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
+	"src/scripts/brief-autocomplete.ts": [
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
-	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
+	"src/pages/api/software-inquiry.ts": [
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
+	"src/styles/software-intake.css": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+		"software-board",
+	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",
 		"software-project",
 		"website-brief",
+		"software-board",
 	],
 	"src/pages/owner/requests/index.astro": ["software-brief", "website-brief"],
 	"src/components/owner/RequestList.astro": ["software-brief", "website-brief"],
@@ -540,6 +594,9 @@ export const PREVIEW_OVERRIDES = {
 	AUDIO_CLIENT_CODE_KEY: "screenshots-only-code-key-0123456789abcdef",
 	// Gated pages stay reviewable in PRs before launch.
 	AUDIO_CLIENT_PORTAL_ENABLED: "true",
+	// The brief board too. The preview has no AI binding, so its route answers that interpretation is off; scenarios that
+	// show cards answer the route locally with scripts/screenshots/brief-board-script.mjs.
+	SOFTWARE_BOARD_ENABLED: "true",
 };
 
 /** Parses JSON with comments and trailing commas, the format of wrangler.jsonc. */

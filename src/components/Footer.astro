@@ -7,13 +7,16 @@ interface Props {
 	buttonLabel?: string;
 	buttonPath?: string;
 	id?: string;
+	/** The pinned phone button. Invitation pages have it; Home, a quiet page, asks for it too. */
+	pinned?: boolean;
 }
 
 const {
 	variant = "invitation",
 	buttonLabel = "Get in touch",
-	buttonPath = "/#contact",
+	buttonPath = "/contact",
 	id,
+	pinned = variant === "invitation",
 } = Astro.props;
 
 const host = Astro.isPrerendered
@@ -34,7 +37,7 @@ const privacyHref = mainHref("/privacy");
 const homeHref = mainHref("/");
 const year = new Date().getFullYear();
 ---
-{variant === 'invitation' && <div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel}</a></div>}
+{pinned && <div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel}</a></div>}
 <footer class="compact-footer site-shell">
   <div class:list={['closing-panel', { 'closing-panel--quiet': variant === 'quiet' }]} id={id}>
     {variant === 'quiet' && <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>}
