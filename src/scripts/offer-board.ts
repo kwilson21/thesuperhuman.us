@@ -196,6 +196,7 @@ export function setupOfferBoard() {
 		hovering = false,
 		timer: ReturnType<typeof setTimeout> | undefined,
 		inFlight: AbortController | null = null,
+		latestN = 0,
 		held: Held | null = null,
 		priceSignature = "";
 
@@ -241,8 +242,12 @@ export function setupOfferBoard() {
 	const endAfter = (text: string) =>
 		/[.?!]["”’)]*$/.test(text.trim()) ? "" : ".";
 
+	/** The whole sentence behind a short form shown while the owner was among the cards, shown once they leave. */
+	let pendingFull: string | null = null;
+
 	/** A message the owner both sees in the status line and hears. */
 	const say = (text: string) => {
+		pendingFull = null;
 		status.style.minHeight = "";
 		status.textContent = text;
 		announce(text);
@@ -250,6 +255,7 @@ export function setupOfferBoard() {
 
 	/** Words the board writes on its own, while the owner may be among the cards: the line keeps its height. */
 	const quietly = (text: string) => {
+		pendingFull = null;
 		status.style.minHeight = `${status.offsetHeight}px`;
 		status.textContent = text;
 	};
@@ -260,9 +266,31 @@ export function setupOfferBoard() {
 		hovering ||
 		cardsBox.contains(document.activeElement) ||
 		document.activeElement === heldButton ||
+		// A price row is redrawn when a reply applies, so focus on its buttons holds a reply too.
+		Boolean(
+			document.activeElement?.closest("[data-price-day], [data-price-market]"),
+		) ||
 		[...cardsBox.querySelectorAll<HTMLElement>("[data-card-editor]")].some(
 			(editor) => !editor.hidden,
 		);
+
+	/**
+	 * What the board says on its own (a reply, a failure). While the owner is among the cards the line keeps its height and
+	 * shows the short form, so the cards do not move under the pointer or finger; the whole sentence is announced now and
+	 * shown once they leave the cards.
+	 */
+	function sayOrHold(full: string, short: string) {
+		if (!interacting()) {
+			say(full);
+
+			return;
+		}
+
+		quietly(short);
+		announce(full);
+
+		if (short !== full) pendingFull = full;
+	}
 
 	// ---- The offer editor's fields ------------------------------------------------------------------------------------
 	const named = <E extends HTMLInputElement | HTMLTextAreaElement>(
@@ -883,8 +911,15 @@ export function setupOfferBoard() {
 				? document.activeElement.closest("dd")
 				: null;
 
+		// What a price button said stays in its row through the redraw.
+		const said = document.querySelector<HTMLElement>("[data-price-said]");
+		const saidIn = said?.closest("dd");
+
 		priceDay.replaceChildren(...dayParts);
 		priceMarket.replaceChildren(...marketParts);
+
+		if (said && (saidIn === priceDay || saidIn === priceMarket))
+			saidIn.appendChild(said);
 
 		// A row redrawn under focus keeps it on its new button, or on the row's heading when it has none.
 		if (focused && !focused.contains(document.activeElement))
@@ -1162,7 +1197,7 @@ export function setupOfferBoard() {
 	const sameDetail = (one: MilestoneDetail | undefined, two: MilestoneDetail) =>
 		JSON.stringify(one) === JSON.stringify(two);
 
-	function apply(reply: Held) {
+	function apply(reply: Held, shown = false) {
 		replied = true;
 
 		const result = applyReplyIn(
@@ -1185,19 +1220,30 @@ export function setupOfferBoard() {
 		held = null;
 		render();
 
-		const done = result.added
-			? `Up to date with your draft. ${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`
-			: "Up to date with your draft.";
+		const added = `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`;
+
+		// A reply that waited while a newer request went out is not the board catching up with the draft.
+		const reading = inFlight !== null && reply.n < latestN;
+
+		const done = reading
+			? result.added
+				? `${added} Reading your latest changes…`
+				: "Reading your latest changes…"
+			: result.added
+				? `Up to date with your draft. ${added}`
+				: "Up to date with your draft.";
 
 		// The reply to the page's last request says so: the board asks nothing more on this page.
 		const full = reply.last ? `${done} ${PAGE_LIMIT}` : done;
 
 		// While the owner is among the cards the line keeps its height and a short form, so the cards do not move under the
 		// pointer or finger; the whole sentence is still announced, and Suggest says the limit again.
-		if (interacting()) {
-			quietly(reply.last ? "Up to date. This page’s limit is reached." : done);
-			announce(full);
-		} else say(full);
+		if (shown) say(full);
+		else
+			sayOrHold(
+				full,
+				reply.last ? "Up to date. This page’s limit is reached." : done,
+			);
 	}
 
 	function deliver(reply: Held) {
@@ -1269,14 +1315,18 @@ export function setupOfferBoard() {
 	const AI_FAILED =
 		"The AI couldn’t answer just now. Your draft is unchanged; press Suggest to try again.";
 
-	function failed(text: string) {
+	/** A request failed: the route's sentence or the page's own. `daily` is the owner's daily limit (a reload cannot help). */
+	function failed(text: string, daily = false) {
 		autoAsk = false;
-		// Only the request on its way can fail, so at the limit it was the page's last: Suggest cannot try again.
-		say(
-			requests < REQUESTS_PER_PAGE
+
+		// Only the request on its way can fail, so at the page's limit it was the last: Suggest cannot try again, and the
+		// route's "try again" would contradict the reload the limit asks for. The daily limit keeps its own sentence.
+		const full =
+			requests < REQUESTS_PER_PAGE || daily
 				? text
-				: `${text === AI_FAILED ? "The AI couldn’t answer just now. Your draft is unchanged." : text} ${PAGE_LIMIT}`,
-		);
+				: `The board’s last request on this page got no answer. ${PAGE_LIMIT}`;
+
+		sayOrHold(full, "No answer from the board just now.");
 	}
 
 	async function ask(pressed = false) {
@@ -1288,6 +1338,7 @@ export function setupOfferBoard() {
 
 		const key = requestKey();
 		const [next, n] = sendRequest(board);
+		latestN = n;
 		board = next;
 		const controller = new AbortController();
 		const stop = setTimeout(() => controller.abort(), TIMEOUT);
@@ -1322,7 +1373,7 @@ export function setupOfferBoard() {
 			if (!reply) {
 				const error = field(json, "error");
 
-				if (Predicate.isString(error)) failed(error);
+				if (Predicate.isString(error)) failed(error, response.status === 429);
 				else if (
 					json === null ||
 					response.status === 401 ||
@@ -1428,20 +1479,10 @@ export function setupOfferBoard() {
 				pressed.focus({ preventScroll: true });
 
 			// A reply held while the owner was among the cards lands before a press outside them (Suggest, Undo), not
-			// just after it, so the press's own message is said last and a request includes the waiting cards. Not for
-			// a price row's button, which applying a reply may redraw, and not while a card editor is open.
-			if (
-				held &&
-				pressed !== heldButton &&
-				!cardsBox.contains(pressed) &&
-				!pressed.closest(
-					"[data-price-day], [data-price-market], [data-price-past]",
-				) &&
-				![...cardsBox.querySelectorAll<HTMLElement>("[data-card-editor]")].some(
-					(editor) => !editor.hidden,
-				)
-			)
-				apply(held);
+			// just after it, so the press's own message is said last and a request includes the waiting cards. Only when
+			// nothing else holds it: not under a resting pointer, not while a card editor is open, and not for a price
+			// row's button (focus there holds it, since applying a reply redraws the row).
+			if (held && !interacting()) apply(held);
 		},
 		true,
 	);
@@ -1748,23 +1789,29 @@ export function setupOfferBoard() {
 		)
 			return;
 
-		apply(held);
+		apply(held, true);
 		heading.focus();
 	});
 	cardsBox.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")
 			hovering = true;
 	});
+
+	/** Once the owner leaves the cards: a held reply applies, or a sentence held back while they were there is shown. */
+	const left = () => {
+		if (interacting()) return;
+
+		if (held) apply(held);
+		else if (pendingFull) say(pendingFull);
+	};
+
 	cardsBox.addEventListener("pointerleave", () => {
 		hovering = false;
-
-		if (held && !interacting()) apply(held);
+		left();
 	});
 	root.addEventListener("focusout", () => {
 		// Decided once focus has settled: drawing a card can replace the focused button and move focus to its neighbour.
-		setTimeout(() => {
-			if (held && !interacting()) apply(held);
-		}, 0);
+		setTimeout(left, 0);
 	});
 
 	// Once the owner has asked, the board keeps up with the draft.

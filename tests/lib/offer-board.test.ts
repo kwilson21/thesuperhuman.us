@@ -650,3 +650,18 @@ describe("found in the offer board's twenty-first review", () => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
+
+describe("found in the offer board's twenty-second review", () => {
+	it.each([
+		"Fee 1,500 200 pages",
+		"Budget 2,000 300 pages",
+		"Fee 1.500 300 pages",
+		"Quote 4,500 150 pages",
+		"Fee 1,200 150 hours of support",
+	])(
+		"drops %s: a comma or dot grouped amount does not continue as a space-grouped count",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+});
