@@ -767,3 +767,19 @@ The final API recheck is a race reduction, not an atomic GitHub transaction:
 GitHub provides no compare-and-set for commit status writes. A new run starting
 between that read and status write is handled by its in-progress/completion
 notification and by checking current runs again before any actual merge.
+
+### Immutable preview review evidence
+
+The trusted publisher records the screenshots commit and each sheet's Git blob ID,
+SHA-256 and byte size. The finalizer verifies that exact directory tree and creates
+an Actions-owned `Trusted preview evidence` check with commit-pinned image URLs.
+Successful validation links to that check, not to the author-editable PR description.
+The body remains a convenience copy; changing it cannot change the canonical evidence.
+The `immutablePreviewCurrent` model requires verified sheets and the canonical check
+before success; `immutablePreviewMutable` keeps the old mutable-evidence failure.
+
+Read-only discovery verifies the resolved PR base against `main` and exposes that
+immutable SHA. The write-capable job checks out that resolved commit, rather than
+an older workflow-event snapshot, then rechecks the base before writing status.
+Run identity accepts both unqualified REST workflow paths and a matching, validated
+`@ref` suffix. Workflow ID, repository, event and dispatch-main restrictions remain.

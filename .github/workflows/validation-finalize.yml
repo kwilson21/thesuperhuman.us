@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       sha: ${{ steps.target.outputs.sha }}
+      base: ${{ steps.target.outputs.base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,6 +31,7 @@ jobs:
       actions: read
       pull-requests: read
       statuses: write
+      checks: write
     concurrency:
       group: trusted-validation-${{ needs.resolve.outputs.sha }}
       cancel-in-progress: false
@@ -39,6 +41,7 @@ jobs:
       # Never install dependencies, restore caches or execute candidate code in this job.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.resolve.outputs.base }}
           persist-credentials: false
       - name: Resolve authenticated check and review provenance
         id: resolve
@@ -46,6 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          EXPECTED_BASE: ${{ needs.resolve.outputs.base }}
       - if: steps.resolve.outputs.sha
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

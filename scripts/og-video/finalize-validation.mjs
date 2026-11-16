@@ -11,12 +11,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { verifyEvidence, evidenceSummary } from "./review-evidence.mjs";
+
 const SHA = /^[0-9a-f]{40}$/;
+
+export function authenticPath(run, workflow, kind) {
+	if (run.path === workflow.path) return true;
+
+	if (typeof run.path !== "string" || !run.path.startsWith(`${workflow.path}@`))
+		return false;
+	const ref = run.path.slice(workflow.path.length + 1);
+
+	if (kind === "publisher" || run.event === "workflow_dispatch")
+		return ["main", "refs/heads/main"].includes(ref);
+
+	if (run.event !== "pull_request") return false;
+
+	return [
+		run.head_branch,
+		`refs/heads/${run.head_branch}`,
+		run.head_sha,
+		...(run.pull_requests ?? []).flatMap((pr) =>
+			Number.isSafeInteger(pr.number)
+				? [`refs/pull/${pr.number}/merge`, `refs/pull/${pr.number}/head`]
+				: [],
+		),
+	].includes(ref);
+}
 
 export function authenticRun(run, workflow, repository, kind) {
 	return (
 		run.workflow_id === workflow.id &&
-		run.path === workflow.path &&
+		authenticPath(run, workflow, kind) &&
 		run.repository?.full_name === repository &&
 		(kind === "publisher"
 			? run.event === "workflow_run"
@@ -130,13 +156,15 @@ async function marker(run, prefix, filename) {
 	}
 }
 
-async function status(sha, state) {
+async function status(sha, state, evidenceUrl) {
 	if (!SHA.test(sha)) throw new Error("Invalid status head");
 	await api(`statuses/${sha}`, {
 		state,
 		context: "validate",
 		description: "Trusted tests, preview review and private approvals",
-		target_url: `https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+		target_url:
+			evidenceUrl ??
+			`https://github.com/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`,
 	});
 }
 
@@ -253,7 +281,19 @@ export function assertTarget(expected, actual) {
 async function discover() {
 	const result = await target();
 
-	if (result) appendFileSync(process.env.GITHUB_OUTPUT, `sha=${result.sha}\n`);
+	if (result) {
+		const main = await api("git/ref/heads/main");
+
+		if (
+			!SHA.test(result.pr.base.sha) ||
+			main.object?.sha !== result.pr.base.sha
+		)
+			throw new Error("PR base is not the current trusted main commit");
+		appendFileSync(
+			process.env.GITHUB_OUTPUT,
+			`sha=${result.sha}\nbase=${result.pr.base.sha}\n`,
+		);
+	}
 }
 
 async function resolve() {
@@ -263,6 +303,12 @@ async function resolve() {
 	const { sha, pr, validationWorkflow, publisherWorkflow } = result;
 	let { receipt } = result;
 	assertTarget(process.env.EXPECTED_SHA, sha);
+
+	if (
+		!SHA.test(process.env.EXPECTED_BASE ?? "") ||
+		pr.base.sha !== process.env.EXPECTED_BASE
+	)
+		throw new Error("Trusted base changed after resolution");
 	await status(sha, "pending");
 
 	if (!receipt) {
@@ -388,6 +434,28 @@ async function verify() {
 
 	assertValidationScripts(trusted, candidate);
 
+	if (changed) {
+		await verifyEvidence(state.receipt, api);
+
+		const check = await api("check-runs", {
+			name: "Trusted preview evidence",
+			head_sha: state.sha,
+			status: "completed",
+			conclusion: "neutral",
+			completed_at: new Date().toISOString(),
+			details_url: `https://github.com/${repository}/tree/${state.receipt.screenshotsCommit}/${state.receipt.dir}`,
+			output: {
+				title: "Immutable review sheets",
+				summary: evidenceSummary(state.receipt, repository),
+			},
+		});
+
+		if (!check.html_url?.startsWith(`https://github.com/${repository}/`))
+			throw new Error("Invalid canonical check URL");
+		state.evidenceUrl = check.html_url;
+		writeFileSync("validation-state.json", JSON.stringify(state));
+	}
+
 	appendFileSync(process.env.GITHUB_OUTPUT, "ready=true\n");
 }
 
@@ -417,6 +485,7 @@ async function finish() {
 	await status(
 		state.sha,
 		process.env.GATE_RESULT === "success" ? "success" : "failure",
+		state.evidenceUrl,
 	);
 }
 

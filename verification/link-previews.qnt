@@ -103,3 +103,24 @@ module validationAuthority {
 }
 module validationAuthorityCurrent { import validationAuthority(STALE=false).* }
 module validationAuthorityStale { import validationAuthority(STALE=true).* }
+
+// Editing the PR description cannot replace the immutable evidence linked by validation.
+module immutablePreviewEvidence {
+  const MUTABLE: bool
+  var sheetsVerified: bool
+  var immutableCheck: bool
+  var bodyChanged: bool
+  var green: bool
+  action init = all { sheetsVerified' = false, immutableCheck' = false, bodyChanged' = false, green' = false }
+  action step = any {
+    all { sheetsVerified' = true, immutableCheck' = immutableCheck, bodyChanged' = bodyChanged, green' = green },
+    all { sheetsVerified, immutableCheck' = true, sheetsVerified' = sheetsVerified, bodyChanged' = bodyChanged, green' = green },
+    all { bodyChanged' = true, sheetsVerified' = sheetsVerified, immutableCheck' = immutableCheck, green' = green },
+    all { (sheetsVerified and immutableCheck) or MUTABLE, green' = true, sheetsVerified' = sheetsVerified, immutableCheck' = immutableCheck, bodyChanged' = bodyChanged },
+    all { sheetsVerified' = sheetsVerified, immutableCheck' = immutableCheck, bodyChanged' = bodyChanged, green' = green },
+  }
+  val immutableReviewBound = not(green) or (sheetsVerified and immutableCheck)
+  val allProperties = immutableReviewBound
+}
+module immutablePreviewCurrent { import immutablePreviewEvidence(MUTABLE=false).* }
+module immutablePreviewMutable { import immutablePreviewEvidence(MUTABLE=true).* }

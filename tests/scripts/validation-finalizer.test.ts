@@ -222,3 +222,77 @@ it("re-resolves provenance inside a per-head lock and rejects target substitutio
 		"finalize-validation.mjs resolve",
 	);
 });
+
+it("authenticates both REST path formats without accepting an unrelated ref", () => {
+	for (const suffix of ["@main", "@refs/heads/main"])
+		expect(
+			authenticRun(
+				{ ...run, path: workflow.path + suffix },
+				workflow,
+				repository,
+				"validation",
+			),
+		).toBe(true);
+
+	for (const suffix of ["@attacker", "@refs/heads/attacker", "@main@attacker"])
+		expect(
+			authenticRun(
+				{ ...run, path: workflow.path + suffix },
+				workflow,
+				repository,
+				"validation",
+			),
+		).toBe(false);
+
+	const pull = {
+		...run,
+		event: "pull_request",
+		head_branch: "feature",
+		head_sha: sha,
+		pull_requests: [{ number: 213 }],
+	};
+
+	for (const suffix of [
+		"@feature",
+		"@refs/heads/feature",
+		"@refs/pull/213/merge",
+		`@${sha}`,
+	])
+		expect(
+			authenticRun(
+				{ ...pull, path: workflow.path + suffix },
+				workflow,
+				repository,
+				"validation",
+			),
+		).toBe(true);
+	expect(
+		authenticRun(
+			{ ...pull, path: workflow.path + "@refs/pull/214/merge" },
+			workflow,
+			repository,
+			"validation",
+		),
+	).toBe(false);
+});
+
+it("uses the resolved trusted base and an author-immutable check", () => {
+	const trusted = readFileSync(
+		".github/workflows/validation-finalize.yml",
+		"utf8",
+	);
+
+	expect(trusted).toContain("ref: ${{ needs.resolve.outputs.base }}");
+	expect(trusted).toContain("EXPECTED_BASE: ${{ needs.resolve.outputs.base }}");
+	expect(trusted).toContain("checks: write");
+
+	const publisher = readFileSync(
+		".github/workflows/link-previews-publish.yml",
+		"utf8",
+	);
+
+	expect(publisher).toContain(
+		"SCREENSHOTS_COMMIT: ${{ steps.sheets.outputs.commit }}",
+	);
+	expect(publisher).toContain("node scripts/og-video/review-evidence.mjs");
+});

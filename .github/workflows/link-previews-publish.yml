@@ -132,13 +132,14 @@ jobs:
               printf '100644 %s\t%s\n' "$(git hash-object -w -- "$file")" "$dir/$(basename "$file")"
             done | git update-index --index-info
             tree=$(git write-tree --missing-ok)
-            [ "$tree" = "$(git rev-parse "$tip^{tree}")" ] && { pushed=1; break; }
+            [ "$tree" = "$(git rev-parse "$tip^{tree}")" ] && { commit="$tip"; pushed=1; break; }
             commit=$(git commit-tree "$tree" -p "$tip" -m "chore: link-preview sheets for #${PR} at ${SHA::7}")
             if git push --no-thin origin "$commit:refs/heads/screenshots"; then pushed=1; break; fi
             sleep $(( (RANDOM % 5) + i ))
           done
           [ -n "${pushed:-}" ] || { echo "Could not push the contact sheets"; exit 1; }
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
       - name: Update the PR description
         if: steps.sheets.outputs.dir
         env:
@@ -157,9 +158,8 @@ jobs:
           SCENES: ${{ steps.apply.outputs.scenes }}
           BASE: ${{ steps.pr.outputs.base }}
           RENDER_RUN: ${{ github.event.workflow_run.id }}
-        run: |
-          mkdir receipt
-          jq -n --arg base "$BASE" --arg sha "$SHA" --arg pr "$PR" --arg dir "$DIR" --arg scenes "$SCENES" --arg renderRun "$RENDER_RUN" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '{base:$base,sha:$sha,pr:$pr,dir:$dir,scenes:$scenes,renderRun:$renderRun,run:$run,attempt:$attempt}' > receipt/receipt.json
+          SCREENSHOTS_COMMIT: ${{ steps.sheets.outputs.commit }}
+        run: node scripts/og-video/review-evidence.mjs
       - if: steps.sheets.outputs.dir
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
