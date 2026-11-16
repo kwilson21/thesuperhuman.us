@@ -52,14 +52,15 @@ export function setupPinnedContact(): void {
 
 		if (!pinned.getClientRects().length) return;
 		// Layout-only measurements: the browser, not a scroll-event transform,
-		// constrains the sticky action to this document-space track. It therefore
+		// constrains the sticky action to this body-relative track. Main-content
+		// reflow changes its length natively, without waiting for an observer. It
 		// follows fast/compositor scrolling even while the main thread is busy.
 		const box = pinned.getBoundingClientRect();
 		const action = link.getBoundingClientRect();
 		const target = footer.getBoundingClientRect();
 		track.style.setProperty(
-			"--contact-track-height",
-			`${target.top + window.scrollY + box.bottom - action.top}px`,
+			"--contact-track-bottom",
+			`${document.body.getBoundingClientRect().bottom - target.top - (box.bottom - action.top)}px`,
 		);
 		pinned.style.setProperty("--contact-height", `${box.height}px`);
 		footer.setAttribute("data-contact-proxy", "");
@@ -100,9 +101,19 @@ export function setupPinnedContact(): void {
 	if (typeof ResizeObserver !== "undefined") {
 		const resize = new ResizeObserver(schedule);
 		resize.observe(document.documentElement);
+		// Main can reflow without changing the root viewport box (notably WebKit).
+		const main = document.querySelector("main");
+
+		if (main) resize.observe(main);
 		resize.observe(footer);
+		const footerContainer = document.querySelector("footer");
+
+		if (footerContainer) resize.observe(footerContainer);
 		resize.observe(pinned);
 	}
+
+	// Cold-font loads can move the footer without resizing the footer itself.
+	void document.fonts?.ready.then(schedule);
 
 	// Establish the initial state before paint, including restored scroll positions.
 	update();

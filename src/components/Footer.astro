@@ -77,7 +77,8 @@ const year = new Date().getFullYear();
   .contact-track { display: none; }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
-    .contact-track { display: block; position: absolute; inset: 0 0 auto; height: var(--contact-track-height, 0px); pointer-events: none; z-index: 4; }
+    :global(body:has([data-contact-track])) { position: relative; }
+    .contact-track { display: block; position: absolute; inset: 0 0 var(--contact-track-bottom, 0px); pointer-events: none; z-index: 4; }
     .pinned-contact:not([hidden]) { display: flex; position: sticky; top: max(0px, calc(100dvh - var(--contact-height, 0px))); z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); pointer-events: none; }
     .pinned-contact::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); }
     .pinned-contact .site-button { pointer-events: auto; width: min(100%, var(--contact-action-max)); margin-inline: auto; box-sizing: border-box; white-space: normal; text-align: center; }
