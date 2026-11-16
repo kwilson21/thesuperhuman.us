@@ -89,7 +89,8 @@ import * as rows from "../golden/harness/rows";
 // The offers store (src/server/offers-store.ts) against the real schema on node:sqlite: what each read finds, what each
 // batch writes, and the failure each answers with (OffersStoreFailed for a rejection, GuardRefused for a refused guard,
 // ChangedSinceRead for the draft's unique indexes). And its SQL against the golden corpus: every text it runs is one the
-// old route ran (and the fixtures recorded), or one of the few listed below, none of which a golden hook picks.
+// old route ran (and the fixtures recorded), or one of the few listed below: three changed texts, each picked by the hooks
+// that picked its old text, and the added reads, which no golden hook picks.
 
 const EARLIER = "2026-11-13T11:00:00.000Z";
 const AT = "2026-11-13T12:00:00.000Z";

@@ -1,14 +1,21 @@
 // What the owner's software request actions (POST /api/owner/requests/[id]/software) read from and write to MUSIC_DB
 // (the MusicDb service), one function per statement or batch the route runs, in the order of
-// docs/plans/2026-11-offers-conversion.md, section 4. A read asks for stored facts and decides nothing: every invoice of
-// the request, the request's link row, the attachments' metadata rows, and the rules in src/server/rules decide from them.
-// A batch stores what a rule decided, and its only SQL that can refuse is the compare-and-set guards (G1 to G11 of the
+// docs/plans/2026-11-offers-conversion.md, section 4. A read returns facts (rows, columns, or whether a row exists), and
+// the rules in src/server/rules decide from them. Where today's route asks a question in SQL (a live link made since the
+// start of the sending window, an offer left in the WITHDRAW list, an MSA the offer may reuse, an attachment's row with
+// these columns, a link still live), the store keeps that text, so the golden corpus records the same statement; which
+// refusal the answer leads to, and in what order, stays in the rules. The reads it adds for conditions only a guard
+// checked before ask what that guard asks (G3's signed statuses, G6's audio project, G11's rows and closed archives). A
+// batch stores what a rule decided, and its only SQL that can refuse is the compare-and-set guards (G1 to G11 of the
 // design), which re-check at write time what the rule read; the status lists those guards and writes name come from the
 // offer version machine (`OFFER_MOVES`, src/server/machines/offer-version.ts).
 //
 // The SQL text is the route's own wherever the golden corpus (tests/golden/owner-request-software-*.test.ts) recorded it,
-// because its hooks pick statements by pattern and count matches; tests/server/offers-store.test.ts holds every text to the
-// fixtures, and every read this store adds to matching none of those patterns.
+// because its hooks pick statements by pattern and count matches, with three recorded texts changed: the deposit read
+// (every invoice of the request, unfiltered, for the rule to decide on), the withdraw (its IN list in the machine's
+// order) and mark sent (which gains `AND status='draft'` from SEND). tests/server/offers-store.test.ts lists each change
+// with its reason and each read this store adds, holds every other text to the fixtures, each changed text to the
+// patterns its old text matched, and each added read to matching none.
 //
 // Failures. Any rejection of a read, or of a batch that no guard refused, is an `OffersStoreFailed` carrying what the
 // database raised in `failure`, which the route logs once (logUnexpected) before its fixed answer. A batch a guard refused
