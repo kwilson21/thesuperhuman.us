@@ -271,6 +271,7 @@ const PAGE_NAMES_BY_FILE = {
 	"src/scripts/audio-portfolio-filter.ts": ["audio-portfolio"],
 	"src/scripts/audio-releases-filter.ts": ["audio-releases"],
 	"src/scripts/audio-services-links.ts": ["audio-services"],
+	"src/components/ContactForm.astro": ["home"],
 	"src/scripts/contact-form.ts": ["home"],
 	"src/scripts/home-contact.ts": ["home"],
 	"src/scripts/music-detail-links.ts": ["music-old-news"],
@@ -290,6 +291,9 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/components/ContactForm.astro": ["home-contact"],
+	"src/scripts/contact-form.ts": ["home-contact"],
+	"src/scripts/home-contact.ts": ["home-contact"],
 	"src/components/Hero.astro": ["studio-objects"],
 	"src/components/home/StudioLife.astro": ["studio-objects"],
 	"src/scripts/studio-objects.ts": ["studio-objects"],
@@ -315,7 +319,7 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief"],
+	"src/pages/software/start.astro": ["brief-examples", "website-brief"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -373,9 +377,17 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
-	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/styles/software-intake.css": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",
