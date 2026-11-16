@@ -4,9 +4,12 @@ import { clientPortalEnabled } from "~/lib/client-portal";
 import { deliverProjectUpdateNotice } from "~/lib/audio-project-updates";
 import { publishProjectFile } from "~/lib/audio-project-publishing";
 import { revokeProjectFile } from "~/lib/audio-project-revocation";
+import { objectStoreUnavailable } from "~/lib/object-store-errors";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/files/[fileId]";
 
 const input = z.discriminatedUnion("action", [
 	z.object({
@@ -107,13 +110,17 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		);
 
 		return Response.json({ ok: true, updateId });
-	} catch {
+	} catch (error) {
+		const unavailable = objectStoreUnavailable(error);
+
+		if (!unavailable) logUnexpected(ROUTE, error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "The file could not be published. Please try again.",
 			},
-			{ status: 503 },
+			{ status: unavailable ? 503 : 500 },
 		);
 	}
 };

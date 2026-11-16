@@ -8,6 +8,9 @@ import {
 import {
 	allowanceMutants,
 	agreementLinkMutants,
+	audioProjectFilesMutants,
+	audioProjectMessagesMutants,
+	audioProjectNoticesMutants,
 	boardMutants,
 	briefCopyMutants,
 	budgetMutants,
@@ -492,6 +495,130 @@ describe("the agreement link model", () => {
 	});
 });
 
+describe("the audio project messages model", () => {
+	const model = readFileSync(
+		new URL("../../verification/audio-project-messages.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(9);
+		expect(
+			propertiesWithoutMutant(properties, audioProjectMessagesMutants),
+		).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(
+				/^module (\w+) \{ import audioProjectMessages\(MUTANT/gm,
+			),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[
+				...Object.keys(audioProjectMessagesMutants),
+				"projectMessages",
+				"projectMessagesWriteNoRounds",
+				"projectMessagesRuleNoCount",
+			].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			audioProjectMessagesMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the audio project files model", () => {
+	const model = readFileSync(
+		new URL("../../verification/audio-project-files.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(13);
+		expect(
+			propertiesWithoutMutant(properties, audioProjectFilesMutants),
+		).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(/^module (\w+) \{ import audioProjectFiles\(MUTANT/gm),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[
+				...Object.keys(audioProjectFilesMutants),
+				"projectFiles",
+				"projectFilesCompleteNoFile",
+				"projectFilesFinalAndReview",
+				"projectFilesFinalPlus",
+			].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			audioProjectFilesMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
+describe("the audio project notices model", () => {
+	const model = readFileSync(
+		new URL("../../verification/audio-project-notices.qnt", import.meta.url),
+		"utf8",
+	);
+
+	it("every property in allProperties has a mutant that must break it", () => {
+		const properties: string[] = propertiesOf(model);
+
+		expect(properties).toHaveLength(5);
+		expect(
+			propertiesWithoutMutant(properties, audioProjectNoticesMutants),
+		).toEqual([]);
+	});
+
+	it("every mutant names a module in the model, and every module is listed", () => {
+		const modules = [
+			...model.matchAll(
+				/^module (\w+) \{ import audioProjectNotices\(MUTANT/gm,
+			),
+		].map((match) => match[1]);
+
+		expect([...modules].sort()).toEqual(
+			[
+				...Object.keys(audioProjectNoticesMutants),
+				"projectNotices",
+				"projectNoticesUpdate",
+			].sort(),
+		);
+	});
+
+	it("every mutant property is one of allProperties", () => {
+		const properties: string[] = propertiesOf(model);
+
+		for (const { property } of Object.values<{ property: string }>(
+			audioProjectNoticesMutants,
+		))
+			expect(properties).toContain(property);
+	});
+});
+
 describe("the brief copy model", () => {
 	const model = readFileSync(
 		new URL("../../verification/brief-copy.qnt", import.meta.url),
@@ -526,7 +653,7 @@ describe("the brief copy model", () => {
 });
 
 describe("the models the driver runs", () => {
-	it("lists the thirteen models, each with its own registry", () => {
+	it("lists the sixteen models, each with its own registry", () => {
 		expect(models.map((model: { file: string }) => model.file)).toEqual([
 			"verification/invoice-events.qnt",
 			"verification/discount-offers.qnt",
@@ -540,6 +667,9 @@ describe("the models the driver runs", () => {
 			"verification/suggestion-budget.qnt",
 			"verification/publication-journal.qnt",
 			"verification/agreement-link.qnt",
+			"verification/audio-project-messages.qnt",
+			"verification/audio-project-files.qnt",
+			"verification/audio-project-notices.qnt",
 			"verification/brief-copy.qnt",
 		]);
 		expect(models[0].mutants).toBe(mutants);
@@ -554,7 +684,10 @@ describe("the models the driver runs", () => {
 		expect(models[9].mutants).toBe(budgetMutants);
 		expect(models[10].mutants).toBe(publicationMutants);
 		expect(models[11].mutants).toBe(agreementLinkMutants);
-		expect(models[12].mutants).toBe(briefCopyMutants);
+		expect(models[12].mutants).toBe(audioProjectMessagesMutants);
+		expect(models[13].mutants).toBe(audioProjectFilesMutants);
+		expect(models[14].mutants).toBe(audioProjectNoticesMutants);
+		expect(models[15].mutants).toBe(briefCopyMutants);
 	});
 
 	it("runs each model at 20 steps unless it sets a positive whole number of its own", () => {
