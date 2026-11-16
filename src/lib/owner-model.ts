@@ -46,6 +46,10 @@ export type OwnerRequest = {
 	contactDeleteAfter: string | null;
 };
 
+/** Every column of an owner request, in the order of `OwnerRequestRow`: what a read selects and an update returns. */
+export const requestColumns = `id,kind,release_id,service_id,campaign_id,name,email,city_region,
+  summary,details_json,status,private_note,created_at,updated_at,resolved_at,contact_delete_after`;
+
 export type OwnerRequestRow = {
 	id: string;
 	kind: OwnerRequestKind;
