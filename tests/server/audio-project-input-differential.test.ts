@@ -1,4 +1,5 @@
 import { inspect } from "node:util";
+import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vitest";
 import type { RawValue } from "../../src/lib/fields";
 import {
@@ -21,9 +22,7 @@ import {
 // is the ok flag and, when ok, the value with its keys in order, key presence included. Inputs come from a seeded random
 // source, so a failure repeats.
 
-type Answer =
-	| { readonly ok: true; readonly value: RawValue }
-	| { readonly ok: false };
+type Answer = { readonly ok: boolean; readonly value?: RawValue };
 
 type Random = ReturnType<typeof seeded>;
 
@@ -144,23 +143,20 @@ function bodyFor(
 	action: RawValue,
 	pools: { readonly [field: string]: readonly RawValue[] },
 ): RawValue {
-	const body: { [key: string]: RawValue } = { action };
+	const entries: [string, RawValue][] = [["action", action]];
 
 	for (const [field, pool] of Object.entries(pools))
-		if (!random.chance(0.12)) body[field] = random.pick(pool);
+		if (!random.chance(0.12)) entries.push([field, random.pick(pool)]);
 
-	if (random.chance(0.15)) body.stray = random.pick(extras);
-
-	if (random.chance(0.05)) body.__proto__ = random.pick(extras);
-	const keys = Object.keys(body);
+	if (random.chance(0.15)) entries.push(["stray", random.pick(extras)]);
 
 	// A shuffled key order, so the order the body was written in never leaks into the answer.
-	for (let i = keys.length - 1; i > 0; i -= 1) {
+	for (let i = entries.length - 1; i > 0; i -= 1) {
 		const j = random.below(i + 1);
-		[keys[i], keys[j]] = [keys[j], keys[i]];
+		[entries[i], entries[j]] = [entries[j], entries[i]];
 	}
 
-	return Object.fromEntries(keys.map((key) => [key, body[key]]));
+	return Object.fromEntries(entries);
 }
 
 const ownerPools = {
@@ -186,12 +182,10 @@ function inputs(random: Random, count: number, withRespond: boolean) {
 		const action = random.chance(0.85)
 			? random.pick(named)
 			: random.pick(actions);
-		const fields =
-			action === "send" || action === "read" || action === "respond"
-				? pools[action as keyof typeof pools]
-				: pools.send;
 
-		found.push(bodyFor(random, action, fields ?? {}));
+		const fields = Object.entries(pools).find(([name]) => name === action)?.[1];
+
+		found.push(bodyFor(random, action, fields ?? pools.send));
 	}
 
 	return found;
@@ -200,8 +194,8 @@ function inputs(random: Random, count: number, withRespond: boolean) {
 describe("the message commands", () => {
 	it("the owner's reader accepts and refuses every generated body as the Zod schema did, with the same value", () => {
 		const found = differential(
-			(input: RawValue) => legacyReadOwnerMessage(input) as Answer,
-			(input: RawValue) => readOwnerMessageCommand(input) as Answer,
+			(input: RawValue): Answer => legacyReadOwnerMessage(input),
+			(input: RawValue): Answer => readOwnerMessageCommand(input),
 			show,
 		);
 
@@ -220,8 +214,8 @@ describe("the message commands", () => {
 
 	it("the client's reader accepts and refuses every generated body as the Zod schema did, with the same value", () => {
 		const found = differential(
-			(input: RawValue) => legacyReadStudioMessage(input) as Answer,
-			(input: RawValue) => readStudioMessageCommand(input) as Answer,
+			(input: RawValue): Answer => legacyReadStudioMessage(input),
+			(input: RawValue): Answer => readStudioMessageCommand(input),
 			show,
 		);
 
@@ -240,16 +234,14 @@ describe("the message commands", () => {
 
 	it("keeps a body the client set to undefined and refuses one with no body key, as Zod 4 did", () => {
 		const keys = (read: Answer) =>
-			read.ok && typeof read.value === "object" && read.value !== null
-				? Object.keys(read.value)
-				: [];
+			read.ok && Predicate.isObject(read.value) ? Object.keys(read.value) : [];
 
 		for (const body of [
 			{ action: "send", body: undefined },
 			{ action: "send" },
 		]) {
-			expect(keys(readOwnerMessageCommand(body) as Answer)).toEqual(
-				keys(legacyReadOwnerMessage(body) as Answer),
+			expect(keys(readOwnerMessageCommand(body))).toEqual(
+				keys(legacyReadOwnerMessage(body)),
 			);
 		}
 	});
