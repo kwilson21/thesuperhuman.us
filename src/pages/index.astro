@@ -17,14 +17,17 @@ import tallyTransactions from "~/assets/projects/tally/transactions-demo-2026-09
 import kailleraLanding from "~/assets/projects/kaillera-next/landing-2026-09-26.webp";
 import { tallyStory } from "~/data/project-stories/tally";
 import { kailleraStory } from "~/data/project-stories/kaillera-next";
-import { capacityCells, parseFigure } from "~/lib/home-motion";
+import { capacityCells, parseFigure, resamplePeaks } from "~/lib/home-motion";
+import { latestSongWaveform } from "~/lib/latest-song";
 import { loadMusicCatalog } from "~/lib/music-content";
 import { audioPath } from "~/lib/host-routing";
+import { latestEssay } from "~/data/writing";
+import { homeComparisonExample } from "~/lib/music-catalog";
 
 const musicCatalog = await loadMusicCatalog();
 
 const oldNewsExample = musicCatalog.examples.find(
-	(example) => example.id === "old-news-mastering",
+	(example) => example.id === homeComparisonExample,
 );
 
 const oldNewsRecording =
@@ -33,8 +36,11 @@ const oldNewsRecording =
 		(recording) => recording.id === oldNewsExample.recordingId,
 	);
 
+// The waveform edge draws the newest released song.
+const edgeWaveform = latestSongWaveform(musicCatalog);
+
 const host = Astro.request.headers.get("host") ?? Astro.url.host;
-const essay = await getEntry("pages", "ai-gives-you-speed");
+const essay = await getEntry("pages", latestEssay.id);
 
 if (!essay) throw new Error("AI essay content missing");
 
@@ -127,7 +133,7 @@ const jsonLd = {
           </div>
         </section>
       </div>
-      <SignalEdge />
+      <SignalEdge peaks={edgeWaveform && resamplePeaks(edgeWaveform, 110)} />
     </div>
 
     <div class="site-shell">
@@ -137,7 +143,7 @@ const jsonLd = {
           <div class="editorial-art notebook-art"><img src={notebook.src} width={notebook.width} height={notebook.height} alt="" loading="lazy" /></div>
           <div class="editorial-copy">
             <h3>{penAt < 0 ? essay.data.title : <>{essay.data.title.slice(0, penAt)}<span class="pen-mark">{penWord}<svg class="pen-stroke" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 5 C 40 2, 76 8, 116 4.5 S 176 3, 198 5.5" /></svg></span>{essay.data.title.slice(penAt + penWord.length)}</>}</h3>
-            <a class="site-link" href="/writing/ai-gives-you-speed">Read the essay <span aria-hidden="true">→</span></a>
+            <a class="site-link" href={latestEssay.href}>Read the essay <span aria-hidden="true">→</span></a>
           </div>
         </article>
       </section>
@@ -233,12 +239,18 @@ const jsonLd = {
   .pen-stroke path { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
   .writing-preview .site-link { margin-top: 1.6rem; }
 
-  /* The horizon: the contact rule, with a sun that rises over it as the page ends. */
+  /* The horizon: the contact rule, with a sun that rises over it as the page ends. While the A/B comparison plays,
+     home-worlds.ts sets --glow (0 to 1) from the music's level, and a ring of light around the sun (drawn once, only its
+     opacity changes) glows with it, following the level at once and fading when the music stops. The ring leaves the disk
+     itself clear. */
   .contact-section { position: relative; border-top: 1px solid var(--rule); padding-block: 3rem; margin-top: calc(var(--site-section-space) + 4rem); scroll-margin-top: 2rem; }
   .horizon { position: absolute; left: calc(var(--site-gutter) * -1); right: calc(var(--site-gutter) * -1); bottom: 100%; height: 150px; overflow: hidden; pointer-events: none; }
   .horizon::before { content: ''; position: absolute; inset: 0; background: radial-gradient(36% 90% at 74% 100%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%); opacity: var(--p, 1); }
   .horizon::after { content: ''; position: absolute; left: var(--site-gutter); right: var(--site-gutter); bottom: 0; height: 1px; background: linear-gradient(to right, transparent, var(--accent) 74%, transparent); opacity: calc(var(--p, 1) * .7); }
   .horizon-sun { position: absolute; bottom: 0; left: 74%; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 72%, var(--paper)); box-shadow: 0 0 50px 14px color-mix(in srgb, var(--accent) 14%, transparent); transform: translateY(calc((1 - var(--p, 1)) * 100% + 30%)); }
+
+  .horizon-sun::after { content: ''; position: absolute; inset: -56%; border-radius: 50%; background: radial-gradient(closest-side, transparent 46.5%, color-mix(in srgb, var(--accent) 34%, transparent) 47.5%, transparent); opacity: var(--glow, 0); pointer-events: none; }
+  @media (prefers-reduced-motion: no-preference) { .horizon:not([data-playing]) .horizon-sun::after { transition: opacity 240ms linear; } }
 
   .contact-intro { display: flex; justify-content: space-between; gap: 2rem; align-items: center; }
   .contact-intro h2 { max-width: 24ch; font-size: clamp(2rem, 3.5vw, 2.7rem); line-height: 1.07; letter-spacing: -.035em; margin: 0 0 .7rem; text-wrap: balance; }

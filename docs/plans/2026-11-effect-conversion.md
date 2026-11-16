@@ -18,9 +18,9 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 
 ## Where things stand
 
-- Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301), and the media routes (3 routes: `music/file`, `audio/file` and `og/[name].mp4`; fixes and conversion in one stack, record `docs/prelaunch-qa-2026-11-15-media.md`).
-- Not converted: 32 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
-  components (all reads), 28 files under `src/` that use Zod (27 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
+- Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301), the media routes (3 routes: `music/file`, `audio/file` and `og/[name].mp4`; fixes and conversion in one stack, record `docs/prelaunch-qa-2026-11-15-media.md`), and the owner brief copy route (step 8 is complete; the claim of the client's copy is one flow for the public form and the owner).
+- Not converted: 31 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
+  components (all reads), 27 files under `src/` that use Zod (26 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
   parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
   Stripe reconciliation are operator scripts.
 - Every route has a golden corpus (recorded in PRs 246, 248 and 249, and for the three media routes at the bottom of their stack).
@@ -81,7 +81,7 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 6. **Software projects.** Project start, state, money actions, updates, visuals and messages, owner and studio sides.
    Starting a project while invoices and payments change gets a Quint model.
 7. **Audio projects.** The owner project routes and the studio project routes.
-8. **Software inquiry and brief**, with the owner brief copy route. Converted for the public routes (PRs 300 and 301); the owner brief copy route is not part of it.
+8. **Software inquiry and brief**, with the owner brief copy route. Converted: the public routes (PRs 300 and 301) and the owner brief copy route, whose claim of the client's copy (`src/lib/software-brief-copy.ts`, which kept its rule in SQL and which the public form also called) is now a rule, a store and one flow for both senders (`docs/prelaunch-qa-2026-11-15-brief-copy.md`).
 9. **Audio intake.** Converted (PRs 300 and 301). Its store keeps relying on the `audio_project_after_service_request` trigger (issue 242), which
    is named in its rule file until it moves (step 13).
 10. **Publication** (converted), with the work feed, `.well-known` and the MCP probe. The MCP tools stop importing Zod (see

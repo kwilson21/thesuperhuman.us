@@ -3,12 +3,14 @@ import * as Effect from "effect/Effect";
 import { type Mock, beforeEach, describe, expect, it, vi } from "vitest";
 import { sendMail } from "../../src/lib/resend";
 import {
+	ClientCopyMail,
 	Mail,
 	OwnerAlert,
 	RateLimit,
 	ResumeStore,
 	Turnstile,
 	legacyBindingsOrDefect,
+	liveClientCopyMail,
 	liveMail,
 	liveOwnerAlert,
 	liveTurnstile,
@@ -229,6 +231,78 @@ describe("liveOwnerAlert", () => {
 		expect(JSON.stringify(answer)).not.toContain("keychain");
 		expect(JSON.stringify(answer)).not.toContain("fan@example.com");
 	});
+});
+
+describe("liveClientCopyMail", () => {
+	const copy = {
+		to: "client@example.test",
+		subject: "Your brief: A tool",
+		text: "Hi",
+		html: "<p>Hi</p>",
+	};
+
+	const env = (over: Partial<Env> = {}) =>
+		double<Env>({
+			RESEND_API_KEY: "key",
+			CONTACT_FROM_EMAIL: "site@example.test",
+			CONTACT_TO_EMAIL: "owner@example.test",
+			...over,
+		});
+
+	/** What the live copy mail answers for the copy. */
+	const outcome = (given: Env) =>
+		ClientCopyMail.use((mail) => mail.send(copy)).pipe(
+			Effect.provideContext(liveClientCopyMail(given)),
+			Effect.runPromise,
+		);
+
+	it("sends the copy from the site's address to the client, with replies to the owner, and says it sent", async () => {
+		fetchMock.mockResolvedValue(answered(200));
+
+		expect(await outcome(env())).toBe("sent");
+
+		const [url, init] = fetchMock.mock.calls[0];
+
+		expect(url).toBe("https://api.resend.com/emails");
+		expect(init?.headers).toEqual({
+			Authorization: "Bearer key",
+			"Content-Type": "application/json",
+		});
+		// The body's keys keep the order the route has always sent them in.
+		expect(String(init?.body)).toBe(
+			JSON.stringify({
+				from: "site@example.test",
+				to: ["client@example.test"],
+				reply_to: "owner@example.test",
+				subject: "Your brief: A tool",
+				text: "Hi",
+				html: "<p>Hi</p>",
+			}),
+		);
+	});
+
+	it("says refused for an answer below 500 that is not a success, and uncertain for a 5xx and for no answer", async () => {
+		fetchMock.mockResolvedValue(answered(422));
+		expect(await outcome(env())).toBe("refused");
+
+		fetchMock.mockResolvedValue(answered(500));
+		expect(await outcome(env())).toBe("uncertain");
+
+		fetchMock.mockRejectedValue(new Error("network down"));
+		expect(await outcome(env())).toBe("uncertain");
+	});
+
+	it.each([
+		"RESEND_API_KEY",
+		"CONTACT_FROM_EMAIL",
+		"CONTACT_TO_EMAIL",
+	] as const)(
+		"does not ask Resend, and says unconfigured, when %s is not set",
+		async (name) => {
+			expect(await outcome(env({ [name]: undefined }))).toBe("unconfigured");
+			expect(fetchMock).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("legacyBindingsOrDefect", () => {

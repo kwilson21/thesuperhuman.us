@@ -543,6 +543,54 @@ File: `verification/agreement-link.qnt`, written for the conversion of the agree
 
 **What it does not cover.** The allowances, the mail's outcome (it only decides which older links are consumed), the signing link (which is another area's), and the verify page's cookie.
 
+## The brief-copy model
+
+File: `verification/brief-copy.qnt`, written before the conversion of the owner brief copy route (module `briefCopy`). The client's copy of a software brief is claimed before the provider is asked, by the public form (the first copy, sent when the brief is stored) and by the owner's resend (`POST /api/owner/requests/[id]/brief-copy`), and the Worker serves several of them at once. A delivery reads the request row once (whether it is open, whether it has an address, the copy's status, the instant of the attempt that recorded it), the rule judges it, a compare-and-set writes status "uncertain" and the delivery's instant only while the row is as it was read (a lost set reads and judges again, three tries), the provider is asked, and a final compare-and-set records the answer only while the row still carries this delivery's instant. The model reads the way the code does: the read and the rule are one step, each write and the provider's call are their own steps, and the clock and a close of the request (resolved or withdrawn) or the loss of its address happen between them. The model starts with a fresh request or with one whose earlier attempt left the copy uncertain.
+
+**State.** The clock, the row (open, has an address, status, instant), three deliveries (phase, mode, whether the owner confirmed, the kept instant, the row as it was read, tries, the provider's answer, how it ended), the claims (who, and the real row each one overwrote), the deliveries that asked the provider, and the final writes that changed a row carrying another delivery's attempt. The claims and overwrites are set from the row each step finds, never from what a delivery believed.
+
+The copy's status moves as drawn. The request's own status (new, reviewed, resolved, withdrawn) is only read here: this area never moves it, so there is no request machine to use until the owner request status area (step 12) defines one.
+
+```mermaid
+stateDiagram-v2
+    [*] --> none: the brief is stored
+    none --> uncertain: a claim, by the public form's first copy or the owner's resend
+    failed --> uncertain: the owner's resend claims it
+    uncertain --> uncertain: the owner confirmed it was not sent, and a minute has passed since the attempt: claimed again
+    uncertain --> sent: the provider sent it
+    uncertain --> failed: the provider refused it, was never asked, or the copy could not be built
+    uncertain --> uncertain: the provider did not answer, or its answer could not be recorded
+    none --> failed: a claim that could not be written, recorded over a copy with no status
+    sent --> [*]: never claimed again
+```
+
+**Properties** (`allProperties`):
+1. `claimsEligible`: every claim was made over a row the rule allows (the master property: a claim from a stale read breaks it).
+2. `closedNeverClaimed`: a resolved or withdrawn request is never claimed.
+3. `sentNeverResent`: a copy that was sent is never claimed again.
+4. `uncertainHeld`: an uncertain copy is claimed again only by an owner who confirmed, and only once the hold has passed since the attempt.
+5. `publicOnlyFirst`: the public form's copy is claimed only while no status is recorded.
+6. `everySendClaimed`: only a delivery that wrote a claim asks the provider.
+7. `finalOnlyOwn`: the final write never changes a row that carries another delivery's attempt.
+
+| Mutant | The change | Breaks |
+|---|---|---|
+| `NoCas` | The claim does not re-check the row | `claimsEligible` |
+| `CasSkipsOpen` | The claim re-checks the status and the instant but not whether the request is still open | `closedNeverClaimed` |
+| `CasSkipsAttempt` | The claim re-checks the status, the address and whether the request is open but not the attempt instant | `uncertainHeld` |
+| `CasSkipsAddress` | The claim re-checks the status, the instant and whether the request is open but not the address | `claimsEligible` |
+| `NoHold` | An uncertain copy is claimed again without waiting for the hold | `uncertainHeld` |
+| `NoConfirm` | An uncertain copy is claimed again without the owner's confirmation | `uncertainHeld` |
+| `ResendSent` | The owner's resend claims a copy that was sent | `sentNeverResent` |
+| `PublicAgain` | The public form's copy is claimed again after a failure | `publicOnlyFirst` |
+| `IgnoreClosed` | The rule does not look at whether the request is open | `closedNeverClaimed` |
+| `NoClaim` | A delivery asks the provider without writing a claim | `everySendClaimed` |
+| `FinalUnguarded` | The final write does not check the row still carries this delivery's instant | `finalOnlyOwn` |
+
+**Why it has a model.** The old claim was one atomic statement that held every condition in its WHERE clause. The conversion reads the row and decides in a rule, so the claim becomes a read followed by a compare-and-set, which is the shape the plan's rule on order and timing names. `NoCas` and `CasSkipsOpen` are the two ways that conversion could go wrong silently: the first sends twice, the second sends for a request closed after the read.
+
+**What it does not cover.** The mail keys of a deployment (a delivery that never asks the provider records "failed" at once, the same path as a refusal here), the answers the route gives, and the 10-second limit of the provider's call (the model lets a delivery wait indefinitely between the claim and its record, which is the harder case). There is no Apalache run for it.
+
 ## The golden corpus: what "request" and "background" mean
 
 The recorded effects of a route carry a phase. `request` means the response waited for the effect (or cannot be told apart

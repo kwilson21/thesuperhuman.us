@@ -42,8 +42,8 @@ class Node extends EventTarget {
 
 		return node;
 	}
-	replaceChildren() {
-		this.children = [];
+	replaceChildren(...nodes: Node[]) {
+		this.children = nodes;
 	}
 	contains(node: Node) {
 		return Object.values(this.nodes).includes(node);
@@ -194,9 +194,15 @@ async function setup(
 			"[data-suggestions-off]",
 			"[data-ghost-prefix]",
 			"[data-ghost-text]",
+			"[data-examples-list]",
 		])
 			section.nodes[selector] = new Node();
 		section.nodes["[data-ghost-prefix]"].parentElement = new Node();
+		section.nodes["[data-examples-list]"].hidden = true;
+		section.nodes["[data-examples-toggle]"] = Object.assign(new Node(), {
+			section,
+			textContent: "See example answers",
+		});
 		section.nodes["[data-answer]"] = box;
 		section.nodes.textarea = box;
 		section.inputs = [box];
@@ -315,6 +321,9 @@ async function setup(
 					node.nodes["[data-ghost-prefix]"],
 					node.nodes["[data-ghost-text]"],
 				]);
+
+		if (selector === "[data-examples-toggle]")
+			return steps.slice(1, 3).map((node) => node.nodes[selector]);
 
 		if (selector === "[data-accept]" || selector === "[data-accept-hint]")
 			return steps.slice(1, 3).map((node) => node.nodes[selector]);
@@ -1458,6 +1467,65 @@ it("shows the web app brief with seven screens, its own first question and no ti
 	expect(form.nodes["[data-timing-hint]"].hidden).toBe(true);
 });
 
+it("lists example answers under each written question and swaps them with the path", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	const listed = (index: number) =>
+		steps[index].nodes["[data-examples-list]"].children.map(
+			(item) => item.textContent,
+		);
+
+	for (const path of ["workflow", "webapp", "website"] as const) {
+		backToStart();
+		choose("path", path);
+		briefQuestions[path].forEach((question, i) => {
+			expect(listed(i + 1)).toEqual(question.examples);
+			expect(field(question.key).placeholder).toBe(question.placeholder);
+		});
+	}
+});
+
+it("opens and closes each question's example answers from its own toggle", () => {
+	choose("path", "workflow");
+
+	const toggle = steps[1].nodes["[data-examples-toggle]"],
+		list = steps[1].nodes["[data-examples-list]"];
+
+	fire(toggle, "click");
+	expect(list.hidden).toBe(false);
+	expect(toggle.attrs["aria-expanded"]).toBe("true");
+	expect(toggle.textContent).toBe("Hide example answers");
+	expect(steps[2].nodes["[data-examples-list]"].hidden).toBe(true);
+	fire(toggle, "click");
+	expect(list.hidden).toBe(true);
+	expect(toggle.attrs["aria-expanded"]).toBe("false");
+	expect(toggle.textContent).toBe("See example answers");
+});
+
+it("gives every written question a placeholder and a few different examples, kept within its limit", async () => {
+	const { briefQuestions } = await import("~/scripts/software-inquiry");
+
+	for (const question of Object.values(briefQuestions).flat()) {
+		expect(question.placeholder).not.toBe("");
+		expect(question.examples.length).toBeGreaterThanOrEqual(2);
+		expect(new Set(question.examples).size).toBe(question.examples.length);
+		expect(question.examples).not.toContain(question.placeholder);
+
+		for (const text of [question.placeholder, ...question.examples])
+			expect(text.length).toBeLessThanOrEqual(question.max);
+	}
+
+	const page = readFileSync("src/pages/software/start.astro", "utf8");
+
+	expect(page).toContain(
+		'<button type="button" data-examples-toggle aria-expanded="false" aria-controls={`brief-examples-${index}`}>See example answers</button></p>',
+	);
+	expect(page).toContain(
+		'<ul class="brief-examples" id={`brief-examples-${index}`} role="list" aria-label="Example answers" data-examples-list hidden></ul>',
+	);
+	expect(page).toContain("Amount in US dollars (optional)");
+});
+
 it("restores an old idea draft as a web app brief with its idea as the first answer", async () => {
 	store.set(
 		"software-brief-draft",
@@ -1710,7 +1778,7 @@ it("sends each website review Edit button to its plan position", () => {
 		["What you already have", 2],
 		["Who will keep it up to date?", 3],
 		["Timing", 4],
-		["Budget", 5],
+		["Budget (USD)", 5],
 		["Your name", 6],
 		["Email", 6],
 		["Company, if you have one", 6],

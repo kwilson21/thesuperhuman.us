@@ -1684,6 +1684,7 @@ describe("moved client modules", () => {
 	const manifest = {
 		pages: PAGES.map(({ name, path }) => ({ name, path })),
 		scenarios: [
+			"home-contact",
 			"journal-pagination",
 			"owner-details",
 			"services-print",
@@ -1731,9 +1732,9 @@ describe("moved client modules", () => {
 		["audio-portfolio-filter", ["audio-portfolio"], []],
 		["audio-releases-filter", ["audio-releases"], []],
 		["audio-services-links", ["audio-services"], []],
-		["contact-form", ["home"], []],
+		["contact-form", ["home"], ["home-contact"]],
 		["countersign-name", [], OWNER_REQUEST_WITH_SIGNING],
-		["home-contact", ["home"], []],
+		["home-contact", ["home"], ["home-contact"]],
 		["music-detail-links", ["music-old-news"], []],
 		["open-details-links", [], ["software-project"]],
 		["owner-agreements", [], ["software-signing"]],
