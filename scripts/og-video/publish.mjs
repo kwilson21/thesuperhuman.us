@@ -250,6 +250,10 @@ export function deriveSheet(video, declaredDurationMs, image) {
 				`[0:v]fps=12/${durationMs / 1000},scale=400:210,tile=3x4[frames];[1:v]scale=1200:630[poster];[poster][frames]vstack=inputs=2`,
 				"-frames:v",
 				"1",
+				"-compression_level",
+				"9",
+				"-pred",
+				"mixed",
 				output,
 			],
 			{
@@ -267,7 +271,7 @@ export function deriveSheet(video, declaredDurationMs, image) {
 }
 
 export function applyArtifact(
-	{ INCOMING, TARGET, SHEETS_OUT, PR_NUMBER, RUN_ID },
+	{ INCOMING, TARGET, SHEETS_OUT, PR_NUMBER, RUN_ID, REQUIRED_SCENES },
 	makeSheet = deriveSheet,
 ) {
 	if (
@@ -298,6 +302,11 @@ export function applyArtifact(
 		)
 	)
 		throw new Error("Invalid scenes");
+
+	const required = (REQUIRED_SCENES ?? "").split(" ").filter(Boolean);
+
+	if (required.some((scene) => !scenes.includes(scene)))
+		throw new Error("Artifact omits scenes required by trusted review");
 	const deleted = changes.deleted;
 
 	if (

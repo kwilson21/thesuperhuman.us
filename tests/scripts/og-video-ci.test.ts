@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -191,7 +192,7 @@ function fixture() {
 	);
 	put(incoming, "sheets/home-sheet.png", PNG);
 
-	const apply = () =>
+	const apply = (required = "") =>
 		applyArtifact(
 			{
 				INCOMING: incoming,
@@ -199,6 +200,7 @@ function fixture() {
 				SHEETS_OUT: join(root, "sheets"),
 				PR_NUMBER: "213",
 				RUN_ID: "1",
+				REQUIRED_SCENES: required,
 			},
 			() => PNG,
 		);
@@ -406,7 +408,7 @@ it("dispatches only trusted-main validation and withholds secrets from dispatche
 	);
 	expect(
 		validation.match(/ref: \$\{\{ inputs.revision \|\| github.sha \}\}/g),
-	).toHaveLength(5);
+	).toHaveLength(6);
 	const reporter = validation.split("  validate:\n")[1];
 	expect(reporter).toContain("statuses: write");
 	expect(reporter).not.toContain("actions/checkout");
@@ -479,6 +481,7 @@ it("publishes review sheets before starting required validation", () => {
 		),
 		"utf8",
 	);
+
 	expect(workflow.indexOf("gh workflow run validate.yml")).toBeGreaterThan(
 		workflow.indexOf("run: node scripts/og-video/pr-section.mjs"),
 	);
@@ -489,8 +492,58 @@ it("does not reuse derived media from a different renderer", () => {
 		new URL("../../scripts/og-video/render.mjs", import.meta.url),
 		"utf8",
 	);
+
 	const eligibility = renderer
 		.split("const reviewed =")[1]
 		.split("if (reviewed")[0];
+
 	expect(eligibility).toContain("previous?.renderer === rendererHash(ROOT)");
+});
+
+it("fails publication when the head moves before review attachment", () => {
+	const script = new URL(
+		"../../scripts/og-video/pr-section.mjs",
+		import.meta.url,
+	).href;
+
+	const result = spawnSync(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`
+   globalThis.fetch = async (_url, options) => {
+     if (options.method) throw new Error("Unexpected write");
+     return { ok: true, json: async () => ({ body: "", head: { sha: "b".repeat(40) } }) };
+   };
+   await import(${JSON.stringify(script)});
+ `,
+		],
+		{
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				PR_NUMBER: "213",
+				SHA: "a".repeat(40),
+				DIR: "pr-213/previews-aaaaaaa",
+				SCENES: "home",
+				GITHUB_REPOSITORY: "example/site",
+				GITHUB_TOKEN: "test",
+			},
+		},
+	);
+
+	expect(result.status).not.toBe(0);
+	expect(result.stderr).toContain("review was not attached");
+	expect(result.stderr).not.toContain("Unexpected write");
+});
+
+it("rejects partial artifacts when trusted review requires additional scenes", () => {
+	const f = fixture();
+
+	try {
+		expect(() => f.apply("home about")).toThrow(/omits scenes/);
+	} finally {
+		rmSync(f.root, { recursive: true, force: true });
+	}
 });

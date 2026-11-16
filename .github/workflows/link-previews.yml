@@ -18,6 +18,7 @@ on:
       - '.github/workflows/link-previews.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
+      - 'docs/asset-reviews/link-previews.md'
   workflow_dispatch:
     inputs:
       scenes:
@@ -44,7 +45,7 @@ jobs:
       - name: Find stale scenes
         id: stale
         env:
-          FORCE: ${{ inputs.scenes }}
+          FORCE: ${{ github.event_name == 'pull_request' && 'all' || inputs.scenes }}
         run: |
           node scripts/og-video/site-tokens.mjs
           node scripts/og-video/stale.mjs $FORCE

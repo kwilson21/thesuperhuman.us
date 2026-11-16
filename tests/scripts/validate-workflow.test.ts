@@ -14,11 +14,11 @@ describe("parallel Validate retains every release gate", () => {
 	it("keeps the required validate identity and rejects skipped, cancelled and failed lanes", () => {
 		expect(job("validate")).toContain("if: ${{ always() }}");
 		expect(job("validate")).toContain(
-			"needs: [quality, contracts, quint, tests, build]",
+			"needs: [quality, contracts, quint, tests, build, publicist]",
 		);
 		expect(job("validate")).toContain("RESULTS: ${{ toJSON(needs) }}");
 		expect(job("validate")).toContain(
-			'length == 5 and all(.[]; .result == "success")',
+			'length == 6 and all(.[]; .result == "success")',
 		);
 		expect(workflow).not.toMatch(
 			/continue-on-error|paths-ignore|pull_request_target/,
@@ -32,10 +32,9 @@ describe("parallel Validate retains every release gate", () => {
 		if (!predicate) throw new Error("Aggregate predicate missing");
 
 		const success = Object.fromEntries(
-			["quality", "contracts", "quint", "tests", "build"].map((name) => [
-				name,
-				{ result: "success" },
-			]),
+			["quality", "contracts", "quint", "tests", "build", "publicist"].map(
+				(name) => [name, { result: "success" }],
+			),
 		);
 
 		const run = (results: Record<string, { result?: string }>) => {
@@ -102,7 +101,7 @@ describe("parallel Validate retains every release gate", () => {
 			),
 		);
 		expect(lane).toContain('REQUIRE_CLIENT_BUNDLE: "1"');
-		expect(workflow.match(/secrets\.PUBLICIST_PRIVATE_TOKEN/g)).toHaveLength(1);
+		expect(workflow.match(/secrets\.PUBLICIST_PRIVATE_TOKEN/g)).toHaveLength(2);
 		expect(job("validate")).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
 		expect(job("validate")).not.toContain("actions/checkout");
 		expect(lane).toContain(

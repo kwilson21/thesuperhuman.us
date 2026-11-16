@@ -146,6 +146,32 @@ jobs:
         env:
           GOLDEN_VERIFY_DIGESTS: "1"
           GOLDEN_VERIFY_COUNTS: "1"
+  publicist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate immutable revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.revision || github.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Require unchanged publicist inputs for media-only validation
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/og-video/publicist-inputs.mjs candidate
+      - name: Check trusted publicist approvals
+        if: github.event_name == 'workflow_dispatch'
+        run: node scripts/publicist/gate.mjs
+        env:
+          PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -164,9 +190,17 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
+      - if: github.event_name != 'workflow_dispatch'
+        run: pnpm run build
         env:
           PUBLICIST_PRIVATE_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || '' }}
+      # The separate trusted job checks byte-identical publicist inputs and private approvals.
+      # All other prebuild checks still run, without handing a secret to candidate code.
+      - if: github.event_name == 'workflow_dispatch'
+        run: |
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; const p=JSON.parse(readFileSync("package.json")); if(p.scripts.build !== "astro build" || p.scripts.postbuild !== undefined) throw Error("Build lifecycle changed; update trusted validation"); if(p.scripts.prebuild !== "pnpm run navigation:generate && pnpm run assets:check && pnpm run copy:check && pnpm run design:check && pnpm run publicist:gate") throw Error("Prebuild changed; update trusted validation");'
+          pnpm run navigation:generate && pnpm run assets:check && pnpm run copy:check && pnpm run design:check
+          pnpm exec astro build
       - run: pnpm exec vitest run tests/architecture/client-bundle.test.ts
         env:
           REQUIRE_CLIENT_BUNDLE: "1"
@@ -174,7 +208,7 @@ jobs:
     permissions:
       statuses: write
     if: ${{ always() }}
-    needs: [quality, contracts, quint, tests, build]
+    needs: [quality, contracts, quint, tests, build, publicist]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -183,7 +217,7 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           # A failed, cancelled or skipped dependency is not a pass. No output is interpolated into shell code.
-          jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"
+          jq -e 'length == 6 and all(.[]; .result == "success")' <<< "$RESULTS"
       - name: Report trusted validation on published commit
         if: ${{ always() && inputs.revision != '' }}
         env:
@@ -193,5 +227,5 @@ jobs:
         run: |
           [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
           state=failure
-          if jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"; then state=success; fi
+          if jq -e 'length == 6 and all(.[]; .result == "success")' <<< "$RESULTS"; then state=success; fi
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$REVISION" -f "state=$state" -f context=validate -f description="Trusted secretless validation" -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

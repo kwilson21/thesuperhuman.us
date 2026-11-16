@@ -72,10 +72,9 @@ for (let attempt = 1; ; attempt++) {
 	const latest = await readPull();
 
 	if (latest.head?.sha !== SHA) {
-		console.log(
-			`The PR has moved on to ${latest.head?.sha}; leaving the description alone.`,
+		throw new Error(
+			`The PR has moved on to ${latest.head?.sha}; review was not attached.`,
 		);
-		process.exit(0);
 	}
 
 	if (latest.body !== body) {
