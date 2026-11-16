@@ -178,7 +178,11 @@ const noAudioProject = (db: D1Database, requestId: string) =>
 		[requestId],
 	);
 
-/** G11: the attachment has its metadata row of the request, unchanged, and is named in no closed archive. */
+/**
+ * G11: the attachment has its metadata row of the request, unchanged, and is named in no closed archive, or a closed
+ * archive whose manifest cannot be read (its `json_each` or `json_extract` raises "malformed JSON", which refuses the
+ * batch as the guard does).
+ */
 const attachmentUnchanged = (
 	db: D1Database,
 	requestId: string,
@@ -592,8 +596,14 @@ const NO_CLOSED_ARCHIVES: ClosedArchives = { keys: [], unreadable: false };
  * The closed archives G11 covers, for these keys: which of them a manifest names, and whether a manifest, or an entry of
  * one, is not JSON, where G11's `json_each` or `json_extract` raises "malformed JSON" and so refuses its batch. Only the
  * agreements whose archive is closed count, as in G11's predicate, and `json_valid` passes over every value that is not
- * JSON before anything parses it, so stored data never fails the read (`json_valid` takes strict JSON, where `json_each`
- * also takes JSON5, which the site never writes). With no key there is no G11 in the batch, so nothing is read.
+ * JSON before anything parses it, so stored data never fails the read. With no key there is no G11 in the batch, so
+ * nothing is read.
+ *
+ * Where the two can differ: plain `json_valid` accepts only strict JSON text, while G11's `json_each` and `json_extract`
+ * also accept JSON5, JSONB blobs and infinite numbers (such as `[1e400]`), so for such a stored value this read says
+ * unreadable, and the rule refuses, where G11 would pass. The site cannot write one: a manifest is `JSON.stringify` of
+ * validated attachments. `json_valid(x,6)` would match G11, but it needs SQLite 3.45 or later and production D1's
+ * version is not verified, so the strict form is kept.
  */
 export const readClosedArchives = (
 	keys: readonly string[],

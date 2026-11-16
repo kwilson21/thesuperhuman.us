@@ -1270,7 +1270,7 @@ describe("draft", () => {
 	 * The draft saved through `decideAndSave`, as the flow will: read the offers, number the new version after the newest,
 	 * save. `taken` runs before each try's batch, as another writer would.
 	 */
-	const draftLoop = (world: World, taken: (attempt: number) => void) => {
+	const draftLoop = (taken: (attempt: number) => void) => {
 		let attempt = 0;
 
 		return decideAndSave({
@@ -1297,7 +1297,7 @@ describe("draft", () => {
 		const world = seeded();
 
 		const saved = await world.ok(
-			draftLoop(world, (attempt) => {
+			draftLoop((attempt) => {
 				if (attempt === 1)
 					world.seed({
 						software_offers: [
@@ -1319,7 +1319,7 @@ describe("draft", () => {
 
 		expect(
 			await busy.failed(
-				draftLoop(busy, (attempt) =>
+				draftLoop((attempt) =>
 					busy.seed({
 						software_offers: [
 							rows.softwareOffer(`o-${attempt}`, "r1", {
@@ -1573,6 +1573,12 @@ describe("the store's statements", () => {
 });
 
 // ---- the SQL against the golden corpus ----
+//
+// The corpus was recorded from the old route, then re-recorded from the converted route in a commit of fixture files only,
+// which `golden:neutral` showed neutral (only D1 statements differ). So it now holds the store's own texts: every text the
+// store runs is in it, none of the old texts listed below is, and each changed and added text is. Before the re-record
+// these tests held the store to the old route's texts with the same two lists (CHANGED and ADDED); `golden:neutral`
+// between the fixtures before and after the re-record is what shows the two differ only by them.
 
 /** The old texts the store changes, each with the new text and why. A hook that picked the old text must pick the new. */
 const CHANGED = [
@@ -1785,40 +1791,30 @@ async function tour() {
 }
 
 describe("the store's SQL against the golden corpus", () => {
-	it("runs only texts the old route ran, and the changed and added texts listed here, every one of them", async () => {
+	it("runs only texts the converted route's corpus recorded, the changed and added texts among them, and none of the old ones", async () => {
 		const recorded = recordedSql();
 		const { texts: ran } = await tour();
 
-		const expected = new Set<string>([
-			...CHANGED.map((change) => change.new),
-			...ADDED.map((added) => added.sql),
-		]);
-
-		const unknown = [...ran].filter(
-			(text) => !recorded.has(text) && !expected.has(text),
-		);
-
-		expect(unknown).toEqual([]);
-		expect([...expected].filter((text) => !ran.has(text))).toEqual([]);
+		expect([...ran].filter((text) => !recorded.has(text))).toEqual([]);
 
 		for (const change of CHANGED) {
-			expect(recorded.has(change.old), change.why).toBe(true);
-			expect(ran.has(change.old), change.why).toBe(false);
+			expect(ran.has(change.new), change.why).toBe(true);
+			expect(recorded.has(change.new), change.why).toBe(true);
+			expect(recorded.has(change.old), change.why).toBe(false);
 		}
 
-		for (const added of ADDED)
-			expect(recorded.has(added.sql), added.why).toBe(false);
+		for (const added of ADDED) {
+			expect(ran.has(added.sql), added.why).toBe(true);
+			expect(recorded.has(added.sql), added.why).toBe(true);
+		}
 	});
 
-	it("runs each batch's statements in an order the old route ran them", async () => {
+	it("runs each batch's statements in an order the converted route's corpus recorded them", async () => {
 		const recorded = recordedBatches();
 		const { batches } = await tour();
 
-		const asBefore = (sql: string) =>
-			CHANGED.find((change) => change.new === sql)?.old ?? sql;
-
 		const unmatched = batches.filter(
-			(batch) => !recorded.has(JSON.stringify(batch.sql.map(asBefore))),
+			(batch) => !recorded.has(JSON.stringify(batch.sql)),
 		);
 
 		expect(unmatched).toEqual([]);

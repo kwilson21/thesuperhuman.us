@@ -58,7 +58,8 @@ export class AgreementSigned extends Data.TaggedError("AgreementSigned") {
 
 /**
  * An attachment the details name has no metadata row of this request with its digest, size, name, version and date, or
- * is named in a closed archive (G11 re-checks it). Answered as a refused batch is: a changed draft, or a changed request.
+ * is named in a closed archive, or a closed archive's manifest cannot be read (G11 re-checks it). Answered as a refused
+ * batch is: a changed draft, or a changed request.
  */
 export class AttachmentNotUsable extends Data.TaggedError(
 	"AttachmentNotUsable",
