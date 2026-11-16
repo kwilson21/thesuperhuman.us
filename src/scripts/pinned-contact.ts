@@ -1,30 +1,94 @@
 /**
- * Keep the phone contact action available throughout the page. Only the shared footer replaces it;
- * page buttons (project choices, players, etc.) are not substitutes for Get in touch.
- * CSS separately steps aside for the mobile menu and focused form fields.
+ * One visible action: the phone link stays fixed until it meets the footer slot,
+ * then follows that slot in both directions. The footer link preserves layout
+ * and the no-JS/desktop fallback, but is inert while its phone proxy is active.
  */
-export const STEP_ASIDE_FOR = ".compact-footer";
-
 export function setupPinnedContact(): void {
 	const pinned = document.querySelector<HTMLElement>("[data-pinned-contact]");
-	const ends = [...document.querySelectorAll<HTMLElement>(STEP_ASIDE_FOR)];
 
-	if (!pinned || !ends.length || typeof IntersectionObserver === "undefined")
+	const footer = document.querySelector<HTMLElement>(
+		"footer [data-closing-button]",
+	);
+
+	const link = pinned?.querySelector<HTMLElement>("a");
+
+	if (
+		!pinned ||
+		!footer ||
+		!link ||
+		typeof requestAnimationFrame === "undefined"
+	)
 		return;
-	// It starts aside until the observer's first report, so it never flashes over a button that is
-	// already on screen when the page opens or its scroll position is restored.
-	pinned.setAttribute("data-at-end", "");
+	const phone = matchMedia("(max-width: 600px)");
+	let offset = 0;
+	let pending = false;
+
 	pinned.removeAttribute("hidden");
-	const showing = new Set<Element>();
 
-	const observer = new IntersectionObserver((entries) => {
-		for (const entry of entries)
-			if (entry.isIntersecting) showing.add(entry.target);
-			else showing.delete(entry.target);
+	const update = () => {
+		pending = false;
 
-		if (showing.size) pinned.setAttribute("data-at-end", "");
-		else pinned.removeAttribute("data-at-end");
+		if (!phone.matches) {
+			footer.removeAttribute("data-contact-proxy");
+			footer.removeAttribute("inert");
+
+			if (document.activeElement === link)
+				footer.focus({ preventScroll: true });
+			pinned.setAttribute("inert", "");
+			pinned.removeAttribute("data-docked");
+			offset = 0;
+			pinned.style.setProperty("--contact-dock-offset", "0px");
+
+			return;
+		}
+
+		if (!pinned.getClientRects().length) return;
+		// Subtract the last translation to recover the stable fixed-bottom position.
+		const restingTop = link.getBoundingClientRect().top - offset;
+		offset = Math.min(0, footer.getBoundingClientRect().top - restingTop);
+		pinned.style.setProperty("--contact-dock-offset", `${offset}px`);
+
+		if (offset < 0) pinned.setAttribute("data-docked", "");
+		else pinned.removeAttribute("data-docked");
+		footer.setAttribute("data-contact-proxy", "");
+		pinned.removeAttribute("inert");
+
+		if (document.activeElement === footer) link.focus({ preventScroll: true });
+		footer.setAttribute("inert", "");
+	};
+
+	const schedule = () => {
+		if (pending) return;
+		pending = true;
+		requestAnimationFrame(update);
+	};
+
+	window.addEventListener("scroll", schedule, { passive: true });
+	window.addEventListener("resize", schedule);
+	window.addEventListener("pageshow", schedule);
+	window.addEventListener("focusin", () => {
+		if (phone.matches && document.activeElement === link) {
+			const rect = link.getBoundingClientRect();
+
+			if (rect.bottom <= 0 || rect.top >= window.innerHeight)
+				footer.scrollIntoView({ block: "center", behavior: "instant" });
+		}
+
+		schedule();
 	});
+	window.addEventListener("focusout", schedule);
+	// Details toggle does not bubble; capture also covers closing the phone menu
+	// after scrolling while its CSS temporarily hid the proxy.
+	window.addEventListener("toggle", schedule, true);
+	phone.addEventListener("change", schedule);
+	window.visualViewport?.addEventListener("resize", schedule);
+	window.visualViewport?.addEventListener("scroll", schedule);
 
-	for (const end of ends) observer.observe(end);
+	if (typeof ResizeObserver !== "undefined") {
+		const resize = new ResizeObserver(schedule);
+		resize.observe(document.documentElement);
+	}
+
+	// Establish the initial state before paint, including restored scroll positions.
+	update();
 }

@@ -271,7 +271,9 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	const mobile = footer.slice(mobileStart, footer.indexOf("@media print"));
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
 	expect(mobile).toContain("position: fixed");
-	expect(mobile).toContain(".pinned-contact[data-at-end] { display: none; }");
+	expect(mobile).toContain(
+		"transform: translateY(var(--contact-dock-offset, 0px))",
+	);
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
 	);
@@ -285,7 +287,7 @@ it("hides the pinned button by default and shows it only on phones", () => {
 
 it("hides the pinned button in print", () => {
 	expect(footer).toContain(
-		"@media print { .pinned-contact { display: none !important; } }",
+		"@media print { .pinned-contact { display: none !important; } [data-closing-button][data-contact-proxy] { visibility: visible; } }",
 	);
 });
 
@@ -295,4 +297,30 @@ it("leaves the essay with one invitation, the panel button", () => {
 		'<nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a></nav>',
 	);
 	expect(essay).not.toContain("Get in touch");
+});
+
+it("aligns phone contact widths and limits handoff motion to visitors who allow it", () => {
+	expect(footer).toContain(
+		"calc(var(--contact-gutter) + var(--contact-panel-inset))",
+	);
+	expect(footer).toContain(
+		".closing-panel [data-closing-button] { width: min(100%, var(--contact-action-max)); box-sizing: border-box;",
+	);
+	expect(footer).toContain("@media (prefers-reduced-motion: no-preference)");
+	expect(footer).toContain(
+		".pinned-contact::before { transition: opacity var(--dur-hover) var(--ease-site); }",
+	);
+	expect(footer).toContain(
+		"[data-closing-button][data-contact-proxy] { visibility: hidden; }",
+	);
+	expect(footer).not.toContain("animation:");
+});
+
+it("keeps the owner-selected narrower contact pill equal in both positions", () => {
+	expect(footer).toContain("--contact-action-max: 15rem");
+	expect(
+		footer.match(/width: min\(100%, var\(--contact-action-max\)\)/g),
+	).toHaveLength(2);
+	expect(footer).toContain("margin-inline: auto;");
+	expect(global).toContain("min-height: 52px");
 });
