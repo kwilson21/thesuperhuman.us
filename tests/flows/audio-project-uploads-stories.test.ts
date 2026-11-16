@@ -414,6 +414,7 @@ describe("aborting an upload", () => {
 		const world = musicWorld();
 		seedProject(world, "in_progress");
 		seedUpload(world);
+
 		const gone = multipart({
 			abort: failing("The specified multipart upload does not exist. (10024)"),
 		});
