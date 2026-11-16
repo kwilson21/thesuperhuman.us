@@ -251,7 +251,7 @@ it("uses ink for readable footer link hover text on the panel", () => {
 it("renders the pinned button on invitation pages and where a page asks for it, hidden until the script shows it", () => {
 	expect(footer).toContain('pinned = variant === "invitation"');
 	expect(footer).toContain(
-		'{pinned && <div class="pinned-contact" data-pinned-contact hidden>',
+		'<div class="pinned-contact" data-pinned-contact hidden>',
 	);
 	expect(footer).toContain(
 		"<script>\n  import { setupPinnedContact } from '~/scripts/pinned-contact';",
@@ -270,10 +270,8 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	expect(mobileStart).toBeGreaterThan(-1);
 	const mobile = footer.slice(mobileStart, footer.indexOf("@media print"));
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
-	expect(mobile).toContain("position: fixed");
-	expect(mobile).toContain(
-		"transform: translateY(var(--contact-dock-offset, 0px))",
-	);
+	expect(mobile).toContain("position: sticky");
+	expect(mobile).toContain("inset: 0 0 var(--contact-track-bottom, 0px)");
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
 	);
