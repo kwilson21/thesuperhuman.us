@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Service page layout: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+
+  /* Site palette (src/styles/global.css) plus the board tones the 2026-10-19 board used. */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    /* Board chrome only: small accent text on the board tone. --accent there is 4.1:1; this mix is 5.1:1. The recreations keep --accent. */
+    --accent-text: color-mix(in srgb, var(--accent) 85%, var(--ink));
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 5vw - 4px, 56px) 72px; }
+  @media (max-width: 600px) { .board { padding-top: 40px; } }
+  .narrow-only { display: none; }
+  @media (max-width: 700px) { .narrow-only { display: block; } }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header p:not(.eyebrow) { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  .marker { display: inline-block; font: 600 11px/1.3 var(--sans); color: var(--accent-text); background: var(--paper); border: 1px solid var(--accent-text); border-radius: 999px; padding: 2px 8px; letter-spacing: .02em; white-space: nowrap; }
+
+  .handled { margin-top: 28px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .handled b { font-weight: 600; }
+  .handled ul { margin: 8px 0 0; padding-left: 18px; }
+  .handled li { margin-bottom: 4px; }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .option-head .tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  .why-rec b { font-weight: 600; }
+
+  .views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 900px) { .views.two { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); } }
+  .stack { display: grid; gap: 20px; min-width: 0; }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { font: 11px/1.3 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame.phone { max-width: 390px; width: 100%; justify-self: center; }
+  .frame.concept { max-width: 760px; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .frame figcaption { font: 12.5px/1.5 var(--sans); color: var(--muted); padding: 8px 12px 10px; border-top: 1px solid var(--rule); }
+  .same { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; margin: 12px 0 0; }
+  .same b { font-weight: 600; }
+  .same.side { margin: 0; align-self: start; }
+  :is(button, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+
+  .facts { margin: 16px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .facts .wide { grid-column: 1 / -1; } }
+  .facts > div { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .facts dd { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; overflow-wrap: anywhere; }
+  .facts dd b { font-weight: 600; color: var(--ink); }
+
+  .decisions { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) { .decisions { grid-template-columns: 1fr 1fr; } }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 16px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--accent); }
+
+  /* ---------- Scaled stages: each recreation is laid out at its real width, then scaled to fit its frame. ---------- */
+  .stage { position: relative; width: 100%; overflow: hidden; height: 240px; }
+  .stage > .site { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+  /* ---------- Recreation of the site. Values from src/styles/global.css, src/styles/service-pages.css,
+     src/layouts/ServiceSheet.astro, src/styles/audio-intake.css (.step-number) and src/pages/audio/services.astro. ---------- */
+  .site { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); text-align: left; overflow: hidden; }
+  .site * { box-sizing: border-box; }
+  :where(.site) :where(h1, h2, h3, p, ol, li) { margin: 0; padding: 0; font-weight: 400; }
+  :where(.site) :where(h1, h2, h3) { letter-spacing: -.01em; text-wrap: balance; }
+  .site p, .site li { text-wrap: pretty; }
+  /* Canvas widths match the CI crops in option A, so the scale is the same across options. */
+  .w-sheet { width: 1028px; padding: 20px; }        /* /services at 1280: content x 146 to 1134 */
+  .w-audio { width: 1160px; padding: 9px 36px 0; } /* /audio/services at 1280: content x 96 to 1184 */
+  .w-hero { width: 1028px; padding: 13px 20px 0; }  /* /services hero at 1280 */
+  .w390 { width: 390px; padding: 20px 24px; }       /* phone: --site-gutter is 24px at 390 */
+  .s-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 210px; padding: .55rem 1.35rem; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; white-space: nowrap; }
+
+  /* "Before we start." (service-pages.css .service-before + ServiceSheet.astro .software-steps) */
+  .s-before { display: grid; grid-template-columns: 1fr 2fr; gap: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); }
+  .s-before h2 { font-size: 2rem; line-height: 1.6; }
+  .w390 .s-before { grid-template-columns: 1fr; gap: .8rem; }
+  .steps { list-style: none; }
+  .steps .num { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--rule); border-radius: 50%; width: 1.85rem; height: 1.85rem; flex: none; }
+  .w390 .steps .num { width: 1.45rem; height: 1.45rem; }
+  .steps h3 { font-size: 1.2rem; line-height: 1.2; }
+  .steps p { font-size: 1rem; line-height: 1.4; margin-top: .4rem; }
+
+  /* D7.1-B: the print sheet's layout on screen. Heading above (the page's own rule at 800px and below,
+     .service-before 1fr with a .8rem gap), the list keeps today's 1rem top margin, rules and columns,
+     and each numeral sits inline before its title, as in print. */
+  .v-b .s-before { grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  .v-b .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--rule); margin-top: 1rem; }
+  .v-b .steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: .6rem; align-items: center; align-content: start; padding: 1rem; border-left: 1px solid var(--rule); }
+  .v-b .steps li:first-child { border-left: 0; padding-left: 0; }
+  .v-b .steps li > p { grid-column: 1 / -1; }
+  .w390.v-b .steps { grid-template-columns: minmax(0, 1fr); }
+  .w390.v-b .steps li, .w390.v-b .steps li:first-child { padding: 1rem 0; border-left: 0; }
+  .w390.v-b .steps li + li { border-top: 1px solid var(--rule); }
+
+  /* D7.1-C: hanging numerals, one list */
+  .v-c .steps { border-bottom: 1px solid var(--rule); }
+  .v-c .steps li { display: grid; grid-template-columns: 1.85rem minmax(0, 1fr); column-gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--rule); }
+  .v-c .steps .num { grid-row: 1 / span 2; margin-top: -.2rem; }
+  .v-c .steps h3, .v-c .steps p { grid-column: 2; }
+  .w-sheet.v-c .steps li:first-child { border-top: 0; padding-top: .7rem; }
+  .w390.v-c .steps li { grid-template-columns: 1.45rem minmax(0, 1fr); column-gap: .85rem; }
+  .w390.v-c .steps .num { margin-top: -.05rem; }
+
+  /* D7.1-D: one numbered paragraph, like the paragraph /audio/services opens with (65ch, 1.55) */
+  .v-d .steps { max-width: 65ch; line-height: 1.55; }
+  .v-d .steps li { display: inline; }
+  .v-d .steps .num { display: inline-flex; width: 1.45rem; height: 1.45rem; font-size: .85rem; line-height: 1; vertical-align: .08em; margin-right: .4rem; }
+  .v-d .steps h3 { display: inline; font-size: 1rem; line-height: inherit; letter-spacing: 0; white-space: nowrap; }
+  .v-d .steps h3::after { content: '.'; }
+  .v-d .steps p { display: inline; font-size: 1rem; line-height: inherit; color: var(--muted); margin: 0 .6rem 0 .3rem; }
+  .w-sheet.v-d .s-before { padding-bottom: .4rem; }
+
+  /* Audio services hero and offers head (service-pages.css at 1280) */
+  .hero { display: grid; grid-template-columns: 1fr 1.1fr; gap: 2.5rem; align-items: start; padding: 1rem 0 2rem; }
+  .hero h1, .hero .disp { font-size: 58.88px; letter-spacing: -.04em; line-height: 1.06; }
+  .hero header > p { font-size: 1.5rem; line-height: 1.4; margin: 1.15rem 0 1.5rem; color: var(--muted); }
+  .hero header > .kicker { font: .6875rem/1.5 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin: 0 0 .75rem; }
+  .hero header > .approach { font-size: 1rem; margin: 0 0 1.5rem; }
+  .ev-head { display: flex; gap: 1rem; align-items: baseline; justify-content: space-between; margin-bottom: .5rem; }
+  .ev-head h2 { font-size: 2rem; line-height: 1.1; }
+  .ev-head p { font-size: .85rem; color: var(--muted); }
+  .ev img { display: block; width: 100%; height: auto; }
+  .offers { border-top: 1px solid var(--rule); padding-top: 1.25rem; }
+  .offers > header { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; margin-bottom: 1rem; }
+  .offers h2 { font-size: 2rem; line-height: 1.6; }
+  .offers > header p { font-size: .9rem; color: var(--muted); }
+  .offers .row1 { border-top: 1px solid var(--rule); height: 14px; }
+
+  /* D7.2-B and D: the heading never shrinks; the label drops under it, whole, when both do not fit on one line */
+  :is(.l-b, .l-d) :is(.ev-head, .offers > header) { flex-wrap: wrap; row-gap: .3rem; }
+  :is(.l-b, .l-d) :is(.ev-head h2, .offers > header h2) { flex: none; max-width: 100%; }
+  /* D7.2-C: the label sits under the heading at every width */
+  .l-c :is(.ev-head, .offers > header) { display: block; }
+  .l-c .ev-head p { margin-top: .3rem; }
+  .l-c .offers > header p { margin-top: .3rem; }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Hallmark audit follow-up · 2026-10-22</p>
+    <h1>Service page layout: alternatives</h1>
+    <p>Two of your calls from the Hallmark audit (“Your call” 13 and 14), each beside what ships today. Nothing here is built. Pick one option per decision and reply with the IDs, for example “D7.1-C, D7.2-B”.</p>
+    <p>Today’s state is cropped from the CI captures of PR #204 at <code>f0abd1f</code>, so it includes the balanced headings and line breaks in PR #204. The alternatives are live recreations at the same scale, using the site’s own CSS values and the real copy from <code>src/data/services.ts</code> and <code>src/pages/audio/services.astro</code>. The audio player and the Lyft diagram inside them are cropped from the same captures, because no option touches them. Every height and width below was re-measured on PR #204’s code with each option’s CSS injected into the real pages.</p>
+    <p class="narrow-only">On a phone the 1280-wide previews are scaled down to fit. Pinch to zoom; they stay sharp.</p>
+    <div class="handled"><b>Applies to every option below.</b>
+      <ul>
+        <li>No option adds motion, so this board has no motion demo and needs no Replay control. The steps keep today’s single rise-in, which already shows at rest with reduced motion.</li>
+        <li>No option adds or changes art, so nothing here needs image QA.</li>
+        <li>The two decisions are independent: any D7.1 option works with any D7.2 option.</li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- ================= D7.1 ================= -->
+  <section class="study" id="d7-1" aria-labelledby="d71-title">
+    <p class="eyebrow">D7.1 · Your call 13 · /services</p>
+    <h2 id="d71-title">How should the three “Before we start.” steps sit on /services?</h2>
+    <p class="lead">Hallmark flagged the steps as a “3-column feature grid, numbered-step variant” (ws-4, punch list #29) and suggested a single-column numbered list. The verifier called that overstated. What the captures do show: at 1280 each step gets a 196px column, so the descriptions run 12 to 22 characters a line over up to four lines, and the list draws its own rule 37px under the section’s rule, so the section opens with two lines.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/prelaunch-qa-2026-09-29-services-redesign.md:7-8</code> (you chose Direction A from rendered mockups on September 29 and asked that the page match the rest of the site; the scope lists the “Before we start.” steps) and <code>:25</code> (the steps are an ordered list). The heading-left, content-right grid is shared with /audio/services (<code>src/styles/service-pages.css</code>, <code>.service-before</code>, 1fr 2fr). The three columns themselves are /services only (<code>src/layouts/ServiceSheet.astro</code>, <code>.software-steps</code>). Options C and D keep the shared grid. Option B moves the heading above the steps, as the print sheet and the page at 800px wide and below already do.</p>
+
+    <!-- D7.1-A -->
+    <article class="option" id="d71-a">
+      <div class="option-head"><h3><span class="id">D7.1-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · Before we start · 1280 wide · CI capture, PR #204</div>
+          <div class="shot"><img src="a-steps-desktop.webp" width="1028" height="290" alt="Today at 1280: “Before we start.” on the left; on the right three equal columns, each with a numeral in a circle, a title and a description that wraps over two to four short lines. “Review the first milestone” wraps onto two lines." /></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · CI capture, PR #204</div>
+          <div class="shot"><img src="a-steps-phone.webp" width="390" height="530" alt="Today at 390: the heading, then the three steps stacked, each with its numeral circle above the title and description." /></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Three equal columns of numeral, title and description in the right two thirds, with hairlines between them. Phones stack the steps.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It is what you approved with Direction A. The three short steps read left to right as a sequence and the whole section stays one compact band (251px tall at 1280).</dd></div>
+        <div><dt>Trade-off</dt><dd>12 to 22 characters a line (the audit’s own reading range is 45 to 75), “Review the first milestone” wraps, the section opens with two rules, and the steps look like the feature rows Hallmark looks for.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · tokens unchanged · numerals are hidden from screen readers and the ordered list carries the order · reduced motion: the list rises in once and shows at rest otherwise · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.1-B -->
+    <article class="option" id="d71-b">
+      <div class="option-head"><h3><span class="id">D7.1-B</span>Heading above, the print sheet’s row</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · Before we start · 1280 wide · recreation</div>
+          <div class="stage" data-w="1028" role="img" aria-label="Option B at 1280: “Before we start.” above the steps; the three steps keep their left-to-right row across the full width, each numeral circle inline before its title, with the description under both."><div class="site w-sheet v-b" data-before></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option B at 390: today’s stacked steps, with each numeral circle beside its title instead of above it."><div class="site w390 v-b" data-before></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>“Before we start.” moves above the steps, the way “Find the right fit.” sits above its rows on the same page. The three steps keep their left-to-right row, now across the full width, and each numeral sits inline before its title. This is the layout the one-page print sheet already uses, and the page already stacks the heading this way at 800px wide and below.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It keeps the left-to-right sequence you approved with Direction A and fixes what the audit measured: at 1280 each column is 296px, so descriptions run up to 39 characters a line, “Review the first milestone” fits on one line (at 1024 it still wraps), and the second rule now sits under a heading instead of beside it. The section gets shorter, and screen and print then match.</dd></div>
+        <div><dt>Trade-off</dt><dd>/services and /audio/services stop opening “Before we start.” the same way (heading beside the content there). It is still three equal columns, the shape Hallmark flags, although the verifier called that overstated. On phones only the numeral moves, so it looks close to C there.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/layouts/ServiceSheet.astro</code>: the software section’s <code>.service-before</code> becomes one column at every width (today only at 800px and below), and <code>.software-steps li</code> sets the numeral inline. The shared rule in <code>service-pages.css</code> stays, so /audio/services does not change. Measured with the CSS injected into the real page: the section is 216px tall at 1280 (today 251px) and 402px at 390 (today 498px). No horizontal scroll from 320 to 1440.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens only (<code>--rule</code> and the shared <code>.step-number</code> circle) · numerals stay hidden from screen readers, the ordered list keeps the order · reduced motion unchanged (same single rise-in) · nothing interactive added · print unchanged · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.1-C -->
+    <article class="option" id="d71-c">
+      <div class="option-head"><h3><span class="id">D7.1-C</span>Hanging numerals, one list</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it fixes the short lines, the wrapped title and the doubled rule at every width while keeping the heading-left grid shared with /audio/services, which B gives up and which the audit named as the reason not to restack this section.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · Before we start · 1280 wide · recreation</div>
+          <div class="stage" data-w="1028" role="img" aria-label="Option C at 1280: the heading on the left; on the right one numbered list, each numeral in a circle in a narrow gutter with the title over a one-line description, hairlines between steps."><div class="site w-sheet v-c" data-before></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option C at 390: the numeral circle sits beside the title, with the description indented under the title."><div class="site w390 v-c" data-before></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>One numbered list in the right-hand column: the numeral circle in a narrow gutter, the title over its description, a hairline between steps. The list’s top rule goes, so it starts level with the heading. On phones the numeral moves from above the title to beside it.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Every description fits on one line at 1280 (the longest is 73 characters, inside the 45 to 75 range). One layout at every width, and the circles keep the shared <code>.step-number</code> style the audio brief also uses.</dd></div>
+        <div><dt>Trade-off</dt><dd>You lose the left-to-right band you approved, and the right column leaves more empty space beside the heading’s single line. At 1280 the section ends up 20px taller than today.</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/layouts/ServiceSheet.astro</code> (the <code>.software-steps</code> rules and their phone overrides, screen only, so the one-page print sheet keeps today’s columns). Measured with the CSS injected into the real page: the section is 271px tall at 1280 (today 251px) and 385px at 390 (today 498px, because each numeral there takes its own line).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens only · numerals stay hidden from screen readers, the ordered list keeps the order · reduced motion unchanged (same single rise-in) · nothing interactive added · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.1-D -->
+    <article class="option" id="d71-d">
+      <div class="option-head"><h3><span class="id">D7.1-D</span>One numbered paragraph</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · Before we start · 1280 wide · recreation</div>
+          <div class="stage" data-w="1028" role="img" aria-label="Option D at 1280: the heading on the left; on the right the three steps run together as one paragraph, each starting with a small numeral circle, the title in black and the description in grey."><div class="site w-sheet v-d" data-before></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" role="img" aria-label="Option D at 390: the same paragraph under the heading, wrapping over several lines."><div class="site w390 v-d" data-before></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The three steps run together as one paragraph in the right-hand column: a small numeral circle, the title in ink with a period, then the description in muted text. Underneath it is still the same ordered list.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Both service pages then open “Before we start.” the same way, with a paragraph (65ch, 1.55 line height, the audio page’s values). It is the shortest option.</dd></div>
+        <div><dt>Trade-off</dt><dd>Harder to scan: the titles lose their heading size, and a reader has to find the numerals inside the text. The period after each title is added by CSS (formatting only).</dd></div>
+        <div class="wide"><dt>Effort · files · measured</dt><dd><b>S.</b> <code>src/layouts/ServiceSheet.astro</code> (the <code>.software-steps</code> rules, screen only). The numeral moves inside each title so the two never split across a line break, and <code>role="list"</code> stays so screen readers still announce three items once they are inline. Measured in the recreation (the markup change cannot be injected into the real page): the section is 127px tall at 1280 (today 251px) and 259px at 390 (today 498px).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change (the period is a CSS separator) · existing tokens only; muted text is 8.4:1 on paper · numerals stay hidden from screen readers · reduced motion unchanged · no new art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D7.2 ================= -->
+  <section class="study" id="d7-2" aria-labelledby="d72-title">
+    <p class="eyebrow">D7.2 · Your call 14 · /services and /audio/services</p>
+    <h2 id="d72-title">Where should the small label beside a service section heading sit?</h2>
+    <p class="lead">Hallmark flagged “tag beside the heading” (gate 54; ws-7, audio-6, punch list #30) on “See the difference.”, “Hear the difference.” and “Find the right fit.”, and suggested putting each label under its heading. The verifier called that overstated, because the approved concept puts the label on the right. The real defect is narrower: the shipped audio label, “Old News (Prod. Lexi Banks) · Mastering example”, is 320px on one line where the concept’s “Old News · Mastering example” was much shorter. The audio column is never wider than 549px, so above 800px wide “Hear the difference.” always breaks onto two lines and the label onto two more.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/design-reviews/audio-2026-09-15/services-approved.png</code> (label right of “Hear the difference.” and “Find the right fit.”); /services copied the anatomy on September 29 (<code>docs/prelaunch-qa-2026-09-29-services-redesign.md:8</code>, “a sibling of /audio/services”). The audio label is built from the recording title at <code>src/pages/audio/services.astro:24</code>. From 651 to 800px wide the evidence labels already sit under their headings; at 650 and below a label sits beside its heading only when it fits.</p>
+    <figure class="frame concept" style="margin-top:16px"><div class="frame-bar">Approved concept · September 15, 2026 · generated study, not a screenshot</div>
+      <div class="shot"><img src="../../../design-reviews/audio-2026-09-15/services-approved.png" width="1536" height="1024" alt="The approved audio services concept: “Hear the difference.” with “Old News · Mastering example” on the right on one line, and “Find the right fit.” with “Introductory prices · USD / song” on the right." /></div>
+    </figure>
+
+    <!-- D7.2-A -->
+    <article class="option" id="d72-a">
+      <div class="option-head"><h3><span class="id">D7.2-A</span>Keep as is</h3><span class="badge no">Live now</span></div>
+      <div class="views two">
+        <div class="stack">
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/audio/services</b> · hero and offers · 1280 wide · CI capture, PR #204</div>
+            <div class="shot"><img src="a-audio-heads-desktop.webp" width="1160" height="700" alt="Today at 1280: “Hear the difference.” wraps onto two lines, with the label “Old News (Prod. Lexi Banks) · Mastering example” also on two lines at the right; below, “Find the right fit.” has “Introductory prices · USD / song” on the right on one line." /></div>
+          </figure>
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · software hero · 1280 wide · CI capture, PR #204</div>
+            <div class="shot"><img src="a-services-head-desktop.webp" width="1028" height="170" alt="Today at 1280 on /services: “See the difference.” with “Lyft · Associate Tools” on the right, both on one line." /></div>
+          </figure>
+        </div>
+        <figure class="frame phone"><div class="frame-bar">/audio/services · 390 wide · PR #204 CI</div>
+          <div class="shot"><img src="a-audio-heads-phone.webp" width="390" height="786" alt="Today at 390: each label sits on its own line under its heading." /></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Heading left, label right: the evidence heads above 800px wide, the price head above 650px. Heading and label share the line and both shrink when they do not fit.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It is the approved concept, and it works for the two short labels: “Lyft · Associate Tools” and “Introductory prices · USD / song” each sit on one line.</dd></div>
+        <div><dt>Trade-off</dt><dd>“Hear the difference.” and its label each wrap onto two lines at every width above 800px, so the first thing beside the audio headline is the most broken-looking part of the page.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · tokens unchanged · labels are plain text, nothing interactive · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.2-B -->
+    <article class="option" id="d72-b">
+      <div class="option-head"><h3><span class="id">D7.2-B</span>Beside when it fits, under when it does not</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it fixes the one real defect, the wrapped audio heading, without a copy change, and keeps the approved label-on-the-right look everywhere it fits.</p>
+      <div class="views two">
+        <div class="stack">
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/audio/services</b> · hero and offers · 1280 wide · recreation</div>
+            <div class="stage" data-w="1160" role="img" aria-label="Option B at 1280 on /audio/services: “Hear the difference.” on one line with the full label on one line under it; “Find the right fit.” keeps its label on the right."><div class="site w-audio l-b" data-audio></div></div>
+          </figure>
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · software hero · 1280 wide · recreation</div>
+            <div class="stage" data-w="1028" role="img" aria-label="Option B at 1280 on /services: unchanged, “See the difference.” with “Lyft · Associate Tools” on the right."><div class="site w-hero l-b" data-hero style="height:230px"></div></div>
+          </figure>
+        </div>
+        <p class="same side"><b>Phone at 390: same arrangement.</b> The labels already sit under their headings there (see D7.2-A); the gap under each evidence heading gets about 5px tighter (one .3rem gap where today there are two). <b>Re-measured on PR #204’s pages with the rule injected:</b> “Hear the difference.” is one line with its label one line under it at 700, 800, 1024, 1130, 1280 and 1440; “See the difference.” and “Find the right fit.” stay exactly as today from 700 up.</p>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>A heading never shrinks. If its label fits beside it on the same line, the label stays on the right as approved; if not, the whole label moves under the heading. Today that changes only “Hear the difference.”: two lines become one, and the label becomes one line under it.</dd></div>
+        <div><dt>Why it could be better</dt><dd>No copy change, and the layout follows the content: a longer example title later cannot break the heading again. One rule replaces the two width-specific overrides in <code>service-pages.css</code>. The audio hero gets 9px shorter at 1280 (584px against 593px).</dd></div>
+        <div><dt>Trade-off</dt><dd>At 1280 the two heads on /audio/services differ (label under for the player, on the right for the prices). Where a label lands depends on its length. Between about 560 and 650px wide the price note would sit on the right, where today it drops under; from about 425 to 440px wide “Lyft · Associate Tools” drops under its heading, where today it just fits beside it.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/service-pages.css</code> (<code>.service-evidence-heading</code> and <code>.service-offers&gt;header</code>: wrap instead of shrink, the heading keeps its width; drop the 800px and 650px overrides it replaces).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens only · reading order unchanged (heading, then label) · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.2-C -->
+    <article class="option" id="d72-c">
+      <div class="option-head"><h3><span class="id">D7.2-C</span>Under the heading everywhere</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <div class="stack">
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/audio/services</b> · hero and offers · 1280 wide · recreation</div>
+            <div class="stage" data-w="1160" role="img" aria-label="Option C at 1280 on /audio/services: both labels sit on their own line under their headings, at the left."><div class="site w-audio l-c" data-audio></div></div>
+          </figure>
+          <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/services</b> · software hero · 1280 wide · recreation</div>
+            <div class="stage" data-w="1028" role="img" aria-label="Option C at 1280 on /services: “Lyft · Associate Tools” sits under “See the difference.”."><div class="site w-hero l-c" data-hero style="height:230px"></div></div>
+          </figure>
+        </div>
+        <p class="same side"><b>Phone at 390: same arrangement.</b> This is today’s phone layout, carried to every width. From about 425 to 650px wide it also moves the /services label under its heading, where today it sits on the right.</p>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Every label sits directly under its heading, on the left, at every width: both evidence heads and the price note. This is Hallmark’s suggested fix and what phones already show.</dd></div>
+        <div><dt>Why it could be better</dt><dd>One rule, no wrapping, the same on both pages at every width, and the page reads in source order. The print sheet already sets “See the difference.” this way.</dd></div>
+        <div><dt>Trade-off</dt><dd>Departs from the approved concept. “Introductory prices · USD / song” moves to the far left, away from the prices it describes. The /services evidence head and the price head each grow by one short line (about 27px); the audio evidence head ends up as in B (hero 584px against 593px).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/service-pages.css</code> (both heads become one column; drop the 800px and 650px overrides).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing tokens only · reading order unchanged · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <!-- D7.2-D -->
+    <article class="option" id="d72-d">
+      <div class="option-head"><h3><span class="id">D7.2-D</span>The concept’s shorter label</h3><span class="tags"><span class="marker">Copy change, needs approval</span><span class="badge no">Alternative</span></span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/audio/services</b> · hero and offers · 1280 wide · recreation</div>
+          <div class="stage" data-w="1160" role="img" aria-label="Option D at 1280 on /audio/services: “Hear the difference.” on one line with “Old News · Mastering example” on the right, as in the approved concept."><div class="site w-audio l-d" data-audio data-label="Old News · Mastering example"></div></div>
+        </figure>
+        <p class="same side"><b>/services: unchanged. Phone at 390: same layout as today</b>, with the shorter text under the heading. <b>Re-measured on PR #204’s page with the label and B’s rule injected:</b> beside the heading at 1140, 1280 and 1440; under it, on one line, at 700, 800, 1024 and 1130. At 560 and 600 wide the short label also fits beside the heading, where today it sits under.</p>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The audio label reads “Old News · Mastering example”, as in the concept, so “Hear the difference.” and its label share one line again. It keeps B’s rule as the fallback: the short label is 199px wide, so the two share a line from about 1140px wide and the label drops under below that.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It restores the look you approved on September 15 on most laptop and desktop windows, and the audio hero gets 35px shorter at 1280 (558px against 593px).</dd></div>
+        <div><dt>Trade-off</dt><dd>The release’s own title carries the producer credit, “Old News (Prod. Lexi Banks)”, and this label would drop it. Lexi Banks stays credited under “Credits” right below the player, but it is your call whether the label may leave it out.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/pages/audio/services.astro:24</code> (a short display title for this label) plus B’s CSS in <code>src/styles/service-pages.css</code>. If short titles should come from the catalog instead, add an optional field in <code>src/content/config.ts</code> and <code>src/content/recordings/old-news-recording.json</code>.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy change, needs approval · credit kept under “Credits” · existing tokens only · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= Decide ================= -->
+  <section class="study" id="decide" aria-labelledby="decide-title">
+    <p class="eyebrow">Your calls</p>
+    <h2 id="decide-title">What I need from you</h2>
+    <ol class="decisions">
+      <li><b>D7.1 · “Before we start.” steps on /services</b>A keep three columns · B heading above, the print sheet’s row · C hanging numerals, one list · D one numbered paragraph.<span class="def">Recommended: D7.1-C</span></li>
+      <li><b>D7.2 · Labels beside the service headings</b>A keep · B beside when it fits, under when it does not · C under the heading everywhere · D the concept’s shorter audio label (copy change, needs approval).<span class="def">Recommended: D7.2-B</span></li>
+    </ol>
+  </section>
+</main>
+<script>
+  // Real copy: src/data/services.ts (steps), src/layouts/ServiceSheet.astro and src/pages/audio/services.astro (heads).
+  const steps = [
+    ['Share the situation', 'Tell me what you want to build, or what happens today.'],
+    ['Review the first milestone', 'I’ll review your brief and propose a scope, deliverables and fixed price.'],
+    ['Agree, then begin', 'We agree on the terms before I begin.'],
+  ];
+  document.querySelectorAll('[data-before]').forEach(el => {
+    // D7.1-D puts the numeral inside the title, so the two never split across a line break.
+    const inTitle = el.classList.contains('v-d');
+    const num = i => `<span class="num" aria-hidden="true">${i + 1}</span>`;
+    el.innerHTML = `<section class="s-before"><h2>Before we start.</h2><div><ol class="steps" role="list">${steps.map(([t, d], i) => inTitle ? `<li><h3>${num(i)}${t}</h3><p>${d}</p></li>` : `<li>${num(i)}<h3>${t}</h3><p>${d}</p></li>`).join('')}</ol></div></section>`;
+  });
+  document.querySelectorAll('[data-audio]').forEach(el => {
+    const label = el.dataset.label || 'Old News (Prod. Lexi Banks) · Mastering example';
+    el.innerHTML = `<section class="hero"><header><h1>Your song.<br>My full attention.</h1><p>Send your recorded vocals and beat, or a finished mix. I’ll review the files, agree the work with you, and mix or master the song.</p><span class="s-btn">Start your song</span></header>`
+      + `<div class="ev"><div class="ev-head"><h2>Hear the difference.</h2><p>${label}</p></div><img src="player-desktop.webp" width="549" height="469" alt=""></div></section>`
+      + `<section class="offers"><header><h2>Find the right fit.</h2><p>Introductory prices · USD / song</p></header><div class="row1"></div></section>`;
+  });
+  document.querySelectorAll('[data-hero]').forEach(el => {
+    el.innerHTML = `<section class="hero"><header><p class="kicker">Websites &amp; software</p><h2 class="disp">Let’s build something useful.</h2><p>A website, a web app, or a task your team repeats. We’ll choose a clear first milestone together.</p></header>`
+      + `<div class="ev"><div class="ev-head"><h2>See the difference.</h2><p>Lyft · Associate Tools</p></div><img src="lyft-panel-desktop.webp" width="497" height="520" alt=""></div></section>`;
+  });
+
+  // Scale each recreation to its frame.
+  function fit() {
+    document.querySelectorAll('.stage').forEach(stage => {
+      const canvas = stage.firstElementChild;
+      const s = stage.clientWidth / (+stage.dataset.w || 1280);
+      canvas.style.transform = `scale(${s})`;
+      stage.style.height = Math.ceil(canvas.offsetHeight * s) + 'px';
+    });
+  }
+  fit();
+  new ResizeObserver(fit).observe(document.body);
+  document.fonts && document.fonts.ready.then(fit);
+  document.querySelectorAll('.stage img').forEach(img => img.complete || img.addEventListener('load', fit));
+</script>
+</body>
+</html>

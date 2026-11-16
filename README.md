@@ -1,6 +1,6 @@
 # thesuperhuman.us
 
-Personal site for Kazon Wilson · software engineer building with AI · independent work through The Superhuman Group LLC.
+Personal site for Kazon Wilson · software engineer building useful software · independent work through The Superhuman Group LLC.
 
 ## Stack
 
@@ -14,13 +14,17 @@ Personal site for Kazon Wilson · software engineer building with AI · independ
 
 ## Development
 
+Use the Node version in `.nvmrc` and the pnpm version in `package.json`'s `packageManager` field.
+
 ```bash
-npm install
-npm run dev       # local Astro dev server on http://localhost:4321
-npm test          # run Vitest unit tests
-npm run check     # Astro type-check
-npm run build     # production build into dist/
-npm run preview   # serve the built Worker locally after npm run build
+pnpm install
+pnpm run dev       # local Astro dev server on http://localhost:4321
+pnpm test          # run Vitest unit tests
+pnpm run check     # Astro type-check
+pnpm run lint      # Oxlint with the anti-slop rules; must report no findings
+pnpm run format:check  # Biome format check on src, scripts, tests and root config (not CSS or docs)
+pnpm run build     # production build into dist/
+pnpm run preview   # serve the built Worker locally after pnpm run build
 ```
 
 Local env vars live in `.dev.vars` (not committed). See `src/env.d.ts` for the full list.
@@ -39,8 +43,8 @@ Push to `main` → Cloudflare's git integration rebuilds and runs `wrangler depl
 | `TURNSTILE_SECRET_KEY` | Dashboard secret | Sensitive |
 | `STRIPE_SECRET_KEY` | Dashboard secret | Stripe server credential |
 | `STRIPE_WEBHOOK_SECRET` | Dashboard secret | Verifies `/api/stripe/webhook` payloads |
-| `STRIPE_PAYMENTS_ENABLED` | `wrangler.jsonc` `vars` | Explicit invoice-creation gate; keep `false` until payment readiness passes |
-| `AUDIO_CLIENT_PORTAL_ENABLED` | `wrangler.jsonc` `vars` | Keep `false` until the complete client portal and its privacy checks are ready |
+| `STRIPE_PAYMENTS_ENABLED` | `wrangler.jsonc` `vars` | Explicit invoice-creation gate; `true` in production since the September 29, 2026 activation, set `false` to roll back |
+| `AUDIO_CLIENT_PORTAL_ENABLED` | `wrangler.jsonc` `vars` | `true` in production now that the client portal and its privacy checks have passed; set `false` to roll back |
 | `AUDIO_CLIENT_CODE_KEY` | Dashboard secret | Random 32-byte or longer key used to protect short email sign-in codes |
 | `CONTACT_TO_EMAIL` | `wrangler.jsonc` `vars` | Not sensitive |
 | `CONTACT_FROM_EMAIL` | `wrangler.jsonc` `vars` (currently `noreply@notifs.thesuperhuman.us`, the verified Resend sending subdomain) | Not sensitive |
@@ -54,33 +58,35 @@ Audio-service payments begin from a reviewed service request in `/owner/requests
 
 Apply `migrations/music/0003_audio_payments.sql` and `migrations/music/0004_stripe_reconciliation.sql` before deploying code that reads payment records. Register the production webhook URL as `https://thesuperhuman.us/api/stripe/webhook` and subscribe only to `invoice.sent`, `invoice.paid`, `invoice.payment_failed`, `invoice.voided`, and `invoice.marked_uncollectible`. Store the endpoint signing secret as `STRIPE_WEBHOOK_SECRET`.
 
-Keep `STRIPE_PAYMENTS_ENABLED=false` until [Stripe invoicing readiness](docs/stripe-invoicing-readiness.md) passes. Disabling this variable stops new invoice creation while preserving owner status readback and signed webhook processing after the Worker is redeployed with the change.
+`STRIPE_PAYMENTS_ENABLED` is `true` in production, following the September 29, 2026 activation recorded in [Stripe invoicing readiness](docs/stripe-invoicing-readiness.md). To roll back, set it to `false` and redeploy: this stops new invoice creation while preserving owner status readback and signed webhook processing.
 
 ### Audio client portal foundation
 
 Apply `migrations/music/0005_audio_projects.sql` before deploying portal code. It creates one provisional project and audit entry with each new audio-service request, and backfills open service requests. The project references the existing request email instead of storing another copy. This migration alone adds no client access or file-delivery route. The [portal design](docs/superpowers/specs/2026-09-21-audio-client-portal-design.md) defines the later communication, authentication, and delivery gates.
 
-The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. The portal flag remains `false` until messaging, private file delivery, retention, and the full [prelaunch checklist](docs/prelaunch-checklist.md) are complete. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project.
+The email-code access slice also requires `migrations/music/0006_audio_client_access.sql` and the `AUDIO_CLIENT_CODE_KEY` secret. Codes expire after 10 minutes and are single-use; client sessions expire after 14 days. The access routes never expose whether an email has a project. A code works only in the browser that asked for it (see "Sign-in codes migration" below).
 
-The private message-thread slice requires `migrations/music/0007_audio_project_messages.sql` after 0006. It stores one immutable owner/client conversation per project, including who sent each message and when the other side read it. Clients can clarify files before approval and both sides can reply until the project is complete. Messages accept plain text and HTTPS links; the site never fetches or previews those links. Routine client messages appear in the owner request view without sending email. The portal flag stays `false` while update notifications, delivery, retention, and operations are unfinished.
+The private message-thread slice requires `migrations/music/0007_audio_project_messages.sql` after 0006. It stores one immutable owner/client conversation per project, including who sent each message and when the other side read it. Clients can clarify files before approval and both sides can reply until the project is complete. Messages accept plain text and HTTPS links; the site never fetches or previews those links. Routine client messages appear in the owner request view without sending email.
 
-Owner progress updates require `migrations/music/0008_audio_project_updates.sql` after 0007. Accepting a reviewed request sets an initial delivery date; later date moves require a reason and preserve the prior date in the timeline. Updates are saved before a minimal sign-in-link email is attempted. The owner view shows whether that email was sent, failed, or remains unconfirmed. A failed delivery can be retried; an unconfirmed delivery requires checking Resend first and confirming that it did not accept the email. The portal gate stays `false` until initial project invitations, private delivery, retention, and full operations checks are ready.
+Owner progress updates require `migrations/music/0008_audio_project_updates.sql` after 0007. Accepting a reviewed request sets an initial delivery date; later date moves require a reason and preserve the prior date in the timeline. Updates are saved before a minimal sign-in-link email is attempted. The owner view shows whether that email was sent, failed, or remains unconfirmed. A failed delivery can be retried; an unconfirmed delivery requires checking Resend first and confirming that it did not accept the email.
 
-Project invitations require `migrations/music/0009_audio_project_invitations.sql` after 0008. When the portal is enabled, a new service request saves its provisional project first, then attempts a minimal sign-in-link email. The owner request view shows the delivery state and can send or retry an invitation for an existing project. An unconfirmed send requires checking Resend before another attempt. Neither the invitation nor its link authorizes access; clients still need their own email code. The portal gate stays `false` until private delivery, retention, and full operations checks are ready.
+Project invitations require `migrations/music/0009_audio_project_invitations.sql` after 0008. With the portal enabled, a new service request saves its provisional project first, then attempts a minimal sign-in-link email. The owner request view shows the delivery state and can send or retry an invitation for an existing project. An unconfirmed send requires checking Resend before another attempt. Neither the invitation nor its link authorizes access; clients still need their own email code.
 
-Private project audio requires `migrations/music/0010_audio_project_files.sql` after 0009. Only the authenticated studio route can read objects under `studio/projects/`; it rechecks session, project, publication, payment, and expiry for each request and uses private, non-cacheable responses. The public media routes reject that prefix. This slice supplies the read boundary and client player; the portal gate stays `false`.
+Private project audio requires `migrations/music/0010_audio_project_files.sql` after 0009. Only the authenticated studio route can read objects under `studio/projects/`; it rechecks session, project, publication, payment, and expiry for each request and uses private, non-cacheable responses. The public media routes reject that prefix. This slice supplies the read boundary and client player.
 
-Owner file upload requires `migrations/music/0011_audio_project_uploads.sql` after 0010. The owner request view uploads MP3 or WAV files to private R2 storage in 10 MiB parts, so a full-resolution file does not have to fit in one Worker request. Completed uploads remain private drafts until a separate owner publication action; an unfinished upload can be recovered if R2 completed it or discarded. The portal gate remains `false` until publication, revocation, retention, and operations checks are complete.
+Owner file upload requires `migrations/music/0011_audio_project_uploads.sql` after 0010. The owner request view uploads MP3 or WAV files to private R2 storage in 10 MiB parts, so a full-resolution file does not have to fit in one Worker request. Completed uploads remain private drafts until a separate owner publication action; an unfinished upload can be recovered if R2 completed it or discarded.
 
-Owner publication requires `migrations/music/0012_audio_project_publication.sql` after 0011. A review can be published after the booking payment is confirmed; a final file requires confirmed balance payment. Publishing a new review or a final file hides earlier review versions. Publication advances the project stage, records an owner-authored timeline note, and queues the existing minimal sign-in-link email. The owner can mark an agreed revision in progress after publishing a review and close a project after the paid final is published; closing makes messages read-only while the final remains available until expiry. The portal gate remains `false` until revocation, retention, and operations checks are complete.
+Owner publication requires `migrations/music/0012_audio_project_publication.sql` after 0011. A review can be published after the booking payment is confirmed; a final file requires confirmed balance payment. Publishing a new review or a final file hides earlier review versions. Publication advances the project stage, records an owner-authored timeline note, and queues the existing minimal sign-in-link email. The owner can mark an agreed revision in progress after publishing a review and close a project after the paid final is published; closing makes messages read-only while the final remains available until expiry.
 
-File and project revocation require `migrations/music/0013_audio_project_revocation.sql` after 0012. Revoking a published file immediately blocks playback and sends a minimal sign-in-link notice attached to the owner's explanation in the timeline. Closing project access immediately hides the project, invalidates that client's current sessions and pending code, and records an audit event; it does not change Stripe invoices. Resolving a provisional request before acceptance also closes that project's access through `migrations/music/0015_audio_project_close_declined.sql`; apply it after 0014 when deploying the full portal stack. The portal gate remains `false` until retention and operations checks are complete.
+File and project revocation require `migrations/music/0013_audio_project_revocation.sql` after 0012. Revoking a published file immediately blocks playback and sends a minimal sign-in-link notice attached to the owner's explanation in the timeline. Closing project access immediately hides the project, invalidates that client's current sessions and pending code, and records an audit event; it does not change Stripe invoices. Resolving a provisional request before acceptance also closes that project's access through `migrations/music/0015_audio_project_close_declined.sql`; apply it after 0014 when deploying the full portal stack.
 
-Studio retention requires `migrations/music/0014_audio_project_retention.sql` after 0013. The [owner operations guide](docs/owner-operations.md) describes its review-first cleanup, private R2 deletion, failure recovery, and the order for running owner-request retention afterward. The owner Today page shows unread studio messages, failed update notices, and delivery dates needing attention when the portal is enabled. Keep `AUDIO_CLIENT_PORTAL_ENABLED=false` until migration reconciliation and the portal's accessibility, mobile, storage-failure, and email checks pass in the target environment.
+Studio retention requires `migrations/music/0014_audio_project_retention.sql` after 0013. The [owner operations guide](docs/owner-operations.md) describes its review-first cleanup, private R2 deletion, failure recovery, and the order for running owner-request retention afterward. The owner Today page shows unread studio messages, failed update notices, and delivery dates needing attention now that the portal is enabled.
 
 Waveform display requires `migrations/music/0016_audio_project_file_peaks.sql` after 0015. The owner's browser measures 160 loudness bars while uploading and sends them with the finished upload; the server only checks that they are whole numbers from 0 to 100. Files without them, including anything uploaded before 0016, show a plain progress bar instead of a waveform.
 
 Timeline milestones require `migrations/music/0017_audio_project_update_milestones.sql` after 0016. It adds a nullable `milestone` to owner updates so starting a revision and completing a project show by name instead of as a general studio update, and backfills existing notes from the audit row written in the same batch.
+
+`AUDIO_CLIENT_PORTAL_ENABLED` is `true` in production: migrations 0005 through 0017 are applied, the code key is set, and the audio bucket has no public access (see `wrangler.jsonc`). The per-migration notes above describe the gates that had to clear, in order, before enabling it. To roll back, set the flag to `false` and redeploy.
 
 Review answers require `migrations/music/0018_audio_project_review_decisions.sql` after 0017, applied **before** deploying the code that reads it: every message query selects the new `review_decision` column. A client answers each published review by approving it, requesting changes while revision rounds remain (two), or stopping once they are used. Stopping closes that project's access in the same write, without signing the client out of other projects.
 
@@ -120,14 +126,14 @@ mkdir -p /secure/private/resume-backups
 BACKUP_DIR="$(mktemp -d /secure/private/resume-backups/resume.XXXXXX)"
 
 # Preserve the bytes currently served before overwriting the canonical key.
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.before.pdf"
 # Wrangler may exit successfully when a key is missing; require a PDF backup.
 test "$(head -c 5 "$BACKUP_DIR/pdf-general.before.pdf")" = "%PDF-"
 shasum -a 256 "$BACKUP_DIR/pdf-general.before.pdf"
 
 # Upload the candidate, download the stored bytes, and require an exact match.
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "/path/to/resume.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.after.pdf"
 cmp "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 shasum -a 256 "/path/to/resume.pdf" "$BACKUP_DIR/pdf-general.after.pdf"
 ```
@@ -137,8 +143,8 @@ If it does not match, restore the saved `*.before.pdf` to the same key, read it
 back again, and confirm the restored bytes with `cmp`:
 
 ```bash
-npx wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
-npx wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
+pnpm exec wrangler kv key put pdf:general --binding=RESUME_STORE --remote --path "$BACKUP_DIR/pdf-general.before.pdf"
+pnpm exec wrangler kv key get pdf:general --binding=RESUME_STORE --remote > "$BACKUP_DIR/pdf-general.restored.pdf"
 cmp "$BACKUP_DIR/pdf-general.before.pdf" "$BACKUP_DIR/pdf-general.restored.pdf"
 ```
 
@@ -161,7 +167,9 @@ These render to `/tmp/services-overview.pdf` and `/tmp/audio-services-overview.p
 
 ### Security headers
 
-`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). Also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, and `X-Frame-Options: DENY`.
+`public/_headers` overrides Cloudflare's default `Permissions-Policy` with an explicit policy that doesn't reference Chrome-only features (which other browsers log as "Unrecognized feature" warnings). It also sets `Referrer-Policy: strict-origin-when-cross-origin`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a general `Content-Security-Policy-Report-Only` policy. The CSP is report-only; it does not block scripts, and no report collector is configured, so violations are not centrally collected.
+
+Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the same five headers, listed in `src/lib/security-headers.ts`, to every response that passes through it. A header already set by the route, or by the middleware's studio and agreement rules, is kept, so those pages keep `Referrer-Policy: no-referrer`. Astro's redirects for repeated trailing slashes and its bare 500 after a thrown error skip the middleware and carry none of the five. Before enforcing the CSP, configure an approved reporting destination, triage reports, audit routes and inline scripts/handlers, and then change the directive in both locations. `tests/lib/security-headers.test.ts` fails if that list and the `/*` block of `public/_headers` differ.
 
 ## Resume request flow
 
@@ -179,13 +187,13 @@ Audio is part of the personal site at `/audio/`. `audio.thesuperhuman.us` remain
 Audio files are stored in the `superhuman-audio` R2 bucket, bound to the Worker as `AUDIO`. Create the bucket once:
 
 ```bash
-npx wrangler r2 bucket create superhuman-audio
+pnpm exec wrangler r2 bucket create superhuman-audio
 ```
 
 Upload a track (stores it at `tracks/<basename>` in the bucket):
 
 ```bash
-npm run audio:upload path/to/track.mp3
+pnpm run audio:upload path/to/track.mp3
 ```
 
 ### Audio tracks content collection
@@ -206,15 +214,24 @@ See plan Task 24 for full detail. The short list:
 2. Bind `audio.thesuperhuman.us` to the existing Worker via the Cloudflare dashboard, using a Custom Domain or Workers Route. Match how `thesuperhuman.us` is already bound.
 3. Add `audio.thesuperhuman.us` to the hostname allowlist of the existing Turnstile widget in the Cloudflare dashboard.
 
-## Regenerating the OG image
+## Link previews
 
-The `/og-image.png` social-share card is rendered from `scripts/og.html` via headless Chrome at 1200×630.
+Each page's link preview is a short silent looping video plus a poster image, both 1200×630. Apple Messages plays the video in place of the image (looped and muted); Discord, X, Slack, LinkedIn, Bluesky and most other apps show the poster, so the poster is the video's first frame and works on its own.
+
+Each scene is an HTML page in `scripts/og-video/scenes/`, styled by `scripts/og-video/kit.css` and timed by `scripts/og-video/kit.js`, built from the site's fonts, reviewed artwork and real screenshots. `OG_SCENES` in `src/lib/og-media.ts` assigns scenes to pages and holds each poster's alt text: an exact route first, then a page's own `ogImage` (a music release's artwork), then a `/*` family, then the home scene. `BaseLayout` writes the tags; the 404 page names its scene with `ogScene`.
 
 ```bash
-./scripts/build-og.sh
+node scripts/og-video/render.mjs                  # every scene
+node scripts/og-video/render.mjs services work    # only these
+node scripts/og-video/render.mjs --sheet services # contact sheet in .og-video/ for review; writes nothing else
+node scripts/og-video/render.mjs --sheet --at=0,2500 services  # also saves those moments (ms) at full size
 ```
 
-Editing `scripts/og.html` updates the layout and copy. The card reuses the reviewed studio artwork at `src/assets/site/studio-v1.webp`; the renderer reads that local asset directly. Inspect the regenerated card before sharing.
+Rendering needs ffmpeg with libx264 and Chromium (set `CHROMIUM_PATH` if Playwright's own build is missing). The renderer pauses every animation, steps one clock at 30 fps and renders each scene in its own Chromium with the switches of Chromium's deterministic mode, so each frame finishes drawing before its screenshot and frames and posters repeat from run to run, even on a busy machine. MP4 bytes also depend on the ffmpeg build and the CPU, so a scene whose frames and encoder settings have not changed keeps its committed video. Chromium very rarely anti-aliases a few pixels differently, so when a scene's files and the encoder settings are unchanged but its frames differ, it is captured once more before its video is replaced. Render only the scenes you changed. Each manifest entry records the local files its scene loaded and a hash of them, and `tests/lib/og-media.test.ts` fails when a scene, the kit or an image changes without a new render. `tests/scripts/og-video-copy.test.ts` fails when any line of two or more words in a scene (statuses included), or a price in a scene or its alt text, no longer matches the site; a short list of composite labels in that test is exempt. The renderer refuses a scene whose fonts did not load, whose content overflows the frame, whose unwrapped text is wider than its box, or whose last frame does not match its first (the loop would jump), and it keeps videos under 2.5 MB and posters under 600 KB. Posters are PNG; a photographic scene sets `data-poster="jpeg"` on `<html>` for a JPEG poster instead. Files are named by content hash (`public/og/<scene>-<hash>.png` or `.jpg`, and `public/og/raw/<scene>-<hash>.mp4`), which lets caches keep them for a year; the hashed names are recorded in `src/data/og-media.json` and stale files are deleted.
+
+Static assets ignore `Range` requests and Safari's media stack expects them, so `/og/<scene>-<hash>.mp4` is served by `src/pages/og/[name].mp4.ts`, which reads the bytes from `/og/raw/` and answers 200, 206 or 416. Every rendered poster and video needs a review record in `docs/asset-reviews/` (`pnpm run assets:check` fails otherwise; see `docs/generated-image-qa.md`), so inspect each new render's frames and update the record with its hashes.
+
+After deploying, check the video from outside: `curl -sI https://thesuperhuman.us/og/<file>.mp4` should give 200, `video/mp4` and `accept-ranges: bytes`, and `curl -s -o /dev/null -D - -H 'Range: bytes=0-1' https://thesuperhuman.us/og/<file>.mp4` should give 206 with `content-range: bytes 0-1/<size>`. (A HEAD request ignores `Range`, so the second check needs GET.) Then send a link in Messages on an iPhone and a Mac, and paste one into Discord's embed debugger and the Facebook Sharing Debugger.
 
 ## Email signature
 
@@ -257,7 +274,7 @@ Apply music migration `0020_software_offers.sql` before deploying code that uses
 
 Apply music migration `0021_software_projects.sql` after 0020 and before deploying code that uses software projects. This code requires 0021. Deploying it before the migration breaks studio sign-in (audio too) and the owner Today page. It stores project term snapshots, private updates, messages and audit records. Do not edit previously applied migrations.
 
-Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It pins invoice records to requests and immutable offers, including deposits before project start, and preserves existing software audit ids and notes. It has not been applied in production. Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
+Apply music migration `0022_software_invoices.sql` after 0021 and before deploying code that uses software invoices. It pins invoice records to requests and immutable offers, including deposits before project start, and preserves existing software audit ids and notes. It was applied in production (the migration ledger, listed read-only on 2026-11-13, shows no earlier migration pending). Signed software invoice events reuse the existing Stripe event de-duplication table; audio tables are unchanged.
 
 ### Software agreement signing
 
@@ -269,7 +286,9 @@ pin immutable template versions. Private source templates are excluded from Git;
 a one-shot private seed refuses to overwrite existing versions.
 
 PDF preparation uses `pdf-lib`, `@pdf-lib/fontkit`, and licensed local Inter and
-Newsreader fonts. Agreement PDFs and certificates belong in private storage.
+Libron fonts. Rebuild the Libron heading TTF with
+`python3 scripts/build-agreement-heading-font.py`. Agreement PDFs and
+certificates belong in private storage.
 Signed copy downloads remain available when new website signing is switched off.
 Code completion does not establish deployment or live signing readiness.
 
@@ -281,5 +300,21 @@ selections or the extended review-window field. It snapshots the planned items
 included in each shared delivery while acceptance remains tied to the complete
 agreed milestone. It also stores executed-agreement review windows longer than
 30 business days without changing the earlier column constraint. Both
-migrations remain pending production approval; do not deploy this code before
-the required schema is applied.
+migrations are applied in production (the migration ledger, listed read-only on
+2026-11-13, shows only 0027 pending); do not deploy code that reads a migration's
+schema before that migration is applied.
+
+### Agreement template labels
+
+Apply music migration `0026_agreement_template_labels.sql` after `0025_brief_suggestion_budget.sql` and before deploying code that reads template version labels. It is additive only: it adds nullable `version_label` and `source_revision` columns to `software_agreement_templates` and a partial unique index on `(kind, version_label)`. Existing template rows keep NULL values and show a `v` plus published-date fallback label. Deploying this code first breaks the owner request page for any request with an offer (even with signing off), the owner Agreements page, the client signing page after email verification and template publishing. `pnpm run owner:health --remote` reports `software_agreement_templates.version_label (migration 0026)` as missing until the migration is applied. Do not edit previously applied migrations.
+
+### Sign-in codes migration
+
+Apply music migration `0027_audio_client_signin_codes.sql` after `0026_agreement_template_labels.sql` and **before** deploying code that reads it; deploying first breaks studio sign-in (every code request and sign-in answers 503). Nothing in this repository applies migrations (no deploy script, no workflow step); the owner applies them by hand and then deploys (`wrangler.jsonc` names `migrations/music` as the migrations directory for `MUSIC_DB`). How the Workers Builds deploy is configured is not in the repository. The command is `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` to see what is pending, then `pnpm exec wrangler d1 migrations apply MUSIC_DB --remote` (this README names no `MUSIC_DB` command for the earlier migrations; these are the same Wrangler commands `docs/publication-deployment.md` uses for `PUBLICATION_DB`). `apply` runs every pending migration in order, so read the `list` output first. The production ledger, listed read-only on 2026-11-13, showed exactly one pending migration, `0027_audio_client_signin_codes.sql`; the earlier warning that 0022 to 0024 might still be pending is out of date. The migration only adds a table and leaves `audio_client_codes` alone, so the code running before the deploy keeps working on the migrated database. Codes pending when the new code goes live stop working (they expire within 10 minutes anyway); the client asks for a new one, and sessions are not affected. After the deploy is live, a later migration (0028, tracked in [issue 271](https://github.com/kwilson21/thesuperhuman.us/issues/271), not in this change) drops `audio_client_codes`; it is not part of 0027 because applying both together would break the code still running. Until then retention, owner health and access closure still clear it, and a database without it is fine.
+
+A code request sets a pending sign-in cookie (HttpOnly, SameSite=Lax, 10 minutes; over https `__Host-studio_pending` with Path `/` and Secure, on plain-http localhost `studio_pending` with Path `/api/studio`) and a code is accepted only with that cookie, so it must be entered in the browser that asked for it. Each code is its own row (keyed by a hash of the cookie value and the address, so a request for one address reads and changes only that address's rows) with its own five attempts; at most six live codes exist per address; a browser can hold codes for several addresses and the cookie is not cleared when it signs in (it expires after its 10 minutes); the expired rows of an address are deleted when a new code is issued for it; closing a client's access deletes every code for the address.
+
+## Credits
+
+- **[Hallmark](https://github.com/nutlope/hallmark)**, the design standard this site is checked against, is made by Together AI and the Hallmark contributors and published under the MIT license. It is vendored unmodified at `.agents/skills/hallmark/` from commit `13ac0ec7e148655948100b6396439e481361d690` (August 6, 2026), with its `LICENSE` and a `VENDORED.md`. The site's own system, which overrides Hallmark's defaults, is in [design.md](design.md); [docs/design-standard.md](docs/design-standard.md) says how it is used. `pnpm run design:check`, part of `prebuild`, runs a few of its gates on `src/`.
+- **[anti-slop](https://github.com/dmmulroy/anti-slop)** by dmmulroy is published under the MIT license. Its Oxlint rules are vendored at `tools/oxlint/anti-slop/` from commit `13909c9e07590f5a85d93c62712259fe14a883f7` (October 13, 2026), with its `LICENSE` and an `UPSTREAM.md` that records the changes made here (none). The rules include code from [eslint-stylistic](https://github.com/eslint-stylistic/eslint-stylistic), published under the MIT license by the OpenJS Foundation and other contributors, vendored at `tools/oxlint/anti-slop/vendor/eslint-stylistic/` with its `LICENSE` and an `UPSTREAM.md` that lists the local adaptations. They are registered in `oxlint.config.ts`.

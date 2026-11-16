@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Type and labels: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+  @font-face { font-family: 'Kazon Name Text'; src: url(../../../../public/fonts/kazon-name-text.woff2) format('woff2'); font-weight: 400; }
+
+  /* Site palette (src/styles/global.css) plus the board tones the 2026-10-19 board used.
+     --accent-text darkens the accent for small text on the board background, where plain accent is 4.1:1. */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    --accent-text: color-mix(in srgb, var(--accent) 85%, var(--ink)); --ease-site: cubic-bezier(.2, .7, .2, 1);
+    --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper));
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    --plex: 'IBM Plex Sans', system-ui, sans-serif; --name: 'Kazon Name Text', Libron, Georgia, serif; color-scheme: light; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 4.4vw, 56px) 72px; }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header > p:not(.eyebrow) { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  :is(button, input, a):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+
+  .panel { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; margin-top: 22px; }
+  .panel b { font-weight: 600; }
+  .panel ul { margin: 8px 0 0; padding-left: 18px; } .panel li { margin-bottom: 5px; }
+  .panel.dashed { border-style: dashed; border-color: #c4ab92; }
+  .glance { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 0; }
+  .glance li { display: grid; grid-template-columns: 52px minmax(0, 1fr) minmax(0, 15rem); gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--rule); align-items: baseline; }
+  .glance .gid { font: 500 13px/1.4 var(--mono); color: var(--accent-text); }
+  .glance .gq b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); }
+  .glance .gr { font-weight: 600; color: var(--ink); padding-block: 4px; } /* inline padding widens the tap area without moving the line */
+  @media (max-width: 700px) { .glance li { grid-template-columns: 44px minmax(0, 1fr); } .glance .grec { grid-column: 2; } }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 44px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-text); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  .why-rec b { font-weight: 600; }
+  .same { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; }
+  .same b { font-weight: 600; }
+  .note { font: 13px/1.5 var(--sans); color: var(--muted); margin: 10px 2px 0; }
+
+  .views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 900px) { .views.two { grid-template-columns: minmax(0, 1fr) minmax(0, 300px); } }
+  .col { display: grid; gap: 16px; min-width: 0; align-content: start; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  @media (min-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { font: 11px/1.4 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; overflow-wrap: anywhere; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame.phone { max-width: 390px; width: 100%; justify-self: center; }
+  .shot img { display: block; width: 100%; height: auto; }
+
+  .facts { margin: 16px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .facts .span2 { grid-column: span 2; } .facts .wide { grid-column: 1 / -1; } }
+  .facts > div { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .facts dd { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; overflow-wrap: anywhere; }
+  .facts dd b { font-weight: 600; color: var(--ink); }
+
+  .matrix-wrap { margin: 18px 0 0; }
+  .matrix { width: 100%; border-collapse: collapse; font: 13.5px/1.45 var(--sans); background: var(--paper); border: 1px solid var(--edge); }
+  .matrix caption { text-align: left; font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 0 0 8px; }
+  .matrix th, .matrix td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .matrix thead th { font-weight: 600; font-size: 12px; letter-spacing: .04em; color: var(--muted); background: #f6f1e9; }
+  .matrix tbody th { font-weight: 400; color: #2b2b2b; }
+  .matrix td { width: 4.6rem; white-space: nowrap; color: var(--muted); }
+  .matrix td.cut { color: var(--accent-text); font-weight: 600; }
+  .matrix td.move { color: var(--ink); font-weight: 600; }
+
+  .samples { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 18px 0 0; }
+  @media (min-width: 900px) { .samples { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .sample { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; font: 18px/1.45 var(--serif); }
+  .sample b { display: block; font: 500 12px/1.3 var(--mono); color: var(--accent-text); margin-bottom: 4px; }
+  .sample .s-ink { color: var(--ink); } .sample .s-muted { color: var(--muted); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-top: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; font: 13px/1.45 var(--sans); color: #2b2b2b; }
+  .sw { display: flex; gap: 10px; align-items: center; }
+  .sw b { font-weight: 600; } .sw span { color: var(--muted); }
+  .chip { width: 34px; height: 34px; border-radius: 6px; flex: none; border: 1px solid var(--edge); }
+  .chip.ring { background: var(--paper); border-width: 2px; }
+  .controls { flex-basis: 100%; }
+  .controls label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font: 14px/1.4 var(--sans); }
+  .controls input { width: 20px; height: 20px; accent-color: var(--accent); margin: 0; }
+
+  .diff { margin-top: 14px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 12px 16px; font: 16px/1.6 var(--serif); max-width: 46rem; }
+  .diff p { margin: 0 0 8px; } .diff p:last-child { margin: 0; }
+  .diff .diff-h { font: 600 12px/1.4 var(--sans); color: var(--muted); letter-spacing: .02em; }
+  .diff del { color: #8a2f17; text-decoration-color: #8a2f17; }
+  .diff ins { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  .marker { display: inline-block; font: 600 10px/1 var(--sans); color: var(--accent-text); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 7px; margin-left: 6px; vertical-align: 1px; letter-spacing: .02em; text-transform: none; }
+
+  .flow-frame { margin-top: 16px; }
+  .flows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px 24px; padding: 14px 16px 8px; font: 14px/1.4 var(--sans); color: var(--ink); }
+  @media (min-width: 900px) { .flows { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .flow-h { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+  .flow-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; }
+  .node { min-width: 0; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--field-border); border-radius: 6px; padding: 7px 11px; background: var(--paper); }
+  .node small { display: block; font-size: 12.5px; color: var(--muted); }
+  .node.own { border-color: var(--accent); }
+  .node.third { border-style: dashed; }
+  .arrow { color: var(--accent); }
+  @media (max-width: 560px) { .flow-row { flex-direction: column; align-items: flex-start; gap: 2px; } .arrow { transform: rotate(90deg); margin-left: 18px; } }
+
+  .decisions { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 900px) { .decisions { grid-template-columns: 1fr 1fr; } }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 16px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--accent-text); }
+
+  /* ---------- Scaled stages: each recreation is laid out at its real width, then scaled to fit (never up). ---------- */
+  .stage { position: relative; width: 100%; overflow: hidden; height: 240px; }
+  .stage > .site { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+  /* ---------- Recreation of the site, with the computed values of src/styles/global.css and the page styles at 1280 and 390. ---------- */
+  .site { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); text-align: left; overflow: hidden; position: relative; text-rendering: optimizeLegibility; font-synthesis: none; }
+  .site *, .site *::before, .site *::after { box-sizing: border-box; }
+  :where(.site p) { margin: 0; text-wrap: pretty; }
+  .site .title, .site .ch2, .site .c2, .site .svc-h1, .site .s2, .site .h3, .site .ph3, .site .bt-h, .site .dt { letter-spacing: -.01em; text-wrap: balance; color: var(--ink); }
+  .w1280 { width: 1280px; } .w920 { width: 920px; } .w900 { width: 900px; } .w580 { width: 580px; } .w390 { width: 390px; }
+  .pad { padding-inline: 80px; } .w390 .pad { padding-inline: 24px; }
+  .pn { font-family: var(--name); }
+  .site .k { font: 400 11px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+  .site .k.km { color: var(--muted); } /* the muted .eyebrow: privacy dateline, experience rows */
+  .lnk { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; color: var(--ink); }
+  .lnk > span, .hlink > span { color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8.8px 21.6px; background: var(--accent); color: var(--paper); border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; flex-shrink: 0; white-space: nowrap; }
+
+  /* /work and /about first screens (.primary-page, .page-title, .page-lede) */
+  .head { padding-top: 64px; padding-bottom: 36px; } .w390 .head { padding-top: 32px; }
+  .work-intro { max-width: 736px; }
+  .site .title { font-size: 83.2px; line-height: 1.02; letter-spacing: -.045em; }
+  .w390 .title { font-size: 52px; }
+  .lede { font-size: 28.8px; line-height: 1.35; margin-top: 20px; max-width: 640px; color: var(--ink); }
+  .w390 .lede { font-size: 20.8px; }
+  .links { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; margin-top: 28px; }
+  .evidence { margin-top: 28px; color: var(--muted); font-size: 18px; max-width: 33rem; }
+  .about-intro { padding-top: 64px; height: 100%; }
+  .about-copy { position: relative; z-index: 1; max-width: 544px; }
+  .about-lede { max-width: 480px; }
+  .terrain { position: absolute; left: 344px; top: -16px; width: 1109px; height: auto; mix-blend-mode: multiply; z-index: 0;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to right, transparent, #000 28%, #000 85%, transparent), linear-gradient(to bottom, #000 75%, transparent); mask-composite: intersect; }
+
+  /* About chapter (.path-chapter) */
+  .chapter { display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 32px; }
+  .chapter-copy { max-width: 480px; position: relative; z-index: 2; }
+  .site .ch2 { font-size: 47.36px; line-height: 1.1; letter-spacing: -.035em; }
+  .ctext { font-size: 19.2px; line-height: 1.5; color: var(--muted); margin-top: 16px !important; }
+  .chapter-copy .lnk { margin-top: 24px; }
+  .scene { width: 115%; margin-left: -5%; }
+  .scene img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; -webkit-mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); mask-image: radial-gradient(ellipse at center, #000 40%, transparent 72%); }
+  .w390 .chapter { display: flex; flex-direction: column; gap: 0; padding-top: 24px; }
+  .w390 .ch2 { font-size: 35.2px; }
+
+  /* Closing band (.page-connect) */
+  .connect { border-top: 1px solid var(--rule); padding-block: 40px; display: flex; justify-content: space-between; align-items: center; gap: 32px; }
+  .site .c2 { font-size: 36px; line-height: 1.15; letter-spacing: -.025em; }
+  .connect .sub { color: var(--muted); font-size: 18px; margin-top: 9.6px; }
+  .w390 .connect { flex-direction: column; align-items: flex-start; }
+  .w390 .c2 { font-size: 28px; }
+
+  /* /services first screen (ServiceSheet.astro) */
+  .svc { padding: 48px 146px 40px; } .w900 .svc { padding-right: 0; } .w390 .svc { padding: 32px 24px 32px; }
+  .site .svc-h1 { font-size: 70.4px; line-height: 1.02; letter-spacing: -.04em; max-width: 14ch; margin-bottom: 20px; }
+  .w390 .svc-h1 { font-size: 44px; }
+  .svc-intro { font-size: 27.2px; line-height: 1.3; max-width: 34ch; }
+  .w390 .svc-intro { font-size: 22.4px; }
+
+  /* Tally journal highlights (tally.astro, ProjectTimeline.astro) */
+  .tally { padding-top: 32px; }
+  .sec-head { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
+  .sec-head::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+  .site .s2 { font-size: 44px; line-height: 1.2; letter-spacing: -.035em; }
+  .site .s2-36 { font-size: 36px; }
+  .w390 .s2 { font-size: 30px; } .w390 .s2-36 { font-size: 28px; }
+  .tally > .k { margin: 0 0 24px; }
+  .hl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); column-gap: 64px; align-items: start; }
+  .w390 .hl { display: block; }
+  .w390 .hl-fig { margin-top: 24px; }
+  .hl-fig img { display: block; width: 100%; height: auto; }
+  .site .h3 { font-size: 33.6px; line-height: 1.2; margin-bottom: 20px; max-width: 24ch; }
+  .w390 .h3 { font-size: 26.4px; }
+  .step { position: relative; border-left: 1px solid var(--rule); padding: 0 0 20px 20px; }
+  .step::before { content: ''; position: absolute; width: 8px; height: 8px; border: 1px solid var(--muted); border-radius: 50%; background: var(--paper); left: -5px; top: 6.4px; }
+  .step.primary::before { background: var(--accent); border-color: var(--accent); }
+  .step:last-child { padding-bottom: 0; border-left-color: transparent; }
+  .site .sl { display: block; color: var(--muted); font: 400 10.88px/1.5 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .step p { max-width: 58ch; color: var(--muted); font-size: 15.68px; line-height: 1.6; margin-top: 4px; }
+  .step.primary p { color: var(--ink); font-size: 17.28px; }
+  .credit { color: var(--muted); font-size: 12.48px; line-height: 1.6; margin-top: 20px !important; max-width: 60ch; }
+
+  /* Building: Earlier prototypes and the Tally row (building.astro) */
+  .protos { padding-block: 32px 40px; }
+  .proto-intro { color: var(--muted); max-width: 640px; margin-bottom: 24px !important; }
+  .proto-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+  .w390 .proto-list { grid-template-columns: 1fr; gap: 28px; }
+  .proto .k { margin-bottom: 6.4px; }
+  .site .ph3 { font-size: 24px; line-height: 1.3; margin-bottom: 10.4px; }
+  .hlink { border-bottom: 1px solid var(--accent); padding-bottom: 1px; }
+  .ptext { color: var(--muted); }
+  .site .st { display: flex; align-items: baseline; gap: .65rem; font: 400 12px/1.7 var(--mono); color: var(--ink); margin: -2px 0 10px; }
+  .site .st::before { content: ''; width: 10.4px; height: 10.4px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+  .bt { padding: 24px 32px 28px; }
+  .site .bt-h { font-size: 40.96px; line-height: 1.15; letter-spacing: -.025em; }
+  .bt-k { margin: 8px 0 17.6px !important; }
+  .st-bt { margin: 10px 0 16px !important; }
+  .bt-sub { font-size: 20px; line-height: 1.4; }
+
+  /* Doors (WorkWithMe.astro) on /services: sheet content 988px from x=146 */
+  .doors-wrap { padding-block: 24px 32px; }
+  .doors { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 40px; }
+  .door { display: grid; grid-template-rows: subgrid; grid-row: span 5; }
+  .art { display: block; aspect-ratio: 3 / 2; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--rule) 50%, var(--paper)); }
+  .art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+  .cap { font-family: var(--sans); font-size: 12.48px; line-height: 1.6; color: var(--muted); margin: 11.2px 0 12.8px !important; }
+  .site .dt { font-size: 24.8px; line-height: 1.2; letter-spacing: -.02em; margin: 0 0 5.6px; }
+  .dline { font-size: 16.8px; line-height: 1.5; color: var(--muted); max-width: 30ch; margin: 0 0 14.4px !important; }
+  .dbtn { justify-self: start; align-self: start; padding: 7.2px 18.4px; }
+  .doors-phone { padding-block: 24px; }
+  .doors-phone .door { grid-template-columns: 104px 1fr; grid-template-rows: none; grid-template-areas: "art caption" "art title" "art line" "art button"; grid-row: auto; column-gap: 16px; align-items: start; }
+  .doors-phone .art { grid-area: art; } .doors-phone .cap { grid-area: caption; margin: 0 0 6.4px !important; } .doors-phone .dt { grid-area: title; font-size: 22.4px; } .doors-phone .dline { grid-area: line; } .doors-phone .dbtn { grid-area: button; }
+
+  /* Lyft figure (ServiceSheet.astro) and the contact field (global.css .site-form) */
+  .lyft { padding: 20px 42px 28px; }
+  .fig { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; border-top: 1px solid var(--rule); padding-top: 12px; }
+  .big { font-size: 38.4px; line-height: 1.2; letter-spacing: -.025em; color: var(--ink); }
+  .arr { color: var(--accent); }
+  .fig small { font: 12.48px/1.5 var(--sans); color: var(--muted); }
+  .story { display: flex; align-items: start; gap: 16px; margin-top: 16px; }
+  .story p { font: 14px/1.5 var(--sans); color: var(--muted); }
+  .story .lnk { font-size: 15.2px; flex-shrink: 0; }
+  .fieldwrap { padding: 24px 20px 28px; }
+  .flabel { margin-bottom: 8px !important; }
+  .ta { border: 1px solid var(--field-border); background: var(--paper); padding: 10.4px 12.8px; border-radius: 3px; font: 16px/1.5 var(--sans); color: #757575; height: 112px; }
+
+  /* Label strip (D4.2), shown at true size */
+  .strip { display: flex; flex-wrap: wrap; gap: 18px 28px; padding: 16px 18px; border: 1px solid var(--edge); border-radius: 10px; }
+  .strip > div { display: grid; gap: 6px; align-content: start; }
+  .strip .k { margin: 0; }
+  .strip .st { margin: 0; }
+  .strip small { font: 11px/1.3 var(--sans); color: #6b655e; }
+  .strip .ul { border-bottom: 1px solid var(--accent); padding-bottom: 1px; color: var(--ink); }
+  .strip .stepcell { border-left: 1px solid var(--rule); padding-left: 12px; }
+  .capstrip { gap: 18px 32px; }
+  .capstrip .cap { margin: 0 !important; }
+  .capstrip .c-door { width: 302px; max-width: 100%; }
+  .capstrip .c-story { width: 300px; max-width: 100%; }
+  .capstrip .c-field { width: 300px; max-width: 100%; }
+  .figsmall { font: 12.48px/1.5 var(--sans); color: var(--muted); }
+  .storyp { font: 14px/1.5 var(--sans); color: var(--muted); }
+  .ta.ta-s { height: auto; min-height: 66px; }
+
+  /* ---------- Option variants ---------- */
+  /* D4.2 label faces */
+  .lab-libron .k { font: italic 400 15px/1.45 var(--serif); letter-spacing: 0; text-transform: none; margin-bottom: 12px; }
+  .lab-libron .sl { font: italic 400 14px/1.45 var(--serif); letter-spacing: 0; text-transform: none; }
+  .lab-libron .st { font: italic 400 15px/1.5 var(--serif); }
+  .lab-inter .k { font: 500 11px/1.6 var(--sans); letter-spacing: .12em; }
+  .lab-inter .sl { font: 500 10.88px/1.5 var(--sans); letter-spacing: .12em; }
+  .lab-inter .st { font: 400 12.5px/1.7 var(--sans); }
+  .lab-caps .k { font: 400 12px/1.6 var(--serif); letter-spacing: .14em; }
+  .lab-caps .sl { font: 400 11.5px/1.5 var(--serif); letter-spacing: .12em; }
+  .lab-caps .st { font: 400 13px/1.6 var(--serif); }
+  .strip.lab-libron .k, .strip.lab-libron .sl { margin: 0; }
+
+  /* D4.3 greys */
+  .grey-b { --ink: #100E0A; --muted: #4D4A43; --field-border: #8A8780; }
+  .grey-c { --ink: #160E09; --muted: #58463B; --field-border: #91847B; }
+  .grey-d { --muted: #564B47; --field-border: #908883; }
+  .option.cmp .site { --ink: #0E0E0E; --muted: #4A4A4A; --field-border: #888785; }
+
+  /* D4.4 interface faces */
+  .ui-libron .cap { font-family: var(--serif); font-size: 14px; line-height: 1.5; }
+  .ui-libron .fig small, .ui-libron .figsmall { font: 14px/1.5 var(--serif); }
+  .ui-libron .story p, .ui-libron .storyp { font: 15px/1.5 var(--serif); }
+  .ui-libron .ta { font-family: var(--serif); }
+  .ui-plex .cap, .ui-plex .fig small, .ui-plex .figsmall, .ui-plex .story p, .ui-plex .storyp, .ui-plex .ta { font-family: var(--plex); }
+
+  /* D4.5 heading weight */
+  .hw-small .dt, .hw-small .ph3 { font-weight: 700; }
+  .hw-title .title { font-weight: 700; }
+  .hw-lede .lede { color: var(--muted); }
+
+  @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<main class="board">
+  <header id="intro">
+    <p class="eyebrow">Design study · Type and labels · 2026-10-22</p>
+    <h1>Type and labels: alternatives</h1>
+    <p>Five choices from the Hallmark audit that are yours to make: the small uppercase labels, the face that sets them, the greys, the interface face and the heading weight. Each decision shows the site as PR #204 leaves it (option A), then two or three alternatives drawn in HTML with the site’s real type sizes, colors and copy, on real page fragments: the /work first screen, the About Audio chapter, closing bands, the /services doors and captions.</p>
+    <p>Option A uses the CI captures of PR #204 at f0abd1f, which include the audit fixes. Where the alternatives need a line-for-line comparison (the /work first screen, the /services doors, the Lyft figure and the contact field), option A is drawn in HTML from PR #204’s CSS like them, and the frame says so. A drawn line can break one word sooner or later than in a CI capture, because CI renders with another browser build. Nothing here is built. None of these options adds motion, and every picture is an existing site picture or a CI capture, so nothing needs image QA. Pick one option per decision; the recommended one is marked.</p>
+    <div class="panel"><b>At a glance</b>
+      <ol class="glance"><li><span class="gid">D4.1</span><span class="gq"><b>Kickers</b>Which small uppercase labels above headings should stay?</span><span class="grec">Recommended: <a class="gr" href="#d41-b">B · Cut the five echoes</a></span></li><li><span class="gid">D4.2</span><span class="gq"><b>Label face</b>Which typeface should set the small labels?</span><span class="grec">Recommended: <a class="gr" href="#d42-a">A · Keep JetBrains Mono</a></span></li><li><span class="gid">D4.3</span><span class="gq"><b>Greys</b>Should the ink and muted text take a slight warm tint?</span><span class="grec">Recommended: <a class="gr" href="#d43-a">A · Keep the neutral greys</a></span></li><li><span class="gid">D4.4</span><span class="gq"><b>Interface face</b>Should Inter stay the face for small interface text?</span><span class="grec">Recommended: <a class="gr" href="#d44-b">B · Libron on public pages</a></span></li><li><span class="gid">D4.5</span><span class="gq"><b>Heading weight</b>Should headings stay Libron Regular?</span><span class="grec">Recommended: <a class="gr" href="#d45-a">A · Keep Regular</a></span></li></ol>
+    </div>
+    <div class="panel dashed"><b>Already fixed in PR #204, so not decisions here:</b>
+      <ul>
+        <li>One kicker face: the muted <code>.eyebrow</code> (the privacy dateline and the Work experience rows) now uses the mono face and size of <code>.page-kicker</code>, and the /audio “Released” labels moved from the Inter <code>.listen-kicker</code> to <code>.page-kicker</code> (audit worth-considering entry 16).</li>
+        <li>The font tokens no longer quote <code>system-ui</code>, <code>serif</code> and <code>monospace</code>, so the fallbacks work if Google Fonts is blocked (entry 7).</li>
+        <li>The door captions and the services footnote show the plain name in the caption face instead of a serif glyph inside sans text (entry 17).</li>
+        <li>The services Lyft sentence is 14px instead of 12.5px (missed issue 4).</li>
+        <li>The A/B player sets each control row in one face (entry 17).</li>
+      </ul>
+    </div>
+    <div class="panel dashed"><b>Noticed while checking, a defect rather than a decision:</b> the Lyft label in /work’s highlights reads <code>Lyft - Associate Tools team</code> with a spaced hyphen (<code>src/pages/work.astro:21</code>). /services writes the same company as “Lyft · Associate Tools” with the middle dot, so this one would read “Lyft · Associate Tools team”. The personal website’s <code>Live - evolving</code> status has the same spaced hyphen (audit missed issue 9); PR #204 left that one as it is because the link-preview videos from PR #203 quote it.</div>
+  </header>
+  
+<section class="study" id="d41">
+  <p class="eyebrow">D4.1 · Kickers</p>
+  <h2>Which small uppercase labels above headings should stay?</h2>
+  <p class="lead">Hallmark flagged a kicker above nearly every heading, on nine page groups (punch list #8). A label that repeats the nav, the page title or the heading under it reads as template habit, and it dilutes the labels that carry facts.</p>
+  <p class="decided"><b>Where it was decided.</b> The selected studies draw page and closing-band labels (<code>docs/design-concepts/2026-09-09/work-v1.png</code> and <code>about-personal-path-v1.png</code>, listed in <code>docs/design-concepts/README.md:8</code>). The brief board draws form kickers (<code>docs/design-concepts/2026-10-19/website-intake/index.html:472-477</code>), and Building puts a status on every row (<code>docs/audits/2026-09-26/website-simplification-audit.md:342-345</code>). Tally’s “Three highlights from the journal” and “Decision” labels have no design record. In the studies the closing-band labels added something: the Work study put “Let’s talk” over “An interesting problem or possibility?”, and the About study put “Let’s connect” over “Let’s find a connection.”. The shipped About heading is now “Let’s talk.”, so its label no longer adds anything.</p>
+  <div class="matrix-wrap"><table class="matrix">
+    <caption>Which labels each option keeps</caption>
+    <thead><tr><th scope="col">Label</th><th scope="col">B</th><th scope="col">C</th><th scope="col">D</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">“Let’s connect” over “Let’s talk.” on /about, and “Let’s talk” beside the “Get in touch” button on /work</th><td class="cut">Cut</td><td class="cut">Cut</td><td class="cut">Cut</td></tr>
+      <tr><th scope="row">“Work with me” above “Three ways to work with me.” on /services</th><td class="cut">Cut</td><td class="cut">Cut</td><td class="cut">Cut</td></tr>
+      <tr><th scope="row">“Three highlights from the journal” on /building/tally</th><td class="cut">Cut</td><td class="cut">Cut</td><td class="cut">Cut</td></tr>
+      <tr><th scope="row">Tally’s “Decision” step label, under a headline that already names the decision</th><td class="cut">Cut</td><td class="cut">Cut</td><td class="cut">Cut</td></tr>
+      <tr><th scope="row">Page names that repeat the nav: Work, About, Building, Audio</th><td>Keep</td><td class="cut">Cut</td><td>Keep</td></tr>
+      <tr><th scope="row">Project statuses on Home and /building</th><td>Keep</td><td>Keep</td><td class="move">Dot line</td></tr>
+      <tr><th scope="row">Breadcrumbs, datelines, company lines, About chapter topics, Tally’s “Why it matters”, the Daily’s Today, Still to build and Next, service evidence labels</th><td>Keep</td><td>Keep</td><td>Keep</td></tr>
+    </tbody>
+  </table></div>
+
+  <article class="option" id="d41-a">
+  <div class="option-head"><h3><span class="id">D4.1-A</span>Keep as is</h3><span class="badge no">Current</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-services-hero-desktop.webp" width="900" height="400" alt="The /services first screen: the label WORK WITH ME above the heading Three ways to work with me."></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-cta-desktop.webp" width="1280" height="200" alt="The About closing band: the label LET’S CONNECT above the heading Let’s talk."></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-work-cta-desktop.webp" width="1280" height="190" alt="The Work closing band: the label LET’S TALK above Have a problem worth exploring?"></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building/tally</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-tally-hl-desktop.webp" width="1280" height="520" alt="Tally’s journal highlights: THREE HIGHLIGHTS FROM THE JOURNAL under the Development journal heading, then DECISION and WHY IT MATTERS step labels."></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-building-protos-desktop.webp" width="1280" height="330" alt="Building’s Earlier prototypes: LOCAL PROTOTYPE and INTERNAL PROTOTYPE labels above each name."></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-services-hero-phone.webp" width="390" height="305" alt="The /services first screen on a phone, with the WORK WITH ME label."></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 390 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-cta-phone.webp" width="390" height="245" alt="The About closing band on a phone, with the LET’S CONNECT label."></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/building/tally</b> · 390 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-tally-hl-phone.webp" width="390" height="478" alt="Tally’s journal highlights on a phone."></div></figure></div></div>
+    <p class="note">Captured by CI on PR #204 at f0abd1f, so they include the audit fixes: headings now balance, which is why Tally’s headline breaks after “with”.</p>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Nothing. Every page head, About chapter, closing band, project row and Tally highlight keeps its label.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Matches the selected studies, which drew labels on page heads and closing bands.</dd></div>
+  <div><dt>Trade-off</dt><dd>Some labels now say what the heading under them says: “Let’s connect” over “Let’s talk.”, and on /services “Work with me” sits between the header button “Work with me” and the heading “Three ways to work with me.” On Tally, “Decision” labels a step whose headline already names the decision. On /work, “Let’s talk” says what the “Get in touch” button beside it says.</dd></div>
+  <div><dt>Effort</dt><dd><b>None</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>None.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>No change.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d41-b">
+  <div class="option-head"><h3><span class="id">D4.1-B</span>Cut the five echoes</h3><span class="badge rec">Recommended</span></div>
+  <p class="why-rec"><b>Recommended:</b> It removes only the five labels that repeat a heading, a button or the nav beside them (the two on Tally have no design record) and keeps every label that carries a fact, including the page labels the studies drew.</p>
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML, left 900px</figcaption><div class="stage" data-w="900"><div class="site w900" role="img" aria-label="The /services first screen without the Work with me label."><div class="svc"><div><p class="svc-h1">Three ways to work with me.</p><p class="svc-intro">Mixing and mastering, website design, and software engineering. Every project is fixed price and agreed in writing before work begins.</p></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 " role="img" aria-label="The About closing band without its label."><div class="pad"><div class="connect"><div><p class="c2">Let’s talk.</p><p class="sub">An idea, a shared interest, or an opportunity worth discussing.</p></div><span class="btn">Get in touch</span></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 " role="img" aria-label="The Work closing band without its label."><div class="pad"><div class="connect"><div><p class="c2">Have a problem worth exploring?</p><p class="sub">I’d love to hear about it.</p></div><span class="btn">Get in touch</span></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building/tally</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 " role="img" aria-label="Tally’s first highlight directly under Development journal, with no Decision label; Why it matters stays."><div class="pad tally"><div class="sec-head"><p class="s2">Development journal</p></div><div class="hl"><div class="hl-copy"><p class="h3">AI suggestions, with people in control</p><div class="steps"><div class="step primary"><p>Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.</p></div><div class="step"><span class="sl">Why it matters</span><p>You can change the category or reject the suggested name.</p></div></div><p class="credit">From the journal: AI suggests, people decide · Sep 24, 2026 and Names for bank text, chosen by a person · Oct 6, 2026</p></div><div class="hl-fig"><img src="a-tally-diagram.webp" width="568" height="381" alt=""></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 " style="height:300px" role="img" aria-label="The /services first screen on a phone without the label."><div class="svc"><div><p class="svc-h1">Three ways to work with me.</p><p class="svc-intro">Mixing and mastering, website design, and software engineering. Every project is fixed price and agreed in writing before work begins.</p></div></div></div></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 " role="img" aria-label="The About closing band on a phone without its label."><div class="pad"><div class="connect"><div><p class="c2">Let’s talk.</p><p class="sub">An idea, a shared interest, or an opportunity worth discussing.</p></div><span class="btn">Get in touch</span></div></div></div></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/building/tally</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 " style="height:480px" role="img" aria-label="Tally’s first highlight on a phone, directly under Development journal, with no Decision label."><div class="pad tally"><div class="sec-head"><p class="s2">Development journal</p></div><div class="hl"><div class="hl-copy"><p class="h3">AI suggestions, with people in control</p><div class="steps"><div class="step primary"><p>Jev suggests categories, and Workers AI suggests names for bank text with no clean name. A person has the final say on both.</p></div><div class="step"><span class="sl">Why it matters</span><p>You can change the category or reject the suggested name.</p></div></div><p class="credit">From the journal: AI suggests, people decide · Sep 24, 2026 and Names for bank text, chosen by a person · Oct 6, 2026</p></div><div class="hl-fig"><img src="a-tally-diagram.webp" width="568" height="381" alt=""></div></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Removes “Let’s talk” (/work), “Let’s connect” (/about), “Work with me” (/services first screen), and on /building/tally “Three highlights from the journal” and each highlight’s “Decision”. The closing bands start with their heading. The Tally highlights sit straight under “Development journal”: headline, then the decision beside its filled accent dot, then “Why it matters”, then the “From the journal” credit.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Every label left on the page says something its heading doesn’t. /services stops saying “work with me” three times in its first screen, and its first screen moves up about 34px, a small help for the fold (your call 15 in the audit). On Tally, “Why it matters” now marks the one turn in each highlight.</dd></div>
+  <div><dt>Trade-off</dt><dd>The closing bands lose the small label the studies drew above them; a 36px heading now opens each band, so the rule above it does more of the separating. “Why it matters” stands alone: if you prefer the Decision and Why it matters pair, keep both and the rest of B still applies.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/pages/work.astro:41</code>, <code>src/pages/about.astro:36</code>, <code>src/layouts/ServiceSheet.astro:19</code>, <code>src/pages/building/tally.astro:18,26</code> and the <code>.decision-highlights &gt; .page-kicker</code> rule (:51), plus a line in <code>docs/website-content-model.md</code> recording the rule (a label must add something its heading doesn’t).</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: deletions only, no new words. Tokens: none. Accessibility: the labels are paragraphs, so the heading outline is unchanged. Reduced motion: no motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d41-c">
+  <div class="option-head"><h3><span class="id">D4.1-C</span>Facts only</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <p class="same"><b>Includes all of B.</b> These drawings show what C adds: the page labels that repeat the underlined nav item go too.</p>
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 " role="img" aria-label="The /work first screen starting with the title, no Work label."><div class="pad head"><div class="work-intro">
+  
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 " style="height:420px" role="img" aria-label="The About first screen starting with the title, no About label."><div class="pad about-intro"><div class="about-copy"><p class="title">A little more<br>about me.</p><div class="lede about-lede">I’m <span class="pn">Kazon</span>. Software engineer, audio engineer, and a person who likes figuring things out.</div></div><img class="terrain" src="../../../../src/assets/site/terrain-v1.webp" width="1536" height="1024" alt=""></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 " role="img" aria-label="The /work first screen on a phone without the Work label."><div class="pad head"><div class="work-intro">
+  
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Everything in B, plus the page labels “Work”, “About”, “Building” and “Audio”. A label stays only when it adds a fact or marks a turn: breadcrumbs (Building / Tally), datelines, statuses, company lines, About chapter topics, Tally’s “Why it matters” and the Daily’s Today, Still to build and Next.</dd></div>
+  <div><dt>Why it could be better</dt><dd>One rule for every future page: a label must add a fact. Each first screen opens with its title, the strongest line on the page.</dd></div>
+  <div><dt>Trade-off</dt><dd>Departs from both selected studies, which put WORK and ABOUT above the title. On phones the nav is folded behind “Menu”, so the label is the only visible name of the page before the title.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>B’s files, plus <code>src/pages/work.astro:12</code>, <code>src/pages/about.astro:27</code>, <code>src/pages/building.astro:35</code> and <code>src/components/audio/AudioHero.astro:10</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: deletions only. Tokens: none. Accessibility: the h1 and the page &lt;title&gt; still name each page. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d41-d">
+  <div class="option-head"><h3><span class="id">D4.1-D</span>Statuses read as statuses</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <p class="same"><b>Includes all of B.</b> These drawings show what D adds: every project status uses the dot line the project pages already have.</p>
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 " role="img" aria-label="Earlier prototypes with each status as a dot line under the name."><div class="pad protos"><div class="sec-head"><p class="s2 s2-36">Earlier prototypes</p></div><p class="proto-intro">These projects are paused. Their pages and development journals remain available.</p><div class="proto-list"><div class="proto"><p class="ph3"><span class="hlink">The Engineer’s Daily<span> →</span></span></p><p class="st">Local prototype</p><p class="ptext">Practice coding through a story, alongside Scripture, prayer and reflection.</p></div><div class="proto"><p class="ph3"><span class="hlink">Threadline<span> →</span></span></p><p class="st">Internal prototype</p><p class="ptext">Pick up interrupted development work with its context intact.</p></div></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 1280 · drawn in HTML, Tally row</figcaption><div class="stage" data-w="580"><div class="site w580 " role="img" aria-label="The Tally row on Building with its status as a dot line."><div class="bt"><p class="bt-h">Tally</p><p class="st st-bt">In development · public demo</p><p class="bt-sub">Review transactions, set monthly budgets and see what remains to spend.</p></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 " role="img" aria-label="Earlier prototypes on a phone with dot-line statuses."><div class="pad protos"><div class="sec-head"><p class="s2 s2-36">Earlier prototypes</p></div><p class="proto-intro">These projects are paused. Their pages and development journals remain available.</p><div class="proto-list"><div class="proto"><p class="ph3"><span class="hlink">The Engineer’s Daily<span> →</span></span></p><p class="st">Local prototype</p><p class="ptext">Practice coding through a story, alongside Scripture, prayer and reflection.</p></div><div class="proto"><p class="ph3"><span class="hlink">Threadline<span> →</span></span></p><p class="st">Internal prototype</p><p class="ptext">Pick up interrupted development work with its context intact.</p></div></div></div></div></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 1280 · CI capture at f0abd1f, Tally row today</figcaption><div class="shot"><img src="a-building-tally-desktop.webp" width="580" height="180" alt="Today the Tally row on Building shows IN DEVELOPMENT · PUBLIC DEMO as an uppercase label."></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Everything in B, plus every project status (Home’s “Currently building” cards, the /building rows and Earlier prototypes) moves from an uppercase label to the dot line the project pages already use (<code>.project-status</code>, <code>src/styles/project-journal.css:6-7</code>), set under the name in the case it is stored in.</dd></div>
+  <div><dt>Why it could be better</dt><dd>A status looks the same wherever it appears, so “In development · public demo” on Home, /building and /building/tally reads as one thing. The name comes first, then its state, and the remaining uppercase labels are all topics or places.</dd></div>
+  <div><dt>Trade-off</dt><dd>Home’s cards sit in the dark “screen” world, so the dot line needs its light-on-dark colors there. More places to change than B.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>B’s files, plus <code>src/pages/index.astro:89,98</code> and <code>src/pages/building.astro:40,51</code> with their styles. Move <code>.project-status</code> from <code>src/styles/project-journal.css</code> into <code>src/styles/global.css</code> so Home and /building can share it.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: the same status strings, shown in their stored sentence case. Tokens: accent dot, ink text (18.2:1). Accessibility: the dot is decorative; the status stays a paragraph after the heading. No motion. No new art.</dd></div>
+</dl>
+</article>
+</section>
+  
+<section class="study" id="d42">
+  <p class="eyebrow">D4.2 · Label face</p>
+  <h2>Which typeface should set the small labels?</h2>
+  <p class="lead">Hallmark wants an outlier face like JetBrains Mono in two places at most (gate 38, punch list #10). Here mono sets the kickers, the project status lines, Tally’s step labels, the Work diagram phase labels, the Threadline step numbers, and Home’s capacity key and code field.</p>
+  <p class="decided"><b>Where it was decided.</b> <code>docs/website-system-plan.md:26-28</code> keeps “the existing monospace role”, and the September 26 audit asked for one kicker face (<code>docs/audits/2026-09-26/website-simplification-audit.md:470,477-479</code>). Both selected studies draw the labels in small mono capitals in the accent: “WORK”, “LYFT · BULK BONUS REFACTOR” and “LET’S TALK” in <code>work-v1.png</code>, “ABOUT”, “AUDIO” and “LET’S CONNECT” in <code>about-personal-path-v1.png</code>. PR #204 already sets every kicker in that one mono face. The audit’s verifier rated Hallmark’s “major” as overstated. Every option keeps mono for real code and data: Home’s code field and its capacity key.</p>
+
+  <article class="option" id="d42-a">
+  <div class="option-head"><h3><span class="id">D4.2-A</span>Keep JetBrains Mono</h3><span class="badge rec">Recommended</span></div>
+  <p class="why-rec"><b>Recommended:</b> It is the face both selected studies drew, the role your system plan names and the one kicker face you asked for in September, and D4.1 already cuts the number of labels, which is the part of Hallmark’s point that holds.</p>
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML from PR #204’s CSS, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920" role="img" aria-label="The /work first screen today: WORK in small mono capitals above the title."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-audio-desktop.webp" width="1280" height="330" alt="The About Audio chapter today: AUDIO in small mono capitals above I started with sound."></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML from PR #204’s CSS</figcaption><div class="stage" data-w="390"><div class="site w390" role="img" aria-label="The /work first screen on a phone today."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><div class="site strip " role="img" aria-label="The same five labels set in this option’s face">
+  <div><p class="k">Work</p><small>Page label</small></div>
+  <div><p class="k"><span class="ul">Building</span> / Tally</p><small>Breadcrumb</small></div>
+  <div><p class="st">In development · public demo</p><small>Status line</small></div>
+  <div><p class="k km">Updated October 19, 2026</p><small>Dateline</small></div>
+  <div class="stepcell"><span class="sl">Decision</span><small>Tally step label</small></div>
+</div></div></div>
+    <p class="note">The /work head is drawn so the alternatives can be compared with it line for line; at 1280 it matches the CI capture at f0abd1f, where PR #204 moved the resume and hire links above the Tally sentence. The About chapter is that capture.</p>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Nothing.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Mono is the site’s one note of the engineer’s notebook, and at 11px in capitals it is clearly not a heading or a link, so labels never compete with either.</dd></div>
+  <div><dt>Trade-off</dt><dd>Three faces on most pages. At 11px the labels are among the smallest text on the page; they pass contrast (accent on paper 4.8:1) but are the hardest lines to read.</dd></div>
+  <div><dt>Effort</dt><dd><b>None</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>None.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>No change.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d42-b">
+  <div class="option-head"><h3><span class="id">D4.2-B</span>Libron italic, sentence case</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 lab-libron" role="img" aria-label="The /work first screen with the label in this option’s face."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 lab-libron" style="height:400px" role="img" aria-label="The About Audio chapter with the label in this option’s face."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 lab-libron" role="img" aria-label="The /work first screen on a phone."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><div class="site strip lab-libron" role="img" aria-label="The same five labels set in this option’s face">
+  <div><p class="k">Work</p><small>Page label</small></div>
+  <div><p class="k"><span class="ul">Building</span> / Tally</p><small>Breadcrumb</small></div>
+  <div><p class="st">In development · public demo</p><small>Status line</small></div>
+  <div><p class="k km">Updated October 19, 2026</p><small>Dateline</small></div>
+  <div class="stepcell"><span class="sl">Decision</span><small>Tally step label</small></div>
+</div></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Labels become Libron italic in sentence case at 15px, in the accent color: “Work”, “Audio”, “Building / Tally”, “In development · public demo”.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Two faces on most pages instead of three, and a quieter, more personal label that fits “Peace is the atmosphere” (<code>docs/website-system-plan.md:16</code>).</dd></div>
+  <div><dt>Trade-off</dt><dd>Italic sentence case scans more slowly than capitals and sits closer to the headings in voice. Labels and links (also Libron) are told apart only by color and the underline. Reverses the September mono choice.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css</code> (<code>.page-kicker</code>, <code>.eyebrow</code>), <code>src/styles/project-journal.css:6</code>, <code>src/pages/building/tally.astro:58</code>, <code>src/components/WorkDiagram.astro:43</code>, <code>src/pages/building/threadline.astro:39</code>, the kicker sizes in <code>src/layouts/ServiceSheet.astro:77,94</code>, and the type roles in <code>docs/website-system-plan.md:26-28</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged, case comes from CSS. Tokens: <code>--font-serif</code>, <code>--accent</code>. Accessibility: accent on paper 4.8:1 at 15px passes AA. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d42-c">
+  <div class="option-head"><h3><span class="id">D4.2-C</span>Inter capitals</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 lab-inter" role="img" aria-label="The /work first screen with the label in this option’s face."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 lab-inter" style="height:400px" role="img" aria-label="The About Audio chapter with the label in this option’s face."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 lab-inter" role="img" aria-label="The /work first screen on a phone."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><div class="site strip lab-inter" role="img" aria-label="The same five labels set in this option’s face">
+  <div><p class="k">Work</p><small>Page label</small></div>
+  <div><p class="k"><span class="ul">Building</span> / Tally</p><small>Breadcrumb</small></div>
+  <div><p class="st">In development · public demo</p><small>Status line</small></div>
+  <div><p class="k km">Updated October 19, 2026</p><small>Dateline</small></div>
+  <div class="stepcell"><span class="sl">Decision</span><small>Tally step label</small></div>
+</div></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Labels take the face the old <code>.eyebrow</code> had before PR #204: Inter 500 at 11px with .12em tracking, in capitals. Colors stay. Tally’s step labels, the Work diagram phases and Threadline’s step numbers move to Inter too.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Keeps the scannable capital label but takes mono out of the labels, so mono is left only on Home’s code field and its capacity key, which meets gate 38 (two places at most).</dd></div>
+  <div><dt>Trade-off</dt><dd>Inter is itself on Hallmark’s list (see D4.4), so this trades one flag for another. The capitals lose the engineering note mono gives them.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css</code> (<code>.page-kicker</code>, <code>.eyebrow</code>), <code>src/pages/building/tally.astro:58</code>, <code>src/components/WorkDiagram.astro:43</code>, <code>src/pages/building/threadline.astro:39</code>, <code>src/styles/project-journal.css:6</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: <code>--font-sans</code>. Accessibility: 4.8:1. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d42-d">
+  <div class="option-head"><h3><span class="id">D4.2-D</span>Libron capitals</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 lab-caps" role="img" aria-label="The /work first screen with the label in this option’s face."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 lab-caps" style="height:400px" role="img" aria-label="The About Audio chapter with the label in this option’s face."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 lab-caps" role="img" aria-label="The /work first screen on a phone."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><div class="site strip lab-caps" role="img" aria-label="The same five labels set in this option’s face">
+  <div><p class="k">Work</p><small>Page label</small></div>
+  <div><p class="k"><span class="ul">Building</span> / Tally</p><small>Breadcrumb</small></div>
+  <div><p class="st">In development · public demo</p><small>Status line</small></div>
+  <div><p class="k km">Updated October 19, 2026</p><small>Dateline</small></div>
+  <div class="stepcell"><span class="sl">Decision</span><small>Tally step label</small></div>
+</div></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Labels keep their capital shape but switch to Libron at 12px with wider tracking (.14em). Status lines use Libron at 13px in sentence case.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Capitals in the heading face read like a book’s running head: calm, scannable and from the same family as the titles. Public pages use the serif for everything except code and the interface face.</dd></div>
+  <div><dt>Trade-off</dt><dd>Libron capitals at 12px are lighter than mono, so labels recede more. These are tracked capitals, not small caps.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>C’s files, plus the kicker sizes in <code>src/layouts/ServiceSheet.astro:77,94</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: <code>--font-serif</code>. Accessibility: 4.8:1 at 12px passes AA for normal text. No motion. No new art.</dd></div>
+</dl>
+</article>
+</section>
+  
+<section class="study" id="d43">
+  <p class="eyebrow">D4.3 · Greys</p>
+  <h2>Should the ink and muted text take a slight warm tint?</h2>
+  <p class="lead">Hallmark flagged <code>--ink</code> #0E0E0E and <code>--muted</code> #4A4A4A as greys with no tint on a warm paper (gate 22, punch list #40). It suggests tinting both warm and writing the tokens in OKLCH.</p>
+  <p class="decided"><b>Where it was decided.</b> <code>docs/website-system-plan.md:23-25</code> retains the existing <code>--paper</code>, <code>--ink</code>, <code>--muted</code>, <code>--rule</code> and <code>--accent</code> values; <code>docs/design-concepts/README.md:3</code> and <code>docs/audits/2026-09-26/website-simplification-audit.md:492</code> keep the palette. The paper (#FBF8F2) and the rules (#E8E3DA) are already warm. Emails hard-code the greys (<code>src/lib/email-template.ts</code>, <code>src/pages/api/resume-approve.ts</code>), as do <code>public/favicon.svg</code> and one project SVG.</p>
+  <div class="samples"><p class="sample" style="--ink:#0E0E0E;--muted:#4A4A4A"><b>A</b><span class="s-ink">I started with sound.</span> <span class="s-muted">I studied audio production at Middle Tennessee State.</span></p><p class="sample" style="--ink:#100E0A;--muted:#4D4A43"><b>B</b><span class="s-ink">I started with sound.</span> <span class="s-muted">I studied audio production at Middle Tennessee State.</span></p><p class="sample" style="--ink:#160E09;--muted:#58463B"><b>C</b><span class="s-ink">I started with sound.</span> <span class="s-muted">I studied audio production at Middle Tennessee State.</span></p><p class="sample" style="--ink:#0E0E0E;--muted:#564B47"><b>D</b><span class="s-ink">I started with sound.</span> <span class="s-muted">I studied audio production at Middle Tennessee State.</span></p></div>
+
+  <article class="option" id="d43-a">
+  <div class="option-head"><h3><span class="id">D4.3-A</span>Keep the neutral greys</h3><span class="badge rec">Recommended</span></div>
+  <p class="why-rec"><b>Recommended:</b> The warmth already comes from the paper, the rules and the accent; B is too close to see, and C or D would retune a palette you have kept three times.</p>
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-audio-desktop.webp" width="1280" height="330" alt="The About Audio chapter today, with the paragraph in #4A4A4A."></div></figure><div class="swatches">
+  <div class="sw"><span class="chip" style="background:#0E0E0E"></span><div><b>Ink</b> <code>#0E0E0E</code><br><span>oklch(0.164 0.000) · 18.2:1 on paper</span></div></div>
+  <div class="sw"><span class="chip" style="background:#4A4A4A"></span><div><b>Muted</b> <code>#4A4A4A</code><br><span>oklch(0.409 0.000) · 8.4:1 on paper</span></div></div>
+  <div class="sw"><span class="chip ring" style="border-color:#888785"></span><div><b>Field edge</b> <code>#888785</code><br><span>65% muted, 35% paper · 3.4:1 on paper</span></div></div>
+  
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 390 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-audio-phone.webp" width="390" height="320" alt="The About Audio chapter on a phone today."></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Nothing.</dd></div>
+  <div><dt>Why it could be better</dt><dd>The highest contrast the palette allows (ink 18.2:1, muted 8.4:1), and neutral text leaves the accent as the only color note.</dd></div>
+  <div><dt>Trade-off</dt><dd>Next to the warm rules and art, neutral grey text can read a touch cool. Gate 22 stays flagged.</dd></div>
+  <div><dt>Effort</dt><dd><b>None</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>None.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>No change.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d43-b">
+  <div class="option-head"><h3><span class="id">D4.3-B</span>Paper-warm greys</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 grey-b" style="height:400px" role="img" aria-label="The About Audio chapter with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure><div class="swatches">
+  <div class="sw"><span class="chip" style="background:#100E0A"></span><div><b>Ink</b> <code>#100E0A</code><br><span>oklch(0.165 0.009 85) · 18.2:1 on paper</span></div></div>
+  <div class="sw"><span class="chip" style="background:#4D4A43"></span><div><b>Muted</b> <code>#4D4A43</code><br><span>oklch(0.410 0.012 88) · 8.3:1 on paper</span></div></div>
+  <div class="sw"><span class="chip ring" style="border-color:#8A8780"></span><div><b>Field edge</b> <code>#8A8780</code><br><span>65% muted, 35% paper · 3.4:1 on paper</span></div></div>
+  <div class="controls"><label><input type="checkbox" data-compare="d43-b"> Show today’s greys in these drawings</label></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 grey-b" style="height:470px" role="img" aria-label="The About Audio chapter on a phone with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd><code>--ink</code> and <code>--muted</code> keep their lightness and take the paper’s hue at very low chroma, written in OKLCH.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Text and paper share one hue family, gate 22 passes, and contrast does not move.</dd></div>
+  <div><dt>Trade-off</dt><dd>Almost invisible on most screens: it changes tokens you have chosen to keep for a difference few visitors will notice. The emails and favicon keep the old greys unless they change too.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css:71-77</code>; optionally <code>src/lib/email-template.ts</code>, <code>src/pages/api/resume-approve.ts</code>, <code>public/favicon.svg</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: none. Tokens: two values change; everything built on them follows, including <code>--field-border</code>. Accessibility: ink 18.2:1, muted 8.3:1, field edge 3.4:1. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d43-c">
+  <div class="option-head"><h3><span class="id">D4.3-C</span>Sepia ink</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 grey-c" style="height:400px" role="img" aria-label="The About Audio chapter with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure><div class="swatches">
+  <div class="sw"><span class="chip" style="background:#160E09"></span><div><b>Ink</b> <code>#160E09</code><br><span>oklch(0.173 0.017 53) · 18.0:1 on paper</span></div></div>
+  <div class="sw"><span class="chip" style="background:#58463B"></span><div><b>Muted</b> <code>#58463B</code><br><span>oklch(0.410 0.031 53) · 8.4:1 on paper</span></div></div>
+  <div class="sw"><span class="chip ring" style="border-color:#91847B"></span><div><b>Field edge</b> <code>#91847B</code><br><span>65% muted, 35% paper · 3.4:1 on paper</span></div></div>
+  <div class="controls"><label><input type="checkbox" data-compare="d43-c"> Show today’s greys in these drawings</label></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 grey-c" style="height:470px" role="img" aria-label="The About Audio chapter on a phone with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Ink becomes a very dark brown and muted text a sepia grey, both at OKLCH hue 53°, between the accent (40°) and the paper (85°).</dd></div>
+  <div><dt>Why it could be better</dt><dd>Reads like printed ink on paper and ties the text to the accent and the terrain art. The only one of the three tints you can clearly see.</dd></div>
+  <div><dt>Trade-off</dt><dd>In practice a new palette: every page, the name mark, the favicon and the emails change color. Brown body text can look muddy on low-quality screens.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>B’s files, plus a check of every <code>color-mix</code> built on <code>--ink</code> or <code>--muted</code> (field edges, the A/B waveform, the menu shadow).</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: none. Tokens: two values change. Accessibility: ink 18.0:1, muted 8.4:1, field edge 3.4:1. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d43-d">
+  <div class="option-head"><h3><span class="id">D4.3-D</span>Warm muted only</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 grey-d" style="height:400px" role="img" aria-label="The About Audio chapter with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure><div class="swatches">
+  <div class="sw"><span class="chip" style="background:#0E0E0E"></span><div><b>Ink</b> <code>#0E0E0E</code><br><span>oklch(0.164 0.000) · 18.2:1 on paper</span></div></div>
+  <div class="sw"><span class="chip" style="background:#564B47"></span><div><b>Muted</b> <code>#564B47</code><br><span>oklch(0.423 0.016 41) · 7.9:1 on paper</span></div></div>
+  <div class="sw"><span class="chip ring" style="border-color:#908883"></span><div><b>Field edge</b> <code>#908883</code><br><span>65% muted, 35% paper · 3.3:1 on paper</span></div></div>
+  <div class="controls"><label><input type="checkbox" data-compare="d43-d"> Show today’s greys in these drawings</label></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/about#audio</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 grey-d" style="height:470px" role="img" aria-label="The About Audio chapter on a phone with this option’s greys."><div class="pad chapter"><div class="chapter-copy"><p class="k">Audio</p><p class="ch2">I started with sound.</p><p class="ctext">I studied audio production at Middle Tennessee State, with a minor in computer science. I still record, mix and master music.</p><span class="lnk">Explore audio engineering <span>→</span></span></div><div class="chapter-art"><div class="scene"><img src="../../../../src/assets/site/headphones-v1.webp" width="1536" height="1024" alt=""></div></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Headings and body keep #0E0E0E. Only secondary text (chapter text, the Tally sentence, captions) takes 12% of the accent: <code>color-mix(in srgb, #4A4A4A 88%, var(--accent))</code>.</dd></div>
+  <div><dt>Why it could be better</dt><dd>The warmth lands on the long muted paragraphs where the eye rests, while headings keep full contrast. It is mixed from colors you already have, the way <code>--field-border</code> is.</dd></div>
+  <div><dt>Trade-off</dt><dd>Muted text leans toward the accent, so it sits a little closer to links and labels. Contrast drops from 8.4:1 to 7.9:1, still far above AA.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css</code> (<code>--muted</code>); optionally the emails.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: none. Tokens: one value, built from existing tokens. Accessibility: muted 7.9:1, field edge 3.3:1. No motion. No new art.</dd></div>
+</dl>
+</article>
+</section>
+  
+<section class="study" id="d44">
+  <p class="eyebrow">D4.4 · Interface face</p>
+  <h2>Should Inter stay the face for small interface text?</h2>
+  <p class="lead">Hallmark lists Inter among its overused default faces (punch list #41) and suggests a face from its list that suits Libron, or Libron itself. On public pages Inter only sets small text: door captions, the services figure caption and Lyft sentence, the print footnote, the essay’s chart labels, the audio players and music menu, the brief’s step track, the Threadline drawing and the contact and resume form fields. The owner, studio and agreement pages use it for all their interface text.</p>
+  <p class="decided"><b>Where it was decided.</b> <code>docs/website-system-plan.md:26</code> retains Inter (Libron later replaced Newsreader, commit 9be434d). <code>docs/website-system-plan.md:136-139</code> defers a name-mark cut for Inter, so PR #204 shows the plain name in Inter captions. The privacy notice says the browser contacts Google Fonts (<code>src/pages/privacy.astro:16</code>). The software brief’s answer boxes already use Libron (<code>src/styles/software-intake.css:26</code>), while the contact and resume fields use Inter (<code>src/styles/global.css</code>, <code>.site-form</code>).</p>
+
+  <article class="option" id="d44-a">
+  <div class="option-head"><h3><span class="id">D4.4-A</span>Keep Inter</h3><span class="badge no">Current</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML from PR #204’s CSS, the three doors</figcaption><div class="stage" data-w="1280"><div class="site w1280 " role="img" aria-label="The three doors on /services with captions in this option’s face."><div class="svc doors-wrap"><div class="doors"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt=""></span><p class="cap">This site, redesigned September 2026</p><p class="dt">Website design</p><p class="dline">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="btn dbtn">Plan your website</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt=""></span><p class="cap">Tally · a budgeting app, public demo</p><p class="dt">Software engineering</p><p class="dline">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="btn dbtn">Discuss your project</span></div></div></div></div></div></figure><div class="pair"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services#software</b> · 1280 · drawn in HTML from PR #204’s CSS, Lyft figure</figcaption><div class="stage" data-w="580"><div class="site w580 " role="img" aria-label="The Lyft figure caption and sentence on /services."><div class="lyft"><p class="fig"><span class="big">5,000 <span class="arr">→</span> 100,000+</span><small>rows per batch · owner-reported</small></p><div class="story"><p>I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><span class="lnk">Read the work story <span>→</span></span></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/#contact</b> · 1280 · drawn in HTML from PR #204’s CSS, contact form field</figcaption><div class="stage" data-w="580"><div class="site w580 " role="img" aria-label="The contact form message field with its placeholder."><div class="fieldwrap"><p class="flabel">Your message</p><div class="ta">What would you like to talk about?</div></div></div></div></figure></div><div class="site strip capstrip " role="img" aria-label="The interface text from these fragments at its real size">
+  <div class="c-door"><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><small>Door caption, at the door’s 302px width</small></div>
+  <div><p class="figsmall">rows per batch · owner-reported</p><small>Figure caption</small></div>
+  <div class="c-story"><p class="storyp">I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><small>Lyft sentence on /services</small></div>
+  <div class="c-field"><div class="ta ta-s">What would you like to talk about?</div><small>Contact form field</small></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML from PR #204’s CSS</figcaption><div class="stage" data-w="390"><div class="site w390 " role="img" aria-label="The Mixing and mastering door on a phone."><div class="pad doors-phone"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div></div></div></div></figure></div></div>
+    <p class="note">Drawn in HTML from PR #204’s CSS so B and C can be compared with it line for line. PR #204 changed the door caption: “Kazon” now inherits Inter instead of showing the serif name mark inside sans text. The drawing matches the CI capture at f0abd1f, except that CI wraps the Website design line one word sooner. The contact field is drawn because the Home form stays folded until a visitor opens it.</p>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Nothing.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Inter is very legible at 12 to 14px and is already loaded. The owner and studio tools are built on it.</dd></div>
+  <div><dt>Trade-off</dt><dd>A third face on public pages for a few captions, and captions can’t carry the name mark until an Inter cut exists.</dd></div>
+  <div><dt>Effort</dt><dd><b>None</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>None.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>No change.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d44-b">
+  <div class="option-head"><h3><span class="id">D4.4-B</span>Libron on public pages</h3><span class="badge rec">Recommended</span></div>
+  <p class="why-rec"><b>Recommended:</b> On public pages Inter only sets a few captions and fields; moving them to Libron gives every public page one text face, brings the name mark back to captions, and leaves Inter where the dense private forms need it.</p>
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML, the three doors</figcaption><div class="stage" data-w="1280"><div class="site w1280 ui-libron" role="img" aria-label="The three doors on /services with captions in this option’s face."><div class="svc doors-wrap"><div class="doors"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by <span class="pn">Kazon</span></p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt=""></span><p class="cap">This site, redesigned September 2026</p><p class="dt">Website design</p><p class="dline">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="btn dbtn">Plan your website</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt=""></span><p class="cap">Tally · a budgeting app, public demo</p><p class="dt">Software engineering</p><p class="dline">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="btn dbtn">Discuss your project</span></div></div></div></div></div></figure><div class="pair"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services#software</b> · 1280 · drawn in HTML, Lyft figure</figcaption><div class="stage" data-w="580"><div class="site w580 ui-libron" role="img" aria-label="The Lyft figure caption and sentence on /services."><div class="lyft"><p class="fig"><span class="big">5,000 <span class="arr">→</span> 100,000+</span><small>rows per batch · owner-reported</small></p><div class="story"><p>I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><span class="lnk">Read the work story <span>→</span></span></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/#contact</b> · 1280 · drawn in HTML, contact form field</figcaption><div class="stage" data-w="580"><div class="site w580 ui-libron" role="img" aria-label="The contact form message field with its placeholder."><div class="fieldwrap"><p class="flabel">Your message</p><div class="ta">What would you like to talk about?</div></div></div></div></figure></div><div class="site strip capstrip ui-libron" role="img" aria-label="The interface text from these fragments at its real size">
+  <div class="c-door"><p class="cap">Old News · recorded, mixed and mastered by <span class="pn">Kazon</span></p><small>Door caption, at the door’s 302px width</small></div>
+  <div><p class="figsmall">rows per batch · owner-reported</p><small>Figure caption</small></div>
+  <div class="c-story"><p class="storyp">I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><small>Lyft sentence on /services</small></div>
+  <div class="c-field"><div class="ta ta-s">What would you like to talk about?</div><small>Contact form field</small></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 ui-libron" role="img" aria-label="The Mixing and mastering door on a phone."><div class="pad doors-phone"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by <span class="pn">Kazon</span></p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Door captions, the services figure caption and Lyft sentence, the print footnote, the essay chart labels, the audio players and music menu, the brief’s step track, the Threadline drawing and the public form fields switch to Libron at 14px or more. The door caption’s “Kazon” gets the name mark again, because Kazon Name Text is cut from Libron. The owner, studio and agreement pages keep Inter.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Public pages use Libron and the label face, nothing else. The contact and resume fields match the software brief. The name mark comes back without waiting for the deferred Inter cut.</dd></div>
+  <div><dt>Trade-off</dt><dd>Small Libron needs a step more size than Inter, so captions grow from 12.5px to 14px and wrap sooner. Public and private pages then differ in interface face. Libron’s figures are close to one width (on this board, 0 to 9 differ by under 3%), so the player time readouts would move by well under a pixel as they count.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/components/WorkWithMe.astro:19-20,33</code>, <code>src/layouts/ServiceSheet.astro</code> (footnote, figure caption, story), <code>src/styles/global.css</code> (<code>.site-form</code> fields), <code>src/pages/writing/ai-gives-you-speed.astro:78-79</code>, <code>src/components/audio/</code> (ComparisonPlayer, AudioPlayer, LyricVideo, MusicNav), <code>src/styles/music-premiere.css</code>, <code>src/styles/music.css</code>, <code>src/styles/audio-intake.css</code>, <code>src/components/SoftwareStepTrack.astro</code>, <code>src/components/PayloadReviewIllustration.astro</code>, <code>src/pages/building/personal-website.astro</code>, and the type roles in <code>docs/website-system-plan.md:26,136-139</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: <code>--font-serif</code>, <code>--muted</code> (8.4:1). Accessibility: captions at 14px or more; inputs stay at 16px so phones don’t zoom. The privacy sentence stays true (Google Fonts still serves mono and the private pages’ Inter). No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d44-c">
+  <div class="option-head"><h3><span class="id">D4.4-C</span>IBM Plex Sans</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML, the three doors</figcaption><div class="stage" data-w="1280"><div class="site w1280 ui-plex" role="img" aria-label="The three doors on /services with captions in this option’s face."><div class="svc doors-wrap"><div class="doors"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt=""></span><p class="cap">This site, redesigned September 2026</p><p class="dt">Website design</p><p class="dline">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="btn dbtn">Plan your website</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt=""></span><p class="cap">Tally · a budgeting app, public demo</p><p class="dt">Software engineering</p><p class="dline">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="btn dbtn">Discuss your project</span></div></div></div></div></div></figure><div class="pair"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services#software</b> · 1280 · drawn in HTML, Lyft figure</figcaption><div class="stage" data-w="580"><div class="site w580 ui-plex" role="img" aria-label="The Lyft figure caption and sentence on /services."><div class="lyft"><p class="fig"><span class="big">5,000 <span class="arr">→</span> 100,000+</span><small>rows per batch · owner-reported</small></p><div class="story"><p>I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><span class="lnk">Read the work story <span>→</span></span></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/#contact</b> · 1280 · drawn in HTML, contact form field</figcaption><div class="stage" data-w="580"><div class="site w580 ui-plex" role="img" aria-label="The contact form message field with its placeholder."><div class="fieldwrap"><p class="flabel">Your message</p><div class="ta">What would you like to talk about?</div></div></div></div></figure></div><div class="site strip capstrip ui-plex" role="img" aria-label="The interface text from these fragments at its real size">
+  <div class="c-door"><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><small>Door caption, at the door’s 302px width</small></div>
+  <div><p class="figsmall">rows per batch · owner-reported</p><small>Figure caption</small></div>
+  <div class="c-story"><p class="storyp">I changed Lyft’s driver-bonus tool so support could run and monitor larger batches without handing the work to on-call engineers.</p><small>Lyft sentence on /services</small></div>
+  <div class="c-field"><div class="ta ta-s">What would you like to talk about?</div><small>Contact form field</small></div>
+</div></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 ui-plex" role="img" aria-label="The Mixing and mastering door on a phone."><div class="pad doors-phone"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>IBM Plex Sans replaces Inter everywhere Inter is used today, public and private, loaded the same way from Google Fonts.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Plex Sans is on Hallmark’s editorial pairing list, and it has an engineering voice with more character than Inter at small sizes. Same single font request, same privacy sentence.</dd></div>
+  <div><dt>Trade-off</dt><dd>Swaps one sans for another across about 40 files, owner and studio tools included, for a difference few visitors will see in captions. The planned Inter name-mark cut becomes a Plex cut.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>The five Google Fonts requests (<code>src/layouts/BaseLayout.astro:68-81</code>, <code>src/layouts/OwnerLayout.astro</code>, <code>src/layouts/AgreementLayout.astro:9</code>, <code>src/components/SoftwareOffer.astro</code>, <code>src/lib/email-template.ts</code>), <code>src/styles/global.css:44</code> (<code>--font-sans</code>), every rule that names Inter directly (mostly <code>src/styles/owner.css</code>, <code>src/styles/studio.css</code> and the owner pages), and <code>docs/website-system-plan.md:26,136-139</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. A new font family from the same CDN, no package dependency. Accessibility: unchanged sizes and colors. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d44-d">
+  <div class="option-head"><h3><span class="id">D4.4-D</span>Keep Inter, host it ourselves</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <p class="same"><b>Looks the same as A.</b> Every page keeps Inter and JetBrains Mono, so the drawings in A apply unchanged. What changes is where the fonts come from and what the privacy notice says.</p>
+    <figure class="frame flow-frame"><figcaption class="frame-bar">Where a public page gets its fonts · drawn in HTML</figcaption>
+      <div class="flows" role="img" aria-label="Today a public page loads Libron and the name mark from thesuperhuman.us and Inter and JetBrains Mono from Google Fonts. With this option all four come from thesuperhuman.us.">
+        <div class="flow"><p class="flow-h">Today</p><div class="flow-row"><span class="node">Visitor’s browser</span><span class="arrow" aria-hidden="true">→</span><span class="node own">thesuperhuman.us<small>Libron, name mark</small></span></div><div class="flow-row"><span class="node">Visitor’s browser</span><span class="arrow" aria-hidden="true">→</span><span class="node third">fonts.googleapis.com and fonts.gstatic.com<small>Inter, JetBrains Mono</small></span></div></div>
+        <div class="flow"><p class="flow-h">D4.4-D</p><div class="flow-row"><span class="node">Visitor’s browser</span><span class="arrow" aria-hidden="true">→</span><span class="node own">thesuperhuman.us<small>Libron, name mark, Inter, JetBrains Mono</small></span></div></div>
+      </div>
+    </figure>
+    <div class="diff"><p class="diff-h">Privacy notice, “Services that process information” <span class="marker">copy change, needs approval</span></p>
+      <p>Cloudflare hosts and protects the site. Its Turnstile service processes browser and network signals to prevent automated form abuse. Resend delivers form notifications and requested emails. <del>Your browser also contacts Google Fonts to load the site’s typefaces.</del></p>
+      <p>Read the providers’ privacy information: Cloudflare, Turnstile, <del>Resend, and Google.</del> <ins>and Resend.</ins></p>
+      <p class="diff-h">The audio section’s YouTube sentence still names Google’s privacy policy, so you may prefer to keep the Google link.</p>
+    </div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Inter and JetBrains Mono ship as WOFF2 files in <code>public/fonts</code>, as Libron does, and every page stops calling Google Fonts. The privacy sentence about Google Fonts comes out.</dd></div>
+  <div><dt>Why it could be better</dt><dd>One less third party on every page, a shorter privacy notice, and no late swap from Google’s stylesheet. The look does not change.</dd></div>
+  <div><dt>Trade-off</dt><dd>Does not answer Hallmark’s point about Inter. Adds five Latin WOFF2 files (Inter 400, 500, 600; JetBrains Mono 400, 500) and their license notices. The agreement pages also load Newsreader from Google, so they need it hosted too, or the one-serif fix (audit entry 5) first.</dd></div>
+  <div><dt>Effort</dt><dd><b>M</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>public/fonts/</code> (new files, OFL notices, README), <code>src/styles/global.css</code> (<code>@font-face</code>), the Google Fonts links in <code>src/layouts/BaseLayout.astro:68-81</code>, <code>src/layouts/OwnerLayout.astro</code>, <code>src/layouts/AgreementLayout.astro:9</code> and <code>src/components/SoftwareOffer.astro</code>, <code>src/pages/privacy.astro:16-17</code>, <code>public/_headers</code> (cache rules). Emails (<code>src/lib/email-template.ts</code>) can keep their Google link or fall back to system fonts.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: the privacy change above needs your approval. Tokens: unchanged. Accessibility: unchanged. No motion. No new art.</dd></div>
+</dl>
+</article>
+</section>
+  
+<section class="study" id="d45">
+  <p class="eyebrow">D4.5 · Heading weight</p>
+  <h2>Should headings stay Libron Regular, or use Bold for some?</h2>
+  <p class="lead">Hallmark flagged headings set at the same weight as the body text (punch list #42) and suggests Libron Bold for h1 to h3, or a lighter body.</p>
+  <p class="decided"><b>Where it was decided.</b> The selected studies draw regular-weight headings (<code>docs/design-concepts/2026-09-09/work-v1.png</code> and <code>home-quiet-studio-v2.png</code>, <code>docs/design-concepts/README.md:7-8</code>), and commit 9be434d kept weight 400 when Libron replaced Newsreader. Libron ships two weights, Regular and Bold (each with an italic), so there is no in-between weight.</p>
+
+  <article class="option" id="d45-a">
+  <div class="option-head"><h3><span class="id">D4.5-A</span>Keep Regular</h3><span class="badge rec">Recommended</span></div>
+  <p class="why-rec"><b>Recommended:</b> Size already does the work (an 83px title over 29px and 16px text), the studies you picked are regular weight, and Libron Bold at display sizes reads heavy on the quiet paper.</p>
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML from PR #204’s CSS, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920" role="img" aria-label="The /work first screen today, title in Libron Regular."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · CI capture at f0abd1f</figcaption><div class="shot"><img src="a-about-intro-desktop.webp" width="1280" height="400" alt="The About first screen today, title in Libron Regular."></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML from PR #204’s CSS, the three doors</figcaption><div class="stage" data-w="1280"><div class="site w1280" role="img" aria-label="The three doors on /services today, door titles in Libron Regular."><div class="svc doors-wrap"><div class="doors"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt=""></span><p class="cap">This site, redesigned September 2026</p><p class="dt">Website design</p><p class="dline">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="btn dbtn">Plan your website</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt=""></span><p class="cap">Tally · a budgeting app, public demo</p><p class="dt">Software engineering</p><p class="dline">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="btn dbtn">Discuss your project</span></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML from PR #204’s CSS</figcaption><div class="stage" data-w="390"><div class="site w390" role="img" aria-label="The /work first screen on a phone today."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML from PR #204’s CSS</figcaption><div class="stage" data-w="390"><div class="site w390" role="img" aria-label="The Mixing and mastering door on a phone today."><div class="pad doors-phone"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Nothing.</dd></div>
+  <div><dt>Why it could be better</dt><dd>The size steps are large, the look matches the studies you chose, and one weight keeps the system simple.</dd></div>
+  <div><dt>Trade-off</dt><dd>Where a heading is only a few pixels larger than the text under it (22 to 25px door titles and experience outcomes), the step is soft.</dd></div>
+  <div><dt>Effort</dt><dd><b>None</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd>None.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>No change.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d45-b">
+  <div class="option-head"><h3><span class="id">D4.5-B</span>Bold for small headings</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 1280 · drawn in HTML, the three doors</figcaption><div class="stage" data-w="1280"><div class="site w1280 hw-small" role="img" aria-label="The three doors with door titles in Libron Bold."><div class="svc doors-wrap"><div class="doors"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-website.webp" width="900" height="600" alt=""></span><p class="cap">This site, redesigned September 2026</p><p class="dt">Website design</p><p class="dline">I design and build your website, from the page plan to a site that works on phones and computers.</p><span class="btn dbtn">Plan your website</span></div><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-software.webp" width="900" height="600" alt=""></span><p class="cap">Tally · a budgeting app, public demo</p><p class="dt">Software engineering</p><p class="dline">I build web apps people can try, or a tool that makes a task your team repeats easier.</p><span class="btn dbtn">Discuss your project</span></div></div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/building</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 hw-small" role="img" aria-label="Earlier prototypes with names in Libron Bold."><div class="pad protos"><div class="sec-head"><p class="s2 s2-36">Earlier prototypes</p></div><p class="proto-intro">These projects are paused. Their pages and development journals remain available.</p><div class="proto-list"><div class="proto"><p class="k">Local prototype</p><p class="ph3"><span class="hlink">The Engineer’s Daily<span> →</span></span></p><p class="ptext">Practice coding through a story, alongside Scripture, prayer and reflection.</p></div><div class="proto"><p class="k">Internal prototype</p><p class="ph3"><span class="hlink">Threadline<span> →</span></span></p><p class="ptext">Pick up interrupted development work with its context intact.</p></div></div></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/services</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 hw-small" role="img" aria-label="The Mixing and mastering door on a phone with a bold title."><div class="pad doors-phone"><div class="door"><span class="art"><img src="../../../../src/assets/site/work-with-me-mixing.webp" width="900" height="600" alt=""></span><p class="cap">Old News · recorded, mixed and mastered by Kazon</p><p class="dt">Mixing &amp; mastering</p><p class="dline">Send your recorded vocals and beat for mixing, or your finished mix for mastering. Vocal mixing from $150, mastering from $75.</p><span class="btn dbtn">Start your song</span></div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Headings set at 25px or smaller use Libron Bold: door titles (24.8px), Earlier prototypes (24px), service rows (22.4px) and experience outcomes (22px). Page titles, section heads, About chapters, journal entry titles (38px) and the form success heading (32px) stay Regular.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Weight separates a heading from its text where size can’t, and the large headings keep the approved look.</dd></div>
+  <div><dt>Trade-off</dt><dd>Two heading weights to keep consistent. Bold door titles under the Regular /services title can look like two systems on one screen.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/components/WorkWithMe.astro:34</code>, <code>src/pages/building.astro:70</code>, <code>src/styles/service-pages.css:17</code>, <code>src/components/ExperienceRow.astro:29</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: Libron Bold is already loaded by <code>global.css</code>. Accessibility: unchanged. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d45-c">
+  <div class="option-head"><h3><span class="id">D4.5-C</span>Bold page titles</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 hw-title" role="img" aria-label="The /work first screen with the title in Libron Bold."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 hw-title" style="height:440px" role="img" aria-label="The About first screen with the title in Libron Bold."><div class="pad about-intro"><div class="about-copy"><p class="k">About</p><p class="title">A little more<br>about me.</p><div class="lede about-lede">I’m <span class="pn">Kazon</span>. Software engineer, audio engineer, and a person who likes figuring things out.</div></div><img class="terrain" src="../../../../src/assets/site/terrain-v1.webp" width="1536" height="1024" alt=""></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 hw-title" role="img" aria-label="The /work first screen on a phone with a bold title."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Each primary page’s title (<code>.page-title</code>, the /services h1, project titles, 404) uses Libron Bold. Everything else stays Regular.</dd></div>
+  <div><dt>Why it could be better</dt><dd>A clear masthead on every page, like a newspaper front, and an obvious step from title to lede even on small phones.</dd></div>
+  <div><dt>Trade-off</dt><dd>The largest visual change of the four: the quiet studio look gets louder, and a long title like “Software engineer. I build useful software.” becomes a heavy block: at 1280 it grows from three lines to four. Departs from the selected studies.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css</code> (<code>.page-title</code>), <code>src/layouts/ServiceSheet.astro</code> (h1), <code>src/styles/project-journal.css</code>, <code>src/pages/404.astro</code>.</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: none. Accessibility: unchanged. No motion. No new art.</dd></div>
+</dl>
+</article>
+
+  <article class="option" id="d45-d">
+  <div class="option-head"><h3><span class="id">D4.5-D</span>Quieter ledes</h3><span class="badge no">Alternative</span></div>
+  
+  
+    <div class="views two"><div class="col"><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 1280 · drawn in HTML, left 920px</figcaption><div class="stage" data-w="920"><div class="site w920 hw-lede" role="img" aria-label="The /work first screen with the lede in the muted grey."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure><figure class="frame"><figcaption class="frame-bar">thesuperhuman.us<b>/about</b> · 1280 · drawn in HTML</figcaption><div class="stage" data-w="1280"><div class="site w1280 hw-lede" style="height:440px" role="img" aria-label="The About first screen with the lede in the muted grey."><div class="pad about-intro"><div class="about-copy"><p class="k">About</p><p class="title">A little more<br>about me.</p><div class="lede about-lede">I’m <span class="pn">Kazon</span>. Software engineer, audio engineer, and a person who likes figuring things out.</div></div><img class="terrain" src="../../../../src/assets/site/terrain-v1.webp" width="1536" height="1024" alt=""></div></div></div></figure></div><div class="col"><figure class="frame phone"><figcaption class="frame-bar">thesuperhuman.us<b>/work</b> · 390 · drawn in HTML</figcaption><div class="stage" data-w="390"><div class="site w390 hw-lede" role="img" aria-label="The /work first screen on a phone with a muted lede."><div class="pad head"><div class="work-intro">
+  <p class="k">Work</p>
+  <p class="title">Software engineer.<br>I build useful software.</p>
+  <p class="lede">7+ years in production engineering: I automated transaction-data troubleshooting at Skupos and built rental features and internal tools at Lyft. I work independently, through contracts and projects, and I’m selective about full-time roles.</p>
+  <div class="links"><span class="lnk">Request my resume <span>→</span></span><span class="lnk">Hire me for software <span>→</span></span></div>
+  <p class="evidence">Tally is my current example of owning a product end to end: I make the product and architecture decisions and review every change; Claude Code and Codex help with implementation. <span class="lnk">Tally development journal <span>→</span></span></p>
+</div></div></div></div></figure></div></div>
+    <dl class="facts">
+  <div><dt>What changes</dt><dd>Headings stay Regular. The large page ledes move from ink to <code>--muted</code>, so the title is the only large black text in the first screen.</dd></div>
+  <div><dt>Why it could be better</dt><dd>Adds hierarchy without touching the heading face or the approved weight.</dd></div>
+  <div><dt>Trade-off</dt><dd>The lede carries each page’s main claim (on /work, the 7+ years line); grey makes it quieter for a recruiter scanning the page. The About lede loses some of its warmth.</dd></div>
+  <div><dt>Effort</dt><dd><b>S</b></dd></div>
+  <div class="span2"><dt>Files it would touch</dt><dd><code>src/styles/global.css</code> (<code>.page-lede</code>), <code>src/layouts/ServiceSheet.astro</code> (<code>.sheet-introduction</code>).</dd></div>
+  <div class="wide"><dt>Guideline check</dt><dd>Copy: unchanged. Tokens: <code>--muted</code> (8.4:1). Accessibility: passes AA. No motion. No new art.</dd></div>
+</dl>
+</article>
+</section>
+  <section class="study" id="calls">
+    <p class="eyebrow">Your calls</p>
+    <h2>What I need from you</h2>
+    <p class="lead">One answer per decision. If you agree with every recommendation, the work is D4.1-B (five label deletions) and D4.4-B (public captions and fields in Libron); the other three stay as they are.</p>
+    <ol class="decisions">
+      <li><b>D4.1 · Kickers</b>A keep · B cut the five echoes · C facts only · D statuses as dot lines.<span class="def">Recommended: B</span></li>
+      <li><b>D4.2 · Label face</b>A JetBrains Mono · B Libron italic · C Inter capitals · D Libron capitals.<span class="def">Recommended: A</span></li>
+      <li><b>D4.3 · Greys</b>A neutral · B paper-warm · C sepia · D warm muted only.<span class="def">Recommended: A</span></li>
+      <li><b>D4.4 · Interface face</b>A Inter · B Libron on public pages · C IBM Plex Sans · D Inter hosted on the site.<span class="def">Recommended: B</span></li>
+      <li><b>D4.5 · Heading weight</b>A Regular · B Bold for small headings · C Bold page titles · D quieter ledes.<span class="def">Recommended: A</span></li>
+    </ol>
+  </section>
+</main>
+<script>
+  // Scale each recreation to its frame; never enlarge past its real size.
+  function fit() {
+    document.querySelectorAll('.stage').forEach(stage => {
+      const canvas = stage.firstElementChild;
+      const s = Math.min(1, stage.clientWidth / (+stage.dataset.w || 1280));
+      canvas.style.transform = 'scale(' + s + ')';
+      stage.style.height = Math.ceil(canvas.offsetHeight * s) + 'px';
+    });
+  }
+  fit();
+  new ResizeObserver(fit).observe(document.body);
+  if (document.fonts) document.fonts.ready.then(fit);
+  document.querySelectorAll('.stage img').forEach(img => img.complete || img.addEventListener('load', fit));
+  // D4.3: show today's greys in an option's drawings while the box is checked.
+  document.querySelectorAll('[data-compare]').forEach(box => box.addEventListener('change', () => box.closest('.option').classList.toggle('cmp', box.checked)));
+</script>
+</body>
+</html>

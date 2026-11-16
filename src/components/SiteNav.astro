@@ -1,27 +1,49 @@
 ---
-import { mainSitePath, audioPath } from '~/lib/host-routing';
-import PersonalName from '~/components/PersonalName.astro';
-const host = (Astro.isPrerendered ? null : Astro.request.headers.get('host')) ?? Astro.url.host;
-const mainHref = (path: string) => Astro.isPrerendered ? new URL(path, Astro.site).href : mainSitePath(host, path);
-const isAudio = host.split(':')[0] === 'audio.thesuperhuman.us' || Astro.url.pathname.startsWith('/audio');
-const audioHref = (path: string) => Astro.isPrerendered ? new URL(`/audio${path}`, Astro.site).href : audioPath(host, path);
+import { mainSitePath, audioPath } from "~/lib/host-routing";
+import PersonalName from "~/components/PersonalName.astro";
+
+const host =
+	(Astro.isPrerendered ? null : Astro.request.headers.get("host")) ??
+	Astro.url.host;
+
+const mainHref = (path: string) =>
+	Astro.isPrerendered
+		? new URL(path, Astro.site).href
+		: mainSitePath(host, path);
+
+const isAudio =
+	host.split(":")[0] === "audio.thesuperhuman.us" ||
+	Astro.url.pathname.startsWith("/audio");
+
+const audioHref = (path: string) =>
+	Astro.isPrerendered
+		? new URL(`/audio${path}`, Astro.site).href
+		: audioPath(host, path);
+
 const links = [
-  { href: '/work', label: 'Work' },
-  { href: '/building', label: 'Building' },
-  { href: '/writing', label: 'Writing' },
-  { href: '/audio/', label: 'Audio' },
-  { href: '/about', label: 'About' },
+	{ href: "/work", label: "Work" },
+	{ href: "/building", label: "Building" },
+	{ href: "/writing", label: "Writing" },
+	{ href: "/audio/", label: "Audio" },
+	{ href: "/about", label: "About" },
 ];
-// The phone menu's "Work with me" group: the hub's three offers and the contact form, one tap each.
+
+// The phone menu's "Work with me" group: the hub's three offers and the Get in touch switchboard, one tap each.
 const hire = [
-  { href: audioHref('/services'), label: 'Mixing & mastering' },
-  { href: mainHref('/services#door-website'), label: 'Website design' },
-  { href: mainHref('/services#software'), label: 'Software engineering' },
-  { href: mainHref('/#contact'), label: 'Get in touch' },
+	{ href: audioHref("/services"), label: "Mixing & mastering" },
+	{ href: mainHref("/services#website"), label: "Website design" },
+	{ href: mainHref("/services#software"), label: "Software engineering" },
+	{ href: mainHref("/contact"), label: "Get in touch" },
 ];
-const current = isAudio ? '' : Astro.url.pathname.replace(/\/$/, '') || '/';
-const active = (href: string) => (isAudio && href === '/audio/') || current === href || current.startsWith(`${href}/`);
-const onHub = current === '/services';
+
+const current = isAudio ? "" : Astro.url.pathname.replace(/\/$/, "") || "/";
+
+const active = (href: string) =>
+	(isAudio && href === "/audio/") ||
+	current === href ||
+	current.startsWith(`${href}/`);
+
+const onHub = current === "/services";
 ---
 <header class="site-header site-shell">
   <a class="site-name" href={mainHref('/')}><PersonalName variant="full" /></a>
@@ -41,19 +63,13 @@ const onHub = current === '/services';
   </details>
 </header>
 <script>
-  document.querySelectorAll<HTMLDetailsElement>('.mobile-menu').forEach(menu => {
-    menu.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && menu.open) {
-        menu.open = false;
-        menu.querySelector('summary')?.focus();
-      }
-    });
-    menu.querySelectorAll('a').forEach(link => link.addEventListener('click', () => { menu.open = false; }));
-  });
+  import { setupSiteNav } from '~/scripts/site-nav';
+
+  setupSiteNav();
 </script>
 <style>
   .site-header { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; position: relative; z-index: 5; }
-  .site-name { font-size: 1.5rem; letter-spacing: -.04em; border: 0; white-space: nowrap; }
+  .site-name { font-size: 1.5rem; letter-spacing: -.04em; border: 0; white-space: normal; }
   .desktop-nav { display: flex; gap: 2rem; }
   nav a { border-bottom: 1px solid transparent; padding: .4rem 0; }
   nav a[aria-current] { border-color: var(--accent); }
@@ -65,9 +81,10 @@ const onHub = current === '/services';
     .mobile-menu { display: block; }
     summary { display: flex; align-items: center; gap: 14px; min-height: 44px; cursor: pointer; list-style: none; }
     summary::-webkit-details-marker { display: none; }
+    @media (hover: hover) and (pointer: fine) { summary:hover { color: var(--accent); } }
     .menu-mark { width: 25px; display: grid; gap: 7px; }
     .menu-mark i { height: 1px; background: var(--accent); }
-    .mobile-menu nav { position: absolute; top: calc(100% - 10px); left: 0; right: 0; display: grid; padding: 1rem var(--site-gutter) 1.5rem; background: var(--paper); border-bottom: 1px solid var(--rule); box-shadow: 0 18px 24px -24px #0e0e0e55; }
+    .mobile-menu nav { position: absolute; top: calc(100% - 10px); left: 0; right: 0; display: grid; padding: 1rem var(--site-gutter) 1.5rem; background: var(--paper); border-bottom: 1px solid var(--rule); box-shadow: 0 18px 24px -24px color-mix(in srgb, var(--ink) 33%, transparent); }
     .mobile-menu nav a { min-height: 44px; width: fit-content; }
     .menu-group, .menu-group > div { display: grid; }
     .menu-group { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--rule); }

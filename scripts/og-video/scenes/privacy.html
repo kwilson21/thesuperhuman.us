@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- Privacy (/privacy): the notice's plain promise over its two automatic expiry limits. The poster
+     is the trackers sentence and a small ledger in the capacity-row anatomy (LyftWorkStory.astro:9-18,
+     76-84): label, figure, 12px track and accent bar. In the loop each record runs out in turn and
+     dims, then both return. Every bar drains over the same 800 ms on an eased curve, so the timing
+     shows order only (shortest limit first), never proportion: five minutes and seven days get the
+     same drain. Only the two limits of privacy.astro:20 appear, so the footnote from the same
+     paragraph (in the aside slot, under the bars' right end) covers exactly the rows above it.
+     The operator line and the cookie row are left out to
+     keep the poster near 25 words; the page's "Updated" date is left out so the clip never shows a
+     stale date. Copy is verbatim from src/pages/privacy.astro:11 (kicker), :22 (headline) and :20
+     (limits, footnote); "Expires after" is a short ledger label and "Form rate-limit records" is the
+     page's "Temporary IP-based form rate-limit records" shortened. Re-render when :20 or :22 changes. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  .head { position: absolute; left: 64px; top: 104px; width: 1072px; white-space: nowrap; }
+
+  /* The ledger: the page's eyebrow (global.css:143-150) over capacity rows (LyftWorkStory.astro:76-84). */
+  .ledger { position: absolute; left: 64px; top: 290px; width: 1072px; }
+  .ledger-head { margin: 0; padding-bottom: 14px; border-bottom: 1px solid var(--rule); font: 500 20px/24px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+  .row { margin-top: 28px; }
+  .line { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; will-change: opacity; }
+  .lab { font: 400 24px/34px var(--sans); color: var(--ink); white-space: nowrap; }
+  .val { font: 500 30px/34px var(--sans); color: var(--accent); font-variant-numeric: tabular-nums; letter-spacing: -.01em; white-space: nowrap; }
+  .track { height: 12px; margin-top: 10px; background: var(--rule); }
+  .bar { display: block; height: 100%; background: var(--accent); transform-origin: left; will-change: transform; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Privacy</p>
+  <h1 class="h-60 head">The website’s page code<br />does not include advertising trackers.</h1>
+  <section class="ledger">
+    <p class="ledger-head">Expires after</p>
+    <div class="row r1"><div class="line"><span class="lab">Form rate-limit records</span><strong class="val">five minutes</strong></div><div class="track"><i class="bar"></i></div></div>
+    <div class="row r2"><div class="line"><span class="lab">Pending resume requests</span><strong class="val">seven days</strong></div><div class="track"><i class="bar"></i></div></div>
+  </section>
+  <p class="url">thesuperhuman.us/privacy</p>
+  <p class="aside">These limits do not delete email copies.</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // 0-700 poster. Each row's turn: its bar empties over 800 ms (same for both rows), then its label
+  // and figure dim to .35. 2500-3300 both are empty under the full-strength headline and footnote.
+  // From 3300 the rows return on the reveal curve, 120 ms apart; 4220-6000 rests on the poster.
+  const DRAIN = 800, DIM = 250, GROW = 800;
+  const turn = [700, 1700];
+  const back = [3300, 3420];
+  turn.forEach((t, k) => {
+    const row = `.r${k + 1}`;
+    play(`${row} .bar`, [
+      [t, { transform: 'scaleX(1)', easing: ease.inOut }],
+      [t + DRAIN, { transform: 'scaleX(0)' }],
+      [back[k], { transform: 'scaleX(0)', easing: ease.out }],
+      [back[k] + GROW, { transform: 'scaleX(1)' }],
+    ]);
+    play(`${row} .line`, [
+      [t + DRAIN, { opacity: 1 }],
+      [t + DRAIN + DIM, { opacity: .35 }],
+      [back[k], { opacity: .35, easing: ease.out }],
+      [back[k] + 300, { opacity: 1 }],
+    ]);
+  });
+</script>
+</body>
+</html>

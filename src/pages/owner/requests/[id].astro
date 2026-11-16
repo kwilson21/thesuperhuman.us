@@ -1,72 +1,275 @@
 ---
 export const prerender = false;
-import SoftwareProjectPanel from '~/components/owner/SoftwareProjectPanel.astro';
-import SoftwareAgreementPanel from '~/components/owner/SoftwareAgreementPanel.astro';
-import { getSoftwareProject, listSoftwareUpdates, projectTerms } from '~/lib/software-projects';
-import { listSoftwareProjectMessages, readableSoftwareProjectMessages } from '~/lib/software-project-messages';
-import SoftwareOfferEditor from '~/components/owner/SoftwareOfferEditor.astro';
-import SoftwareFitReview from '~/components/owner/SoftwareFitReview.astro';
-import SoftwareQuestions from '~/components/owner/SoftwareQuestions.astro';
-import { listSoftwareOffers } from '~/lib/software-offers';
-import OwnerLayout from '~/layouts/OwnerLayout.astro';
-import AudioPaymentPanel from '~/components/owner/AudioPaymentPanel.astro';
-import { paymentDefaults } from '~/lib/audio-payments';
-import ProjectMessages from '~/components/ProjectMessages.astro';
-import AudioProjectUpdates from '~/components/AudioProjectUpdates.astro';
-import { defaultFirstUpdate } from '~/lib/audio-project-updates';
-import { ownerNextStep } from '~/lib/audio-project-next-step';
-import OwnerProjectFiles from '~/components/owner/OwnerProjectFiles.astro';
-import StageTrack from '~/components/StageTrack.astro';
-import { getAudioPayment } from '~/lib/audio-payments';
-import { clientPortalEnabled } from '~/lib/audio-client-access';
-import type { ProjectInvitation } from '~/lib/audio-project-invitations';
-import { latestReviewDecision, listProjectMessages } from '~/lib/audio-project-messages';
-import { listProjectUpdates } from '~/lib/audio-project-updates';
-import { getOwnerRequest, listOwnerRequestAudit, listOwnerRequests } from '~/lib/owner-requests';
-import { safeExternalUrl } from '~/lib/owner-model';
-import { stripeAvailable } from '~/lib/stripe-invoicing';
-import { softwareBrief, softwareLabels } from '~/lib/software-inquiry';
+
+import SoftwareProjectPanel from "~/components/owner/SoftwareProjectPanel.astro";
+import SoftwareAgreementPanel from "~/components/owner/SoftwareAgreementPanel.astro";
+import {
+	getSoftwareProject,
+	listSoftwareUpdates,
+	projectTerms,
+} from "~/lib/software-projects";
+import {
+	listSoftwareProjectMessages,
+	readableSoftwareProjectMessages,
+} from "~/lib/software-project-messages";
+import SoftwareOfferEditor from "~/components/owner/SoftwareOfferEditor.astro";
+import SoftwareFitReview from "~/components/owner/SoftwareFitReview.astro";
+import SoftwareQuestions from "~/components/owner/SoftwareQuestions.astro";
+import { listSoftwareOffers } from "~/lib/software-offers";
+import OwnerLayout from "~/layouts/OwnerLayout.astro";
+import AudioPaymentPanel from "~/components/owner/AudioPaymentPanel.astro";
+import { paymentDefaults } from "~/lib/audio-payments";
+import ProjectMessages from "~/components/ProjectMessages.astro";
+import AudioProjectUpdates from "~/components/AudioProjectUpdates.astro";
+import { defaultFirstUpdate } from "~/lib/audio-project-updates";
+import { ownerNextStep } from "~/lib/audio-project-next-step";
+import OwnerProjectFiles from "~/components/owner/OwnerProjectFiles.astro";
+import StageTrack from "~/components/StageTrack.astro";
+import { getAudioPayment } from "~/lib/audio-payments";
+import { clientPortalEnabled } from "~/lib/client-portal";
+import type { ProjectInvitation } from "~/lib/audio-project-invitations";
+import {
+	latestReviewDecision,
+	listProjectMessages,
+} from "~/lib/audio-project-messages";
+import { listProjectUpdates } from "~/lib/audio-project-updates";
+import {
+	getOwnerRequest,
+	listOwnerRequestAudit,
+	listOwnerRequests,
+} from "~/lib/owner-requests";
+import { safeExternalUrl } from "~/lib/owner-model";
+import type { RequestDetails } from "~/lib/owner-model";
+import { isObject } from "~/lib/type-guards";
+import { stripeAvailable } from "~/lib/stripe-invoicing";
+import {
+	currentSiteHref,
+	softwareBrief,
+	softwareLabels,
+} from "~/lib/software-inquiry";
+
 const db = Astro.locals.runtime.env.MUSIC_DB;
-if (!db) return new Response('Owner reporting is unavailable.', { status: 503 });
-const request = Astro.params.id ? await getOwnerRequest(db, Astro.params.id) : null;
-if (!request) return new Response('Request not found.', { status: 404 });
-const [audit, newRequests] = await Promise.all([listOwnerRequestAudit(db, request.id), listOwnerRequests(db, { status: 'new' })]);
-const payment = request.kind === 'service' ? await getAudioPayment(db, request.id) : null;
-const portalProject = request.kind === 'service' && clientPortalEnabled(Astro.locals.runtime.env)
-  ? await db.prepare('SELECT stage,current_due_at,revoked_at,invitation_status,invitation_attempted_at,invitation_sent_at FROM audio_projects WHERE request_id=?').bind(request.id).first<
-    { stage: string; current_due_at: string | null; revoked_at: string | null } & ProjectInvitation>() : null;
+
+if (!db)
+	return new Response("Owner reporting is unavailable.", { status: 503 });
+
+const request = Astro.params.id
+	? await getOwnerRequest(db, Astro.params.id)
+	: null;
+
+if (!request) return new Response("Request not found.", { status: 404 });
+
+const [audit, newRequests] = await Promise.all([
+	listOwnerRequestAudit(db, request.id),
+	listOwnerRequests(db, { status: "new" }),
+]);
+
+const payment =
+	request.kind === "service" ? await getAudioPayment(db, request.id) : null;
+
+const portalProject =
+	request.kind === "service" && clientPortalEnabled(Astro.locals.runtime.env)
+		? await db
+				.prepare(
+					"SELECT stage,current_due_at,revoked_at,invitation_status,invitation_attempted_at,invitation_sent_at FROM audio_projects WHERE request_id=?",
+				)
+				.bind(request.id)
+				.first<
+					{
+						stage: string;
+						current_due_at: string | null;
+						revoked_at: string | null;
+					} & ProjectInvitation
+				>()
+		: null;
+
 const stripeEnabled = stripeAvailable(Astro.locals.runtime.env);
-const reviewDecision = portalProject?.stage === 'review_ready' ? await latestReviewDecision(db, request.id) : null;
-const nextStep = portalProject ? ownerNextStep({ stage: portalProject.stage, requestStatus: request.status, revoked: Boolean(portalProject.revoked_at), payment, stripeEnabled, reviewDecision }) : null;
-const projectMessages = portalProject ? await listProjectMessages(db, request.id) : [];
-const projectUpdates = portalProject ? await listProjectUpdates(db, request.id) : [];
-const projectFiles = portalProject ? (await db.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at,peaks
-  FROM audio_project_files WHERE request_id=? ORDER BY uploaded_at DESC`).bind(request.id).all<
-  { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
-    status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null; peaks: string | null }>()).results : [];
-const pendingUploads = portalProject ? (await db.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
-  WHERE request_id=? ORDER BY created_at DESC`).bind(request.id).all<
-  { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string }>()).results : [];
-const pendingSignature = request.kind === 'software' && Boolean(await db.prepare("SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'").bind(request.id).first());
-const allowed = request.status === 'new' ? ['review', 'resolve', 'withdraw'] : request.status === 'reviewed' ? ['resolve', 'reopen', 'withdraw'] : request.status === 'resolved' ? ['reopen', 'withdraw'] : [];
-const label = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, character => character.toUpperCase());
-const detailRows = Object.entries(request.details).filter(([, value]) => value !== '' && value !== null && value !== false && (!Array.isArray(value) || value.length));
-const detailValue = (value: unknown) => Array.isArray(value) ? value.join(', ') : typeof value === 'object' && value ? Object.entries(value).map(([key, item]) => `${label(key)}: ${String(item)}`).join(' · ') : String(value);
-const offers = request.kind === 'software' ? await listSoftwareOffers(db, request.id) : [];
-const softwareProject = request.kind === 'software' ? await getSoftwareProject(db, request.id) : null;
-const softwareUpdates = softwareProject ? await listSoftwareUpdates(db, request.id) : [];
-const softwareMessageRows = softwareProject ? await listSoftwareProjectMessages(db, request.id) : [];
-const softwareMessages = softwareProject ? readableSoftwareProjectMessages(softwareMessageRows, softwareUpdates, projectTerms(softwareProject)) : [];
+
+const reviewDecision =
+	portalProject?.stage === "review_ready"
+		? await latestReviewDecision(db, request.id)
+		: null;
+
+const nextStep = portalProject
+	? ownerNextStep({
+			stage: portalProject.stage,
+			requestStatus: request.status,
+			revoked: Boolean(portalProject.revoked_at),
+			payment,
+			stripeEnabled,
+			reviewDecision,
+		})
+	: null;
+
+const projectMessages = portalProject
+	? await listProjectMessages(db, request.id)
+	: [];
+
+const projectUpdates = portalProject
+	? await listProjectUpdates(db, request.id)
+	: [];
+
+const projectFiles = portalProject
+	? (
+			await db
+				.prepare(`SELECT id,version,display_name,byte_size,status,uploaded_at,published_at,peaks
+  FROM audio_project_files WHERE request_id=? ORDER BY uploaded_at DESC`)
+				.bind(request.id)
+				.all<{
+					id: string;
+					version: "review" | "final";
+					display_name: string;
+					byte_size: number;
+					status: "uploaded" | "published" | "revoked";
+					uploaded_at: string;
+					published_at: string | null;
+					peaks: string | null;
+				}>()
+		).results
+	: [];
+
+const pendingUploads = portalProject
+	? (
+			await db
+				.prepare(`SELECT id,display_name,state,created_at FROM audio_project_uploads
+  WHERE request_id=? ORDER BY created_at DESC`)
+				.bind(request.id)
+				.all<{
+					id: string;
+					display_name: string;
+					state: "pending" | "discarding";
+					created_at: string;
+				}>()
+		).results
+	: [];
+
+const pendingSignature =
+	request.kind === "software" &&
+	Boolean(
+		await db
+			.prepare(
+				"SELECT 1 FROM software_agreements WHERE request_id=? AND status='client_signed'",
+			)
+			.bind(request.id)
+			.first(),
+	);
+
+const allowed =
+	request.status === "new"
+		? ["review", "resolve", "withdraw"]
+		: request.status === "reviewed"
+			? ["resolve", "reopen", "withdraw"]
+			: request.status === "resolved"
+				? ["reopen", "withdraw"]
+				: [];
+
+const label = (key: string) =>
+	key
+		.replace(/([a-z])([A-Z])/g, "$1 $2")
+		.replace(/^./, (character) => character.toUpperCase());
+
+const detailRows = Object.entries(request.details).filter(
+	([, value]) =>
+		value !== "" &&
+		value !== null &&
+		value !== false &&
+		(!Array.isArray(value) || value.length),
+);
+
+const detailValue = (value: RequestDetails[string]) =>
+	Array.isArray(value)
+		? value.join(", ")
+		: isObject(value)
+			? Object.entries(value)
+					.map(([key, item]) => `${label(key)}: ${String(item)}`)
+					.join(" · ")
+			: String(value);
+
+const offers =
+	request.kind === "software" ? await listSoftwareOffers(db, request.id) : [];
+
+const softwareProject =
+	request.kind === "software" ? await getSoftwareProject(db, request.id) : null;
+
+const softwareUpdates = softwareProject
+	? await listSoftwareUpdates(db, request.id)
+	: [];
+
+const softwareMessageRows = softwareProject
+	? await listSoftwareProjectMessages(db, request.id)
+	: [];
+
+const softwareMessages = softwareProject
+	? readableSoftwareProjectMessages(
+			softwareMessageRows,
+			softwareUpdates,
+			projectTerms(softwareProject),
+		)
+	: [];
+
 if (softwareProject) {
-  const projectAudit = (await db.prepare('SELECT id,action,actor,note,occurred_at AS occurredAt FROM software_project_audit WHERE request_id=? ORDER BY id DESC').bind(request.id).all<typeof audit[number]>()).results;
-  audit.push(...projectAudit);audit.sort((first,second)=>second.occurredAt.localeCompare(first.occurredAt));
+	const projectAudit = (
+		await db
+			.prepare(
+				"SELECT id,action,actor,note,occurred_at AS occurredAt FROM software_project_audit WHERE request_id=? ORDER BY id DESC",
+			)
+			.bind(request.id)
+			.all<(typeof audit)[number]>()
+	).results;
+
+	audit.push(...projectAudit);
+	audit.sort((first, second) =>
+		second.occurredAt.localeCompare(first.occurredAt),
+	);
 }
-const fit = request.kind === 'software' ? await db.prepare('SELECT label,note FROM software_fit_reviews WHERE request_id=?').bind(request.id).first<{label:string;note:string}>() : null;
-const offerLink = request.kind === 'software' ? await db.prepare('SELECT revoked_at,created_at FROM software_offer_links WHERE request_id=?').bind(request.id).first<{revoked_at:string|null;created_at:string}>() : null;
-const auditLabel = (item: typeof audit[number]) => ({ 'fit-reviewed': 'Fit review saved', 'question-sent': 'Question sent', 'declined': 'Declined', 'offer-draft-saved': 'Offer draft saved', 'offer-sent': item.note || 'Offer sent', 'offer-link-revoked': 'Client link revoked' }[item.action] ?? item.action.replaceAll('-', ' '));
-const closed = ['resolved', 'withdrawn'].includes(request.status);
-const clientCopyStatus = request.details.clientCopyStatus ?? 'failed';
-const brief = request.kind === 'software' ? softwareBrief(request) : null;
+
+const fit =
+	request.kind === "software"
+		? await db
+				.prepare(
+					"SELECT label,note FROM software_fit_reviews WHERE request_id=?",
+				)
+				.bind(request.id)
+				.first<{ label: string; note: string }>()
+		: null;
+
+const offerLink =
+	request.kind === "software"
+		? await db
+				.prepare(
+					"SELECT revoked_at,created_at FROM software_offer_links WHERE request_id=?",
+				)
+				.bind(request.id)
+				.first<{ revoked_at: string | null; created_at: string }>()
+		: null;
+
+const auditLabel = (item: (typeof audit)[number]) =>
+	({
+		"fit-reviewed": "Fit review saved",
+		"question-sent": "Question sent",
+		declined: "Declined",
+		"offer-draft-saved": "Offer draft saved",
+		"offer-sent": item.note || "Offer sent",
+		"offer-link-revoked": "Client link revoked",
+	})[item.action] ?? item.action.replaceAll("-", " ");
+
+const closed = ["resolved", "withdrawn"].includes(request.status);
+const clientCopyStatus = request.details.clientCopyStatus ?? "failed";
+const brief = request.kind === "software" ? softwareBrief(request) : null;
+
+const softwarePath =
+	request.kind === "software" ? (request.serviceId ?? "") : "";
+
+// Each software path's row on the services page. Earlier web app briefs keep the idea path name.
+const softwareServiceRows = new Map([
+	["website", "website"],
+	["webapp", "web-app"],
+	["idea", "web-app"],
+	["workflow", "workflow"],
+]);
+
+const serviceRow = (serviceId: string) =>
+	softwareServiceRows.get(serviceId) ?? "software";
 ---
 <OwnerLayout title={request.summary} current="requests" newRequestCount={newRequests.length} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <p class="owner-breadcrumb"><a href="/owner/requests">Requests</a> <span aria-hidden="true">/</span> {request.summary}</p>
@@ -87,8 +290,8 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         bookingPaid={payment?.bookingStatus === 'paid'} balancePaid={payment?.balanceStatus === 'paid'} />}
       {portalProject && <ProjectMessages messages={projectMessages} endpoint={`/api/owner/projects/${encodeURIComponent(request.id)}/messages`} reader="owner" closed={portalProject.stage === 'complete' || Boolean(portalProject.revoked_at) || request.status === 'withdrawn'} />}
       {softwareProject && <ProjectMessages heading="Messages" hint="Replies appear on the client’s project page." messages={softwareMessages} endpoint={`/api/owner/requests/${request.id}/messages`} reader="owner" closed={Boolean(softwareProject.revoked_at) || softwareProject.state === 'complete' || request.status === 'withdrawn'} />}
-      {!portalProject && brief && <section class="rail-section wide software-brief" aria-labelledby="submission-heading"><h2 id="submission-heading">Their brief</h2><p class="rail-muted rail-caption">As submitted by the client. Read only.</p><dl class="rail-list">{Object.entries(brief).filter(([key]) => key !== 'name' && key !== 'email').map(([key]) => <><dt>{softwareLabels[key as keyof typeof softwareLabels]}</dt><dd class="software-answer">{brief[key]}</dd></>)}</dl></section>}
-      {brief && <SoftwareOfferEditor requestId={request.id} email={request.email} offers={offers} startedVersion={softwareProject ? offers.find(offer => offer.id === softwareProject.offer_id)?.version : undefined} resolved={request.status === 'resolved'} withdrawn={request.status === 'withdrawn'} revoked={Boolean(offerLink?.revoked_at)} linkCreatedAt={offerLink?.created_at} />}
+      {!portalProject && brief && <section class="rail-section wide software-brief" aria-labelledby="submission-heading"><h2 id="submission-heading">Their brief</h2><p class="rail-muted rail-caption">As submitted by the client. Read only.</p><dl class="rail-list">{Object.entries(brief).filter(([key]) => key !== 'name' && key !== 'email').map(([key]) => { const href = key === 'currentUrl' ? currentSiteHref(brief.currentUrl) : null; return <><dt>{softwareLabels[key as keyof typeof softwareLabels]}</dt><dd class="software-answer">{href ? <><a href={href} target="_blank" rel="noopener noreferrer">{href}<span class="visually-hidden"> (opens in a new tab)</span></a> <span class="rail-muted rail-caption" aria-hidden="true">opens in a new tab</span></> : brief[key]}</dd></>; })}</dl></section>}
+      {brief && <SoftwareOfferEditor requestId={request.id} email={request.email} offers={offers} path={softwarePath} startedVersion={softwareProject ? offers.find(offer => offer.id === softwareProject.offer_id)?.version : undefined} resolved={request.status === 'resolved'} withdrawn={request.status === 'withdrawn'} revoked={Boolean(offerLink?.revoked_at)} linkCreatedAt={offerLink?.created_at} />}
       {!portalProject && !brief && detailRows.length > 0 && <section class="rail-section wide" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
       {!portalProject && request.kind === 'service' && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
     </div>
@@ -100,12 +303,12 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         {!closed && clientCopyStatus === 'uncertain' && typeof request.details.clientCopyAttemptedAt === 'string' && Date.now() - Date.parse(request.details.clientCopyAttemptedAt) > 60_000 && <button type="button" class="studio-quiet" data-send-project-invitation data-confirmed-not-sent="true">I checked Resend; retry</button>}
         <p class="studio-status" data-invitation-status role="status" aria-live="polite"></p>
       </div>}
-      {brief && <SoftwareFitReview requestId={request.id} fit={fit} closed={closed} />}
+      {brief && <SoftwareFitReview requestId={request.id} fit={fit} closed={closed} path={softwarePath} />}
       <section class="rail-section" aria-labelledby="contact-heading"><h2 id="contact-heading">Client</h2>
         <p class="rail-name">{request.name || 'Name not supplied'}</p>
         <p><a href={`mailto:${request.email}`}>{request.email}</a></p>
         {request.kind !== 'software' && <p class="rail-muted">{request.cityRegion || 'City not supplied'} <small>· Supplied by requester</small></p>}
-        {(request.releaseId || request.serviceId || request.campaignId) && <p class="rail-links">{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Release →</a>}{request.serviceId && <a href={request.kind === 'software' ? '/services#software' : '/audio/services'}>Service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Campaign →</a>}</p>}
+        {(request.releaseId || request.serviceId || request.campaignId) && <p class="rail-links">{request.releaseId && <a href={`/music/${request.releaseId.replace(/-single$/, '')}`}>Release →</a>}{request.serviceId && <a href={request.kind === 'software' ? `/services#${serviceRow(request.serviceId)}` : '/audio/services'}>Service →</a>}{request.campaignId && <a href={`/owner/campaigns/${request.campaignId}`}>Campaign →</a>}</p>}
       </section>
       {portalProject && detailRows.length > 0 && <section class="rail-section" aria-labelledby="submission-heading"><h2 id="submission-heading">Submitted details</h2><p class="rail-muted rail-caption">Submitted with this request, as the client wrote it.</p><dl class="rail-list">{detailRows.map(([key, value]) => { const href = /url|link/i.test(key) ? safeExternalUrl(value) : null; return <><dt>{label(key)}</dt><dd>{href ? <a href={href} rel="noreferrer">Open link ↗</a> : detailValue(value)}</dd></>; })}</dl></section>}
       {portalProject && <AudioPaymentPanel requestId={request.id} payment={payment} stripeEnabled={stripeEnabled} defaults={paymentDefaults(request.serviceId, request.details)} />}
@@ -130,14 +333,43 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
         <div class="rail-actions" data-request-actions data-open-studio={portalProject && portalProject.stage === 'files_under_review' && !portalProject.revoked_at ? 'true' : undefined}>{allowed.filter(action => (action !== 'reopen' || !softwareProject) && (action !== 'resolve' || !softwareProject || softwareProject.completed_at !== null || softwareProject.revoked_at !== null)).map(action => <button type="button" id={action === 'review' ? 'mark-reviewed' : undefined} data-action={action} disabled={pendingSignature && (action === 'resolve' || action === 'withdraw')} class:list={{ danger: action === 'withdraw' }}>{action === 'review' ? 'Mark reviewed' : action === 'resolve' ? 'Mark resolved' : action === 'reopen' ? 'Reopen' : 'Honor withdrawal'}</button>)}</div>
         {pendingSignature && <p class="rail-muted">Countersign or abandon the signed agreement first.</p>}
       </section>}
-      {brief && !closed && !softwareProject && <SoftwareQuestions requestId={request.id} />}
+      {brief && !closed && !softwareProject && <SoftwareQuestions requestId={request.id} path={softwarePath} />}
       <p class="studio-status" data-action-status aria-live="polite"></p>
       <details class="rail-section rail-activity"><summary><span>Activity</span><span>{audit.length} {audit.length === 1 ? 'entry' : 'entries'}</span></summary>
         <ol>{audit.map(item => <li><strong>{auditLabel(item)}</strong><span>{item.actor}</span><time datetime={item.occurredAt}>{new Date(item.occurredAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' })}</time>{item.note && item.note !== auditLabel(item) && <p>{item.note}</p>}</li>)}</ol>
       </details>
     </aside>
   </div>
-  <script>import { setupSoftwareOffers } from '~/scripts/software-offers'; setupSoftwareOffers(); import { setupOwnerRequestActions } from '~/scripts/owner-request-actions'; import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions'; import { setupProjectMessages } from '~/scripts/project-messages'; import { setupProjectUpdates } from '~/scripts/project-updates'; import { setupProjectInvitation } from '~/scripts/project-invitation'; import { setupOwnerProjectFiles } from '~/scripts/owner-project-files'; setupOwnerRequestActions(); setupOwnerPaymentActions(); setupProjectMessages(); setupProjectUpdates(); setupProjectInvitation(); setupProjectInvitation('[data-brief-copy]'); setupOwnerProjectFiles(); import { setupNextStep } from '~/scripts/next-step'; setupNextStep();</script>
+  <script>
+    import { setupSoftwareOffers } from '~/scripts/software-offers';
+
+    setupSoftwareOffers();
+
+    import { setupOwnerRequestActions } from '~/scripts/owner-request-actions';
+    import { setupOwnerPaymentActions } from '~/scripts/owner-payment-actions';
+    import { setupProjectMessages } from '~/scripts/project-messages';
+    import { setupProjectUpdates } from '~/scripts/project-updates';
+    import { setupProjectInvitation } from '~/scripts/project-invitation';
+    import { setupOwnerProjectFiles } from '~/scripts/owner-project-files';
+
+    setupOwnerRequestActions();
+
+    setupOwnerPaymentActions();
+
+    setupProjectMessages();
+
+    setupProjectUpdates();
+
+    setupProjectInvitation();
+
+    setupProjectInvitation('[data-brief-copy]');
+
+    setupOwnerProjectFiles();
+
+    import { setupNextStep } from '~/scripts/next-step';
+
+    setupNextStep();
+  </script>
   <style>
     .request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
     .request-layout:not(.portal) { grid-template-columns: minmax(0, 1fr) minmax(17rem, 21rem); }
@@ -157,7 +389,7 @@ const brief = request.kind === 'software' ? softwareBrief(request) : null;
     .rail-note { display: grid; gap: .5rem; }
     .rail-note .studio-textarea { min-height: 5rem; font-size: .9rem; }
     .rail-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-    .rail-actions button { min-height: 2.4rem; padding: .45rem .85rem; border: 1px solid var(--ink); border-radius: 2px; background: none; color: var(--ink); font: 500 .8rem/1.2 Inter, sans-serif; cursor: pointer; }
+    .rail-actions button { min-height: 2.4rem; padding: .45rem 1.25rem; border: 1px solid var(--ink); border-radius: var(--radius-button); white-space: nowrap; background: none; color: var(--ink); font: 500 .8rem/1.2 Inter, sans-serif; cursor: pointer; }
     .rail-actions button:hover { background: var(--ink); color: var(--paper); }
     .rail-actions button.danger { border-color: var(--studio-danger); color: var(--studio-danger); }
     .rail-actions button.danger:hover { background: var(--studio-danger); color: var(--paper); }

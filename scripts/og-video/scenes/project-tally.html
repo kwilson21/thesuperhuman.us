@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- Tally (/building/tally): the project page's title, promise and status beside the page's own
+     annotated Home screen (PR #41, demo data), cropped so the "Demo data" banner shows on every frame
+     and the crop ends above the Eating Out row (its badge 5 is not part of the tour). A spotlight
+     ring walks the capture's own numbered pointers 1 to 4 while the legend beside it names each
+     part, then returns to Safe to spend. The ring and its light veil are annotation layers; the
+     screenshot is not edited, and the veil starts below the banner so the banner is never dimmed.
+     7.2 s: four stops, each with a label and a one-line explanation held at least 900 ms.
+     Copy is verbatim: title, subtitle and status from src/data/project-stories/tally.ts:46-49;
+     kicker from src/layouts/ProjectLayout.astro:28 (first crumb only, the headline carries the
+     name); the legend labels and descriptions are items 1-4 of the annotated image's own legend
+     (src/assets/projects/tally/home-annotated.webp, the journal artifact at tally.ts:117). -->
+<html lang="en" data-duration="7200">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 60px; top: 96px; margin: 0; white-space: nowrap; }
+  .lede { position: absolute; left: 64px; top: 222px; width: 420px; margin: 0; }
+
+  /* Legend: one item at a time, stacked. The badge copies the capture's own pointer badges. */
+  .legend { position: absolute; left: 64px; top: 384px; width: 420px; height: 100px; }
+  .item { position: absolute; inset: 0; opacity: 0; }
+  .item.i1 { opacity: 1; }
+  .badge { position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%; background: #204f8f; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(14, 14, 14, .35); color: #fff; font: 600 20px/32px var(--sans); text-align: center; }
+  .lab { position: absolute; left: 52px; top: 0; margin: 0; font: 500 30px/36px var(--sans); color: var(--ink); white-space: nowrap; }
+  .desc { position: absolute; left: 52px; top: 44px; width: 368px; margin: 0; font: 400 20px/26px var(--sans); color: var(--muted); opacity: 0; text-wrap: balance; }
+
+  /* Source crop x 316-1284, y 28-575 of the 1336 × 1387 capture at 612 / 968. */
+  .shot { position: absolute; left: 524px; top: 100px; width: 612px; height: 346px; background: #fbf8f2; }
+  .shot img { position: absolute; left: -199.78px; top: -17.70px; width: 844.66px; height: 876.90px; max-width: none; object-fit: fill; }
+  /* The veil starts at the banner's lower edge (source y 64), so the banner is never dimmed. */
+  .spot { position: absolute; left: 0; right: 0; top: 22.76px; bottom: 0; overflow: hidden; pointer-events: none; }
+  .spot .ring { opacity: 1; border: 3px solid var(--accent); border-radius: 8px; box-shadow: 0 0 0 2000px rgba(251, 248, 242, .42); will-change: left, top, width, height; }
+
+  .status { position: absolute; left: 524px; top: 470px; margin: 0; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Building</p>
+  <h1 class="h-112">Tally</h1>
+  <p class="lede">Review your transactions, set monthly budgets and see how much remains to spend.</p>
+
+  <div class="legend">
+    <div class="item i1"><i class="badge">1</i><p class="lab">Safe to spend</p><p class="desc">The headline: how much is left to spend this month.</p></div>
+    <div class="item i2"><i class="badge">2</i><p class="lab">Status sentence</p><p class="desc">Written by code from the numbers, not by AI.</p></div>
+    <div class="item i3"><i class="badge">3</i><p class="lab">Needs a category</p><p class="desc">How many transactions are uncategorized; opens that filtered list.</p></div>
+    <div class="item i4"><i class="badge">4</i><p class="lab">Budget bar</p><p class="desc">Spent of budget for each category, drawn as SVG.</p></div>
+  </div>
+
+  <div class="capture shot"><img src="../../../src/assets/projects/tally/home-annotated.webp" alt="" width="1336" height="1387" />
+    <div class="spot"><i class="ring"></i></div></div>
+  <p class="status">In development · public demo</p>
+
+  <p class="url">thesuperhuman.us/building/tally</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Capture source px to spotlight px: crop origin (316, 28), scale 612 / 968, veil top 22.76.
+  const S = 612 / 968;
+  const box = (x0, y0, x1, y1) => ({ left: `${((x0 - 316) * S).toFixed(2)}px`, top: `${((y0 - 28) * S - 22.76).toFixed(2)}px`, width: `${((x1 - x0) * S).toFixed(2)}px`, height: `${((y1 - y0) * S).toFixed(2)}px` });
+  // Each target holds its pointer badge and the part it names, measured on the capture.
+  const T = [
+    box(332, 179, 562, 279),    // 1 Safe to spend, $283
+    box(330, 302, 758, 359),    // 2 the status sentence
+    box(381, 361, 1267, 426),   // 3 the "12 transactions need a category" band
+    box(382, 503, 1119, 575),   // 4 the Groceries budget bar, down to the crop's lower edge
+  ];
+  const ring = document.querySelector('.spot .ring');
+  Object.assign(ring.style, T[0]);
+
+  // The ring leaves each stop at M[k] and arrives 350 ms later; M[3] returns it to Safe to spend.
+  const M = [1800, 3300, 4800, 6300], MOVE = 350;
+  const path = [[0, T[0]]];
+  M.forEach((m, k) => path.push([m, { ...T[k], easing: ease.inOut }], [m + MOVE, T[(k + 1) % 4]]));
+  play(ring, path);
+
+  // Legend: the item exits as the ring leaves (150 ms), the next rises 12 px as it lands (300 ms),
+  // and its description follows 100 ms later. Hidden items reset with 1 ms steps.
+  const shown = { opacity: 1, transform: 'translateY(0)' };
+  const below = { opacity: 0, transform: 'translateY(12px)' };
+  const above = { opacity: 0, transform: 'translateY(-8px)' };
+  const rise = t => [[t, { ...below, easing: ease.out }], [t + 300, shown]];
+  const exit = t => [[t, { ...shown, easing: ease.in }], [t + 150, above], [t + 151, below]];
+  // Item 1 is the poster: on at 0, its description rises at 600, both leave at M[0], the label returns.
+  play('.i1', [[0, shown], ...exit(M[0]), ...rise(M[3] + 200)]);
+  play('.i1 .desc', [[0, below], ...rise(600), [M[0] + 151, shown], [M[0] + 152, below]]);
+  [2, 3, 4].forEach(k => {
+    const on = M[k - 2] + 200, off = M[k - 1];
+    play(`.i${k}`, [[0, below], ...rise(on), ...exit(off)]);
+    play(`.i${k} .desc`, [[0, below], ...rise(on + 100), [off + 151, shown], [off + 152, below]]);
+  });
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@
 - Motion: static.
 - Publication: no private information. The drawing does not claim to show the owner's studio.
 - Outcome: ready for production asset use on the studio sign-in page. Deployment is a separate step.
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): pass. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 1152 × 393 under the /studio/sign-in form at 1280px wide. It reads as a pencil drawing; none of the tells comes first.
 
 Exact delivered-file record:
 

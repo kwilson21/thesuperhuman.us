@@ -1,0 +1,125 @@
+<!doctype html>
+<!-- Audio (/audio, and the fallback for /audio/* pages without their own scene): the Audio hero
+     (src/components/audio/AudioHero.astro) with its headphones, the first sentence of its price lede
+     and its Start your song button, plus the page's "What I work on" icons
+     (src/components/audio/ServiceIcon.astro, labels from src/data/audio.ts). The headphones give
+     off the hero's ObjectLife rings in two waves, the main motion; while they play, each service icon
+     acts out its work once and its label takes the accent. Nothing is pressed. Copy is verbatim. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 108px; white-space: nowrap; }
+  /* First sentence of the hero lede (AudioHero.astro:7), keeping the service and its price together. */
+  .price { position: absolute; left: 64px; top: 332px; width: 440px; margin: 0; font: 400 26px/34px var(--serif); color: var(--muted); }
+  .cta { position: absolute; left: 64px; top: 424px; margin: 0; }
+  /* The hero art: headphones-v1 with the Audio hero's own mask (audio/index.astro:91, 8% / 92% both ways).
+     The ring overlay shares the image's box, its 1536 × 1024 pixels and the mask (ObjectLife.astro). */
+  .art { left: 440px; top: 24px; width: 820px; height: 547px; --fx0: 8%; --fx1: 92%; --fy0: 8%; --fy1: 92%; }
+  .art svg { overflow: visible; }
+  .rings ellipse { fill: none; stroke: var(--accent); stroke-width: 4; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; opacity: 0; }
+  /* What I work on (audio/index.astro:69): the four ServiceIcon drawings with their labels. */
+  .services { position: absolute; left: 620px; top: 446px; display: flex; }
+  .service { width: 128px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .service svg { width: 72px; height: 72px; overflow: visible; color: var(--ink); }
+  .service p { margin: 0; font: 400 20px/24px var(--sans); color: var(--ink); white-space: nowrap; }
+  .knob-arc { transform-box: view-box; transform-origin: 32px 32px; }
+  .note-head, .tick { transform-box: fill-box; transform-origin: center; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Audio</p>
+  <h1 class="h-96">Mixing and<br />mastering.</h1>
+  <p class="price">From $150 per song for two-track vocal mixing.</p>
+  <p class="cta"><span class="btn">Start your song</span></p>
+  <div class="art">
+    <img src="../../../src/assets/site/headphones-v1.webp" alt="" width="1536" height="1024" />
+    <!-- ObjectLife.astro: rings centred on the front ear cup at (700, 585), rx 172, ry 150. -->
+    <svg viewBox="0 0 1536 1024" aria-hidden="true">
+      <g class="rings" transform="translate(700 585)">
+        <ellipse class="w1" rx="172" ry="150" /><ellipse class="w1" rx="172" ry="150" /><ellipse class="w1" rx="172" ry="150" />
+        <ellipse class="w2" rx="172" ry="150" /><ellipse class="w2" rx="172" ry="150" />
+      </g>
+    </svg>
+  </div>
+  <div class="services">
+    <!-- Paths copied from ServiceIcon.astro; the mixing icon's accent path is split into its three fader caps. -->
+    <div class="service s-mixing">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 8v48M32 8v48M52 8v48" />
+        <path class="cap c1" d="M5 25h14" stroke="var(--accent)" stroke-width="3" />
+        <path class="cap c2" d="M25 43h14" stroke="var(--accent)" stroke-width="3" />
+        <path class="cap c3" d="M45 20h14" stroke="var(--accent)" stroke-width="3" />
+      </svg>
+      <p>Mixing</p>
+    </div>
+    <div class="service s-mastering">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="32" cy="32" r="24" /><circle cx="32" cy="32" r="6" />
+        <path class="knob-arc" d="M34 15a17 17 0 0 1 15 16" stroke="var(--accent)" />
+      </svg>
+      <p>Mastering</p>
+    </div>
+    <div class="service s-production">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 46V16l31-9v33" />
+        <circle class="note-head" cx="12" cy="47" r="7" fill="var(--accent)" stroke="var(--accent)" />
+        <circle class="note-second" cx="43" cy="41" r="7" />
+      </svg>
+      <p>Production</p>
+    </div>
+    <div class="service s-recording">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="24" y="5" width="16" height="34" rx="8" />
+        <path d="M17 28v4a15 15 0 0 0 30 0v-4M32 47v12M22 59h20" />
+        <path class="tick" d="M30 11h4" stroke="var(--accent)" />
+      </svg>
+      <p>Recording</p>
+    </div>
+  </div>
+  <p class="url">thesuperhuman.us/audio</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  const INK = '#0E0E0E', ACCENT = '#AE5534';
+
+  // Rings (ObjectLife.astro ring-out): 2.2 s each, scale 1 to 1.7 on the ring curve, opacity peaking
+  // 88 ms (4%) in. Wave 1 keeps the page's 550 ms spacing after a 600 ms poster hold; wave 2 follows.
+  // The preview shows the art at about a third of its size on the page, so the stroke is 4px (page 2.4)
+  // and the peak opacity .6 (page .55), enough to read in Messages.
+  const ring = (el, at) => {
+    play(el, [[at, { transform: 'scale(1)', easing: ease.ring }], [at + 2200, { transform: 'scale(1.7)' }], [at + 2201, { transform: 'scale(1)' }]]);
+    play(el, [[at, { opacity: 0, easing: ease.ring }], [at + 88, { opacity: .6, easing: ease.ring }], [at + 2200, { opacity: 0 }]]);
+  };
+  const w1 = [...document.querySelectorAll('.w1')], w2 = [...document.querySelectorAll('.w2')];
+  [600, 1150, 1700].forEach((at, i) => ring(w1[i], at));
+  [3200, 3550].forEach((at, i) => ring(w2[i], at));
+
+  // Each service acts out its work once, left to right, while its label takes the accent:
+  // in over 300 ms, held 400 ms, back over 300 ms. Beats start 600 ms apart, so the sweep runs 1.9-4.7 s.
+  const beat = (sel, at, from, to) => play(sel, [[at, { ...from, easing: ease.inOut }], [at + 300, to], [at + 700, { ...to, easing: ease.inOut }], [at + 1000, from]]);
+  const label = (sel, at) => beat(`${sel} p`, at, { color: INK }, { color: ACCENT });
+
+  // Mixing: the three fader caps slide along their tracks (+12, -16, +16 icon units).
+  const MIX = 1900;
+  [['.c1', 12], ['.c2', -16], ['.c3', 16]].forEach(([sel, dy]) => beat(sel, MIX, { transform: 'translateY(0px)' }, { transform: `translateY(${dy}px)` }));
+  label('.s-mixing', MIX);
+  // Mastering: the knob's accent arc turns 70 degrees about the knob's centre.
+  const MASTER = 2500;
+  beat('.knob-arc', MASTER, { transform: 'rotate(0deg)' }, { transform: 'rotate(70deg)' });
+  label('.s-mastering', MASTER);
+  // Production: the filled note head swells and the second head takes the accent.
+  const PROD = 3100;
+  beat('.note-head', PROD, { transform: 'scale(1)' }, { transform: 'scale(1.35)' });
+  beat('.note-second', PROD, { stroke: INK }, { stroke: ACCENT });
+  label('.s-production', PROD);
+  // Recording: the mic's accent tick widens to 12 units, inside the capsule's 13.5 at that height.
+  const REC = 3700;
+  beat('.tick', REC, { transform: 'scaleX(1)' }, { transform: 'scaleX(2)' });
+  label('.s-recording', REC);
+</script>
+</body>
+</html>

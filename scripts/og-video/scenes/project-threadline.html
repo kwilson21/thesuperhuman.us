@@ -1,0 +1,157 @@
+<!doctype html>
+<!-- Threadline (/building/threadline): the project page's title, subtitle and status beside its
+     reviewed illustration (threadline-v1.webp, docs/asset-reviews/threadline-v1.md): three paper
+     notes pinned to a wall, joined by one terracotta thread that runs down to a spool. The notes
+     carry the page's three steps. A small light travels the real thread: it leaves pin 1 (Work),
+     stops at pin 2 (Switch) and pin 3 (Return), passing behind each pin head, then runs down into
+     the spool. Each step lights as the light reaches its pin, with an accent rule under it, and the
+     line under the subtitle shows that step's sentence from the page. The artwork is not edited:
+     the light is drawn above it in the artwork's own pixels, along a path traced from the thread
+     and checked against it (within about 3 artwork px of the thread's centre), and masked behind
+     the pin heads and the spool. Nothing implies active development: the page calls the project
+     paused (src/pages/building.astro:50) and the status stays verbatim.
+     Copy is verbatim: kicker from src/layouts/ProjectLayout.astro:28 (first crumb only, the
+     headline carries the name); title, subtitle and status from src/data/project-stories/threadline.ts:2,
+     3 and 5; the poster's sentence from src/pages/building.astro:30; step numbers, names and
+     sentences from src/pages/building/threadline.astro:15-17; caption from :19. -->
+<html lang="en" data-duration="6000" data-poster="jpeg">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 61px; top: 100px; margin: 0; white-space: nowrap; }
+  /* .project-subtitle (project-journal.css:4), broken where it reads naturally. */
+  .sub { position: absolute; left: 64px; top: 194px; margin: 0; font: 400 44px/1.15 var(--serif); letter-spacing: -.025em; white-space: nowrap; }
+  /* The sentence slot: the poster's line, then each step's sentence. Stacked; only opacity and a short rise move. */
+  .say { position: absolute; left: 64px; top: 318px; width: 330px; height: 96px; margin: 0; }
+  .say span { position: absolute; left: 0; top: 0; width: 330px; font: 400 26px/32px var(--serif); color: var(--muted); opacity: 0; }
+  .say .s0 { opacity: 1; }
+  .status { position: absolute; left: 64px; top: 446px; margin: 0; white-space: nowrap; }
+
+  /* threadline-v1 (1536 × 1024) at 0.58: frame x = 368 + 0.58 × art x, frame y = 4 + 0.58 × art y.
+     The box runs from x 420 past the right edge and down to the artwork's bottom (y 598); it fades
+     in over 60 px on the left and 40 px at the top, and out from 88% down. The whole spool
+     (x 1102-1190) stays in frame. A photographic illustration, so the poster is a JPEG. */
+  .art.wall, .art.over { left: 420px; top: 20px; width: 800px; height: 578px; --fx0: 60px; --fx1: 100%; --fy0: 40px; --fy1: 88%; }
+  /* The light is drawn above the artwork, not multiplied into it. */
+  .art.over { mix-blend-mode: normal; }
+  .layer { position: absolute; left: -52px; top: -16px; width: 890.88px; height: 593.92px; }
+  /* The light, in artwork px (x 0.58 in the frame): a soft glow about 31 px wide, a warm blurred
+     body about the thread's width, and a thin bright core, shorter than the glow and centred in it.
+     Every dash pattern repeats every 1.25, so only one dash ever falls on the thread. */
+  .glint path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dashoffset: .06; }
+  .glint .glow { stroke: #ffb488; stroke-width: 54; opacity: .6; stroke-dasharray: .05 1.2; }
+  .glint .body { stroke: #ffd3b4; stroke-width: 12; opacity: .9; stroke-dasharray: .042 1.208; }
+  .glint .core { stroke: #fff6ee; stroke-width: 4; stroke-dasharray: .03 1.22; }
+
+  /* The page's three steps (threadline.astro:14-18): mono accent number over the step name,
+     18 px in from each note's left edge and 124 px below its top, clear of the thread.
+     Notes in frame px: 489-656 × 70-287, 699-865 × 157-373, 927-1093 × 240-445. */
+  .step { position: absolute; margin: 0; }
+  .step b { display: block; font: 500 20px/24px var(--mono); color: var(--accent); }
+  .step span { position: relative; display: inline-block; font: 400 36px/40px var(--serif); letter-spacing: -.02em; white-space: nowrap; }
+  .step .u { position: absolute; left: 0; right: 0; bottom: -6px; height: 3px; background: var(--accent); transform: scaleX(0); transform-origin: left; }
+  .st1 { left: 507px; top: 194px; }
+  .st2 { left: 717px; top: 280px; }
+  .st3 { left: 945px; top: 364px; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Building</p>
+  <h1 class="h-76">Threadline</h1>
+  <p class="sub">Pick up where<br />you left off.</p>
+  <p class="say"><span class="s0">Pick up interrupted development work with its context intact.</span><span class="s1">A task, its code, and the context that belongs to it.</span><span class="s2">Something else needs your attention.</span><span class="s3">Pick up the related work inside your editor.</span></p>
+  <p class="status">Internal prototype</p>
+
+  <div class="art wall"><div class="layer"><img src="../../../src/assets/site/threadline-v1.webp" alt="" width="1536" height="1024" /></div></div>
+  <div class="art over"><div class="layer">
+    <svg viewBox="0 0 1536 1024" aria-hidden="true">
+      <defs>
+        <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10" /></filter>
+        <filter id="warm" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.5" /></filter>
+        <!-- The pin heads (measured centres and radii) and the spool stand in front of the thread. -->
+        <mask id="behind" maskUnits="userSpaceOnUse" x="0" y="0" width="1536" height="1024">
+          <rect width="1536" height="1024" fill="#fff" />
+          <circle cx="365" cy="148.5" r="19" fill="#000" />
+          <circle cx="726" cy="294" r="18" fill="#000" />
+          <circle cx="1111" cy="441" r="21" fill="#000" />
+          <rect x="1264" y="690" width="160" height="236" fill="#000" />
+        </mask>
+      </defs>
+      <g class="glint" mask="url(#behind)">
+        <path class="glow" pathLength="1" filter="url(#soft)" d="" />
+        <path class="body" pathLength="1" filter="url(#warm)" d="" />
+        <path class="core" pathLength="1" d="" />
+      </g>
+    </svg>
+  </div></div>
+
+  <p class="step st1"><b>01</b><span>Work<i class="u"></i></span></p>
+  <p class="step st2"><b>02</b><span>Switch<i class="u"></i></span></p>
+  <p class="step st3"><b>03</b><span>Return<i class="u"></i></span></p>
+
+  <p class="url">thesuperhuman.us/building/threadline</p>
+  <p class="aside caption">Illustration of the intended experience.</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // The thread in artwork px, from pin 1 to where it meets the spool. Around pin 3 it runs over the
+  // head, down its right side and back behind it, and leaves from the head's upper left, as drawn.
+  const thread = 'M376 167 C 402 186, 440 228, 480 256 S 560 292, 610 298 S 680 284, 706 270 C 718 262, 736 266, 740 280 C 744 296, 752 308, 760 320 S 800 368, 830 392 S 880 424, 930 438 S 1010 444, 1050 432 C 1066 427, 1082 416, 1097 411 C 1110 408, 1121 414, 1126 427 C 1128 445, 1113 416, 1101 423 C 1092 429, 1084 439, 1078 450 C 1072 461, 1068 474, 1065 486 S 1056 515, 1042 540 S 1000 594, 970 618 S 930 660, 916 684 S 904 730, 908 750 S 920 786, 936 802 S 990 846, 1040 862 S 1110 874, 1150 867 S 1220 842, 1262 812';
+  document.querySelectorAll('.glint path').forEach(path => path.setAttribute('d', thread));
+
+  // Pins as fractions of the thread's length (measured with getPointAtLength). The light is a dash
+  // .05 long covering [f, f + .05]; it rests at a pin when its middle is there.
+  const PIN = [0, 0.2467, 0.5186];
+  const at = pin => pin - 0.025;
+  // Each step lights when the light reaches its pin: Work 700, Switch 2000, Return 3300.
+  const T = [700, 2000, 3300];
+  // Each layer's dash is centred on the glow's: body .004 in, core .01 in.
+  const glint = (sel, inset) => {
+    const dash = f => ({ strokeDashoffset: String(-(f + inset)) });
+    play(sel, [
+      [600, { ...dash(-0.06), easing: ease.out }],
+      [T[0], dash(at(PIN[0]))],
+      [T[0] + 300, { ...dash(at(PIN[0])), easing: ease.inOut }],
+      [T[1], dash(at(PIN[1]))],
+      [T[1] + 300, { ...dash(at(PIN[1])), easing: ease.inOut }],
+      [T[2], dash(at(PIN[2]))],
+      // Leaves pin 3 gently and enters the spool at speed (no slow crawl against the mask's edge).
+      [T[2] + 300, { ...dash(at(PIN[2])), easing: 'cubic-bezier(.45, .05, .75, .6)' }],
+      // Down past note 3 and into the spool, whose mask swallows it; reset while hidden.
+      [4700, dash(1.0)],
+      [4750, dash(1.05)],
+      [4751, dash(-0.06)],
+    ]);
+  };
+  glint('.glow', 0);
+  glint('.body', 0.004);
+  glint('.core', 0.01);
+  play('.glint', [[600, { opacity: 0 }], [T[0], { opacity: 1 }], [4650, { opacity: 1 }], [4750, { opacity: 0 }]]);
+
+  // Steps 02 and 03 wait, dimmed and 8 px lower, until the light reaches their pins; all three are lit in the poster.
+  const wait = { opacity: .22, transform: 'translateY(8px)' }, lit = { opacity: 1, transform: 'translateY(0)' };
+  play('.st2', [[600, { ...lit, easing: ease.out }], [850, wait], [T[1] - 50, { ...wait, easing: ease.out }], [T[1] + 250, lit]]);
+  play('.st3', [[600, { ...lit, easing: ease.out }], [850, wait], [T[2] - 50, { ...wait, easing: ease.out }], [T[2] + 250, lit]]);
+
+  // The rule under the current step draws in from the left and leaves to the right.
+  const OFF = [T[1], T[2], 4650];
+  ['.st1 .u', '.st2 .u', '.st3 .u'].forEach((rule, k) => play(rule, [
+    [T[k] + 50, { transform: 'scaleX(0)', transformOrigin: 'left', easing: ease.out }],
+    [T[k] + 400, { transform: 'scaleX(1)', transformOrigin: 'left' }],
+    [OFF[k] - 50, { transform: 'scaleX(1)', transformOrigin: 'right', easing: ease.in }],
+    [OFF[k] + 200, { transform: 'scaleX(0)', transformOrigin: 'right' }],
+  ]));
+
+  // The sentence slot: out 150 ms rising 6 px, in 200 ms rising from 8 px.
+  const show = (sel, on, off) => play(sel, [[on, { opacity: 0, transform: 'translateY(8px)', easing: ease.out }], [on + 200, { opacity: 1, transform: 'translateY(0)' }], [off, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [off + 150, { opacity: 0, transform: 'translateY(-6px)' }]]);
+  // Each sentence is gone before the next one starts, so two never share the slot.
+  play('.s0', [[0, { opacity: 1, transform: 'translateY(0)' }], [T[0] - 150, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [T[0], { opacity: 0, transform: 'translateY(-6px)' }], [4650, { opacity: 0, transform: 'translateY(8px)', easing: ease.out }], [4900, { opacity: 1, transform: 'translateY(0)' }]]);
+  show('.s1', T[0], T[1] - 150);
+  show('.s2', T[1], T[2] - 150);
+  show('.s3', T[2], 4500);
+</script>
+</body>
+</html>

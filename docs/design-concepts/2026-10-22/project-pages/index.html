@@ -1,0 +1,1179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Project pages: alternatives</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Regular.woff2) format('woff2'); font-weight: 400; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Bold.woff2) format('woff2'); font-weight: 700; }
+  @font-face { font-family: Libron; src: url(../../../../public/fonts/libron-v0.25/Libron-Italic.woff2) format('woff2'); font-style: italic; }
+  @font-face { font-family: 'Kazon Name Text'; src: url(../../../../public/fonts/kazon-name-text.woff2) format('woff2'); font-weight: 400; }
+
+  /* Site palette (src/styles/global.css) plus the board tones the 2026-10-19 board used. */
+  :root { --paper: #FBF8F2; --ink: #0E0E0E; --muted: #4A4A4A; --rule: #E8E3DA; --accent: #AE5534; --tint: #F5ECE5; --board: #ECE6DB; --edge: #d6cdbf;
+    /* Board only: the accent is 4.1:1 on the board background, so small accent text on the board uses this darker shade (4.9:1). */
+    --accent-board: #9C4A2E;
+    --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper));
+    --ease-site: cubic-bezier(.2, .7, .2, 1);
+    --serif: Libron, 'Iowan Old Style', Georgia, serif; --sans: Inter, system-ui, -apple-system, sans-serif; --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--board); color: var(--ink); font-family: var(--serif); -webkit-font-smoothing: antialiased; }
+  .board { max-width: 1280px; margin: 0 auto; padding: 56px clamp(16px, 5vw - 4px, 56px) 72px; }
+  @media (max-width: 600px) { .board { padding-top: 40px; } }
+  .narrow-only { display: none; }
+  @media (max-width: 700px) { .narrow-only { display: block; } .wide-only { display: none !important; } }
+  .eyebrow { font: 500 11px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-board); margin: 0 0 14px; }
+  .board > header h1 { font-size: clamp(36px, 6vw, 52px); line-height: 1.04; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 400; }
+  .board > header p.intro { font-size: clamp(17px, 2vw, 20px); line-height: 1.5; color: var(--muted); max-width: 60rem; margin: 0 0 12px; }
+  code { font: 12.5px var(--mono); background: #efe8dd; padding: 1px 4px; border-radius: 3px; overflow-wrap: anywhere; }
+  .marker { display: inline-block; font: 600 11px/1.3 var(--sans); color: var(--accent-board); border: 1px solid var(--accent-board); border-radius: 999px; padding: 2px 8px; letter-spacing: .02em; white-space: nowrap; vertical-align: 1px; }
+  a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--accent); }
+
+  .handled { margin-top: 28px; background: var(--paper); border: 1px dashed #c4ab92; border-radius: 8px; padding: 14px 18px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .handled b { font-weight: 600; }
+  .handled ul { margin: 8px 0 0; padding-left: 18px; }
+  .handled li { margin-bottom: 4px; }
+
+  .decisions { list-style: none; padding: 0; margin: 24px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 900px) { .decisions { grid-template-columns: 1fr 1fr; } }
+  .decisions li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 16px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .decisions li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+  /* The title link gets a 44px-tall tap area without moving the text. */
+  .decisions li a { display: block; width: fit-content; border: 0; padding-block: 10px 6px; margin-block: -10px -6px; }
+  .decisions li a:hover b { color: var(--accent); }
+  .decisions li .def { display: block; margin-top: 6px; font-weight: 600; color: var(--accent-board); }
+
+  section.study { margin-top: 64px; padding-top: 40px; border-top: 1px solid #d8d0c3; }
+  section.study > h2 { font-size: clamp(28px, 4vw, 36px); line-height: 1.12; letter-spacing: -.02em; font-weight: 400; margin: 0 0 12px; }
+  section.study > p.lead { font-size: 18px; line-height: 1.55; color: var(--muted); max-width: 62rem; margin: 0 0 12px; }
+  .decided { font: 14px/1.55 var(--sans); color: #2b2b2b; max-width: 62rem; margin: 0 0 8px; }
+  .decided b { font-weight: 600; }
+
+  .option { margin-top: 40px; }
+  .option-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .option-head h3 { font-size: 26px; font-weight: 400; margin: 0; letter-spacing: -.01em; line-height: 1.2; }
+  .option-head h3 .id { font: 500 13px/1 var(--mono); color: var(--accent-board); letter-spacing: .04em; margin-right: 8px; vertical-align: 3px; }
+  .badge { font: 600 11px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; white-space: nowrap; }
+  .badge.rec { background: var(--accent); color: var(--paper); }
+  .badge.no { background: transparent; color: var(--muted); border: 1px solid #b9ad9c; }
+  .why-rec { font: 14.5px/1.55 var(--sans); color: #2b2b2b; border-left: 3px solid var(--accent); background: var(--tint); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 6px 6px 0; }
+  .why-rec b { font-weight: 600; }
+
+  .views { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (min-width: 900px) {
+    .views.two { grid-template-columns: minmax(0, 1fr) 392px; }
+    .views.three { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+    .views.pair { grid-template-columns: 1fr 1fr; }
+  }
+  /* Split options: the 1280 frame takes the full width, then the phone frame sits beside the facts. */
+  @media (min-width: 900px) {
+    .option.split { display: grid; grid-template-columns: 392px minmax(0, 1fr); column-gap: 20px; align-items: start; }
+    .option.split > :not(.views):not(.facts) { grid-column: 1 / -1; }
+    .option.split > .views.two { display: contents; }
+    .option.split > .views.two > .frame:first-child { grid-column: 1 / -1; margin-bottom: 20px; }
+    .option.split > .facts { grid-column: 2; grid-template-columns: 1fr; margin-top: 0; }
+    .option.split > .facts .wide { grid-column: auto; }
+  }
+  @media (min-width: 560px) and (max-width: 899px) { .views.three { grid-template-columns: 1fr 1fr; } .views.three > :first-child { grid-column: 1 / -1; } }
+  @media (max-width: 559px) { .views.three { grid-template-columns: 1fr 1fr; gap: 12px; } .views.three > :first-child { grid-column: 1 / -1; } }
+  .frame { margin: 0; background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; overflow: hidden; box-shadow: 0 10px 24px -20px #0e0e0e66; min-width: 0; }
+  .frame-bar { font: 11px/1.3 var(--mono); color: var(--muted); padding: 9px 12px; border-bottom: 1px solid var(--rule); background: #f6f1e9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frame-bar b { color: var(--ink); font-weight: 500; }
+  .frame.phone { max-width: 392px; width: 100%; justify-self: center; }
+  .frame-note { font: 12px/1.5 var(--sans); color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--rule); background: #f6f1e9; margin: 0; }
+  .frame-note b { color: var(--ink); font-weight: 600; }
+  .shot { position: relative; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .same { font: 14px/1.55 var(--sans); color: #2b2b2b; background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; margin: 12px 0 0; }
+  .same b { font-weight: 600; }
+  .same > summary { cursor: pointer; padding-block: 11px; margin-block: -11px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 12px 0 0; font: 14px/1.4 var(--sans); }
+  .controls button { min-height: 44px; padding: 0 18px; border-radius: 3px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); font: 500 15px/1 var(--sans); cursor: pointer; }
+  @media (hover: hover) and (pointer: fine) { .controls button:hover { background: var(--ink); color: var(--paper); } }
+  .controls label { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+  .controls input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .controls .hint { color: var(--muted); }
+  :is(button, input, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .facts { margin: 16px 0 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  @media (min-width: 900px) { .facts { grid-template-columns: repeat(3, minmax(0, 1fr)); } .facts .wide { grid-column: 1 / -1; } }
+  .facts > div { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+  .facts dt { font: 600 11px/1.3 var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .facts dd { margin: 0; font: 14px/1.55 var(--sans); color: #2b2b2b; overflow-wrap: anywhere; }
+  .facts dd b { font-weight: 600; color: var(--ink); }
+
+  .combine { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  @media (min-width: 900px) { .combine { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .combine li { background: var(--paper); border: 1px solid var(--edge); border-radius: 8px; padding: 14px 16px; font: 14px/1.55 var(--sans); color: #2b2b2b; }
+  .combine li b { display: block; font: 400 19px/1.3 var(--serif); color: var(--ink); margin-bottom: 4px; }
+
+  /* ---------- Scaled stages: each recreation is laid out at its real width, then scaled to fit. ---------- */
+  .stage { position: relative; width: 100%; overflow: hidden; height: 240px; }
+  .stage > .site { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  .ov { position: absolute; inset: 0; pointer-events: none; }
+  .mk { position: absolute; left: 10px; width: 10px; border: 2px solid var(--accent); border-right: 0; }
+  .mk span, .gap-pill { position: absolute; font: 600 11px/1 var(--sans); background: var(--accent); color: var(--paper); padding: 4px 6px; border-radius: 3px; white-space: nowrap; }
+  .mk span { left: 16px; top: 50%; transform: translateY(-50%); }
+  .gap-pill { right: 6px; transform: translateY(-50%); }
+  .gap-pill.chapter { background: var(--ink); }
+
+  /* ---------- Recreation of the site, with the values from src/styles/global.css, project-journal.css,
+     building.astro, threadline.astro, BuildingIllustration.astro, ProjectTimeline.astro and
+     PayloadReviewIllustration.astro. Lengths are the computed values at 1280 and 390 wide. ---------- */
+  .site { background: var(--paper); color: var(--ink); font: 16px/1.6 var(--serif); text-align: left; overflow: hidden; position: relative; text-rendering: optimizeLegibility; }
+  .site * { box-sizing: border-box; }
+  :where(.site) :where(h1, h2, h3, h4, p, ol, ul, figure, blockquote, dl, dd) { margin: 0; padding: 0; font-weight: 400; }
+  .site p, .site li, .site figcaption { text-wrap: pretty; }
+  .site.w1280 { width: 1280px; }
+  .site.w390 { width: 390px; }
+  .site .a { color: var(--ink); border-bottom: 1px solid var(--accent); padding-bottom: 1px; }
+  .s-shell { max-width: 1232px; margin-inline: auto; padding-inline: 56px; }
+  .w390 .s-shell { padding-inline: 24px; }
+  .s-hdr { display: flex; align-items: center; justify-content: space-between; gap: 2rem; min-height: 112px; }
+  .s-name { font: 400 1.5rem/1.6 'Kazon Name Text', var(--serif); letter-spacing: -.04em; white-space: nowrap; }
+  .s-nav { display: flex; gap: 2rem; }
+  .s-nav span { padding: .4rem 0; border-bottom: 1px solid transparent; }
+  .s-nav .on { border-color: var(--accent); }
+  .s-hire { display: inline-flex; align-items: center; min-height: 44px; padding: .55rem 1.35rem; border: 1px solid var(--accent); border-radius: 3px; line-height: 1.4; }
+  .s-menu { display: none; }
+  .w390 .s-hdr { min-height: 90px; padding-block: 1.25rem; gap: 0; }
+  .w390 .s-nav, .w390 .s-hire { display: none; }
+  .w390 .s-menu { display: flex; align-items: center; gap: 14px; min-height: 44px; }
+  .s-menu i { width: 25px; display: grid; gap: 7px; }
+  .s-menu i::before, .s-menu i::after { content: ''; height: 1px; background: var(--accent); }
+  .pk { font-family: var(--mono); color: var(--accent); font-size: .6875rem; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 1rem; }
+  .slink { display: inline-flex; align-items: baseline; gap: .65rem; padding: .35rem 0; border-bottom: 1px solid var(--accent); line-height: 1.45; }
+  .slink i { font-style: normal; color: var(--accent); }
+  .s-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem; padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: .875rem; }
+  .s-foot .nm { font: 1.25rem 'Kazon Name Text', var(--serif); letter-spacing: -.03em; color: var(--ink); }
+  .s-foot span.l { display: flex; gap: 1.5rem; color: var(--ink); }
+
+  /* Building row (building.astro) */
+  .kr { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 51.2px; align-items: center; padding-block: 48px; }
+  .kc-h { font-size: 40.96px; line-height: 1.15; letter-spacing: -.025em; }
+  .kc .pk.kc-status { margin: .5rem 0 1.1rem; }
+  .kc-sub { font-size: 1.25rem; line-height: 1.4; }
+  .kc-act { display: grid; gap: .9rem; list-style: none; margin: 1.5rem 0 !important; }
+  .kc-act li { display: flex; gap: .85rem; align-items: flex-start; line-height: 1.45; }
+  .kc-act svg { flex-shrink: 0; margin-top: .05rem; }
+  .kc-ctx { border-top: 1px solid var(--rule); padding-top: 1rem; font-size: .9375rem; line-height: 1.55; color: var(--muted); }
+  .kc-links { display: flex; flex-wrap: wrap; align-items: center; margin-top: 1.3rem; gap: .75rem 1.35rem; font-size: .9375rem; }
+  .kd-figcap { color: var(--muted); font-size: 12px; font-style: italic; margin-top: 12.8px; }
+
+  /* Kaillera drawing (BuildingIllustration.astro): the plain-node variant (B); C's panels follow below. */
+  .kd { position: relative; height: 340px; color: var(--ink); --ill-line: #cbc5ba; }
+  .w390 .kd { height: 310px; }
+  .kd-lines { position: absolute; inset: 0; overflow: visible; }
+  .kd-lines .dash { stroke: var(--muted); stroke-dasharray: 5 6; stroke-width: 1.4; fill: none; }
+  .kd-lines .peer { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+  .kd-room { position: absolute; top: 0; left: 32%; width: 36%; }
+  .w390 .kd-room { left: 29%; width: 42%; }
+  .kd-label { font-size: 14px; line-height: 1.2; text-align: center; margin-bottom: 8px !important; }
+  .w390 .kd-label { font-size: 12px; }
+  .kd-panel { border: 1px solid var(--ill-line); border-radius: 3px; background: var(--paper); }
+  .kd-members { padding: 10.4px 12px; font-size: 12px; }
+  .w390 .kd-members { padding: 8.8px; font-size: 11.2px; }
+  .kd-members p { display: flex; align-items: center; gap: 9.6px; margin-bottom: 7.2px !important; }
+  .kd-m { width: 8.8px; height: 8.8px; border: 1px solid var(--ink); border-radius: 50%; background: var(--ink); flex: none; }
+  .kd-m.spec { background: var(--paper); }
+  .kd-invite { border: 1px solid var(--accent); border-radius: 3px; padding: 4.8px; text-align: center; margin-top: 10.4px; }
+  .kd-node { position: absolute; width: 25%; text-align: center; }
+  .kd-node.p1 { left: 0; top: 62%; }
+  .kd-node.p2 { right: 0; top: 62%; }
+  .kd-node.sp { width: 25%; left: 37.5%; bottom: 0; }
+  .kd-circle { width: 92px; height: 92px; margin: 0 auto; border: 1px solid var(--ill-line); border-radius: 50%; background: var(--paper); display: grid; place-items: center; }
+  .kd-node.sp .kd-circle { width: 70px; height: 70px; }
+  .w390 .kd-circle { width: 70px; height: 70px; }
+  .w390 .kd-node.sp .kd-circle { width: 54px; height: 54px; }
+  .kd-circle svg { width: 62px; height: 37px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .kd-node.sp .kd-circle svg { width: 31px; height: 38px; }
+  .w390 .kd-circle svg { width: 46px; height: 28px; }
+  .w390 .kd-node.sp .kd-circle svg { width: 24px; height: 29px; }
+  .kd-node .kd-label { margin: 8.8px 0 0 !important; }
+  .kd-watch { text-align: center; font-size: 12px; color: var(--muted); }
+  .kd-cap img { display: block; width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 3px; }
+  /* D6.1-C: three plain panels in a row, with Tally's values (BuildingIllustration.astro .panels, .panel, .flow-arrow) */
+  .ks { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 10.4px; color: var(--ink); --ill-line: #cbc5ba; }
+  .w390 .ks { gap: 5.6px; }
+  .ks-step { min-width: 0; }
+  .ks .kd-label { margin-bottom: 12.8px !important; }
+  .ks-panel { min-height: 190px; padding: 14.4px 10.4px; font-size: 12px; line-height: 1.35; }
+  .w390 .ks-panel { min-height: 175px; padding: 10.4px 6.4px; font-size: 10.4px; }
+  .ks-panel { display: flex; flex-direction: column; }
+  .ks-head { border-bottom: 1px solid var(--rule); padding-bottom: 8px; margin-bottom: 12px !important; }
+  .ks-panel .kd-members { padding: 0; font-size: inherit; display: flex; flex-direction: column; flex: 1; }
+  .ks-panel .kd-members p { margin-bottom: 14px !important; }
+  .ks-panel .kd-invite { margin-top: auto; }
+  .w390 .ks-panel .kd-members p { gap: 5px; margin-bottom: 11px !important; }
+  .w390 .ks-panel .kd-invite { padding: 4px 2px; }
+  .ks-arrow { color: var(--accent); font-size: 22.4px; padding-top: 25.6px; }
+  .w390 .ks-arrow { font-size: 16px; }
+  .ks-play { display: grid; justify-items: center; align-content: center; text-align: center; }
+  .ks-play svg { display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .ks-pair { display: flex; align-items: center; gap: 3px; }
+  .ks-pair > svg { width: 54px; height: 32px; }
+  .ks-pair > svg.ks-peer { width: 24px; height: 12px; stroke: var(--accent); stroke-width: 1.4; }
+  .ks-spec svg { width: 28px; height: 34px; }
+  .w390 .ks-pair > svg { width: 30px; height: 18px; }
+  .w390 .ks-pair > svg.ks-peer { width: 14px; height: 9px; }
+  .w390 .ks-spec svg { width: 18px; height: 22px; }
+  .ks-cap { margin: 4px 0 14px !important; }
+  .ks-cap:last-child { margin-bottom: 0 !important; color: var(--muted); }
+
+  /* Threadline page (ProjectLayout + project-journal.css + threadline.astro) */
+  .tp-intro { padding-block: 76.8px 40px; }
+  .w390 .tp-intro { padding-block: 48px 40px; }
+  .hero-b .tp-intro { padding-block: 76.8px 96px; }
+  .w390.hero-b .tp-intro { padding-block: 48px 56px; }
+  .hero-c .tp-intro, .hero-d .tp-intro { padding-block: 64px 64px; }
+  .w390.hero-c .tp-intro { padding-block: 32px 40px; }
+  .hero-d .tp-intro { padding-bottom: 48px; }
+  .w390.hero-d .tp-intro { padding-block: 32px 40px; }
+  .ptitle { font-size: 83.2px; line-height: 1.02; letter-spacing: -.045em; max-width: 18ch; }
+  .w390 .ptitle { font-size: 52px; }
+  .psub { font-size: 37.6px; line-height: 1.25; margin-top: 1rem !important; }
+  .w390 .psub { font-size: 26.4px; }
+  .pdesc { max-width: 54ch; margin-top: 1rem !important; color: var(--muted); font-size: 1.2rem; line-height: 1.55; }
+  .pstatus { display: flex; align-items: baseline; gap: .65rem; font: .75rem/1.7 var(--mono); margin-block: 1.5rem !important; }
+  .pstatus::before { content: ''; width: .65rem; height: .65rem; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+  .tp-meta { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .25rem 2rem; max-width: 40rem; margin-top: 2rem; padding-top: .75rem; border-top: 1px solid var(--rule); }
+  .tp-meta .pstatus { margin: 0 !important; }
+  .tp-fig { position: relative; margin-top: .5rem !important; }
+  .tp-img img { display: block; width: 100%; height: auto; border-radius: 3px; }
+  .tp-img.trim { height: 190px; overflow: hidden; position: relative; border-radius: 3px; }
+  .tp-img.trim img { position: absolute; left: 0; bottom: 0; }
+  .ts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; gap: 2rem; padding: 2rem 0 1rem !important; }
+  .ts-h { font-size: 1.6rem; line-height: 1.25; letter-spacing: -.01em; }
+  .ts .ts-p { font-size: 1rem; color: var(--muted); margin-top: .5rem !important; line-height: 1.6; }
+  .ts-a li { display: flex; gap: 1rem; align-items: baseline; }
+  .ts-a .num { font: .8rem var(--mono); color: var(--accent); }
+  .w390 .ts { grid-template-columns: 1fr; gap: 1.5rem; }
+  .w390 .ts-a li { border-left: 1px solid var(--rule); padding-left: 1rem; }
+  /* D6.3-B: the steps run on as one paragraph */
+  .ts-run { list-style: none; padding: 2rem 0 1rem !important; max-width: 46rem; font-size: 1.1rem; line-height: 1.75; color: var(--muted); }
+  .ts-run li { display: inline; }
+  .ts-run .ts-rh { color: var(--ink); font-size: 1.35rem; letter-spacing: -.01em; margin-right: .3em; }
+  .ts-run .ts-arr { color: var(--accent); margin: 0 .5em 0 .4em; }
+  /* D6.3-C: the stepper from threadline-detail-v2.png */
+  .ts-c { gap: 0; }
+  .ts-c .ts-head { display: flex; align-items: center; gap: 12px; }
+  .ts-c .circ { flex: none; width: 30px; height: 30px; border: 1px solid var(--accent); border-radius: 50%; display: grid; place-items: center; font: 500 13px/1 var(--sans); color: var(--accent); }
+  .ts-c .ln { flex: 1; height: 1px; background: var(--rule); margin-right: 16px; }
+  .ts-c li:last-child .ln { visibility: hidden; }
+  .ts-c .ts-p { padding-left: 42px; padding-right: 2rem; }
+  .w390 .ts-c { gap: 1.5rem; }
+  .w390 .ts-c li { position: relative; padding-left: 42px; }
+  .w390 .ts-c .ts-head { display: block; }
+  .w390 .ts-c .circ { position: absolute; left: 0; top: 2px; }
+  .w390 .ts-c .ln { display: none; }
+  .w390 .ts-c li:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 36px; bottom: calc(-1.5rem + 4px); width: 1px; background: var(--rule); }
+  .w390 .ts-c .ts-p { padding: 0; }
+  /* D6.3-D: thread and pins */
+  .ts-thread { position: relative; }
+  .ts-thread svg { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+  .ts-d { padding-top: 3rem !important; }
+  .w390 .ts-d { padding-top: 2rem !important; }
+  .w390 .ts-d li { padding-left: 30px; }
+  .thread-path { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; }
+  .thread-pin { fill: var(--accent); stroke: var(--paper); stroke-width: 2; transform-box: fill-box; transform-origin: center; }
+  .ts-thread:not(.drawn) .thread-pin { transform: scale(0); }
+  .ts-thread.drawn .thread-path { stroke-dashoffset: 0 !important; }
+  .ts-thread.drawn .thread-path { transition: stroke-dashoffset 1400ms var(--ease-site); }
+  .ts-thread.drawn .thread-pin { transform: scale(1); transition: transform 320ms var(--ease-site); }
+  .ts-thread.drawn .thread-pin:nth-of-type(2) { transition-delay: 450ms; }
+  .ts-thread.drawn .thread-pin:nth-of-type(3) { transition-delay: 900ms; }
+  .ts-thread.still .thread-path, .ts-thread.still .thread-pin { transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { .ts-thread .thread-path, .ts-thread .thread-pin { transition: none !important; } }
+  .tcap { font-size: .8rem; color: var(--muted); line-height: 1.65; margin-top: .75rem; }
+  .tsec { margin-block: 3.5rem; }
+  .shead { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .shead .h2 { flex-shrink: 1; min-width: 0; font-size: 36px; line-height: 1.2; letter-spacing: -.035em; }
+  .w390 .shead .h2 { font-size: 28px; }
+  .shead::after { content: ''; height: 1px; flex: 1; background: var(--rule); }
+  .tpair { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; margin-top: 1.5rem; }
+  .w390 .tpair { grid-template-columns: 1fr; gap: 32px; }
+  .tpair .h3 { font-size: 32px; line-height: 1.2; letter-spacing: -.01em; }
+  .w390 .tpair .h3 { font-size: 24.8px; }
+  .tpair p:not(.h3) { font-size: 1.1rem; line-height: 1.6; color: var(--muted); margin-top: .6rem !important; max-width: 45ch; }
+  .tstate { margin-top: 1.5rem !important; font-size: 1.15rem; line-height: 1.6; max-width: 33rem; }
+  .ttl { margin: 64px 0; }
+  .ttl .shead .h2 { font-size: 44px; letter-spacing: -.01em; }
+  .w390 .ttl .shead .h2 { font-size: 30px; }
+  .tclose { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1.5rem; padding-block: 2rem; border-top: 1px solid var(--rule); margin-top: 3rem; }
+  .tp-shell { padding-bottom: 2rem; }
+  /* D6.5 spacing variants, at 1280 */
+  .sp-b .tsec { margin-block: 76.8px; } .sp-b .ttl { margin: 76.8px 0; }
+  .sp-c .tsec { margin-block: 76.8px; } .sp-c .ttl { margin: 128px 0 76.8px; }
+  .sp-d .tsec { margin-block: 0; } .sp-d .tsec.idea { margin-top: 96px; } .sp-d .tsec.stands { margin-top: 40px; } .sp-d .ttl { margin: 112px 0 64px; }
+
+  /* Journal entry panel (ProjectTimeline.astro) and the Threadline drawing (PayloadReviewIllustration.astro) */
+  .tl-host { container-type: inline-size; background: var(--paper); padding: 0 20px; }
+  .frame.phone .tl-host { padding: 0 24px; }
+  .tl { border-top: 1px solid var(--rule); padding: 28px 0; font: 16px/1.6 var(--serif); color: var(--ink); }
+  .tl-meta { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
+  .tl-h3 { font-size: 38px; line-height: 1.2; letter-spacing: -.01em; margin: 12px 0; text-wrap: balance; }
+  @container (max-width: 540px) { .tl-h3 { font-size: 28px; } }
+  .tl-sum { font-size: 19px; line-height: 1.65; max-width: 33rem; margin: 0; text-wrap: pretty; }
+  .tl details { margin: 18px 0 24px; max-width: 33rem; font-size: 15px; line-height: 1.7; }
+  .tl summary { cursor: pointer; color: var(--accent); padding-block: 9px; margin-block: -9px; }
+  .tl .detail { white-space: pre-line; margin: 12px 0 0; }
+  .tl .tl-basis { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .flag { background: color-mix(in srgb, var(--accent) 16%, var(--paper)); outline: 1px dashed var(--accent); }
+
+  .pr-demo { --demo-frame: #c9d1d0; --demo-chrome: #eef1ef; --demo-chrome-text: #415250; --demo-editor: #172b35; --demo-editor-text: #dce9ec; --demo-tab: #29424e; --demo-tab-edge: #68adc7; --demo-dim: #9db4bf; --demo-selection: #32697c; --demo-veil: #0b1820b3; --demo-surface: #f4f7f7; --demo-surface-edge: #a9babf; --demo-button: #215d70; --demo-button-quiet: #dde5e6; --demo-control-edge: #bacacf; }
+  .pr-demo { max-width: 640px; margin: 22px 0 10px; border: 1px solid var(--demo-frame); border-radius: 9px; overflow: hidden; background: var(--paper); font: 13px/1.55 var(--sans); }
+  .pr-bar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 9px 14px; background: var(--demo-chrome); font-size: 11px; color: var(--demo-chrome-text); }
+  .pr-stage { position: relative; min-height: 255px; background: var(--demo-editor); padding: 13px; color: var(--demo-editor-text); }
+  .pr-tab { border-top: 2px solid var(--demo-tab-edge); width: fit-content; background: var(--demo-tab); padding: 6px 11px; font-size: 12px; }
+  .pr-doc { padding: 14px 12px; font: 13px/1.7 var(--mono); max-width: 100%; white-space: pre-wrap; }
+  .pr-doc .dim { color: var(--demo-dim); }
+  .pr-doc .sel { background: transparent; transition: background .3s; }
+  .pr-stage[data-step="2"] .sel { background: var(--demo-selection); }
+  .pr-veil { position: absolute; inset: 0; background: var(--demo-veil); display: grid; place-items: center; transition: opacity .3s; pointer-events: none; }
+  .pr-dialog { max-width: 350px; margin: 16px; padding: 18px; background: var(--demo-surface); color: var(--demo-editor); border: 1px solid var(--demo-surface-edge); border-radius: 6px; }
+  .pr-dialog strong { font-size: 14px; }
+  .pr-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .pr-fake { padding: 5px 10px; background: var(--demo-button); color: var(--paper); font-size: 11px; border-radius: 3px; }
+  .pr-fake.q { background: var(--demo-button-quiet); color: var(--demo-editor); }
+  .pr-note { position: absolute; bottom: 12px; right: 12px; left: 28%; padding: 10px 12px; background: var(--demo-surface); color: var(--demo-editor); border: 1px solid var(--demo-surface-edge); border-radius: 5px; opacity: 0; transform: translateY(10px); transition: opacity .3s, transform .3s; font-size: 11px; }
+  .pr-note .pr-actions { margin-top: 7px; }
+  .pr-stage:is([data-step="1"], [data-step="2"]) .pr-veil { opacity: 0; }
+  .pr-stage:is([data-step="1"], [data-step="2"]) .pr-note { opacity: 1; transform: none; }
+  .pr-caption { padding: 12px 14px; border-top: 1px solid var(--rule); min-height: 65px; font-size: 13px; margin: 0; }
+  .pr-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 14px 14px; }
+  .pr-controls button { min-height: 44px; white-space: nowrap; border: 1px solid var(--demo-control-edge); border-radius: 4px; padding: 8px 12px; color: var(--accent); background: var(--paper); font: 12px var(--sans); cursor: pointer; }
+  .pr-controls button:first-child { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  .pr-controls span { margin-left: auto; white-space: nowrap; color: var(--muted); font-size: 11px; }
+  .pr-label { max-width: 640px; font: 12px/1.6 var(--sans); color: var(--muted); margin: 0; }
+  @container (max-width: 540px) { .pr-note { left: 15px; } .pr-stage { min-height: 275px; } .pr-doc { font-size: 12px; padding-inline: 2px; } .pr-caption { min-height: 85px; } .pr-controls { gap: 6px; } .pr-controls button { padding: 8px 9px; } }
+  /* D6.2-C: the same steps drawn in the site's paper palette */
+  .pc-demo { max-width: 640px; margin: 22px 0 10px; font: 13px/1.55 var(--sans); }
+  .pc-phase { font: 500 13px/1.4 var(--sans); margin: 0 0 8px; }
+  .pc-stage { position: relative; min-height: 255px; border: 1px solid #cbc5ba; border-radius: 3px; background: var(--paper); padding: 16px 14px; overflow: hidden; }
+  .pc-doc { font: 13px/1.7 var(--mono); white-space: pre-wrap; color: var(--ink); }
+  .pc-doc .dim { color: var(--muted); }
+  .pc-doc .sel { transition: background .4s var(--ease-site); }
+  .pc-stage[data-step="2"] .sel { background: color-mix(in srgb, var(--accent) 18%, var(--paper)); }
+  .pc-veil { position: absolute; inset: 0; background: color-mix(in srgb, var(--paper) 74%, transparent); display: grid; place-items: center; transition: opacity .4s var(--ease-site); pointer-events: none; }
+  .pc-card { background: var(--paper); border: 1.5px solid var(--ink); border-radius: 3px; color: var(--ink); }
+  .pc-dialog { max-width: 340px; margin: 16px; padding: 16px 18px; }
+  .pc-dialog strong { font-size: 14px; font-weight: 600; }
+  .pc-dialog div:not(.pc-actions) { color: var(--muted); }
+  .pc-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .pc-btn { padding: 5px 10px; background: var(--accent); color: var(--paper); font-size: 11px; border-radius: 2px; }
+  .pc-btn.q { background: transparent; color: var(--ink); border: 1px solid var(--field-border); }
+  .pc-note { position: absolute; bottom: 12px; right: 12px; left: 28%; padding: 10px 12px; font-size: 11px; opacity: 0; transform: translateY(10px); transition: opacity .4s var(--ease-site), transform .4s var(--ease-site); }
+  .pc-note strong { font-weight: 600; }
+  .pc-note .pc-actions { margin-top: 7px; }
+  .pc-stage:is([data-step="1"], [data-step="2"]) .pc-veil { opacity: 0; }
+  .pc-stage:is([data-step="1"], [data-step="2"]) .pc-note { opacity: 1; transform: none; }
+  .pc-caption { padding: 12px 0; min-height: 65px; font-size: 13px; margin: 0; }
+  .pc-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 0 4px; }
+  .pc-controls button { min-height: 44px; white-space: nowrap; border: 1px solid var(--field-border); border-radius: 3px; padding: 8px 12px; color: var(--ink); background: var(--paper); font: 12px var(--sans); cursor: pointer; }
+  .pc-controls button:first-child { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  .pc-controls span { margin-left: auto; white-space: nowrap; color: var(--muted); font-size: 11px; }
+  @container (max-width: 540px) { .pc-note { left: 15px; } .pc-stage { min-height: 275px; } .pc-doc { font-size: 12px; } .pc-caption { min-height: 85px; } .pc-controls { gap: 6px; } .pc-controls button { padding: 8px 9px; } }
+  .still :is(.pr-veil, .pr-note, .sel, .pc-veil, .pc-note) { transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { :is(.pr-veil, .pr-note, .sel, .pc-veil, .pc-note) { transition: none !important; } }
+  /* D6.2-B: before and after in type */
+  .tb { max-width: 760px; margin: 22px 0 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 16px 20px; align-items: start; font: 14px/1.6 var(--sans); }
+  .tb-k { font: 500 14px/1.4 var(--sans); margin: 0 0 10px; }
+  .tb-ui { margin: 0 0 12px; padding: 10px 14px; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--tint) 60%, var(--paper)); }
+  .tb-ui strong { display: block; font-weight: 600; }
+  .tb-ui span { display: block; color: var(--muted); }
+  .tb-ui .acts { margin-top: 6px; font: 11px/1.5 var(--mono); color: var(--ink); letter-spacing: .02em; }
+  .tb p { margin: 0; color: #2b2b2b; }
+  .tb-mid { padding-top: 34px; text-align: center; color: var(--accent); font-size: 18px; }
+  .tb-mid::before { content: '→'; }
+  .tb-change { grid-column: 1 / -1; border-top: 1px solid var(--rule); padding-top: 10px; color: var(--muted); }
+  .tb-change b { color: var(--ink); font-weight: 500; }
+  @container (max-width: 600px) { .tb { grid-template-columns: 1fr; } .tb-mid { padding: 0; text-align: left; } .tb-mid::before { content: '↓'; } }
+
+  /* Spacing strips (D6.5): blocks and gaps drawn to scale from the 1280 measurements. */
+  .strip { background: var(--paper); border: 1px solid var(--edge); border-radius: 10px; padding: 12px 12px 14px; min-width: 0; }
+  .strip h4 { font: 500 12px/1.3 var(--mono); margin: 0 0 4px; color: var(--ink); }
+  .strip .delta { font: 12px/1.4 var(--sans); color: var(--muted); margin: 0 0 10px; }
+  .strip .delta b { color: var(--ink); font-weight: 600; }
+  .col { position: relative; width: 100%; }
+  .blk { position: relative; background: #f1ebe1; border: 1px solid #d9cfbf; border-radius: 3px; font: 11px/1.25 var(--sans); color: #2b2b2b; padding: 4px 6px; overflow: hidden; }
+  .blk.tiny { padding: 0 6px; }
+  .blk.tiny span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; }
+  .gp { position: relative; }
+  .gp i { position: absolute; left: 6px; top: 1px; bottom: 1px; width: 6px; border: 1.5px solid var(--accent); border-right: 0; }
+  .gp .rl { position: absolute; left: 0; right: 0; height: 1px; background: #bfb3a2; }
+  .gp b { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font: 600 10.5px/1 var(--sans); color: var(--accent-board); white-space: nowrap; }
+  .gp.fixed i { border-color: #b9ad9c; } .gp.fixed b { color: var(--muted); font-weight: 500; }
+  .gp.chapter i { border-color: var(--ink); } .gp.chapter b { color: var(--ink); }
+  .legend { font: 12.5px/1.5 var(--sans); color: var(--muted); margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<main class="board">
+  <header>
+    <p class="eyebrow">Design study · Hallmark audit follow-up · 2026-10-22</p>
+    <h1>Project pages: alternatives</h1>
+    <p class="intro">Five of your calls from the Hallmark audit about /building, the project pages and /audio, each beside what ships today. Nothing here is built. Pick one option per decision and reply with the IDs, for example “D6.1-B, D6.3-C”.</p>
+    <p class="intro">“Today” is cropped from the CI captures of PR #204 at <code>f0abd1f</code>, so it already includes that PR’s fixes listed below. The Threadline journal drawing only appears when the published feed carries its entry, which CI does not have, so its “today” is a live recreation from the component’s own markup and CSS. The alternatives are live recreations that use the site’s CSS values, its real copy and the approved Threadline picture; your browser sets their line breaks, so a line can break one word differently from CI. Gaps come from the CSS and were checked in the development preview at 1280 × 800 and 390 × 844; block heights in the D6.5 strips come from the CI captures.</p>
+    <p class="intro narrow-only">On a phone the 1280-wide previews are scaled down to fit. Pinch to zoom; they stay sharp.</p>
+    <div class="handled"><b>Already handled in PR #204, no decision needed.</b> These apply to every option below.
+      <ul>
+        <li>The Threadline drawing uses the paper token instead of pure white, and the site’s Inter and mono faces instead of the system fonts (Hallmark #4 and #12).</li>
+        <li>Building’s link tap areas are 44px tall from a pseudo-element, so the underlines sit where the house link puts them (part of #58).</li>
+        <li>Threadline’s “Where it stands” line and the journal text stop at the shared prose measure (#34).</li>
+        <li>Journal picker labels balance their lines instead of leaving one word behind (#24).</li>
+      </ul>
+    </div>
+    <ol class="decisions" aria-label="Decisions on this board">
+      <li><a href="#d6-1"><b>D6.1 · The Kaillera-next drawing</b></a>Browser windows, plain nodes, a three-panel sequence, or a real capture.<span class="def">Recommended: D6.1-B, plain labelled nodes</span></li>
+      <li><a href="#d6-2"><b>D6.2 · The Threadline drawn editor</b></a>Keep, set it in type, redraw it on paper, or hold it.<span class="def">Recommended: D6.2-A, keep until a real capture</span></li>
+      <li><a href="#d6-3"><b>D6.3 · Threadline’s three steps</b></a>Numerals beside, one run-in line, the study’s stepper, or a thread.<span class="def">Recommended: D6.3-C, the stepper from the study</span></li>
+      <li><a href="#d6-4"><b>D6.4 · Space around project titles</b></a>Keep, Hallmark’s ratio, one landing line, or a status line under a rule.<span class="def">Recommended: D6.4-C, one landing line</span></li>
+      <li><a href="#d6-5"><b>D6.5 · Section spacing</b></a>Keep, one shared step, a shared step with one chapter break, or spacing by content.<span class="def">Recommended: D6.5-C, shared step and one break</span></li>
+    </ol>
+  </header>
+
+  <!-- ================= D6.1 ================= -->
+  <section class="study" id="d6-1" aria-labelledby="d61-title">
+    <p class="eyebrow">D6.1 · Your call 10 · /building</p>
+    <h2 id="d61-title">Should the Kaillera-next drawing keep its little browser windows?</h2>
+    <p class="lead">Hallmark’s gate 47, redrawn interface chrome (building-2), flagged the “•••” title bars: the room and all three players are drawn as small browser windows. It suggested plain labelled nodes or a real capture. The verifier called it overstated, because the windows say “this runs in a browser”, which is the project’s point. The Tally and website drawings beside it use plain panels.</p>
+    <p class="decided"><b>Where it was decided:</b> no doc records the windows. They came in with commit <code>2beb025</code> (#159, “Explain Building projects through what visitors can do”). Publicist hard rule 11 limits Kaillera-next gameplay media to what you supply and rules out ROMs, so a gameplay picture is yours to provide; the landing page capture Home already uses shows no gameplay and no game files.</p>
+
+    <article class="option split" id="d61-a">
+      <div class="option-head"><h3><span class="id">D6.1-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building</b> · Kaillera-next row · 1280 wide · CI capture, PR #204</div>
+          <div class="shot"><img src="a-kaillera-desktop.webp" width="1280" height="500" alt="Today’s Kaillera-next row: a drawing of a game room window joined by dashed lines to three small browser windows for Player 1, Player 2 and a spectator, beside the project’s title, status, three actions and links." /></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · CI capture, PR #204 · drawing only</div>
+          <div class="shot"><img src="a-kaillera-phone.webp" width="390" height="380" alt="Today’s drawing at phone width: the game room window above three small browser windows." /></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. The room and the three players are small browser windows with a “•••” title bar, joined by dashed lines from the room and an accent two-way arrow between the players.</dd></div>
+        <div><dt>Why it could be better</dt><dd>One glance says every player is just a browser tab, which matches “Open a link and play”.</dd></div>
+        <div><dt>Trade-off</dt><dd>Four drawn browser windows in one picture, the pattern Hallmark flags. It is the only Building drawing with window chrome; Tally and the website use plain panels.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · local drawing tokens unchanged · decorative and hidden from screen readers · the drawing’s panels rise in turn only when motion is welcome · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d61-b">
+      <div class="option-head"><h3><span class="id">D6.1-B</span>Plain labelled nodes</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it puts the Kaillera drawing in the same plain-panel family as the Tally and website drawings beside it, and the line “Open a link and play supported retro games with friends.” already says it runs in a browser.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building</b> · Kaillera-next row · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" data-build="krow" data-v="b" role="img" aria-label="Recreation: the room as a plain panel and the players as circles holding person and controller marks, beside the unchanged Kaillera-next copy."></div>
+          <p class="frame-note">Study drawing. Production art would need image QA.</p>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation · drawing only</div>
+          <div class="stage" data-w="390" data-build="kphone" data-v="b" role="img" aria-label="Recreation at phone width: plain room panel above three circles."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The room becomes a plain panel like Tally’s, with the same member list and Invite friends. Each player becomes a circle holding the same person and controller marks; the spectator’s circle is smaller. Lines and labels stay.</dd></div>
+        <div><dt>Why it could be better</dt><dd>All three Building drawings read as one set. The relationship (one room, two players, one watcher) is clearer without four title bars competing with it.</dd></div>
+        <div><dt>Trade-off</dt><dd>The picture no longer says “browser” by itself; the line beside it carries that. Circles lean a little toward a network diagram.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/components/BuildingIllustration.astro</code> (Kaillera markup and CSS: drop <code>.browser-bar</code>, round the player frames, re-aim the three dashed lines and the arrow).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing local tokens (<code>--ill-line</code>, <code>--ink</code>, <code>--accent</code>, <code>--muted</code>) · decorative · same rise-in-turn motion and reduced-motion behaviour · a redrawn diagram: check its relationships per <code>docs/generated-image-qa.md</code> (explanatory diagrams) and inspect it in the page at 1440, 800, 390 and 320.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d61-c">
+      <div class="option-head"><h3><span class="id">D6.1-C</span>A three-panel sequence, like Tally’s</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building</b> · Kaillera-next row · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" data-build="krow" data-v="c" role="img" aria-label="Recreation: three plain panels joined by arrows. Create a room shows Player 1 and Invite friends; Friends join shows Player 1, Player 2 and Spectator; Play or watch shows two players joined by a two-way arrow above a spectator marked Watch only."></div>
+          <p class="frame-note">Study drawing. Production art would need image QA. The panel labels are new drawing text <span class="marker">copy change, needs approval</span></p>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation · drawing only</div>
+          <div class="stage" data-w="390" data-build="kphone" data-v="c" role="img" aria-label="Recreation at phone width: the same three panels side by side, as Tally’s drawing sits on a phone."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The diagram becomes a left-to-right sequence in plain panels, built like Tally’s Transactions → Categories → Monthly budget: <b>Create a room</b> (the game room with Player 1 and Invite friends), <b>Friends join</b> (the same room with the member list), <b>Play or watch</b> (two players joined by the accent two-way arrow, and a spectator marked Watch only). No windows, circles or dashed lines.</dd></div>
+        <div><dt>Why it could be better</dt><dd>It tells the visit in the same order as the three action lines beside it, so the picture explains what you do rather than how the parts connect. Same panels, arrows and rise-in-turn motion as Tally, so it needs no new drawing parts.</dd></div>
+        <div><dt>Trade-off</dt><dd>Two of the three Building drawings would share one composition, which can read as a template. The room stops being the visible hub. Four short panel labels are new copy and need your approval.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/components/BuildingIllustration.astro</code> (Kaillera markup and CSS: the absolute layout and the connections SVG go; it reuses <code>.panels</code>, <code>.panel-step</code>, <code>.panel</code> and <code>.flow-arrow</code>).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>New drawing labels (“Create a room”, “Friends join”, “Play or watch”, “Play together”) need approval; the rest reuses today’s drawing text · existing local tokens (<code>--ill-line</code>, <code>--ink</code>, <code>--accent</code>, <code>--muted</code>) · decorative and hidden from screen readers · the existing rise-in-turn motion applies unchanged and rests at once with reduced motion · a redrawn diagram: check its order and arrows per <code>docs/generated-image-qa.md</code> (explanatory diagrams) and inspect it in the page at 1440, 800, 390 and 320.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d61-d">
+      <div class="option-head"><h3><span class="id">D6.1-D</span>Real landing page capture</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building</b> · Kaillera-next row · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" data-build="krow" data-v="d" role="img" aria-label="Recreation: the Kaillera Next landing page capture from September 2026 in place of the drawing."></div>
+          <p class="frame-note">Caption <b>“Page capture · September 2026”</b> is a copy change and needs approval.</p>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation · picture only</div>
+          <div class="stage" data-w="390" data-build="kphone" data-v="d" role="img" aria-label="Recreation at phone width: the landing page capture."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The drawing is replaced by the September 2026 landing page capture that Home already shows on its Kaillera card, in a plain frame. The “Illustration” caption becomes a capture caption <span class="marker">copy change, needs approval</span>.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Real evidence instead of a drawing, and no drawn chrome. The same picture identifies the project on Home and Building (the simplification audit, <code>:630</code>, lets a project thumbnail repeat).</dd></div>
+        <div><dt>Trade-off</dt><dd>It shows the empty “no open rooms right now” state, not the room, players and watcher that the three action lines describe. A dark page between two light drawings. Its floating chat button is cut off at the right edge, and it will age as the Kaillera site changes.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/pages/building.astro</code> (a picture for the Kaillera row), <code>src/components/BuildingIllustration.astro</code> (drop the Kaillera drawing), the caption.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Caption needs approval · tokens unchanged · alt text reuses Home’s line (“Kaillera Next’s landing page, September 2026, with no open rooms.”) · reduced motion unaffected · a page capture, not generated art, so image QA does not apply; publicist hard rules 6 and 11 do, and this capture passes both: no address bar, private URL, hostname or console, and no gameplay or game files (it names the supported game in text, as the live page does).</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D6.2 ================= -->
+  <section class="study" id="d6-2" aria-labelledby="d62-title">
+    <p class="eyebrow">D6.2 · Your call 11 · /building/threadline journal</p>
+    <h2 id="d62-title">How should the “Inspect before sending” entry show the change until there is a real capture?</h2>
+    <p class="lead">Hallmark’s gate 47 (building-3) flagged the drawn editor: a mock tab, a dark editor and fake buttons. It suggested a real capture in a figure, or a before and after in type with no mock tab. The drawing appears in one place, the approved journal entry <code>threadline-inspect-before-sending-20260905</code>, and only when the published feed carries it. CI runs with an empty feed, so its captures do not show it; option A is a live recreation from the component’s markup and CSS.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/design-concepts/2026-09-09/threadline-detail-v2.png</code> (the before and after editor drawing with Play change, Next step and Reset), <code>docs/generated-image-qa.md:47-50</code> (real screenshots for product evidence; drawn interfaces only as clearly identified illustrations) and <code>docs/website-system-plan.md:174-176</code> (identify Threadline concepts until real evidence exists). A real capture is the planned replacement. It would come from you, since Threadline is not a publicist project, and it must pass publicist hard rule 6: no file paths, workspace names or hostnames in the title bar, sidebar or terminal.</p>
+    <div class="controls">
+      <label><input type="checkbox" id="pr-still" /> Preview the players below with reduced motion</label>
+      <span class="hint">With reduced motion, Play change moves one step with no transitions, as the site does.</span>
+    </div>
+
+    <article class="option" id="d62-a">
+      <div class="option-head"><h3><span class="id">D6.2-A</span>Keep as is</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it is the drawing from the study you selected, it is clearly labelled, the approved entry text says “This is an illustration of that interaction”, and the planned replacement is a real capture, so a redraw now would be done twice.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · journal panel · live recreation</div>
+          <div class="tl-host" data-entry="a"></div>
+        </figure>
+        <figure class="frame phone wide-only"><div class="frame-bar">390 wide · live recreation</div>
+          <div class="tl-host" data-entry="a" style="max-width:390px"></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. A dark drawn editor with a tab, an example document and the blocking dialog. Play change, Next step and Reset walk through three steps, and the label says it is not a Threadline screenshot.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The motion shows the actual point: the document stays usable behind the notification.</dd></div>
+        <div><dt>Trade-off</dt><dd>Keeps the mock tab and editor chrome Hallmark flagged, and its own fifteen local colours (now named as local tokens).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · local colours are named tokens · 44px buttons · reduced motion: Play moves one step with no transitions · labelled illustration, not evidence.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d62-b">
+      <div class="option-head"><h3><span class="id">D6.2-B</span>Before and after in type</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · journal panel · recreation</div>
+          <div class="tl-host" data-entry="b"></div>
+        </figure>
+        <figure class="frame phone wide-only"><div class="frame-bar">390 wide · recreation</div>
+          <div class="tl-host" data-entry="b" style="max-width:390px"></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Two short columns in the site’s type, “Before: the editor is blocked” and “After: inspect, then decide”, each quoting the real dialog or notification text, with the change line under them. No buttons, no animation, no drawn window.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Hallmark’s own suggested fix. Nothing to operate, it reads at once on a phone, and it uses only site tokens and faces.</dd></div>
+        <div><dt>Trade-off</dt><dd>Loses the picture of the document staying usable behind the notification, which is the point of the change. The label’s last sentence (“Animation timing is illustrative.”) no longer applies and would go <span class="marker">copy change, needs approval</span>.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/components/PayloadReviewIllustration.astro</code> (markup and CSS; the script goes).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Reuses the component’s existing strings · label edit needs approval · site tokens only · no controls or motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d62-c">
+      <div class="option-head"><h3><span class="id">D6.2-C</span>Same steps, drawn on paper</h3><span class="badge no">Alternative · motion</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · journal panel · live recreation</div>
+          <div class="tl-host" data-entry="c"></div>
+          <p class="frame-note">Study drawing. Production art would need image QA.</p>
+        </figure>
+        <figure class="frame phone wide-only"><div class="frame-bar">390 wide · live recreation</div>
+          <div class="tl-host" data-entry="c" style="max-width:390px"></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The same three steps and controls, drawn in the site’s paper palette: the example document as plain text on paper, the dialog as an ink-edged card over a light veil, the notification as a small card. No tab, no title bar, no dark editor.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Removes the mock chrome and the fifteen local colours while keeping the demonstration, and joins the plain-panel family of the Building drawings. Button edges move to <code>--field-border</code> (3.4:1).</dd></div>
+        <div><dt>Trade-off</dt><dd>Looks less like VS Code, so the idea is a little less concrete. Still a drawing, and a redraw that a real capture later replaces.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/components/PayloadReviewIllustration.astro</code> (markup and CSS; the script stays).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change apart from dropping the “Drawn editor · Illustrative steps” bar · site tokens only · 44px buttons · transitions 400ms on the house curve; with reduced motion the steps change at once · study drawing: inspect it in the page per <code>docs/generated-image-qa.md</code> before release.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d62-d">
+      <div class="option-head"><h3><span class="id">D6.2-D</span>Text only until a capture</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · journal panel · recreation, details opened</div>
+          <div class="tl-host" data-entry="d"></div>
+        </figure>
+        <figure class="frame phone wide-only"><div class="frame-bar">390 wide · recreation</div>
+          <div class="tl-host" data-entry="d" style="max-width:390px"></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The entry keeps its text and “What was checked”; the drawing is removed until a real capture exists.</dd></div>
+        <div><dt>Why it could be better</dt><dd>No drawn interface at all, and nothing to maintain.</dd></div>
+        <div><dt>Trade-off</dt><dd>The approved text (highlighted) says “This is an illustration of that interaction”, which would then point at nothing. Changing that sentence means a new approved draft for this entry (publicist hard rule 2).</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S</b> in code (<code>src/lib/project-story.ts</code> stops attaching the drawing), blocked on a re-approved entry.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Needs an approved text change · no controls · no motion · no art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D6.3 ================= -->
+  <section class="study" id="d6-3" aria-labelledby="d63-title">
+    <p class="eyebrow">D6.3 · Your call 12 · /building/threadline</p>
+    <h2 id="d63-title">How should Threadline’s three steps sit under the picture?</h2>
+    <p class="lead">Hallmark flagged the small “01, 02, 03” numerals beside each heading as a tag beside a heading (gate 54, building-8), and the three equal columns as a feature grid (building-9, which the verifier called overstated). It is a real ordered list: Work, then Switch, then Return.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/design-concepts/2026-09-09/threadline-detail-v2.png</code>. The study you selected draws the steps as a stepper under the picture: three numbers in small circles joined by a hairline. The shipped page kept the order, added a line under each step, and set the numbers as mono numerals. The picture is trimmed to its bottom edge in these frames.</p>
+
+    <article class="option split" id="d63-a">
+      <div class="option-head"><h3><span class="id">D6.3-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 wide · CI capture, PR #204</div>
+          <div class="shot"><img src="a-steps-desktop.webp" width="1280" height="400" alt="Today’s steps at 1280: under the picture, three columns: 01 Work, 02 Switch, 03 Return, each numeral in small mono type beside its heading, with a line of text under each." /></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · CI capture, PR #204</div>
+          <div class="shot"><img src="a-steps-phone.webp" width="390" height="640" alt="Today’s steps on a phone: the picture, then the three steps stacked, each with a hairline on its left and the numeral beside the heading." /></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. Mono numerals in the accent colour beside each heading, in three equal columns; on phones the steps stack with a hairline on the left.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Compact, and the order is plain.</dd></div>
+        <div><dt>Trade-off</dt><dd>The tag-beside-heading pattern, and three equal columns that read like a feature row. It also departs from the study’s stepper.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · numerals hidden from screen readers; the list announces the order · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d63-b">
+      <div class="option-head"><h3><span class="id">D6.3-B</span>One run-in line</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" data-build="steps" data-v="b" role="img" aria-label="Recreation: under the picture, the three steps run on as one short paragraph: Work, its line, an accent arrow, Switch, its line, an arrow, Return, its line."></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" data-build="steps" data-v="b" role="img" aria-label="Recreation at phone width: the same run-in paragraph wrapping under the picture."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The numerals and the three columns go. The steps run on as one short paragraph under the picture, like a caption: each heading in ink, its line in muted text, and a small accent arrow before Switch and Return. Phones get the same paragraph, wrapped.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Reads as one sequence that explains the picture, and clears both Hallmark points (no tag beside a heading, no feature row) with no art or motion, and the picture’s caption follows closer.</dd></div>
+        <div><dt>Trade-off</dt><dd>Less scannable: the headings stop standing out as headings, so the steps read as prose. It departs from the study’s stepper, and the arrows are one more accent mark on the page.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/pages/building/threadline.astro</code> (each numeral becomes an arrow before steps 2 and 3; the list, headings and lines set inline in CSS).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · the headings stay <code>h2</code> inside the ordered list, so screen readers keep the order · arrows hidden from screen readers; <code>--accent</code> on <code>--paper</code> is 4.78:1 · site tokens only · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d63-c">
+      <div class="option-head"><h3><span class="id">D6.3-C</span>The stepper from the study</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it is the composition you selected in the study, and the joining hairline turns three equal columns into one sequence without adding motion or copy.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 wide · recreation</div>
+          <div class="stage" data-w="1280" data-build="steps" data-v="c" role="img" aria-label="Recreation: numbers in small accent circles before each heading, joined by a hairline from one step to the next."></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · recreation</div>
+          <div class="stage" data-w="390" data-build="steps" data-v="c" role="img" aria-label="Recreation at phone width: the circles run down a vertical hairline beside the stacked steps."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Each number sits in a small accent circle before its heading, and a hairline runs from each heading to the next circle. The line under each step stays. On phones the circles run down a vertical hairline in place of today’s left rule.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Reads as steps in order, not three features. Matches the study you selected.</dd></div>
+        <div><dt>Trade-off</dt><dd>A number still sits beside each heading, so Hallmark may still count it, though as a stepper rather than a tag. The study’s “Play walkthrough” is not part of this.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/pages/building/threadline.astro</code> (markup for the circle and hairline, CSS).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · <code>--accent</code> on <code>--paper</code> is 4.78:1 for the numbers and the circle edges · the hairline is <code>--rule</code> and decorative · numbers stay hidden from screen readers · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d63-d">
+      <div class="option-head"><h3><span class="id">D6.3-D</span>A thread and three pins</h3><span class="badge no">Alternative · motion</span></div>
+      <div class="controls" style="margin:0 0 12px">
+        <button type="button" id="thread-replay">Replay</button>
+        <label><input type="checkbox" id="thread-still" /> Preview with reduced motion</label>
+        <span class="hint">It plays once when the steps come into view. With reduced motion the thread and pins are simply there.</span>
+      </div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 wide · live recreation</div>
+          <div class="stage" data-w="1280" data-build="steps" data-v="d" role="img" aria-label="Recreation: a terracotta thread runs above the three steps with a pin at each one; the numerals are gone."></div>
+          <p class="frame-note">Study drawing. Production art would need image QA.</p>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 wide · live recreation</div>
+          <div class="stage" data-w="390" data-build="steps" data-v="d" role="img" aria-label="Recreation at phone width: the thread runs down the left of the stacked steps with a pin at each heading."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The numerals go. A thin terracotta thread runs above the three steps (down the left on phones) with a pin at each step, echoing the thread in the picture. When the steps come into view the thread draws once from left to right over 1.4 seconds on the house curve, the pins appear in turn, and it rests.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Ties the steps to the picture’s idea, one thread keeping work together, and the order reads from the thread’s direction. A small part of the “same life across the site” you asked for on September 27.</dd></div>
+        <div><dt>Trade-off</dt><dd>The first scroll motion on Threadline (today it has only the page fade), while your call 6 (reveal motion across the site) is still open. A decorative drawing to maintain. Without numbers, a skimming reader gets the order from position only.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/pages/building/threadline.astro</code> (SVG, CSS and a <code>runMotion()</code> call through <code>src/scripts/scroll-scenes.ts</code>).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · <code>--accent</code> stroke and <code>--ease-site</code> · decorative SVG hidden from screen readers · reduced motion: thread and pins at rest, nothing draws · rests within 2 seconds (the system plan allows five) · study drawing: production art would need image QA.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D6.4 ================= -->
+  <section class="study" id="d6-4" aria-labelledby="d64-title">
+    <p class="eyebrow">D6.4 · Your call 25 · project pages and /building</p>
+    <h2 id="d64-title">How much space should sit above and below the title block on project pages?</h2>
+    <p class="lead">Hallmark’s gate 44a (building-17, ws-19) wants a hero’s bottom padding at least 1.3 times its top, so the title block sits optically high. On a 1280 screen the project pages have 77px above the breadcrumb and 48px from the journal link to the picture; /building has 64 above and 48 below. On phones it is 48 above and 48 below. Measuring turned up one more thing: project titles land 13px lower than the /building title (breadcrumb at 189 against 176; 16px lower on a phone), so the two titles don’t line up during the page fade between them.</p>
+    <p class="decided"><b>Where it was decided:</b> the selected studies <code>daily-detail-v1.png</code>, <code>threadline-detail-v2.png</code> and <code>article-desktop-v1.png</code> all draw about as much space above the title block as below it. The <code>.primary-page</code> top padding (<code>src/styles/global.css:266</code>, line 240 at the audit commit) is shared by /building, /work, /writing and /audio; project pages set their own in <code>src/styles/project-journal.css:2</code>. Each frame shows the first screen only; the brackets mark the space above and below the title block.</p>
+
+    <article class="option split" id="d64-a">
+      <div class="option-head"><h3><span class="id">D6.4-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 × 800 · CI capture, PR #204</div>
+          <div class="shot"><img src="a-hero-desktop.webp" width="1280" height="800" alt="Today’s Threadline first screen at 1280 by 800: header, breadcrumb, title, subtitle, description, status and journal link, then the top of the picture." />
+            <div class="ov"><div class="mk" style="top:14%;height:9.625%"><span>77</span></div><div class="mk" style="top:68.75%;height:6%"><span>48</span></div></div></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 × 844 · CI capture, PR #204</div>
+          <div class="shot"><img src="a-hero-phone.webp" width="390" height="844" alt="Today’s Threadline first screen on a phone: header, title block and the whole picture." />
+            <div class="ov"><div class="mk" style="top:10.664%;height:5.687%"><span>48</span></div><div class="mk" style="top:60.664%;height:5.687%"><span>48</span></div></div></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. 77px above and 48 below on a computer (40 of padding plus the picture’s 8); 48 and 48 on a phone. The picture starts at 598, so 202px of it shows in the first screen at 1280 × 800.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Generous air above the big title, and the picture follows soon after the link.</dd></div>
+        <div><dt>Trade-off</dt><dd>Top-heavy by Hallmark’s rule, and project titles sit lower than the /building title.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Unchanged.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d64-b">
+      <div class="option-head"><h3><span class="id">D6.4-B</span>Hallmark’s ratio</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" data-build="first" data-v="b" role="img" aria-label="Recreation: 77 pixels above the title block and 104 below it, so the picture starts lower."></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 × 844 · recreation</div>
+          <div class="stage" data-w="390" data-build="first" data-v="b" role="img" aria-label="Recreation at phone width: 48 above, 64 below."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The top stays at 77; the bottom grows to 104 (96 of padding plus the picture’s 8). Phones: 48 above, 64 below. /building’s gap under its introduction grows from 48 to 83 on a computer.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Passes gate 44a as written; the title block sits optically higher.</dd></div>
+        <div><dt>Trade-off</dt><dd>Adds space the studies don’t show. The picture drops about 55px, so only about 147px of it shows in the first screen at 1280 × 800. Titles still sit lower than on /building.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/project-journal.css</code> (<code>.project-intro</code> padding), <code>src/pages/building.astro</code> (<code>.selected-projects</code> margin).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · fluid <code>clamp()</code> values like today’s · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d64-c">
+      <div class="option-head"><h3><span class="id">D6.4-C</span>One landing line</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it matches the studies’ even spacing, lands every page title on the same line as /building and /writing, and changes one rule on each of two pages.</p>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" data-build="first" data-v="c" role="img" aria-label="Recreation: 64 pixels above the title block, the same as /building, and 72 below it."></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 × 844 · recreation</div>
+          <div class="stage" data-w="390" data-build="first" data-v="c" role="img" aria-label="Recreation at phone width: 32 above, 48 below."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The top takes the value /building and /writing already use (64 on a computer, 32 on a phone), so the breadcrumb lands exactly where the Building kicker does. The bottom becomes 72 to the picture on a computer and stays 48 on a phone. /building’s gap under its introduction becomes 64 on a computer and stays 48 on a phone.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Even top and bottom, like the studies. The title no longer shifts between /building and a project page, and the bottom is no longer smaller than the top.</dd></div>
+        <div><dt>Trade-off</dt><dd>The bottom is about 1.1 times the top, not the 1.3 Hallmark asks for. The picture moves 11px lower on a computer (191px of it in the first screen) and 16px higher on a phone.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/project-journal.css</code> (<code>.project-intro</code> padding becomes <code>clamp(2rem, 5vw, 4rem) clamp(2.5rem, 5vw, 4rem)</code>), <code>src/pages/building.astro</code> (<code>.selected-projects</code> margin <code>clamp(3rem, 5vw, 4rem)</code>).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · reuses the clamp() <code>.primary-page</code> already uses; the shared rule itself is untouched · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option split" id="d64-d">
+      <div class="option-head"><h3><span class="id">D6.4-D</span>Status line under a rule</h3><span class="badge no">Alternative</span></div>
+      <div class="views two">
+        <figure class="frame"><div class="frame-bar">thesuperhuman.us<b>/building/threadline</b> · 1280 × 800 · recreation</div>
+          <div class="stage" data-w="1280" data-build="first" data-v="d" role="img" aria-label="Recreation: the status and the Development journal link share one line under a hairline that closes the title block."></div>
+        </figure>
+        <figure class="frame phone"><div class="frame-bar">390 × 844 · recreation</div>
+          <div class="stage" data-w="390" data-build="first" data-v="d" role="img" aria-label="Recreation at phone width: status and link on one line under a hairline."></div>
+        </figure>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>The same top as C. The status and the Development journal link share one line under a hairline, which closes the title block, then 56px to the picture (48 on a phone).</dd></div>
+        <div><dt>Why it could be better</dt><dd>The rule gives the block a clear bottom edge, so the ratio matters less. The block gets shorter: the picture rises 29px on a computer (231px of it in the first screen).</dd></div>
+        <div><dt>Trade-off</dt><dd>A composition the studies don’t show. On phones the status and the link don’t fit on one line, so they stack under the rule and the picture rises only 15px.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> <code>src/layouts/ProjectLayout.astro</code> (wrap the status and link), <code>src/styles/project-journal.css</code>, <code>src/pages/building.astro</code> (as C).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Copy unchanged · <code>--rule</code> hairline · no motion · no new art.</dd></div>
+      </dl>
+    </article>
+  </section>
+
+  <!-- ================= D6.5 ================= -->
+  <section class="study" id="d6-5" aria-labelledby="d65-title">
+    <p class="eyebrow">D6.5 · Your call 26 · /building, project pages and /audio</p>
+    <h2 id="d65-title">Should sections keep even spacing, and should the pages share it?</h2>
+    <p class="lead">Hallmark (building-18, audio-20) flagged that every section on a page gets the same padding, which reads mechanical, and suggested varying it by content: tighter for a status line, more room for the journal. Measuring turned up a second point: each page is even inside, but the pages don’t share one value. /audio puts 40px each side of its rules, /building 48, Threadline’s sections sit 56 apart and its journal 64.</p>
+    <p class="decided"><b>Where it was decided:</b> <code>docs/audits/2026-09-26/website-simplification-audit.md:627-628</code> (“Framing is standardized, content is not”: shared heading, spacing, alignment and link behaviour), <code>docs/website-system-plan.md:29-31</code> (shared page gutters and section spacing in the layout layer) and <code>docs/design-concepts/2026-09-09/audio-page-v3.png</code>. Each option shows the whole Threadline page at 1280 with its gaps labelled, and /building and /audio as strips drawn to scale from the PR #204 CI captures at 1280. The gap under the title block belongs to D6.4 and is held at today’s value (grey).</p>
+
+    <article class="option" id="d65-a">
+      <div class="option-head"><h3><span class="id">D6.5-A</span>Keep as is</h3><span class="badge no">Today</span></div>
+      <div class="views three">
+        <figure class="frame"><div class="frame-bar"><b>/building/threadline</b> · 1280 · recreation of today</div>
+          <div class="stage" data-w="1280" data-build="page" data-v="a" role="img" aria-label="Recreation of today’s whole Threadline page with the gaps between sections labelled 56, 56, 64 and 64."></div>
+        </figure>
+        <div class="strip" data-strip="building" data-v="a"></div>
+        <div class="strip" data-strip="audio" data-v="a"></div>
+      </div>
+      <details class="same"><summary><b>CI captures for reference</b> (PR #204: Threadline, /building, /audio at 1280)</summary>
+        <div class="views three" style="margin-top:12px">
+          <div class="shot"><img src="a-page-threadline.webp" width="520" height="988" alt="CI capture of today’s whole Threadline page." loading="lazy" /></div>
+          <div class="shot"><img src="a-page-building.webp" width="520" height="1016" alt="CI capture of today’s whole /building page." loading="lazy" /></div>
+          <div class="shot"><img src="a-page-audio.webp" width="520" height="1004" alt="CI capture of today’s whole /audio page." loading="lazy" /></div>
+        </div>
+      </details>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Nothing. At 1280: /building rows 48 each side of their rules; /audio 40 each side; Threadline’s sections 56 apart and the journal 64. On phones: 40 each side on /building and /audio; 56 and 64 on project pages.</dd></div>
+        <div><dt>Why it could be better</dt><dd>A calm, predictable rhythm; each page is even inside.</dd></div>
+        <div><dt>Trade-off</dt><dd>Hallmark’s point stands, and the same job uses four different numbers across pages.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd>None.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>Unchanged.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d65-b">
+      <div class="option-head"><h3><span class="id">D6.5-B</span>One shared step</h3><span class="badge no">Alternative</span></div>
+      <div class="views three">
+        <figure class="frame"><div class="frame-bar"><b>/building/threadline</b> · 1280 · recreation</div>
+          <div class="stage" data-w="1280" data-build="page" data-v="b" role="img" aria-label="Recreation of the whole Threadline page with every gap between sections at 77."></div>
+        </figure>
+        <div class="strip" data-strip="building" data-v="b"></div>
+        <div class="strip" data-strip="audio" data-v="b"></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Gaps between unruled sections take the shared <code>--site-section-space</code> (77 on a computer, 48 on a phone). Ruled divisions use one named value: 48 each side on a computer and 40 on a phone, today’s Building rows. /audio moves from 40 to 48 each side on a computer; project pages from 56 and 64 to 77.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Finishes the shared spacing you agreed (S5, S12): one source instead of four local numbers.</dd></div>
+        <div><dt>Trade-off</dt><dd>Even more even, so Hallmark’s point stands. Pages grow a little on a computer; Threadline is 48px shorter on a phone.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> <code>src/styles/global.css</code> (one named value beside <code>--site-section-space</code>), <code>src/styles/project-journal.css</code>, <code>src/components/ProjectTimeline.astro</code>, <code>src/pages/audio/index.astro</code>, <code>src/pages/building.astro</code> (named values, no visible change).</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · existing <code>--site-section-space</code> plus one named value · reduced motion unaffected (sections still rise in once) · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d65-c">
+      <div class="option-head"><h3><span class="id">D6.5-C</span>Shared step and one chapter break</h3><span class="badge rec">Recommended</span></div>
+      <p class="why-rec"><b>Why this one:</b> it keeps the shared, even framing you agreed and answers Hallmark with one named break per page, instead of a different number for every section.</p>
+      <div class="views three">
+        <figure class="frame"><div class="frame-bar"><b>/building/threadline</b> · 1280 · recreation</div>
+          <div class="stage" data-w="1280" data-build="page" data-v="c" role="img" aria-label="Recreation of the whole Threadline page: gaps of 77, with one larger break of 128 before the Development journal."></div>
+        </figure>
+        <div class="strip" data-strip="building" data-v="c"></div>
+        <div class="strip" data-strip="audio" data-v="c"></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>B, plus one larger break (128 on a computer, 112 on a phone) before the part of each page that changes job: the Development journal on project pages, Earlier prototypes on /building, Start on /audio.</dd></div>
+        <div><dt>Why it could be better</dt><dd>Each page gets a rhythm (the work, then the record or the action) while every other gap stays shared and even.</dd></div>
+        <div><dt>Trade-off</dt><dd>One more named value to document and keep to one use per page. Pages grow a little more than with B.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>S.</b> The files in B, plus a <code>--site-chapter-space</code> value in <code>src/styles/global.css</code> and its three uses.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · shared tokens only · reduced motion unaffected · no new art.</dd></div>
+      </dl>
+    </article>
+
+    <article class="option" id="d65-d">
+      <div class="option-head"><h3><span class="id">D6.5-D</span>Spacing by content</h3><span class="badge no">Alternative</span></div>
+      <div class="views three">
+        <figure class="frame"><div class="frame-bar"><b>/building/threadline</b> · 1280 · recreation</div>
+          <div class="stage" data-w="1280" data-build="page" data-v="d" role="img" aria-label="Recreation of the whole Threadline page with varied gaps: 96, then 40 around the status, 112 before the journal, 64 after it."></div>
+        </figure>
+        <div class="strip" data-strip="building" data-v="d"></div>
+        <div class="strip" data-strip="audio" data-v="d"></div>
+      </div>
+      <dl class="facts">
+        <div><dt>What changes</dt><dd>Each section gets the space its content asks for, as Hallmark suggests: on project pages 96 from the picture to the idea, “Where it stands” tightened to 40, 112 before the journal; /building rows 64 each side and Earlier prototypes closer; /audio gives Listen more room and Start less.</dd></div>
+        <div><dt>Why it could be better</dt><dd>The most varied rhythm, with the evidence given the most air.</dd></div>
+        <div><dt>Trade-off</dt><dd>Many local numbers, so every new page has to choose its own, against the “framing is standardized” decision; the same kind of section looks different from page to page.</dd></div>
+        <div class="wide"><dt>Effort · files</dt><dd><b>M.</b> The files in B, with local values per section.</dd></div>
+        <div class="wide"><dt>Guideline check</dt><dd>No copy change · local values rather than shared tokens · reduced motion unaffected · no new art.</dd></div>
+      </dl>
+    </article>
+    <p class="legend">Strips: blocks are sections, drawn to scale from the PR #204 CI captures at 1280. Accent brackets are gaps an option sets; grey brackets are held by D6.4 or unchanged; a black bracket is the chapter break. A horizontal line inside a gap is a hairline rule. The figure above each strip is the change in page length against today.</p>
+  </section>
+
+  <!-- ================= Combine and decide ================= -->
+  <section class="study" id="combine" aria-labelledby="combine-title">
+    <p class="eyebrow">How they combine</p>
+    <h2 id="combine-title">The five choices are independent</h2>
+    <ul class="combine">
+      <li><b>D6.4 and D6.5 split the vertical space</b>D6.4 sets the gap under the title block and D6.5 every gap after it. D6.4-C (64 under the title on a computer) sits well with D6.5-B or C (77 between sections).</li>
+      <li><b>D6.1-B with D6.2-C</b>Puts the Kaillera and Threadline drawings in one plain-panel family with the Tally and website drawings. With D6.2-A, the Threadline drawing stays dark until its real capture.</li>
+      <li><b>D6.3 and D6.4 meet on one screen</b>Both change Threadline’s first screen at 1280, but neither depends on the other.</li>
+    </ul>
+  </section>
+
+  <section class="study" id="decide" aria-labelledby="decide-title">
+    <p class="eyebrow">Your calls</p>
+    <h2 id="decide-title">What I need from you</h2>
+    <ol class="decisions">
+      <li><b>D6.1 · Kaillera-next drawing</b>A keep the browser windows · B plain labelled nodes · C a three-panel sequence, like Tally’s · D real landing page capture.<span class="def">Recommended: D6.1-B</span></li>
+      <li><b>D6.2 · Threadline drawn editor</b>A keep until a real capture · B before and after in type · C same steps drawn on paper · D text only until a capture.<span class="def">Recommended: D6.2-A</span></li>
+      <li><b>D6.3 · Threadline steps</b>A keep · B one run-in line · C the stepper from the study · D a thread and three pins.<span class="def">Recommended: D6.3-C</span></li>
+      <li><b>D6.4 · Space around project titles</b>A keep · B Hallmark’s ratio · C one landing line · D status line under a rule.<span class="def">Recommended: D6.4-C</span></li>
+      <li><b>D6.5 · Section spacing</b>A keep · B one shared step · C shared step and one chapter break · D spacing by content.<span class="def">Recommended: D6.5-C</span></li>
+    </ol>
+    <p class="decided" style="margin-top:14px">If you pick D6.1-C, D6.1-D or D6.2-B, also approve the drawing labels, caption or label wording shown with that option.</p>
+  </section>
+</main>
+
+<script>
+  const IMG = '../../../../src/assets/';
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  /* ---------- Real copy ---------- */
+  const T = {
+    subtitle: 'Pick up where you left off.',
+    description: 'I’m building a VS Code tool that keeps a task with its relevant code locations, so developers can return to it after switching work.',
+    status: 'Internal prototype',
+    steps: [['Work', 'A task, its code, and the context that belongs to it.'], ['Switch', 'Something else needs your attention.'], ['Return', 'Pick up the related work inside your editor.']],
+  };
+  const K = {
+    title: 'Kaillera-next', status: 'In development · playable demo build',
+    description: 'Open a link and play supported retro games with friends.',
+    actions: ['Create a room and invite friends.', 'Play together or watch a game.', 'Use a controller or touch controls.'],
+    detail: 'Built on EmulatorJS, with rollback and host-streaming modes.',
+    links: ['Explore build', 'GitHub', 'Development journal'],
+  };
+  const ENTRY = {
+    meta: 'Sep 5, 2026 · Built', title: 'Inspect before sending',
+    summary: 'The recap confirmation dialog blocked the editor while you were deciding whether to send the displayed payload. A nonblocking notification now leaves the review document usable, while sending still requires choosing Generate Recap.',
+    detail1: 'In a development check, the review document remained usable while the sending decision stayed open. Sending still required an explicit choice.',
+    detail2a: 'This is an illustration of that interaction', detail2b: ', not a test recording or a released feature. No speed or productivity improvement has been measured.',
+  };
+  const PHASES = ['Before: the editor is blocked', 'Change: use a nonblocking notification', 'After: inspect, then decide'];
+  const CAPTIONS = ['Before the fix, the decision covers the document and blocks editor interaction.', 'Removing the modal option moves the decision out of the document’s way.', 'The document stays usable. The notification still waits for an explicit decision before sending.'];
+
+  /* ---------- Shared pieces ---------- */
+  const header = () => `<div class="s-shell s-hdr"><span class="s-name">Kazon Wilson</span><span class="s-nav"><span>Work</span><span class="on">Building</span><span>Writing</span><span>Audio</span><span>About</span></span><span class="s-hire">Work with me</span><span class="s-menu">Menu <i></i></span></div>`;
+  const footer = () => `<div class="s-shell"><div class="s-foot"><span class="nm">Kazon Wilson</span><span class="l"><span>GitHub</span><span>LinkedIn</span><span>Audio</span><span>Work with me</span><span>Support my work</span><span>Privacy</span></span><span>The Superhuman Group LLC · 2026</span></div></div>`;
+
+  /* ---------- Threadline ---------- */
+  function intro(v) {
+    const top = `<p class="pk"><span class="a">Building</span> / Threadline</p><p class="ptitle">Threadline</p><p class="psub">${T.subtitle}</p><p class="pdesc">${T.description}</p>`;
+    const status = `<p class="pstatus">${T.status}</p>`;
+    const link = `<span class="slink">Development journal <i>↓</i></span>`;
+    return v === 'd' ? `<div class="tp-intro">${top}<div class="tp-meta">${status}${link}</div></div>` : `<div class="tp-intro">${top}${status}${link}</div>`;
+  }
+  function steps(v) {
+    if (v === 'c') return `<ol class="ts ts-c">${T.steps.map(([h, p], i) => `<li><div class="ts-head"><span class="circ">${i + 1}</span><p class="ts-h">${h}</p><i class="ln"></i></div><p class="ts-p">${p}</p></li>`).join('')}</ol>`;
+    if (v === 'd') return `<div class="ts-thread"><svg aria-hidden="true"><path class="thread-path" /><circle class="thread-pin" r="6" /><circle class="thread-pin" r="6" /><circle class="thread-pin" r="6" /></svg><ol class="ts ts-d">${T.steps.map(([h, p]) => `<li><p class="ts-h">${h}</p><p class="ts-p">${p}</p></li>`).join('')}</ol></div>`;
+    if (v === 'b') return `<ol class="ts-run">${T.steps.map(([h, p], i) => `<li>${i ? '<span class="ts-arr" aria-hidden="true">→</span>' : ''}<span class="ts-rh">${h}</span> ${p}</li>`).join(' ')}</ol>`;
+    return `<ol class="ts ts-a">${T.steps.map(([h, p], i) => `<li><span class="num">0${i + 1}</span><div><p class="ts-h">${h}</p><p class="ts-p">${p}</p></div></li>`).join('')}</ol>`;
+  }
+  const figure = (v, trim) => `<div class="tp-fig"><div class="tp-img${trim ? ' trim' : ''}"><img src="${IMG}site/threadline-v1.webp" width="1536" height="1024" alt=""></div>${steps(v)}<p class="tcap">Illustration of the intended experience.</p></div>`;
+  const sections = () => `<section class="tsec idea"><div class="shead"><p class="h2">Behind the idea</p></div><div class="tpair"><div><p class="h3">Less reconstructing.</p><p>Returning to a task should feel familiar. I’m exploring how to keep its context close to the code.</p></div><div><p class="h3">You keep the final say.</p><p>Suggestions should be inspectable and correctable. The developer decides what belongs together.</p></div></div></section><section class="tsec stands"><div class="shead"><p class="h2">Where it stands</p></div><p class="tstate">This is an internal prototype. The journal below distinguishes plans, built pieces, checks and availability as the work develops.</p></section><section class="ttl"><div class="shead"><p class="h2">Development journal</p></div><p>No published milestones yet.</p></section><div class="tclose"><span class="slink">Back to Building <i>←</i></span><span class="slink">Get in touch <i>→</i></span></div>`;
+
+  /* ---------- Kaillera ---------- */
+  const ICONS = ['<rect x="3" y="6" width="18" height="15" rx="2"/><path d="M8 6V3h8v3"/>', '<path d="M3 12h18M6 7v10M12 4v16M18 7v10"/>', '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>'];
+  const kCopy = () => `<div class="kc"><p class="kc-h">${K.title}</p><p class="pk kc-status">${K.status}</p><p class="kc-sub">${K.description}</p><ul class="kc-act">${K.actions.map((a, i) => `<li><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${ICONS[i]}</svg><span>${a}</span></li>`).join('')}</ul><div class="kc-ctx"><p>${K.detail}</p></div><div class="kc-links">${K.links.map(l => `<span class="slink">${l} <i>→</i></span>`).join('')}</div></div>`;
+  const memberRows = `<p><span class="kd-m"></span> Player 1</p><p><span class="kd-m"></span> Player 2</p><p><span class="kd-m spec"></span> Spectator</p>`;
+  const members = `<div class="kd-members">${memberRows}<div class="kd-invite">Invite friends</div></div>`;
+  const G_PLAYER = '<svg viewBox="18 5 74 44"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/><path d="M68 21h13l5 17c1 4-2 5-5 2l-5-4-5 4c-3 3-6 2-5-2z"/><path d="M69 28h7m-3-3v6"/><circle cx="80" cy="29" r="1"/></svg>';
+  const G_SPEC = '<svg viewBox="20 5 36 44"><circle cx="38" cy="17" r="8"/><path d="M23 44v-4c0-17 30-17 30 0v4"/></svg>';
+  function kDrawing(v) {
+    if (v === 'd') return `<figure class="kd-cap"><img src="${IMG}projects/kaillera-next/landing-2026-09-26.webp" width="1252" height="835" alt=""><figcaption class="kd-figcap">Page capture · September 2026</figcaption></figure>`;
+    if (v === 'c') return `<figure class="kfig"><div class="ks">`
+      + `<div class="ks-step"><p class="kd-label">Create a room</p><div class="kd-panel ks-panel"><p class="ks-head">Game room</p><div class="kd-members"><p><span class="kd-m"></span> Player 1</p><div class="kd-invite">Invite friends</div></div></div></div><span class="ks-arrow">→</span>`
+      + `<div class="ks-step"><p class="kd-label">Friends join</p><div class="kd-panel ks-panel"><p class="ks-head">Game room</p><div class="kd-members">${memberRows}</div></div></div><span class="ks-arrow">→</span>`
+      + `<div class="ks-step"><p class="kd-label">Play or watch</p><div class="kd-panel ks-panel ks-play"><div class="ks-pair">${G_PLAYER}<svg class="ks-peer" viewBox="0 0 24 12"><path d="M2 6H22M6.5 1.5 2 6l4.5 4.5M17.5 1.5 22 6l-4.5 4.5"/></svg>${G_PLAYER}</div><p class="ks-cap">Play together</p><div class="ks-spec">${G_SPEC}</div><p class="ks-cap">Watch only</p></div></div>`
+      + `</div><figcaption class="kd-figcap">Illustration</figcaption></figure>`;
+    const room = `<div class="kd-panel">${members}</div>`;
+    return `<figure class="kfig"><div class="kd" data-nodes><svg class="kd-lines" aria-hidden="true"></svg><div class="kd-room"><p class="kd-label">Game room</p><div class="kd-box">${room}</div></div>`
+      + `<div class="kd-node p1"><div class="kd-circle">${G_PLAYER}</div><p class="kd-label">Player 1</p></div>`
+      + `<div class="kd-node p2"><div class="kd-circle">${G_PLAYER}</div><p class="kd-label">Player 2</p></div>`
+      + `<div class="kd-node sp"><div class="kd-circle">${G_SPEC}</div><p class="kd-label">Spectator</p><p class="kd-watch">Watch only</p></div></div><figcaption class="kd-figcap">Illustration</figcaption></figure>`;
+  }
+
+  /* ---------- Build every stage ---------- */
+  document.querySelectorAll('[data-build]').forEach(stage => {
+    const w = +stage.dataset.w, v = stage.dataset.v, kind = stage.dataset.build;
+    const cls = `site w${w}`;
+    let html = '', extra = '';
+    if (kind === 'krow') html = `<div class="${cls}"><div class="s-shell"><div class="kr">${kDrawing(v)}${kCopy()}</div></div></div>`;
+    if (kind === 'kphone') html = `<div class="${cls}"><div class="s-shell" style="padding-block:24px">${kDrawing(v)}</div></div>`;
+    if (kind === 'steps') html = `<div class="${cls}"><div class="s-shell" style="padding-block:24px 32px">${figure(v, w === 1280)}</div></div>`;
+    if (kind === 'first') { html = `<div class="${cls} tp hero-${v}" style="height:${w === 1280 ? 800 : 844}px">${header()}<div class="s-shell tp-shell">${intro(v)}${figure('a')}</div></div>`; extra = 'marks'; }
+    if (kind === 'page') { html = `<div class="${cls} tp sp-${v}">${header()}<div class="s-shell tp-shell">${intro('a')}${figure('a')}${sections()}</div>${footer()}</div>`; extra = 'gaps'; }
+    stage.innerHTML = html + '<div class="ov"></div>';
+    stage.dataset.extra = extra;
+  });
+
+  /* Layout positions are read with offsetTop and offsetLeft, which ignore the scale transform. */
+  const off = (el, root) => { let x = 0, y = 0; while (el && el !== root) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; } return { x, y }; };
+  function box(el, root) { const p = off(el, root); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight }; }
+
+  function drawNodes() {
+    document.querySelectorAll('.kd[data-nodes]').forEach(kd => {
+      const W = kd.offsetWidth, H = kd.offsetHeight;
+      const room = box(kd.querySelector('.kd-box'), kd);
+      const c = sel => { const b = box(kd.querySelector(sel + ' .kd-circle'), kd); return { x: b.x + b.w / 2, y: b.y + b.h / 2, r: b.w / 2 }; };
+      const p1 = c('.p1'), p2 = c('.p2'), sp = c('.sp');
+      const rx = room.x + room.w / 2, ry = room.y + room.h / 2;
+      const y = p1.y, a = p1.x + p1.r + 6, b = p2.x - p2.r - 6;
+      kd.querySelector('.kd-lines').setAttribute('viewBox', `0 0 ${W} ${H}`);
+      kd.querySelector('.kd-lines').setAttribute('width', W); kd.querySelector('.kd-lines').setAttribute('height', H);
+      kd.querySelector('.kd-lines').innerHTML = `<path class="dash" d="M${rx} ${ry} L${p1.x} ${p1.y} M${rx} ${ry} L${p2.x} ${p2.y} M${rx} ${ry} L${sp.x} ${sp.y}"/><path class="peer" d="M${a} ${y} H${b} M${a + 8} ${y - 6} L${a} ${y} L${a + 8} ${y + 6} M${b - 8} ${y - 6} L${b} ${y} L${b - 8} ${y + 6}"/>`;
+    });
+  }
+
+  /* ---------- D6.3-D thread ---------- */
+  function buildThreads() {
+    document.querySelectorAll('.ts-thread').forEach(t => {
+      const svg = t.querySelector('svg'), path = t.querySelector('.thread-path'), pins = [...t.querySelectorAll('.thread-pin')];
+      const lis = [...t.querySelectorAll('li')];
+      const phone = !!t.closest('.w390');
+      let pts, d;
+      if (!phone) {
+        pts = lis.map(li => ({ x: li.offsetLeft + 6, y: 16 }));
+        d = `M${pts[0].x - 6} ${pts[0].y - 4}`;
+        pts.forEach((p, i) => { if (i === 0) { d += ` L${p.x} ${p.y}`; return; } const q = pts[i - 1], dx = p.x - q.x; d += ` C${q.x + dx * .3} ${q.y + 22} ${q.x + dx * .7} ${q.y + 22} ${p.x} ${p.y}`; });
+        const last = pts[pts.length - 1];
+        d += ` C${last.x + 60} ${last.y + 14} ${last.x + 120} ${last.y + 10} ${last.x + 170} ${last.y + 18}`;
+        svg.setAttribute('width', t.offsetWidth); svg.setAttribute('height', 48);
+      } else {
+        pts = lis.map(li => { const h = li.querySelector('.ts-h'); return { x: 8, y: h.offsetTop + h.offsetHeight / 2 }; });
+        d = `M${pts[0].x - 2} ${pts[0].y - 28} L${pts[0].x} ${pts[0].y}`;
+        pts.forEach((p, i) => { if (i === 0) return; const q = pts[i - 1], dy = p.y - q.y; d += ` C${q.x + 12} ${q.y + dy * .3} ${q.x + 12} ${q.y + dy * .7} ${p.x} ${p.y}`; });
+        const last = pts[pts.length - 1];
+        d += ` C${last.x + 10} ${last.y + 30} ${last.x + 2} ${last.y + 50} ${last.x + 10} ${last.y + 70}`;
+        svg.setAttribute('width', 40); svg.setAttribute('height', t.offsetHeight);
+      }
+      path.setAttribute('d', d);
+      pins.forEach((pin, i) => { pin.setAttribute('cx', pts[i].x); pin.setAttribute('cy', pts[i].y); });
+      const len = Math.ceil(path.getTotalLength());
+      path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+    });
+  }
+  const threadStill = () => document.getElementById('thread-still').checked || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function playThreads() {
+    const still = threadStill();
+    document.querySelectorAll('.ts-thread').forEach(t => {
+      t.classList.remove('drawn'); t.classList.toggle('still', still);
+      void t.offsetWidth; t.classList.add('drawn');
+    });
+  }
+  document.getElementById('thread-replay').addEventListener('click', playThreads);
+  document.getElementById('thread-still').addEventListener('change', playThreads);
+
+  /* ---------- D6.4 brackets and D6.5 gap labels, kept in the unscaled overlay ---------- */
+  /* Fractional positions in the site's own pixels: rectangles divided by the current scale. */
+  function measure(stage) {
+    const site = stage.firstElementChild, marks = [];
+    const sr = site.getBoundingClientRect(), k = sr.width / site.offsetWidth;
+    const top = el => (el.getBoundingClientRect().top - sr.top) / k, bottom = el => (el.getBoundingClientRect().bottom - sr.top) / k;
+    const introContentBottom = intro => bottom(intro) - parseFloat(getComputedStyle(intro).paddingBottom);
+    if (stage.dataset.extra === 'marks') {
+      const intro = site.querySelector('.tp-intro');
+      marks.push({ type: 'mk', y1: bottom(site.querySelector('.s-hdr')), y2: top(intro.querySelector('.pk')) },
+        { type: 'mk', y1: introContentBottom(intro), y2: top(site.querySelector('.tp-img')) });
+    }
+    if (stage.dataset.extra === 'gaps') {
+      const bl = [site.querySelector('.tp-fig'), site.querySelector('.tsec.idea'), site.querySelector('.tsec.stands'), site.querySelector('.ttl'), site.querySelector('.tclose')];
+      marks.push({ type: 'gap', y1: introContentBottom(site.querySelector('.tp-intro')), y2: top(bl[0]), fixed: true });
+      for (let i = 1; i < bl.length; i++) marks.push({ type: 'gap', y1: bottom(bl[i - 1]), y2: top(bl[i]), chapter: stage.dataset.v === 'c' && i === 3 });
+    }
+    stage._marks = marks;
+  }
+  function placeMarks(stage, s) {
+    const ov = stage.querySelector(':scope > .ov');
+    if (!stage._marks || !ov) return;
+    ov.innerHTML = stage._marks.map(m => {
+      const v = Math.round(m.y2 - m.y1);
+      if (m.type === 'mk') return `<div class="mk" style="top:${m.y1 * s}px;height:${(m.y2 - m.y1) * s}px"><span>${v}</span></div>`;
+      return `<span class="gap-pill${m.chapter ? ' chapter' : ''}" style="top:${(m.y1 + m.y2) / 2 * s}px;${m.fixed ? 'background:#7a7166' : ''}">${v}</span>`;
+    }).join('');
+  }
+
+  /* ---------- Journal entries for D6.2 ---------- */
+  const prDemo = () => `<figure class="pr-demo" data-player="pr"><div class="pr-bar"><strong data-phase>${PHASES[0]}</strong><span>Drawn editor · Illustrative steps</span></div><div class="pr-stage" data-stage data-step="0"><div class="pr-tab">Recap payload review · Markdown</div><div class="pr-doc"><span class="dim">Illustrative review document</span><br><span class="sel">Review the recap information
+before choosing to share it.</span><br><span class="dim">Example text; no project data shown.</span></div><div class="pr-veil"><div class="pr-dialog"><strong>Generate this recap?</strong><div>The modal decision blocks interaction with the document behind it.</div><div class="pr-actions" aria-hidden="true"><span class="pr-fake">Generate Recap</span><span class="pr-fake q">Cancel</span></div></div></div><div class="pr-note"><strong>Nothing has been sent yet.</strong><br>Inspect the document, then decide.<div class="pr-actions" aria-hidden="true"><span class="pr-fake">Generate Recap</span><span class="pr-fake q">Cancel</span></div></div></div><figcaption class="pr-caption" data-caption aria-live="polite">${CAPTIONS[0]}</figcaption><div class="pr-controls"><button data-play type="button">Play change</button><button data-next type="button">Next step</button><button data-reset type="button">Reset</button><span data-count>1 / 3</span></div></figure><p class="pr-label">Illustration, not a Threadline screenshot. Example document, simplified dialog. Animation timing is illustrative.</p>`;
+  const pcDemo = () => `<figure class="pc-demo" data-player="pc"><p class="pc-phase" data-phase>${PHASES[0]}</p><div class="pc-stage" data-stage data-step="0"><div class="pc-doc"><span class="dim">Illustrative review document</span><br><span class="sel">Review the recap information
+before choosing to share it.</span><br><span class="dim">Example text; no project data shown.</span></div><div class="pc-veil"><div class="pc-card pc-dialog"><strong>Generate this recap?</strong><div>The modal decision blocks interaction with the document behind it.</div><div class="pc-actions" aria-hidden="true"><span class="pc-btn">Generate Recap</span><span class="pc-btn q">Cancel</span></div></div></div><div class="pc-card pc-note"><strong>Nothing has been sent yet.</strong><br>Inspect the document, then decide.<div class="pc-actions" aria-hidden="true"><span class="pc-btn">Generate Recap</span><span class="pc-btn q">Cancel</span></div></div></div><figcaption class="pc-caption" data-caption aria-live="polite">${CAPTIONS[0]}</figcaption><div class="pc-controls"><button data-play type="button">Play change</button><button data-next type="button">Next step</button><button data-reset type="button">Reset</button><span data-count>1 / 3</span></div></figure><p class="pr-label">Illustration, not a Threadline screenshot. Example document, simplified dialog. Animation timing is illustrative.</p>`;
+  const tbDemo = () => `<div class="tb"><div><p class="tb-k">${PHASES[0]}</p><div class="tb-ui"><strong>Generate this recap?</strong><span>The modal decision blocks interaction with the document behind it.</span><span class="acts">Generate Recap · Cancel</span></div><p>${CAPTIONS[0]}</p></div><div class="tb-mid" aria-hidden="true"></div><div><p class="tb-k">${PHASES[2]}</p><div class="tb-ui"><strong>Nothing has been sent yet.</strong><span>Inspect the document, then decide.</span><span class="acts">Generate Recap · Cancel</span></div><p>${CAPTIONS[2]}</p></div><p class="tb-change"><b>${PHASES[1]}.</b> ${CAPTIONS[1]}</p></div><p class="pr-label">Illustration, not a Threadline screenshot. Example document, simplified dialog.</p>`;
+  document.querySelectorAll('.tl-host').forEach(host => {
+    const v = host.dataset.entry;
+    const open = v === 'd' ? ' open' : '';
+    const flagged = v === 'd' ? `<span class="flag">${ENTRY.detail2a}</span>` : ENTRY.detail2a;
+    const body = v === 'a' ? prDemo() : v === 'b' ? tbDemo() : v === 'c' ? pcDemo() : '';
+    host.innerHTML = `<article class="tl"><p class="tl-meta">${ENTRY.meta}</p><p class="tl-h3">${ENTRY.title}</p><p class="tl-sum">${ENTRY.summary}</p><details${open}><summary>What was checked</summary><p class="detail">${ENTRY.detail1}\n\n${flagged}${ENTRY.detail2b}</p><p class="tl-basis">Basis: repository verified</p></details>${body}</article>`;
+  });
+
+  /* The players behave like PayloadReviewIllustration.astro's script. */
+  const prStill = () => document.getElementById('pr-still').checked || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.querySelectorAll('[data-player]').forEach(root => {
+    const stage = root.querySelector('[data-stage]'), play = root.querySelector('[data-play]');
+    let step = 0, timer;
+    const stop = () => { clearTimeout(timer); timer = undefined; play.textContent = 'Play change'; };
+    const show = n => { step = n; stage.dataset.step = String(n); root.querySelector('[data-phase]').textContent = PHASES[n]; root.querySelector('[data-caption]').textContent = CAPTIONS[n]; root.querySelector('[data-count]').textContent = `${n + 1} / 3`; };
+    const sync = () => root.classList.toggle('still', prStill());
+    root.querySelector('[data-next]').addEventListener('click', () => { sync(); stop(); show((step + 1) % 3); });
+    root.querySelector('[data-reset]').addEventListener('click', () => { sync(); stop(); show(0); });
+    play.addEventListener('click', () => {
+      sync();
+      if (timer) { stop(); return; }
+      if (prStill()) { show((step + 1) % 3); return; }
+      show(0); play.textContent = 'Pause';
+      const advance = () => { show(step + 1); if (step < 2) timer = setTimeout(advance, 1800); else stop(); };
+      timer = setTimeout(advance, 1800);
+    });
+  });
+  document.getElementById('pr-still').addEventListener('change', () => document.querySelectorAll('[data-player]').forEach(r => r.classList.toggle('still', prStill())));
+
+  /* ---------- D6.5 strips: block heights from the PR #204 CI captures at 1280, gaps from the CSS ---------- */
+  const STRIPS = {
+    building: { title: '/building', blocks: [['Title block', 216], ['Tally', 440], ['Kaillera-next', 417], ['Personal website', 416], ['Earlier prototypes', 267], ['Journal note', 30]],
+      gaps: [ // [above rule, below rule] or a plain number; first gap is held by D6.4
+        { a: [48], b: [48], c: [48], d: [48], fixed: true },
+        { a: [48, 48], b: [48, 48], c: [48, 48], d: [64, 64] },
+        { a: [48, 48], b: [48, 48], c: [48, 48], d: [64, 64] },
+        { a: [48, 48], b: [48, 48], c: [48, 80], d: [64, 40], chapter: 'c' },
+        { a: [48, 24], b: [48, 24], c: [48, 24], d: [40, 24], fixed: 'abc' },
+      ] },
+    audio: { title: '/audio', blocks: [['Title block and audio links', 508], ['Listen', 717], ['What I work on', 428], ['Start', 193]],
+      gaps: [
+        { a: [48, 40], b: [48, 48], c: [48, 48], d: [48, 64] },
+        { a: [40, 40], b: [48, 48], c: [48, 48], d: [64, 40] },
+        { a: [40, 40], b: [48, 48], c: [48, 80], d: [40, 24], chapter: 'c' },
+      ], tail: { a: 40, b: 48, c: 48, d: 40 } },
+  };
+  const sum = arr => arr.reduce((x, y) => x + y, 0);
+  function pageLength(def, v) { return sum(def.blocks.map(b => b[1])) + sum(def.gaps.map(g => sum(g[v]))) + (def.tail ? def.tail[v] : 0); }
+  document.querySelectorAll('[data-strip]').forEach(el => {
+    const def = STRIPS[el.dataset.strip], v = el.dataset.v, k = .22;
+    const delta = pageLength(def, v) - pageLength(def, 'a');
+    let col = '';
+    def.blocks.forEach(([name, h], i) => {
+      const tiny = h * k < 18;
+      col += `<div class="blk${tiny ? ' tiny' : ''}" style="height:${Math.max(h * k, 16)}px"><span>${name}</span></div>`;
+      const g = def.gaps[i];
+      if (!g) return;
+      const parts = g[v], total = sum(parts);
+      const fixed = g.fixed === true || (typeof g.fixed === 'string' && g.fixed.includes(v));
+      const chapter = g.chapter && g.chapter.includes(v);
+      const rule = parts.length === 2 ? `<span class="rl" style="top:${parts[0] * k}px"></span>` : '';
+      const label = parts.length === 2 ? `${total} (${parts[0]} + ${parts[1]})` : `${total}`;
+      col += `<div class="gp${fixed ? ' fixed' : ''}${chapter ? ' chapter' : ''}" style="height:${total * k}px">${rule}<i></i><b>${label}</b></div>`;
+    });
+    if (def.tail) col += `<div class="gp" style="height:${def.tail[v] * k}px"><i></i><b>${def.tail[v]} to footer</b></div>`;
+    const note = v === 'a' ? 'Today, 1280' : delta === 0 ? '<b>No change</b> at 1280' : `<b>${delta > 0 ? '+' : ''}${delta}px</b> against today, 1280`;
+    el.innerHTML = `<h4>${def.title}</h4><p class="delta">${note}</p><div class="col">${col}</div>`;
+  });
+
+  /* ---------- Scale each recreation to its frame ---------- */
+  function fit() {
+    document.querySelectorAll('.stage').forEach(stage => {
+      const canvas = stage.firstElementChild;
+      const s = stage.clientWidth / (+stage.dataset.w || 1280);
+      canvas.style.transform = `scale(${s})`;
+      stage.style.height = Math.ceil(canvas.offsetHeight * s) + 'px';
+      placeMarks(stage, s);
+    });
+  }
+  function layout() {
+    drawNodes(); buildThreads();
+    document.querySelectorAll('.stage[data-extra="marks"], .stage[data-extra="gaps"]').forEach(measure);
+    fit();
+  }
+  layout();
+  new ResizeObserver(fit).observe(document.body);
+  document.fonts && document.fonts.ready.then(() => { layout(); if (threadStill()) playThreads(); });
+  document.querySelectorAll('.stage img').forEach(img => img.complete || img.addEventListener('load', layout));
+
+  /* Play the thread once when its frames come into view. */
+  const threadFrames = document.querySelectorAll('#d63-d .stage');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => { if (entries.some(e => e.isIntersecting)) { playThreads(); io.disconnect(); } }, { threshold: .5 });
+    threadFrames.forEach(f => io.observe(f));
+  } else playThreads();
+</script>
+</body>
+</html>

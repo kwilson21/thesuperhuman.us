@@ -8,7 +8,7 @@ description: "Draft private review notes, then development-journal entries and q
 This is the single maintained copy of the publicist's instructions. Claude Code
 reaches it through the `.claude/skills/publicist/` pointer and a `CLAUDE.md` import;
 Codex reads it here and through the hard-rules block in `AGENTS.md`, which
-`npm run publicist:sync` keeps identical to the section below.
+`pnpm run publicist:sync` keeps identical to the section below.
 
 These rules are not optional and do not depend on this skill being matched:
 `CLAUDE.md` imports this file, `AGENTS.md` carries a CI-checked copy of the hard
@@ -170,7 +170,7 @@ Stage 2, publish (public):
 6. Advance `publicist/state.json` here: entry IDs published, plus entry IDs from a
    public publicist PR closed without merging, recorded as declined. It holds IDs
    only.
-7. Run `npm run check`, `npm test` and `npm run build`. Open or update one public
+7. Run `pnpm run check`, `pnpm test` and `pnpm run build`. Open or update one public
    PR titled "Publicist: <date range>" listing each entry by ID, its public sources
    and each queued post, plus the count of entries held for an unapproved draft (IDs
    only). If nothing is ready, open nothing.

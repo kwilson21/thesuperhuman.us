@@ -355,7 +355,7 @@ Each run:
 7. Writes entries into `src/data/project-stories/<project>.ts` from verified
    Draft entries, drafts posts into `publicist/queue/`, records the published entry IDs in
    `publicist/state.json`,
-   runs `npm run check`, `npm test` and `npm run build`, and opens one public PR
+   runs `pnpm run check`, `pnpm test` and `pnpm run build`, and opens one public PR
    titled "Publicist: <date range>", listing entries by ID and the number held.
 8. If a publicist PR (private or public) is already open, it adds to that branch
    instead of opening a second one. If the last public publicist PR was closed
@@ -535,7 +535,7 @@ enforced in four layers, plus the owner's review of the final public PR:
    needs the owner's trust to activate.
 4. **A mechanical safeguard that does not depend on the model.** A gate script,
    `publicist-gate`, runs as a `prebuild` step, the same way `assets:check` already
-   does. Every `npm run build` therefore runs it: the existing `validate` workflow on
+   does. Every `pnpm run build` therefore runs it: the existing `validate` workflow on
    each PR, and Cloudflare's own Workers Build on each PR preview and each
    production deploy. It checks the configured projects' journal data (Tally,
    Kaillera-next and the website, whose 17 entries from before it joined are listed
@@ -586,7 +586,7 @@ is a stub with the same name and description whose only instruction is to follow
 canonical file. `.gitignore` changes from `.claude/` to `.claude/*` plus
 `!.claude/skills/` so the stub can be committed. `CLAUDE.md` imports the canonical
 file, and `AGENTS.md` carries its hard rules in a marked block that
-`npm run publicist:sync` writes and the build checks. The Routine prompt (appendix)
+`pnpm run publicist:sync` writes and the build checks. The Routine prompt (appendix)
 loads that canonical file first. In short:
 - Tally content comes only from demo data (seeded fictional household, CI
   screenshots, the public demo). Never production bindings, the family's data, or

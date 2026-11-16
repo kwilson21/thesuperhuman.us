@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- The Engineer's Daily (/building/the-engineers-daily): the project page's title, subtitle and
+     status beside the page's own lesson screenshot (Beacon Day 12, the local prototype). A camera
+     moves over the unaltered capture: in to the story hero ("An honest default."), across to the
+     Scripture card (Proverbs 22:3) beside the story, and back. While the camera is on the lesson,
+     the practice row keeps Arrive lit and dims Practice and Reflect, as the capture's own step bar
+     does (step 1 is current); when the camera returns, the row re-inks in order. Nothing in the
+     capture advances and no code runs: the page says code execution and saved progress are not
+     built, and the status says Local prototype.
+     Copy is verbatim:
+       kicker "Building": src/layouts/ProjectLayout.astro:28 (first crumb only; the headline carries the name)
+       title, subtitle, status: src/data/project-stories/the-engineers-daily.json:4, 5, 9
+       Arrive, Practice, Reflect: the capture's step bar and the-engineers-daily.json:152 (arrows are new punctuation)
+       aside "Beacon Day 12 · Arrival": the-engineers-daily.json:149 (the artifact title the journal shows)
+     Media: src/assets/projects/daily-preview.webp (1440 × 1000), the page's hero figure, moved only by
+     camera transforms (at most 1.6×). 6 s: two camera stops, each held at least 900 ms.
+     Crop veil: at the Scripture stop the window's left edge cuts the lesson's text column and the
+     Practice step label mid-word. A white veil (an annotation layer over the window, not a raster
+     edit) covers window x 0-168 below the hero and fades out by x 236, so only white page and those
+     fragments sit under it; the illustration (above window y 170) and the card (from x 238) stay
+     clear. It fades in as the pan settles and out as the return begins, and is off at the seam. -->
+<html lang="en" data-duration="6000">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  h1 { position: absolute; left: 64px; top: 100px; margin: 0; white-space: nowrap; }
+  .lede { position: absolute; left: 64px; top: 244px; margin: 0; white-space: nowrap; }
+  /* The practice: words in ink, arrows in the accent (the site's forward-link arrow). */
+  .seq { position: absolute; left: 64px; top: 378px; margin: 0; white-space: nowrap; color: var(--ink); }
+  .seq span { display: inline-block; }
+  .seq .ar { font-weight: 400; color: var(--accent); margin: 0 12px; }
+  .seq-status { position: absolute; left: 64px; top: 436px; margin: 0; white-space: nowrap; }
+
+  /* The capture: 620 px wide (scale 620 / 1440), white backing as on the page. The camera wrapper
+     carries will-change from frame 0, so the poster and the moving frames rasterize alike. */
+  .shot { position: absolute; left: 516px; top: 92px; width: 620px; height: 430.56px; background: #fff; }
+  .cam { position: absolute; left: 0; top: 0; width: 620px; height: 430.56px; transform-origin: 0 0; will-change: transform; }
+  .cam img { width: 620px; height: 430.56px; max-width: none; object-fit: fill; }
+  .veil { position: absolute; left: 0; top: 172px; width: 240px; height: 259px; background: linear-gradient(to right, #fff 168px, rgb(255 255 255 / 0) 236px); opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <p class="kicker">Building</p>
+  <h1 class="h-60">The Engineer’s<br />Daily</h1>
+  <p class="lede">A daily practice of<br />faith and craft.</p>
+  <p class="seq label-l"><span class="w w1">Arrive</span><span class="ar a1">→</span><span class="w w2">Practice</span><span class="ar a2">→</span><span class="w w3">Reflect</span></p>
+  <p class="status seq-status">Local prototype</p>
+
+  <div class="capture shot"><div class="cam"><img src="../../../src/assets/projects/daily-preview.webp" alt="" width="1440" height="1000" /></div><i class="veil"></i></div>
+
+  <p class="url">thesuperhuman.us/building/the-engineers-daily</p>
+  <p class="aside">Beacon Day 12 · Arrival</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Camera, in window px with origin 0 0. Display scale k = 620 / 1440; at 1.6× a source pixel is 0.6889 px.
+  // Story: source x 0-900, y 150-775 (the "An honest default." hero, Mara and the lamp).
+  // Scripture: source x 540-1440, y 374-1000 (the monitor, the step labels and the Proverbs 22:3 card).
+  const home = { transform: 'translate(0px, 0px) scale(1)' };
+  const story = { transform: 'translate(0px, -103.3px) scale(1.6)' };
+  const faith = { transform: 'translate(-372px, -257.7px) scale(1.6)' };
+  play('.cam', [
+    [700, { ...home, easing: ease.inOut }], [1800, story],          // in to the story
+    [2800, { ...story, easing: ease.inOut }], [3800, faith],        // across to Scripture
+    [4700, { ...faith, easing: ease.inOut }], [5550, home],         // back to the poster
+  ]);
+  // Crop veil over the clipped text column at the Scripture stop (see the header comment).
+  play('.veil', [[3550, { opacity: 0, easing: ease.out }], [3800, { opacity: 1 }], [4700, { opacity: 1, easing: ease.in }], [4880, { opacity: 0 }]]);
+
+  // The practice row: Arrive stays lit while the camera is on the Arrival lesson; the rest dims
+  // with the move in, then inks back in order as the camera returns. Rest from 5650 to the seam.
+  const lit = { opacity: 1, transform: 'translateX(0)' };
+  const dimWord = { opacity: .28, transform: 'translateX(0)' };
+  const dimArrow = { opacity: 0, transform: 'translateX(-8px)' };
+  const row = (sel, dim, on, dur) => play(sel, [
+    [700, { ...lit, easing: ease.in }], [900, dim],
+    [on, { ...dim, easing: ease.out }], [on + dur, lit],
+  ]);
+  row('.a1', dimArrow, 5000, 260);
+  row('.w2', dimWord, 5100, 300);
+  row('.a2', dimArrow, 5240, 260);
+  row('.w3', dimWord, 5340, 300);
+</script>
+</body>
+</html>

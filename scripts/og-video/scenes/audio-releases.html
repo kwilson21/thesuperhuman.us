@@ -1,0 +1,98 @@
+<!doctype html>
+<!-- Audio releases (/audio/releases): the catalogue, "Listen" in the Audio bar. The collection hero's
+     skyline (music-hubs.css .collection-hero>img: opacity .8, multiply, masked) sits behind
+     "Music by Kazon.", with the one release card below it. The motion is about the catalogue: the
+     skyline's low sun glows (the sun-glow halo from ObjectLife.astro, with a clear core so the drawn
+     sun stays bright), the release card rises in (the [data-reveal] rise), and the page's own line for
+     a one-release catalogue appears at the right, where the collection footer sets it. Nothing plays
+     and nothing is pressed (presses belong to music-old-news); the skyline does not drift.
+     Copy is verbatim: the headline from src/pages/audio/releases.astro:20, the card from :24 with
+     values from src/content/releases/old-news-single.json, the count from :21 and the closing line
+     from :27. Re-render when the catalogue changes: the card, "1 release" and "One song. A beginning."
+     are true only while Old News is the only public release. The skyline's grain keeps a PNG poster
+     over 600 KB, so the poster is a JPEG. -->
+<html lang="en" data-duration="6000" data-poster="jpeg">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../kit.css" />
+<style>
+  /* The skyline at 1500 × 500 (scale .6906), bleeding off the right edge; the low sun lands at (1030, 240). */
+  .art { left: -276px; top: 0; width: 1500px; height: 500px; --fx0: 46%; --fx1: 100%; --fy0: 12%; --fy1: 85%; }
+  .art img { opacity: .8; }
+  /* The glow paints over the multiplied skyline in normal blending, as ObjectLife's layer sits over its art. */
+  .glow { mix-blend-mode: normal; }
+  .halo { transform-box: fill-box; transform-origin: center; opacity: 0; }
+
+  h1 { position: absolute; left: 64px; top: 100px; white-space: nowrap; }
+  h1 .name { font-family: var(--name-text); }
+
+  /* The release card (music-hubs.css .music-collection article): cover with its shadow, then the text. */
+  .release { position: absolute; left: 64px; top: 330px; display: flex; align-items: center; gap: 30px; }
+  .cover { width: 200px; height: 200px; box-shadow: 0 7px 15px #38261520; will-change: transform; }
+  .meta > * { will-change: transform; }
+  .meta p { white-space: nowrap; }
+  .kind { font: 400 20px/24px var(--sans); color: var(--muted); }
+  .title { margin-top: 6px; font: 400 52px/1.05 var(--serif); letter-spacing: -.02em; }
+  .credit { margin-top: 2px; font: 400 24px/30px var(--serif); color: var(--muted); }
+  .actions { margin-top: 16px; display: flex; align-items: center; gap: 18px; }
+  /* .round-play (music-premiere.css): 48px accent circle, paper play symbol (PlayIcon.astro). */
+  .play { width: 48px; height: 48px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .play svg { width: 22px; height: 22px; color: var(--paper); }
+  /* .site-link (global.css:200): accent underline. The page writes the arrow as plain text, so it stays ink. */
+  .link { font: 400 24px/30px var(--serif); border-bottom: 1px solid var(--accent); padding-bottom: 2px; white-space: nowrap; }
+
+  /* .collection-footer>p: italic, muted, at the right of the collection. */
+  .closing { position: absolute; right: 64px; top: 478px; margin: 0; font: italic 400 32px/40px var(--serif); color: var(--muted); white-space: nowrap; opacity: 0; }
+</style>
+</head>
+<body>
+<main class="frame card">
+  <div class="art"><img src="../../../src/assets/site/music-skyline.webp" alt="" width="2172" height="724" /></div>
+  <div class="art glow">
+    <!-- Sun-glow halos (ObjectLife.astro whats-next), in the skyline's own pixels, centred on its sun disk at (1891, 348). -->
+    <svg viewBox="0 0 2172 724" aria-hidden="true">
+      <defs><radialGradient id="sun-glow"><stop offset=".22" stop-color="#e08a62" stop-opacity="0" /><stop offset=".5" stop-color="#e08a62" stop-opacity=".5" /><stop offset="1" stop-color="#e08a62" stop-opacity="0" /></radialGradient></defs>
+      <g transform="translate(1891 348)"><circle class="halo" r="70" fill="url(#sun-glow)" /><circle class="halo" r="70" fill="url(#sun-glow)" /><circle class="halo" r="70" fill="url(#sun-glow)" /></g>
+    </svg>
+  </div>
+  <p class="kicker">Audio / Releases</p>
+  <h1 class="h-96">Music by<br /><span class="name">Kazon</span>.</h1>
+  <div class="release">
+    <img class="cover" src="../../../public/music/old-news-single-0db5fc05dca4ee79.webp" alt="" width="1254" height="1254" />
+    <div class="meta">
+      <p class="kind">Single · Released</p>
+      <p class="title">Old News</p>
+      <p class="credit">Prod. Lexi Banks</p>
+      <div class="actions"><span class="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 4.5 20 12 8 19.5z" /></svg></span><p class="link">Explore release →</p></div>
+    </div>
+  </div>
+  <p class="url">thesuperhuman.us/audio/releases</p>
+  <p class="closing">One song. A beginning.</p>
+  <p class="aside">1 release</p>
+</main>
+<script src="../kit.js"></script>
+<script>
+  const { play, ease } = og;
+  // Sun glow (ObjectLife.astro sun-glow): 2.4 s ease-out, scale .6 to 1.9, peak .9 just after the start.
+  const halo = at => [[at, { transform: 'scale(.6)', opacity: 0 }], [at + 120, { transform: 'scale(.6)', opacity: .9, easing: ease.out }], [at + 2400, { transform: 'scale(1.9)', opacity: 0 }], [at + 2401, { transform: 'scale(.6)', opacity: 0 }]];
+  const halos = document.querySelectorAll('.halo');
+  [600, 1400, 3200].forEach((at, i) => play(halos[i], halo(at)));
+
+  // The release card leaves briefly and rises back in with the [data-reveal] rise (26 px, 900 ms, main curve).
+  // The cover leads; the four text lines follow 120 ms apart, as staggered reveals do on the site.
+  const rise = (element, out, back) => play(element, [
+    [0, { opacity: 1, transform: 'translateY(0)' }],
+    [out, { opacity: 1, transform: 'translateY(0)', easing: ease.in }],
+    [out + 250, { opacity: 0, transform: 'translateY(-10px)' }],
+    [back - 1, { opacity: 0, transform: 'translateY(-10px)' }],
+    [back, { opacity: 0, transform: 'translateY(26px)', easing: ease.out }],
+    [back + 900, { opacity: 1, transform: 'translateY(0)' }],
+  ]);
+  rise(document.querySelector('.cover'), 900, 1300);
+  document.querySelectorAll('.meta > *').forEach((line, i) => rise(line, 900, 1420 + i * 120));
+
+  // Once the card has landed, the page's line for a one-release catalogue rises in beside it, holds, and leaves.
+  play('.closing', [[2700, { opacity: 0, transform: 'translateY(12px)', easing: ease.out }], [3200, { opacity: 1, transform: 'translateY(0)' }], [5200, { opacity: 1, transform: 'translateY(0)', easing: ease.in }], [5450, { opacity: 0, transform: 'translateY(-8px)' }]]);
+</script>
+</body>
+</html>

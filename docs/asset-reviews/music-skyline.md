@@ -7,6 +7,7 @@ Final optimized WebP inspected at full composition and in desktop/mobile placeme
 Reviewer: Codex, September 15, 2026. Asset review does not establish owner approval of the implemented page.
 
 Outcome: ready for production
+- Reads as generated (one-time check of the current files, October 22, 2026, owner pick D5.3-B): pass. Claude Code agent, not a fresh viewer, so judged by the listed tells, at 1200 × 330 in the /audio/releases banner at 1280px wide. It reads as a sepia pencil-and-wash drawing of a skyline over water; none of the tells comes first.
 
 ```json
 {

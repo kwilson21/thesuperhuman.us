@@ -16,15 +16,87 @@
 @media(max-width:700px){.software-intake .software-step-help{margin-bottom:1.5rem}.software-intake .intake-review dl{grid-template-columns:minmax(0,1fr)}.software-intake .intake-review dt{border-bottom:0;padding-bottom:.15rem}.software-intake .intake-review dd{padding-top:0}}
 @media print{.site-header,.compact-footer,.skip-link,.intake-return,.intake-progress,.intake-contact,[data-print]{display:none!important}.software-intake{padding:0!important}}
 .software-intake form{max-width:var(--content-width, 42rem)}
+/* The brief's questions run longer than /audio/start's, so its heading caps lower: the first question
+   stays on one line and Next lands inside a 1280x800 screen. .intake-page h1 itself is shared and unchanged. */
+.intake-page.software-intake h1{font-size:clamp(2.4rem,5vw,3.5rem)}
+/* One hover signal per control, for mouse and trackpad only. */
+@media (hover:hover) and (pointer:fine){.software-intake :is([data-skip],[data-suggestions-toggle],[data-examples-toggle],[data-review] button):hover{color:var(--accent)}}
 .software-intake .brief-dots{gap:.75rem;margin:1rem 0 2rem}.software-intake .brief-dots .step-number{width:.65rem;height:.65rem;font-size:0}.software-intake .brief-dots li::after{display:none}
 .software-intake .brief-answer{position:relative}
 .software-intake .brief-answer textarea,.software-intake .brief-ghost{font:inherit;line-height:1.6;padding:.75rem;white-space:pre-wrap;overflow-wrap:break-word;letter-spacing:normal}
 .software-intake .brief-answer textarea{display:block;position:relative;background:transparent;overflow:hidden;resize:none}
 .software-intake .brief-ghost{position:absolute;inset:0 0 auto;pointer-events:none;z-index:1;border:1px solid transparent;color:var(--muted)}
 .software-intake [data-ghost-prefix]{visibility:hidden}
-.software-intake [data-suggestions-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
+.software-intake [data-suggestions-toggle],.software-intake [data-examples-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
 /* Keep the 44px touch target without expanding the small-text line box. */
-.software-intake [data-suggestions-toggle]{margin-block:-.75rem;vertical-align:middle}
+.software-intake :is([data-suggestions-toggle],[data-examples-toggle]){margin-block:-.75rem;vertical-align:middle}
 .software-intake [data-ghost-text]{pointer-events:auto;cursor:pointer}
 
 .software-intake [data-copy-card]{overflow-wrap:anywhere}.software-intake [data-copy-status]{margin-top:.75rem}
+.software-intake .brief-footnote{max-width:calc(var(--measure-prose) * .9)}
+/* Example answers open under the footnote from its own inline toggle. Closed, the toggle adds at most one footnote line
+   (none at 390px wide), not a row of its own. role="list" keeps the unstyled list announced as one in Safari. */
+.software-intake .brief-examples{list-style:none;margin:.75rem 0 0;padding:0;max-width:calc(var(--measure-prose) * .9);font-size:.9rem;line-height:1.5}
+.software-intake .brief-examples li{padding:.6rem 0;border-top:1px solid var(--rule)}
+.software-intake .brief-examples li:last-child{border-bottom:1px solid var(--rule)}
+/* A link that names a path skips the choice screen, so it stays out of sight until the script has moved past it; without scripting it shows, with the page's heading. */
+@media (scripting:enabled){#software-inquiry[data-linked-path]:not([data-ready]) [data-step="0"]{display:none}}
+
+/* The living brief (docs/plans/2026-11-living-brief.md). The board's height is bounded: its head stays put and its cards
+   scroll inside .board-scroll, so however many cards arrive the page never grows with them. On a wide screen it is a
+   panel beside the answers, as tall as the screen at most; below that it follows the step's buttons, with the cards in a
+   box about three fifths of the screen tall, so a card arriving never moves the answer box or Next. */
+.software-intake .brief-board{display:flex;flex-direction:column;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--rule);min-width:0}
+.software-intake .board-scroll{overflow-y:auto;max-height:min(34rem,62vh);max-height:min(34rem,62dvh);padding:.25rem .375rem .5rem;margin-inline:-.375rem}
+@media (min-width:70rem){
+  .software-intake .brief-workspace[data-board-enabled]{display:grid;grid-template-columns:minmax(0,42rem) minmax(18rem,1fr);column-gap:clamp(2rem,4vw,3.5rem);align-items:start}
+  .software-intake .brief-board{position:sticky;top:1.5rem;max-height:calc(100vh - 3rem);max-height:calc(100dvh - 3rem);margin-top:0;padding:0 0 0 2rem;border-top:0;border-left:1px solid var(--rule)}
+  .software-intake .board-scroll{flex:1 1 auto;min-height:0;max-height:none;overscroll-behavior:contain}
+  .software-intake .board-links [data-board-pulse]{display:none}
+}
+.software-intake .board-head{padding-bottom:.25rem;border-bottom:1px solid var(--rule)}
+.software-intake .brief-board h2{margin:0}
+.software-intake .board-explain{color:var(--muted);font-size:.875rem;margin-top:.5rem;max-width:var(--measure-prose)}
+/* Two lines are kept for the status, so a longer message never moves the cards below it. */
+.software-intake .board-status{color:var(--muted);font-size:.875rem;line-height:1.5;min-height:3em;margin-top:.25rem}
+.software-intake [data-board-pause][aria-pressed="true"]{color:var(--accent)}
+.software-intake .board-controls{display:flex;flex-wrap:wrap;gap:0 1.25rem;margin-top:.25rem}
+.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button,.software-intake .board-add{min-height:44px;min-width:44px;text-align:start;text-decoration:underline;text-underline-offset:.2em;cursor:pointer;font-size:.9rem}
+.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:disabled,.software-intake .board-add:disabled{opacity:.5;cursor:not-allowed}
+.software-intake .board-links{min-height:max(44px,3.1em);margin-top:.25rem;font-size:.875rem}
+.software-intake .board-links a{display:inline-flex;align-items:flex-end;min-height:44px}
+.software-intake .board-lane{margin-top:1.25rem}
+.software-intake .board-lane h3{font-size:1.05rem;font-weight:400;line-height:1.3;padding-bottom:.3rem;border-bottom:1px solid var(--rule);margin-bottom:.5rem}
+.software-intake .board-cards{list-style:none;margin:0;padding:0;display:grid;gap:.4rem}
+.software-intake .board-why{color:var(--muted);font-size:.875rem}.software-intake .board-full{margin:.25rem 0 .5rem}.software-intake .board-empty{color:var(--muted);font-size:.875rem}
+.software-intake .board-card{border:1px solid var(--field-border);border-radius:3px;padding:.5rem .65rem .1rem;background:var(--paper);min-width:0}
+/* An inference is dashed until the visitor keeps it; a card whose passage left the answers is dashed too. */
+.software-intake .board-card[data-status="proposed"]:is([data-basis="suggested"],[data-grounded="false"]){border-style:dashed}
+.software-intake .board-card-origin{font:500 11px/1.4 var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+.software-intake .board-card-text{font-size:1rem;line-height:1.35;margin-top:.1rem;overflow-wrap:anywhere}
+.software-intake .board-card[data-status="proposed"][data-basis="said"][data-grounded="false"] .board-card-text{color:var(--muted)}
+.software-intake .board-card-quote{margin-top:.2rem;color:var(--muted);font-size:.875rem;line-height:1.4;overflow-wrap:anywhere}
+.software-intake :is(.board-card-reason,.board-card-answer){color:var(--muted);font-size:.875rem;line-height:1.4;margin-top:.2rem;overflow-wrap:anywhere}
+.software-intake .board-card-answer{color:var(--ink)}
+.software-intake .board-card-actions{display:flex;flex-wrap:wrap;gap:0 1rem}
+.software-intake .board-editor .intake-field{margin-top:.5rem;font-size:.9rem}
+/* Fields keep 16px text (design.md, States), which also stops iOS zooming in on focus. */
+.software-intake .board-editor input{min-height:44px;font-size:1rem}
+.software-intake .board-editor-actions{display:flex;gap:1rem}
+.software-intake .board-aside{margin-top:1.25rem;border-block:1px solid var(--rule);padding:.25rem 0}
+.software-intake .board-aside ul{list-style:none;margin:0 0 .5rem;padding:0}
+.software-intake .board-aside li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 1rem;color:var(--muted);font-size:.9rem;overflow-wrap:anywhere}
+.software-intake .board-held{margin-top:1rem}
+.software-intake .board-foot{color:var(--muted);font-size:.875rem;margin-top:1.25rem;max-width:var(--measure-prose)}
+.software-intake .review-outline{list-style:disc;margin:0 0 .25rem 1.1rem;white-space:normal}
+.software-intake .review-outline li{margin:.15rem 0}
+.software-intake .review-outline-origin{color:var(--muted)}
+/* A new card is outlined in the accent all round for a moment, then settles to the field edge. */
+.software-intake .board-card.is-new{border-color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){
+  .software-intake .board-card{transition:border-color 600ms var(--ease-site)}
+  .software-intake .board-card.is-new{animation:board-card-in 180ms var(--ease-site)}
+  @keyframes board-card-in{from{opacity:0;transform:translateY(4px)}}
+}
+@media (hover:hover) and (pointer:fine){.software-intake :is(.board-controls,.board-card-actions,.board-editor-actions,.board-aside,.board-links) button:not(:disabled):hover,.software-intake .board-add:not(:disabled):hover{color:var(--accent)}}
+@media print{.software-intake .brief-board,.software-intake .board-links{display:none!important}}

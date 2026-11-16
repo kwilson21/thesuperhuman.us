@@ -9,8 +9,10 @@ to the comma-separated IDs approved for public display. Set `PUBLICATION_TOKEN`
 as a Cloudflare encrypted secret and in the publisher's private credential store.
 Never put the token in source, browser code, chat output or project payloads.
 Production uses the dedicated `thesuperhuman-publication` database, bound as
-`PUBLICATION_DB` in `wrangler.jsonc`, with `threadline` and `the-engineers-daily`
-as its allowlisted public projects. Existing OAuth grants need renewed owner consent
+`PUBLICATION_DB` in `wrangler.jsonc`, with `threadline`, `the-engineers-daily`, and
+`personal-website` as its allowlisted public projects (see
+[publication-mcp.md](publication-mcp.md) for the personal-website activation).
+Existing OAuth grants need renewed owner consent
 for an additional project; changing the allowlist does not expand issued tokens.
 The initial migration was applied through the Cloudflare API on 2026-09-05,
 before enabling the binding. After comparing the production table constraints and
@@ -20,9 +22,9 @@ do not rerun the SQL file directly against production.
 `PUBLICATION_TOKEN` is provisioned as an encrypted Worker secret, outside Git.
 
 For future migrations, authenticate Wrangler to the production account, inspect
-`npx wrangler d1 migrations list PUBLICATION_DB --remote`, and apply only the
+`pnpm exec wrangler d1 migrations list PUBLICATION_DB --remote`, and apply only the
 reviewed pending migrations with
-`npx wrangler d1 migrations apply PUBLICATION_DB --remote`. The initial migration
+`pnpm exec wrangler d1 migrations apply PUBLICATION_DB --remote`. The initial migration
 must not appear as pending. Stop and compare `sqlite_master` with the checked-in
 migration if the ledger is unexpectedly missing; never mark an unverified schema
 as migrated. Fresh databases should use `migrations apply` from the start, which
@@ -31,8 +33,9 @@ executes the schema and records each filename together.
 The working agent prepares audience-safe prose after normal durable reconciliation.
 POST the version-1 publication envelope to `/api/work-feed` with Bearer authorization.
 Persist the receipt on 200. On 409, reconcile current project state; never blindly
-increment and overwrite. On 410, honor withdrawal. On 503, retain the exact envelope
-and retry at the next work or shutdown boundary. GET `/api/work-feed?project=ID`
+increment and overwrite. On 410, honor withdrawal. On 500 or 503, retain the exact envelope
+and retry the same event (same event ID, same content) at the next work or shutdown boundary; a retry is safe because an event
+that was stored answers duplicate with its receipt. GET `/api/work-feed?project=ID`
 returns the public current view and up to 100 recent historical entries.
 
 All responses disable caching. Public allowlisting governs both writes and reads;

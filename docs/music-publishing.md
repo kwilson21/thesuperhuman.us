@@ -14,7 +14,7 @@ recording. Keep IDs stable after launch so analytics and requests stay attached.
 
 ## Prepare a release
 
-Use Node 24 or newer for the publishing helpers. Copy
+Use the Node version in `.nvmrc` for the publishing helpers. Copy
 `templates/music/release-package.json` beside a release's source folders and fill
 in accurate metadata and relative asset paths. Remove unavailable versions and
 examples. MP3 is the streaming audio format, MP4 the hosted video format. Retain
@@ -23,7 +23,7 @@ WAV masters privately. Supply the actual audio duration in seconds.
 ```sh
 node scripts/prepare-music.mjs /path/to/release/package.json
 node scripts/music-preview.mjs
-MUSIC_PREVIEW_CONFIG=.private/wrangler-music-preview.json npm run dev
+MUSIC_PREVIEW_CONFIG=.private/wrangler-music-preview.json pnpm run dev
 ```
 
 The importer validates all shared references and route collisions, creates

@@ -1,4 +1,11 @@
 ---
-import Footer from '~/components/Footer.astro';
+import Footer from "~/components/Footer.astro";
+
+interface Props {
+	/** Audio pages end on the Get in touch button; the song intake, itself a form, is quiet. */
+	variant?: "invitation" | "quiet";
+}
+
+const { variant = "invitation" } = Astro.props;
 ---
-<Footer compact />
+<Footer variant={variant} />

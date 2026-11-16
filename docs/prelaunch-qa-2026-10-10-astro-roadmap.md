@@ -206,3 +206,13 @@ Local checks: `npm run copy:check` PASS; `git diff --check` PASS. Diff review ag
 - **Verified live:** UNVERIFIED. No network access performed; the caller's production baseline is separately attributed above.
 
 Before a future merge, require green current-head CI, Codex and Greptile review under the repository review rules, and deployment authorization. After merge, verify Workers Builds and run `npm run owner:health -- --remote --post-deploy`. The framework migration requires its own plan, release records, runtime verification and UI screenshots.
+
+## November 16 refresh
+
+The original October observations above are historical, not today's environment.
+Refreshed onto current main without changing application code or dependencies.
+The roadmap now names the current Astro placeholder PR #231, acknowledges that
+Tailwind 4 is already installed, removes stale file counts, and refers to the
+current independent-review requirement. The migration remains deferred.
+Current-head CI, deployment and post-deploy health remain UNVERIFIED until their
+actual completion; the original rollback revision is not a current rollback target.

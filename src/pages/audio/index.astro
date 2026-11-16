@@ -1,40 +1,51 @@
 ---
 export const prerender = false;
 
-import { getCollection } from 'astro:content';
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import AudioHero from '~/components/audio/AudioHero.astro';
-import MusicNav from '~/components/audio/MusicNav.astro';
-import ComparisonPlayer from '~/components/audio/ComparisonPlayer.astro';
-import PersonalNameText from '~/components/PersonalNameText.astro';
-import AudioFooter from '~/components/audio/AudioFooter.astro';
-import ServiceIcon from '~/components/audio/ServiceIcon.astro';
-import { audioServices } from '~/data/audio';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import { groupTracksByService, type AudioTrack } from '~/lib/audio-tracks';
-import { loadMusicCatalog } from '~/lib/music-content';
+import { getCollection } from "astro:content";
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import AudioHero from "~/components/audio/AudioHero.astro";
+import MusicNav from "~/components/audio/MusicNav.astro";
+import ComparisonPlayer from "~/components/audio/ComparisonPlayer.astro";
+import PersonalNameText from "~/components/PersonalNameText.astro";
+import AudioFooter from "~/components/audio/AudioFooter.astro";
+import ServiceIcon from "~/components/audio/ServiceIcon.astro";
+import { audioServices } from "~/data/audio";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import { groupTracksByService, type AudioTrack } from "~/lib/audio-tracks";
+import { loadMusicCatalog } from "~/lib/music-content";
 
-const entries = await getCollection('audio-tracks');
+const entries = await getCollection("audio-tracks");
+
 const tracks: AudioTrack[] = entries.map((e) => ({
-  slug: e.id,
-  ...(e.data as Omit<AudioTrack, 'slug'>),
+	slug: e.id,
+	...e.data,
 }));
+
 const groups = groupTracksByService(tracks);
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const audioHref = (path: string) => audioPath(host, path);
 
 const catalog = await loadMusicCatalog();
-const example = catalog.examples.find(example => example.service === 'mastering');
-const recording = example && catalog.recordings.find(track => track.id === example.recordingId);
-const release = recording && catalog.releases.find(release => release.tracks.includes(recording.id));
+
+const example = catalog.examples.find(
+	(example) => example.service === "mastering",
+);
+
+const recording =
+	example &&
+	catalog.recordings.find((track) => track.id === example.recordingId);
+
+const release =
+	recording &&
+	catalog.releases.find((release) => release.tracks.includes(recording.id));
 
 const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'Person',
-  name: 'Kazon Wilson',
-  jobTitle: 'Audio Engineer',
-  url: 'https://thesuperhuman.us/audio/',
-  worksFor: { '@type': 'Organization', name: 'The Superhuman Group LLC' },
+	"@context": "https://schema.org",
+	"@type": "Person",
+	name: "Kazon Wilson",
+	jobTitle: "Audio Engineer",
+	url: "https://thesuperhuman.us/audio/",
+	worksFor: { "@type": "Organization", name: "The Superhuman Group LLC" },
 };
 ---
 <BaseLayout
@@ -51,12 +62,12 @@ const jsonLd = {
         <div class="audio-listen" data-reveal>
           <a class="listen-release" href={mainSitePath(host, `/music/${release.slug}`)}>
             <img src={release.artwork} alt={`${release.displayTitle ?? release.title} cover artwork`} width="1254" height="1254" />
-            <p class="listen-kicker">Released</p>
+            <p class="page-kicker listen-kicker">Released</p>
             <h3>{release.displayTitle ?? release.title}</h3>
             <span class="site-link">Hear the song <span aria-hidden="true">→</span></span>
           </a>
           <div class="listen-example">
-            <p class="listen-kicker">Engineering example</p>
+            <p class="page-kicker listen-kicker">Engineering example</p>
             <ComparisonPlayer example={example} recording={recording} />
             <details class="listen-credits"><summary>Credits</summary><p>This comparison demonstrates mastering.</p>{recording.credits.map(credit => <p>{credit.role}: <PersonalNameText text={credit.name} />.</p>)}</details>
           </div>
@@ -79,7 +90,9 @@ const jsonLd = {
     import '~/scripts/audio-player-coordinator';
     import { setupComparisonPlayers } from '~/scripts/comparison-player';
     import { runMotion } from '~/scripts/scroll-scenes';
+
     setupComparisonPlayers();
+
     // The headphones give off a few rings on arrival and the sections rise in; nothing plays sound.
     runMotion();
   </script>
@@ -89,16 +102,20 @@ const jsonLd = {
 
 <style>
   .audio-page :global(.audio-art), .audio-page :global(.audio-scene .chapter-life) { mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 92%, transparent); mask-composite: intersect; }
-  .audio-section { border-top: 1px solid var(--rule); padding-block: 2.5rem; scroll-margin-top: 2rem; }
+  .audio-section { border-top: 1px solid var(--rule); padding-block: var(--site-rule-space); scroll-margin-top: 2rem; }
+  /* The page's one chapter break, under Start's rule. */
+  .audio-start { padding-top: calc(var(--site-chapter-space) - var(--site-rule-space)); }
   .audio-section h2 { font-size: clamp(2rem, 3.5vw, 2.75rem); line-height: 1.15; }
   .audio-listen { display: grid; grid-template-columns: .85fr 1.15fr; gap: 3rem; align-items: start; margin-top: 1.5rem; }
-  .listen-kicker { font: 600 .75rem/1.4 Inter, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 .5rem; }
+  /* The shared .page-kicker sets the face; these sit close to what they label. */
+  .listen-kicker { margin: 0 0 .5rem; }
   .listen-release { display: block; border: 0; }
-  .listen-release img { width: 100%; height: auto; display: block; box-shadow: 0 7px 15px #38261520; margin-bottom: 1rem; }
+  .listen-release img { width: 100%; height: auto; display: block; box-shadow: 0 7px 15px color-mix(in srgb, var(--ink) 12%, transparent); margin-bottom: 1rem; }
   .listen-release h3 { font-size: 1.75rem; line-height: 1.15; margin-bottom: .5rem; }
   .listen-credits { font-size: .85rem; color: var(--muted); text-align: right; margin-top: .75rem; }
   .listen-credits p { text-align: left; padding: .5rem 0; }
   .listen-credits summary { cursor: pointer; }
+  @media (hover: hover) and (pointer: fine) { .listen-credits summary:hover { color: var(--accent); } }
   .listen-empty { color: var(--muted); font-size: 1.2rem; padding-block: 1rem; }
   .listen-more { display: block; width: fit-content; margin-top: 2rem; }
   .audio-services { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4rem; }
