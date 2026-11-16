@@ -14,6 +14,8 @@
 //            the outcome is written while the status is still `sending`; the invitation's write also needs the project open
 //            (an email sent just after a revoke leaves it at `sending`), the update notice's does not; an uncertain outcome
 //            writes nothing
+// The 60 second cutoff of the retry's write (`attempted_at<=now-60s`, with the owner's confirmation) is stood in for by the attempt
+// the retry read: any later attempt is newer than the cutoff, so the write refuses it.
 // The properties read the stored state and the world (the emails that really went out) and never a flag set from a guard. The
 // clock stamps the attempt and the close, as `invitation_attempted_at` and `revoked_at` do.
 // What is left out, on purpose: the 60 second staleness test itself (the model lets the owner confirm only a notice that is
@@ -26,7 +28,7 @@ module audioProjectNotices {
   // "none" is the design. Every other value removes one protection so a property must fail (the mutants):
   //   "claim-no-status"   the claim does not compare the status, so two deliveries that read `pending` both claim it
   //   "claim-no-open"     the invitation's claim does not compare that the project is still open
-  //   "queue-any-status"  the rule lets a retry move a notice that was sent
+  //   "queue-any-status"  the rule and the write admit a notice that was sent
   //   "queue-no-cas"      the retry's write compares neither the status nor the attempt it read, so a delivery that claimed the notice
   //                       between the retry's read and its write is overwritten and a second email can go out
   //   "queue-status-only" the retry's write does not compare the attempt: with two retries at once, both read the notice stuck in
@@ -159,9 +161,10 @@ module audioProjectNotices {
 
   // The owner's retry is two steps, as the code is: a read and the rule, then a write. A failed or pending notice, or one stuck in
   // `sending` that the owner confirms was not sent (truthfully: no email went out and no delivery is still working), goes back to
-  // pending. The write compares what the read saw: the status and, for a notice read as `sending`, that no attempt is newer than the
-  // one read (today's `invitation_attempted_at<=?`, `notification_attempted_at<=?`, against the cutoff the retry computed), and the
-  // project's access. Two retries can be in flight (two tabs), each in its own key of `runs`.
+  // pending. The write is today's condition: the notice is `pending` or `failed` whatever the read saw, or it is `sending`, the retry
+  // read it as `sending` (the owner confirmed it) and its stored attempt is not newer than the cutoff (here the attempt the read saw
+  // stands in for the cutoff `now - 60 s`), and the project is open. Two retries can be in flight (two tabs), each in its own key of
+  // `runs`.
   action queueRead = {
     nondet r = RETRIES.filter(i => runs.get(i).phase == "none").oneOf()
     val confirmedNotSent = status == "sending" and mailed.get(epoch) == 0 and not(RUNS.exists(i => alive(runs.get(i).phase)))
@@ -178,8 +181,9 @@ module audioProjectNotices {
   action queueWrite = {
     nondet r = RETRIES.filter(i => runs.get(i).phase == "write").oneOf()
     val h = runs.get(r)
-    // Today's condition, exactly: `status IN ('pending','failed')`, or `sending` when the owner confirmed it (the retry read it as
-    // `sending`) and its attempt is not newer than the one read (`attempted_at<=?`). The mutants drop the attempt, or every condition.
+    // Today's condition: `status IN ('pending','failed')`, or `sending` when the owner confirmed it (the retry read it as `sending`) and
+    // its attempt is not newer than the cutoff (`attempted_at<=?`; the attempt the read saw stands in for the cutoff). The mutants drop
+    // the attempt, admit a notice that was sent, or drop every condition.
     val holds =
       MUTANT == "queue-no-cas" or status == "failed" or status == "pending" or
       (MUTANT == "queue-any-status" and status == "sent") or
