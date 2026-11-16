@@ -282,7 +282,7 @@ export const saveDraft = alwaysWrites({
 	refusals: [
 		unless(
 			term(
-				"each named attachment has its metadata row, unchanged, and is in no closed archive",
+				"each named attachment has its metadata row, unchanged, in no closed archive, and every closed archive reads",
 				(given: SaveGiven) => attachmentsUsable(given.attachments, given.named),
 			),
 			() => new AttachmentNotUsable(),

@@ -13,7 +13,10 @@ import {
 	type SaveDraftRequest,
 	saveDraft,
 } from "../../src/server/rules/offer-draft";
-import type { AttachmentRow } from "../../src/server/rules/software-request";
+import type {
+	AttachmentRow,
+	ClosedArchives,
+} from "../../src/server/rules/software-request";
 import {
 	attachment,
 	inOrder,
@@ -192,11 +195,14 @@ describe("saving the draft", () => {
 		at: NOW,
 	};
 
+	/** No closed archive names a key, and every one reads. */
+	const noneClosed: ClosedArchives = { keys: [], unreadable: false };
+
 	const facts = (over: Partial<SaveDraftFacts> = {}): SaveDraftFacts => ({
 		request: softwareRequest(),
 		chosen: choice,
 		attachments: [attachment],
-		named: { rows: [row], closedKeys: [] },
+		named: { rows: [row], closed: noneClosed },
 		removed: [],
 		reusedMsaFound: null,
 		...over,
@@ -221,7 +227,7 @@ describe("saving the draft", () => {
 						confirmMsaReuse: true,
 					}),
 					f: facts({
-						named: { rows: [], closedKeys: [] },
+						named: { rows: [], closed: noneClosed },
 						reusedMsaFound: false,
 					}),
 				},
@@ -229,7 +235,7 @@ describe("saving the draft", () => {
 				[
 					(s) => ({
 						...s,
-						f: { ...s.f, named: { rows: [row], closedKeys: [] } },
+						f: { ...s.f, named: { rows: [row], closed: noneClosed } },
 					}),
 					(s) => ({ ...s, f: { ...s.f, reusedMsaFound: true } }),
 				],
@@ -251,7 +257,7 @@ describe("saving the draft", () => {
 					save(
 						command(),
 						facts({
-							named: { rows: [{ ...row, ...changed }], closedKeys: [] },
+							named: { rows: [{ ...row, ...changed }], closed: noneClosed },
 						}),
 					),
 				),
@@ -261,10 +267,36 @@ describe("saving the draft", () => {
 			outcome(
 				save(
 					command(),
-					facts({ named: { rows: [row], closedKeys: [attachment.key] } }),
+					facts({
+						named: {
+							rows: [row],
+							closed: { keys: [attachment.key], unreadable: false },
+						},
+					}),
 				),
 			),
 		).toBe("AttachmentNotUsable");
+	});
+
+	it("refuses a named attachment while a closed archive does not read, as G11's malformed JSON refuses the batch, and checks nothing with none named", () => {
+		const unreadable = {
+			rows: [row],
+			closed: { keys: [], unreadable: true },
+		};
+
+		expect(outcome(save(command(), facts({ named: unreadable })))).toBe(
+			"AttachmentNotUsable",
+		);
+
+		for (const agreementDetails of [undefined, null, { attachments: [] }])
+			expect(
+				outcome(
+					save(
+						command({ agreementDetails }),
+						facts({ attachments: [], named: unreadable }),
+					),
+				),
+			).toBe("writes");
 	});
 
 	it("checks the reused MSA only when the draft confirms one", () => {

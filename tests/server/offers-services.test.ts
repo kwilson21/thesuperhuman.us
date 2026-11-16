@@ -209,7 +209,7 @@ describe("the live Mail", () => {
 						request: grace,
 						signedAgreement: false,
 						linkRow: null,
-						closedKeys: [],
+						closed: { keys: [], unreadable: false },
 					},
 				),
 			),
