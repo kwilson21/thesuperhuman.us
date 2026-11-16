@@ -1,7 +1,9 @@
 # Software offers: conversion design
 
-Status: proposed, 2026-11-15, revised the same day after the review of #306. This is the design PR for step 1 of
-`docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code. It changes nothing under `src/`. Every
+Status: implemented, pending merge, in the stack #334 (the command reader, the machines and the rules), #337 (the store,
+the services and the answers) and #341 (the flows and the route); record `docs/prelaunch-qa-2026-11-16-offers-area.md`.
+Proposed 2026-11-15 and revised the same day after the review of #306, as the design PR for step 1 of
+`docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR changed nothing under `src/`. Every
 claim about today's code cites a file and line on `origin/main` at `68ce7822`; `software.ts` below means
 `src/pages/api/owner/requests/[id]/software.ts`.
 
@@ -389,8 +391,11 @@ the write time plus 90 days, today computed inside the statement builder (src/li
 
 ## 3. The flows
 
-`src/server/flows/software-offers.ts`, one program per action. Each keeps today's order of reads, decisions and outside
-effects; no read moves ahead of a decision that comes before it today. Each builds no response text.
+One program per action. As built (#341) they are seven files, not one `software-offers.ts`: `src/server/flows/offer-fit.ts`,
+`offer-question.ts`, `offer-decline.ts`, `offer-revoke.ts`, `offer-draft.ts` and `offer-send.ts`, which mirror the rule
+files, and `offer-request.ts`, what they share (the first read, the reads after a refused batch, the client email through
+the request machine). Each keeps today's order of reads, decisions and outside effects; no read moves ahead of a
+decision that comes before it today. Each builds no response text.
 
 **Services.**
 
@@ -507,7 +512,8 @@ when the client email was accepted (835; F9 asks about the other case).
 ## 4. The store
 
 `src/server/offers-store.ts`, over the `MusicDb` service, one function per statement, plain SQL that decides nothing
-beyond its compare-and-set. A read that rejects is `OffersStoreFailed` (no fields). A batch that rejects is:
+beyond its compare-and-set. A read that rejects is `OffersStoreFailed`, whose one field, `failure`, carries what the
+database raised for the route's log (never its answer). A batch that rejects is:
 
 - `GuardRefused` when its message is the JSON guard's (`raisedByJsonGuard`), and for the draft's reused MSA a FOREIGN KEY
   failure with evidence of the race read afterwards (the MSA row gone), as the agreement review recognises `LostRace`
