@@ -1,7 +1,5 @@
 # The software offers area converted to Effect: release gate
 
-Draft. The merge, deploy and live facts are marked TODO for the owner to fill.
-
 Date: November 16, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Pull requests, a stack that reaches `main` in one merge (`docs/plans/2026-11-effect-conversion.md`, "Rules this order
@@ -15,12 +13,16 @@ follows"):
 - [#341](https://github.com/kwilson21/thesuperhuman.us/pull/341), `claude/offers-convert-3`, targets #337: the flows,
   the route, the route tests, the fixtures re-recorded in a commit of their own, and this record.
 
-The stack merges `main` at `f0709a25` (into #334 as `6c7263e2`, then up through #337 and #341). Merge order: #341 into
-#337, then #337 into #334 (retargeted by hand after each merge), then #334 into `main`, with the `conversion` label.
-TODO: the merge commits and times.
+The stack merges `main` at `f0709a25` (into #334 as `6c7263e2`, then up through #337 and #341), and again at `c27b8fe4`
+(into #334 as `922df817`). Merged on 2026-11-16: #341 into #337 at 02:50:39 UTC as `a329c396` (head `ca6c48d7`), #337
+into #334 at 02:54:31 UTC as `28261b62` (head `a329c396`), and #334 into `main` at 03:05:38 UTC as `a9f30919` (head
+`922df817`), with the `conversion` label.
 Target: production `https://thesuperhuman.us`
-Decisions: Kazon Wilson (below). Implementation was done with Claude Code. TODO: merge authorization.
-Rollback revision: TODO, the revision of `main` before #334 merges (`git revert -m 1 <merge>` undoes the whole area).
+Decisions: Kazon Wilson (below). Implementation and the review passes were done with Claude Code; Codex reviewed each
+pull request. Merge authorization: the owner, in conversation on 2026-11-15 ("Do the fixes and yes you can merge", for
+this work's pull requests once reviews pass and CI is green).
+Rollback revision: `5022d29c`, the revision of `main` before #334 merged; `git revert -m 1 a9f30919` undoes the
+whole area.
 
 ## Scope
 
@@ -236,8 +238,17 @@ UNVERIFIED until checked:
   defect left; their comment corrections are in #341 ("Comments from the closed-archive re-review"). On #341, two
   independent reviews and Codex found no code defect, security problem or CLAUDE.md violation; one low behaviour point
   (the draft's clock read after its offers read) and the record and design corrections are fixed in their own commits.
-  TODO: the review of the final head, and the `conversion` label's CI.
-- **TODO · Production revision and live check.**
+  The last code change (the draft's clock read) was checked against its test, which fails on the previous flow, and not
+  given another pass. CI on each final head: #341 `ca6c48d7`, #337 `a329c396` and #334 `922df817`, each with every
+  `validate` lane, `neutrality` (the `conversion` label's golden check) and the Workers preview build succeeding.
+  Before the last merge, `main` had moved to `5022d29c` (#326); the stack merged with it locally printed
+  `golden:neutral: NEUTRAL` (80 fixtures, 9,365 cases, the same five software corpora neutral with D1 changes) and the
+  offers, flow, server, rules and architecture tests passed (2,029), with `pnpm run check` 0 errors and lint clean.
+- **PASS, with limits · Production revision and live check.** On `a9f30919`: the Workers build succeeded (03:11:41 UTC)
+  and `validate` succeeded (03:08:55 UTC). Live check at 03:11:55 UTC: `https://thesuperhuman.us/` answered 200, and a
+  POST to `https://thesuperhuman.us/api/owner/requests/r1/software` without an Access login answered 302 (to the Access
+  login), so the owner API still fails closed. UNVERIFIED live: the six actions as the owner uses them; they need the
+  owner's Access login and a real request, and none was made.
 
 ## 8. Private owner center
 
