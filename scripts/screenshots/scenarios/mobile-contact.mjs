@@ -24,7 +24,25 @@ export default {
 				path: "/",
 				viewport: "phone",
 				prepare: async (page) => {
-					await waitForPinned(page, true);
+					for (const width of [320, 375, 414, 768]) {
+						await page.setViewportSize({ width, height: 844 });
+						await page.evaluate(() => window.scrollTo(0, 0));
+						await waitForPinned(page, width <= 600);
+						await page.locator(".hire-section").scrollIntoViewIfNeeded();
+						await waitForPinned(page, width <= 600);
+						assert.ok(
+							await page.evaluate(
+								() => document.documentElement.scrollWidth <= innerWidth + 1,
+							),
+							`Home must not overflow at ${width}px`,
+						);
+						await page.locator(".compact-footer").scrollIntoViewIfNeeded();
+						await waitForPinned(page, false);
+						await page.evaluate(() => window.scrollTo(0, 0));
+						await waitForPinned(page, width <= 600);
+					}
+
+					await page.setViewportSize({ width: 390, height: 844 });
 					await page.locator(".hire-section").scrollIntoViewIfNeeded();
 					await waitForPinned(page, true);
 					assert.equal(

@@ -57,3 +57,17 @@ switchboard scenario covers the message form. Inspect the CI images before revie
   tests and design check independently passed. Canonical design-rule inconsistency fixed.
 - Release: UNVERIFIED until final-head CI and rendered QA pass.
 - Owner center/agreement signing: N/A, no changes.
+
+
+## Hosted follow-up at 6ed577e
+
+All 21 hosted checks passed, including full test shards, production build, screenshot
+capture and Cloudflare preview build. Independently inspected CI Home and Services
+phone pages, Home/Services/Audio footer close-ups and the quiet Contact page: no
+layout blocker found at the captured 390px width. The mobile-contact scenario
+passed footer hide/return assertions. The preview URL requires Cloudflare Access
+sign-in, so no authenticated live-browser pass is claimed.
+
+The follow-up adds Home behavior/overflow checks at 320, 375, 414 and 768px to the
+same screenshot scenario. Final-head CI must pass again before merge. Real-device
+and second-browser checks remain unverified.
