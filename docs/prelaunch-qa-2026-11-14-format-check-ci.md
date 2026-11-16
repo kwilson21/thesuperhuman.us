@@ -57,12 +57,12 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ### 7. Release and final QA
 
-- PASS (local), 7.1 Required checks: see Evidence and limits. The full test suite and build were not re-run for this branch alone, since no code changed; they ran on the branch stacked above it.
+- PASS (local), 7.1 Required checks: see Evidence and limits. The full test suite and build were not re-run locally for this branch alone, since no code changed; CI ran its full set (build, tests, quality, contracts, the model checks and `validate`) on the final head.
 - PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - N/A, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed.
 - PASS, 7.4 Rollback version: `6c30c5d7`, the first parent of the merge commit `a2bde456`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
-- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes (`a2bde456`). Verified live: two pages answer 200; nothing else.
+- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `a2bde456`). Verified live: two pages answer 200; nothing else.
 
 ### Software agreement signing
 
@@ -74,12 +74,12 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ## Merge and deployment (added after the merge)
 
-- Merged 2026-11-16 UTC as merge commit `a2bde456`, whose first parent is `6c30c5d7`.
+- Merged 2026-11-16 at about 01:22 UTC (the evening of 2026-11-15, US Eastern) as merge commit `a2bde456`, whose first parent is `6c30c5d7`.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
-- Production build: this merge commit got no build check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
-- After the merges, `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
+- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
+- Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
 - Rollback: revert the merge commit `a2bde456` to undo only this change.
 
 ## Delivery status
 
-Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`a2bde456`). Verified live: two pages answer 200; nothing else.
+Current state: Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `a2bde456`). Verified live: two pages answer 200; nothing else.

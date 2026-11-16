@@ -3,15 +3,15 @@
 Date: November 14, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Target: production `https://thesuperhuman.us`
-Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: none yet. This record does not certify the checks listed as UNVERIFIED.
-Branch: `claude/followup-stripe` (pull request #279), stacked on `claude/followup-spy` (pull request #278)
-Rollback revision: `6822a848`, the first parent of the merge commit `85cf0d39`. Reverting that merge commit undoes only this change.
+Reviewer: built with Claude Code and reviewed in independent AI review rounds; Greptile and Codex review on the pull request. Owner review: the before and after table was shown to the owner before the merge (see Owner decisions); no other owner review. This record does not certify the checks listed as UNVERIFIED.
+Branch: `claude/followup-stripe` (pull request #279), which was stacked on #278; both are merged to `main`
+Rollback: revert the merge commit `85cf0d39` (first parent `6822a848`) to undo only this change. That first parent was not built or deployed on its own; production before these three merges was `6c30c5d7`.
 
 ## Scope
 
 A behaviour change in one route. `src/pages/api/owner/requests/[id]/payment.ts` answered 502 for a failed Stripe invoice action only when the error message contained "Stripe" or "hosted payment URL", and 409 otherwise. Many real Stripe refusals do not contain that word, so they were answered as a 409 conflict. The route now answers 502 when the error is a Stripe SDK error or one of this code's own Stripe provider errors, raised for an unusable response or when invoicing is unavailable (`isStripeProviderFailure` and `StripeProviderError` in `src/lib/stripe-invoicing.ts`), and 409 otherwise. Response bodies are unchanged (`{"ok": false}`). The same catch serves the create and the replace actions for booking and balance invoices. No other route, the webhook, software invoices, text, migration, binding or dependency changed. Besides the route and the library, the change touches tests, the Stripe stand-in, one re-recorded fixture and the explanatory comment at the top of `tests/golden/owner-request-payment.test.ts`.
 
-Live on merge: `wrangler.jsonc` sets `STRIPE_PAYMENTS_ENABLED` to `"true"`. Whether the Stripe secrets are set in production was not checked here (UNVERIFIED). If they are, this status change takes effect for real invoice actions as soon as it is deployed.
+Live since deployment: `wrangler.jsonc` sets `STRIPE_PAYMENTS_ENABLED` to `"true"`. Whether the Stripe secrets are set in production was not checked here (UNVERIFIED). If they are, the new statuses apply to real invoice actions now.
 
 | Stripe refusal or failure | Before | After |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Two things for the owner to know. An idempotency conflict and an invalid request
 
 ## Owner decisions
 
-- The owner approved building this fix (approval relayed to the pull request author, 2026-11-14), then saw the table above and said to merge once the checks were clean (in conversation, 2026-11-15).
+- The owner approved building this fix (approval relayed to the pull request author, 2026-11-14), and, after being shown the table above, approved merging once the checks were clean (2026-11-15).
 
 ## Evidence and limits
 
@@ -45,14 +45,14 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - Golden corpus: `tests/golden/fixtures/owner-request-payment.json.gz` was re-recorded in its own commit. 21 of 221 cases change, each only in the first step's response status, 409 to 502; bodies, headers, database statements, outgoing requests, logs and rows are unchanged. The commit message and the pull request list the cases. No other fixture changed. After `main` re-recorded its fixtures in a newer format, `main` was merged in, its fixture taken, and the same change re-recorded on top in a commit of its own: again 21 of 221 cases, each only the first step's status.
 - Top of this branch, after merging `main` at `6c30c5d7`, run without a build: `oxlint --deny-warnings` exit 0; `biome format .` no fixes; `astro check` 0 errors; the full test suite passed except one test, `tests/scripts/publication-journal-trace.test.ts`, which starts an external model run and fails the same way in every scratch checkout used here, including one with documentation changes only, while passing in a normal checkout of `main`. It is treated as a local setup limit; `validate` in CI is the check. Before that merge, the build, the full suite and the built-bundle tests passed on this branch.
 - One independent review round for correctness and security and one for repository rules: no blocker or should-fix item. The correctness review enumerated every error that can reach the changed line and found the only status change is the intended one, apart from the lowercase case noted above.
-- `validate` passed on the final head, including the one test that failed only in the scratch checkout, and Codex found nothing. UNVERIFIED: the built Worker bundle was not inspected for the Stripe error class check; the server code already relies on the same check elsewhere.
+- `validate` and all six test lanes passed on the final head, and Codex found nothing. The one test that failed in the scratch checkout was not looked up individually in the CI logs. UNVERIFIED: the built Worker bundle was not inspected for the Stripe error class check; the server code already relies on the same check elsewhere.
 - UNVERIFIED: no Stripe test-mode run. The statuses come from tests with a stand-in for Stripe and from the recorded corpus.
 
 ## Checklist
 
 ### 1. Purpose and content
 
-- PASS, 1.1 Project, branch and scope: see the header and Scope. PASS, deployment authorization: the owner saw the before and after table and said to merge once the checks were clean (in conversation, 2026-11-15).
+- PASS, 1.1 Project, branch and scope: see the header and Scope. PASS, deployment authorization: after being shown the before and after table, the owner approved merging once the checks were clean (2026-11-15).
 - N/A, 1.2 to 1.5: no page, copy, media, link or route changed.
 
 ### 2. Search and sharing
@@ -84,9 +84,9 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - PASS (local), 7.1 Required checks: see Evidence and limits.
 - PASS, 7.2 Diff review: independent review locally, and Codex's code and security reviews of the final head found nothing; no review thread was open at merge. Greptile reviewed only the first head, because its reviews on this repository are paused.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, routing, cache and headers: none changed; not observed live.
-- PASS, 7.4 Rollback version: `6822a848`, the first parent of the merge commit `85cf0d39`.
+- PASS, 7.4 Rollback: a git revert of the merge commit `85cf0d39`. Production before the three merges was `6c30c5d7`.
 - UNVERIFIED, 7.5 Post-deployment verification, apart from what "Merge and deployment" lists: no journey, form, owner center or payment action was exercised live.
-- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes (`85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
+- PASS, 7.6 Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
 
 ### Software agreement signing
 
@@ -104,13 +104,13 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ## Merge and deployment (added after the merge)
 
-- Merged 2026-11-16 UTC as merge commit `85cf0d39`, whose first parent is `6822a848`.
+- Merged 2026-11-16 at about 01:22 UTC (the evening of 2026-11-15, US Eastern) as merge commit `85cf0d39`, whose first parent is `6822a848`.
 - Before the merge, read on the final head: every check passed, including `validate`, and Codex's code and security reviews had no finding.
 - This is the one behaviour change of the three: from this deployment the owner payment route answers 502 for the Stripe refusals listed in the table. No invoice action was exercised live and no Stripe test-mode run was made, so the new statuses are unobserved in production.
-- Production build: this merge commit got no build check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
-- After the merges, `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
+- Production build: this merge commit got no Workers Builds (production build) check of its own, because another pull request merged to `main` straight after. The Workers Builds check on the next `main` commit, `9eecc5e2`, which contains this merge, completed with success, and `validate` passed on that commit.
+- Checked by a plain HTTP request on 2026-11-16 at about 01:35 UTC, after `9eecc5e2` built: `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` each answered 200. No other live check was made.
 - Rollback: revert the merge commit `85cf0d39` to undo only this change.
 
 ## Delivery status
 
-Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
+Current state: Implemented: yes. Verified locally: yes. Deployed: yes, as part of `9eecc5e2` (which contains `85cf0d39`). Verified live: two pages answer 200; the payment route's new statuses are not observed live.
