@@ -32,7 +32,7 @@ it("shows the name mark only in the quiet panel", () => {
 
 it("shows the panel button only in the invitation, before the nav", () => {
 	expect(footer).toContain(
-		"{variant === 'invitation' && <a class=\"site-button site-button-large\" href={mainHref(buttonPath)} data-closing-button>",
+		"{variant === 'invitation' && <a class=\"site-button site-button-large site-button-trailing\" href={mainHref(buttonPath)} data-closing-button>",
 	);
 	expect(footer.indexOf("data-closing-button")).toBeLessThan(
 		footer.indexOf('<nav aria-label="Elsewhere">'),
