@@ -59,6 +59,8 @@ src/lib/invoice-event-order.dfy
 src/lib/invoice-event-order.dfy.gen
 tests/fixtures/discount-installments.dfy
 tests/fixtures/discount-installments.dfy.gen
+src/lib/software-deposit-block.dfy
+src/lib/software-deposit-block.dfy.gen
 
 # Apalache scratch output from quint verify
 _apalache-out/

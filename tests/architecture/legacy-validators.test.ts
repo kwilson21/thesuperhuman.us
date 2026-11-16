@@ -29,6 +29,7 @@ describe("the frozen Zod validators", () => {
 			"brief-suggest.ts",
 			"mcp-tool-inputs.ts",
 			"music-demand.ts",
+			"owner-software-command.ts",
 			"publication-contract.ts",
 			"software-inquiry.ts",
 			"software-offers.ts",

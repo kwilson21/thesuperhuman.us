@@ -8,6 +8,8 @@ export function setupBriefAutocomplete(
 	form: HTMLFormElement,
 	earlier: () => Record<string, string>,
 	startSuggestionPass: typeof setupSuggestionPass,
+	// Told when the visitor turns suggestions on or off; the brief board follows the same switch.
+	onToggle: () => void = () => {},
 ) {
 	const startPass = startSuggestionPass(form);
 	const resizeAnswers: (() => void)[] = [];
@@ -102,6 +104,8 @@ export function setupBriefAutocomplete(
 			} catch {
 				/* Storage is optional. */
 			}
+
+			onToggle();
 		}),
 	);
 	form.querySelectorAll<HTMLTextAreaElement>("[data-answer]").forEach((box) => {
@@ -282,5 +286,5 @@ export function setupBriefAutocomplete(
 	});
 	updateToggles();
 
-	return { clear, start };
+	return { clear, start, isEnabled: () => enabled };
 }
