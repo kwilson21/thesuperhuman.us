@@ -293,9 +293,9 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
-		// The mutants whose race needs one particular starting point (PublishNoStage, PublishStaleSupersede, CompleteNoStage,
-		// RevokeNoFirstStatus)
-		// begin from that point only, and are found within a few thousand random runs. Three runs must pass, each of 8,000 runs:
+		// The mutants whose race needs particular starting points (PublishNoStage from finalAndReview, PublishStaleSupersede and
+		// RevokeNoFirstStatus from twoReviews, CompleteNoStage from final and finalPlus) begin from the one or two starting points
+		// their race needs and no others, and are found within a few thousand random runs. Three runs must pass, each of 8,000 runs:
 		// projectFiles takes every starting point; projectFilesFinalAndReview takes only finalAndReview, where a review publish
 		// whose stage guard is false in a race is reached (the first run reaches it only between 8,000 and 12,000 runs); and
 		// projectFilesFinalPlus takes only finalPlus, where a final publish whose stage guard is false in a race is reached
