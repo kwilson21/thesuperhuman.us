@@ -36,7 +36,9 @@ unchanged. Main integration includes #343, #346, #348 and #349.
   a source-level SDK regression guard, not a general sandbox or network security
   boundary. Static Stripe API hostname literals are rejected to catch common
   direct REST transports, including constants, URL/Request constructors and
-  template prefixes. Arbitrarily assembled runtime destinations are not proven
+  template prefixes and literal-only concatenation/template folding. Package
+  imports-map names are inspected as well as resolved files. Arbitrarily assembled
+  runtime destinations are not proven
   safe by this syntax check.
 - Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
   test-only entropy from application IDs and restores it after each case; the

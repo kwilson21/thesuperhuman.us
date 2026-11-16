@@ -1,6 +1,13 @@
 // Keep the reviewed Stripe SDK call inventory small. New adapters,
 // aliases or endpoints must extend this guard and the wire-header regression.
-import { globSync, readFileSync } from "node:fs";
+import {
+	globSync,
+	readFileSync,
+	mkdtempSync,
+	writeFileSync,
+	rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import ts from "typescript";
 import { posix } from "node:path";
 import { convertToTSX } from "@astrojs/compiler/sync";
@@ -59,7 +66,38 @@ const sources = globSync("src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,astro}").map(
 	}),
 );
 
-function verifyInventory(inputs: typeof sources) {
+function staticText(node: ts.Node): string | undefined {
+	if (ts.isStringLiteralLike(node)) return node.text;
+
+	if (ts.isParenthesizedExpression(node)) return staticText(node.expression);
+
+	if (
+		ts.isBinaryExpression(node) &&
+		node.operatorToken.kind === ts.SyntaxKind.PlusToken
+	) {
+		const left = staticText(node.left);
+		const right = staticText(node.right);
+
+		return left !== undefined && right !== undefined ? left + right : undefined;
+	}
+
+	if (ts.isTemplateExpression(node)) {
+		let text = node.head.text;
+
+		for (const span of node.templateSpans) {
+			const value = staticText(span.expression);
+
+			if (value === undefined) return undefined;
+			text += value + span.literal.text;
+		}
+
+		return text;
+	}
+
+	return undefined;
+}
+
+function verifyInventory(inputs: typeof sources, resolver = resolveModule) {
 	const found: string[] = [];
 	const clients: string[] = [];
 	const constructors: string[] = [];
@@ -78,9 +116,13 @@ function verifyInventory(inputs: typeof sources) {
 		const visit = (node: ts.Node) => {
 			// Direct REST transports are outside the reviewed SDK adapters. Reject
 			// static API-host literals even through constants, URL/Request constructors,
-			// concatenation or template prefixes. This is not arbitrary dataflow analysis.
+			// literal-only concatenations/templates or template prefixes. No arbitrary dataflow analysis.
+			const folded = staticText(node);
+
+			if (folded !== undefined && /api/i.test(folded))
+				expect(folded).not.toMatch(/\bapi\.stripe\.com\b/i);
+
 			if (
-				ts.isStringLiteralLike(node) ||
 				ts.isTemplateHead(node) ||
 				ts.isTemplateMiddle(node) ||
 				ts.isTemplateTail(node)
@@ -123,7 +165,11 @@ function verifyInventory(inputs: typeof sources) {
 				moduleSpecifier = node.arguments[0].text;
 
 			if (moduleSpecifier !== undefined) {
-				const resolved = resolveModule(moduleSpecifier, path);
+				const resolved = resolver(moduleSpecifier, path);
+
+				// Package imports maps can resolve an innocuous alias to the SDK.
+				if (resolved.names.some(isStripeModule))
+					expect(isStripeModule(moduleSpecifier)).toBe(true);
 
 				// Module imports are not public asset URLs. An unresolved local-looking
 				// path cannot silently leave the inventory (including Vite root paths).
@@ -601,4 +647,41 @@ it.each([
 	expect(() =>
 		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
 	).toThrow();
+});
+
+it.each([
+	'fetch("https://api.stripe" + ".com/v1/refunds");',
+	'fetch(("https://api." + "stripe") + (".com" + "/v1/refunds"));',
+	'fetch(`https://api.${"stripe"}${".com"}/v1/refunds`);',
+])("rejects folded static REST destination %s", (text) => {
+	expect(() =>
+		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
+	).toThrow();
+});
+
+it.each([
+	'import SDK from "#payments-sdk"; new SDK("sk_test_guard");',
+	'const SDK = await import("#payments-sdk");',
+	'const SDK = require("#payments-sdk");',
+	'export * from "#payments-sdk";',
+])("rejects package imports-map SDK alias %s", (text) => {
+	const root = mkdtempSync(posix.join(tmpdir(), "stripe-imports-"));
+
+	try {
+		writeFileSync(posix.join(root, "tsconfig.json"), "{}");
+		writeFileSync(
+			posix.join(root, "package.json"),
+			JSON.stringify({ imports: { "#payments-sdk": "stripe" } }),
+		);
+		const resolver = runtimeModuleResolver(root);
+
+		expect(resolver("#payments-sdk", "src/unsafe.ts").names).toContain(
+			"stripe",
+		);
+		expect(() =>
+			verifyInventory([{ path: "src/unsafe.ts", text }, ...sources], resolver),
+		).toThrow();
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
