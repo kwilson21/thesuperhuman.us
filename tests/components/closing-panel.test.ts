@@ -99,6 +99,7 @@ it("keeps the global pill button used by the closing panel", () => {
 const quiet = ["src/pages/contact.astro", "src/pages/software/start.astro"];
 
 const invitation = [
+	"src/layouts/ServiceSheet.astro",
 	"src/pages/building.astro",
 	"src/pages/writing/ai-gives-you-speed.astro",
 	"src/layouts/ProjectLayout.astro",
@@ -174,15 +175,17 @@ it("removes page-connect and the compact prop everywhere", () => {
 	}
 });
 
-it("gives Home the quiet panel with the pinned button, ending at its own contact section", () => {
+it("gives Home the shared footer button, keeping its horizon and invitation copy without a duplicate CTA", () => {
 	const home = read("src/pages/index.astro");
-	expect(home).toContain('<Footer variant="quiet" pinned slot="footer" />');
-	expect(home).toMatch(
-		/<section id="contact" class="site-section contact-section"[^>]* data-pinned-end>/,
-	);
-	expect(home).toContain(
+	expect(home).toContain('<Footer slot="footer" />');
+	expect(home).not.toContain("data-pinned-end");
+	expect(home).not.toContain(
 		'<a class="site-button" href="/contact">Get in touch</a>',
 	);
+	expect(home).toContain(
+		"Ideas, opportunities, or a conversation worth having.",
+	);
+	expect(home).toContain('class="horizon"');
 	expect(home).not.toContain("ContactForm");
 });
 
@@ -248,7 +251,7 @@ it("uses ink for readable footer link hover text on the panel", () => {
 it("renders the pinned button on invitation pages and where a page asks for it, hidden until the script shows it", () => {
 	expect(footer).toContain('pinned = variant === "invitation"');
 	expect(footer).toContain(
-		'{pinned && <div class="pinned-contact" data-pinned-contact hidden>',
+		'<div class="pinned-contact" data-pinned-contact hidden>',
 	);
 	expect(footer).toContain(
 		"<script>\n  import { setupPinnedContact } from '~/scripts/pinned-contact';",
@@ -267,8 +270,8 @@ it("hides the pinned button by default and shows it only on phones", () => {
 	expect(mobileStart).toBeGreaterThan(-1);
 	const mobile = footer.slice(mobileStart, footer.indexOf("@media print"));
 	expect(mobile).toContain(".pinned-contact:not([hidden])");
-	expect(mobile).toContain("position: fixed");
-	expect(mobile).toContain(".pinned-contact[data-at-end] { display: none; }");
+	expect(mobile).toContain("position: sticky");
+	expect(mobile).toContain("inset: 0 0 var(--contact-track-bottom, 0px)");
 	expect(mobile).toContain(
 		":global(body:has(.mobile-menu[open])) .pinned-contact",
 	);
@@ -282,7 +285,7 @@ it("hides the pinned button by default and shows it only on phones", () => {
 
 it("hides the pinned button in print", () => {
 	expect(footer).toContain(
-		"@media print { .pinned-contact { display: none !important; } }",
+		"@media print { .pinned-contact { display: none !important; } [data-closing-button][data-contact-proxy] { visibility: visible; } }",
 	);
 });
 
@@ -292,4 +295,30 @@ it("leaves the essay with one invitation, the panel button", () => {
 		'<nav class="essay-close" aria-label="Continue exploring"><a class="site-link" href="/writing">Back to Writing <span aria-hidden="true">←</span></a></nav>',
 	);
 	expect(essay).not.toContain("Get in touch");
+});
+
+it("aligns phone contact widths and limits handoff motion to visitors who allow it", () => {
+	expect(footer).toContain(
+		"calc(var(--contact-gutter) + var(--contact-panel-inset))",
+	);
+	expect(footer).toContain(
+		".closing-panel [data-closing-button] { width: min(100%, var(--contact-action-max)); box-sizing: border-box;",
+	);
+	expect(footer).toContain("@media (prefers-reduced-motion: no-preference)");
+	expect(footer).toContain(
+		".pinned-contact::before { transition: opacity var(--dur-hover) var(--ease-site); }",
+	);
+	expect(footer).toContain(
+		"[data-closing-button][data-contact-proxy] { visibility: hidden; }",
+	);
+	expect(footer).not.toContain("animation:");
+});
+
+it("keeps the owner-selected narrower contact pill equal in both positions", () => {
+	expect(footer).toContain("--contact-action-max: 15rem");
+	expect(
+		footer.match(/width: min\(100%, var\(--contact-action-max\)\)/g),
+	).toHaveLength(2);
+	expect(footer).toContain("margin-inline: auto;");
+	expect(global).toContain("min-height: 52px");
 });

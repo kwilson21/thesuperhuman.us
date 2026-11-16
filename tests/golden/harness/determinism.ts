@@ -4,6 +4,7 @@
 // that a route checks against a hex pattern still passes), crypto.getRandomValues and Math.random. A case moves time
 // only with `advance(ms)`, and the move is recorded.
 import { vi } from "vitest";
+import Stripe from "stripe";
 import type { EffectLog } from "./log";
 import type { Slot } from "./sequencer";
 import { isText } from "~/lib/type-guards";
@@ -147,6 +148,20 @@ export class Determinism {
 		const bytes = seeded(0x2545f491);
 		const floats = seeded(0x9e3779b9);
 
+		// Stripe 23 draws UUIDs for transport idempotency keys, even when the caller
+		// supplies its own key. Keep SDK entropy separate from application IDs, as
+		// we do for fake R2 upload IDs. The SDK and its HTTP requests still run.
+		// _platformFunctions is shared by Stripe instances; this test-only seam is
+		// restored after each case and covered by real-SDK harness regressions.
+		let transportIds = 0;
+
+		const stripeUuid = vi
+			.spyOn(new Stripe("sk_test_golden")._platformFunctions, "uuid4")
+			.mockImplementation(
+				() =>
+					`10000000-0000-4000-8000-${(++transportIds).toString(16).padStart(12, "0")}`,
+			);
+
 		const uuid = vi
 			.spyOn(crypto, "randomUUID")
 			.mockImplementation(() => uuidFor(++this.ids));
@@ -194,6 +209,7 @@ export class Determinism {
 			() => errors.mockRestore(),
 			() => warnings.mockRestore(),
 			() => generate.mockRestore(),
+			() => stripeUuid.mockRestore(),
 			() => uuid.mockRestore(),
 			() => random.mockRestore(),
 			() => math.mockRestore(),

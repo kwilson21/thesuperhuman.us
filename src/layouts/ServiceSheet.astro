@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "~/layouts/BaseLayout.astro";
+import Footer from "~/components/Footer.astro";
 import WorkWithMe from "~/components/WorkWithMe.astro";
 import PersonalName from "~/components/PersonalName.astro";
 import WorkDiagram from "~/components/WorkDiagram.astro";
@@ -47,6 +48,7 @@ const lyft = sheet.hero;
     <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
     <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
   </article>
+  <Footer slot="footer" />
 </BaseLayout>
 <script>
   import { runMotion } from '~/scripts/scroll-scenes';
@@ -101,6 +103,8 @@ h1 { font-size: clamp(2.75rem, 5.5vw, 4.5rem); line-height: 1.02; letter-spacing
   .software-steps p { font-size: 1rem; line-height: 1.4; margin-top: .4rem; }
   /* On screen the steps are one numbered list: each numeral hangs in a narrow gutter beside its title and description, with a hairline between steps. Beside the heading the list starts level with it, with no rule of its own. The print sheet keeps three columns (below). */
   @media screen {
+    /* The shared footer owns the screen legal line; the sheet retains it in print. */
+    .sheet-footnote > span { display: none; }
     .software-steps { border-bottom: 1px solid var(--rule); }
     .software-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 1rem; padding: 1rem 0; border-top: 1px solid var(--rule); }
     .software-steps li:first-child { border-top: 0; padding-top: .7rem; }
