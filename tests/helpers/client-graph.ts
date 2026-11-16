@@ -995,6 +995,14 @@ function resolveSpecifier(
 			};
 }
 
+/** Shared canonical local-module resolution for bounded runtime inventories. */
+export function runtimeModuleResolver(root: string) {
+	const aliases = aliasesOf(root);
+
+	return (specifier: string, from: string) =>
+		resolveSpecifier(specifier, resolve(root, from), root, aliases);
+}
+
 /** The files an `import.meta.glob` pattern matches: relative to the file, from the root (`/`), or through an alias. */
 function expandGlob(
 	pattern: string,

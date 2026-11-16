@@ -8,6 +8,7 @@ import {
 	globPatternsOf,
 	isImportMetaGlob,
 	runtimeGlobFiles,
+	runtimeModuleResolver,
 } from "../helpers/client-graph";
 import { expect, it } from "vitest";
 
@@ -15,6 +16,8 @@ const adapters = [
 	"src/lib/stripe-invoicing.ts",
 	"src/lib/software-invoices.ts",
 ];
+
+const resolveModule = runtimeModuleResolver(process.cwd());
 
 const methods = [
 	"stripe.customers.create",
@@ -33,14 +36,8 @@ function runtimeSource(path: string, text: string) {
 }
 
 function isInvoiceModule(path: string, specifier: string) {
-	const resolved = specifier.startsWith("~/")
-		? `src/${specifier.slice(2)}`
-		: specifier.startsWith(".")
-			? posix.normalize(posix.join(posix.dirname(path), specifier))
-			: specifier;
-
-	return (
-		resolved.replace(/\.(?:[cm]?[jt]sx?)$/, "") === "src/lib/stripe-invoicing"
+	return resolveModule(specifier, path).files.some(
+		(file) => posix.relative(process.cwd(), file) === adapters[0],
 	);
 }
 
@@ -79,6 +76,50 @@ function verifyInventory(inputs: typeof sources) {
 		);
 
 		const visit = (node: ts.Node) => {
+			// Loader values must not escape under aliases; only direct calls are reviewed.
+			if (ts.isExpression(node) && isRequire(node)) {
+				const owner = node.parent;
+
+				const propertyName =
+					ts.isIdentifier(node) &&
+					ts.isPropertyAccessExpression(owner) &&
+					owner.name === node;
+
+				if (!propertyName)
+					expect(ts.isCallExpression(owner) && owner.expression === node).toBe(
+						true,
+					);
+			}
+
+			// Local executable dependencies must remain in the scanned source boundary.
+			// Reuse canonical aliases/extension resolution, not hand-written path parsing.
+			let moduleSpecifier: string | undefined;
+
+			if (
+				(ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+				node.moduleSpecifier &&
+				ts.isStringLiteralLike(node.moduleSpecifier)
+			)
+				moduleSpecifier = node.moduleSpecifier.text;
+
+			if (
+				ts.isCallExpression(node) &&
+				(node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+					isRequire(node.expression)) &&
+				node.arguments[0] &&
+				ts.isStringLiteralLike(node.arguments[0])
+			)
+				moduleSpecifier = node.arguments[0].text;
+
+			if (moduleSpecifier !== undefined) {
+				for (const file of resolveModule(moduleSpecifier, path).files) {
+					if (/\.(?:[cm]?[jt]sx?|astro)$/.test(file))
+						expect(posix.relative(process.cwd(), file).startsWith("src/")).toBe(
+							true,
+						);
+				}
+			}
+
 			// Asset globs may not become an alternative runtime module loader. Use the
 			// same alias/glob resolver as the browser graph; broad and eager code globs
 			// are refused even when an `import` option conceals the exported factory.
@@ -479,4 +520,38 @@ it("rejects string-named re-export of the SDK constructor", () => {
 		(a, b) => Number(b.path === adapters[0]) - Number(a.path === adapters[0]),
 	);
 	expect(() => verifyInventory(mutated)).toThrow();
+});
+
+it.each([
+	[
+		"normalized alias",
+		'import { "stripeClient" as make } from "~/lib/../lib/stripe-invoicing"; make(env).refunds.create({});',
+	],
+	[
+		"normalized relative alias",
+		'import { "stripeClient" as make } from "./lib/../lib/stripe-invoicing"; make(env).refunds.create({});',
+	],
+	["escaped require", 'const load = require; const SDK = load("stripe");'],
+	[
+		"escaped module require",
+		'const load = module.require; const SDK = load("stripe");',
+	],
+	[
+		"escaped computed require",
+		'const load = module["require"]; const SDK = load("stripe");',
+	],
+	["outside static helper", 'import helper from "../scripts/build-icons.mjs";'],
+	[
+		"outside dynamic helper",
+		'const helper = await import("../scripts/build-icons.mjs");',
+	],
+	[
+		"outside aliased helper",
+		'import helper from "~/../scripts/build-icons.mjs";',
+	],
+	["outside reexport", 'export * from "../scripts/build-icons.mjs";'],
+])("rejects %s", (_name, text) => {
+	expect(() =>
+		verifyInventory([{ path: "src/unsafe.ts", text }, ...sources]),
+	).toThrow();
 });

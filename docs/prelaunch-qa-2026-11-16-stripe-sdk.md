@@ -29,7 +29,9 @@ unchanged. Main integration includes #343, #346, #348 and #349.
   calls, rejecting unpinned calls and client aliases that leave that inventory.
   Static asset globs use the existing source-graph resolver; runtime-module
   matches and unresolved glob patterns are rejected. String-named factory
-  import/re-export aliases are rejected too. New SDK use requires updating this
+  import/re-export aliases are rejected too. Canonical shared module resolution
+  covers alias dot segments; local executable imports outside the scanned src
+  boundary and escaping CommonJS loader values are rejected. New SDK use requires updating this
   scoped guard and its wire tests. This is
   a source-level regression guard, not a general sandbox or security boundary.
 - Stripe 23 draws transport UUIDs eagerly. The golden harness separates that
