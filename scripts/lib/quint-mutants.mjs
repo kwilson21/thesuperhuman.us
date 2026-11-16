@@ -91,6 +91,19 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/brief-board.qnt: the living brief's board, where late and overlapping replies from the interpreting model
+// meet the visitor's own changes (src/lib/brief-board.ts). Module name -> the property its change must break.
+export const boardMutants = {
+	boardSnapshotStatus: { property: "ownedUntouched" },
+	boardSeenOnly: { property: "undoRespected" },
+	boardWithdrawUnseen: { property: "undoRespected" },
+	boardNoAvoid: { property: "rejectedStaysRejected" },
+	boardSnapshotQuote: { property: "groundedOnApply" },
+	boardOutlineQuote: { property: "outlineGrounded" },
+	boardNoNumberGuard: { property: "newestWins" },
+	boardApplyPaused: { property: "pausedHolds" },
+};
+
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
 // name -> the property its change must break.
 export const inquiryMutants = {
@@ -262,6 +275,14 @@ export const models = [
 		mutants: musicMutants,
 		equivalents: [],
 		exhaustive: ["music"],
+		samples: "20000",
+	},
+	{
+		file: "verification/brief-board.qnt",
+		current: ["board"],
+		mutants: boardMutants,
+		equivalents: [],
+		exhaustive: ["board"],
 		samples: "20000",
 	},
 	{

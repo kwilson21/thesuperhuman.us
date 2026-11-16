@@ -575,6 +575,7 @@ it("discloses browser drafts and Workers AI accurately, with reassurance only at
 	expect(privacy).not.toContain("Software brief suggestions use");
 	expect(privacy).not.toContain("While you write a software brief");
 	expect(privacy).not.toContain("Updated October 10, 2026");
+	expect(privacy).not.toContain("Updated October 29, 2026");
 	expect(privacy).not.toContain("approximate counter");
 	expect(
 		readFileSync("src/pages/software/start.astro", "utf8").match(
