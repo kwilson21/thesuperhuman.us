@@ -352,6 +352,8 @@ type AnswerSeen = {
 	readonly facts: AnswerFacts;
 	/** The latest published review that has a time, the first of equal times, or null. */
 	readonly latest: StoredFile | null;
+	/** Every published review with that latest time: the write's `ORDER BY ... LIMIT 1` may take any of them. */
+	readonly tied: readonly StoredFile[];
 	/** A published review exists and no client message answered a review at or after its publication. */
 	readonly awaiting: boolean;
 	readonly rounds: number;
@@ -389,6 +391,13 @@ export const answerReview = alwaysWrites({
 			request,
 			facts,
 			latest,
+			tied: facts.files.filter(
+				(file) =>
+					latest !== null &&
+					file.version === "review" &&
+					file.status === "published" &&
+					file.published_at === latest.published_at,
+			),
 			awaiting:
 				latest !== null &&
 				!facts.decisions.some(
@@ -416,9 +425,8 @@ export const answerReview = alwaysWrites({
 			() => new ReviewNotAnswerable(),
 		),
 		unless(
-			term(
-				"the answer names the latest review",
-				(g: AnswerSeen) => g.latest?.id === g.request.reviewId,
+			term("the answer names the latest review", (g: AnswerSeen) =>
+				g.tied.some((file) => file.id === g.request.reviewId),
 			),
 			() => new ReviewNotAnswerable(),
 		),
