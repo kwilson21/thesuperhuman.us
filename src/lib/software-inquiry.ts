@@ -16,6 +16,7 @@ import type { NewOwnerRequest } from "./owner-requests";
 import type { OwnerRequest } from "./owner-model";
 import type { JsonValue } from "./json-value";
 import { isText } from "./type-guards";
+import { outlineText, storedOutline } from "./brief-board";
 
 export const softwarePaths = {
 	website: "Website design",
@@ -103,6 +104,7 @@ export const softwareLabels = {
 	existing: "What they already have",
 	updates: "Who will keep it up to date?",
 	appGoal: "What should the app let people do?",
+	outline: "Brief outline",
 } as const;
 
 // The client reads their own answers, so "they" becomes "you".
@@ -448,7 +450,10 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 			? details.path
 			: "workflow";
 
-	return Object.fromEntries(
+	// The living brief's outline (src/lib/brief-board.ts), when one was sent: one line an item, with where it came from.
+	const outline = path === "idea" ? [] : storedOutline(details.outline ?? null);
+
+	const rows = Object.fromEntries(
 		["path", ...softwareQuestions[path], ...softwareDetailKeys].flatMap(
 			(key): [string, string][] => {
 				if (key === "approverRole" && details.approver !== "other") return [];
@@ -484,4 +489,8 @@ export function softwareBrief(request: OwnerRequest): Record<string, string> {
 			},
 		),
 	);
+
+	return outline.length && path !== "idea"
+		? { ...rows, outline: outlineText(outline, path) }
+		: rows;
 }
