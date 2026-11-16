@@ -98,6 +98,15 @@ direction, and no schema in this repository uses CASCADE or SET NULL today. What
   to a table that moved across the response boundary, none of which change a digest;
 - the trigger-hit markers: an injected failure or interleave that, after the conversion, hits another operation or table.
 
+**A counter row at 0 is no state.** The digest of a database leaves out a `sqlite_sequence` row whose `seq` is 0 (a corpus
+rule, not a format change: the shape of a record is the same). For an AUTOINCREMENT table a counter row at 0 and no
+counter row give the same next id (SQLite takes the larger of the stored counter and the table's largest rowid), so no
+later statement can tell them apart, and a refused `INSERT ... SELECT` that creates one is not a write a rule moved out of
+SQL may be asked to repeat. Every other counter is still state. `tests/golden/harness/digest.test.ts` shows both halves, and
+`node scripts/golden-sequence-proof.mjs <from> [<to>]` proves a re-record after the rule changed only digests and
+never gained a counter row. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
+the proof, not with `golden:neutral`.
+
 What is deliberately not compared, because a conversion may change it: the D1 statements themselves. So one UPDATE
 replaced by a DELETE and an INSERT of the same row, an INSERT OR REPLACE, an upsert turned into an UPDATE, a statement
 split into a read and a guarded write, and writes to different tables reordered between the same two effects are all
