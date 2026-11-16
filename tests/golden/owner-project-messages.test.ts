@@ -110,7 +110,7 @@ const text = (
 
 const long = (n: number) => "a".repeat(n);
 
-const SELECT_PROJECT = /SELECT request_id FROM audio_projects/;
+const SELECT_PROJECT = /SELECT request_id,stage,revoked_at FROM audio_projects/;
 const INSERT = /INSERT INTO audio_project_messages/;
 const MARK = /UPDATE audio_project_messages SET read_at/;
 

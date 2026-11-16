@@ -1189,7 +1189,7 @@ const cases: Case[] = [
 	audioCase("the project lookup fails", {}, [text("Hello")], {
 		failures: [
 			{
-				on: /FROM audio_client_sessions s\s+JOIN owner_requests r ON r\.email/,
+				on: /SELECT email,expires_at,revoked_at FROM audio_client_sessions/,
 				message: "D1 is down",
 			},
 		],
