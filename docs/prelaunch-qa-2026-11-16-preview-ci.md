@@ -6,11 +6,24 @@ The read-only render workflow has no write credentials. The trusted publisher
 runs main's scripts, rejects unsafe paths/symlinks, changes outside declared
 scenes, deleted in-use media, mismatched tokens, invalid metadata and content hashes.
 Review sheets are derived by trusted ffmpeg from the exact accepted poster and
-video, not from PR-supplied sheets. Only the trusted scene inventory is allowed;
-new scene names require landing their source before automatic publication.
+video, not from PR-supplied sheets. Source posters must decode to 1200×630.
+The trusted inventory includes bounded regular scene HTML blobs from the exact
+candidate Git tree without executing them; every new scene requires full evidence.
 The publisher dispatches main's Validate workflow with an immutable revision.
-Dispatched code jobs have read-only tokens and no private build secret; a separate
-no-checkout job reports their aggregate result on that exact revision.
+An isolated read-only target job resolves a GitHub merge commit with exact base and
+head parents; all code lanes test that merge. The trusted finalizer verifies the
+run marker and merged-tree provenance against the still-current base before success.
+Dispatched code jobs have read-only tokens and no private build secret.
+A publisher rerun deterministically recreates its generated commit and may resume
+only when the PR still names the original head or that exact generated child.
+Unrelated moved heads are rejected; failed publication never reports success.
+
+State flow: resolve exact head/base → test merged tree → authenticate run and
+immutable sheet evidence → private approval gate → recheck authority/head/base →
+required status. Publisher recovery: render original head → reproduce generated
+child → compare current tip → publish sheets/receipt → dispatch validation.
+Bootstrap remains UNVERIFIED: these trusted scripts must exist on main before the
+new workflow can run; this change does not authorize bypassing any merge gate.
 
 Purpose and content: PASS for CI automation; no intentional visual redesign.
 Search/sharing and asset QA: UNVERIFIED until hosted renders are checked.

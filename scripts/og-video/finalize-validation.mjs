@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { verifyEvidence, evidenceSummary } from "./review-evidence.mjs";
+import { evidenceSummary, verifyEvidence } from "./review-evidence.mjs";
 
 const SHA = /^[0-9a-f]{40}$/;
 
@@ -225,15 +225,14 @@ async function latestValidation(sha, workflow) {
 
 		if (!authenticRun(run, workflow, repository, "validation")) continue;
 
-		if (run.event === "pull_request") {
-			if (run.head_sha === sha) candidates.push(run);
-		} else {
-			const value = await marker(run, "validation-target", "result.json");
+		const value = await marker(run, "validation-target", "result.json");
 
-			if (value?.sha === sha) candidates.push(run);
-			else if (!value)
-				candidates.push({ ...run, unbound: true, conclusion: null });
-		}
+		if (value?.sha === sha) candidates.push({ ...run, target: value });
+		else if (
+			!value &&
+			(run.event === "workflow_dispatch" || run.head_sha === sha)
+		)
+			candidates.push({ ...run, unbound: true, conclusion: null });
 	}
 
 	return selectAuthority(candidates);
@@ -394,6 +393,18 @@ export function assertValidationScripts(trusted, candidate) {
 	}
 }
 
+export function validMergeEvidence(target, sha, base, commit) {
+	return (
+		target?.sha === sha &&
+		target?.base === base &&
+		SHA.test(target?.merge ?? "") &&
+		commit?.sha === target.merge &&
+		commit.parents?.length === 2 &&
+		commit.parents[0].sha === base &&
+		commit.parents[1].sha === sha
+	);
+}
+
 async function verify() {
 	const state = JSON.parse(readFileSync("validation-state.json", "utf8"));
 
@@ -407,8 +418,14 @@ async function verify() {
 	// PR-controlled workflow edits cannot certify their own checks. A trusted main dispatch is required.
 	if (
 		state.sourceEvent === "pull_request" &&
-		tree(".", [".github/workflows/validate.yml"]) !==
-			tree("candidate", [".github/workflows/validate.yml"])
+		tree(".", [
+			".github/workflows/validate.yml",
+			"scripts/og-video/validation-target.mjs",
+		]) !==
+			tree("candidate", [
+				".github/workflows/validate.yml",
+				"scripts/og-video/validation-target.mjs",
+			])
 	)
 		throw new Error("Candidate validation workflow differs from trusted main");
 	const changed = tree(".", paths) !== tree("candidate", paths);
@@ -419,6 +436,21 @@ async function verify() {
 
 		return;
 	}
+
+	const target = state.authority?.target;
+
+	if (
+		!SHA.test(target?.merge ?? "") ||
+		!validMergeEvidence(
+			target,
+			state.sha,
+			state.base,
+			await api(`git/commits/${target.merge}`),
+		)
+	)
+		throw new Error(
+			"Validation did not test the exact head merged with the current base",
+		);
 
 	const scriptsAt = (cwd) =>
 		JSON.parse(

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 // Trusted half of the link-preview CI (.github/workflows/link-previews-publish.yml runs main's copy).
 // Checks the artifact the render job uploaded, which came from pull request code, copies the files
 // it allows into the pull request's checkout, and brings the asset record up to date.
@@ -6,20 +7,19 @@
 // Env: INCOMING (the artifact), TARGET (the pull request checkout), SHEETS_OUT (checked contact
 // sheets), PR_NUMBER, RUN_ID. Writes scenes=<names> to $GITHUB_OUTPUT. Node built-ins only.
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import {
-	mkdtempSync,
 	appendFileSync,
 	copyFileSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { withFiles, withNote } from "./record.mjs";
@@ -199,8 +199,23 @@ export function videoDuration(probe) {
 	return durationMs;
 }
 
-export function deriveSheet(video, declaredDurationMs, image) {
-	const probe = JSON.parse(
+export function posterDimensions(probe) {
+	const streams = probe?.streams;
+	const stream = streams?.[0];
+
+	if (
+		!Array.isArray(streams) ||
+		streams.length !== 1 ||
+		stream.codec_type !== "video" ||
+		!["png", "mjpeg"].includes(stream.codec_name) ||
+		stream.width !== 1200 ||
+		stream.height !== 630
+	)
+		throw new Error("Invalid preview poster dimensions or codec");
+}
+
+function probeMedia(path) {
+	return JSON.parse(
 		execFileSync(
 			"ffprobe",
 			[
@@ -211,7 +226,7 @@ export function deriveSheet(video, declaredDurationMs, image) {
 				"-show_streams",
 				"-of",
 				"json",
-				video,
+				path,
 			],
 			{
 				timeout: 10000,
@@ -220,8 +235,12 @@ export function deriveSheet(video, declaredDurationMs, image) {
 			},
 		).toString(),
 	);
+}
 
-	const durationMs = videoDuration(probe);
+export function deriveSheet(video, declaredDurationMs, image) {
+	// Check the original before any scaling can disguise malformed dimensions.
+	posterDimensions(probeMedia(image));
+	const durationMs = videoDuration(probeMedia(video));
 
 	if (Math.abs(durationMs - declaredDurationMs) > 34)
 		throw new Error("Declared duration differs from video");
@@ -288,6 +307,17 @@ export function applyArtifact(
 	);
 
 	const scenes = Array.isArray(changes.scenes) ? changes.scenes : [];
+	// REQUIRED_SCENES is emitted by trusted review-required.mjs from the exact
+	// candidate Git tree, not from changes.json or candidate manifest claims.
+	const required = (REQUIRED_SCENES ?? "").split(" ").filter(Boolean);
+
+	if (
+		required.length > 32 ||
+		new Set(required).size !== required.length ||
+		!required.every((scene) => SCENE.test(scene))
+	)
+		throw new Error("Invalid required scene inventory");
+	const allowedScenes = required.length ? new Set(required) : TRUSTED_SCENES;
 
 	if (
 		!scenes.length ||
@@ -297,13 +327,13 @@ export function applyArtifact(
 			(scene) =>
 				typeof scene === "string" &&
 				SCENE.test(scene) &&
-				TRUSTED_SCENES.has(scene) &&
-				existsSync(safePath(TARGET, `scripts/og-video/scenes/${scene}.html`)),
+				allowedScenes.has(scene) &&
+				lstatSync(safePath(TARGET, `scripts/og-video/scenes/${scene}.html`), {
+					throwIfNoEntry: false,
+				})?.isFile(),
 		)
 	)
 		throw new Error("Invalid scenes");
-
-	const required = (REQUIRED_SCENES ?? "").split(" ").filter(Boolean);
 
 	if (required.some((scene) => !scenes.includes(scene)))
 		throw new Error("Artifact omits scenes required by trusted review");

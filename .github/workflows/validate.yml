@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 # Dispatched candidate code must never poison default-branch caches.
 cache-mode: read
@@ -23,7 +24,29 @@ concurrency:
 
 # Independent checks run together; validate remains the required, fail-closed aggregate.
 jobs:
+  # Read-only isolation. Finalizer pins both this workflow and its helper to main
+  # for pull-request events; dispatched runs execute main itself.
+  target:
+    runs-on: ubuntu-latest
+    outputs:
+      merge: ${{ steps.target.outputs.merge }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: target
+        run: node scripts/og-video/validation-target.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ inputs.revision }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: validation-target-${{ github.run_attempt }}
+          path: result/result.json
+          retention-days: 7
   quality:
+    needs: target
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -34,7 +57,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          ref: ${{ needs.target.outputs.merge }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -44,6 +67,7 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run check
   contracts:
+    needs: target
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -54,7 +78,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          ref: ${{ needs.target.outputs.merge }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -71,6 +95,7 @@ jobs:
       - name: LemmaScript contracts (Dafny)
         run: pnpm run verify:dafny
   quint:
+    needs: target
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -85,7 +110,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          ref: ${{ needs.target.outputs.merge }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -108,6 +133,7 @@ jobs:
         env:
           QUINT_SHARD: ${{ matrix.shard }}/8
   tests:
+    needs: target
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -122,7 +148,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          ref: ${{ needs.target.outputs.merge }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -146,6 +172,7 @@ jobs:
           GOLDEN_VERIFY_DIGESTS: "1"
           GOLDEN_VERIFY_COUNTS: "1"
   build:
+    needs: target
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -156,7 +183,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          ref: ${{ needs.target.outputs.merge }}
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -181,19 +208,3 @@ jobs:
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"
-      # Isolated from candidate execution. The finalizer accepts this marker only from
-      # this workflow dispatched on main, never from a branch-selected dispatch.
-      - name: Record immutable validation target
-        if: always() && github.event_name == 'workflow_dispatch'
-        env:
-          REVISION: ${{ inputs.revision }}
-        run: |
-          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          mkdir result
-          jq -n --arg sha "$REVISION" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '{sha:$sha,run:$run,attempt:$attempt}' > result/result.json
-      - if: always() && github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: validation-target-${{ github.run_attempt }}
-          path: result/result.json
-          retention-days: 7

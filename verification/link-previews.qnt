@@ -124,3 +124,39 @@ module immutablePreviewEvidence {
 }
 module immutablePreviewCurrent { import immutablePreviewEvidence(MUTABLE=false).* }
 module immutablePreviewMutable { import immutablePreviewEvidence(MUTABLE=true).* }
+
+// Reruns may resume only at the reproducible generated child, not an unrelated push.
+module previewRecovery {
+  const ADOPT: bool
+  var tip: int
+  var resumed: bool
+  var lost: bool
+  action init = all { tip' = 0, resumed' = false, lost' = false }
+  action step = any {
+    all { tip == 0, tip' = 1, resumed' = resumed, lost' = lost },
+    all { not(resumed), tip' = 2, resumed' = resumed, lost' = lost },
+    all { tip == 1 or ADOPT, tip' = tip, resumed' = true, lost' = tip == 2 },
+    all { tip' = tip, resumed' = resumed, lost' = lost },
+  }
+  val recoveryPreservesNewerHead = not(lost)
+  val allProperties = recoveryPreservesNewerHead
+}
+module previewRecoveryCurrent { import previewRecovery(ADOPT=false).* }
+module previewRecoveryAdopt { import previewRecovery(ADOPT=true).* }
+
+// A green dispatch certifies the merged tree at the same current base, not just the head.
+module validationMergeBase {
+  const HEAD_ONLY: bool
+  var baseChanged: bool
+  var green: bool
+  action init = all { baseChanged' = false, green' = false }
+  action step = any {
+    all { not(green), baseChanged' = true, green' = false },
+    all { not(baseChanged) or HEAD_ONLY, baseChanged' = baseChanged, green' = true },
+    all { baseChanged' = baseChanged, green' = green },
+  }
+  val testedCurrentMerge = not(green) or not(baseChanged)
+  val allProperties = testedCurrentMerge
+}
+module validationMergeCurrent { import validationMergeBase(HEAD_ONLY=false).* }
+module validationMergeHeadOnly { import validationMergeBase(HEAD_ONLY=true).* }

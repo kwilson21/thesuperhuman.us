@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { siteTokens } from "../../scripts/og-video/site-tokens.mjs";
-import { withFiles, withNote } from "../../scripts/og-video/record.mjs";
 import { check, videoDuration } from "../../scripts/og-video/publish.mjs";
+import { withFiles, withNote } from "../../scripts/og-video/record.mjs";
+import { siteTokens } from "../../scripts/og-video/site-tokens.mjs";
 
 const PNG = Buffer.from([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13,
@@ -134,21 +134,21 @@ describe("link-preview publish checks", () => {
 });
 
 import {
-	mkdtempSync,
 	mkdirSync,
-	writeFileSync,
+	mkdtempSync,
 	rmSync,
 	symlinkSync,
+	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applyArtifact, safePath } from "../../scripts/og-video/publish.mjs";
-import { why } from "../../scripts/og-video/stale.mjs";
 import {
 	ENCODING,
 	rendererHash,
 	sourceHash,
 } from "../../scripts/og-video/fingerprint.mjs";
+import { applyArtifact, safePath } from "../../scripts/og-video/publish.mjs";
+import { why } from "../../scripts/og-video/stale.mjs";
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "preview-ci-"));
@@ -406,11 +406,13 @@ it("dispatches only trusted-main validation and withholds secrets from dispatche
 	expect(validation).not.toContain("PUBLICIST_PRIVATE_TOKEN");
 	expect(validation).not.toContain("statuses: write");
 	expect(
-		validation.match(/ref: \$\{\{ inputs.revision \|\| github.sha \}\}/g),
+		validation.match(/ref: \$\{\{ needs.target.outputs.merge \}\}/g),
 	).toHaveLength(5);
 	const reporter = validation.split("  candidate-checks:\n")[1];
 	expect(reporter).not.toContain("actions/checkout");
-	expect(reporter).toContain("validation-target-${{ github.run_attempt }}");
+	expect(validation.split("  quality:\n")[0]).toContain(
+		"validation-target-${{ github.run_attempt }}",
+	);
 	expect(reporter).not.toContain("statuses/$REVISION");
 });
 

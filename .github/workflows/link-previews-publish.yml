@@ -47,12 +47,11 @@ jobs:
           number=$(jq -r '.pull_requests[0].number' <<< "$run")
           [[ "$number" =~ ^[0-9]+$ ]] || exit 1
           pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$number")
-          jq -e --arg sha "$SHA" --arg branch "$BRANCH" --arg repo "$GITHUB_REPOSITORY" '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.ref == $branch and .head.sha == $sha' <<< "$pr" >/dev/null || { echo "Pull request moved or has an ineligible base."; exit 1; }
+          jq -e --arg sha "$SHA" --arg branch "$BRANCH" --arg repo "$GITHUB_REPOSITORY" '.state == "open" and .base.ref == "main" and .base.repo.full_name == $repo and .head.repo.full_name == $repo and .head.ref == $branch' <<< "$pr" >/dev/null || { echo "Pull request moved or has an ineligible base."; exit 1; }
           encoded=$(jq -rn --arg branch "$BRANCH" '$branch | @uri')
           protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded" --jq '.protected')
           [[ "$protected" == false ]] || { echo "Protected destination rejected."; exit 1; }
-          { echo "number=$number"; echo "branch=$BRANCH"; echo "base=$(jq -r .base.sha <<< "$pr")"; } >> "$GITHUB_OUTPUT"
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=pending -f context=validate -f description="Waiting for trusted preview review"
+          { echo "number=$number"; echo "branch=$BRANCH"; echo "base=$(jq -r .base.sha <<< "$pr")"; echo "date=$(jq -r .created_at <<< "$run")"; } >> "$GITHUB_OUTPUT"
           jq -e '.conclusion == "success"' <<< "$run" >/dev/null
       - if: steps.pr.outputs.number
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,6 +95,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.pr.outputs.branch }}
           SCENES: ${{ steps.apply.outputs.scenes }}
+          ORIGINAL: ${{ github.event.workflow_run.head_sha }}
+          PR: ${{ steps.pr.outputs.number }}
+          GIT_AUTHOR_DATE: ${{ steps.pr.outputs.date }}
+          GIT_COMMITTER_DATE: ${{ steps.pr.outputs.date }}
         working-directory: pr
         run: |
           git config user.name "github-actions[bot]"
@@ -104,6 +107,11 @@ jobs:
           if ! git diff --cached --quiet; then
             git commit -q -m "Render link previews: $SCENES" -m "Rendered by the Link previews workflow; review the contact sheets in the pull request description."
           fi
+          # Deterministic tree/parent/message/date recreates exactly the same generated commit.
+          # A rerun can resume after any later publication step failed, but never adopt user changes.
+          current=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.head.sha')
+          generated=$(git rev-parse HEAD)
+          [[ "$current" == "$ORIGINAL" || "$current" == "$generated" ]] || { echo "Pull request moved"; exit 1; }
           # A push that lost a race with a newer commit fails here; that commit gets its own run.
           git push origin "HEAD:refs/heads/$BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"

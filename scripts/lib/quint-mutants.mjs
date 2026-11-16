@@ -375,6 +375,8 @@ export const models = [
 			"previewFinalizerCurrent",
 			"validationAuthorityCurrent",
 			"immutablePreviewCurrent",
+			"previewRecoveryCurrent",
+			"validationMergeCurrent",
 		],
 		mutants: {
 			linkPreviewsMovingCheckout: { property: "renderedTreeMatches" },
@@ -385,6 +387,8 @@ export const models = [
 			previewFinalizerMoved: { property: "exactHead" },
 			validationAuthorityStale: { property: "authoritativeSuccess" },
 			immutablePreviewMutable: { property: "immutableReviewBound" },
+			previewRecoveryAdopt: { property: "recoveryPreservesNewerHead" },
+			validationMergeHeadOnly: { property: "testedCurrentMerge" },
 		},
 		equivalents: [],
 		exhaustive: [
@@ -393,6 +397,8 @@ export const models = [
 			"previewFinalizerCurrent",
 			"validationAuthorityCurrent",
 			"immutablePreviewCurrent",
+			"previewRecoveryCurrent",
+			"validationMergeCurrent",
 		],
 		samples: "1000",
 		steps: "8",
