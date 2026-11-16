@@ -1,15 +1,17 @@
 ---
 interface Props {
-  company: string;
-  role: string;
-  dates: string;
-  outcome: string;
-  id: string;
-  location: string;
-  context: readonly string[];
-  companyHref?: string;
+	company: string;
+	role: string;
+	dates: string;
+	outcome: string;
+	id: string;
+	location: string;
+	context: readonly string[];
+	companyHref?: string;
 }
-const { company, companyHref, role, dates, outcome, id, location, context } = Astro.props;
+
+const { company, companyHref, role, dates, outcome, id, location, context } =
+	Astro.props;
 ---
 <details id={id + '-background'} class="experience-row">
   <summary><span class="company">{company}</span><span class="role">{role}</span><span class="dates">{dates}</span><span class="toggle" aria-hidden="true">+</span></summary>

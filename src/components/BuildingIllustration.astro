@@ -1,12 +1,20 @@
 ---
-interface Props { kind: 'tally' | 'kaillera' | 'website'; }
+interface Props {
+	kind: "tally" | "kaillera" | "website";
+}
+
 const { kind } = Astro.props;
-const bars = [8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31, 22, 14, 27, 18];
+
+const bars = [
+	8, 14, 23, 17, 29, 11, 25, 34, 19, 26, 13, 30, 21, 10, 28, 36, 17, 25, 12, 31,
+	22, 14, 27, 18,
+];
+
 // The three dashed lines from the game room: to Player 1, to Player 2 and down to the spectator.
 // Each player is a person and a game controller (rounded body, two grips, a d-pad and two face
 // buttons) in the person's line weight; the spectator has no controller. Reviewed in
 // docs/design-reviews/building-kaillera-drawing-2026-10-22.md.
-const roomLines = ['M270 82 L70 207', 'M270 82 L470 207', 'M270 150 L270 270'];
+const roomLines = ["M270 82 L70 207", "M270 82 L470 207", "M270 150 L270 270"];
 ---
 {/* Each drawing arrives with its project row (building.astro). Where motion is welcome it then
     shows its flow once, in reading order, as it is seen ([data-scene-arrive] in

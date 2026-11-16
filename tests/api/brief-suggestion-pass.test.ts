@@ -1,49 +1,202 @@
-import { afterEach, expect, it, vi } from 'vitest';
-import { POST } from '~/pages/api/software/brief/pass';
-import { createSuggestionPass, validSuggestionPass, suggestionVisitorHash } from '~/lib/brief-suggestion-pass';
-const secret = 'existing-turnstile-secret-for-tests';
-const context = (token: unknown = 'token', overrides = {}) => ({
-  request: new Request('https://example.com/api/software/brief/pass', { method: 'POST', headers: { origin: 'https://example.com', 'content-type': 'application/json', 'cf-connecting-ip': 'test' }, body: JSON.stringify({ token }) }),
-  locals: { runtime: { env: { TURNSTILE_SECRET_KEY: secret, SOFTWARE_SUGGESTIONS_ENABLED: 'true', ...overrides } } },
-}) as any;
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
-it('verifies once and issues a thirty-minute secure, IP-bound pass', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: true })));
-  const response = await POST(context());
-  const cookie = response.headers.get('set-cookie')!;
-  expect(cookie).toContain('HttpOnly; Secure; SameSite=Strict; Max-Age=1800');
-  expect(await validSuggestionPass(cookie.split(';')[0].split('=')[1], secret, 'test')).toBe(true);
-  expect(fetch).toHaveBeenCalledTimes(1);
-});
-it.each([false, true])('never issues a pass on verification failure or absent secret (%s)', async missing => {
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ success: false })));
-  expect((await POST(context('token', missing ? { TURNSTILE_SECRET_KEY: undefined } : {}))).headers.get('set-cookie')).toBeNull();
-});
-it('rejects invalid payloads and cross-origin issuance', async () => {
-  vi.stubGlobal('fetch', vi.fn());
-  await POST(context(''));
-  const ctx = context(); ctx.request = new Request(ctx.request, { headers: { origin: 'https://other.example' } }); await POST(ctx);
-  expect(fetch).not.toHaveBeenCalled();
+import type { APIContext } from "astro";
+import { afterEach, expect, it, vi } from "vitest";
+import { partial } from "../helpers/doubles";
+import type { TestRuntime } from "../helpers/runtime";
+import { POST } from "~/pages/api/software/brief/pass";
+import {
+	createSuggestionPass,
+	validSuggestionPass,
+	suggestionVisitorHash,
+} from "~/lib/brief-suggestion-pass";
+
+const secret = "existing-turnstile-secret-for-tests";
+
+const context = (
+	token = "token",
+	overrides: Partial<TestRuntime["env"]> = {},
+): APIContext =>
+	partial<APIContext>({
+		request: new Request("https://example.com/api/software/brief/pass", {
+			method: "POST",
+			headers: {
+				origin: "https://example.com",
+				"content-type": "application/json",
+				"cf-connecting-ip": "test",
+			},
+			body: JSON.stringify({ token }),
+		}),
+		locals: partial<APIContext["locals"]>({
+			runtime: partial<TestRuntime>({
+				env: partial<TestRuntime["env"]>({
+					TURNSTILE_SECRET_KEY: secret,
+					SOFTWARE_SUGGESTIONS_ENABLED: "true",
+					...overrides,
+				}),
+			}),
+		}),
+	});
+
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
 });
 
-it('keeps an IP-bound pass valid across midnight UTC until its signed expiry', async () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-10T23:50:00Z'));
-  const pass = await createSuggestionPass(secret, 'test');
-  vi.setSystemTime(new Date('2026-10-11T00:05:00Z'));
-  expect(await validSuggestionPass(pass, secret, 'test')).toBe(true);
-  expect(await validSuggestionPass(pass, secret, 'other')).toBe(false);
-  expect(await validSuggestionPass(pass.slice(0, -1) + (pass.endsWith('a') ? 'b' : 'a'), secret, 'test')).toBe(false);
-  vi.setSystemTime(new Date('2026-10-11T00:20:00Z'));
-  expect(await validSuggestionPass(pass, secret, 'test')).toBe(false);
+it("verifies once and issues a thirty-minute secure, IP-bound pass", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: true })),
+	);
+	const response = await POST(context());
+	const cookie = response.headers.get("set-cookie")!;
+	expect(cookie).toContain("HttpOnly; Secure; SameSite=Strict; Max-Age=1800");
+	expect(
+		await validSuggestionPass(
+			cookie.split(";")[0].split("=")[1],
+			secret,
+			"test",
+		),
+	).toBe(true);
+	expect(fetch).toHaveBeenCalledTimes(1);
 });
 
-it('keys visitor identities with a labelled HMAC over the IP and UTC day', async () => {
-  const { createHmac } = await import('node:crypto');
-  const now = Date.parse('2026-10-10T23:50:00Z');
-  const expected = createHmac('sha256', secret).update(`brief-suggestion-visitor:v1:${Math.floor(now / 86400000)}:test`).digest('hex');
-  expect(await suggestionVisitorHash(secret, 'test', now)).toBe(expected);
-  expect(await suggestionVisitorHash('other-secret', 'test', now)).not.toBe(expected);
-  expect(await suggestionVisitorHash(secret, 'other-ip', now)).not.toBe(expected);
-  expect(await suggestionVisitorHash(secret, 'test', now + 86400000)).not.toBe(expected);
-  expect((await createSuggestionPass(secret, 'test', now)).split('.')[1]).toBe(expected);
+it.each([false, true])(
+	"never issues a pass on verification failure or absent secret (%s)",
+	async (missing) => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ success: false })),
+		);
+		expect(
+			(
+				await POST(
+					context("token", missing ? { TURNSTILE_SECRET_KEY: undefined } : {}),
+				)
+			).headers.get("set-cookie"),
+		).toBeNull();
+	},
+);
+
+it("answers 503 without a pass when the captcha service cannot be reached", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => {
+			throw new Error("network down");
+		}),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(503);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("set-cookie")).toBeNull();
+});
+
+it("answers 200 without a pass when the captcha check refuses the token", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: false })),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual({ ok: false });
+});
+
+it("answers 500 without a pass when the pass cannot be signed", async () => {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn(async () => Response.json({ success: true })),
+	);
+	vi.spyOn(crypto.subtle, "sign").mockRejectedValueOnce(
+		new Error("signing down"),
+	);
+	const response = await POST(context());
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("set-cookie")).toBeNull();
+});
+
+it("rejects invalid payloads and cross-origin issuance", async () => {
+	vi.stubGlobal("fetch", vi.fn());
+	await POST(context(""));
+	const ctx = context();
+	ctx.request = new Request(ctx.request, {
+		headers: { origin: "https://other.example" },
+	});
+	await POST(ctx);
+	expect(fetch).not.toHaveBeenCalled();
+});
+
+it("keeps an IP-bound pass valid across midnight UTC until its signed expiry", async () => {
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date("2026-10-10T23:50:00Z"));
+	const pass = await createSuggestionPass(secret, "test");
+	vi.setSystemTime(new Date("2026-10-11T00:05:00Z"));
+	expect(await validSuggestionPass(pass, secret, "test")).toBe(true);
+	expect(await validSuggestionPass(pass, secret, "other")).toBe(false);
+	expect(
+		await validSuggestionPass(
+			pass.slice(0, -1) + (pass.endsWith("a") ? "b" : "a"),
+			secret,
+			"test",
+		),
+	).toBe(false);
+	vi.setSystemTime(new Date("2026-10-11T00:20:00Z"));
+	expect(await validSuggestionPass(pass, secret, "test")).toBe(false);
+});
+
+it("keys visitor identities with a labelled HMAC over the IP and UTC day", async () => {
+	const { createHmac } = await import("node:crypto");
+	const now = Date.parse("2026-10-10T23:50:00Z");
+
+	const expected = createHmac("sha256", secret)
+		.update(`brief-suggestion-visitor:v1:${Math.floor(now / 86400000)}:test`)
+		.digest("hex");
+
+	expect(await suggestionVisitorHash(secret, "test", now)).toBe(expected);
+	expect(await suggestionVisitorHash("other-secret", "test", now)).not.toBe(
+		expected,
+	);
+	expect(await suggestionVisitorHash(secret, "other-ip", now)).not.toBe(
+		expected,
+	);
+	expect(await suggestionVisitorHash(secret, "test", now + 86400000)).not.toBe(
+		expected,
+	);
+	expect((await createSuggestionPass(secret, "test", now)).split(".")[1]).toBe(
+		expected,
+	);
+});
+
+it("logs a body that fails while it is read once, answers 500 with the fixed body and never asks the captcha", async () => {
+	const log = vi.spyOn(console, "error").mockImplementation(() => {});
+	vi.stubGlobal("fetch", vi.fn());
+
+	const ctx = context();
+
+	const init: RequestInit & { duplex: "half" } = {
+		method: "POST",
+		headers: {
+			origin: "https://example.com",
+			"content-type": "application/json",
+			"cf-connecting-ip": "test",
+		},
+		body: new ReadableStream({
+			start(controller) {
+				controller.error(new Error("client went away"));
+			},
+		}),
+		duplex: "half",
+	};
+
+	ctx.request = new Request(
+		"https://example.com/api/software/brief/pass",
+		init,
+	);
+
+	const response = await POST(ctx);
+
+	expect(response.status).toBe(500);
+	expect(await response.json()).toEqual({ ok: false });
+	expect(response.headers.get("cache-control")).toBe("no-store");
+	expect(fetch).not.toHaveBeenCalled();
+	expect(log).toHaveBeenCalledTimes(1);
+	log.mockRestore();
 });

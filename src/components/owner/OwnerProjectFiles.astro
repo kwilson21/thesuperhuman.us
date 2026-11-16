@@ -1,15 +1,66 @@
 ---
-import '~/styles/studio.css';
-import { parsePeaks, waveformRects } from '~/lib/audio-peaks';
+import "~/styles/studio.css";
+import { parsePeaks, waveformRects } from "~/lib/audio-peaks";
 
-type FileRow = { id: string; version: 'review' | 'final'; display_name: string; byte_size: number;
-  status: 'uploaded' | 'published' | 'revoked'; uploaded_at: string; published_at: string | null; peaks: string | null };
-type PendingUpload = { id: string; display_name: string; state: 'pending' | 'discarding'; created_at: string };
-type Props = { files: FileRow[]; pending: PendingUpload[]; endpoint: string; publishEndpoint: string;
-  canUpload: boolean; canRevoke: boolean; finalOnly: boolean; bookingPaid: boolean; balancePaid: boolean };
-const { files, pending, endpoint, publishEndpoint, canUpload, canRevoke, finalOnly, bookingPaid, balancePaid } = Astro.props;
-const stateLabel = { uploaded: 'Draft', published: 'Published', revoked: 'Revoked' } as const;
-const when = (value: string) => new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short' });
+type FileRow = {
+	id: string;
+	version: "review" | "final";
+	display_name: string;
+	byte_size: number;
+	status: "uploaded" | "published" | "revoked";
+	uploaded_at: string;
+	published_at: string | null;
+	peaks: string | null;
+};
+
+type PendingUpload = {
+	id: string;
+	display_name: string;
+	state: "pending" | "discarding";
+	created_at: string;
+};
+
+type Props = {
+	files: FileRow[];
+	pending: PendingUpload[];
+	endpoint: string;
+	publishEndpoint: string;
+	canUpload: boolean;
+	canRevoke: boolean;
+	finalOnly: boolean;
+	bookingPaid: boolean;
+	balancePaid: boolean;
+};
+
+const {
+	files,
+	pending,
+	endpoint,
+	publishEndpoint,
+	canUpload,
+	canRevoke,
+	finalOnly,
+	bookingPaid,
+	balancePaid,
+} = Astro.props;
+
+const stateLabel = {
+	uploaded: "Draft",
+	published: "Published",
+	revoked: "Revoked",
+} as const;
+
+const when = (value: string) =>
+	new Date(value).toLocaleString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+		timeZone: "America/New_York",
+		timeZoneName: "short",
+	});
+
 const size = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 ---
 <section class="owner-section project-files" data-owner-project-files data-endpoint={endpoint} data-publish-endpoint={publishEndpoint} aria-labelledby="project-files-heading">

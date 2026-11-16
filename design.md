@@ -28,6 +28,10 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
   --rule:   #E8E3DA;  /* hairlines only, 1.2:1 */
   --accent: #AE5534;  /* oklch(55.3% 0.126 40)  4.78:1 on paper, and paper on accent */
   --field-border: color-mix(in srgb, var(--muted) 65%, var(--paper)); /* 3.4:1, field edges */
+  --panel: color-mix(in srgb, var(--rule) 50%, var(--paper)); /* the closing panel and door art: the one soft surface */
+  /* on --panel, ink is 16.5:1, muted is 7.6:1, accent is 4.3:1 (focus rings and non-text only; no accent text on the panel) */
+  --radius-panel: 32px;  /* closing panel corners */
+  --radius-button: 999px; /* every button is a pill; fields, pictures and cards keep 3px or their own corners */
 
   /* @theme: Tailwind maps --color-paper/ink/muted/rule/accent to the above. */
   --font-serif: 'Libron', 'Iowan Old Style', Georgia, serif;     /* display, body */
@@ -52,7 +56,11 @@ file is the rule. Process rules (audits, triage, image QA, copy) live in
 }
 ```
 New colours are named tokens. Illustrations may keep local colour tokens in their own
-component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
+component (`--ill-*`, `--code-*`, the switchboard's `--sb-*`); declarations reference tokens,
+never raw hex.
+The publishing consent page (`src/lib/publication/oauth-login.ts`) is a standalone page with its own
+Content-Security-Policy, so it inlines the tokens as literals and loads Libron from the site's own font
+files; a test checks those literals against `global.css`.
 
 ## Typography
 - Libron (`--font-serif`) sets headings, body and public interface text at 14px or
@@ -65,7 +73,8 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Three families at most: Libron (the name mark counts as Libron), Inter, JetBrains Mono.
 - Body 16px / 1.6. Roles in `global.css`: `.page-title` clamp(3.25rem, 6.5vw, 5.4rem)
   / 1.02, `.page-lede`, `.display`, `.heading`, `.lede`, section `h2` clamp(1.75rem,
-  3vw, 2.25rem). Headings balance; prose wraps `pretty`. Roman headings only.
+  3vw, 2.25rem). Headings balance; prose wraps `pretty`. One exception: the closing panel's LLC
+  line balances (Nov 13 decision). Roman headings only.
 - Header wordmark and footer name are both 24px (D10.3-B).
 - Punctuation: curly quotes and apostrophes (D10.5-B), `·` as the separator in
   statuses and metadata (D10.7-B), and no em dashes anywhere.
@@ -85,20 +94,67 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
 - Project statuses are accent-dot lines in their stored sentence case (D4.1-D).
 - Numbered steps: hanging numerals in one list (D7.1-C); Threadline's steps use the
   study's stepper, accent circles joined by a hairline (D6.3-C).
+- Every page with the shared footer ends on the closing panel (`--panel`,
+  `--radius-panel`). It is the site's one soft surface; no other panel, card or field
+  takes a large radius without an owner decision.
+  On invitation pages the panel holds one "Get in touch" button, the footer links and the
+  LLC line. On quiet pages it holds the name mark, the footer links and the LLC line.
+- Every Get in touch button and link goes to the switchboard at `/contact` (November 15
+  decision, below). Home's contact section keeps its horizon and ends on its own Get in
+  touch button, so Home's closing panel stays quiet.
+- Every public page with the shared footer is an invitation page except Home (above) and
+  the pages Get in touch leads to, which are quiet: the switchboard and the two intake forms. Privacy, the
+  404 and the audio pages became invitation pages on November 16 (decision below).
+- Pinned contact button: the only element fixed over page content. On invitation pages
+  and on Home, at 600px wide and below, a full-width Get in touch pill stays at the bottom
+  of the screen. It steps aside while the closing panel, Home's contact section or another
+  filled button in the page (Home's "Start a project" and its three Work with me doors, the
+  404's "Back to home", the audio pages' "Start your song") is on screen, so it is never a
+  second filled button on the screen. A page's own button and the closing panel's can still
+  share a screen near the end of a page. It also hides while the phone menu is open or a form field has focus, appears
+  and goes without motion, and never shows above 600px, in print or without JavaScript.
+- The switchboard (`/contact`, `Switchboard.astro`) is a patch bay drawn in the site's
+  hairlines: rack ears with screws, a lamp over each jack, and the visitor's own "You"
+  jack. Each line is a plain link to the form that fits; the three project lines open the
+  brief with its path already chosen. From 1100px wide the lines are six columns, title and line over
+  lamp and jack, and the cable hangs below them; narrower, the board turns on its side
+  and the jacks run down the left. It is laid out for the cable from the first paint, so
+  nothing moves when the script arrives; without scripting it is the six links, with no
+  "You" jack. It takes the 3px corner of fields and pictures, not the panel radius.
+- At 380px wide and below a button label may wrap (reflow, WCAG 1.4.10); wider than
+  that it stays on one line. The publishing consent page's button is the exception: its
+  label wraps at any width, because that page cannot use a width query that follows text
+  size, and the label must stay inside the pill when text is enlarged. The closing panel's
+  large button is a second exception: its label wraps at any width when it does not fit, so
+  enlarged text reflows inside the panel; at the default text size it stays on one line.
+- The Work diagram's flow wraps by content: its parts share a row 1 : 1.2 and stack when the
+  row cannot hold their longest word, so enlarged text reflows instead of scrolling sideways
+  (WCAG 1.4.10). A word breaks inside itself only when it cannot fit a line. The large
+  button's and the phone closing panel's side padding are capped by the viewport
+  (`min(1.75rem, 8.75vw)`, `min(1.25rem, 6.25vw)`), and the footer's side gutter is capped
+  too (`min(var(--site-gutter), max(24px, 7.5vw))`). Each cap equals its rem value at 320px
+  wide and above at the default text size; the `max(24px, …)` floor keeps the footer's gutter
+  at its default value below 320px. The footer's side gutter stops growing with the text,
+  which gives the closing panel room for its button when text is enlarged.
 
 ## CTA voice
-- Primary · `.site-button`: accent fill, paper text, 1px border, 3px radius, 44px
-  minimum height; on a fine-pointer hover, ink fill.
-- Secondary · `.site-button-outline` (transparent, ink text) or `.site-link`: ink
+- Primary · `.site-button`: accent fill, paper text, 1px border, pill (`--radius-button`),
+  44px minimum height, one line; on a fine-pointer hover, ink fill. Large size,
+  `.site-button-large`, 52px, in the closing panel and the pinned contact button only.
+- Secondary · `.site-button-outline` (transparent, ink text, also a pill) or `.site-link`: ink
   text, accent rule about 4px under the baseline, accent arrow, 44px tap area
   (D8.4-C).
 - Running links · ink with a 1px accent rule; accent on fine-pointer hover.
+
+- On the closing panel, footer links are muted and turn ink on a fine-pointer hover; accent is not used for text there (4.3:1).
 
 ## States
 - Focus · `outline: 2px solid var(--accent)` with a 2px offset on `:focus-visible`,
   shown at once, never animated.
 - Hover · only inside `(hover: hover) and (pointer: fine)`; one signal per element
   (D2.2-B: project cards keep their lean and resting glow; the glow does not grow).
+  On the switchboard the signal is the plug reaching toward the line, or the lamp
+  warming when the script has not drawn the cable.
 - Active · opacity .78 on links, buttons, summaries and sliders.
 - Fields · 1px `--field-border`, paper fill, 3px radius, 16px text; invalid shows
   the accent edge with an error message in text; disabled is opacity .5 with a
@@ -116,10 +172,24 @@ component (`--ill-*`, `--code-*`); declarations reference tokens, never raw hex.
   stop: the studio picture no longer lifts or leans toward the pointer, and the code
   rows, notebook and terrain sit still (D2.1-D). Nothing else drifts or parallaxes.
   The project-card lean on Home is a hover state, kept by D2.2-B (see States).
+- Home's waveform edge draws the newest released song. While the A/B comparison plays,
+  the edge rises and falls with the music's level and a ring of light around the
+  horizon sun glows with it; both rest when the music stops, and only a visitor's
+  Play starts them (owner decision, 2026-11-15, PR #320).
 - Building drawings arrive with their row, then play once in reading order (D3.3-C).
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).
 - Anything that plays on its own rests within five seconds. Page cross-fade 180ms.
+- The switchboard's plug sits square over the jack it reaches toward or seats in; a lifted
+  plug shows the lift by its size and shadow. Reaching toward a line on hover or focus
+  arrives in about 0.15s with no overshoot; seating or dropping it overshoots a touch,
+  like a plug clicking home, and settles in about half a second. A carried plug stays
+  under the pointer. Its lamp strikes twice in 420ms. The cable is a chain under gravity
+  pinned at both plugs, so it whips and sways as the plug moves; the first time the
+  board's "You" jack comes into view it drops from straight into its hang. Each settles
+  within three seconds; a change of layout lets the cable swing to its new ends. With reduced motion the cable is drawn at rest and never swings. A chosen line navigates 560ms after the click so the lamp can
+  be seen; with reduced motion the plug moves without animating and the page changes at
+  once.
 
 ## Page families
 From `docs/website-system-plan.md` (Templates and explanations): Home, Work,
@@ -171,6 +241,9 @@ timings and local colour tokens.
   clearance, and never a personal address. Gate 46 (no invented metrics) applies.
 - Design-choice findings go to the owner as alternatives. They are never silently
   fixed, flattened or "brought into line"; only defects are fixed directly.
+- The studio's labels and phone pins are frosted glass pills (owner decision, November
+  15, 2026), against Hallmark's editorial default of no glass. They are overlays over
+  the picture, the one case Hallmark's anti-patterns allow.
 
 ## Owner decisions (October 22, 2026)
 All picks are quoted in `docs/design-concepts/README.md` ("Owner's picks"), with
@@ -181,6 +254,72 @@ One-time changes with no standing rule: D1.1-B and D1.2-C (door layout on Home a
 D5.4-B, D8.5-D, D9.1-B, D10.1-C, D10.4-A, D10.6-B. Deferred: D5.1-D (photographs
 of the owner's own objects; recorded in `docs/website-system-plan.md`, Deferred
 maintenance).
+
+## Owner decisions (November 12, 2026)
+Kazon chose the closing panel and pill buttons from the design options: "I really like B"
+and "Pills on every button". The spec is
+`docs/superpowers/specs/2026-11-12-closing-panel-and-pill-buttons-design.md`.
+
+Kazon revised the panel after seeing the built pages: "it feels like there's two calls to action, I just want a simple get in touch button"; "The original one button only worked best"; and, for the pinned button, "Phones only".
+
+## Owner decisions (November 13, 2026)
+Kazon chose how the closing panel's legal line wraps on a narrow phone, from four options
+shown side by side at 320px wide: "B" (balanced wrap). The line balances when it wraps and
+is unchanged where it fits on one line.
+
+When the closing button's label wraps to two lines at enlarged text, the arrow stays centred
+beside both lines. Kazon chose it from two renders ("1 for sure", November 13, 2026). At a
+doubled root the label is two lines from 320px to 430px wide (measured in the release
+record). A width where it needs three lines is not yet approved and is an owner decision.
+
+At enlarged text on phone widths the footer's side gutter stops growing, so the closing panel may sit wider than the content above it and the gap before the arrow may widen. Kazon accepted both from a render: "Yes, acceptable" (November 13, 2026).
+
+Kazon chose to load Libron on the publishing consent page, so it matches the rest of the site: "We should def load libron" (November 13, 2026, after seeing the page with fallback fonts).
+
+## Owner decisions (November 15, 2026)
+Kazon's picks on the round-two decision page, given in conversation: frosted glass for the
+studio's labels and for its phone pins, "Play Kaillera Next" for the controller's label, and
+the Combo for its scene, with the note "Frosted glass looks the best but let's improve upon
+what we have with that". Built from those picks and that note, and shown to Kazon in the
+PR: paper glass that blurs the desk behind it, in pill corners like the buttons, with a
+bright top edge, a hairline and a soft shadow; dark glass for the monitor's pin over its
+screen; an accent dot on each pin; the headphones' pin near their top and the controller's
+just above it, so both stay in view; plain paper where a browser cannot blur. Its colours are local tokens mixed from the
+site's own (`--glass-*` in `src/components/Hero.astro`). The controller's pin is "Play",
+and it opens the game itself at kaillera-next.thesuperhuman.us, its label ending in ↗ as a
+link that leaves the site ("yes straight to the game").
+Pointing at the controller or focusing it plays the Combo: the D-pad glints, then the four
+face buttons light in turn, resting within two seconds.
+
+Kazon asked why Home had no Get in touch button ("Why is the get in touch button missing on
+the home page?") and for the button to open a chooser: "modify the button so we can instead
+bring the user to a screen to let them quickly choose whether they want to send me an
+inquiry, request my resume, start a song or plan their website/discuss their project", with
+the project choices making the selection for the visitor "if that makes sense", and "Please
+be very very creative in re-envisioning this, let's make it fun for the user to make their
+selection". The switchboard, its patch bay look, and the split of "Discuss your project" into
+its two briefs (web app, workflow) are the builder's answer to that request, recorded above
+and waiting for Kazon's review on the pull request.
+
+## Owner decisions (November 16, 2026)
+Kazon asked, in conversation: "Are there any other screens that are missing the get in
+touch button? Be sure to address those, idk how to answer the other design choices".
+Privacy, the 404 and the audio pages (Audio, Portfolio, Releases, Services and each song
+page) had the quiet panel; they now end on the Get in touch button. On the audio site it
+opens the switchboard on the main site, whose song line leads back to the song intake. The
+switchboard and the two intake forms stay quiet, since each is where Get in touch leads.
+
+The builder's calls on the three design choices put to Kazon on November 15, for Kazon's
+review on the pull request:
+
+- The switchboard keeps its six columns from 1100px: at 1280px each line reads in four or
+  five short lines, and the row is what makes it a patch bay.
+- The pinned phone button steps aside while another filled button is on screen, so
+  Home's first phone screen shows "Start a project" alone and the pinned button appears
+  once it has scrolled away. The same rule hides it through Home's Work with me doors (three
+  filled buttons) and covers the 404 and the audio pages.
+- Home's contact section keeps its approved line ("Ideas, opportunities, or a
+  conversation worth having."); the switchboard names the choices one click later.
 
 ## Variants
 None. A page that needs something this file does not allow gets an owner decision

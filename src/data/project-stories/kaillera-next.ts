@@ -1,219 +1,434 @@
-import type { ImageMetadata } from 'astro';
-import type { Milestone } from '~/lib/project-story';
-import prototype from '~/assets/projects/kaillera-next/prototype-v0.1.0.webp';
-import lobbyDesktop from '~/assets/projects/kaillera-next/lobby-v0.8.0-desktop.webp';
-import lobbyPhone from '~/assets/projects/kaillera-next/lobby-v0.8.0-phone.webp';
-import gamepad from '~/assets/projects/kaillera-next/gamepad-iphone.webp';
-import syncDiagram from '~/assets/projects/kaillera-next/staying-in-sync-diagram.webp';
-import bitsDiagram from '~/assets/projects/kaillera-next/identical-bits-diagram.webp';
-import rollbackDiagram from '~/assets/projects/kaillera-next/rollback-diagram.webp';
-import startupDiagram from '~/assets/projects/kaillera-next/startup-diagram.webp';
-import aiTeamDiagram from '~/assets/projects/kaillera-next/ai-team-diagram.webp';
-import staticDemoDiagram from '~/assets/projects/kaillera-next/static-demo-diagram.webp';
-import recoveryDiagram from '~/assets/projects/kaillera-next/recovery-syncs-diagram.webp';
-import selfHostingDiagram from '~/assets/projects/kaillera-next/self-hosting-diagram.webp';
-import supportedRoms from '~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp';
-import remixFreezesDiagram from '~/assets/projects/kaillera-next/remix-freezes-diagram.webp';
-import landingPage from '~/assets/projects/kaillera-next/landing-page-annotated.webp';
-import directionADemo from '~/assets/projects/kaillera-next/direction-a-demo-annotated.webp';
-import remixMenuRollback from '~/assets/projects/kaillera-next/remix-menu-rollback-diagram.webp';
-import graphicsFixes from '~/assets/projects/kaillera-next/graphics-fixes-diagram.webp';
-import matchLogsDiagram from '~/assets/projects/kaillera-next/match-logs-diagram.webp';
-import netplayReliability from '~/assets/projects/kaillera-next/netplay-reliability-diagram.webp';
-import switch2Diagram from '~/assets/projects/kaillera-next/switch2-controller-diagram.webp';
+import type { ImageMetadata } from "astro";
+import type { Milestone } from "~/lib/project-story";
+import prototype from "~/assets/projects/kaillera-next/prototype-v0.1.0.webp";
+import lobbyDesktop from "~/assets/projects/kaillera-next/lobby-v0.8.0-desktop.webp";
+import lobbyPhone from "~/assets/projects/kaillera-next/lobby-v0.8.0-phone.webp";
+import gamepad from "~/assets/projects/kaillera-next/gamepad-iphone.webp";
+import syncDiagram from "~/assets/projects/kaillera-next/staying-in-sync-diagram.webp";
+import bitsDiagram from "~/assets/projects/kaillera-next/identical-bits-diagram.webp";
+import rollbackDiagram from "~/assets/projects/kaillera-next/rollback-diagram.webp";
+import startupDiagram from "~/assets/projects/kaillera-next/startup-diagram.webp";
+import aiTeamDiagram from "~/assets/projects/kaillera-next/ai-team-diagram.webp";
+import staticDemoDiagram from "~/assets/projects/kaillera-next/static-demo-diagram.webp";
+import recoveryDiagram from "~/assets/projects/kaillera-next/recovery-syncs-diagram.webp";
+import selfHostingDiagram from "~/assets/projects/kaillera-next/self-hosting-diagram.webp";
+import supportedRoms from "~/assets/projects/kaillera-next/supported-roms-lobby-annotated.webp";
+import remixFreezesDiagram from "~/assets/projects/kaillera-next/remix-freezes-diagram.webp";
+import landingPage from "~/assets/projects/kaillera-next/landing-page-annotated.webp";
+import directionADemo from "~/assets/projects/kaillera-next/direction-a-demo-annotated.webp";
+import remixMenuRollback from "~/assets/projects/kaillera-next/remix-menu-rollback-diagram.webp";
+import graphicsFixes from "~/assets/projects/kaillera-next/graphics-fixes-diagram.webp";
+import matchLogsDiagram from "~/assets/projects/kaillera-next/match-logs-diagram.webp";
+import netplayReliability from "~/assets/projects/kaillera-next/netplay-reliability-diagram.webp";
+import switch2Diagram from "~/assets/projects/kaillera-next/switch2-controller-diagram.webp";
 
 export const kailleraStory = {
-  title: 'Kaillera Next',
-  subtitle: 'Open a link and play supported N64 games with friends, nothing to install.',
-  description: 'Kaillera introduced me to programming. I make the design decisions and review every change; Claude Code helps with implementation.',
-  status: 'In development · playable demo build',
+	title: "Kaillera Next",
+	subtitle:
+		"Open a link and play supported N64 games with friends, nothing to install.",
+	description:
+		"Kaillera introduced me to programming. I make the design decisions and review every change; Claude Code helps with implementation.",
+	status: "In development · playable demo build",
 };
 
-const artifact = (image: ImageMetadata, title: string, caption: string, kind: string) => ({
-  src: image.src, width: image.width, height: image.height, title, caption, kind,
-  alt: `${title}. ${caption}`,
+const artifact = (
+	image: ImageMetadata,
+	title: string,
+	caption: string,
+	kind: string,
+) => ({
+	src: image.src,
+	width: image.width,
+	height: image.height,
+	title,
+	caption,
+	kind,
+	alt: `${title}. ${caption}`,
 });
 
 // Publicist entries. Each is the owner-approved draft from its private
 // review note (same ID), changed only for formatting. Page renders use the
 // site's own files at each tag with no server; no game footage is shown.
 export const kailleraMilestones: Milestone[] = [
-  {
-    id: 'kaillera-next-first-playable', day: '2026-03-19',
-    title: 'Playable in two days',
-    summary: 'Kaillera was a big part of my childhood and teenage years. It’s what introduced me to programming and made me want to learn. I always dreamed it could be more than it was, but never had the skills to build that, until now. The goal: open a link and play N64 games with friends, nothing to install. In two days, Claude Code and I had a first version that runs the game in lockstep, directly between browsers.',
-    backfilled: true,
-    artifacts: [artifact(prototype, 'Kaillera Next · v0.1.0 prototype', 'The first prototype page, rendered from the v0.1.0 files without a server.', 'Page render')],
-  },
-  {
-    id: 'kaillera-next-streaming-mode', day: '2026-03-24',
-    title: 'A second way to play',
-    summary: 'The host runs the game and streams it as video, and guests send back their controller input. With only one copy of the game running, it can’t fall out of sync. Phone guests get an on-screen N64 gamepad.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-staying-in-sync', day: '2026-03-25',
-    title: 'Staying in sync',
-    summary: 'Lockstep only works if every browser computes the exact same game. An iPhone kept drifting out of sync about every 25 seconds. The cause was a compiler setting that let math come out slightly differently between browsers. Claude Code rebuilt the emulator with strict math, shipped March 25, and the game resyncs players when they drift.',
-    backfilled: true,
-    artifacts: [artifact(syncDiagram, 'Kaillera Next · Staying in sync', 'The symptom, the cause, the fix, and the resync safety net.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-easier-start', day: '2026-03-24',
-    title: 'Easier to start',
-    summary: 'Getting into a game got quicker. With both players opting in, the host can send their game file straight to a friend; the server only connects them and never touches the file. Invite links choose play or watch, and a phone that switches apps pauses instead of breaking the match.',
-    backfilled: true,
-    artifacts: [artifact(lobbyDesktop, 'Kaillera Next · Lobby', 'Create a room, or join or watch with a room code or invite link. Rendered from the v0.8.0 files without a server.', 'Page render')],
-  },
-  {
-    id: 'kaillera-next-alpha-launch', day: '2026-03-28',
-    title: 'Ready for other players',
-    summary: 'Security hardening, every script served from the site itself so it works on iPhone, rooms that survive a server update, and a version badge with a changelog. Tagged v0.8.0 on March 28, credited to my Agent 21 handle.',
-    backfilled: true,
-    artifacts: [artifact(lobbyPhone, 'Kaillera Next · v0.8.0 on a phone', 'The v0.8.0 lobby at phone width, with the version badge. Rendered from the tagged files without a server.', 'Page render')],
-  },
-  {
-    id: 'kaillera-next-seeing-problems', day: '2026-04-11',
-    title: 'Seeing what players hit',
-    summary: 'I wanted to know when something broke without waiting for someone to tell me. Players can send feedback from any page, every session’s log is saved however it ends, and an admin timeline shows each match step by step. I pushed it to start from one player’s session, because real reports start there.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-phone-controls', day: '2026-04-13',
-    title: 'Phones as real controllers',
-    summary: 'An on-screen N64 gamepad that fits every screen, and an invite button that opens the phone’s share sheet instead of making you leave the page. Version 0.21.0, “Agent’s Version”, also added an About page with the project’s history.',
-    backfilled: true,
-    artifacts: [artifact(gamepad, 'Kaillera Next · On-screen gamepad', 'The gamepad test page at iPhone size, with a placeholder where the game appears.', 'Test page render')],
-  },
-  {
-    id: 'kaillera-next-rom-library', day: '2026-04-02',
-    title: 'A library of your games',
-    summary: 'Your browser now keeps your games instead of forgetting the last one, and marks known-good copies as verified. When you join a friend, it finds their game in your library automatically. The server only knows fingerprints of known games, never the files.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-bit-exact', day: '2026-04-10',
-    title: 'Identical bits',
-    summary: 'Close wasn’t enough: a Mac and an iPhone had to compute identical bits. I noticed the game stayed in sync with audio off and drifted with it on, which led to one piece of float math in the audio timer. Claude Code then moved the emulated N64’s math into software, and 176,870 operations matched exactly between the two browsers.',
-    backfilled: true,
-    artifacts: [artifact(bitsDiagram, 'Kaillera Next · Identical bits', 'The three causes fixed in April and the recorded verification.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-four-players', day: '2026-04-09',
-    title: 'Four players who agree',
-    summary: 'Four-player games needed everyone to agree who was playing on every frame. The host now decides and everyone follows, fast players slow down smoothly instead of stuttering, and iPhone connections that silently stop are replaced.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-rollback', day: '2026-04-13',
-    title: 'Rollback',
-    summary: 'Fighting games feel best with rollback: guess a late input, keep playing, and rewind if the guess was wrong. Doing that in JavaScript fell out of sync across devices, so Claude Code moved the whole loop into the emulator’s C code, then hardened it against the freezes and silent failures that playtests turned up.',
-    backfilled: true,
-    artifacts: [artifact(rollbackDiagram, 'Kaillera Next · Rollback', 'One tick of the rollback engine in C.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-launch-readiness', day: '2026-04-13',
-    title: 'Fewer dead ends before the game',
-    summary: 'Starting a game took 30 to 40 seconds, and some failures left players on a spinner with no explanation. Claude Code now downloads the emulator while you’re still in the lobby and keeps the starting game state on your device for next time, and failures before gameplay now tell the player what happened.',
-    backfilled: true,
-    artifacts: [artifact(startupDiagram, 'Kaillera Next · Before the game starts', 'The three changes: an early download, a saved starting state, and no silent spinners.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-n64recomp', day: '2026-04-14',
-    title: 'Exploring a faster core',
-    summary: 'I asked what it would take to build an N64 emulator made for rollback. The design we landed on uses N64Recomp to translate the game’s code ahead of time instead of interpreting it, for an estimated 5 to 20 times speedup that would leave plenty of room for rewinds. It’s an exploration on its own branch, not part of the site.',
-    status: 'Exploration',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-late-join', day: '2026-04-29',
-    title: 'Joining a game in progress',
-    summary: 'We tried having late joiners watch first and then step in as players. It added too many moving parts, so we went back: if there’s a free slot you join as a player, and if the room is full you watch. Then Claude Code fixed the bugs a real session turned up, like a correct game file being flagged as wrong.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-hardening', day: '2026-04-30',
-    title: 'A security and polish pass',
-    summary: 'Claude Code ran a security pass: upload and reconnect tokens now expire, one room can no longer overwrite another game’s cached state, and spoofed IP headers are ignored by default. Alongside it came a round of phone polish: lobby controls that stack, overlays that stay out of the way, and slide-to-press on the gamepad.',
-    backfilled: true,
-  },
-  {
-    id: 'kaillera-next-ai-team', day: '2026-04-29',
-    title: 'A team of AI models',
-    summary: 'I set up a team of AI models with clear roles: Claude Code implements most of what I decide and integrates the work, under my review, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.',
-    backfilled: true,
-    artifacts: [artifact(aiTeamDiagram, 'Kaillera Next · A team of AI models', 'The roles as designed and the nightly two-model audit.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-static-demo', day: '2026-09-24',
-    title: 'A demo build with no ROMs',
-    summary: 'Kaillera Next now has a static demo build that runs on Cloudflare with no ROMs and no ROM sharing anywhere in the deploy. The same change fixed several rollback bugs, including a build step that quietly zeroed negative stick inputs. It also added a real two-browser test that plays against the server with added latency and jitter and compares both players’ game state. Claude Code built it to my design, and I reviewed it.',
-    artifacts: [artifact(staticDemoDiagram, 'Kaillera Next · A demo build with no ROMs', 'The static demo build and the rollback fixes that came with it.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-recovery-syncs', day: '2026-09-24',
-    title: 'Getting a stuck player back in sync',
-    summary: 'When one player’s game drifts or freezes, the host sends a fresh copy of its game state to bring them back. These fixes make that recovery work in rollback mode: the host sends it only once its own state is final, waits until the connection is open, and retries a send that was skipped. A separate fix makes any stick mismatch between players trigger a rollback, where small differences used to slip through. Claude Code wrote the fixes and a test that freezes one player and checks both games match afterward, and I reviewed them. Released in v0.51.3.',
-    artifacts: [artifact(recoveryDiagram, 'Kaillera Next · Getting a stuck player back in sync', 'The recovery path from drift to resync, and the stick-prediction fix.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-self-hosting', day: '2026-09-24',
-    title: 'Moving Kaillera Next onto one small server',
-    summary: 'Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections. It’s now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed. Players who can’t connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that. Claude Code built the setup to my design, and I reviewed it. The site now runs on the free-tier host, with the small server ready as the alternative.',
-    artifacts: [artifact(selfHostingDiagram, 'Kaillera Next · One small server', 'The request path through the tunnel, the relay for direct play, and the server-side ROM switch.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-supported-roms', day: '2026-09-23',
-    title: 'Saying which games work',
-    summary: 'Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it, and I reviewed both. Released in v0.50.0.',
-    artifacts: [artifact(supportedRoms, 'Kaillera Next · Saying which games work', 'The v0.50.0 lobby with the Supported ROMs list, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
-  },
-  {
-    id: 'kaillera-next-remix-freezes', day: '2026-09-25',
-    title: 'Fixing two Smash Remix freezes',
-    summary: 'Smash Remix matches could freeze in two places, both traced from one session’s logs. At match start, each player waited 5 seconds a frame for menu inputs that had already been used and deleted. On pause, one player’s frame count reset while the other’s didn’t, so their inputs never lined up again. Claude Code fixed both, then made the rollback engine wait for late inputs before it shuts down on a pause or match end, so a wrong guess can’t quietly leave the two games different. Code review by Greptile caught follow-up issues along the way. Released in v0.53.4.',
-    artifacts: [artifact(remixFreezesDiagram, 'Kaillera Next · Fixing two Smash Remix freezes', 'The freeze at match start, the freeze on pause, and the shutdown hold that followed. Drawn from the commits, not a gameplay capture.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-landing-page', day: '2026-09-26',
-    title: 'A front page that shows who’s playing',
-    summary: 'Kaillera Next’s room server runs on a free tier that naps when idle and takes about a minute to wake. It also served the front page, so the first visitor after a nap stared at a loading tab. The new front page leads with open rooms that hosts choose to list, each with a recent frame and Watch or Join. While the server wakes, it shows a clock and the lag visualizer. Invite links now open a page that says who invited you and what joining needs. A Cloudflare Worker is built to serve both pages without waiting on the server. Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1.',
-    artifacts: [artifact(landingPage, 'Kaillera Next · A front page that shows who’s playing', 'The v0.56.1 front page in its waking state, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
-  },
-  {
-    id: 'kaillera-next-direction-a', day: '2026-09-27',
-    title: 'Direction A reaches the room and the demo',
-    summary: 'I chose one look for the new front page, a console-era online lobby, and asked for everything else to match it. This round carried it into the room page and the rollback demo. The room names the game the host is playing, says when a ROM doesn’t match, lets a player switch to watching without leaving, and explains plainly when a browser can’t run the game. The demo’s result card gets a timeline driven by the engine’s real rollbacks. The site has a KN logo and lighter link-preview cards. The Worker in front now notices when its copy of the front page is out of date. Claude Code and Codex built it; I reviewed it. Released in v0.58.0.',
-    artifacts: [artifact(directionADemo, 'Kaillera Next · Direction A reaches the demo', 'The v0.58.0 rollback demo page, rendered from the site’s own files without a server or ROMs, with numbered pointers.', 'Annotated page render')],
-  },
-  {
-    id: 'kaillera-next-remix-menu-rollback', day: '2026-09-27',
-    title: 'Rollback through the Smash Remix menus, and two sync fixes',
-    summary: 'Smash Remix menus ran at 30 to 40 frames a second while matches ran near 60. The menus used lockstep because rollback had once crashed there; rollback now saves state a different way, so Claude Code turned it on from the start of the game, as Super Smash Bros. 64 already had it. Two fixes landed first. Players could reach different stages from the same picks, because each kept their own save file, so everyone now starts with the host’s. And a resync that arrived a frame early left a player one frame behind for good; now it waits for its frame. Late join also accepts Remix’s 16 MB states. Released in v0.59.0.',
-    artifacts: [artifact(remixMenuRollback, 'Kaillera Next · Rollback through the Remix menus', 'The shared save file at game start, the resync timing fix, and rollback from the first frame. Drawn from the commits, not a gameplay capture.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-graphics-fixes', day: '2026-09-28',
-    title: 'Fixing two graphics glitches in Smash Remix',
-    summary: 'Two picture bugs showed up in Smash Remix while both players’ games stayed in sync. On Pokemon Stadium, stage pieces stretched into slabs: our copy of the GLideN64 renderer predated two upstream fixes for reading past its vertex buffer, so Claude Code backported them. The other glitch hit the first frame shown after a rollback caught up. Replay had skipped a graphics-state bookkeeping step while the renderer kept drawing, so that frame restored stale state. Claude Code kept the step running and added a per-frame picture comparison to our two-player test, since state hashes couldn’t see the problem. Released in v0.59.3 and v0.59.4.',
-    artifacts: [artifact(graphicsFixes, 'Kaillera Next · Two graphics glitches fixed', 'The vertex buffer read past its end, and the replay step that restored stale graphics state. Drawn from the commits, not a gameplay capture.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-match-logs', day: '2026-09-28',
-    title: 'Match logs that outlast a restart',
-    summary: 'Kaillera Next’s room server runs on a free plan with no lasting disk, so every deploy, restart or idle sleep wiped its logs, including those of a match being debugged. Claude Code moved them to Cloudflare: rows in D1, screenshots in R2, with logs split and capped to fit D1’s 2 MB row limit. Each match is now registered when it starts, and late log uploads are refused for matches the server doesn’t know or that have closed. Matches whose logs show a crash, freeze or desync, or that a player sent feedback about, are kept for up to 180 days; the rest are deleted after 7 days. Released in v0.63.0.',
-    artifacts: [artifact(matchLogsDiagram, 'Kaillera Next · Match logs that outlast a restart', 'Where logs and screenshots go now, which matches are kept, and how the rest are deleted. Drawn from the code.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-netplay-reliability', day: '2026-09-28',
-    title: 'Keeping matches in step when the browser gets in the way',
-    summary: 'A netplay match has to survive browsers that throttle timers and pause background tabs. On one day, Claude Code fixed four ways matches broke. A phone whose timers fire about 30 times a second now runs a second frame per tick to catch up, instead of holding the match at 30 frames a second. Clicking the toolbar mid-match no longer steals the emulator’s frame and quietly desyncs the players. Returning to a background tab no longer wipes inputs both players were waiting for. A shader cache that wrote past its table now stays in bounds, and a core crash now ends the match with an error instead of a frozen screen. Released in v0.63.1 to v0.63.14.',
-    artifacts: [artifact(netplayReliability, 'Kaillera Next · Keeping matches in step', 'Before and after for throttled timers, the toolbar click, tab return and the core crash, among other fixes in these releases. Drawn from the commits, not a gameplay capture.', 'Diagram')],
-  },
-  {
-    id: 'kaillera-next-switch2-controller', day: '2026-09-30',
-    title: 'Switch 2 Pro Controller over USB-C',
-    summary: 'The Nintendo Switch 2 Pro Controller stays silent to a browser until it gets a vendor handshake over USB, and on a Mac nothing sends it, so it never showed up as a gamepad. Claude Code added a small WebUSB module that sends the handshake after one click on "Connect Switch 2 Pro" in the room. After that first permission, it re-enables the controller on every page load and replug. A built-in profile maps its buttons and sticks, using numbers measured on the hardware. It’s experimental: wired USB-C in Chrome, tested on macOS only. Bluetooth, Safari and Firefox aren’t supported. A Codex review caught a stalled write being reported as success. Released in v0.64.0.',
-    artifacts: [artifact(switch2Diagram, 'Kaillera Next · Switch 2 Pro Controller over USB-C', 'The handshake, the profile choice and the stick mapping. Drawn from the code.', 'Diagram')],
-  },
+	{
+		id: "kaillera-next-first-playable",
+		day: "2026-03-19",
+		title: "Playable in two days",
+		summary:
+			"Kaillera was a big part of my childhood and teenage years. It’s what introduced me to programming and made me want to learn. I always dreamed it could be more than it was, but never had the skills to build that, until now. The goal: open a link and play N64 games with friends, nothing to install. In two days, Claude Code and I had a first version that runs the game in lockstep, directly between browsers.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				prototype,
+				"Kaillera Next · v0.1.0 prototype",
+				"The first prototype page, rendered from the v0.1.0 files without a server.",
+				"Page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-streaming-mode",
+		day: "2026-03-24",
+		title: "A second way to play",
+		summary:
+			"The host runs the game and streams it as video, and guests send back their controller input. With only one copy of the game running, it can’t fall out of sync. Phone guests get an on-screen N64 gamepad.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-staying-in-sync",
+		day: "2026-03-25",
+		title: "Staying in sync",
+		summary:
+			"Lockstep only works if every browser computes the exact same game. An iPhone kept drifting out of sync about every 25 seconds. The cause was a compiler setting that let math come out slightly differently between browsers. Claude Code rebuilt the emulator with strict math, shipped March 25, and the game resyncs players when they drift.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				syncDiagram,
+				"Kaillera Next · Staying in sync",
+				"The symptom, the cause, the fix, and the resync safety net.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-easier-start",
+		day: "2026-03-24",
+		title: "Easier to start",
+		summary:
+			"Getting into a game got quicker. With both players opting in, the host can send their game file straight to a friend; the server only connects them and never touches the file. Invite links choose play or watch, and a phone that switches apps pauses instead of breaking the match.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				lobbyDesktop,
+				"Kaillera Next · Lobby",
+				"Create a room, or join or watch with a room code or invite link. Rendered from the v0.8.0 files without a server.",
+				"Page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-alpha-launch",
+		day: "2026-03-28",
+		title: "Ready for other players",
+		summary:
+			"Security hardening, every script served from the site itself so it works on iPhone, rooms that survive a server update, and a version badge with a changelog. Tagged v0.8.0 on March 28, credited to my Agent 21 handle.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				lobbyPhone,
+				"Kaillera Next · v0.8.0 on a phone",
+				"The v0.8.0 lobby at phone width, with the version badge. Rendered from the tagged files without a server.",
+				"Page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-seeing-problems",
+		day: "2026-04-11",
+		title: "Seeing what players hit",
+		summary:
+			"I wanted to know when something broke without waiting for someone to tell me. Players can send feedback from any page, every session’s log is saved however it ends, and an admin timeline shows each match step by step. I pushed it to start from one player’s session, because real reports start there.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-phone-controls",
+		day: "2026-04-13",
+		title: "Phones as real controllers",
+		summary:
+			"An on-screen N64 gamepad that fits every screen, and an invite button that opens the phone’s share sheet instead of making you leave the page. Version 0.21.0, “Agent’s Version”, also added an About page with the project’s history.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				gamepad,
+				"Kaillera Next · On-screen gamepad",
+				"The gamepad test page at iPhone size, with a placeholder where the game appears.",
+				"Test page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-rom-library",
+		day: "2026-04-02",
+		title: "A library of your games",
+		summary:
+			"Your browser now keeps your games instead of forgetting the last one, and marks known-good copies as verified. When you join a friend, it finds their game in your library automatically. The server only knows fingerprints of known games, never the files.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-bit-exact",
+		day: "2026-04-10",
+		title: "Identical bits",
+		summary:
+			"Close wasn’t enough: a Mac and an iPhone had to compute identical bits. I noticed the game stayed in sync with audio off and drifted with it on, which led to one piece of float math in the audio timer. Claude Code then moved the emulated N64’s math into software, and 176,870 operations matched exactly between the two browsers.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				bitsDiagram,
+				"Kaillera Next · Identical bits",
+				"The three causes fixed in April and the recorded verification.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-four-players",
+		day: "2026-04-09",
+		title: "Four players who agree",
+		summary:
+			"Four-player games needed everyone to agree who was playing on every frame. The host now decides and everyone follows, fast players slow down smoothly instead of stuttering, and iPhone connections that silently stop are replaced.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-rollback",
+		day: "2026-04-13",
+		title: "Rollback",
+		summary:
+			"Fighting games feel best with rollback: guess a late input, keep playing, and rewind if the guess was wrong. Doing that in JavaScript fell out of sync across devices, so Claude Code moved the whole loop into the emulator’s C code, then hardened it against the freezes and silent failures that playtests turned up.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				rollbackDiagram,
+				"Kaillera Next · Rollback",
+				"One tick of the rollback engine in C.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-launch-readiness",
+		day: "2026-04-13",
+		title: "Fewer dead ends before the game",
+		summary:
+			"Starting a game took 30 to 40 seconds, and some failures left players on a spinner with no explanation. Claude Code now downloads the emulator while you’re still in the lobby and keeps the starting game state on your device for next time, and failures before gameplay now tell the player what happened.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				startupDiagram,
+				"Kaillera Next · Before the game starts",
+				"The three changes: an early download, a saved starting state, and no silent spinners.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-n64recomp",
+		day: "2026-04-14",
+		title: "Exploring a faster core",
+		summary:
+			"I asked what it would take to build an N64 emulator made for rollback. The design we landed on uses N64Recomp to translate the game’s code ahead of time instead of interpreting it, for an estimated 5 to 20 times speedup that would leave plenty of room for rewinds. It’s an exploration on its own branch, not part of the site.",
+		status: "Exploration",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-late-join",
+		day: "2026-04-29",
+		title: "Joining a game in progress",
+		summary:
+			"We tried having late joiners watch first and then step in as players. It added too many moving parts, so we went back: if there’s a free slot you join as a player, and if the room is full you watch. Then Claude Code fixed the bugs a real session turned up, like a correct game file being flagged as wrong.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-hardening",
+		day: "2026-04-30",
+		title: "A security and polish pass",
+		summary:
+			"Claude Code ran a security pass: upload and reconnect tokens now expire, one room can no longer overwrite another game’s cached state, and spoofed IP headers are ignored by default. Alongside it came a round of phone polish: lobby controls that stack, overlays that stay out of the way, and slide-to-press on the gamepad.",
+		backfilled: true,
+	},
+	{
+		id: "kaillera-next-ai-team",
+		day: "2026-04-29",
+		title: "A team of AI models",
+		summary:
+			"I set up a team of AI models with clear roles: Claude Code implements most of what I decide and integrates the work, under my review, Codex takes on engineering tasks and cross-reviews designs, and DeepSeek audits the reasoning. A nightly tech-debt audit only opens a draft pull request for me when two models agree on a fix.",
+		backfilled: true,
+		artifacts: [
+			artifact(
+				aiTeamDiagram,
+				"Kaillera Next · A team of AI models",
+				"The roles as designed and the nightly two-model audit.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-static-demo",
+		day: "2026-09-24",
+		title: "A demo build with no ROMs",
+		summary:
+			"Kaillera Next now has a static demo build that runs on Cloudflare with no ROMs and no ROM sharing anywhere in the deploy. The same change fixed several rollback bugs, including a build step that quietly zeroed negative stick inputs. It also added a real two-browser test that plays against the server with added latency and jitter and compares both players’ game state. Claude Code built it to my design, and I reviewed it.",
+		artifacts: [
+			artifact(
+				staticDemoDiagram,
+				"Kaillera Next · A demo build with no ROMs",
+				"The static demo build and the rollback fixes that came with it.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-recovery-syncs",
+		day: "2026-09-24",
+		title: "Getting a stuck player back in sync",
+		summary:
+			"When one player’s game drifts or freezes, the host sends a fresh copy of its game state to bring them back. These fixes make that recovery work in rollback mode: the host sends it only once its own state is final, waits until the connection is open, and retries a send that was skipped. A separate fix makes any stick mismatch between players trigger a rollback, where small differences used to slip through. Claude Code wrote the fixes and a test that freezes one player and checks both games match afterward, and I reviewed them. Released in v0.51.3.",
+		artifacts: [
+			artifact(
+				recoveryDiagram,
+				"Kaillera Next · Getting a stuck player back in sync",
+				"The recovery path from drift to resync, and the stick-prediction fix.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-self-hosting",
+		day: "2026-09-24",
+		title: "Moving Kaillera Next onto one small server",
+		summary:
+			"Kaillera Next needs a server for rooms, plus a relay for players whose networks block direct connections. It’s now set up to run on one small server behind a Cloudflare Tunnel, with no open inbound ports, and it redeploys itself when I merge to main. A free-tier host can take over with one command if needed. Players who can’t connect directly get short-lived relay credentials, and the key never reaches the browser. ROM sharing is off on the public server, and the server enforces that. Claude Code built the setup to my design, and I reviewed it. The site now runs on the free-tier host, with the small server ready as the alternative.",
+		artifacts: [
+			artifact(
+				selfHostingDiagram,
+				"Kaillera Next · One small server",
+				"The request path through the tunnel, the relay for direct play, and the server-side ROM switch.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-supported-roms",
+		day: "2026-09-23",
+		title: "Saying which games work",
+		summary:
+			"Kaillera Next only works with three ROMs right now: Super Smash Bros. (US) and Smash Remix 2.0.0 and 2.0.1. The lobby now lists them. If you load anything else, the play page warns that it may not work and names the supported ones. It’s a warning, not a block. Claude Code built the warning from the server’s own list and added a test that fails if the lobby’s copy drifts from it, and I reviewed both. Released in v0.50.0.",
+		artifacts: [
+			artifact(
+				supportedRoms,
+				"Kaillera Next · Saying which games work",
+				"The v0.50.0 lobby with the Supported ROMs list, rendered from the site’s own files without a server or ROMs, with numbered pointers.",
+				"Annotated page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-remix-freezes",
+		day: "2026-09-25",
+		title: "Fixing two Smash Remix freezes",
+		summary:
+			"Smash Remix matches could freeze in two places, both traced from one session’s logs. At match start, each player waited 5 seconds a frame for menu inputs that had already been used and deleted. On pause, one player’s frame count reset while the other’s didn’t, so their inputs never lined up again. Claude Code fixed both, then made the rollback engine wait for late inputs before it shuts down on a pause or match end, so a wrong guess can’t quietly leave the two games different. Code review by Greptile caught follow-up issues along the way. Released in v0.53.4.",
+		artifacts: [
+			artifact(
+				remixFreezesDiagram,
+				"Kaillera Next · Fixing two Smash Remix freezes",
+				"The freeze at match start, the freeze on pause, and the shutdown hold that followed. Drawn from the commits, not a gameplay capture.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-landing-page",
+		day: "2026-09-26",
+		title: "A front page that shows who’s playing",
+		summary:
+			"Kaillera Next’s room server runs on a free tier that naps when idle and takes about a minute to wake. It also served the front page, so the first visitor after a nap stared at a loading tab. The new front page leads with open rooms that hosts choose to list, each with a recent frame and Watch or Join. While the server wakes, it shows a clock and the lag visualizer. Invite links now open a page that says who invited you and what joining needs. A Cloudflare Worker is built to serve both pages without waiting on the server. Claude Code and Codex built it to a design doc that records my decisions. Released in v0.56.1.",
+		artifacts: [
+			artifact(
+				landingPage,
+				"Kaillera Next · A front page that shows who’s playing",
+				"The v0.56.1 front page in its waking state, rendered from the site’s own files without a server or ROMs, with numbered pointers.",
+				"Annotated page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-direction-a",
+		day: "2026-09-27",
+		title: "Direction A reaches the room and the demo",
+		summary:
+			"I chose one look for the new front page, a console-era online lobby, and asked for everything else to match it. This round carried it into the room page and the rollback demo. The room names the game the host is playing, says when a ROM doesn’t match, lets a player switch to watching without leaving, and explains plainly when a browser can’t run the game. The demo’s result card gets a timeline driven by the engine’s real rollbacks. The site has a KN logo and lighter link-preview cards. The Worker in front now notices when its copy of the front page is out of date. Claude Code and Codex built it; I reviewed it. Released in v0.58.0.",
+		artifacts: [
+			artifact(
+				directionADemo,
+				"Kaillera Next · Direction A reaches the demo",
+				"The v0.58.0 rollback demo page, rendered from the site’s own files without a server or ROMs, with numbered pointers.",
+				"Annotated page render",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-remix-menu-rollback",
+		day: "2026-09-27",
+		title: "Rollback through the Smash Remix menus, and two sync fixes",
+		summary:
+			"Smash Remix menus ran at 30 to 40 frames a second while matches ran near 60. The menus used lockstep because rollback had once crashed there; rollback now saves state a different way, so Claude Code turned it on from the start of the game, as Super Smash Bros. 64 already had it. Two fixes landed first. Players could reach different stages from the same picks, because each kept their own save file, so everyone now starts with the host’s. And a resync that arrived a frame early left a player one frame behind for good; now it waits for its frame. Late join also accepts Remix’s 16 MB states. Released in v0.59.0.",
+		artifacts: [
+			artifact(
+				remixMenuRollback,
+				"Kaillera Next · Rollback through the Remix menus",
+				"The shared save file at game start, the resync timing fix, and rollback from the first frame. Drawn from the commits, not a gameplay capture.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-graphics-fixes",
+		day: "2026-09-28",
+		title: "Fixing two graphics glitches in Smash Remix",
+		summary:
+			"Two picture bugs showed up in Smash Remix while both players’ games stayed in sync. On Pokemon Stadium, stage pieces stretched into slabs: our copy of the GLideN64 renderer predated two upstream fixes for reading past its vertex buffer, so Claude Code backported them. The other glitch hit the first frame shown after a rollback caught up. Replay had skipped a graphics-state bookkeeping step while the renderer kept drawing, so that frame restored stale state. Claude Code kept the step running and added a per-frame picture comparison to our two-player test, since state hashes couldn’t see the problem. Released in v0.59.3 and v0.59.4.",
+		artifacts: [
+			artifact(
+				graphicsFixes,
+				"Kaillera Next · Two graphics glitches fixed",
+				"The vertex buffer read past its end, and the replay step that restored stale graphics state. Drawn from the commits, not a gameplay capture.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-match-logs",
+		day: "2026-09-28",
+		title: "Match logs that outlast a restart",
+		summary:
+			"Kaillera Next’s room server runs on a free plan with no lasting disk, so every deploy, restart or idle sleep wiped its logs, including those of a match being debugged. Claude Code moved them to Cloudflare: rows in D1, screenshots in R2, with logs split and capped to fit D1’s 2 MB row limit. Each match is now registered when it starts, and late log uploads are refused for matches the server doesn’t know or that have closed. Matches whose logs show a crash, freeze or desync, or that a player sent feedback about, are kept for up to 180 days; the rest are deleted after 7 days. Released in v0.63.0.",
+		artifacts: [
+			artifact(
+				matchLogsDiagram,
+				"Kaillera Next · Match logs that outlast a restart",
+				"Where logs and screenshots go now, which matches are kept, and how the rest are deleted. Drawn from the code.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-netplay-reliability",
+		day: "2026-09-28",
+		title: "Keeping matches in step when the browser gets in the way",
+		summary:
+			"A netplay match has to survive browsers that throttle timers and pause background tabs. On one day, Claude Code fixed four ways matches broke. A phone whose timers fire about 30 times a second now runs a second frame per tick to catch up, instead of holding the match at 30 frames a second. Clicking the toolbar mid-match no longer steals the emulator’s frame and quietly desyncs the players. Returning to a background tab no longer wipes inputs both players were waiting for. A shader cache that wrote past its table now stays in bounds, and a core crash now ends the match with an error instead of a frozen screen. Released in v0.63.1 to v0.63.14.",
+		artifacts: [
+			artifact(
+				netplayReliability,
+				"Kaillera Next · Keeping matches in step",
+				"Before and after for throttled timers, the toolbar click, tab return and the core crash, among other fixes in these releases. Drawn from the commits, not a gameplay capture.",
+				"Diagram",
+			),
+		],
+	},
+	{
+		id: "kaillera-next-switch2-controller",
+		day: "2026-09-30",
+		title: "Switch 2 Pro Controller over USB-C",
+		summary:
+			'The Nintendo Switch 2 Pro Controller stays silent to a browser until it gets a vendor handshake over USB, and on a Mac nothing sends it, so it never showed up as a gamepad. Claude Code added a small WebUSB module that sends the handshake after one click on "Connect Switch 2 Pro" in the room. After that first permission, it re-enables the controller on every page load and replug. A built-in profile maps its buttons and sticks, using numbers measured on the hardware. It’s experimental: wired USB-C in Chrome, tested on macOS only. Bluetooth, Safari and Firefox aren’t supported. A Codex review caught a stalled write being reported as success. Released in v0.64.0.',
+		artifacts: [
+			artifact(
+				switch2Diagram,
+				"Kaillera Next · Switch 2 Pro Controller over USB-C",
+				"The handshake, the profile choice and the stick mapping. Drawn from the code.",
+				"Diagram",
+			),
+		],
+	},
 ];

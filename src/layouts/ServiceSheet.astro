@@ -1,15 +1,19 @@
 ---
-import BaseLayout from '~/layouts/BaseLayout.astro';
-import WorkWithMe from '~/components/WorkWithMe.astro';
-import PersonalName from '~/components/PersonalName.astro';
-import WorkDiagram from '~/components/WorkDiagram.astro';
-import '~/styles/service-pages.css';
-import '~/styles/audio-intake.css';
-import { audioPath, mainSitePath } from '~/lib/host-routing';
-import type { ServiceSheet } from '~/data/services';
-interface Props { sheet: ServiceSheet; }
+import BaseLayout from "~/layouts/BaseLayout.astro";
+import WorkWithMe from "~/components/WorkWithMe.astro";
+import PersonalName from "~/components/PersonalName.astro";
+import WorkDiagram from "~/components/WorkDiagram.astro";
+import "~/styles/service-pages.css";
+import "~/styles/audio-intake.css";
+import { audioPath, mainSitePath } from "~/lib/host-routing";
+import type { ServiceSheet } from "~/data/services";
+
+interface Props {
+	sheet: ServiceSheet;
+}
+
 const { sheet } = Astro.props;
-const host = Astro.request.headers.get('host') ?? Astro.url.host;
+const host = Astro.request.headers.get("host") ?? Astro.url.host;
 const href = (path: string) => mainSitePath(host, path);
 const lyft = sheet.hero;
 ---
@@ -39,25 +43,18 @@ const lyft = sheet.hero;
       <section class="service-before"><h2 id="steps-title">{sheet.stepsHeading}</h2><div><ol data-reveal class="software-steps" aria-labelledby="steps-title" role="list">{sheet.steps.map((step, index) => <li><span class="step-number" aria-hidden="true">{index + 1}</span><h3>{step.title}</h3><p>{step.description}</p></li>)}</ol></div></section>
       <p class="other-services">{sheet.audioLead} <a class="site-link" href={audioPath(host, sheet.audioServicesPath)}>{sheet.audioLabel} <span aria-hidden="true">→</span></a></p>
     </section>
-    <p class="hub-elsewhere">Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>. Something else? <a href={href('/#contact')}>Get in touch</a>.</p>
+    <p class="hub-elsewhere">Hiring for a role? <a href={href('/about#resumes')}>Request my resume</a>. Something else? <a href={href('/contact')}>Get in touch</a>.</p>
     <div class="sheet-address"><span>kazon.wilson@thesuperhuman.us</span><a href={href(sheet.path)}>thesuperhuman.us{sheet.path}</a></div>
     <footer class="sheet-footnote"><span><PersonalName variant="full" /> · The Superhuman Group LLC · <a href={href('/privacy')}>Privacy</a></span><button type="button" class="site-button site-button-outline" data-print-sheet><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H3V9h18v9h-3"/><path d="M6 14h12v7H6zM17 12h1"/></svg>Print / Save PDF</button></footer>
   </article>
 </BaseLayout>
 <script>
-import { runMotion } from '~/scripts/scroll-scenes';
-runMotion();
-document.querySelector('[data-print-sheet]')?.addEventListener('click', () => window.print());
-const rows = [...document.querySelectorAll<HTMLDetailsElement>('#software .service-offer')];
-let closed: HTMLDetailsElement[] = [];
-window.addEventListener('beforeprint', () => {
-  closed = rows.filter(row => !row.open);
-  rows.forEach(row => { row.open = true; });
-});
-window.addEventListener('afterprint', () => {
-  closed.forEach(row => { row.open = false; });
-  closed = [];
-});
+  import { runMotion } from '~/scripts/scroll-scenes';
+  import { setupServiceSheet } from '~/scripts/service-sheet';
+
+  runMotion();
+
+  setupServiceSheet();
 </script>
 <style>
 .service-sheet { max-width: 1100px; padding-block: 2rem 3rem; }

@@ -1,7 +1,77 @@
 ---
-import studio from '~/assets/site/studio-v1.webp';
-import PersonalName from '~/components/PersonalName.astro';
-import StudioLife from '~/components/home/StudioLife.astro';
+import studio from "~/assets/site/studio-v1.webp";
+import PersonalName from "~/components/PersonalName.astro";
+import StudioLife from "~/components/home/StudioLife.astro";
+import { latestEssay } from "~/data/writing";
+import { homeComparisonExample, latestRelease } from "~/lib/music-catalog";
+import { loadMusicCatalog } from "~/lib/music-content";
+
+// The headphones play the newest released song. Home's comparison plays it when it is that song's mix and master; a
+// newer song it does not have opens its own page instead.
+const music = await loadMusicCatalog();
+const latestSong = latestRelease(music);
+
+const homeRecording = music.examples.find(
+	(example) => example.id === homeComparisonExample,
+)?.recordingId;
+
+const playsHere = Boolean(
+	latestSong && homeRecording && latestSong.tracks.includes(homeRecording),
+);
+
+// The objects on the desk, in the artwork's own pixels (1536 x 1024), each a way in: three into the site, the controller to the game itself. The touch pin (`short`)
+// is a word from the label, so a visitor using speech input can say what they see.
+const objects = [
+	{
+		id: "monitor",
+		label: "What I’m building",
+		short: "Building",
+		href: "/building",
+		x: 755,
+		y: 118,
+		w: 600,
+		h: 420,
+	},
+	{
+		id: "headphones",
+		label: "Hear a mix and master",
+		short: "Hear",
+		href:
+			playsHere || !latestSong
+				? "/audio/portfolio"
+				: `/music/${latestSong.slug}`,
+		// Its area stops short of the headband's tip, which is off screen at widths from 1233 to about 1290 pixels, so
+		// its focus ring stays on screen.
+		x: 1075,
+		y: 590,
+		w: 360,
+		h: 200,
+	},
+	{
+		id: "notebook",
+		label: "What I’m writing",
+		short: "Writing",
+		href: latestEssay.href,
+		x: 805,
+		y: 745,
+		w: 500,
+		h: 210,
+	},
+	{
+		id: "controller",
+		label: "Play Kaillera Next",
+		short: "Play",
+		// Straight to the game itself (owner's answer, November 15, 2026), the address the project page links as "Kaillera Next".
+		href: "https://kaillera-next.thesuperhuman.us",
+		x: 585,
+		y: 692,
+		w: 285,
+		h: 98,
+	},
+];
+
+const percent = (value: number, of: number) =>
+	`${((value / of) * 100).toFixed(3)}%`;
 ---
 <section class="studio-hero site-shell" aria-labelledby="intro-title" data-studio>
   <div class="studio-copy">
@@ -13,13 +83,21 @@ import StudioLife from '~/components/home/StudioLife.astro';
       <a class="site-link" href="/building">Explore what I’m building <span aria-hidden="true">→</span></a>
     </div>
   </div>
-  <div class="studio-art" aria-hidden="true">
+  <div class="studio-art">
     <div class="studio-scene" data-studio-scene>
       <img src={studio.src} width={studio.width} height={studio.height} alt="" loading="eager" fetchpriority="high" />
       <StudioLife />
+      <nav class="studio-objects" aria-label="Around the studio">
+        {objects.map(object => <a class="studio-object" href={object.href} data-studio-object={object.id} data-plays-here={object.id === "headphones" && playsHere ? "true" : undefined} style={`left:${percent(object.x, 1536)};top:${percent(object.y, 1024)};width:${percent(object.w, 1536)};height:${percent(object.h, 1024)}`}><span class="studio-object-label">{object.label} <span aria-hidden="true">{object.href.startsWith("https://") ? "↗" : "→"}</span></span><span class="studio-object-pin" aria-hidden="true">{object.short}</span></a>)}
+      </nav>
     </div>
   </div>
 </section>
+<script>
+  import { setupStudioObjects } from '~/scripts/studio-objects';
+
+  setupStudioObjects();
+</script>
 <style>
   .studio-hero { position: relative; min-height: 610px; padding-block: 3rem 5rem; isolation: isolate; }
   .studio-copy { position: relative; z-index: 1; max-width: 440px; }
@@ -31,6 +109,77 @@ import StudioLife from '~/components/home/StudioLife.astro';
   /* The overlay shares the image's box and mask, so it fades out exactly where the picture does. */
   .studio-scene { position: relative; }
   .studio-scene :global(img) { display: block; width: 100%; height: auto; mix-blend-mode: multiply; }
+  /* Each object on the desk is a link over its own area of the picture. The label is the link's text: it shows on
+     keyboard focus, and on hover with a fine pointer. The headphones sit above the notebook where their areas meet, and
+     their label hangs from their right edge so it stays on screen. */
+  /* Labels and pins are frosted glass (owner decision, November 15, 2026): paper glass that blurs the desk behind it,
+     with a bright top edge, a hairline and a soft shadow. The monitor's pin sits on its dark screen, so it is dark glass.
+     Local colour tokens, each mixed from the site's own. */
+  .studio-objects {
+    position: absolute; inset: 0;
+    --glass: color-mix(in srgb, var(--paper) 74%, transparent);
+    --glass-top: color-mix(in srgb, var(--paper) 90%, transparent);
+    --glass-edge: color-mix(in srgb, var(--paper) 92%, transparent);
+    --glass-line: color-mix(in srgb, var(--ink) 12%, transparent);
+    --glass-shadow: color-mix(in srgb, var(--ink) 32%, transparent);
+    --glass-dark: color-mix(in srgb, var(--ink) 62%, transparent);
+    --glass-dark-top: color-mix(in srgb, var(--ink) 48%, transparent);
+    --glass-dark-edge: color-mix(in srgb, var(--paper) 24%, transparent);
+    --glass-dark-accent: color-mix(in srgb, var(--accent) 45%, var(--paper));
+  }
+  .studio-object { position: absolute; display: block; pointer-events: auto; border-radius: 6px; border-bottom: 0; padding: 0; color: var(--ink); text-decoration: none; }
+  .studio-object:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .studio-object[data-studio-object="headphones"] { z-index: 1; }
+  /* The object whose label shows rises above the others, so no other link covers its label. */
+  .studio-object:focus-visible { z-index: 2; }
+  .studio-object[data-studio-object="notebook"] { --pin-y: 65%; }
+  /* A label takes clicks only while it shows. The strip under it bridges the gap to its object, so the pointer can
+     move onto the label without it disappearing (WCAG 1.4.13). */
+  .studio-object-label { position: absolute; left: 0; bottom: calc(100% + .45rem); width: max-content; max-width: 16rem; padding: .42rem .95rem; border: 1px solid var(--glass-edge); border-radius: var(--radius-button); background: linear-gradient(var(--glass-top), var(--glass)); -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-edge), 0 14px 30px -14px var(--glass-shadow); font: .9rem/1.3 var(--font-serif); white-space: normal; opacity: 0; pointer-events: none; }
+  .studio-object-label::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: calc(.45rem + 1px); }
+  .studio-object[data-studio-object="headphones"] .studio-object-label { left: auto; right: 0; }
+  .studio-object-label span { color: var(--accent); }
+  .studio-object:focus-visible .studio-object-label { opacity: 1; pointer-events: auto; }
+  /* The object pointed at is the one the pointer moved onto (studio-objects.ts sets [data-hovered]), not CSS :hover: a
+     label that appears under a resting mouse, or a scroll under it, must not take the hover and hold it. */
+  @media (hover: hover) and (pointer: fine) {
+    .studio-object[data-hovered] { z-index: 3; }
+    .studio-object[data-hovered] .studio-object-label { opacity: 1; pointer-events: auto; }
+    /* One label at a time: the object pointed at leads, as its scene does, and a focused object's label waits. */
+    .studio-objects:has([data-hovered]) .studio-object:not([data-hovered]) .studio-object-label { opacity: 0; pointer-events: none; }
+  }
+  /* Escape hides a showing label until the visitor points at or focuses an object again (studio-objects.ts). */
+  .studio-scene[data-labels-dismissed] .studio-object .studio-object-label { opacity: 0; pointer-events: none; }
+  /* Touch screens have no hover, and on a narrow screen the full labels would cover the copy and run off the edge, so
+     each object shows a one-word pin instead; the full label stays the link's name for screen readers. Each area is
+     at least 44px tall to tap. */
+  .studio-object-pin { display: none; }
+  @media (hover: none), (pointer: coarse), (max-width: 800px) {
+    .studio-object-label { width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    /* A pin's accent dot says it can be tapped. The headphones' and the controller's pins sit at their edges, so those
+       small objects stay in view; the monitor's sits on its screen and the notebook's low on its page. */
+    .studio-object-pin { display: flex; align-items: center; gap: .4rem; position: absolute; left: var(--pin-x, 50%); top: var(--pin-y, 50%); transform: translate(-50%, -50%); padding: .2rem .7rem .2rem .55rem; border: 1px solid var(--glass-edge); border-radius: var(--radius-button); background: linear-gradient(var(--glass-top), var(--glass)); -webkit-backdrop-filter: blur(10px) saturate(1.4); backdrop-filter: blur(10px) saturate(1.4); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-edge), 0 8px 20px -10px var(--glass-shadow); font: .875rem/1.35 var(--font-serif); white-space: nowrap; }
+    .studio-object-pin::before { content: ""; width: .4rem; height: .4rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin { border-color: var(--glass-dark-edge); background: linear-gradient(var(--glass-dark-top), var(--glass-dark)); box-shadow: 0 0 0 .5px var(--glass-line), inset 0 1px 0 var(--glass-dark-edge), 0 8px 20px -10px var(--glass-shadow); color: var(--paper); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin::before { background: var(--glass-dark-accent); }
+    .studio-object[data-studio-object="headphones"] { --pin-y: 12%; }
+    /* The controller is small on a phone, so its pin sits just above it. */
+    .studio-object[data-studio-object="controller"] { --pin-y: -55%; }
+    .studio-object::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
+  }
+  /* Where a browser cannot blur, the glass is plain paper, so the text keeps its contrast. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .studio-object-label, .studio-object-pin { background: var(--paper); }
+    .studio-object[data-studio-object="monitor"] .studio-object-pin { background: var(--ink); }
+  }
+  /* A label rises a few pixels into place as it appears. */
+  @media (prefers-reduced-motion: no-preference) {
+    .studio-object-label { translate: 0 .25rem; transition: opacity 180ms var(--ease-site), translate 180ms var(--ease-site); }
+    .studio-object:focus-visible .studio-object-label { translate: 0 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+    .studio-object[data-hovered] .studio-object-label { translate: 0 0; }
+  }
   .studio-scene :global(img), .studio-scene :global(.studio-life) { mask-image: linear-gradient(to right, transparent, #000 18%, #000 94%, transparent), linear-gradient(to bottom, transparent, #000 12%, #000 80%, transparent); mask-composite: intersect; }
   @media (prefers-reduced-motion: no-preference) {
     .studio-copy > * { animation: studio-rise 900ms var(--ease-site) both; }

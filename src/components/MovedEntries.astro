@@ -5,8 +5,17 @@
 // merely visually) until it is the URL's target, so nothing here is tabbable or announced on an
 // ordinary visit. Rendered inside ProjectUpdates' [data-update-content] and its curated-only
 // fallback template, so a live withdrawal or correction replaces this list along with the rest.
-interface MovedEntry { id: string; title: string; destination: 'story' | 'archive'; }
-interface Props { entries: MovedEntry[]; projectId: string; }
+interface MovedEntry {
+	id: string;
+	title: string;
+	destination: "story" | "archive";
+}
+
+interface Props {
+	entries: MovedEntry[];
+	projectId: string;
+}
+
 const { entries, projectId } = Astro.props;
 ---
 {entries.length > 0 && <div class="moved-entries">{entries.map(entry => (

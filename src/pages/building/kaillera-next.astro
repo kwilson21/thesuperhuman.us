@@ -1,8 +1,14 @@
 ---
-import ProjectLayout from '~/layouts/ProjectLayout.astro';
-import ProjectTimeline from '~/components/ProjectTimeline.astro';
-import { kailleraStory, kailleraMilestones } from '~/data/project-stories/kaillera-next';
-const entries = [...kailleraMilestones].sort((a, b) => a.day.localeCompare(b.day));
+import ProjectLayout from "~/layouts/ProjectLayout.astro";
+import ProjectTimeline from "~/components/ProjectTimeline.astro";
+import {
+	kailleraStory,
+	kailleraMilestones,
+} from "~/data/project-stories/kaillera-next";
+
+const entries = [...kailleraMilestones].sort((a, b) =>
+	a.day.localeCompare(b.day),
+);
 ---
 <ProjectLayout title={kailleraStory.title} subtitle={kailleraStory.subtitle} description={kailleraStory.description} status={kailleraStory.status} journalHref="#kaillera-next-updates-title">
   <ProjectTimeline id="kaillera-next-updates" title="Development journal" entries={entries} />

@@ -2,20 +2,31 @@
 // Drawn over studio-v1.webp in the image's own pixel coordinates (1536 × 1024), so it
 // stays registered at every size. Three short scenes, one per part of the tagline:
 // the monitor re-types its last lines of code, the headphones give off a few rings of
-// sound, and a path is sketched on the notebook. The sketch is part of the resting
+// sound, and a path is sketched on the notebook. The controller has a fourth that plays
+// only when it is pointed at or focused: a combo, the D-pad glinting as it is pressed and
+// then each face button lit in turn. The sketch is part of the resting
 // frame; the typing masks and rings only exist while a scene plays (home-worlds.ts adds
 // `is-playing`), so reduced motion and no-JS show the untouched artwork plus the sketch.
 
 // The last four code rows on the monitor, measured on the artwork: where each row
 // starts, its centre line, how far it runs, and when its typing begins (seconds).
 const rows = [
-  { x: 908, y: 385, run: 84, at: 0.9, steps: 9 },
-  { x: 908, y: 397.5, run: 134, at: 1.5, steps: 13 },
-  { x: 899, y: 426.5, run: 40, at: 2.35, steps: 4 },
-  { x: 893, y: 438.5, run: 82, at: 2.75, steps: 8 },
+	{ x: 908, y: 385, run: 84, at: 0.9, steps: 9 },
+	{ x: 908, y: 397.5, run: 134, at: 1.5, steps: 13 },
+	{ x: 899, y: 426.5, run: 40, at: 2.35, steps: 4 },
+	{ x: 893, y: 438.5, run: 82, at: 2.75, steps: 8 },
 ];
+
 // The screen recedes to the right; its rows slope down by about this much per pixel.
 const slope = 0.105;
+
+// The controller's four face buttons, measured on the artwork, in the order the combo lights them.
+const buttons = [
+	{ x: 781, y: 715, at: 0.25 },
+	{ x: 802, y: 703, at: 0.45 },
+	{ x: 829, y: 713, at: 0.65 },
+	{ x: 810, y: 727, at: 0.85 },
+];
 ---
 <svg class="studio-life" viewBox="0 0 1536 1024" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
   <g class="life-typing" transform={`matrix(1 ${slope} 0 1 0 ${-slope * 900})`}>
@@ -34,16 +45,26 @@ const slope = 0.105;
     <ellipse rx="96" ry="84" style="--at:1.55s" />
     <ellipse rx="96" ry="84" style="--at:2.1s" />
   </g>
+  <g class="life-combo">
+    <filter id="combo-glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="3" /></filter>
+    <ellipse class="combo-press" cx="646" cy="721" rx="13" ry="9" filter="url(#combo-glow)" />
+    {buttons.map(button => <g class="combo-button" style={`--at:${button.at}s`}><ellipse cx={button.x} cy={button.y} rx="15" ry="10" filter="url(#combo-glow)" /><ellipse class="combo-core" cx={button.x} cy={button.y} rx="8" ry="5.5" /></g>)}
+  </g>
   <g class="life-sketch" transform="matrix(2.2 -0.88 2.75 0.95 815 840)">
     <path class="sketch-path" pathLength="1" d="M18 55 C 25 50, 22 44, 30 41 S 43 43, 48 36 S 55 27, 64 28 S 76 25, 80 17" />
     <ellipse class="sketch-sun" cx="84" cy="36" rx="4.6" ry="4.6" />
   </g>
 </svg>
 <style>
-  /* Sampled from studio-v1.webp: the monitor's screen and its code. Local to this drawing. */
-  .studio-life { --studio-screen: #1d1f20; --studio-code: #d8d2c6; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  /* Resting frame: nothing covers the code, no rings, the sketch drawn. */
-  .type-row, .life-sound ellipse { display: none; }
+  /* Local to this drawing: the monitor's screen and its code, sampled from studio-v1.webp, and the warm light the
+     controller's buttons give off in the Combo. */
+  .studio-life { --studio-screen: #1d1f20; --studio-code: #d8d2c6; --studio-glow: #ffc98f; --studio-glow-core: #ffe2c2; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  /* Resting frame: nothing covers the code, no rings, no combo, the sketch drawn. */
+  .type-row, .life-sound ellipse, .life-combo { display: none; }
+  .combo-press { fill: var(--studio-glow); opacity: 0; }
+  .combo-button ellipse { fill: var(--studio-glow); }
+  .combo-button .combo-core { fill: var(--studio-glow-core); }
+  .combo-button { opacity: 0; }
   .type-row rect { fill: var(--studio-screen); }
   .type-row .caret { fill: var(--studio-code); }
   .life-sound ellipse { fill: none; stroke: var(--accent); stroke-width: 2.4; vector-effect: non-scaling-stroke; }
@@ -53,13 +74,23 @@ const slope = 0.105;
   .sketch-sun { fill: var(--accent); fill-opacity: .85; stroke: none; }
 
   @media screen and (prefers-reduced-motion: no-preference) {
-    :global(.is-playing) .type-row { display: inline; animation: type-row calc(var(--steps) * 70ms) steps(var(--steps), end) var(--at) both; }
+    :global(.is-playing) .type-row, :global([data-play="monitor"]) .type-row { display: inline; animation: type-row calc(var(--steps) * 70ms) steps(var(--steps), end) var(--at) both; }
     /* Each caret shows only while its own row types; the last one then blinks twice. */
-    :global(.is-playing) .type-row .caret { opacity: 0; animation: caret-on calc(var(--steps) * 70ms) linear var(--at); }
-    :global(.is-playing) .type-row:last-child .caret { animation: caret-on calc(var(--steps) * 70ms) linear var(--at), caret-blink 1.2s steps(1, end) calc(var(--at) + var(--steps) * 70ms); }
-    :global(.is-playing) .life-sound ellipse { display: inline; transform-box: fill-box; transform-origin: center; animation: sound-ring 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
-    :global(.is-playing) .sketch-path { animation: sketch-draw 1.8s cubic-bezier(.45, .05, .3, 1) 1.5s both; }
-    :global(.is-playing) .sketch-sun { transform-box: fill-box; transform-origin: center; animation: sketch-sun .7s cubic-bezier(.3, 1.5, .5, 1) 3.3s both; }
+    :global(.is-playing) .type-row .caret, :global([data-play="monitor"]) .type-row .caret { opacity: 0; animation: caret-on calc(var(--steps) * 70ms) linear var(--at); }
+    :global(.is-playing) .type-row:last-child .caret, :global([data-play="monitor"]) .type-row:last-child .caret { animation: caret-on calc(var(--steps) * 70ms) linear var(--at), caret-blink 1.2s steps(1, end) calc(var(--at) + var(--steps) * 70ms); }
+    :global(.is-playing) .life-sound ellipse, :global([data-play="headphones"]) .life-sound ellipse { display: inline; transform-box: fill-box; transform-origin: center; animation: sound-ring 2.2s cubic-bezier(.2, .6, .3, 1) var(--at) both; }
+    :global(.is-playing) .sketch-path, :global([data-play="notebook"]) .sketch-path { animation: sketch-draw 1.8s cubic-bezier(.45, .05, .3, 1) 1.5s both; }
+    :global(.is-playing) .sketch-sun, :global([data-play="notebook"]) .sketch-sun { transform-box: fill-box; transform-origin: center; animation: sketch-sun .7s cubic-bezier(.3, 1.5, .5, 1) 3.3s both; }
+    /* Pointed at, an object answers at once: its scene starts without the arrival's staggered delays. */
+    :global([data-play="monitor"]) .type-row, :global([data-play="monitor"]) .type-row .caret { animation-delay: calc(var(--at) - .9s); }
+    :global([data-play="monitor"]) .type-row:last-child .caret { animation-delay: calc(var(--at) - .9s), calc(var(--at) - .9s + var(--steps) * 70ms); }
+    :global([data-play="headphones"]) .life-sound ellipse { animation-delay: calc(var(--at) - 1s); }
+    :global([data-play="notebook"]) .sketch-path { animation-delay: 0s; }
+    :global([data-play="notebook"]) .sketch-sun { animation-delay: 1.8s; }
+    /* The controller's combo plays only when it is pointed at or focused, and rests within two seconds. */
+    :global([data-play="controller"]) .life-combo { display: inline; }
+    :global([data-play="controller"]) .combo-press { animation: combo-press .3s ease-out both; }
+    :global([data-play="controller"]) .combo-button { transform-box: fill-box; transform-origin: center; animation: combo-light .55s cubic-bezier(.2, .7, .3, 1) var(--at) both; }
   }
   @keyframes type-row { from { transform: translateX(0); } to { transform: translateX(var(--run)); } }
   @keyframes caret-on { from, to { opacity: 1; } }
@@ -72,4 +103,6 @@ const slope = 0.105;
   }
   @keyframes sketch-draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; } to { stroke-dasharray: 1; stroke-dashoffset: 0; } }
   @keyframes sketch-sun { from { transform: scale(0); } to { transform: scale(1); } }
+  @keyframes combo-press { 0%, 100% { opacity: 0; } 35% { opacity: .7; } }
+  @keyframes combo-light { 0% { opacity: 0; transform: scale(.8); } 30% { opacity: .9; transform: scale(1.08); } 100% { opacity: 0; transform: scale(1); } }
 </style>

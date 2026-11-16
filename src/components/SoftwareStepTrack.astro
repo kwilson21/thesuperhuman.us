@@ -1,7 +1,17 @@
 ---
-import { projectSteps } from '~/lib/software-projects';
-const { step } = Astro.props as { step: string };
-const current = projectSteps.indexOf(step as typeof projectSteps[number]);
+import { projectSteps } from "~/lib/software-projects";
+
+interface Props {
+	step: string;
+}
+
+const { step } = Astro.props;
+
+function isProjectStep(value: string): value is (typeof projectSteps)[number] {
+	return projectSteps.some((item) => item === value);
+}
+
+const current = isProjectStep(step) ? projectSteps.indexOf(step) : -1;
 ---
 <ol class="software-step-track" aria-label="Project steps">{projectSteps.map((item,index) => <li aria-current={item === step ? 'step' : undefined} class:list={{done: index < current}}><span aria-hidden="true"></span>{item[0].toUpperCase()+item.slice(1)}</li>)}</ol>
 <style>

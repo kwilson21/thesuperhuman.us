@@ -1,8 +1,15 @@
 ---
-import type { Recording } from '~/lib/music-catalog';
-import { musicFile } from '~/lib/music-catalog';
-import PlayIcon from './PlayIcon.astro';
-interface Props { recording: Recording; releaseId: string; poster: string; quote?: string }
+import type { Recording } from "~/lib/music-catalog";
+import { musicFile } from "~/lib/music-catalog";
+import PlayIcon from "./PlayIcon.astro";
+
+interface Props {
+	recording: Recording;
+	releaseId: string;
+	poster: string;
+	quote?: string;
+}
+
 const { recording, releaseId, poster, quote } = Astro.props;
 const id = `video-${recording.id}`;
 ---

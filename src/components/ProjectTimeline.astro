@@ -1,25 +1,56 @@
 ---
-import PayloadReviewIllustration from './PayloadReviewIllustration.astro';
-import PersonalName from './PersonalName.astro';
-import { personalNameSegments } from '~/lib/personal-name';
-import type { Milestone } from '~/lib/project-story';
+import PayloadReviewIllustration from "./PayloadReviewIllustration.astro";
+import PersonalName from "./PersonalName.astro";
+import { personalNameSegments } from "~/lib/personal-name";
+import type { Milestone } from "~/lib/project-story";
+
 interface Props {
-  id: string; title: string; entries: Milestone[]; selectedId?: string; unavailable?: boolean;
-  /** Personal Website's reading mode: one active panel, no "Show all entries", and a next-path
-   * nav to the project story and archive in place of it. Every other project page omits this. */
-  bounded?: boolean; storyHref?: string; archiveHref?: string;
-  /** A short line rendered under the heading, always visible (with or without JavaScript). */
-  lead?: string;
-  /** Keep the order given (the project story reads oldest first). Otherwise entries are shown newest first. */
-  chronological?: boolean;
-  /** How many milestones the picker lists at once; the rest are reached by paging. */
-  pageSize?: number;
+	id: string;
+	title: string;
+	entries: Milestone[];
+	selectedId?: string;
+	unavailable?: boolean;
+	/** Personal Website's reading mode: one active panel, no "Show all entries", and a next-path
+	 * nav to the project story and archive in place of it. Every other project page omits this. */
+	bounded?: boolean;
+	storyHref?: string;
+	archiveHref?: string;
+	/** A short line rendered under the heading, always visible (with or without JavaScript). */
+	lead?: string;
+	/** Keep the order given (the project story reads oldest first). Otherwise entries are shown newest first. */
+	chronological?: boolean;
+	/** How many milestones the picker lists at once; the rest are reached by paging. */
+	pageSize?: number;
 }
-const { id, title, entries: given, selectedId, unavailable = false, bounded = false, storyHref, archiveHref, lead, chronological = false, pageSize = 6 } = Astro.props;
-const entries = chronological ? given : given.slice().sort((a, b) => b.day.localeCompare(a.day));
+
+const {
+	id,
+	title,
+	entries: given,
+	selectedId,
+	unavailable = false,
+	bounded = false,
+	storyHref,
+	archiveHref,
+	lead,
+	chronological = false,
+	pageSize = 6,
+} = Astro.props;
+
+const entries = chronological
+	? given
+	: given.slice().sort((a, b) => b.day.localeCompare(a.day));
+
 const pageCount = Math.ceil(entries.length / pageSize);
-const hasHighlights = Astro.slots.has('highlights');
-const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+const hasHighlights = Astro.slots.has("highlights");
+
+const date = (day: string) =>
+	new Date(day + "T12:00:00Z").toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+		timeZone: "UTC",
+	});
 ---
 <section class="project-timeline" data-timeline data-selected-id={selectedId} data-page-size={pageSize} data-order={chronological ? 'oldest' : 'newest'} aria-labelledby={`${id}-title`}>
   <div class="site-section-heading"><h2 id={`${id}-title`}>{title}</h2></div>
@@ -61,62 +92,9 @@ const date = (day: string) => new Date(day + 'T12:00:00Z').toLocaleDateString('e
   </> : <p>{unavailable ? 'Published updates are temporarily unavailable.' : 'No published milestones yet.'}</p>}
 </section>
 <script>
-  document.querySelectorAll<HTMLElement>('[data-timeline]').forEach(root => {
-    const picks = [...root.querySelectorAll<HTMLButtonElement>('[data-pick]')];
-    const panels = [...root.querySelectorAll<HTMLElement>('[data-panel]')];
-    if (!picks.length) return;
-    const controls = root.querySelector<HTMLElement>('[data-controls]')!;
-    // Absent when there is only one entry: nothing to page between, so the row isn't rendered.
-    const previous = root.querySelector<HTMLButtonElement>('[data-prev]');
-    const next = root.querySelector<HTMLButtonElement>('[data-next]');
-    const position = root.querySelector<HTMLElement>('[data-position]');
-    const all = root.querySelector<HTMLButtonElement>('[data-all]');
-    const pagePrev = root.querySelector<HTMLButtonElement>('[data-page-prev]');
-    const pageNext = root.querySelector<HTMLButtonElement>('[data-page-next]');
-    const pagePosition = root.querySelector<HTMLElement>('[data-page-position]');
-    const pageSize = Number(root.dataset.pageSize) || picks.length;
-    const pageCount = Math.max(1, Math.ceil(picks.length / pageSize));
-    let selected = panels.findIndex(panel => '#' + panel.id === location.hash);
-    if (selected < 0 && root.dataset.selectedId) selected = panels.findIndex(panel => panel.id === root.dataset.selectedId);
-    if (selected < 0) selected = root.dataset.order === 'oldest' ? panels.length - 1 : 0;
-    let page = Math.floor(selected / pageSize);
-    let showAll = false;
-    function render(scroll = true) {
-      page = Math.floor(selected / pageSize);
-      picks.forEach((pick, i) => pick.hidden = Math.floor(i / pageSize) !== page);
-      if (pagePrev) pagePrev.disabled = page === 0;
-      if (pageNext) pageNext.disabled = page === pageCount - 1;
-      if (pagePosition) pagePosition.textContent = `Page ${page + 1} of ${pageCount}`;
-      panels.forEach((panel, i) => panel.hidden = !showAll && i !== selected);
-      picks.forEach((pick, i) => pick.setAttribute('aria-pressed', String(i === selected)));
-      if (previous) previous.disabled = selected === 0;
-      if (next) next.disabled = selected === picks.length - 1;
-      if (position) position.textContent = `${selected + 1} / ${picks.length}`;
-      if (all) { all.setAttribute('aria-pressed', String(showAll)); all.textContent = showAll ? 'Show selected entry' : 'Show all entries'; }
-      if (scroll) { const strip = picks[selected].parentElement!; strip.scrollLeft = picks[selected].offsetLeft - strip.offsetLeft; }
-    }
-    function choose(index: number) { selected = index; showAll = false; render(); }
-    picks.forEach((pick, i) => { pick.addEventListener('click', () => choose(i)); pick.addEventListener('keydown', event => {
-      const target = event.key === 'Home' ? 0 : event.key === 'End' ? picks.length - 1 : (event.key === 'ArrowRight' || event.key === 'ArrowDown') ? Math.min(i + 1, picks.length - 1) : (event.key === 'ArrowLeft' || event.key === 'ArrowUp') ? Math.max(i - 1, 0) : -1;
-      if (target >= 0) { event.preventDefault(); choose(target); picks[target].focus(); }
-    }); });
-    previous?.addEventListener('click', () => choose(Math.max(0, selected - 1)));
-    next?.addEventListener('click', () => choose(Math.min(picks.length - 1, selected + 1)));
-    // Paging moves the selection to the first entry of the new page, so the open panel always matches the list.
-    pagePrev?.addEventListener('click', () => choose((page - 1) * pageSize));
-    pageNext?.addEventListener('click', () => choose((page + 1) * pageSize));
-    all?.addEventListener('click', () => { showAll = !showAll; render(false); });
-    function followHash() {
-      const index = panels.findIndex(panel => '#' + panel.id === location.hash);
-      if (index < 0) return;
-      choose(index);
-      panels[index].scrollIntoView({ block: 'start' });
-    }
-    window.addEventListener('hashchange', followHash);
-    controls.hidden = false; render();
-    if (panels.some(panel => '#' + panel.id === location.hash)) followHash();
-    new ResizeObserver(() => render()).observe(root);
-  });
+  import { setupProjectTimeline } from '~/scripts/project-timeline';
+
+  setupProjectTimeline();
 </script>
 <style>
   .project-timeline { margin: var(--project-timeline-top, var(--site-section-space)) 0 var(--site-section-space); min-width: 0; } h2 { font-size: clamp(30px,4vw,44px); } .timeline-hint,.meta { color: var(--muted); font-size: 13px; line-height: 1.6; } .timeline-hint { margin: 10px 0 22px; }

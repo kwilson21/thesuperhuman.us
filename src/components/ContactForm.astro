@@ -1,5 +1,8 @@
 ---
-const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const turnstileSiteKey =
+	Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ??
+	"";
 ---
 <form id="contact-form" class="site-form" data-available={Boolean(turnstileSiteKey)} novalidate>
   <p class="form-hint">All fields required unless marked optional.</p>
@@ -17,11 +20,24 @@ const turnstileSiteKey = Astro.locals.runtime.env.PUBLIC_TURNSTILE_SITE_KEY ?? i
   <p class="form-hint">Looking for my resume? <a href="/about#resumes">Request a copy.</a></p>
 <p class="form-hint">Read how your information is handled in the <a href="https://thesuperhuman.us/privacy">privacy notice</a>.</p>
 </form>
-<div id="contact-success" class="form-success" role="status" tabindex="-1" hidden><h3>Message received.</h3><p>Thanks for getting in touch.</p></div>
+<div id="contact-hold" class="form-hold" role="group" aria-labelledby="contact-hold-title" aria-describedby="contact-hold-when contact-hold-about" tabindex="-1" hidden>
+  <h3 id="contact-hold-title">Check it before it sends.</h3>
+  <p id="contact-hold-when" hidden>It sends in 15 seconds unless you undo it.</p>
+  <p id="contact-hold-count" class="contact-hold-count" role="timer" aria-labelledby="contact-hold-count" tabindex="-1" data-hold-count>Sending in 15 seconds.</p>
+  <p id="contact-hold-about" class="mt-3 max-w-measure wrap-anywhere">I’ll reply to <span data-hold-email></span>. If anything needs fixing, undo and edit it. Leaving or switching away from this page sends it right away.</p>
+  <div class="mt-4 flex flex-wrap gap-3"><button type="button" class="site-button" data-hold-undo>Undo and edit</button><button type="button" class="site-button site-button-outline" data-hold-send>Send now</button></div>
+  <p class="text-sm text-muted mt-6">From</p>
+  <p class="mt-1 max-w-measure wrap-anywhere" data-hold-from></p>
+  <p class="text-sm text-muted mt-4">Your message</p>
+  <p class="mt-1 max-w-measure whitespace-pre-wrap wrap-anywhere" data-hold-message></p>
+</div>
+<div id="contact-success" class="form-success" role="status" tabindex="-1" hidden>
+  <h3>Message received.</h3>
+  <p class="max-w-measure wrap-anywhere" data-contact-reply>Thanks for getting in touch. I’ll read it myself and reply by email.</p>
+  <p class="text-sm text-muted mt-3 max-w-measure">A short confirmation email should arrive soon. If it doesn’t, check your spam folder. Your message reached me either way.</p>
+</div>
 <script>
-  import { setupFormSubmission } from '~/scripts/form-submission';
-  const form = document.getElementById('contact-form') as HTMLFormElement;
-  setupFormSubmission({ form, endpoint: '/api/contact', success: document.getElementById('contact-success')!, payload: data => ({
-    name: String(data.get('name') ?? ''), email: String(data.get('email') ?? ''), company: String(data.get('company') ?? ''), description: String(data.get('description') ?? ''),
-  }) });
+  import { setupContactForm } from '~/scripts/contact-form';
+
+  setupContactForm();
 </script>

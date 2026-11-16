@@ -1,8 +1,27 @@
 ---
-import PlayIcon from './PlayIcon.astro';
-interface Props { id: string; src: string; title: string; duration?: number; artwork?: string; releaseId?: string; recordingId?: string; }
-const { id, src, title, duration = 0, artwork, releaseId, recordingId } = Astro.props;
-const time = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, '0')}`;
+import PlayIcon from "./PlayIcon.astro";
+
+interface Props {
+	id: string;
+	src: string;
+	title: string;
+	duration?: number;
+	artwork?: string;
+	releaseId?: string;
+	recordingId?: string;
+}
+
+const {
+	id,
+	src,
+	title,
+	duration = 0,
+	artwork,
+	releaseId,
+	recordingId,
+} = Astro.props;
+
+const time = `${Math.floor(duration / 60)}:${String(Math.floor(duration % 60)).padStart(2, "0")}`;
 ---
 <div class="listening-player" data-player={id}>
   <audio id={id} controls controlslist="nodownload" preload="none" class="audio-player" src={src} aria-label={title} data-release-id={releaseId} data-recording-id={recordingId}></audio>
