@@ -1,5 +1,5 @@
-// The homepage contact form while a message is held before sending, after Undo and edit, and after it is sent, at
-// both widths. The capture clock is pinned, so the hold's count stays at its start; the sent images use Send now. The
+// The contact form on /contact (opened from the switchboard's message line) while a message is held before sending,
+// after Undo and edit, and after it is sent, at both widths. The capture clock is pinned, so the hold's count stays at its start; the sent images use Send now. The
 // send is answered locally, as the route answers once the owner's copy is accepted; no email is sent and the visitor
 // is fictional.
 import { stubTurnstile } from "../turnstile-stub.mjs";
@@ -9,7 +9,8 @@ const holdAnd = (then) => async (page) => {
 	await page.route("**/api/contact", (route) =>
 		route.fulfill({ json: { ok: true } }),
 	);
-	await page.locator(".contact-disclosure summary").click();
+	await page.locator('a[data-line="message"] .line-title').click();
+	await page.locator("[data-message-panel]").waitFor({ state: "visible" });
 	await page.waitForFunction(
 		() =>
 			!!document.querySelector('#contact-form [name="cf-turnstile-response"]'),
@@ -42,7 +43,7 @@ const holdAnd = (then) => async (page) => {
 };
 
 export default {
-	title: "Homepage contact confirmation",
+	title: "Contact form confirmation",
 	async run({ capture }) {
 		const steps = [];
 
@@ -55,10 +56,10 @@ export default {
 
 			for (const viewport of ["desktop", "phone"]) {
 				const file = await capture({
-					file: `home-contact-${name}-${viewport}.png`,
-					path: "/",
+					file: `contact-hold-${name}-${viewport}.png`,
+					path: "/contact",
 					viewport,
-					selector: "#contact",
+					selector: "[data-message-panel]",
 					prepare: holdAnd(then),
 				});
 
