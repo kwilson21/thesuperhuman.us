@@ -248,8 +248,11 @@ UNVERIFIED until checked:
   defect left; their comment corrections are in #341 ("Comments from the closed-archive re-review"). On #341, two
   independent reviews and Codex found no code defect, security problem or CLAUDE.md violation; one low behaviour point
   (the draft's clock read after its offers read) and the record and design corrections are fixed in their own commits.
-  The last code change (the draft's clock read) was checked against its test, which fails on the previous flow, and not
-  given another pass. CI on each final head: #341 `ca6c48d7`, #337 `a329c396` and #334 `922df817`, each with every
+  The last code change (the draft's clock read, `ad1a14d1`) had its own independent review after the merge, on
+  `a9f30919`: the clock is read where the route read it, once per try (a probe logged one read before each offers read
+  across one and three taken versions), no other draft step reads it, and the story fails on the previous flow and
+  passed five runs in a row on a fake clock; it found nothing. Its limit: the story pins "before the offers read", not
+  "after the front checks". CI on each final head: #341 `ca6c48d7`, #337 `a329c396` and #334 `922df817`, each with every
   `validate` lane, `neutrality` (the `conversion` label's golden check) and the Workers preview build succeeding.
   Before the last merge, `main` had moved to `5022d29c` (#326); the stack merged with it locally printed
   `golden:neutral: NEUTRAL` (80 fixtures, 9,365 cases, the same five software corpora neutral with D1 changes) and the
