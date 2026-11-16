@@ -349,6 +349,7 @@ async function renderIn(browser, key, attempt) {
 
 		const reviewed =
 			!failed &&
+			previous?.renderer === rendererHash(ROOT) &&
 			previous?.image.endsWith(posterExtension) &&
 			[previous.image, previous.video.replace("/og/", "/og/raw/")].every(
 				(file) => existsSync(join(ROOT, "public", file)),

@@ -3,8 +3,8 @@ name: Publish link previews
 # Trusted half of the link-preview flow. workflow_run always runs this file and the scripts it
 # checks out from the default branch, never the pull request's code. The artifact is untrusted
 # input: scripts/og-video/publish.mjs accepts only preview media, the manifest and the generated
-# site tokens, checked by type and size. It commits them to the pull request, runs Validate on that
-# commit (a push made with this token starts no workflow by itself) and posts the contact sheets.
+# site tokens, checked by type and size. It commits them to the pull request, posts the contact
+# sheets, then validates that commit (a push made with this token starts no workflow by itself).
 # Merging approves the renders (owner decision, October 22, 2026).
 on:
   workflow_run:
@@ -96,7 +96,6 @@ jobs:
           git push origin "HEAD:refs/heads/$BRANCH"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$(git rev-parse HEAD)" -f state=pending -f context=validate -f description="Waiting for trusted secretless validation"
-          gh workflow run validate.yml --repo "$GITHUB_REPOSITORY" --ref main -f "revision=$(git rev-parse HEAD)"
       - name: Publish the contact sheets
         if: steps.commit.outputs.sha
         id: sheets
@@ -137,3 +136,9 @@ jobs:
           DIR: ${{ steps.sheets.outputs.dir }}
           SCENES: ${{ steps.apply.outputs.scenes }}
         run: node scripts/og-video/pr-section.mjs
+      - name: Validate after review sheets are attached
+        if: steps.sheets.outputs.dir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REVISION: ${{ steps.commit.outputs.sha }}
+        run: gh workflow run validate.yml --repo "$GITHUB_REPOSITORY" --ref main -f "revision=$REVISION"

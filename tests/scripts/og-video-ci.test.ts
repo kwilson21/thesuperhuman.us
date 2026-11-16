@@ -399,7 +399,7 @@ it("dispatches only trusted-main validation and withholds secrets from dispatche
 	);
 
 	const validation = readFileSync(".github/workflows/validate.yml", "utf8");
-	expect(publisher).toContain('--ref main -f "revision=$(git rev-parse HEAD)"');
+	expect(publisher).toContain('--ref main -f "revision=$REVISION"');
 	expect(publisher).not.toContain('--ref "$BRANCH"');
 	expect(validation).toContain(
 		"github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || ''",
@@ -469,4 +469,28 @@ it("validates reused media instead of trusting existing hashed filenames", () =>
 	} finally {
 		rmSync(f.root, { recursive: true, force: true });
 	}
+});
+
+it("publishes review sheets before starting required validation", () => {
+	const workflow = readFileSync(
+		new URL(
+			"../../.github/workflows/link-previews-publish.yml",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	expect(workflow.indexOf("gh workflow run validate.yml")).toBeGreaterThan(
+		workflow.indexOf("run: node scripts/og-video/pr-section.mjs"),
+	);
+});
+
+it("does not reuse derived media from a different renderer", () => {
+	const renderer = readFileSync(
+		new URL("../../scripts/og-video/render.mjs", import.meta.url),
+		"utf8",
+	);
+	const eligibility = renderer
+		.split("const reviewed =")[1]
+		.split("if (reviewed")[0];
+	expect(eligibility).toContain("previous?.renderer === rendererHash(ROOT)");
 });

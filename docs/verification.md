@@ -718,3 +718,5 @@ The current protocol preserves the rendered tree and newer commits. The moving
 checkout and force-push mutants reproduce the two races. CI runs 1,000 sampled
 executions of eight steps; this is not exhaustive proof. File allowlists and
 contact-sheet completeness are tested separately in `og-video-ci.test.ts`.
+
+The preview review gate additionally models sheet publication and PR-description success before validation dispatch. Failed publication cannot unlock validation; the early-dispatch mutant violates this property. Apalache checked the current gate through 8 steps.
