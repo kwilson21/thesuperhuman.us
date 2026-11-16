@@ -272,17 +272,20 @@ export function visibleCatalog(
 /** The mix and master comparison Home plays (src/pages/index.astro), which the headphones on Home's desk start. */
 export const homeComparisonExample = "old-news-mastering";
 
-/** The newest released song: the release with the latest date among those released. */
-export function latestRelease(catalog: MusicCatalog): Release | undefined {
+/**
+ * The released songs, newest first: the one order that Home's headphones (latestRelease) and its waveform edge
+ * (latestSongWaveform in src/lib/latest-song.ts) both read. A release without a date comes after every dated one, and
+ * releases on the same date keep the catalog's order.
+ */
+export function releasedNewestFirst(catalog: MusicCatalog): Release[] {
 	return catalog.releases
 		.filter((release) => release.status === "released")
-		.reduce<Release | undefined>(
-			(newest, release) =>
-				!newest || (release.date ?? "") > (newest.date ?? "")
-					? release
-					: newest,
-			undefined,
-		);
+		.toSorted((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+}
+
+/** The newest released song. */
+export function latestRelease(catalog: MusicCatalog): Release | undefined {
+	return releasedNewestFirst(catalog)[0];
 }
 
 export function musicFile(id: string, version: keyof Recording["versions"]) {
