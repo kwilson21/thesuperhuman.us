@@ -590,9 +590,22 @@ is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId` (Z
 
 ## 9. The PR stack
 
-1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes. It merges before
-   the fixes PR (the stack order), and the fixes PR is cut from it.
+1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes. It merged before
+   the fixes PR (the stack order), and the fixes PR was cut from it.
 2. `claude/effect-15-audio-projects-fixes`: F1 to F5, each reproduced by a failing test first; fixture re-records in
-   commits that contain fixture files only.
-3. `claude/effect-15-audio-projects`: the conversion; the record `docs/prelaunch-qa-2026-11-15-audio-projects.md`; step 7
-   marked converted in the plan.
+   commits that contain fixture files only. It merged before the conversion.
+3. The conversion, as a stack of three layers, each converting whole routes, standing alone and neutral against the layer
+   below (`golden:neutral --all <below> <tip>` prints NEUTRAL, D1 statements changing only):
+   1. `claude/effect-15-audio-projects-messages` (from `main`): the owner and studio messages routes. It creates the
+      area's store file `src/server/audio-project-store.ts`, the answers module `src/lib/audio-project-answers.ts`, the
+      input readers in `src/server/audio-project-input.ts` with their frozen copies and differential tests, and the rules
+      and flows for messages, read marks, responses and the rate window. It deletes the five writers of
+      `src/lib/audio-project-messages.ts` that only these routes called.
+   2. `claude/effect-15-audio-projects-files` (from layer 1): the uploads route (POST and PUT), the owner file route and the
+      studio file route. Publish, file revoke with its carried first-read status and the `decideAndSave` stage reset, the
+      upload protocol and the R2 code mapping of section 3. The machines `audioProject` and `projectFile` land here, the
+      first layer whose store takes a stage or status list.
+   3. `claude/effect-15-audio-projects` (from layer 2): the access, invitation and updates routes and the notices (claims,
+      delivery in `waitUntil`, retries with today's 60 second cutoff). AR2, AR3 and AR5 go in
+      `src/server/studio-signin-store.ts` (section 4). The machine `projectNotice` lands here. It adds the record
+      `docs/prelaunch-qa-2026-11-15-audio-projects.md` and marks step 7 converted in the plan.
