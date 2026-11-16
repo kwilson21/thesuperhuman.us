@@ -207,7 +207,8 @@ UNVERIFIED until checked:
 ## 1. Purpose and content
 
 - **PASS · Changes, instructions and audience.** One owner route converted; no answer changes.
-- **PASS · Approved decisions.** Quoted above; one judgment call (the landing's timeout) for the owner to confirm.
+- **PASS, with exception · Approved decisions.** Quoted above. The exception: the answer when the email's outcome never
+  lands is UNVERIFIED, released without the owner's confirmation (impact and follow-up under "Owner decisions").
 - **N/A · Public copy, first screen, navigation.** No page changes.
 
 ## 2. Search and sharing
