@@ -89,6 +89,32 @@ export default {
 								return scrollY + slot.top - action.top;
 							});
 
+							// Read geometry synchronously in the same task as large scroll jumps.
+							// A JS/rAF-positioned proxy lags here; native sticky must already agree.
+							await page.evaluate((dockY) => {
+								for (const jump of [-300, 180, -160, 240, -8, 8, -300]) {
+									scrollTo(0, dockY + jump);
+
+									const action = document
+										.querySelector("[data-pinned-contact] a")
+										.getBoundingClientRect();
+
+									const target = document
+										.querySelector("[data-closing-button]")
+										.getBoundingClientRect();
+
+									if (
+										Math.abs(
+											action.top -
+												Math.min(target.top, innerHeight - 16 - action.height),
+										) > 1
+									)
+										throw new Error(
+											`Contact action lagged rapid scroll by ${action.top - Math.min(target.top, innerHeight - 16 - action.height)}px`,
+										);
+								}
+							}, dockScroll);
+
 							for (const step of [-8, -2, 2, 8, 2, -2, -8]) {
 								await page.evaluate((y) => scrollTo(0, y), dockScroll + step);
 								await page.waitForFunction(() => {

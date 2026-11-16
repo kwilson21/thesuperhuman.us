@@ -500,6 +500,58 @@ describe("digest precision", () => {
 		expect(digestDatabase(one).sha256).not.toBe(digestDatabase(two).sha256);
 	});
 
+	it("the next AUTOINCREMENT id is the same with a counter row at 0 as with none", () => {
+		const setup = "CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)";
+		const none = freshPublicationDb();
+		const zero = freshPublicationDb();
+
+		for (const sqlite of [none, zero]) sqlite.exec(setup);
+
+		// A refused INSERT ... SELECT creates the counter row at 0 and no table row.
+		zero.exec("INSERT INTO seq (v) SELECT 1 WHERE 0");
+
+		expect(zero.prepare("SELECT name, seq FROM sqlite_sequence").all()).toEqual(
+			[{ name: "seq", seq: 0 }],
+		);
+		expect(none.prepare("SELECT name, seq FROM sqlite_sequence").all()).toEqual(
+			[],
+		);
+
+		for (const sqlite of [none, zero])
+			expect(
+				sqlite.prepare("INSERT INTO seq (v) VALUES (1) RETURNING id").get(),
+			).toEqual({ id: 1 });
+	});
+
+	it("a counter row at 0 is no state, and a counter row above 0 is", () => {
+		const none = freshPublicationDb();
+		const zero = freshPublicationDb();
+		const one = freshPublicationDb();
+
+		for (const sqlite of [none, zero, one])
+			sqlite.exec("CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)");
+
+		zero.exec("INSERT INTO seq (v) SELECT 1 WHERE 0");
+		one.exec("INSERT INTO seq (v) VALUES (1); DELETE FROM seq");
+
+		expect(digestDatabase(zero).sha256).toBe(digestDatabase(none).sha256);
+		expect(Object.keys(digestDatabase(zero).tables)).not.toContain(
+			"sqlite_sequence",
+		);
+		expect(digestDatabase(one).sha256).not.toBe(digestDatabase(none).sha256);
+		expect(digestDatabase(one).tables.sqlite_sequence?.rows).toBe(1);
+	});
+
+	it("preserves a NULL counter row while ignoring only a numeric zero", () => {
+		const sqlite = freshPublicationDb();
+		sqlite.exec("CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)");
+		const before = digestDatabase(sqlite);
+		sqlite.exec("INSERT INTO sqlite_sequence (name, seq) VALUES ('seq', NULL)");
+		const after = digestDatabase(sqlite);
+		expect(after.sha256).not.toBe(before.sha256);
+		expect(after.tables.sqlite_sequence?.rows).toBe(1);
+	});
+
 	it("negative zero, text that looks like a number and blobs are all told apart", () => {
 		const seen = new Set(
 			["-0.0", "0.0", "'0'", "x'30'", "NULL", "0"].map((value) =>
