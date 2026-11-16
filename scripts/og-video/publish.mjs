@@ -177,7 +177,54 @@ export function safePath(root, path) {
 	return current;
 }
 
-export function deriveSheet(video, durationMs, image) {
+export function videoDuration(probe) {
+	const streams = probe?.streams;
+	const stream = streams?.[0];
+	const durationMs = Number(stream?.duration) * 1000;
+
+	if (
+		!Array.isArray(streams) ||
+		streams.length !== 1 ||
+		stream.codec_type !== "video" ||
+		stream.codec_name !== "h264" ||
+		stream.width !== 1200 ||
+		stream.height !== 630 ||
+		stream.pix_fmt !== "yuv420p" ||
+		!Number.isFinite(durationMs) ||
+		durationMs < 100 ||
+		durationMs > 30000
+	)
+		throw new Error("Invalid silent preview video");
+
+	return durationMs;
+}
+
+export function deriveSheet(video, declaredDurationMs, image) {
+	const probe = JSON.parse(
+		execFileSync(
+			"ffprobe",
+			[
+				"-v",
+				"error",
+				"-protocol_whitelist",
+				"file",
+				"-show_streams",
+				"-of",
+				"json",
+				video,
+			],
+			{
+				timeout: 10000,
+				maxBuffer: 1024 * 1024,
+				env: { PATH: process.env.PATH },
+			},
+		).toString(),
+	);
+
+	const durationMs = videoDuration(probe);
+
+	if (Math.abs(durationMs - declaredDurationMs) > 34)
+		throw new Error("Declared duration differs from video");
 	const directory = mkdtempSync(join(tmpdir(), "trusted-preview-"));
 
 	try {
@@ -343,8 +390,12 @@ export function applyArtifact(
 			throw new Error("Scene filename mismatch");
 
 		for (const path of mediaPaths(entry)) {
-			if (!files.includes(path) && !existsSync(safePath(TARGET, path)))
-				throw new Error(`Missing output ${path}`);
+			const location = safePath(files.includes(path) ? filesDir : TARGET, path);
+
+			if (!existsSync(location)) throw new Error(`Missing output ${path}`);
+			const problem = check(path, readFileSync(location));
+
+			if (problem) throw new Error(`${path} ${problem}`);
 		}
 	}
 

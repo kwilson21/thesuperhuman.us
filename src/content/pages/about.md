@@ -1,4 +1,5 @@
 ---
+
 title: "About · Kazon Wilson"
 description: "Software, sound, play, and the curiosity that connects them."
 ---

@@ -102,9 +102,11 @@ describe("parallel Validate retains every release gate", () => {
 			),
 		);
 		expect(lane).toContain('REQUIRE_CLIENT_BUNDLE: "1"');
-		expect(workflow.match(/secrets\./g)).toHaveLength(1);
+		expect(workflow.match(/secrets\.PUBLICIST_PRIVATE_TOKEN/g)).toHaveLength(1);
+		expect(job("validate")).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+		expect(job("validate")).not.toContain("actions/checkout");
 		expect(lane).toContain(
-			"PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}",
+			"PUBLICIST_PRIVATE_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || '' }}",
 		);
 	});
 	it("performs global mutant-coverage validation before selecting a shard", () => {

@@ -119,14 +119,26 @@ A scenario captures a stateful flow step by step. Add `scripts/screenshots/scena
 
 ```js
 export default {
-  title: 'Client journey',
-  async run({ base, capture, sql, ownerFetch }) {
-    sql("INSERT INTO owner_requests(...) VALUES(...)"); // seed only what needs an outside service
-    await ownerFetch('/api/owner/requests/<id>', { action: 'review' }); // then drive the real routes
-    return [{ title: 'Request reviewed', images: [
-      { file: await capture({ file: 'journey-01-desktop.png', path: '/owner/requests/<id>', owner: true }), caption: 'Owner view' },
-    ] }];
-  },
+	title: "Client journey",
+	async run({ base, capture, sql, ownerFetch }) {
+		sql("INSERT INTO owner_requests(...) VALUES(...)"); // seed only what needs an outside service
+		await ownerFetch("/api/owner/requests/<id>", { action: "review" }); // then drive the real routes
+		return [
+			{
+				title: "Request reviewed",
+				images: [
+					{
+						file: await capture({
+							file: "journey-01-desktop.png",
+							path: "/owner/requests/<id>",
+							owner: true,
+						}),
+						caption: "Owner view",
+					},
+				],
+			},
+		];
+	},
 };
 ```
 

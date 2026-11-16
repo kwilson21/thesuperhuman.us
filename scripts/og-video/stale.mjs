@@ -23,8 +23,15 @@ const manifest = JSON.parse(
 	readFileSync(join(ROOT, "src/data/og-media.json"), "utf8"),
 );
 
-export function why(entry, root = ROOT) {
+export function why(entry, root = ROOT, scene) {
 	if (!entry) return "not rendered yet";
+
+	if (
+		scene &&
+		(!new RegExp(`^/og/${scene}-[0-9a-f]{10}\\.(png|jpg)$`).test(entry.image) ||
+			!new RegExp(`^/og/${scene}-[0-9a-f]{10}\\.mp4$`).test(entry.video))
+	)
+		return "scene paths changed";
 
 	if (entry.renderer !== rendererHash(root)) return "renderer changed";
 
@@ -63,7 +70,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	}
 
 	const stale = scenes.filter((scene) => {
-		const reason = why(manifest[scene]);
+		const reason = why(manifest[scene], ROOT, scene);
 
 		if (reason) console.error(`${scene}: ${reason}`);
 

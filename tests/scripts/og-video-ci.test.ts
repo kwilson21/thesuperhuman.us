@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { siteTokens } from "../../scripts/og-video/site-tokens.mjs";
 import { withFiles, withNote } from "../../scripts/og-video/record.mjs";
-import { check } from "../../scripts/og-video/publish.mjs";
+import { check, videoDuration } from "../../scripts/og-video/publish.mjs";
 
 const PNG = Buffer.from([
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13,
@@ -161,8 +161,8 @@ function fixture() {
 
 	const entry = (scene: string) => ({
 		...metadata,
-		image: `/og/${scene}-0123456789.png`,
-		video: `/og/${scene}-0123456789.mp4`,
+		image: `/og/${scene}-${hash(PNG)}.png`,
+		video: `/og/${scene}-${hash(Buffer.from("\0\0\0\x20ftypisom"))}.mp4`,
 		inputs: [],
 	});
 
@@ -170,10 +170,10 @@ function fixture() {
 
 	for (const scene of ["home", "about"]) {
 		put(target, `scripts/og-video/scenes/${scene}.html`, "scene");
-		put(target, `public/og/${scene}-0123456789.png`, PNG);
+		put(target, `public/og/${scene}-${hash(PNG)}.png`, PNG);
 		put(
 			target,
-			`public/og/raw/${scene}-0123456789.mp4`,
+			`public/og/raw/${scene}-${hash(Buffer.from("\0\0\0\x20ftypisom"))}.mp4`,
 			Buffer.from("\0\0\0\x20ftypisom"),
 		);
 	}
@@ -298,6 +298,8 @@ describe("stale inputs and outputs", () => {
 			for (const path of [
 				"scripts/og-video/render.mjs",
 				"scripts/og-video/fingerprint.mjs",
+				"package.json",
+				"pnpm-lock.yaml",
 			])
 				f.put(f.target, path, "implementation");
 
@@ -309,7 +311,10 @@ describe("stale inputs and outputs", () => {
 			};
 
 			expect(why(entry, f.target)).toBeNull();
-			rmSync(join(f.target, "public/og/home-0123456789.png"));
+			expect(
+				why({ ...entry, image: f.manifest.about.image }, f.target, "home"),
+			).toMatch(/scene paths/);
+			rmSync(join(f.target, `public/og/home-${hash(PNG)}.png`));
 			expect(why(entry, f.target)).toMatch(/output missing/);
 			f.put(f.target, "scripts/og-video/render.mjs", "changed implementation");
 			expect(why(entry, f.target)).toMatch(/renderer changed/);
@@ -423,4 +428,45 @@ it("publishes only the run-associated feature PR targeting main", () => {
 	expect(workflow).toContain('[[ "$BRANCH" != "$default"');
 	expect(workflow).toContain('[[ "$protected" == false ]]');
 	expect(workflow).not.toContain("pulls?state=open&head=");
+});
+
+it("takes review timing from a bounded silent H264 video stream", () => {
+	const stream = {
+		codec_type: "video",
+		codec_name: "h264",
+		width: 1200,
+		height: 630,
+		pix_fmt: "yuv420p",
+		duration: "7.2",
+	};
+
+	expect(videoDuration({ streams: [stream] })).toBe(7200);
+	expect(() =>
+		videoDuration({ streams: [stream, { codec_type: "audio" }] }),
+	).toThrow(/silent preview/);
+
+	for (const invalid of [
+		{ duration: "Infinity" },
+		{ duration: "40" },
+		{ width: 0 },
+		{ codec_type: "audio" },
+	])
+		expect(() =>
+			videoDuration({ streams: [{ ...stream, ...invalid }] }),
+		).toThrow(/silent preview/);
+});
+
+it("validates reused media instead of trusting existing hashed filenames", () => {
+	const f = fixture();
+
+	try {
+		f.put(
+			f.target,
+			`public${f.manifest.home.image}`,
+			Buffer.concat([PNG, Buffer.from("tampered")]),
+		);
+		expect(f.apply).toThrow(/content hash/);
+	} finally {
+		rmSync(f.root, { recursive: true, force: true });
+	}
 });

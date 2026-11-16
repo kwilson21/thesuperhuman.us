@@ -81,5 +81,7 @@ export function rendererHash(root) {
 	return sourceHash(root, [
 		"scripts/og-video/render.mjs",
 		"scripts/og-video/fingerprint.mjs",
+		"package.json",
+		"pnpm-lock.yaml",
 	]);
 }
