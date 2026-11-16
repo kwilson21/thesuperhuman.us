@@ -37,6 +37,7 @@ import {
 	saveDraft,
 } from "../rules/offer-draft";
 import { afterRefusedDraft } from "../rules/offer-refused-batch";
+import type { AttachmentsRead } from "../rules/software-request";
 import type { DraftCommand } from "../software-offer-input";
 import {
 	answerRefusedBatch,
@@ -64,6 +65,12 @@ export type DraftAnswer = {
 	readonly version: number;
 	readonly updatedAt: string;
 	readonly attachmentCleanupPending: boolean;
+};
+
+/** What the draft decides from when its details name no attachment: no metadata row and no closed archive was read. */
+const NOTHING_NAMED: AttachmentsRead = {
+	rows: [],
+	closed: { keys: [], unreadable: false },
 };
 
 /** Every read the draft decides on, in the order the route has always made them, deciding between them. */
@@ -102,11 +109,16 @@ const draftFacts = (action: DraftAction) =>
 
 		const keys = attachments.map((attachment) => attachment.key);
 
-		// With no attachment named, the batch has no G11 and nothing is read (the closed archives read nothing either).
-		const named = {
-			rows: keys.length > 0 ? yield* readAttachmentRows(requestId, keys) : [],
-			closed: yield* readClosedArchives(keys),
-		};
+		// Only details that are given and not null name attachments, and only they put G11 in the batch; with no details, or
+		// none named, nothing is read (the closed archives read nothing for no key either).
+		const named =
+			command.agreementDetails == null
+				? NOTHING_NAMED
+				: {
+						rows:
+							keys.length > 0 ? yield* readAttachmentRows(requestId, keys) : [],
+						closed: yield* readClosedArchives(keys),
+					};
 
 		const msaId = reusedMsaOf(command);
 		const reusedMsaFound = msaId === null ? null : yield* readMsaExists(msaId);
