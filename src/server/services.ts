@@ -4,6 +4,7 @@
 //
 // The bindings are real here, and typed as required (see `bindingsOrUnavailable`). Mail, Stripe and Turnstile are only their interface and typed errors in this layer: each
 // live implementation, wrapping the function the site calls today, comes with the first route that uses it.
+import type { OfferAsk } from "./offer-board-model";
 import type StripeSdk from "stripe";
 import * as Context from "effect/Context";
 import * as Data from "effect/Data";
@@ -311,6 +312,16 @@ export class BoardModel extends Context.Service<
 		) => Effect.Effect<RawValue, BoardModelFailed | BoardModelTimedOut>;
 	}
 >()("site/BoardModel") {}
+
+/** The offer board's model (src/server/offer-board-model.ts): its JSON answer for one suggestion, unread. */
+export class OfferModel extends Context.Service<
+	OfferModel,
+	{
+		readonly suggest: (
+			ask: OfferAsk,
+		) => Effect.Effect<RawValue, BoardModelFailed | BoardModelTimedOut>;
+	}
+>()("site/OfferModel") {}
 
 /** A rate limit binding refused to answer. */
 export class RateLimiterFailed extends Data.TaggedError("RateLimiterFailed") {}

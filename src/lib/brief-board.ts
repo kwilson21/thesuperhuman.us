@@ -121,9 +121,9 @@ export type CardStatus = "proposed" | "kept" | "edited" | "dismissed" | "wrote";
 /** said: read from the visitor's answers, with the passage quoted. suggested: an inference. none: the visitor's note. */
 export type Basis = "said" | "suggested" | "none";
 
-export type BoardCard = {
+export type BoardCard<L extends string = Lane> = {
 	readonly id: string;
-	readonly lane: Lane;
+	readonly lane: L;
 	readonly text: string;
 	readonly status: CardStatus;
 	readonly basis: Basis;
@@ -140,34 +140,50 @@ export type BoardCard = {
 };
 
 /** One visitor action, for Undo: each card it changed as it was before (null: the action added it), and where it was. */
-export type HistoryStep = {
+export type HistoryStep<L extends string = Lane> = {
 	readonly label: string;
 	readonly before: readonly {
 		readonly id: string;
-		readonly card: BoardCard | null;
+		readonly card: BoardCard<L> | null;
 		readonly index: number;
 	}[];
 };
 
 /** A note the visitor removed: its lane and words, so a reply does not offer the idea back in that lane. */
-export type RemovedNote = { readonly lane: Lane; readonly text: string };
+export type RemovedNote<L extends string = Lane> = {
+	readonly lane: L;
+	readonly text: string;
+};
 
-export type Board = {
-	readonly cards: readonly BoardCard[];
+/**
+ * What the board's rules need to know about a set of lanes: the lanes, how many cards and how many characters each
+ * holds, the lane whose cards take an answer (if any), and whether a card still stands. The living brief's are BRIEF_LANES;
+ * the offer board (src/lib/offer-board.ts) has its own, and the same rules.
+ */
+export type LaneConfig<L extends string> = {
+	readonly lanes: readonly L[];
+	readonly limits: Readonly<Record<L, number>>;
+	readonly textLimits: Readonly<Record<L, number>>;
+	readonly answerLane: L | null;
+	readonly stands: (card: BoardCard<L>, answers: string) => boolean;
+};
+
+export type Board<L extends string = Lane> = {
+	readonly cards: readonly BoardCard<L>[];
 	readonly nextId: number;
 	/** Requests sent so far: each request's number is the count after it was sent. */
 	readonly sent: number;
 	/** The number of the newest reply applied (0: none). */
 	readonly applied: number;
-	readonly history: readonly HistoryStep[];
+	readonly history: readonly HistoryStep<L>[];
 	/**
 	 * The words of notes the visitor removed, so a reply does not offer them back. Kept in memory only: never saved with
 	 * the board and never sent to the model, because a removed note is gone as far as the visitor is concerned.
 	 */
-	readonly removed?: readonly RemovedNote[];
+	readonly removed?: readonly RemovedNote<L>[];
 };
 
-export const emptyBoard = (): Board => ({
+export const emptyBoard = <L extends string = Lane>(): Board<L> => ({
 	cards: [],
 	nextId: 1,
 	sent: 0,
@@ -175,10 +191,11 @@ export const emptyBoard = (): Board => ({
 	history: [],
 });
 
-export const isOwned = (card: BoardCard) => card.status !== "proposed";
+export const isOwned = (card: Pick<BoardCard, "status">) =>
+	card.status !== "proposed";
 
 /** The cards that count toward a lane's limit: everything but set-aside cards. */
-export const laneCount = (board: Board, lane: Lane) =>
+export const laneCount = <L extends string>(board: Board<L>, lane: L) =>
 	board.cards.filter(
 		(card) => card.lane === lane && card.status !== "dismissed",
 	).length;
@@ -439,20 +456,153 @@ export function sameIdea(a: string, b: string): boolean {
 const MONEY_WORDS =
 	"budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|around|about|roughly|approximately|under|over|below|above|up to|less than|more than";
 
+// The money forms, as named parts. PRICE_PARTS keeps the living brief's order, so MONEY's source stays as it was; the
+// offer board's PRICE below reuses some of them and adds its own.
+/** A currency's symbol before the amount ("$5,000", "€300", "$5k"). */
+const SYMBOL_BEFORE =
+	"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?";
+
+/** An amount, then a currency's code or word ("5,000 USD", "300 euros"). */
+const CODE_OR_WORD_AFTER =
+	"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b";
+
+// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
+// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
+const CODE_BEFORE =
+	"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d";
+
+/** Chinese and Japanese amounts ("5000元", "3万円"). */
+const CJK_AMOUNT =
+	"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)";
+
+// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
+const WON_AMOUNT =
+	"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)";
+
+/** A Chinese, Japanese or Korean money word with an amount ("预算: 5000"). */
+const CJK_MONEY_WORD =
+	"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d";
+
+/** The living brief's money word with any number ("estimated 6 weeks" included: the brief refuses durations anyway). */
+const BRIEF_MONEY_WORD_AMOUNT =
+	"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*";
+
+const PRICE_PARTS = [
+	SYMBOL_BEFORE,
+	CODE_OR_WORD_AFTER,
+	CODE_BEFORE,
+	CJK_AMOUNT,
+	WON_AMOUNT,
+	CJK_MONEY_WORD,
+	BRIEF_MONEY_WORD_AMOUNT,
+];
+
+/**
+ * Money, or an amount a brief reads as money: "about 5k", or a bare large amount after "under", "up to" and the like
+ * ("up to 5,000"). The same alternatives in the same order as before the offer board split PRICE out.
+ */
 const MONEY = new RegExp(
 	[
-		"[$€£¥₹₩]\\s?\\d[\\d,.]*(?:\\s?(?:k|m|million|thousand)\\b)?",
-		"\\d[\\d,.]*\\s?(?:usd|eur|gbp|cad|aud|dollars?|euros?|pounds?|bucks)\\b",
-		// The currency's code before the amount ("USD 5,000", "EUR 300"), but not "CAD 3D" or "CAD 2D". Known limits: codes
-		// that are also abbreviations or words ("INR 2.5" readings, "CHF 4", Norwegian "nok 3") are refused.
-		"\\b(?:usd|eur|gbp|cad|aud|nzd|chf|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk)\\s?(?![\\d,.]*d\\b)\\d",
-		"\\d[\\d,.]*\\s?(?:千|万|萬|亿|億)?\\s?(?:円|元|圓|块钱|塊錢)",
-		// Korean won, with the amount's own units and spacing ("10만 원", "5천만원"), but not "3원칙" (three principles).
-		"\\d[\\d,.]*\\s?(?:천만|천|만|억)?\\s?원(?=$|[^가-힣]|에|을|이|은|의|도|만|으로|짜리|정도|쯤|대|선|까지|부터|이하|이상|미만|씩)",
-		"(?:预算|預算|予算|費用|费用|价格|價格|価格|예산|비용)\\s*[:：]?\\s*\\d",
+		...PRICE_PARTS.slice(0, -1),
 		`\\b(?:${MONEY_WORDS})\\s*(?:of|is|at|around|about|:)?\\s*\\d[\\d,.]*\\s?k\\b`,
-		"\\b(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?)\\s*(?:of|is|at|around|about|under|over|roughly|:)?\\s*\\d[\\d,.]*",
+		BRIEF_MONEY_WORD_AMOUNT,
 		"\\b(?:under|over|below|above|up to|less than|more than)\\s+\\d{1,3}(?:,\\d{3})+\\b",
+	].join("|"),
+	"iu",
+);
+
+// ---- The offer board's money test --------------------------------------------------------------------------------
+// An offer's cards may count things and give durations ("Import up to 2,000 products", "Estimated 6 weeks"), so the
+// offer board reads a number after a money word by what follows it. A large amount (three digits or more, a thousands
+// separator, "k", or a scale word such as "thousand", "mil" or "Tausend") is money unless a unit or a counted thing
+// follows ("Fee 3,000 plus VAT" and "Budget around 5 thousand" are money; "Estimated 1,500 pages" is not). A small one is
+// money only when what follows reads as paying ("a fee of 50", "costs 25/month"). An amount with its currency after it
+// is money with or without a scale word between them ("5 mil dólares", "2 thousand dollars"), and so is a sum spelled in
+// English words before a currency word ("five thousand dollars", "fifteen hundred dollars", "two hundred thousand
+// dollars"). A range after a money word may end in a scale word ("Budget of 5 to 10 thousand").
+// Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"); a large number
+// followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"), and so is a number before a short
+// scale word that is also an English word ("Quote 4 mil poly bags", "Price 2 bin sizes"); money words are listed for English,
+// Spanish, Portuguese, French, German, Italian, Russian, Polish and Turkish only, so another language's money word
+// passes unless a currency is written; a currency code that is also a word ("TRY") is not listed; a sum spelled in
+// words in another language passes ("cinco mil dólares").
+
+/** A money word, in the languages listed above, standing as a word of its own. */
+const OFFER_MONEY_WORD =
+	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
+
+/**
+ * What may stand between a money word and its amount: a colon, then up to two of these words, each perhaps followed by
+ * a colon ("of", "is about", "of around", ": roughly", "von ca.").
+ */
+const OFFER_CONNECTOR =
+	"\\s*(?:[:：]\\s*)?(?:(?:of|is|at|around|about|under|over|roughly|approximately|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,2}";
+
+/** A scale word after a number, in the languages listed above ("thousand", "mil", "millones", "Tausend", "тыс.", "bin"). */
+const SCALE =
+	"(?:thousands?|millions?|billions?|milliards?|mil|mill[oó]n(?:es)?|milh(?:ão|ões|ao|oes)|mille|mila|milion[ei]?|milioni|tausend|millionen|mio(?:\\.|(?!\\.))|mrd(?:\\.|(?!\\.))|тысяч\\p{L}*|тыс(?:\\.|(?!\\.))|миллион\\p{L}*|млн(?:\\.|(?!\\.))|tys(?:\\.|(?!\\.))|tysięcy|tysiące|milion(?:ów|y)?|bin|milyon)";
+
+/**
+ * A large amount: a thousands separator, three digits or more, or a scale ("1,500", "1.500,00", "3 000", "120", "5k",
+ * "5 thousand").
+ */
+const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[.,]\\d{1,2})?|\\d+(?:[.,]\\d+)?\\s?(?:k|m|${SCALE})(?![\\p{L}\\p{N}]))(?!\\d|[.,]\\d|(?<=(?<![\\d,.])\\d{1,3}(?:\\s\\d{3})*)\\s\\d{3}(?!\\d))`;
+
+/** A small amount: one or two digits, perhaps with cents ("6", "25", "4.5"). */
+const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
+
+/** A range after an amount ("to 6", "- 8", "– 1,200"). */
+const OFFER_RANGE = `(?:\\s*(?:to|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?(?:k|${SCALE})(?![\\p{L}]))?)?`;
+
+/** Units of time, and things an offer counts, in the languages listed above. */
+const OFFER_UNITS =
+	"(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?|rounds?|revisions?|iterations?|pages?|screens?|views?|products?|items?|skus?|users?|members?|accounts?|records?|rows?|entries|orders?|customers?|clients?|subscribers?|visitors?|emails?|messages?|files?|photos?|images?|videos?|posts?|articles?|templates?|forms?|fields?|steps?|milestones?|features?|integrations?|languages?|locations?|stores?|sites?|apps?|carriers?|reports?|dashboards?|seats?|licen[cs]es?|people|staff|employees?|requests?|calls?|tickets?|días|dias|semanas|meses|horas|páginas|paginas|productos|produtos|usuarios|usuários|tage|wochen|monate|stunden|seiten|produkte|jours|semaines|mois|heures|giorni|settimane|mesi|ore|pagine|prodotti|дней|недел[ьи]|месяц[аев]*|часов|страниц|dni|tygodni|miesięcy|godzin|stron|gün|hafta|ay|saat|sayfa)(?!\\p{L})";
+
+/** What may follow a large amount when it counts things rather than money: a range, perhaps one word, then a unit. */
+const COUNTED_AFTER = `\\+?${OFFER_RANGE}\\s*(?:(?!(?:per|a|an|each|every|for|plus|or|and|including|on|in|with|to|of|the|this|next|last|first|across|over|during|throughout)(?!\\p{L}))\\p{L}+\\s+)?${OFFER_UNITS}`;
+
+/** What follows a small amount when it is money: the end, a full stop, a period of time after a slash, or a paying word. */
+const PAID_AFTER = `${OFFER_RANGE}\\s*(?:$|[.;)\\]](?=\\s|$)|\\/\\s?(?:mo|month|yr|year|wk|week|day|hr|hour)\\b|(?:dollars?|euros?|pounds?|bucks|per|a(?!\\s*\\d)|an|each|flat|upfront|up front|total|plus)\\b)`;
+
+/** A money word with an amount that is money by the rules above. */
+const OFFER_MONEY_WORD_AMOUNT = `${OFFER_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${PAID_AFTER}))`;
+
+/** Currency symbols the living brief does not list, before the amount ("₽5 000", "₺50.000", "₪20,000"). */
+const OTHER_SYMBOL_BEFORE = "[₽₺₪₱₫]\\s?\\d";
+
+/** Codes the living brief does not list, before the amount ("PLN 2 000"). */
+const OTHER_CODE_BEFORE = "\\b(?:pln|czk|huf|rub|zar|sgd|hkd)\\s?\\d";
+
+/**
+ * Money written after the amount, as many languages write it and the model writes in the brief's language: "20 €",
+ * "1.500 €", "5.000 R$", "15 CHF", "5k USD", "50 000 kr", "3.000 dólares", "20 000 zł", and "Rs. 50,000" with its dot
+ * (without it, "RS 232" is a port). "CAD" and "AUD" after a small number followed by a word are formats, not money
+ * ("3 CAD file types").
+ */
+const AMOUNT_THEN_CURRENCY = [
+	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])`,
+	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])`,
+	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
+	"(?<![\\p{L}])(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|a few|few|several|a couple of|couple of)(?:[-\\s](?:one|two|three|four|five|six|seven|eight|nine))?\\s+(?:hundred|thousand|million)(?:\\s+(?:thousand|million))?\\s+(?:dollars?|euros?|pounds?|bucks|usd|eur|gbp)(?![\\p{L}])",
+	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
+	"\\brs\\.\\s?\\d",
+];
+
+/**
+ * An amount of money only, for the offer board: a currency before or after the amount, or a money word with an amount
+ * that reads as money. MONEY above keeps its own alternatives for the living brief.
+ */
+const PRICE = new RegExp(
+	[
+		SYMBOL_BEFORE,
+		OTHER_SYMBOL_BEFORE,
+		CODE_BEFORE,
+		OTHER_CODE_BEFORE,
+		CJK_AMOUNT,
+		WON_AMOUNT,
+		CJK_MONEY_WORD,
+		OFFER_MONEY_WORD_AMOUNT,
+		...AMOUNT_THEN_CURRENCY,
 	].join("|"),
 	"iu",
 );
@@ -532,6 +682,17 @@ const plainText = (text: string) =>
 		.replace(/\s+/g, " ");
 
 /**
+ * Whether text names an amount of money or a link: the offer board's filter, where durations, promises and quantities
+ * ("a few hundred products", "up to 2,000 subscribers") belong to the offer the owner writes, but money belongs to the
+ * pricing panel and links to nobody. Words about cost without an amount ("low-cost hosting") are not money.
+ */
+export const pricesOrLinks = (text: string) =>
+	[PRICE, LINK].some((pattern) => pattern.test(plainText(text)));
+
+/** Whether text names a link or an address (a domain, a path, an email): for text that may name money but not a link. */
+export const hasLink = (text: string) => LINK.test(plainText(text));
+
+/**
  * Whether text makes a commitment or points somewhere: a price, a time estimate, a date, a promise, a link or an
  * address. Fixed, whatever the answers say: a card that repeats the visitor's "classes run for 4 weeks" is left out too,
  * and the visitor's words stay in their answers. (Allowing a phrase the visitor wrote was tried and reviewed twice: every
@@ -554,6 +715,15 @@ export const standsOn = (
 ) =>
 	!commits(card.text) &&
 	(card.basis !== "said" || quotedFrom(card.quote, answers));
+
+/** The living brief's lanes for the board's rules. */
+export const BRIEF_LANES: LaneConfig<Lane> = {
+	lanes: LANES,
+	limits: laneLimits,
+	textLimits,
+	answerLane: "questions",
+	stands: standsOn,
+};
 
 // ---- Lists --------------------------------------------------------------------------------------------------------
 
@@ -603,9 +773,9 @@ const replyCardFields = {
 
 const replyCardDefaults = { ref: "", quote: "", reason: "" };
 
-export type ReplyCard = {
+export type ReplyCard<L extends string = Lane> = {
 	readonly ref: string;
-	readonly lane: Lane;
+	readonly lane: L;
 	readonly text: string;
 	readonly basis: "said" | "suggested";
 	readonly quote: string;
@@ -709,17 +879,17 @@ export function readBoardAnswer(raw: RawValue): BoardAnswer {
 }
 
 /** Whether a reply card says the idea of a note the visitor removed from that lane. */
-const removedIdea = (board: Board, item: ReplyCard) =>
+const removedIdea = <L extends string>(board: Board<L>, item: ReplyCard<L>) =>
 	(board.removed ?? []).some(
 		(note) => note.lane === item.lane && sameIdea(note.text, item.text),
 	);
 
 /** Whether reply number `n` may change `card`: only an unowned card that was unowned when request `n` was sent. */
-const mayChange = (card: BoardCard, n: number) =>
+const mayChange = (card: Pick<BoardCard, "status" | "since">, n: number) =>
 	card.status === "proposed" && n > card.since;
 
-export type Applied = {
-	readonly board: Board;
+export type Applied<L extends string = Lane> = {
+	readonly board: Board<L>;
 	readonly added: number;
 	readonly updated: number;
 	readonly withdrawn: number;
@@ -742,6 +912,19 @@ export function applyReply(
 	paused: boolean,
 	refs: readonly string[] = [],
 ): Applied {
+	return applyReplyIn(BRIEF_LANES, board, reply, n, answers, paused, refs);
+}
+
+/** applyReply for any set of lanes: the same rules, with the lanes' limits and their own test of whether a card stands. */
+export function applyReplyIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	reply: readonly ReplyCard<L>[],
+	n: number,
+	answers: string,
+	paused: boolean,
+	refs: readonly string[] = [],
+): Applied<L> {
 	if (paused || n <= board.applied)
 		return { board, added: 0, updated: 0, withdrawn: 0 };
 
@@ -749,7 +932,7 @@ export function applyReply(
 
 	// A card named by a reply card that was left out stays, while what it says is still supported: a suggestion, or a
 	// card read from the answers whose passage is still in them. One whose passage the visitor deleted is withdrawn.
-	const supported = (card: BoardCard) => standsOn(card, answers);
+	const supported = (card: BoardCard<L>) => config.stands(card, answers);
 
 	const named = new Set<string>(
 		cards.flatMap((card) =>
@@ -757,7 +940,7 @@ export function applyReply(
 		),
 	);
 
-	const fresh: ReplyCard[] = [];
+	const fresh: ReplyCard<L>[] = [];
 
 	let updated = 0;
 
@@ -828,7 +1011,7 @@ export function applyReply(
 		)
 			continue;
 
-		const next: BoardCard = {
+		const next: BoardCard<L> = {
 			...card,
 			text: item.text,
 			basis: item.basis,
@@ -862,7 +1045,7 @@ export function applyReply(
 			) ||
 			kept.filter(
 				(card) => card.lane === item.lane && card.status !== "dismissed",
-			).length >= laneLimits[item.lane]
+			).length >= config.limits[item.lane]
 		)
 			continue;
 
@@ -892,13 +1075,13 @@ export function applyReply(
 // ---- The visitor's actions ----------------------------------------------------------------------------------------
 
 /** Records how the cards named in `ids` were, then applies `change` to the board's cards. */
-function act(
-	board: Board,
+function act<L extends string>(
+	board: Board<L>,
 	label: string,
 	ids: readonly string[],
-	change: (cards: BoardCard[]) => BoardCard[],
+	change: (cards: BoardCard<L>[]) => BoardCard<L>[],
 	nextId = board.nextId,
-): Board {
+): Board<L> {
 	const before = ids.map((id) => {
 		const index = board.cards.findIndex((card) => card.id === id);
 
@@ -914,14 +1097,18 @@ function act(
 }
 
 const replace =
-	(id: string, patch: (card: BoardCard) => BoardCard) => (cards: BoardCard[]) =>
+	<L extends string>(id: string, patch: (card: BoardCard<L>) => BoardCard<L>) =>
+	(cards: BoardCard<L>[]) =>
 		cards.map((card) => (card.id === id ? patch(card) : card));
 
-const find = (board: Board, id: string) =>
+const find = <L extends string>(board: Board<L>, id: string) =>
 	board.cards.find((card) => card.id === id);
 
 /** Keep: an unowned card becomes the visitor's. */
-export function keepCard(board: Board, id: string): Board {
+export function keepCard<L extends string>(
+	board: Board<L>,
+	id: string,
+): Board<L> {
 	const card = find(board, id);
 
 	if (!card || card.status !== "proposed") return board;
@@ -930,23 +1117,70 @@ export function keepCard(board: Board, id: string): Board {
 		board,
 		`kept “${card.text}”`,
 		[id],
-		replace(id, (c) => ({ ...c, status: "kept" })),
+		replace<L>(id, (c) => ({ ...c, status: "kept" })),
 	);
 }
 
-/** Edit: the visitor's words replace the card's. A note stays a note. */
-export function editCard(board: Board, id: string, text: string): Board {
+/**
+ * Use (the offer board): a card on the board becomes the owner's, as used in the offer. Like Keep, but an edited card, or
+ * one kept by bringing it back, may be used too, and Undo says "used". The step is recorded even when the card was
+ * already the owner's, so the page can undo what Use put into the offer with it.
+ */
+export function useCard<L extends string>(
+	board: Board<L>,
+	id: string,
+	/** What the press did, as Undo names it; "used" by default. */
+	verb = "used",
+): Board<L> {
 	const card = find(board, id);
-	const words = oneLine(text).slice(0, textLimits[card?.lane ?? "parts"]);
 
-	if (!card || card.status === "dismissed" || !words || words === card.text)
+	if (!card || card.status === "dismissed" || card.status === "wrote")
 		return board;
+
+	return act(
+		board,
+		`${verb} “${card.text}”`,
+		[id],
+		replace<L>(id, (c) => ({ ...c, status: "kept" })),
+	);
+}
+
+/**
+ * A step on the board's history that changes no card, for an action beside the board that Undo must reach (the offer
+ * board's Set its fee). Undo of it puts the card back as it already is; the page puts back what the action changed.
+ */
+export function markStep<L extends string>(
+	board: Board<L>,
+	id: string,
+	label: string,
+): Board<L> {
+	if (!find(board, id)) return board;
+
+	return act(board, label, [id], (cards) => cards);
+}
+
+/** Edit: the visitor's words replace the card's. A note stays a note. */
+export const editCard = (board: Board, id: string, text: string): Board =>
+	editCardIn(BRIEF_LANES, board, id, text);
+
+export function editCardIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	id: string,
+	text: string,
+): Board<L> {
+	const card = find(board, id);
+
+	if (!card || card.status === "dismissed") return board;
+	const words = oneLine(text).slice(0, config.textLimits[card.lane]);
+
+	if (!words || words === card.text) return board;
 
 	return act(
 		board,
 		`edited “${card.text}”`,
 		[id],
-		replace(id, (c) => ({
+		replace<L>(id, (c) => ({
 			...c,
 			text: words,
 			status: c.status === "wrote" ? "wrote" : "edited",
@@ -956,13 +1190,21 @@ export function editCard(board: Board, id: string, text: string): Board {
 }
 
 /** Answer: the visitor's answer to a question. The question becomes the visitor's; an empty answer clears it. */
-export function answerCard(board: Board, id: string, answer: string): Board {
+export const answerCard = (board: Board, id: string, answer: string): Board =>
+	answerCardIn(BRIEF_LANES, board, id, answer);
+
+export function answerCardIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	id: string,
+	answer: string,
+): Board<L> {
 	const card = find(board, id);
 	const words = oneLine(answer).slice(0, ANSWER_MAX);
 
 	if (
 		!card ||
-		card.lane !== "questions" ||
+		card.lane !== config.answerLane ||
 		card.status === "dismissed" ||
 		words === card.answer
 	)
@@ -972,7 +1214,7 @@ export function answerCard(board: Board, id: string, answer: string): Board {
 		board,
 		`answered “${card.text}”`,
 		[id],
-		replace(id, (c) => ({
+		replace<L>(id, (c) => ({
 			...c,
 			answer: words,
 			status: c.status === "proposed" ? "kept" : c.status,
@@ -981,7 +1223,10 @@ export function answerCard(board: Board, id: string, answer: string): Board {
 }
 
 /** Not this: the card is set aside, and the idea is not offered again. */
-export function setAside(board: Board, id: string): Board {
+export function setAside<L extends string>(
+	board: Board<L>,
+	id: string,
+): Board<L> {
 	const card = find(board, id);
 
 	if (!card || card.status === "dismissed" || card.status === "wrote")
@@ -991,25 +1236,32 @@ export function setAside(board: Board, id: string): Board {
 		board,
 		`set aside “${card.text}”`,
 		[id],
-		replace(id, (c) => ({ ...c, status: "dismissed" })),
+		replace<L>(id, (c) => ({ ...c, status: "dismissed" })),
 	);
 }
 
 /** What a set-aside card returns as: the visitor's note, edited when the visitor had reworded it, or kept. */
-function broughtBack(card: BoardCard): CardStatus {
+function broughtBack(card: Pick<BoardCard, "basis" | "edited">): CardStatus {
 	if (card.basis === "none") return "wrote";
 
 	return card.edited ? "edited" : "kept";
 }
 
 /** Bring back: a set-aside card returns as the visitor's again (see broughtBack). */
-export function bringBack(board: Board, id: string): Board {
+export const bringBack = (board: Board, id: string): Board =>
+	bringBackIn(BRIEF_LANES, board, id);
+
+export function bringBackIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	id: string,
+): Board<L> {
 	const card = find(board, id);
 
 	if (
 		!card ||
 		card.status !== "dismissed" ||
-		laneCount(board, card.lane) >= laneLimits[card.lane]
+		laneCount(board, card.lane) >= config.limits[card.lane]
 	)
 		return board;
 
@@ -1017,7 +1269,7 @@ export function bringBack(board: Board, id: string): Board {
 		board,
 		`brought back “${card.text}”`,
 		[id],
-		replace(id, (c) => ({ ...c, status: broughtBack(c) })),
+		replace<L>(id, (c) => ({ ...c, status: broughtBack(c) })),
 	);
 }
 
@@ -1025,7 +1277,10 @@ export function bringBack(board: Board, id: string): Board {
  * Remove: the visitor's own note is deleted (Undo brings it back). Its words are remembered in memory only, so a reply
  * does not offer the idea back during this visit.
  */
-export function removeNote(board: Board, id: string): Board {
+export function removeNote<L extends string>(
+	board: Board<L>,
+	id: string,
+): Board<L> {
 	const card = find(board, id);
 
 	if (!card || card.status !== "wrote") return board;
@@ -1042,10 +1297,18 @@ export function removeNote(board: Board, id: string): Board {
 }
 
 /** Add: the visitor's own note, at the end of its lane, within the lane's limit. */
-export function addNote(board: Board, lane: Lane, text: string): Board {
-	const words = oneLine(text).slice(0, textLimits[lane]);
+export const addNote = (board: Board, lane: Lane, text: string): Board =>
+	addNoteIn(BRIEF_LANES, board, lane, text);
 
-	if (!words || laneCount(board, lane) >= laneLimits[lane]) return board;
+export function addNoteIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+	lane: L,
+	text: string,
+): Board<L> {
+	const words = oneLine(text).slice(0, config.textLimits[lane]);
+
+	if (!words || laneCount(board, lane) >= config.limits[lane]) return board;
 	const id = `c${board.nextId}`;
 
 	return act(
@@ -1076,14 +1339,19 @@ export const laneFull = (label: string) =>
 	`“${label}” is full. Use “Not this” on one of its cards, or remove a note, then try again.`;
 
 /** What Undo would undo, for its label; null when there is nothing. */
-export const lastAction = (board: Board) =>
+export const lastAction = <L extends string>(board: Board<L>) =>
 	board.history.length ? board.history[board.history.length - 1].label : null;
 
 /**
  * Undo: every card the last action changed is put back as it was, where it was. A card that becomes unowned again is
  * stamped with the requests sent so far, so a reply already on its way does not change it (the plan, rule 4).
  */
-export function undo(board: Board): Board {
+export const undo = (board: Board): Board => undoIn(BRIEF_LANES, board);
+
+export function undoIn<L extends string>(
+	config: LaneConfig<L>,
+	board: Board<L>,
+): Board<L> {
 	const step = board.history[board.history.length - 1];
 
 	if (!step) return board;
@@ -1129,7 +1397,7 @@ export function undo(board: Board): Board {
 
 	return {
 		...board,
-		cards: withinLimits(cards),
+		cards: withinLimits(config, cards),
 		history: board.history.slice(0, -1),
 		removed,
 	};
@@ -1140,15 +1408,18 @@ export function undo(board: Board): Board {
  * since added one), and the visitor's cards win: the lane's newest open cards are withdrawn until it fits, suggestions
  * before cards read from the answers.
  */
-function withinLimits(cards: readonly BoardCard[]): BoardCard[] {
+function withinLimits<L extends string>(
+	config: LaneConfig<L>,
+	cards: readonly BoardCard<L>[],
+): BoardCard<L>[] {
 	const fitted = [...cards];
 
-	for (const lane of LANES)
+	for (const lane of config.lanes)
 		for (const basis of ["suggested", "said"] as const) {
 			let over =
 				fitted.filter(
 					(card) => card.lane === lane && card.status !== "dismissed",
-				).length - laneLimits[lane];
+				).length - config.limits[lane];
 
 			for (let at = fitted.length - 1; over > 0 && at >= 0; at--)
 				if (
@@ -1165,24 +1436,26 @@ function withinLimits(cards: readonly BoardCard[]): BoardCard[] {
 }
 
 /** The board after a request is sent: its number is the new count. */
-export const sendRequest = (board: Board): [Board, number] => [
-	{ ...board, sent: board.sent + 1 },
-	board.sent + 1,
-];
+export const sendRequest = <L extends string>(
+	board: Board<L>,
+): [Board<L>, number] => [{ ...board, sent: board.sent + 1 }, board.sent + 1];
 
 // ---- What the model is shown ---------------------------------------------------------------------------------------
 
-export type ContextCard = {
+export type ContextCard<L extends string = Lane> = {
 	readonly ref: string;
-	readonly lane: Lane;
+	readonly lane: L;
 	readonly text: string;
 	/** open: the model's, which it may keep, reword or leave out. yours: the visitor's. avoid: set aside. */
 	readonly state: "open" | "yours" | "avoid";
 };
 
 /** The cards a request shows the model, at most CONTEXT_MAX: open ones first, then the visitor's, then set-aside ones. */
-export function boardContext(board: Board): ContextCard[] {
-	const state = (card: BoardCard): ContextCard["state"] =>
+export function boardContext<L extends string>(
+	board: Board<L>,
+	max = CONTEXT_MAX,
+): ContextCard<L>[] {
+	const state = (card: BoardCard<L>): ContextCard["state"] =>
 		card.status === "proposed"
 			? "open"
 			: card.status === "dismissed"
@@ -1199,7 +1472,7 @@ export function boardContext(board: Board): ContextCard[] {
 			state: state(card),
 		}))
 		.sort((a, b) => order[a.state] - order[b.state])
-		.slice(0, CONTEXT_MAX);
+		.slice(0, max);
 }
 
 /**
@@ -1207,10 +1480,10 @@ export function boardContext(board: Board): ContextCard[] {
  * first and then the visitor's own, from the last. Open cards are always shown: a reply may withdraw an open card it
  * was not shown (its request was sent after the card became open), so leaving one out would risk losing it.
  */
-export function fitContext(
-	cards: readonly ContextCard[],
+export function fitContext<L extends string>(
+	cards: readonly ContextCard<L>[],
 	answersLength: number,
-): ContextCard[] {
+): ContextCard<L>[] {
 	const fitted = [...cards];
 
 	let size =
