@@ -4,9 +4,24 @@ import { isText } from "~/lib/type-guards";
 import {
 	EffectLog,
 	json,
+	networkDown,
 	recordingFetch,
+	type FetchAnswer,
 	type Responder,
 } from "../golden/harness";
+
+/**
+ * What invoices.create answers instead of an invoice: an error body with this status, or a dropped connection. An
+ * error with `retry: false` carries stripe-should-retry: false, so the SDK does not back off before it gives up.
+ */
+export type StripeInvoiceFailure =
+	| {
+			readonly status: number;
+			readonly type: string;
+			readonly message: string;
+			readonly retry?: boolean;
+	  }
+	| "connection";
 
 export type StripeFakeOptions = {
 	/** The id each invoices.create call returns, in order. The last id repeats for later creates. */
@@ -15,8 +30,12 @@ export type StripeFakeOptions = {
 	readonly refuseInvoices?: boolean;
 	/** Refuse the first n invoice creations with a 400, then answer as usual. Default 0. */
 	readonly refuseFirstInvoices?: number;
+	/** Fail invoice creation the way the named Stripe answer or connection failure would. */
+	readonly invoiceFailure?: StripeInvoiceFailure;
 	/** The due date (ISO 8601) the sent invoice carries, as Stripe's due_date. Omitted when not given. */
 	readonly dueDate?: string;
+	/** Answer the send call with a draft that has no hosted URL, which the site must not record as sent. */
+	readonly unusableSend?: boolean;
 };
 
 /** One request the Stripe SDK made: its method, path, form-encoded body and Idempotency-Key header (null if none). */
@@ -34,12 +53,26 @@ const refusal = json(400, {
 	},
 });
 
+function invoiceFailureAnswer(failure: StripeInvoiceFailure): FetchAnswer {
+	if (failure === "connection") return networkDown("socket hang up");
+
+	return json(
+		failure.status,
+		{ error: { type: failure.type, message: failure.message } },
+		failure.retry === false ? { "stripe-should-retry": "false" } : {},
+	);
+}
+
 function stripeAnswers({
 	invoiceIds = ["in_fake"],
 	refuseInvoices = false,
 	refuseFirstInvoices = 0,
+	invoiceFailure,
 	dueDate,
+	unusableSend = false,
 }: StripeFakeOptions): Responder {
+	// Precedence when options overlap: for one invoices.create, refuseInvoices, then refuseFirstInvoices, then
+	// invoiceFailure. For the send call, unusableSend wins over dueDate.
 	let created = 0;
 	let refused = 0;
 
@@ -60,6 +93,8 @@ function stripeAnswers({
 				return refusal;
 			}
 
+			if (invoiceFailure) return invoiceFailureAnswer(invoiceFailure);
+
 			const id =
 				invoiceIds[Math.min(created, invoiceIds.length - 1)] ?? "in_fake";
 
@@ -73,6 +108,13 @@ function stripeAnswers({
 
 		if (method === "POST" && finalize)
 			return json(200, { id: finalize[1], object: "invoice", status: "open" });
+
+		if (method === "POST" && send && unusableSend)
+			return json(200, {
+				id: send[1],
+				object: "invoice",
+				status: "draft",
+			});
 
 		if (method === "POST" && send)
 			return json(200, {
