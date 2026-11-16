@@ -1272,6 +1272,32 @@ const cases: Case[] = [
 		open(),
 		put(1, BYTES, {}, "11111111-1111-1111-1111-111111111111"),
 	),
+	named(
+		"start: R2 is unavailable (10043)",
+		{ ...begin(), r2: { unavailable: ["createMultipartUpload"] } },
+		act(startBody()),
+	),
+	named(
+		"complete: R2 head is unavailable (10043)",
+		{ ...open(), r2: { unavailable: ["head"] } },
+		act(complete()),
+	),
+	named(
+		"complete: R2 is unavailable at the completion (10043)",
+		{
+			...open(),
+			r2: { uploads: { "upload-1": keyOf(U1) }, unavailable: ["complete"] },
+		},
+		act(complete()),
+	),
+	named(
+		"put: R2 is unavailable (10043)",
+		{
+			...open(),
+			r2: { uploads: { "upload-1": keyOf(U1) }, unavailable: ["uploadPart"] },
+		},
+		put(),
+	),
 ];
 
 defineCorpus("owner-project-uploads", POST, cases);

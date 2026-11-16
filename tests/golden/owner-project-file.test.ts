@@ -1016,6 +1016,12 @@ const cases: Case[] = [
 		live("in_progress"),
 		revoke(),
 	),
+	{
+		name: "outage: the R2 head is unavailable (10043)",
+		...draft("in_progress"),
+		r2: { ...R2, unavailable: ["head"] },
+		steps: [publish()],
+	},
 ];
 
 defineCorpus("owner-project-file", POST, cases);
