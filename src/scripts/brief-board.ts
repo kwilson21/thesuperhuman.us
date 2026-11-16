@@ -48,6 +48,10 @@ import {
 import type { RawValue } from "../lib/fields";
 import type { SoftwarePath } from "../lib/software-inquiry";
 
+/** The end of a sentence after a quoted text: nothing when the quote already ends one (“…songs first.”, “…show dates?”). */
+const endAfter = (text: string) =>
+	/[.?!]["”’)]*$/.test(text.trim()) ? "" : ".";
+
 /** How long the visitor stops writing before the board asks. */
 const IDLE = 1500;
 
@@ -1029,7 +1033,7 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 			switch (target.dataset.act) {
 				case "keep":
 					change(keepCard(board(), id));
-					announce(`Kept “${card.text}”.`, true);
+					announce(`Kept “${card.text}”${endAfter(card.text)}`, true);
 
 					break;
 				case "edit":
@@ -1040,14 +1044,17 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				case "aside":
 					change(setAside(board(), id), focusNear(id, card.lane));
 					announce(
-						`Set aside “${card.text}”. Undo or Bring back restores it.`,
+						`Set aside “${card.text}”${endAfter(card.text)} Undo or Bring back restores it.`,
 						true,
 					);
 
 					break;
 				case "remove":
 					change(removeNote(board(), id), focusNear(id, card.lane));
-					announce(`Removed “${card.text}”. Undo brings it back.`, true);
+					announce(
+						`Removed “${card.text}”${endAfter(card.text)} Undo brings it back.`,
+						true,
+					);
 
 					break;
 			}
@@ -1080,7 +1087,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 				cardNode(backId)?.querySelector<HTMLElement>("button"),
 			);
 
-			if (back) announce(`Brought back “${back.text}”.`, true);
+			if (back)
+				announce(`Brought back “${back.text}”${endAfter(back.text)}`, true);
 		}
 	});
 
@@ -1144,8 +1152,8 @@ export function setupBriefBoard(options: BriefBoardOptions): BriefBoardHandle {
 		});
 		announce(
 			withdrawn.length
-				? `Undid: ${label}. ${withdrawn.map((card) => `“${card.text}”`).join(", ")} left the list to keep it within its limit.`
-				: `Undid: ${label}.`,
+				? `Undid: ${label}${endAfter(label)} ${withdrawn.map((card) => `“${card.text}”`).join(", ")} left the list to keep it within its limit.`
+				: `Undid: ${label}${endAfter(label)}`,
 			true,
 		);
 	}

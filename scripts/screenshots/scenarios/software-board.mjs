@@ -39,6 +39,75 @@ const OUTLINE = [
 	},
 ].map(({ quote, ...item }) => (quote ? { ...item, quote } : item));
 
+/** A suggested question and a note that each end their own sentence, for the board's messages that quote a card. */
+const QUESTION = "Who will add new show dates?";
+const NOTE = "Fans hear new songs first.";
+
+/**
+ * Each message that quotes a card (Kept, Set aside, Brought back, Removed, Undid) ends its sentence once: no period
+ * after a quote that already ends a sentence (checked here with "?" and "."), and one after a quote that does not
+ * (checked with "Shows" and "Press kit"). Every action is undone, so the board keeps the same cards. The Undid message
+ * that also names the cards Undo withdrew is not reached here.
+ */
+async function quotesEndOnce(page) {
+	const live = page.locator("[data-board-live]");
+	const aside = page.locator("[data-board-aside]");
+
+	const said = async (expected) => {
+		const text = await live.textContent();
+
+		if (text !== expected)
+			throw new Error(
+				`The board said ${JSON.stringify(text)}, not ${JSON.stringify(expected)}`,
+			);
+	};
+
+	const press = async (name, expected) => {
+		await page.getByRole("button", { name, exact: true }).click();
+		await said(expected);
+	};
+
+	const undo = async (expected) => {
+		await page.locator("[data-board-undo]").click();
+		await said(expected);
+	};
+
+	// A card from the reply (read from the answers or suggested): Keep, Not this and Bring back, each undone. `end` is
+	// what must follow its quote.
+	const card = async (text, end) => {
+		await press(`Keep: ${text}`, `Kept “${text}”${end}`);
+		await undo(`Undid: kept “${text}”${end}`);
+		await press(
+			`Not this: ${text}`,
+			`Set aside “${text}”${end} Undo or Bring back restores it.`,
+		);
+
+		if (!(await aside.evaluate((list) => list.open)))
+			await page.locator("[data-board-aside-summary]").click();
+		await press(`Bring back: ${text}`, `Brought back “${text}”${end}`);
+		await undo(`Undid: brought back “${text}”${end}`);
+		await undo(`Undid: set aside “${text}”${end}`);
+	};
+
+	// The visitor's own note: added with the lane's Add, removed, and both undone.
+	const note = async (add, text, end) => {
+		await page.getByRole("button", { name: add }).click();
+		await page.keyboard.type(text);
+		await page.keyboard.press("Enter");
+		await press(
+			`Remove: ${text}`,
+			`Removed “${text}”${end} Undo brings it back.`,
+		);
+		await undo(`Undid: removed “${text}”${end}`);
+		await undo(`Undid: added “${text}”${end}`);
+	};
+
+	await card("Shows", ".");
+	await card(QUESTION, "");
+	await note("Add a page", "Press kit", ".");
+	await note(/^Add what it/, NOTE, "");
+}
+
 export default {
 	title: "Living brief board",
 	async run({ capture, sql }) {
@@ -205,6 +274,11 @@ export default {
 				async (page) => {
 					await open(page);
 					await write(page, PURPOSE);
+
+					// The check runs in this step because the plain form hides the board before the capture: it leaves focus in
+					// the board and redraws the cards it brought back with the new-card edge, which a visible board would show.
+					// Desktop only: the messages are the same at every width.
+					if (viewport === "desktop") await quotesEndOnce(page);
 					await page
 						.getByRole("button", { name: "Use the plain form" })
 						.click();
