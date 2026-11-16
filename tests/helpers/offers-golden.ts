@@ -163,9 +163,17 @@ export function recordedBatches(): ReadonlySet<string> {
 	return batches;
 }
 
+/** A regular expression literal's text (`/source/flags`) as a RegExp. */
+function regExpOf(literal: string): RegExp {
+	const end = literal.lastIndexOf("/");
+
+	return new RegExp(literal.slice(1, end), literal.slice(end + 1));
+}
+
 /**
- * Every pattern the seven corpora's hooks (an `interleave` or a `failures` entry) pick statements by: the regular
- * expression literal of each `on:` property in the test files, read from the syntax tree.
+ * Every pattern the seven corpora's hooks (an `interleave` or a `failures` entry) pick statements by, read from the syntax
+ * tree of the test files: the value of each `on` property, a regular expression literal or a name bound by a `const` to
+ * one (`onBatch`, `liveCheck`, `afterTheEmail`). An `on` of any other form fails, so that no hook's pattern is missed.
  */
 export function hookPatterns(): readonly RegExp[] {
 	const found = new Map<string, RegExp>();
@@ -180,26 +188,54 @@ export function hookPatterns(): readonly RegExp[] {
 			true,
 		);
 
+		const bound = new Map<string, string[]>();
+		const hooks: ts.Node[] = [];
+
 		const visit = (node: ts.Node) => {
 			if (
-				ts.isPropertyAssignment(node) &&
+				ts.isVariableDeclaration(node) &&
 				ts.isIdentifier(node.name) &&
-				node.name.text === "on" &&
-				ts.isRegularExpressionLiteral(node.initializer)
-			) {
-				const literal = node.initializer.text;
-				const end = literal.lastIndexOf("/");
+				node.initializer !== undefined &&
+				ts.isRegularExpressionLiteral(node.initializer) &&
+				ts.isVariableDeclarationList(node.parent) &&
+				(node.parent.flags & ts.NodeFlags.Const) !== 0
+			)
+				bound.set(node.name.text, [
+					...(bound.get(node.name.text) ?? []),
+					node.initializer.text,
+				]);
 
-				found.set(
-					literal,
-					new RegExp(literal.slice(1, end), literal.slice(end + 1)),
+			if (
+				(ts.isPropertyAssignment(node) ||
+					ts.isShorthandPropertyAssignment(node)) &&
+				ts.isIdentifier(node.name) &&
+				node.name.text === "on"
+			)
+				hooks.push(
+					ts.isPropertyAssignment(node) ? node.initializer : node.name,
 				);
-			}
 
 			ts.forEachChild(node, visit);
 		};
 
 		visit(source);
+
+		for (const value of hooks) {
+			const named = ts.isIdentifier(value) ? bound.get(value.text) : undefined;
+
+			const literal = ts.isRegularExpressionLiteral(value)
+				? value.text
+				: named?.length === 1
+					? named[0]
+					: undefined;
+
+			if (literal === undefined)
+				throw new Error(
+					`${file}: the hook pattern \`${value.getText(source)}\` is neither a regular expression literal nor the name of one const bound to one.`,
+				);
+
+			found.set(literal, regExpOf(literal));
+		}
 	}
 
 	return [...found.values()];

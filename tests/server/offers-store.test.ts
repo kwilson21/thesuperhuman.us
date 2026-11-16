@@ -1830,6 +1830,19 @@ describe("the store's SQL against the golden corpus", () => {
 			patterns.filter((pattern) => pattern.test(sql)).map(String);
 
 		expect(patterns.length).toBeGreaterThan(20);
+		// Hooks also name a pattern through a const: onBatch (send and signing, revoke), liveCheck and afterTheEmail.
+		expect(patterns.map(String)).toEqual(
+			expect.arrayContaining([
+				String(/INSERT INTO software_offer_links/),
+				String(/UPDATE software_offer_links SET revoked_at/),
+				String(
+					/SELECT 1 FROM software_offer_links WHERE request_id=\? AND token_hash=\?/,
+				),
+				String(
+					/UPDATE owner_requests SET status='resolved'|^SELECT 1 FROM software_offers WHERE request_id=\? AND status IN/,
+				),
+			]),
+		);
 
 		for (const change of CHANGED) {
 			expect(matching(change.new), change.why).toEqual(matching(change.old));
