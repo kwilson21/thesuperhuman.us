@@ -254,6 +254,11 @@ const PAGE_NAMES_BY_FILE = {
 	"src/components/audio/ComparisonPlayer.astro": COMPARISON_PAGES,
 	"src/scripts/comparison-player.ts": COMPARISON_PAGES,
 	"src/lib/waveform.ts": COMPARISON_PAGES,
+	"src/lib/loudness-meter.ts": COMPARISON_PAGES,
+	"src/components/home/SignalEdge.astro": ["home"],
+	"src/scripts/home-worlds.ts": ["home"],
+	"src/scripts/home-signal.ts": ["home"],
+	"src/scripts/comparison-signal.ts": ["home"],
 	"src/components/audio/PlayIcon.astro": [
 		"audio-portfolio",
 		"audio-releases",
@@ -294,11 +299,12 @@ const PAGE_NAMES_BY_FILE = {
 const SCENARIO_NAMES_BY_FILE = {
 	"src/pages/contact.astro": ["contact-switchboard"],
 	"src/components/Switchboard.astro": ["contact-switchboard"],
-	"src/components/ContactForm.astro": ["contact-switchboard"],
+	"src/components/ContactForm.astro": ["contact-switchboard", "contact-hold"],
 	"src/data/contact-lines.ts": ["contact-switchboard"],
 	"src/scripts/switchboard.ts": ["contact-switchboard"],
 	"src/scripts/contact-page.ts": ["contact-switchboard"],
 	"src/scripts/contact-message.ts": ["contact-switchboard"],
+	"src/scripts/contact-form.ts": ["contact-hold"],
 	"src/components/Hero.astro": ["studio-objects"],
 	"src/components/home/StudioLife.astro": ["studio-objects"],
 	"src/scripts/studio-objects.ts": ["studio-objects"],
@@ -324,7 +330,7 @@ const SCENARIO_NAMES_BY_FILE = {
 		"software-offer",
 		"website-brief",
 	],
-	"src/pages/software/start.astro": ["website-brief"],
+	"src/pages/software/start.astro": ["brief-examples", "website-brief"],
 	"src/components/SoftwareProjectUpdate.astro": ["software-project"],
 	"src/components/SoftwareReviewResponse.astro": ["software-project"],
 	"src/scripts/software-review.ts": ["software-project"],
@@ -382,9 +388,17 @@ const SCENARIO_NAMES_BY_FILE = {
 	],
 	"src/scripts/brief-autocomplete.ts": ["software-brief", "website-brief"],
 	"src/pages/api/software/brief/suggest.ts": ["software-brief"],
-	"src/scripts/software-inquiry.ts": ["software-brief", "website-brief"],
+	"src/scripts/software-inquiry.ts": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/api/software-inquiry.ts": ["software-brief", "website-brief"],
-	"src/styles/software-intake.css": ["software-brief", "website-brief"],
+	"src/styles/software-intake.css": [
+		"brief-examples",
+		"software-brief",
+		"website-brief",
+	],
 	"src/pages/owner/requests/[id].astro": [
 		"software-brief",
 		"software-offer",
@@ -411,6 +425,10 @@ const SCENARIO_NAMES_BY_FILE = {
 	"src/lib/navigation-prefetch.ts": ["prefetch-trial"],
 	"src/scripts/project-timeline.ts": ["journal-pagination"],
 	"src/components/ProjectTimeline.astro": ["journal-pagination"],
+	"src/components/audio/ComparisonPlayer.astro": ["loop-desk"],
+	"src/scripts/comparison-player.ts": ["loop-desk"],
+	"src/scripts/comparison-transport.ts": ["loop-desk"],
+	"src/lib/loudness-meter.ts": ["loop-desk"],
 };
 
 function routeForPageFile(file) {

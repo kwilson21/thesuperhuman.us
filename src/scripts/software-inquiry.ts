@@ -10,7 +10,7 @@ import {
 	type SoftwarePath,
 } from "../lib/software-inquiry";
 import { ownLabel } from "../lib/type-guards";
-import { setupFormSubmission } from "./form-submission";
+import { greetingName, setupFormSubmission } from "./form-submission";
 import { openMessages } from "./form-messages";
 
 // Each path's screens in order, by data-step. Website adds two screens after its first question.
@@ -26,12 +26,90 @@ const pathFields = {
 	workflow: ["today", "firstResult"],
 } as const;
 
-const questionLimits = {
-	today: 2000,
-	firstResult: 2000,
-	purpose: 2000,
-	appGoal: 1000,
-	firstVersion: 1000,
+type BriefQuestion = {
+	key: string;
+	title: string;
+	hint: string;
+	/** One example answer, shown in the empty box. */
+	placeholder: string;
+	max: number;
+	/** Further example answers from other situations, shown under the footnote by its "See example answers" toggle. */
+	examples: readonly string[];
+};
+
+// Each path's written questions, in the order of data-step 1 and 2. Examples are fictional answers a visitor might give.
+export const briefQuestions: Record<SoftwarePath, readonly BriefQuestion[]> = {
+	website: [
+		{
+			key: "purpose",
+			title: "What’s the website for?",
+			hint: "Who it’s for, and what you want visitors to do when they get there.",
+			placeholder:
+				"A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.",
+			max: 2000,
+			examples: [
+				"I’m a wedding photographer. Couples should see my work and packages, then ask whether I’m free on their date.",
+				"Our food pantry needs a site where volunteers can sign up for a shift and neighbors can check opening hours.",
+				"A home for my band: new music, show dates and a way to join the mailing list.",
+			],
+		},
+	],
+	webapp: [
+		{
+			key: "appGoal",
+			title: "What should the app let people do?",
+			hint: "Who it’s for, and the one thing they’d come back for.",
+			placeholder:
+				"Let my students book and pay for lessons without emailing me.",
+			max: 1000,
+			examples: [
+				"Give our volunteers one place to see their shifts and swap them with each other.",
+				"Let customers check on a repair without calling the shop.",
+				"Help members of our running club find a group run at their pace and sign up.",
+			],
+		},
+		{
+			key: "firstVersion",
+			title: "Have a first version in mind?",
+			hint: "If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.",
+			placeholder:
+				"Students see my open times and book one. Payment can wait for a later version.",
+			max: 1000,
+			examples: [
+				"We track shifts in a spreadsheet. A first version could show each volunteer their own shifts on a phone.",
+				"A page where a customer types their order number and sees where the repair is.",
+				"No real idea yet. I’d like to hear what you would build first.",
+			],
+		},
+	],
+	workflow: [
+		{
+			key: "today",
+			title: "What happens today?",
+			hint: "Who does it, what’s slow or error-prone, and what it costs you.",
+			placeholder:
+				"We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.",
+			max: 2000,
+			examples: [
+				"Every Friday I copy orders from our online shop into the accounting tool by hand. It takes about two hours, and typos turn into refunds.",
+				"New hires are set up from a checklist in a shared document. Steps get missed, and nobody knows who did what.",
+				"Customers email photos to get a quote. I retype the details into a spreadsheet before I can price the job.",
+			],
+		},
+		{
+			key: "firstResult",
+			title: "Have a first result in mind?",
+			hint: "If you have a hunch. Otherwise I’ll propose one.",
+			placeholder:
+				"Each Monday, a list of clients whose follow-up is overdue, sent to the person who owns each one.",
+			max: 2000,
+			examples: [
+				"Orders reach the accounting tool on their own, and I only check the ones that don’t match.",
+				"One page that shows which setup steps are done for each new hire.",
+				"Not sure yet. Something small we could try for a few weeks.",
+			],
+		},
+	],
 };
 
 // The success body of /api/software-inquiry, as renderSoftwareReceipt reads it.
@@ -63,7 +141,7 @@ export function renderSoftwareReceipt(
 ) {
 	const brief = isBriefRecord(result.brief) ? result.brief : {};
 
-	const firstName = brief.name?.trim().split(/\s+/)[0] || "there";
+	const firstName = greetingName(brief.name);
 	document.querySelector<HTMLElement>("[data-receipt-thanks]")!.textContent =
 		`Thanks, ${firstName}. I’ll read it myself and reply within two business days.`;
 	document.querySelector<HTMLElement>("[data-intake-progress]")!.hidden = true;
@@ -208,69 +286,35 @@ export function setupSoftwareInquiry(
 	}
 
 	function configureQuestions() {
-		const questions =
-			path() === "website"
-				? [
-						[
-							"purpose",
-							"What’s the website for?",
-							"Who it’s for, and what you want visitors to do when they get there.",
-							"A site for my pottery studio. People should see upcoming classes and sign up without messaging me first.",
-							2000,
-						],
-					]
-				: path() === "webapp"
-					? [
-							[
-								"appGoal",
-								"What should the app let people do?",
-								"Who it’s for, and the one thing they’d come back for.",
-								"Let my students book and pay for lessons without emailing me.",
-								1000,
-							],
-							[
-								"firstVersion",
-								"Have a first version in mind?",
-								"If you have a hunch, or a spreadsheet or prototype it should replace. Otherwise I’ll propose one.",
-								"",
-								1000,
-							],
-						]
-					: [
-							[
-								"today",
-								"What happens today?",
-								"Who does it, what’s slow or error-prone, and what it costs you.",
-								"We track new clients in a shared spreadsheet. Three of us update it, and follow-ups slip through the cracks.",
-								2000,
-							],
-							[
-								"firstResult",
-								"Have a first result in mind?",
-								"If you have a hunch. Otherwise I’ll propose one.",
-								"",
-								2000,
-							],
-						];
+		const questions = briefQuestions[path()];
 
 		const footnote =
 			path() === "website"
 				? "Plain language is fine. We’ll work out the design and technical details together. Please leave out passwords and access details."
 				: "Plain language is fine. We’ll work out the technical details together. Please leave out passwords, access details and real customer data.";
 
-		questions.forEach(([key, title, hint, placeholder, max], i) => {
+		questions.forEach(({ key, title, hint, placeholder, max, examples }, i) => {
 			const section = steps[i + 1],
 				box = section.querySelector<HTMLTextAreaElement>("[data-answer]")!;
 
-			box.name = String(key);
-			box.maxLength = Number(max);
-			box.placeholder = String(placeholder);
-			section.querySelector("h1")!.textContent = String(title);
-			section.querySelector("[data-answer-label]")!.textContent = String(title);
-			section.querySelector("[data-question-hint]")!.textContent = String(hint);
+			box.name = key;
+			box.maxLength = max;
+			box.placeholder = placeholder;
+			section.querySelector("h1")!.textContent = title;
+			section.querySelector("[data-answer-label]")!.textContent = title;
+			section.querySelector("[data-question-hint]")!.textContent = hint;
 			section.querySelector("[data-question-footnote]")!.textContent = footnote;
+			// More answers in other situations, read-only, for a visitor who doesn't know what to write. The placeholder holds one more.
+			section.querySelector("[data-examples-list]")?.replaceChildren(
+				...examples.map((text) => {
+					const item = document.createElement("li");
+					item.textContent = text;
+
+					return item;
+				}),
+			);
 			const error = section.querySelector<HTMLElement>("[data-form-error]")!;
-			error.dataset.formError = String(key);
+			error.dataset.formError = key;
 			error.textContent = "";
 			error.hidden = true;
 			// form-submission links an error to its box only when the box is named at setup. Link it now if the error already has an id.
@@ -299,7 +343,8 @@ export function setupSoftwareInquiry(
 
 			const validPath = isSoftwarePath(stored.path);
 
-			for (const [key, max] of Object.entries(questionLimits)) {
+			// Every path's written answers, each cut to its question's limit.
+			for (const { key, max } of Object.values(briefQuestions).flat()) {
 				const value = stored[key];
 
 				if (isString(value)) answers[key] = value.slice(0, max);
@@ -355,6 +400,26 @@ export function setupSoftwareInquiry(
 
 	configureQuestions();
 
+	// Each written question's example answers open under its footnote and stay open through a path switch.
+	form
+		.querySelectorAll<HTMLButtonElement>("[data-examples-toggle]")
+		.forEach((toggle) =>
+			toggle.addEventListener("click", () => {
+				const list = toggle
+					.closest("[data-step]")
+					?.querySelector<HTMLElement>("[data-examples-list]");
+
+				if (!list) return;
+
+				const open = list.hidden;
+				list.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				toggle.textContent = open
+					? "Hide example answers"
+					: "See example answers";
+			}),
+		);
+
 	const suggestions = setupBriefAutocomplete(
 		form,
 		() =>
@@ -373,7 +438,7 @@ export function setupSoftwareInquiry(
 		const values = payload();
 
 		const labels = {
-			budgetNote: "Budget",
+			budgetNote: "Budget (USD)",
 			firstResult: "First result",
 			firstVersion: "First version",
 		};

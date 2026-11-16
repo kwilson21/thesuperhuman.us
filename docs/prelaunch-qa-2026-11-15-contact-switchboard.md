@@ -23,7 +23,7 @@ Why Home had no button: the November 12 closing panel decision made Home a quiet
 - `src/components/SiteNav.astro`, `src/layouts/ServiceSheet.astro`, `src/layouts/ProjectLayout.astro`, `src/pages/software/start.astro`, `public/email/signature.html`: Get in touch links go to `/contact`. An installed email signature keeps its old `/#contact` link until it is reinstalled; that link still lands on Home's contact section.
 - `src/scripts/software-inquiry.ts`: a link that names a brief path opens at the first question even when the saved draft was left on the choice screen. Before, once a visitor pressed Back to the choice screen, every later "Plan your website" link opened "What are you working on?".
 - `design.md`, `docs/website-content-model.md`: the rules and the owner request.
-- Tests and screenshots: `tests/components/closing-panel.test.ts`, `tests/scripts/pinned-contact.test.ts`, `tests/lib/contact-turnstile.test.ts`, `tests/scripts/brief-flow.test.ts`, `tests/scripts/screenshots.test.ts`, `scripts/screenshots/config.mjs` (the `contact` page) and the scenario `scripts/screenshots/scenarios/contact-switchboard.mjs`.
+- Tests and screenshots: `tests/components/closing-panel.test.ts`, `tests/scripts/pinned-contact.test.ts`, `tests/lib/contact-turnstile.test.ts`, `tests/scripts/brief-flow.test.ts`, `tests/scripts/screenshots.test.ts`, `scripts/screenshots/config.mjs` (the `contact` page) and the scenario `scripts/screenshots/scenarios/contact-switchboard.mjs`. The `home-contact` scenario that `main` added on November 16 (the contact form's check-before-send hold) is now `contact-hold`, captured on `/contact` after the message line opens the form, because the form no longer lives on Home.
 
 ## Checklist
 

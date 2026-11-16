@@ -109,6 +109,9 @@ function fresh() {
 let script: string[] = [];
 const waiters = new Map<string, () => void>();
 
+/** First steps granted to a request the route has taken up (see `arrive`); its first gated batch runs in that step without waiting. */
+const arrived = new Set<string>();
+
 function pump() {
 	const waiting = waiters.get(script[0]);
 
@@ -154,7 +157,7 @@ function scripted(who: string, gated = true) {
 
 			if (kind === null || !gated) return db.batch(items);
 
-			await gate(`${who}.${kind}`);
+			if (!arrived.delete(`${who}.${kind}`)) await gate(`${who}.${kind}`);
 
 			try {
 				return await db.batch(items);
@@ -218,19 +221,34 @@ function context(
 	});
 }
 
+/**
+ * A scheduled request leaves its browser at once, with the cookies the browser holds then, but the route takes it up only when the
+ * request's first step is due, and that step lasts until its first gated batch ends. So the route's work before that batch (the
+ * allowance batches, which prune counters by the clock, the Turnstile check, and the reading of the clock that stamps the code or the
+ * attempt) happens at the step's place in the schedule. Taken up at once, that work ran while earlier steps did, and whether it read
+ * the clock before or after an `atomic` clock step depended on how fast its hashing ran, not on the schedule. After its first batch
+ * a request reads no clock and writes only in its gated batches (the stubbed email is always accepted, so no code is discarded).
+ */
+async function arrive(first: string) {
+	await gate(first);
+	arrived.add(first);
+}
+
 async function send(
 	path: string,
 	body: Record<string, string>,
 	label: string | undefined,
 	database: D1Database,
+	first?: string,
 ) {
 	const url = `${ORIGIN}${path}`;
 	const jar = label ? jarOf(label) : undefined;
 	const handler = path.endsWith("/code") ? requestCode : completeCode;
+	const sent = context(path, body, jar?.headerFor(url), database);
 
-	const response = await handler(
-		context(path, body, jar?.headerFor(url), database),
-	);
+	if (first) await arrive(first);
+
+	const response = await handler(sent);
 
 	jar?.apply(response.clone(), url);
 
@@ -248,6 +266,7 @@ const ask = (
 		{ email, turnstileToken: "ok" },
 		cookie,
 		scripted(who, gated),
+		gated ? `${who}.r` : undefined,
 	);
 
 const enter = (
@@ -256,7 +275,14 @@ const enter = (
 	code: string,
 	cookie: string | undefined,
 	gated = true,
-) => send("/api/studio/session", { email, code }, cookie, scripted(who, gated));
+) =>
+	send(
+		"/api/studio/session",
+		{ email, code },
+		cookie,
+		scripted(who, gated),
+		gated ? `${who}.cr` : undefined,
+	);
 
 const flush = async () => {
 	while (background.length) await Promise.all(background.splice(0));
@@ -319,6 +345,7 @@ async function withSchedule<T>(
 ): Promise<T> {
 	script = [...schedule];
 	waiters.clear();
+	arrived.clear();
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const pending = work();
@@ -350,6 +377,7 @@ async function withSchedule<T>(
 	} catch (error) {
 		script = [];
 		waiters.clear();
+		arrived.clear();
 		throw error;
 	} finally {
 		clearTimeout(timer);
@@ -583,6 +611,52 @@ describe("withSchedule", () => {
 				50,
 			),
 		).resolves.toBe("ok");
+	});
+
+	it("takes a request up when its first step is due, so the route reads the clock at that step's place", async () => {
+		const start = Date.now();
+		const later = new Date(start + 11 * 60_000).toISOString();
+
+		try {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(start);
+			fresh();
+			stubFetch();
+
+			await withSchedule("unit", ["S.x", "X.x", "R.r", "R.c", "R.w"], () =>
+				Promise.all(
+					[
+						// A slow step first: a request taken up at once counted its allowances and read the clock while this ran.
+						atomic(
+							"S",
+							() => new Promise<void>((resolve) => setTimeout(resolve, 50)),
+						),
+						atomic("X", async () => {
+							vi.setSystemTime(start + 11 * 60_000);
+						}),
+						request("R", () => ADDR.client, K1),
+					].map((actor) => actor.start(ADDR.client)),
+				),
+			);
+			await flush();
+
+			expect(
+				sql
+					.prepare(
+						"SELECT created_at AS at FROM audio_client_signin_codes WHERE email=?",
+					)
+					.all(ADDR.client),
+			).toEqual([{ at: later }]);
+			expect(
+				sql
+					.prepare(
+						"SELECT DISTINCT window_start AS at FROM audio_client_allowances",
+					)
+					.all(),
+			).toEqual([{ at: later }]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 
@@ -859,6 +933,8 @@ describe("a request for one address does not change what an attacker sees of ano
 
 		it(`a request racing the passing of time, ${attacker.name}`, async () => {
 			// The attacker's code expires between two steps of the target's request: a clock step of 11 minutes runs in every position.
+			// The route takes each request up in its first step (see `arrive`), so the clock step's position decides whether the request
+			// counts its allowances and stamps its code at the old time or the new one.
 			const start = Date.now();
 
 			try {

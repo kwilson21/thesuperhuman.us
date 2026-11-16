@@ -166,6 +166,10 @@ files; a test checks those literals against `global.css`.
   stop: the studio picture no longer lifts or leans toward the pointer, and the code
   rows, notebook and terrain sit still (D2.1-D). Nothing else drifts or parallaxes.
   The project-card lean on Home is a hover state, kept by D2.2-B (see States).
+- Home's waveform edge draws the newest released song. While the A/B comparison plays,
+  the edge rises and falls with the music's level and a ring of light around the
+  horizon sun glows with it; both rest when the music stops, and only a visitor's
+  Play starts them (owner decision, 2026-11-15, PR #320).
 - Building drawings arrive with their row, then play once in reading order (D3.3-C).
 - A caret appears only after typed text (D2.4-C). The essay pen stroke sits 3 to
   5px under "Direction" (D3.5-B).

@@ -20,19 +20,24 @@
    stays on one line and Next lands inside a 1280x800 screen. .intake-page h1 itself is shared and unchanged. */
 .intake-page.software-intake h1{font-size:clamp(2.4rem,5vw,3.5rem)}
 /* One hover signal per control, for mouse and trackpad only. */
-@media (hover:hover) and (pointer:fine){.software-intake :is([data-skip],[data-suggestions-toggle],[data-review] button):hover{color:var(--accent)}}
+@media (hover:hover) and (pointer:fine){.software-intake :is([data-skip],[data-suggestions-toggle],[data-examples-toggle],[data-review] button):hover{color:var(--accent)}}
 .software-intake .brief-dots{gap:.75rem;margin:1rem 0 2rem}.software-intake .brief-dots .step-number{width:.65rem;height:.65rem;font-size:0}.software-intake .brief-dots li::after{display:none}
 .software-intake .brief-answer{position:relative}
 .software-intake .brief-answer textarea,.software-intake .brief-ghost{font:inherit;line-height:1.6;padding:.75rem;white-space:pre-wrap;overflow-wrap:break-word;letter-spacing:normal}
 .software-intake .brief-answer textarea{display:block;position:relative;background:transparent;overflow:hidden;resize:none}
 .software-intake .brief-ghost{position:absolute;inset:0 0 auto;pointer-events:none;z-index:1;border:1px solid transparent;color:var(--muted)}
 .software-intake [data-ghost-prefix]{visibility:hidden}
-.software-intake [data-suggestions-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
+.software-intake [data-suggestions-toggle],.software-intake [data-examples-toggle],.software-intake [data-skip],.software-intake [data-review] button{min-height:44px;text-decoration:underline;text-underline-offset:.2em}
 /* Keep the 44px touch target without expanding the small-text line box. */
-.software-intake [data-suggestions-toggle]{margin-block:-.75rem;vertical-align:middle}
+.software-intake :is([data-suggestions-toggle],[data-examples-toggle]){margin-block:-.75rem;vertical-align:middle}
 .software-intake [data-ghost-text]{pointer-events:auto;cursor:pointer}
 
 .software-intake [data-copy-card]{overflow-wrap:anywhere}.software-intake [data-copy-status]{margin-top:.75rem}
-.software-intake [data-question-footnote]{max-width:calc(var(--measure-prose) * .9)}
+.software-intake .brief-footnote{max-width:calc(var(--measure-prose) * .9)}
+/* Example answers open under the footnote from its own inline toggle. Closed, the toggle adds at most one footnote line
+   (none at 390px wide), not a row of its own. role="list" keeps the unstyled list announced as one in Safari. */
+.software-intake .brief-examples{list-style:none;margin:.75rem 0 0;padding:0;max-width:calc(var(--measure-prose) * .9);font-size:.9rem;line-height:1.5}
+.software-intake .brief-examples li{padding:.6rem 0;border-top:1px solid var(--rule)}
+.software-intake .brief-examples li:last-child{border-bottom:1px solid var(--rule)}
 /* A link that names a path skips the choice screen, so it stays out of sight until the script has moved past it; without scripting it shows, with the page's heading. */
 @media (scripting:enabled){#software-inquiry[data-linked-path]:not([data-ready]) [data-step="0"]{display:none}}

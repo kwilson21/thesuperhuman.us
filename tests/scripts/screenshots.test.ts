@@ -1685,6 +1685,7 @@ describe("moved client modules", () => {
 		pages: PAGES.map(({ name, path }) => ({ name, path })),
 		scenarios: [
 			"contact-switchboard",
+			"contact-hold",
 			"journal-pagination",
 			"owner-details",
 			"services-print",
@@ -1732,7 +1733,7 @@ describe("moved client modules", () => {
 		["audio-portfolio-filter", ["audio-portfolio"], []],
 		["audio-releases-filter", ["audio-releases"], []],
 		["audio-services-links", ["audio-services"], []],
-		["contact-form", ["contact"], []],
+		["contact-form", ["contact"], ["contact-hold"]],
 		["contact-message", ["contact"], ["contact-switchboard"]],
 		["contact-page", ["contact"], ["contact-switchboard"]],
 		["countersign-name", [], OWNER_REQUEST_WITH_SIGNING],

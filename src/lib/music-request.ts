@@ -100,3 +100,14 @@ export const intakeNotAvailable = () =>
 /** The intake's temporary sentence, with the status the route gives it (503 for a known outage, 500 otherwise). */
 export const intakeTemporarilyUnavailable = (status: number) =>
 	Response.json({ ok: false, error: intakeUnavailable }, { status });
+
+// The fixed sentence of the owner's brief copy route, and its answers: the copy could not be sent (a failure of the database or of
+// the mail provider answers 500, a deployment with no mail key or address 503).
+export const briefCopyNotSent =
+	"The brief copy could not be sent. Please try again.";
+
+export const briefCopyFailed = () =>
+	Response.json({ ok: false, error: briefCopyNotSent }, { status: 500 });
+
+export const briefCopyUnavailable = () =>
+	Response.json({ ok: false, error: briefCopyNotSent }, { status: 503 });
