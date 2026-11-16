@@ -9,6 +9,9 @@ export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
 export const maxPartEtagLength = 256;
 
+/** The waits before the second and the third try of a completion that R2 refused for writing one key too often (error 10058). */
+const completionRetryDelaysMs = [100, 200];
+
 /** A part was put for an upload that an abort has already marked discarding, or that R2 no longer has: a lost race, not an outage. */
 export class UploadBeingDiscarded extends Error {
 	constructor() {
@@ -191,7 +194,7 @@ export async function finishProjectUpload(
 	parts: R2UploadedPart[] | null,
 	now = new Date(),
 	peaks: number[] | null = null,
-): Promise<"saved" | "blocked" | "size-mismatch"> {
+): Promise<"saved" | "blocked" | "size-mismatch" | "unavailable"> {
 	if (upload.state !== "pending") return "blocked";
 
 	if (!(await ownerProjectCanUpload(db, upload.request_id, upload.version)))
@@ -213,22 +216,39 @@ export async function finishProjectUpload(
 		)
 			return "blocked";
 
-		try {
-			object = await bucket
-				.resumeMultipartUpload(upload.object_key, upload.upload_id)
-				.complete(parts);
-		} catch (error) {
-			// R2 refused a part it lists as missing or with another entity tag: the route's own check of the parts answers the same.
-			if (multipartPartInvalid(error)) return "blocked";
+		// Error 10058 (R2's TooManyRequests, the limit on writes to one key) is temporary, so the completion is tried up to two more
+		// times after a short wait, and the object is looked for each time, because another completion may have won.
+		for (let attempt = 0; ; attempt++) {
+			try {
+				object = await bucket
+					.resumeMultipartUpload(upload.object_key, upload.upload_id)
+					.complete(parts);
+				break;
+			} catch (error) {
+				// R2 refused a part it lists as missing or with another entity tag: the route's own check of the parts answers the same.
+				if (multipartPartInvalid(error)) return "blocked";
+				const gone = multipartUploadGone(error);
+				const busy = concurrentWriteToKey(error);
 
-			// Another completion, an abort or the incomplete-upload lifecycle got there first, or two completions wrote the same
-			// key at once (error 10058). The object may now exist, so look again, as the abort does: a later completion finds it
-			// and finishes.
-			if (!multipartUploadGone(error) && !concurrentWriteToKey(error))
-				throw error;
-			object = await bucket.head(upload.object_key);
+				// Anything else is not a known race: it is an unavailable store (10043) or an unexpected failure for the route.
+				if (!gone && !busy) throw error;
+				// An abort, the incomplete-upload lifecycle or another completion got there first. The object may now exist, so look
+				// again, as the abort does: a later completion finds it and finishes.
+				const found = await bucket.head(upload.object_key);
 
-			if (!object) return "blocked";
+				if (found) {
+					object = found;
+					break;
+				}
+
+				if (gone) return "blocked";
+
+				// Still busy after the last try: a known temporary unavailability, which the owner may try again.
+				if (attempt >= completionRetryDelaysMs.length) return "unavailable";
+				await new Promise((resolve) =>
+					setTimeout(resolve, completionRetryDelaysMs[attempt]),
+				);
+			}
 		}
 	}
 

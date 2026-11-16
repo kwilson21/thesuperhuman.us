@@ -7,6 +7,7 @@ import {
 	sizeMismatchResponse,
 	streamClientProjectFile,
 } from "~/lib/audio-project-files";
+import { objectStoreUnavailable } from "~/lib/object-store-errors";
 import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
@@ -68,10 +69,12 @@ const serve: APIRoute = async ({ params, request, locals }) => {
 
 		return response;
 	} catch (error) {
-		logUnexpected(ROUTE, error);
+		const unavailable = objectStoreUnavailable(error);
+
+		if (!unavailable) logUnexpected(ROUTE, error);
 
 		return new Response("Private audio is temporarily unavailable", {
-			status: 500,
+			status: unavailable ? 503 : 500,
 			headers: { "cache-control": "private, no-store" },
 		});
 	}

@@ -15,6 +15,7 @@ import {
 	uploadPartSize,
 	UploadBeingDiscarded,
 } from "~/lib/audio-project-uploads";
+import { objectStoreUnavailable } from "~/lib/object-store-errors";
 import { musicRequest } from "~/lib/music-request";
 import { logUnexpected } from "~/server/failure";
 
@@ -111,6 +112,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			parsed.data.action === "complete" ? (parsed.data.peaks ?? null) : null,
 		);
 
+		if (result === "unavailable")
+			return fail("The upload could not be saved. Please try again.", 503);
+
 		if (result !== "saved")
 			return fail(
 				result === "size-mismatch"
@@ -121,6 +125,8 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 
 		return Response.json({ ok: true, fileId: upload.id });
 	} catch (error) {
+		if (objectStoreUnavailable(error))
+			return fail("The upload could not be saved. Please try again.", 503);
 		logUnexpected(ROUTE, error);
 
 		return fail("The upload could not be saved. Please try again.", 500);
@@ -181,6 +187,9 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 	} catch (error) {
 		if (error instanceof UploadBeingDiscarded)
 			return fail("This part could not be uploaded. Please try again.", 409);
+
+		if (objectStoreUnavailable(error))
+			return fail("This part could not be uploaded. Please try again.", 503);
 		logUnexpected(ROUTE, error);
 
 		return fail("This part could not be uploaded. Please try again.", 500);
