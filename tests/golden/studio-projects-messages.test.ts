@@ -1336,6 +1336,15 @@ const cases: Case[] = [
 			],
 		},
 	),
+	audioCase(
+		"read with 12 client messages in the window",
+		{
+			extra: {
+				audio_project_messages: [ownerNote, ...clientMessages("r1", 12)],
+			},
+		},
+		[read(1)],
+	),
 ];
 
 defineCorpus("studio-projects-messages", POST, cases);

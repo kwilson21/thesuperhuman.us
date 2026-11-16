@@ -1267,6 +1267,11 @@ const cases: Case[] = [
 		},
 		act(complete()),
 	),
+	named(
+		"put: a UUID of no valid variant",
+		open(),
+		put(1, BYTES, {}, "11111111-1111-1111-1111-111111111111"),
+	),
 ];
 
 defineCorpus("owner-project-uploads", POST, cases);
