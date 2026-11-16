@@ -622,6 +622,16 @@ function check(name, ok, detail = "") {
 			return route.fulfill({ json: { ok: true, version: busyVersion + 1 } });
 		});
 		await values.getByRole("button", { name: "Save", exact: true }).click();
+
+		// The pressed button keeps focus while it waits, and its ring keeps full strength: shown busy by colour, not opacity.
+		const busyButton = await values
+			.getByRole("button", { name: "Save", exact: true })
+			.evaluate((button) => [
+				button.getAttribute("aria-disabled"),
+				getComputedStyle(button).opacity,
+				document.activeElement === button,
+			]);
+
 		await contingency.focus();
 		await page.keyboard.press("Control+a");
 		await page.keyboard.type("150");
@@ -635,6 +645,11 @@ function check(name, ok, detail = "") {
 				document.querySelector('[data-part="values"] [data-pricing-status]')
 					?.textContent ?? "",
 			),
+		);
+		check(
+			"a button waiting on its save keeps focus at full opacity",
+			busyButton[0] === "true" && busyButton[1] === "1" && busyButton[2],
+			busyButton.join(" / "),
 		);
 		check(
 			"a press while a save is on its way says so and marks no field",

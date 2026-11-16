@@ -127,6 +127,8 @@ const updated = pricing.updatedAt
   .pricing-source-meta { display: block; color: var(--studio-muted); font-size: .82rem; padding-bottom: .35rem; }
   .pricing-settings textarea[aria-invalid="true"], .pricing-settings input[aria-invalid="true"] { border-color: var(--accent); }
   .pricing-settings .studio-quiet { display: inline-flex; align-items: center; min-height: 44px; border-bottom: 0; text-decoration: underline; text-underline-offset: .2em; }
-  /* While a save is on its way: marked rather than disabled, so focus stays where it was. */
-  .pricing-settings [aria-disabled="true"] { opacity: .5; cursor: wait; }
+  /* While a save is on its way: marked rather than disabled, so focus stays where it was. Shown by colour rather than
+     opacity, so the pressed button's focus ring keeps its full accent (design.md, States). */
+  .pricing-settings .studio-button[aria-disabled="true"], .pricing-settings .studio-button[aria-disabled="true"]:hover { background: color-mix(in srgb, var(--accent) 50%, var(--paper)); border-color: color-mix(in srgb, var(--accent) 50%, var(--paper)); cursor: wait; }
+  .pricing-settings .studio-quiet[aria-disabled="true"] { color: var(--studio-muted); cursor: wait; }
 </style>

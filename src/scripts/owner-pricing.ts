@@ -246,8 +246,8 @@ async function save(
 					// Without storage the reloaded table is the confirmation.
 				}
 
-				// The page goes with the reload; until then it says so, and the leave-page warning still guards anything
-				// typed in the moment before it goes.
+				// Nothing is unsaved here (checked above), so the leave-page warning, which runs as the reload starts, does
+				// not ask. Text typed while the new page loads is not kept; the status says the page is reloading.
 				if (status)
 					status.textContent = clearing
 						? "Research cleared. Reloading the page…"
