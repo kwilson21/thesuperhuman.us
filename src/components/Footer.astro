@@ -76,17 +76,18 @@ const year = new Date().getFullYear();
   @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } .closing-panel [data-closing-button] { width: 100%; box-sizing: border-box; } }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
-    .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); opacity: 1; visibility: visible; background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); pointer-events: none; }
+    .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); transform: translateY(var(--contact-dock-offset, 0px)); pointer-events: none; }
+    .pinned-contact::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); }
     .pinned-contact .site-button { pointer-events: auto; width: 100%; box-sizing: border-box; white-space: normal; text-align: center; }
-    .pinned-contact[data-at-end] { opacity: 0; visibility: hidden; }
-    .pinned-contact[data-at-end] .site-button { pointer-events: none; }
+    /* Keep the slot's geometry while the same visible link docks into it. */
+    [data-closing-button][data-contact-proxy] { visibility: hidden; }
+    .pinned-contact[data-docked]::before { opacity: 0; }
     @media (prefers-reduced-motion: no-preference) {
-      .pinned-contact:not([hidden]) { transition: opacity var(--dur-hover) var(--ease-site), transform var(--dur-hover) var(--ease-site), visibility 0s; }
-      .pinned-contact[data-at-end] { transform: translateY(4px); transition-delay: 0s, 0s, var(--dur-hover); }
+      .pinned-contact::before { transition: opacity var(--dur-hover) var(--ease-site); }
     }
     :global(body:has(.mobile-menu[open])) .pinned-contact { display: none; }
     :global(body:has(main :is(input, textarea, select):focus)) .pinned-contact { display: none; }
     :global(html:has([data-pinned-contact]:not([hidden]))) { scroll-padding-bottom: 5.5rem; }
   }
-  @media print { .pinned-contact { display: none !important; } }
+  @media print { .pinned-contact { display: none !important; } [data-closing-button][data-contact-proxy] { visibility: visible; } }
 </style>

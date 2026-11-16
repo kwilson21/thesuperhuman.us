@@ -347,3 +347,13 @@ handoff. Both contact links share the same mobile horizontal bounds and arrow;
 the footer panel and page composition remain unchanged. Use the existing hover
 arrow nudge, not a perpetual pulse, bounce, shimmer or attention loop. Hidden
 pinned contact becomes inert immediately. Reduced motion keeps the handoff instant.
+
+
+### Continuous contact docking, revised after owner preview
+The owner rejected the fade/settle swap after watching it in both directions.
+Use one visible phone action: fixed at the bottom until it meets its exact footer
+slot, then scroll-bound to that slot. Reverse at that same point. The footer
+fallback reserves geometry and becomes inert while proxied. Do not fade, scale,
+or slide the button independently of scrolling. Only the floating background
+wash may fade away; reduced motion makes that wash change instantly. Keep the
+aligned widths, locked typography, colors and pill shape.
