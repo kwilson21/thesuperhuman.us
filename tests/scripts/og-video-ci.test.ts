@@ -403,16 +403,15 @@ it("dispatches only trusted-main validation and withholds secrets from dispatche
 	const validation = readFileSync(".github/workflows/validate.yml", "utf8");
 	expect(publisher).toContain('--ref main -f "revision=$REVISION"');
 	expect(publisher).not.toContain('--ref "$BRANCH"');
-	expect(validation).toContain(
-		"github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || ''",
-	);
+	expect(validation).not.toContain("PUBLICIST_PRIVATE_TOKEN");
+	expect(validation).not.toContain("statuses: write");
 	expect(
 		validation.match(/ref: \$\{\{ inputs.revision \|\| github.sha \}\}/g),
-	).toHaveLength(6);
-	const reporter = validation.split("  validate:\n")[1];
-	expect(reporter).toContain("statuses: write");
+	).toHaveLength(5);
+	const reporter = validation.split("  candidate-checks:\n")[1];
 	expect(reporter).not.toContain("actions/checkout");
-	expect(reporter).toContain("statuses/$REVISION");
+	expect(reporter).toContain("validation-target-${{ github.run_attempt }}");
+	expect(reporter).not.toContain("statuses/$REVISION");
 });
 
 it("publishes only the run-associated feature PR targeting main", () => {
@@ -543,6 +542,30 @@ it("rejects partial artifacts when trusted review requires additional scenes", (
 
 	try {
 		expect(() => f.apply("home about")).toThrow(/omits scenes/);
+	} finally {
+		rmSync(f.root, { recursive: true, force: true });
+	}
+});
+
+it("rejects candidate-added manifest entries omitted from review", () => {
+	const f = fixture();
+
+	try {
+		f.put(
+			f.target,
+			"src/data/og-media.json",
+			JSON.stringify({
+				...f.manifest,
+				about: {
+					...f.manifest.home,
+					image: "/og/about-0123456789.png",
+					video: "/og/about-0123456789.mp4",
+				},
+			}),
+		);
+		expect(() => f.apply("home")).toThrow(
+			/outside the trusted reviewed inventory/,
+		);
 	} finally {
 		rmSync(f.root, { recursive: true, force: true });
 	}

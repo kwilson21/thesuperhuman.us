@@ -56,3 +56,31 @@ module previewReviewGate {
 }
 module previewReviewCurrent { import previewReviewGate(EARLY=false).* }
 module previewReviewEarly { import previewReviewGate(EARLY=true).* }
+
+// Only the trusted finalizer can unlock validation; receipts are not candidate claims.
+module previewFinalizer {
+  const MUTANT: str
+  var tests: bool
+  var receipt: bool
+  var privateGate: bool
+  var current: bool
+  var green: bool
+  action init = all { tests' = false, receipt' = false, privateGate' = false, current' = true, green' = false }
+  action step = any {
+    all { tests' = true, receipt' = receipt, privateGate' = privateGate, current' = current, green' = green },
+    all { tests' = tests, receipt' = true, privateGate' = privateGate, current' = current, green' = green },
+    all { tests' = tests, receipt' = receipt, privateGate' = true, current' = current, green' = green },
+    all { not(green), tests' = tests, receipt' = receipt, privateGate' = privateGate, current' = false, green' = green },
+    all { tests, (receipt or MUTANT == "forged-receipt"), (privateGate or MUTANT == "private-skipped"), (current or MUTANT == "moved-head"),
+      tests' = tests, receipt' = receipt, privateGate' = privateGate, current' = current, green' = true },
+    all { tests' = tests, receipt' = receipt, privateGate' = privateGate, current' = current, green' = green },
+  }
+  val authenticatedReview = not(green) or receipt
+  val privateApproved = not(green) or privateGate
+  val exactHead = not(green) or current
+  val allProperties = and { authenticatedReview, privateApproved, exactHead }
+}
+module previewFinalizerCurrent { import previewFinalizer(MUTANT="none").* }
+module previewFinalizerForged { import previewFinalizer(MUTANT="forged-receipt").* }
+module previewFinalizerPrivate { import previewFinalizer(MUTANT="private-skipped").* }
+module previewFinalizerMoved { import previewFinalizer(MUTANT="moved-head").* }

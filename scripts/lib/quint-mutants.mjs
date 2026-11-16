@@ -369,14 +369,25 @@ export const models = [
 	},
 	{
 		file: "verification/link-previews.qnt",
-		current: ["linkPreviewsCurrent", "previewReviewCurrent"],
+		current: [
+			"linkPreviewsCurrent",
+			"previewReviewCurrent",
+			"previewFinalizerCurrent",
+		],
 		mutants: {
 			linkPreviewsMovingCheckout: { property: "renderedTreeMatches" },
 			linkPreviewsForcePush: { property: "newerCommitPreserved" },
 			previewReviewEarly: { property: "reviewBeforeValidation" },
+			previewFinalizerForged: { property: "authenticatedReview" },
+			previewFinalizerPrivate: { property: "privateApproved" },
+			previewFinalizerMoved: { property: "exactHead" },
 		},
 		equivalents: [],
-		exhaustive: ["linkPreviewsCurrent", "previewReviewCurrent"],
+		exhaustive: [
+			"linkPreviewsCurrent",
+			"previewReviewCurrent",
+			"previewFinalizerCurrent",
+		],
 		samples: "1000",
 		steps: "8",
 	},

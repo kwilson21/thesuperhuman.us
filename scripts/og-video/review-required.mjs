@@ -12,6 +12,7 @@ const paths = [
 	"src/assets",
 	"src/data/og-media.json",
 	"public/fonts",
+	"public/music",
 	"public/og",
 	"package.json",
 	"pnpm-lock.yaml",

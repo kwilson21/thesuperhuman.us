@@ -11,14 +11,14 @@ const job = (name: string) =>
 	workflow.split(`\n  ${name}:\n`)[1]?.split(/\n  [a-z]+:\n/)[0] ?? "";
 
 describe("parallel Validate retains every release gate", () => {
-	it("keeps the required validate identity and rejects skipped, cancelled and failed lanes", () => {
-		expect(job("validate")).toContain("if: ${{ always() }}");
-		expect(job("validate")).toContain(
-			"needs: [quality, contracts, quint, tests, build, publicist]",
+	it("keeps candidate checks separate from trusted validate and rejects skipped, cancelled and failed lanes", () => {
+		expect(job("candidate-checks")).toContain("if: ${{ always() }}");
+		expect(job("candidate-checks")).toContain(
+			"needs: [quality, contracts, quint, tests, build]",
 		);
-		expect(job("validate")).toContain("RESULTS: ${{ toJSON(needs) }}");
-		expect(job("validate")).toContain(
-			'length == 6 and all(.[]; .result == "success")',
+		expect(job("candidate-checks")).toContain("RESULTS: ${{ toJSON(needs) }}");
+		expect(job("candidate-checks")).toContain(
+			'length == 5 and all(.[]; .result == "success")',
 		);
 		expect(workflow).not.toMatch(
 			/continue-on-error|paths-ignore|pull_request_target/,
@@ -27,15 +27,16 @@ describe("parallel Validate retains every release gate", () => {
 		expect(workflow).toContain("\ncache-mode: read\n");
 	});
 	it("executes the aggregate predicate against success and every non-success outcome", () => {
-		const predicate = /jq -e '([^']+)'/.exec(job("validate"))?.[1];
+		const predicate = /jq -e '([^']+)'/.exec(job("candidate-checks"))?.[1];
 		expect(predicate).toBeDefined();
 
 		if (!predicate) throw new Error("Aggregate predicate missing");
 
 		const success = Object.fromEntries(
-			["quality", "contracts", "quint", "tests", "build", "publicist"].map(
-				(name) => [name, { result: "success" }],
-			),
+			["quality", "contracts", "quint", "tests", "build"].map((name) => [
+				name,
+				{ result: "success" },
+			]),
 		);
 
 		const run = (results: Record<string, { result?: string }>) => {
@@ -80,7 +81,7 @@ describe("parallel Validate retains every release gate", () => {
 			expect(lane).toContain("persist-credentials: false");
 			expect(lane).toContain("node-version-file: .nvmrc");
 			expect(lane).toContain("pnpm install --frozen-lockfile");
-			expect(lane).toContain("cache: pnpm");
+			expect(lane).not.toContain("cache: pnpm");
 		}
 
 		expect(job("contracts")).toContain(
@@ -94,20 +95,25 @@ describe("parallel Validate retains every release gate", () => {
 			expect(job(name)).toContain('echo "QUINT_HOME=$home" >> "$GITHUB_ENV"');
 		}
 	});
-	it("builds and checks that same output, with the private token restricted to the build step", () => {
+	it("builds and checks that same output, without private credentials", () => {
 		const lane = job("build");
-		expect(lane.indexOf("pnpm run build")).toBeLessThan(
+		expect(lane.indexOf("pnpm exec astro build")).toBeLessThan(
 			lane.indexOf(
 				"pnpm exec vitest run tests/architecture/client-bundle.test.ts",
 			),
 		);
 		expect(lane).toContain('REQUIRE_CLIENT_BUNDLE: "1"');
-		expect(workflow.match(/secrets\.PUBLICIST_PRIVATE_TOKEN/g)).toHaveLength(2);
-		expect(job("validate")).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
-		expect(job("validate")).not.toContain("actions/checkout");
-		expect(lane).toContain(
-			"PUBLICIST_PRIVATE_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || '' }}",
+		expect(workflow).not.toContain("PUBLICIST_PRIVATE_TOKEN");
+		expect(workflow).not.toContain("statuses: write");
+		expect(job("candidate-checks")).not.toContain("actions/checkout");
+		const trusted = readFileSync(
+			".github/workflows/validation-finalize.yml",
+			"utf8",
 		);
+		expect(trusted).toContain(
+			"PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}",
+		);
+		expect(trusted).toContain("workflow_run:");
 	});
 	it("performs global mutant-coverage validation before selecting a shard", () => {
 		const driver = readFileSync(

@@ -720,3 +720,28 @@ executions of eight steps; this is not exhaustive proof. File allowlists and
 contact-sheet completeness are tested separately in `og-video-ci.test.ts`.
 
 The preview review gate additionally models sheet publication and PR-description success before validation dispatch. Failed publication cannot unlock validation; the early-dispatch mutant violates this property. Apalache checked the current gate through 8 steps.
+
+### Trusted preview-validation finalizer
+
+`previewFinalizerCurrent` models the finalizer's conjunction: successful candidate
+checks, authenticated exact-head review (or unchanged preview inputs), private
+approval, and a still-current head. Its three mutants independently admit forged
+review, omit private approval, or approve a moved head. Apalache checks eight steps.
+
+The workflow state sequence is `waitingForChecks` → `waitingForReview` →
+`checkingPrivateApprovals` → `recheckingHead` → `approved`, with failures held and
+head changes terminating that candidate. Either completion notification may arrive
+first: Validate or Publish link previews. Both invoke the same default-branch
+finalizer. Candidate workflows have no private credentials and never post success.
+Only the trusted publisher's successful workflow_run artifact is review evidence;
+receipts bind run/attempt, PR, base and exact resulting head. Validation dispatch
+markers are accepted only from the known Validate workflow dispatched on main.
+Artifacts and runs are bounded to the latest 100 per query; an expired/missing
+receipt remains pending rather than guessing provenance. Re-run publication to
+recover such a candidate. Changes to publicist inputs, build commands, or a
+PR-owned validation workflow cannot self-approve through this path.
+
+Rollout is intentionally not self-certifying: the new workflow_run code must
+already be on trusted main before it can certify a candidate. Its initial landing
+requires independent review and an explicit bootstrap decision; a PR test run is
+not evidence that its proposed privileged workflow executed.

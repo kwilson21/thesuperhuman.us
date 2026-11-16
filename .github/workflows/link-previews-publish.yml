@@ -51,7 +51,7 @@ jobs:
           encoded=$(jq -rn --arg branch "$BRANCH" '$branch | @uri')
           protected=$(gh api "repos/$GITHUB_REPOSITORY/branches/$encoded" --jq '.protected')
           [[ "$protected" == false ]] || { echo "Protected destination rejected."; exit 1; }
-          { echo "number=$number"; echo "branch=$BRANCH"; } >> "$GITHUB_OUTPUT"
+          { echo "number=$number"; echo "branch=$BRANCH"; echo "base=$(jq -r .base.sha <<< "$pr")"; } >> "$GITHUB_OUTPUT"
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state=pending -f context=validate -f description="Waiting for trusted preview review"
           jq -e '.conclusion == "success"' <<< "$run" >/dev/null
       - if: steps.pr.outputs.number
@@ -148,23 +148,27 @@ jobs:
           DIR: ${{ steps.sheets.outputs.dir }}
           SCENES: ${{ steps.apply.outputs.scenes }}
         run: node scripts/og-video/pr-section.mjs
+      - name: Record trusted review receipt
+        if: steps.sheets.outputs.dir
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          PR: ${{ steps.pr.outputs.number }}
+          DIR: ${{ steps.sheets.outputs.dir }}
+          SCENES: ${{ steps.apply.outputs.scenes }}
+          BASE: ${{ steps.pr.outputs.base }}
+          RENDER_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir receipt
+          jq -n --arg base "$BASE" --arg sha "$SHA" --arg pr "$PR" --arg dir "$DIR" --arg scenes "$SCENES" --arg renderRun "$RENDER_RUN" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '{base:$base,sha:$sha,pr:$pr,dir:$dir,scenes:$scenes,renderRun:$renderRun,run:$run,attempt:$attempt}' > receipt/receipt.json
+      - if: steps.sheets.outputs.dir
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: preview-receipt-${{ github.run_attempt }}
+          path: receipt/receipt.json
+          retention-days: 7
       - name: Validate after review sheets are attached
         if: steps.sheets.outputs.dir
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVISION: ${{ steps.commit.outputs.sha }}
         run: gh workflow run validate.yml --repo "$GITHUB_REPOSITORY" --ref main -f "revision=$REVISION"
-      - name: Report trusted preview failure or unchanged inputs
-        if: always() && steps.pr.outputs.number
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          RESULT: ${{ job.status }}
-          PUBLISHED: ${{ steps.commit.outputs.sha }}
-        run: |
-          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          state=failure
-          if [[ "$RESULT" == success ]]; then state=success; fi
-          # A generated head retains pending validation until the separate secretless run completes.
-          if [[ "$PUBLISHED" == "$SHA" && "$RESULT" == success ]]; then exit 0; fi
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f "state=$state" -f context=validate -f description="Trusted preview review" -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

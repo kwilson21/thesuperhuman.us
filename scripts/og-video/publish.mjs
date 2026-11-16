@@ -348,6 +348,14 @@ export function applyArtifact(
 
 	if (manifestProblem) throw new Error(manifestProblem);
 
+	if (
+		required.length &&
+		Object.keys(after).some((scene) => !required.includes(scene))
+	)
+		throw new Error(
+			"Manifest contains scenes outside the trusted reviewed inventory",
+		);
+
 	const mediaPaths = (entry) =>
 		entry
 			? [

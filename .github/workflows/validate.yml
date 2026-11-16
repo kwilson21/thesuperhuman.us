@@ -39,7 +39,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run lint
       - run: pnpm run format:check
@@ -60,7 +59,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       # docs/verification.md: Dafny checks the LemmaScript contracts listed in LemmaScript-files.txt, pinned by version and
       # checksum as in Tally. The unpacked tool is dev-only and never part of the Worker.
@@ -92,7 +90,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Quint downloads its evaluator from a GitHub release with no checksum. Instead the pinned release asset (quint-co/quint,
       # evaluator/v0.7.1, the version in @informalsystems/quint 0.33.1) is fetched over HTTPS, checked against its sha256 and
@@ -130,7 +127,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Quint downloads its evaluator from a GitHub release with no checksum. Instead the pinned release asset (quint-co/quint,
       # evaluator/v0.7.1, the version in @informalsystems/quint 0.33.1) is fetched over HTTPS, checked against its sha256 and
@@ -149,32 +145,6 @@ jobs:
         env:
           GOLDEN_VERIFY_DIGESTS: "1"
           GOLDEN_VERIFY_COUNTS: "1"
-  publicist:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Validate immutable revision
-        env:
-          REVISION: ${{ inputs.revision }}
-        run: '[[ -z "$REVISION" || "$REVISION" =~ ^[0-9a-f]{40}$ ]]'
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          persist-credentials: false
-      - if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.revision || github.sha }}
-          path: candidate
-          persist-credentials: false
-      - name: Require unchanged publicist inputs for media-only validation
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/og-video/publicist-inputs.mjs candidate
-      - name: Check trusted publicist approvals
-        if: github.event_name == 'workflow_dispatch'
-        run: node scripts/publicist/gate.mjs
-        env:
-          PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -191,15 +161,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - if: github.event_name != 'workflow_dispatch'
-        run: pnpm run build
-        env:
-          PUBLICIST_PRIVATE_TOKEN: ${{ github.event_name != 'workflow_dispatch' && secrets.PUBLICIST_PRIVATE_TOKEN || '' }}
-      # The separate trusted job checks byte-identical publicist inputs and private approvals.
-      # All other prebuild checks still run, without handing a secret to candidate code.
-      - if: github.event_name == 'workflow_dispatch'
+      # Private approvals are checked by the trusted workflow_run finalizer.
+      - name: Build without private credentials
         run: |
           node --input-type=module -e 'import {readFileSync} from "node:fs"; const p=JSON.parse(readFileSync("package.json")); if(p.scripts.build !== "astro build" || p.scripts.postbuild !== undefined) throw Error("Build lifecycle changed; update trusted validation"); if(p.scripts.prebuild !== "pnpm run navigation:generate && pnpm run assets:check && pnpm run copy:check && pnpm run design:check && pnpm run publicist:gate") throw Error("Prebuild changed; update trusted validation");'
           pnpm run navigation:generate && pnpm run assets:check && pnpm run copy:check && pnpm run design:check
@@ -207,28 +171,29 @@ jobs:
       - run: pnpm exec vitest run tests/architecture/client-bundle.test.ts
         env:
           REQUIRE_CLIENT_BUNDLE: "1"
-  validate:
-    permissions:
-      statuses: write
+  candidate-checks:
     if: ${{ always() }}
-    needs: [quality, contracts, quint, tests, build, publicist]
+    needs: [quality, contracts, quint, tests, build]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Every validation lane must succeed
+      - name: Every candidate lane must succeed
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          # A failed, cancelled or skipped dependency is not a pass. No output is interpolated into shell code.
-          jq -e 'length == 6 and all(.[]; .result == "success")' <<< "$RESULTS"
-      - name: Report trusted validation on published commit
-        if: ${{ always() && inputs.revision != '' }}
+        run: jq -e 'length == 5 and all(.[]; .result == "success")' <<< "$RESULTS"
+      # Isolated from candidate execution. The finalizer accepts this marker only from
+      # this workflow dispatched on main, never from a branch-selected dispatch.
+      - name: Record immutable validation target
+        if: always() && github.event_name == 'workflow_dispatch'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REVISION: ${{ inputs.revision }}
-          RESULTS: ${{ toJSON(needs) }}
         run: |
           [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || exit 1
-          state=failure
-          if jq -e 'length == 6 and all(.[]; .result == "success")' <<< "$RESULTS"; then state=success; fi
-          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$REVISION" -f "state=$state" -f context=validate -f description="Trusted secretless validation" -f "target_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          mkdir result
+          jq -n --arg sha "$REVISION" --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '{sha:$sha,run:$run,attempt:$attempt}' > result/result.json
+      - if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: validation-target-${{ github.run_attempt }}
+          path: result/result.json
+          retention-days: 7
