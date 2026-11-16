@@ -367,7 +367,16 @@ export const models = [
 		exhaustive: [],
 		samples: "100000",
 	},
- {file: "verification/link-previews.qnt", current: ["linkPreviewsCurrent"],
- mutants: {linkPreviewsMovingCheckout: {property: "renderedTreeMatches"}, linkPreviewsForcePush: {property: "newerCommitPreserved"}},
- equivalents: [], exhaustive: ["linkPreviewsCurrent"], samples: "1000", steps: "8"},
+	{
+		file: "verification/link-previews.qnt",
+		current: ["linkPreviewsCurrent"],
+		mutants: {
+			linkPreviewsMovingCheckout: { property: "renderedTreeMatches" },
+			linkPreviewsForcePush: { property: "newerCommitPreserved" },
+		},
+		equivalents: [],
+		exhaustive: ["linkPreviewsCurrent"],
+		samples: "1000",
+		steps: "8",
+	},
 ];
