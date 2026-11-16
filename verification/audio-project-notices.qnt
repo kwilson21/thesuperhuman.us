@@ -27,8 +27,10 @@ module audioProjectNotices {
   //   "claim-no-status"   the claim does not compare the status, so two deliveries that read `pending` both claim it
   //   "claim-no-open"     the invitation's claim does not compare that the project is still open
   //   "queue-any-status"  the rule lets a retry move a notice that was sent
-  //   "queue-no-cas"      the retry's write does not compare the status it read, so a delivery that claimed the notice between the
-  //                       retry's read and its write is overwritten and a second email can go out
+  //   "queue-no-cas"      the retry's write compares neither the status nor the attempt it read, so a delivery that claimed the notice
+  //                       between the retry's read and its write is overwritten and a second email can go out
+  //   "queue-status-only" the retry's write compares the status it read but not the attempt: with two retries at once, a retry that read
+  //                       `sending` still passes after the other requeued it and a later delivery went uncertain in `sending` again
   //   "uncertain-sent"    an uncertain outcome is written as sent
   //   "uncertain-failed"  an uncertain outcome is written as failed
   //   "lookup-no-open"    the recipient read does not filter on the project's access, so a closed project has a recipient (the
@@ -37,7 +39,7 @@ module audioProjectNotices {
   // "invitation" or "update": whose conditions the claim and the outcome write have (see the header).
   const KIND: str
 
-  type Snap = { status: str, open: bool }
+  type Snap = { status: str, open: bool, attempt: int }
   // One delivery: phase "none", "read" (about to read), "claim" (about to claim), "lookup" (claimed, about to read the
   // recipient), "send" (about to send), "finish" (the outcome is known), "done" or "refused"; and what the send answered.
   type Run = { phase: str, snap: Snap, outcome: str }
@@ -52,11 +54,11 @@ module audioProjectNotices {
   var runs: int -> Run
 
   val RUNS = 1.to(3)
-  // Key 4 of `runs` is the owner's retry: phase "none", "write" (read, about to write) or "done"; its snap is what it read.
-  val RETRY = 4
-  val KEYS = 1.to(4)
+  // Keys 4 and 5 of `runs` are two owner retries (two tabs): phase "none", "write" (read, about to write) or "done"; its snap is what it read.
+  val RETRIES = Set(4, 5)
+  val KEYS = 1.to(5)
   val EPOCHS = 0.to(2)
-  val noSnap = { status: "pending", open: true }
+  val noSnap = { status: "pending", open: true, attempt: 0 }
 
   val inFlight = RUNS.exists(r => {
     val p = runs.get(r).phase
@@ -68,19 +70,27 @@ module audioProjectNotices {
   // The claim's rule, from what the read saw: the invitation's also needs the project open.
   def mayClaim(s: Snap): bool = s.status == "pending" and (KIND == "update" or s.open)
 
-  action init = all {
-    status' = "pending",
-    open' = true,
-    epoch' = 0,
-    mailed' = EPOCHS.mapBy(e => 0),
-    clock' = 0, attempt' = 0, closedAt' = 0,
-    runs' = KEYS.mapBy(r => { phase: "none", snap: noSnap, outcome: "none" }),
+  // The starting points: a new notice, and one stuck in `sending` after a delivery whose answer was uncertain (the email did not go
+  // out). A mutant whose race needs the stuck notice begins from it alone, which narrows where the search begins and not what the
+  // properties say; the run that must pass takes both.
+  val starts = if (MUTANT == "queue-status-only") Set("stuck") else Set("new", "stuck")
+
+  action init = {
+    nondet start = starts.oneOf()
+    all {
+      status' = if (start == "stuck") "sending" else "pending",
+      open' = true,
+      epoch' = 0,
+      mailed' = EPOCHS.mapBy(e => 0),
+      clock' = if (start == "stuck") 1 else 0, attempt' = if (start == "stuck") 1 else 0, closedAt' = 0,
+      runs' = KEYS.mapBy(r => { phase: "none", snap: noSnap, outcome: "none" }),
+    }
   }
 
   // A delivery begins: it reads the status and whether the project is open, and the rule decides.
   action begin = {
     nondet r = RUNS.filter(i => runs.get(i).phase == "none").oneOf()
-    val snap = { status: status, open: open }
+    val snap = { status: status, open: open, attempt: attempt }
     all {
       status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
       runs' = runs.set(r, { phase: if (mayClaim(snap)) "claim" else "refused", snap: snap, outcome: "none" }),
@@ -146,34 +156,36 @@ module audioProjectNotices {
     }
   }
 
-  // The owner's retry is two steps, as the code is: a read and the rule, then a write that compares the status the read saw (and the
-  // project's access) again. A failed or pending notice, or one stuck in `sending` that the owner confirms was not sent (truthfully: no
-  // email went out and no delivery is still working), goes back to pending.
+  // The owner's retry is two steps, as the code is: a read and the rule, then a write. A failed or pending notice, or one stuck in
+  // `sending` that the owner confirms was not sent (truthfully: no email went out and no delivery is still working), goes back to
+  // pending. The write compares what the read saw: the status and, for a notice read as `sending`, that no attempt is newer than the
+  // one read (today's `invitation_attempted_at<=?`, `notification_attempted_at<=?`, against the cutoff the retry computed), and the
+  // project's access. Two retries can be in flight (two tabs), each in its own key of `runs`.
   action queueRead = {
-    val confirmedNotSent = status == "sending" and mailed.get(epoch) == 0 and not(RUNS.exists(r => alive(runs.get(r).phase)))
+    nondet r = RETRIES.filter(i => runs.get(i).phase == "none").oneOf()
+    val confirmedNotSent = status == "sending" and mailed.get(epoch) == 0 and not(RUNS.exists(i => alive(runs.get(i).phase)))
     val movable = status == "failed" or status == "pending" or confirmedNotSent or (MUTANT == "queue-any-status" and status == "sent")
     all {
-      runs.get(RETRY).phase == "none",
       movable,
       epoch < 2,
       open,
       status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
-      runs' = runs.set(RETRY, { phase: "write", snap: { status: status, open: open }, outcome: "none" }),
+      runs' = runs.set(r, { phase: "write", snap: { status: status, open: open, attempt: attempt }, outcome: "none" }),
     }
   }
 
   action queueWrite = {
-    val h = runs.get(RETRY)
-    all {
-      h.phase == "write",
-      if ((MUTANT == "queue-no-cas" or status == h.snap.status) and open) all {
-        status' = "pending", open' = open, epoch' = epoch + 1, mailed' = mailed,
-        clock' = clock, attempt' = 0, closedAt' = closedAt,
-        runs' = runs.set(RETRY, { ...h, phase: "done" }),
-      } else all {
-        status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
-        runs' = runs.set(RETRY, { ...h, phase: "done" }),
-      },
+    nondet r = RETRIES.filter(i => runs.get(i).phase == "write").oneOf()
+    val h = runs.get(r)
+    val statusHolds = MUTANT == "queue-no-cas" or status == h.snap.status
+    val attemptHolds = MUTANT == "queue-no-cas" or MUTANT == "queue-status-only" or h.snap.status != "sending" or attempt <= h.snap.attempt
+    if (statusHolds and attemptHolds and open) all {
+      status' = "pending", open' = open, epoch' = epoch + 1, mailed' = mailed,
+      clock' = clock, attempt' = 0, closedAt' = closedAt,
+      runs' = runs.set(r, { ...h, phase: "done" }),
+    } else all {
+      status' = status, open' = open, epoch' = epoch, mailed' = mailed, clock' = clock, attempt' = attempt, closedAt' = closedAt,
+      runs' = runs.set(r, { ...h, phase: "done" }),
     }
   }
 
@@ -229,3 +241,4 @@ module projectNoticesUncertainSent { import audioProjectNotices(MUTANT = "uncert
 module projectNoticesUncertainFailed { import audioProjectNotices(MUTANT = "uncertain-failed", KIND = "invitation").* }
 module projectNoticesUpdateLookupNoOpen { import audioProjectNotices(MUTANT = "lookup-no-open", KIND = "update").* }
 module projectNoticesQueueNoCas { import audioProjectNotices(MUTANT = "queue-no-cas", KIND = "invitation").* }
+module projectNoticesQueueStatusOnly { import audioProjectNotices(MUTANT = "queue-status-only", KIND = "invitation").* }

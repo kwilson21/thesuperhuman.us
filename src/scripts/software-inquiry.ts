@@ -1,4 +1,6 @@
 import { setupBriefAutocomplete } from "./brief-autocomplete";
+import { type BriefBoardHandle, setupBriefBoard } from "./brief-board";
+import { boardAnswerKeys, laneLabels, originLabels } from "../lib/brief-board";
 import { setupSuggestionPass } from "./brief-suggestion-pass";
 import {
 	clientSoftwareLabels,
@@ -415,6 +417,10 @@ export function setupSoftwareInquiry(
 			}),
 		);
 
+	// One Turnstile pass serves the autocomplete and the brief board: the same cookie, sent to the same path.
+	const startPass = startSuggestionPass(form);
+	let briefBoard: BriefBoardHandle | null = null;
+
 	const suggestions = setupBriefAutocomplete(
 		form,
 		() =>
@@ -424,8 +430,38 @@ export function setupSoftwareInquiry(
 						[pathFields[path()][0]]: payload()[pathFields[path()][0]],
 					}
 				: { path: path() },
-		startSuggestionPass,
+		() => startPass,
+		() => briefBoard?.aiChanged(),
 	);
+
+	// The written answers the board reads: the boxes the autocomplete reads, never the contact details.
+	const writtenAnswers = () => {
+		const values = payload(false);
+
+		return Object.fromEntries(
+			boardAnswerKeys[path()].map((key) => [key, values[key] ?? ""]),
+		);
+	};
+
+	const boardRoot =
+		form.dataset.board === "true"
+			? document.querySelector<HTMLElement>("[data-brief-board]")
+			: null;
+
+	briefBoard = boardRoot
+		? setupBriefBoard({
+				root: boardRoot,
+				form,
+				path,
+				answers: writtenAnswers,
+				startPass,
+				aiEnabled: () => suggestions.isEnabled(),
+				live: boardRoot.dataset.live !== "false",
+				onChange: () => {
+					if (step === last()) renderSummary();
+				},
+			})
+		: null;
 
 	function renderSummary() {
 		const list = form.querySelector<HTMLDListElement>("[data-review]")!;
@@ -469,6 +505,51 @@ export function setupSoftwareInquiry(
 			list.appendChild(dt);
 			list.appendChild(dd);
 		}
+
+		// The board's outline, as it will be sent: each item with where it came from. Suggestions not kept are not listed.
+		const outline = briefBoard?.outline();
+
+		if (outline) {
+			const dt = document.createElement("dt"),
+				dd = document.createElement("dd"),
+				items = document.createElement("ul"),
+				edit = document.createElement("button");
+
+			dt.textContent = "Brief outline";
+			items.className = "review-outline";
+			items.setAttribute("role", "list");
+
+			for (const item of outline) {
+				const entry = document.createElement("li"),
+					origin = document.createElement("span");
+
+				origin.className = "review-outline-origin";
+				// An answered question reads as it did on the board.
+				origin.textContent = ` · ${item.answer && item.origin === "kept" ? "You answered" : originLabels[item.origin]}`;
+				// Each item with its lane, as the outline is grouped on the board ("Pages: Shows").
+				entry.appendChild(
+					document.createTextNode(
+						`${laneLabels[path()][item.lane]}: ${item.text}`,
+					),
+				);
+				entry.appendChild(origin);
+
+				if (item.answer)
+					entry.appendChild(
+						document.createTextNode(` · Your answer: ${item.answer}`),
+					);
+				items.appendChild(entry);
+			}
+
+			edit.type = "button";
+			edit.textContent = "Edit";
+			edit.setAttribute("aria-label", "Edit Brief outline");
+			edit.addEventListener("click", () => showStep(1));
+			dd.appendChild(items);
+			dd.appendChild(edit);
+			list.appendChild(dt);
+			list.appendChild(dd);
+		}
 	}
 
 	function showStep(index: number, focus = true) {
@@ -478,6 +559,8 @@ export function setupSoftwareInquiry(
 		steps.forEach((node, i) => (node.hidden = i !== section));
 
 		if (section === 1 || section === 2) suggestions.start();
+		// The board sits beside the written questions and the website's extra screens, not the contact or review steps.
+		briefBoard?.show([1, 2, 7, 8].includes(section));
 		document
 			.querySelectorAll<HTMLElement>(".intake-progress li")
 			.forEach((item, i) => {
@@ -572,6 +655,13 @@ export function setupSoftwareInquiry(
 	}
 
 	form.addEventListener("input", save);
+	form.addEventListener("input", (event) => {
+		if (
+			event.target instanceof HTMLTextAreaElement &&
+			event.target.hasAttribute("data-answer")
+		)
+			briefBoard?.answersChanged();
+	});
 	// Only a pointer choice moves on by itself. Arrow keys step through the radio group, so keyboard and screen-reader users
 	// reach every starting point and continue with Next, as they do after any other answer.
 	let pointerChoice = false;
@@ -597,6 +687,7 @@ export function setupSoftwareInquiry(
 
 				if (box.name) box.value = answers[box.name] ?? "";
 			});
+			briefBoard?.pathChanged();
 
 			if (pointerChoice) continueStep();
 			else {
@@ -694,7 +785,14 @@ export function setupSoftwareInquiry(
 		form,
 		endpoint: "/api/software-inquiry",
 		success: document.getElementById("software-success")!,
-		payload: () => ({ ...payload(), submissionId }),
+		payload: () => {
+			const outline = briefBoard?.outline();
+
+			// The outline is sent only when the board holds something to send, so a brief without one is sent as before.
+			return outline
+				? { ...payload(), submissionId, outline }
+				: { ...payload(), submissionId };
+		},
 		onSendingChange: (sending) => {
 			if (sending) {
 				form
@@ -715,6 +813,8 @@ export function setupSoftwareInquiry(
 		},
 		onSuccess: (result: SoftwareReceiptResult) => {
 			suggestions.clear();
+			briefBoard?.show(false);
+			briefBoard?.sent();
 
 			try {
 				localStorage.setItem(sentKey, submissionId);

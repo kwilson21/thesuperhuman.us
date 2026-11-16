@@ -91,6 +91,19 @@ export const musicMutants = {
 	musicSplitRead: { property: "sameEventNeverConflicts" },
 };
 
+// verification/brief-board.qnt: the living brief's board, where late and overlapping replies from the interpreting model
+// meet the visitor's own changes (src/lib/brief-board.ts). Module name -> the property its change must break.
+export const boardMutants = {
+	boardSnapshotStatus: { property: "ownedUntouched" },
+	boardSeenOnly: { property: "undoRespected" },
+	boardWithdrawUnseen: { property: "undoRespected" },
+	boardNoAvoid: { property: "rejectedStaysRejected" },
+	boardSnapshotQuote: { property: "groundedOnApply" },
+	boardOutlineQuote: { property: "outlineGrounded" },
+	boardNoNumberGuard: { property: "newestWins" },
+	boardApplyPaused: { property: "pausedHolds" },
+};
+
 // verification/software-inquiry.qnt: one software brief submitted twice at once (src/server/flows/software-inquiry.ts). Module
 // name -> the property its change must break.
 export const inquiryMutants = {
@@ -190,6 +203,7 @@ export const audioProjectNoticesMutants = {
 	projectNoticesUncertainFailed: { property: "failedMeansNotMailed" },
 	projectNoticesUpdateLookupNoOpen: { property: "closedUpdateNeverMails" },
 	projectNoticesQueueNoCas: { property: "oneEmailInTotal" },
+	projectNoticesQueueStatusOnly: { property: "oneEmailInTotal" },
 };
 
 // verification/brief-copy.qnt: the claim of the client's copy of a software brief by owner clicks and the public form's own copy
@@ -265,6 +279,14 @@ export const models = [
 		samples: "20000",
 	},
 	{
+		file: "verification/brief-board.qnt",
+		current: ["board"],
+		mutants: boardMutants,
+		equivalents: [],
+		exhaustive: ["board"],
+		samples: "20000",
+	},
+	{
 		file: "verification/software-inquiry.qnt",
 		current: ["inquiry"],
 		mutants: inquiryMutants,
@@ -317,6 +339,7 @@ export const models = [
 		mutants: audioProjectFilesMutants,
 		equivalents: ["projectFilesCompleteNoFile"],
 		exhaustive: [],
+		// InsertNoState, AbortNoCas and PartNoStateGuard start only from fresh (the upload protocol alone).
 		// The mutants whose race needs particular starting points (PublishNoStage from finalAndReview, PublishStaleSupersede and
 		// RevokeNoFirstStatus from twoReviews, CompleteNoStage from final and finalPlus) begin from the one or two starting points
 		// their race needs and no others, and are found within a few thousand random runs. Three runs must pass, each of 8,000 runs:
