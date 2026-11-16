@@ -3,8 +3,10 @@ import { z } from "zod";
 import { clientPortalEnabled } from "~/lib/client-portal";
 import { revokeProjectAccess } from "~/lib/audio-project-revocation";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+const ROUTE = "/api/owner/projects/[id]/access";
 const input = z.object({ action: z.literal("revoke") });
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
@@ -37,13 +39,15 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		}
 
 		return Response.json({ ok: true });
-	} catch {
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
 		return Response.json(
 			{
 				ok: false,
 				error: "Project access could not be closed. Please try again.",
 			},
-			{ status: 503 },
+			{ status: 500 },
 		);
 	}
 };

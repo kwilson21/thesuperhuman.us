@@ -33,6 +33,10 @@ export type R2Setup = {
 	readonly seed?: R2Seed;
 	/** A listed operation rejects with an Error. Multipart calls are named createMultipartUpload and so on. */
 	readonly fails?: readonly string[];
+	/** A listed operation rejects with R2's error for a concurrent write to the same key (10058), as the losing completion of two can. */
+	readonly concurrentWrites?: readonly string[];
+	/** A listed operation rejects with R2's error for an unavailable service (10043). */
+	readonly unavailable?: readonly string[];
 	/**
 	 * Multipart uploads already started before the case: upload id to the key, or to the key and the parts already
 	 * uploaded (part number to its content) and the metadata the upload was created with.
@@ -179,6 +183,8 @@ export function recordingR2(
 ): RecordedR2 {
 	const store = new Map<string, Held>();
 	const fails = new Set(setup.fails ?? []);
+	const concurrentWrites = new Set(setup.concurrentWrites ?? []);
+	const unavailable = new Set(setup.unavailable ?? []);
 
 	const uploads = new Map<
 		string,
@@ -229,7 +235,27 @@ export function recordingR2(
 
 	for (const op of fails) triggers.declare(`r2 ${label} fails ${op}`);
 
+	for (const op of concurrentWrites)
+		triggers.declare(`r2 ${label} concurrent write ${op}`);
+
+	for (const op of unavailable)
+		triggers.declare(`r2 ${label} unavailable ${op}`);
+
 	const failIf = (op: string) => {
+		if (unavailable.has(op)) {
+			triggers.see(`r2 ${label} unavailable ${op}`);
+
+			throw new Error("The service is unavailable, try again later. (10043)");
+		}
+
+		if (concurrentWrites.has(op)) {
+			triggers.see(`r2 ${label} concurrent write ${op}`);
+
+			throw new Error(
+				"There was a conflict with a concurrent write to the same key. (10058)",
+			);
+		}
+
 		if (!fails.has(op)) return;
 
 		triggers.see(`r2 ${label} fails ${op}`);
@@ -399,7 +425,7 @@ export function recordingR2(
 
 						if (!bodyPart || etagOf(bodyPart) !== part.etag)
 							throw new Error(
-								"r2: multipart part is missing or its etag differs",
+								"One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag. (10025)",
 							);
 
 						return bodyPart;

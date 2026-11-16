@@ -9,6 +9,17 @@ export const uploadPartSize = 10 * 1024 * 1024;
 export const maxProjectFileSize = 1024 * 1024 * 1024;
 export const maxPartEtagLength = 256;
 
+/** The waits before the second and the third try of a completion that R2 refused for writing one key too often (error 10058). */
+const completionRetryDelaysMs = [100, 200];
+
+/** A part was put for an upload that an abort has already marked discarding, or that R2 no longer has: a lost race, not an outage. */
+export class UploadBeingDiscarded extends Error {
+	constructor() {
+		super("This upload is being discarded.");
+		this.name = "UploadBeingDiscarded";
+	}
+}
+
 export type ProjectUpload = {
 	id: string;
 	request_id: string;
@@ -164,12 +175,16 @@ export async function putProjectUploadPart(
 	partNumber: number,
 	body: ArrayBuffer,
 ): Promise<R2UploadedPart> {
-	if (upload.state !== "pending")
-		throw new Error("This upload is being discarded.");
+	if (upload.state !== "pending") throw new UploadBeingDiscarded();
 
-	return bucket
-		.resumeMultipartUpload(upload.object_key, upload.upload_id)
-		.uploadPart(partNumber, body);
+	try {
+		return await bucket
+			.resumeMultipartUpload(upload.object_key, upload.upload_id)
+			.uploadPart(partNumber, body);
+	} catch (error) {
+		if (multipartUploadGone(error)) throw new UploadBeingDiscarded();
+		throw error;
+	}
 }
 
 export async function finishProjectUpload(
@@ -179,7 +194,7 @@ export async function finishProjectUpload(
 	parts: R2UploadedPart[] | null,
 	now = new Date(),
 	peaks: number[] | null = null,
-): Promise<"saved" | "blocked" | "size-mismatch"> {
+): Promise<"saved" | "blocked" | "size-mismatch" | "unavailable"> {
 	if (upload.state !== "pending") return "blocked";
 
 	if (!(await ownerProjectCanUpload(db, upload.request_id, upload.version)))
@@ -200,9 +215,41 @@ export async function finishProjectUpload(
 			)
 		)
 			return "blocked";
-		object = await bucket
-			.resumeMultipartUpload(upload.object_key, upload.upload_id)
-			.complete(parts);
+
+		// Error 10058 (R2's TooManyRequests, the limit on writes to one key) is temporary, so the completion is tried up to two more
+		// times after a short wait, and the object is looked for each time, because another completion may have won.
+		for (let attempt = 0; ; attempt++) {
+			try {
+				object = await bucket
+					.resumeMultipartUpload(upload.object_key, upload.upload_id)
+					.complete(parts);
+				break;
+			} catch (error) {
+				// R2 refused a part it lists as missing or with another entity tag: the route's own check of the parts answers the same.
+				if (multipartPartInvalid(error)) return "blocked";
+				const gone = multipartUploadGone(error);
+				const busy = concurrentWriteToKey(error);
+
+				// Anything else is not a known race: it is an unavailable store (10043) or an unexpected failure for the route.
+				if (!gone && !busy) throw error;
+				// An abort, the incomplete-upload lifecycle or another completion got there first. The object may now exist, so look
+				// again, as the abort does: a later completion finds it and finishes.
+				const found = await bucket.head(upload.object_key);
+
+				if (found) {
+					object = found;
+					break;
+				}
+
+				if (gone) return "blocked";
+
+				// Still busy after the last try: a known temporary unavailability, which the owner may try again.
+				if (attempt >= completionRetryDelaysMs.length) return "unavailable";
+				await new Promise((resolve) =>
+					setTimeout(resolve, completionRetryDelaysMs[attempt]),
+				);
+			}
+		}
 	}
 
 	if (object.size !== upload.byte_size) return "size-mismatch";
@@ -241,7 +288,20 @@ export async function finishProjectUpload(
 export function multipartUploadGone(error: RawValue): boolean {
 	return (
 		error instanceof Error &&
-		/\b10024\b|multipart upload does not exist/i.test(error.message)
+		/\(10024\)$|multipart upload does not exist/i.test(error.message)
+	);
+}
+
+/** R2 reports two writes to one key at once, which the losing completion of two can get, as error 10058. */
+export function concurrentWriteToKey(error: RawValue): boolean {
+	return error instanceof Error && /\(10058\)$/.test(error.message);
+}
+
+/** R2 reports a completion with a missing part, or a part whose entity tag does not match, as error 10025 (invalid part). */
+export function multipartPartInvalid(error: RawValue): boolean {
+	return (
+		error instanceof Error &&
+		/\(10025\)$|specified parts could not be found/i.test(error.message)
 	);
 }
 
