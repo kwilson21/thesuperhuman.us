@@ -1,0 +1,78 @@
+<!doctype html>
+<!-- Starter for a publicist video (docs/publicist/video-standard.md). Copy it into the
+     video's private folder, replace the scenes, keep the pattern: one headline per scene
+     (data-role="headline"), a draw step per scene that builds in reading order on
+     scene-local time, and a plan with each scene's build length.
+     Check and render: node scripts/publicist/video/render.mjs <this file> [--check] -->
+<html><head><meta charset="utf-8">
+<style>
+  /* scene-specific layout only; tokens, fonts and the headline role come from kit.css */
+  html, body { width: 1920px; height: 1080px; }
+  .chip { position: absolute; font: 700 64px Libron; padding: 22px 48px; border: 4px solid var(--ink); border-radius: 22px; background: #fff; }
+  .lbl { position: absolute; font: 600 40px Inter; }
+  .bar { position: absolute; height: 90px; border-radius: 0 14px 14px 0; background: #9aa5ad; }
+  .bar.lead { background: var(--ink); }
+  .val { position: absolute; font: 700 56px Libron; }
+</style></head><body>
+<div id="stage">
+  <svg id="line" width="1920" height="1080" style="position:absolute;inset:0"><path id="ink" stroke="#0E0E0E" stroke-width="10" fill="none" stroke-linecap="round"/></svg>
+  <div class="tag">Build · <b>Example</b></div>
+
+  <div class="scene" id="ask">
+    <div data-role="headline" id="ask-h" style="top:150px;font-size:110px">Open on the question</div>
+    <div class="chip" id="ask-a" style="left:520px;top:520px">A</div>
+    <div class="chip" id="ask-b" style="left:1220px;top:520px;border-color:var(--accent)">B</div>
+  </div>
+
+  <div class="scene" id="compare" style="top:80px;bottom:-80px">
+    <div data-role="headline">One point per scene</div>
+    <div class="lbl" id="lbl-a" style="left:160px;top:442px">A</div><div class="bar lead" id="bar-a" style="left:420px;top:420px;width:0"></div><div class="val" id="val-a" style="top:434px"></div>
+    <div class="lbl" id="lbl-b" style="left:160px;top:632px">B</div><div class="bar" id="bar-b" style="left:420px;top:610px;width:0"></div><div class="val" id="val-b" style="top:624px"></div>
+  </div>
+
+  <div class="scene" id="close">
+    <div data-role="headline" style="left:0;right:0;top:330px;text-align:center">Then the answer</div>
+    <div id="site" style="position:absolute;left:0;right:0;top:640px;text-align:center;font:600 48px Inter;color:var(--accent)">thesuperhuman.us</div>
+  </div>
+</div>
+<script>
+const { prog, easeInOut, fade, run } = VideoKit;
+const $ = (id) => document.getElementById(id);
+
+run({
+  // build: seconds the picture takes to assemble after the headline's lead.
+  // lead (default 0.6s) and hold (default 2s) can be raised per scene.
+  plan: [
+    { id: 'ask', build: 2.8, lead: 0, hold: 2.5 }, // the opener draws its own line under the headline
+    { id: 'compare', build: 2.4, hold: 3 },
+    { id: 'close', build: 1.1, lead: 0, hold: 2.5 },
+  ],
+  draw(id, t) {
+    // the opening ink line: draws across, then settles under the first headline
+    const ink = $('ink'), m = easeInOut((t - 0.9) / 0.7), w = $('ask-h').offsetWidth || 1200;
+    const A = [120, 560, 420, 470, 620, 650, 900, 560, 1300, 470, 1480, 540];
+    const B = [160, 290, 160 + w * .25, 290, 160 + w * .5, 290, 160 + w * .62, 290, 160 + w * .85, 290, 160 + w, 290];
+    const P = A.map((a, i) => a + (B[i] - a) * m);
+    ink.setAttribute('d', `M${P[0]} ${P[1]} C ${P[2]} ${P[3]}, ${P[4]} ${P[5]}, ${P[6]} ${P[7]} S ${P[8]} ${P[9]}, ${P[10]} ${P[11]}`);
+    ink.setAttribute('stroke', m > 0.5 ? '#AE5534' : '#0E0E0E');
+    const L = ink.getTotalLength(); ink.style.strokeDasharray = L + 2; ink.style.strokeDashoffset = (L + 2) * (1 - easeInOut(t / 0.9));
+    $('line').style.display = id === 'ask' ? 'block' : 'none';
+
+    if (id === 'ask') {
+      $('ask-h').style.opacity = prog(t, 1.2, 0.5);
+      fade($('ask-a'), t, 2.1); fade($('ask-b'), t, 2.4);
+    }
+    if (id === 'close') fade($('site'), t, 0.7, 0.4, 0);
+    if (id === 'compare') {
+      [['a', 80, 0], ['b', 35, 1.0]].forEach(([k, v, at]) => {
+        const p = prog(t, at, 1.0), wpx = 1200 * v / 100 * p;
+        $('lbl-' + k).style.opacity = prog(t, at, 0.3);
+        $('bar-' + k).style.width = wpx + 'px';
+        $('val-' + k).style.left = (445 + wpx) + 'px';
+        $('val-' + k).textContent = p > 0.02 ? Math.round(v * p) + '%' : '';
+      });
+    }
+  },
+});
+</script>
+</body></html>
