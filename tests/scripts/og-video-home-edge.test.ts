@@ -1,33 +1,17 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { resamplePeaks } from "~/lib/home-motion";
 import { latestSongWaveform } from "~/lib/latest-song";
-import { validateCatalog, visibleCatalog } from "~/lib/music-catalog";
+import { loadMusicCatalog } from "~/lib/music-content";
 
 // Home's link-preview video (scripts/og-video/scenes/home.html) keeps a copy of the peaks Home's waveform edge draws:
 // the newest released song's waveform at 110 bars (src/pages/index.astro). When a newer song with a comparison is
 // released, Home's edge changes, so this fails and names the scene to update and re-render
-// (node scripts/og-video/render.mjs home).
-const entries = (dir: string) =>
-	readdirSync(join("src/content", dir))
-		.filter((file) => file.endsWith(".json"))
-		.map((file) =>
-			JSON.parse(readFileSync(join("src/content", dir, file), "utf8")),
-		);
-
-it("draws the same waveform as Home's edge in Home's link preview", () => {
+// (node scripts/og-video/render.mjs home). The catalog comes through Home's own loader, with astro:content read from
+// src/content by the test stand-in (tests/helpers/astro-content.ts).
+it("draws the same waveform as Home's edge in Home's link preview", async () => {
 	// Production's view of the catalog: public entries only.
-	const catalog = visibleCatalog(
-		validateCatalog({
-			recordings: entries("recordings"),
-			releases: entries("releases"),
-			examples: entries("audio-examples"),
-		}),
-		false,
-	);
-
-	const waveform = latestSongWaveform(catalog);
+	const waveform = latestSongWaveform(await loadMusicCatalog(false));
 
 	expect(waveform, "Home's edge draws a released song").toBeDefined();
 
