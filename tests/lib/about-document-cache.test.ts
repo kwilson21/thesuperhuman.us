@@ -21,7 +21,10 @@ it("keeps About browser freshness narrowly scoped and credential-partitioned", a
 	for (const method of ["GET", "HEAD"]) {
 		const r = withAboutDocumentCache(
 			new Request(url, { method }),
-			response({ vary: "Accept-Encoding", "x-content-type-options": "nosniff" }),
+			response({
+				vary: "Accept-Encoding",
+				"x-content-type-options": "nosniff",
+			}),
 		);
 
 		assert.equal(r.headers.get("cache-control"), "private, max-age=60");
