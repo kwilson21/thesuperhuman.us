@@ -8,6 +8,7 @@ export function withAboutDocumentCache(
 ): Response {
 	const url = new URL(request.url);
 	const host = request.headers.get("host");
+
 	const vary = (response.headers.get("vary") ?? "")
 		.split(",")
 		.map((value) => value.trim())
