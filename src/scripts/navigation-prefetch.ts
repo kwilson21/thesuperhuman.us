@@ -6,6 +6,22 @@ import {
 	reservePrefetch,
 } from "~/lib/navigation-prefetch";
 
+// Do not register hidden menu copies: Foresight's initial pointer is (0, 0).
+function isRendered(anchor: HTMLAnchorElement): boolean {
+	const rect = anchor.getBoundingClientRect();
+
+	return (
+		rect.width > 0 &&
+		rect.height > 0 &&
+		(anchor.checkVisibility
+			? anchor.checkVisibility({
+					visibilityProperty: true,
+					opacityProperty: true,
+				})
+			: getComputedStyle(anchor).visibility === "visible")
+	);
+}
+
 type Connection = { saveData?: boolean; effectiveType?: string };
 
 export interface PredictionManager {
@@ -76,6 +92,7 @@ export async function setupPrefetchTrial(
 		if (
 			!isPublicPrefetchSource(location.href) ||
 			!anchor.isConnected ||
+			!isRendered(anchor) ||
 			anchor.hasAttribute("download") ||
 			anchor.target ||
 			!reservePrefetch(target, seen, allowedNow())
@@ -108,6 +125,7 @@ export async function setupPrefetchTrial(
 
 	const eligible = (anchor: HTMLAnchorElement) =>
 		anchor.isConnected &&
+		isRendered(anchor) &&
 		!anchor.closest("#prefetch-trial") &&
 		!anchor.hasAttribute("download") &&
 		!anchor.target &&
@@ -135,7 +153,16 @@ export async function setupPrefetchTrial(
 	let active = true;
 
 	const observeRequest = (anchor: HTMLAnchorElement) => {
-		if (active) request(anchor);
+		if (!active) return;
+
+		if (!isRendered(anchor)) {
+			registrations.get(anchor)?.cleanup();
+			registrations.delete(anchor);
+
+			return;
+		}
+
+		request(anchor);
 	};
 
 	const register = (anchor: HTMLAnchorElement) => {
@@ -203,7 +230,34 @@ export async function setupPrefetchTrial(
 		}
 	};
 
-	const observer = new MutationObserver(reconcile);
+	// These three site animation variables never affect link visibility.
+	const visibilityStyle = (style: string) =>
+		style
+			.split(";")
+			.map((part) => part.trim())
+			.filter((part) => part && !/^--(?:p|rx|ry)\s*:/.test(part))
+			.join(";");
+
+	const observer = new MutationObserver((records) => {
+		const relevant = records.some((record) => {
+			if (record.type !== "attributes" || record.attributeName !== "style")
+				return true;
+			// SAFETY: attribute mutation records always target an Element.
+			const target = record.target as Element;
+
+			// Inline style cannot change an unrelated link's inherited visibility.
+			// Skip decorative animation nodes before reading any anchor geometry.
+			if (!target.matches("a[href]") && !target.querySelector("a[href]"))
+				return false;
+
+			return (
+				visibilityStyle(record.oldValue ?? "") !==
+				visibilityStyle(target.getAttribute("style") ?? "")
+			);
+		});
+
+		if (relevant) reconcile();
+	});
 
 	const resume = () => {
 		if (seen.size >= PREFETCH_LIMIT) {
@@ -220,7 +274,16 @@ export async function setupPrefetchTrial(
 			childList: true,
 			subtree: true,
 			attributes: true,
-			attributeFilter: ["href", "download", "target"],
+			attributeOldValue: true,
+			attributeFilter: [
+				"href",
+				"download",
+				"target",
+				"open",
+				"hidden",
+				"class",
+				"style",
+			],
 		});
 	};
 
@@ -232,12 +295,20 @@ export async function setupPrefetchTrial(
 		registrations.clear();
 	};
 
+	window.addEventListener("resize", reconcile);
+	document.addEventListener("toggle", reconcile, true);
+	document.addEventListener("transitionend", reconcile, true);
+	document.addEventListener("animationend", reconcile, true);
 	window.addEventListener("pagehide", pause);
 	window.addEventListener("pageshow", resume);
 	resume();
 
 	return () => {
 		pause();
+		window.removeEventListener("resize", reconcile);
+		document.removeEventListener("toggle", reconcile, true);
+		document.removeEventListener("transitionend", reconcile, true);
+		document.removeEventListener("animationend", reconcile, true);
 		window.removeEventListener("pagehide", pause);
 		window.removeEventListener("pageshow", resume);
 	};
