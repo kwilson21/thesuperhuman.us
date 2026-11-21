@@ -1,0 +1,76 @@
+name: Trusted validation finalizer
+on:
+  workflow_run:
+    workflows: [Validate, Publish link previews]
+    types: [in_progress, completed]
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      base: ${{ steps.target.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Discover exact target with trusted read-only code
+        id: target
+        run: node scripts/og-video/finalize-validation.mjs discover
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  finalize:
+    needs: resolve
+    if: needs.resolve.outputs.sha != ''
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      statuses: write
+      checks: write
+    concurrency:
+      group: trusted-validation-${{ needs.resolve.outputs.sha }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Never install dependencies, restore caches or execute candidate code in this job.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.base }}
+          persist-credentials: false
+      - name: Resolve authenticated check and review provenance
+        id: resolve
+        run: node scripts/og-video/finalize-validation.mjs resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA: ${{ needs.resolve.outputs.sha }}
+          EXPECTED_BASE: ${{ needs.resolve.outputs.base }}
+      - if: steps.resolve.outputs.sha
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.resolve.outputs.sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Check immutable candidate data
+        id: verify
+        if: steps.resolve.outputs.sha
+        run: node scripts/og-video/finalize-validation.mjs verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check private approvals with trusted code only
+        id: gate
+        if: steps.verify.outputs.ready == 'true'
+        run: node scripts/og-video/publicist-inputs.mjs candidate
+        env:
+          PUBLICIST_PRIVATE_TOKEN: ${{ secrets.PUBLICIST_PRIVATE_TOKEN }}
+      - name: Complete exact-head validation
+        if: always() && steps.verify.outputs.ready == 'true'
+        run: node scripts/og-video/finalize-validation.mjs finish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATE_RESULT: ${{ steps.gate.outcome }}

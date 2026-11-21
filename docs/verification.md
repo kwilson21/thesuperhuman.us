@@ -709,3 +709,77 @@ The Quint runs are independent, so the driver runs them in one pool, up to the n
 Why one pool: with the discount model added, two separate steps took 76 s and 125 s on the runner (3 minutes 21 seconds). The second step started the three equivalent mutants (each a full 100,000-run pass) last, so three cores ran long after the rest had finished. One pool removes that tail. Measured since: the Quint step took 151 to 341 s over the last nine successful Validate runs on main on 2026-11-15, which is above the budget of 2 minutes 30 seconds, and 212 to 422 s on the audio pull requests' successful runs on 2026-11-15. The CPU time of `verify:quint:all` (its user time, run locally, which varies by about 20 s between runs) is about 416 to 431 s without the three audio models and about 475 to 512 s with them (both measured before the brief-copy model joined the pool). The audio models make 44 checks (6 pass runs, 3 equivalent mutants and 35 mutants); the sum of their check times (each check's own wall time as the driver prints it, not CPU time) is about 131 s locally for the 44 checks (128 s measured for the first 43, plus 3.4 s for `QueueStatusOnly`); the sum fell from 88 s to 54 s for the 34 checks of that time, after the mutants that need particular starting points began from the one or two their race needs and no others: `PublishNoStage` from `finalAndReview`, `PublishStaleSupersede` and `RevokeNoFirstStatus` from `twoReviews`, `CompleteNoStage` from `final` and `finalPlus`; `InsertNoState`, `AbortNoCas` and `PartNoStateGuard` from `fresh`; `QueueStatusOnly` from a notice stuck in `sending`; the added pass runs that start only from `finalAndReview` and from `finalPlus` take about 4 s each, and the longest audio check is 4.6 s where the longest check on main is 55 s. Each `quint run` costs about 1.5 CPU-seconds of startup (parsing and checking the model) before it makes any random run, so 44 audio checks cost about 66 CPU-seconds in the pool, which is the floor while every property keeps a mutant. The budget is 2 minutes 30 seconds on a 4-core runner.
 
 The discount model's extension (2026-11-15) added time. Measured with `pnpm run verify:quint:all` on a 4-core cloud container, main and the extension one after the other with nothing else running: 232 s on main (94 checks) and 281 s with the extension (98 checks), 21% more. The discount model's own runs went from about 87 CPU-seconds (its pass run 45 s) to about 203 (`discount` 55 s and `discountF10Fix` 66 s at 30 steps, `discountTodayDepositGuard` 27 s, the other twelve mutants 4 to 7 s each). After the review raised the model to 50 steps and added a mutant, the same command took 262 s (99 checks; the discount pass runs 91 s and 109 s), and 338 s in a later run of the same (the machine is shared, so these are rough), against 225 s for the same model at 30 steps in a run just before (see "The discount-offers model" for why 50). On the runner the Quint step had taken 3.5 to 4.5 minutes and `pnpm test` 7 to 9, and two runs were cancelled at the job's 15-minute limit, so the Validate job's `timeout-minutes` was raised (to 30, by #318). F10's fix removed one pass run (`discountF10Fix`) and turned a mutant check into a pass run (`discountSecondBatchNoSendingGuard`, which now makes all 10,000 runs instead of stopping at a violation): 98 checks in 212 s in one run on the same container.
+
+## Link-preview publication
+
+`verification/link-previews.qnt` models immutable rendered SHA, the earlier head
+check, checkout, a concurrent user push, and the final fast-forward push.
+The current protocol preserves the rendered tree and newer commits. The moving
+checkout and force-push mutants reproduce the two races. CI runs 1,000 sampled
+executions of eight steps; this is not exhaustive proof. File allowlists and
+contact-sheet completeness are tested separately in `og-video-ci.test.ts`.
+
+The preview review gate additionally models sheet publication and PR-description success before validation dispatch. Failed publication cannot unlock validation; the early-dispatch mutant violates this property. Apalache checked the current gate through 8 steps.
+
+### Trusted preview-validation finalizer
+
+`previewFinalizerCurrent` models the finalizer's conjunction: successful candidate
+checks, authenticated exact-head review (or unchanged preview inputs), private
+approval, and a still-current head. Its three mutants independently admit forged
+review, omit private approval, or approve a moved head. Apalache checks eight steps.
+
+The workflow state sequence is `waitingForChecks` → `waitingForReview` →
+`checkingPrivateApprovals` → `recheckingHead` → `approved`, with failures held and
+head changes terminating that candidate. Either completion notification may arrive
+first: Validate or Publish link previews. Both invoke the same default-branch
+finalizer. Candidate workflows have no private credentials and never post success.
+Only the trusted publisher's successful workflow_run artifact is review evidence;
+receipts bind run/attempt, PR, base and exact resulting head. Validation dispatch
+markers are accepted only from the known Validate workflow dispatched on main.
+Artifacts and runs are bounded to the latest 100 per query; an expired/missing
+receipt remains pending rather than guessing provenance. Re-run publication to
+recover such a candidate. Changes to publicist policy/config/validators, validation commands (including
+lifecycle hooks), or a PR-owned validation workflow cannot self-approve through
+this path. Candidate story, queue and AGENTS data are read from regular Git blobs
+into isolated staging and checked by the unchanged trusted private gate.
+
+Rollout is intentionally not self-certifying: the new workflow_run code must
+already be on trusted main before it can certify a candidate. Its initial landing
+requires independent review and an explicit bootstrap decision; a PR test run is
+not evidence that its proposed privileged workflow executed.
+
+
+`validationAuthorityCurrent` models a newer failed/in-progress validation
+superseding an older success before publication. The stale-completion mutant
+violates `authoritativeSuccess`. The finalizer obtains the latest run/attempt
+across PR and main-dispatch events both at resolution and immediately before
+posting success; an unbound newer dispatch is pending, never presumed unrelated.
+A read-only trusted job discovers the exact head, then finalizer jobs serialize
+per head and re-resolve provenance within that group. A changed target fails before
+any status write, so independent PRs cannot evict each other from a shared pending
+slot. In-progress notifications invalidate
+prior success where the target is already known. First attempts use request creation time so queue delay cannot revive an older
+request; reruns use their current attempt start (queued retries use update time),
+then run ID and attempt as tie-breakers.
+
+PR and dispatched candidate checks share concurrency by immutable head SHA.
+The final API recheck is a race reduction, not an atomic GitHub transaction:
+GitHub provides no compare-and-set for commit status writes. A new run starting
+between that read and status write is handled by its in-progress/completion
+notification and by checking current runs again before any actual merge.
+
+### Immutable preview review evidence
+
+The trusted publisher records the screenshots commit and each sheet's Git blob ID,
+SHA-256 and byte size. The finalizer verifies that exact directory tree and creates
+an Actions-owned `Trusted preview evidence` check with commit-pinned image URLs.
+Successful validation links to that check, not to the author-editable PR description.
+The body remains a convenience copy; changing it cannot change the canonical evidence.
+The `immutablePreviewCurrent` model requires verified sheets and the canonical check
+before success; `immutablePreviewMutable` keeps the old mutable-evidence failure.
+
+Read-only discovery verifies the resolved PR base against `main` and exposes that
+immutable SHA. The write-capable job checks out that resolved commit, rather than
+an older workflow-event snapshot, then rechecks the base before writing status.
+Run identity accepts both unqualified REST workflow paths and a matching, validated
+`@ref` suffix. Workflow ID, repository, event and dispatch-main restrictions remain.

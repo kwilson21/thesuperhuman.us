@@ -54,7 +54,10 @@ describe("package manager and Node pin", () => {
 			const workflow = read(path);
 			expect(workflow).toContain("pnpm/action-setup@");
 			expect(workflow).toContain("node-version-file: .nvmrc");
-			expect(workflow).toContain("cache: pnpm");
+
+			if (path.endsWith("validate.yml"))
+				expect(workflow).not.toContain("cache: pnpm");
+			else expect(workflow).toContain("cache: pnpm");
 			expect(workflow).toContain("pnpm install --frozen-lockfile");
 			expect(workflow).not.toMatch(/^\s*node-version:/m);
 			expect(workflow).not.toMatch(
@@ -88,12 +91,14 @@ describe("package manager and Node pin", () => {
 
 	it("validate.yml runs the built-bundle backstop after the build, and requires dist", () => {
 		const workflow = read(".github/workflows/validate.yml");
-		const build = workflow.indexOf("- run: pnpm run build");
+		const build = workflow.indexOf("pnpm exec astro build");
 
 		const backstop = workflow.indexOf(
 			"- run: pnpm exec vitest run tests/architecture/client-bundle.test.ts",
 		);
 
+		expect(workflow).toContain("Build without private credentials");
+		expect(workflow).not.toContain("PUBLICIST_PRIVATE_TOKEN");
 		expect(build).toBeGreaterThanOrEqual(0);
 		expect(backstop).toBeGreaterThan(build);
 		expect(workflow.slice(backstop)).toMatch(/REQUIRE_CLIENT_BUNDLE: "1"/);

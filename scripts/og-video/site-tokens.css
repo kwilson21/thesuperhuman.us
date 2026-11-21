@@ -1,0 +1,13 @@
+/* Generated from src/styles/global.css by scripts/og-video/site-tokens.mjs. Do not edit; run the script. */
+:root {
+  --paper: #FBF8F2;
+  --ink: #0E0E0E;
+  --muted: #4A4A4A;
+  --rule: #E8E3DA;
+  --accent: #AE5534;
+  --label-face: var(--sans);
+  --label-weight: 500;
+  --label-tracking: 0.12em;
+  --label-case: uppercase;
+  --status-face: var(--sans);
+}
