@@ -174,8 +174,8 @@ Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the 
 ## Resume request flow
 
 1. A visitor requests the general resume via the form on `/about` (name/email/company/note + Turnstile). New requests always use the general audience; stored legacy approvals retain their original audience.
-2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and an approval link.
-3. Opening `GET /api/resume-approve?id=<uuid>` only renders a confirmation form. The operator must submit it; `POST /api/resume-approve` requires an exact same-origin `Origin`, looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token after successful delivery. GET and HEAD never read or consume the request.
+2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and an approval link to `/owner/resume-approve`.
+3. Opening `/owner/resume-approve?id=<uuid>` requires the existing owner Cloudflare Access check and only renders a confirmation form. The owner must submit it; the same-origin `POST /owner/resume-approve` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token after successful delivery. GET and HEAD never read or consume the request. Existing `/api/resume-approve` GET links redirect safely to the owner page; its POST is disabled.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
 
 ## Audio site

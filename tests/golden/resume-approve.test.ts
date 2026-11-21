@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { POST } from "~/pages/api/resume-approve";
+import { POST } from "~/pages/owner/resume-approve";
 import {
 	type Case,
 	type Responder,
@@ -15,15 +15,15 @@ import {
 } from "./recorder";
 import type { JsonObject } from "../helpers/json";
 
-// The golden corpus for explicit POST /api/resume-approve approvals. The fixture records the prior delivery behavior
-// for the existing edge cases, now submitted through the deliberate same-origin confirmation form.
+// The golden corpus for explicit POST /owner/resume-approve approvals. The existing edge cases exercise delivery only
+// after the test recorder supplies the fictional owner identity that middleware normally verifies through Access.
 //
 // The fixture was re-recorded once, from the route on main after PR #245 (the route before the conversion, with escaping
 // of visitor text on the three pages). Against the unescaped recording only bodies that show a name, an address or an
 // audience containing & < > " or \' differ, by escaping alone; the one other change is a stored request with no audience,
 // which main's fix now throws on (an unanswered 500) where the unescaped route printed "pdf:undefined" on a 500 page.
 
-const BASE = "https://thesuperhuman.us/api/resume-approve";
+const BASE = "https://thesuperhuman.us/owner/resume-approve";
 
 const approve = (query: string) => {
 	const requested = new URL(
@@ -174,7 +174,7 @@ const cases: Case[] = [
 		name: "a request from a preview host",
 		steps: [
 			approve(
-				"https://abc.thesuperhuman-us.pages.dev/api/resume-approve?id=abc",
+				"https://abc.thesuperhuman-us.pages.dev/owner/resume-approve?id=abc",
 			),
 		],
 		resumeStore: { seed: { ...withRequest(), ...withPdfs("general") } },
@@ -402,7 +402,7 @@ afterAll(() =>
 	),
 );
 
-describe("golden: POST /api/resume-approve", () => {
+describe("golden: POST /owner/resume-approve", () => {
 	it("covers at least 40 requests", () => {
 		expect(cases.length).toBeGreaterThanOrEqual(40);
 		expect(new Set(cases.map((c) => c.name)).size).toBe(cases.length);
@@ -410,7 +410,10 @@ describe("golden: POST /api/resume-approve", () => {
 
 	for (const c of cases) {
 		it(`answers ${c.name} as recorded`, async () => {
-			expectRecorded("resume-approve", await record(POST, c));
+			expectRecorded(
+				"resume-approve",
+				await record(POST, { ...c, owner: { email: "owner@example.test" } }),
+			);
 		});
 	}
 });

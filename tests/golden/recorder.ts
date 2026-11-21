@@ -73,6 +73,8 @@ type EnvText = Pick<
 export type Case = {
 	readonly name: string;
 	readonly steps: readonly Step[];
+	/** Owner identity installed by the existing Access middleware for a protected owner-page route. */
+	readonly owner?: { readonly email: string };
 	/** Env members to add or change on top of the defaults. */
 	readonly env?: Partial<EnvText>;
 	/** Env members to remove, as a deployment that never set them. */
@@ -301,6 +303,12 @@ function contextFor(
 
 	if (namespaces.RESUME_STORE) env.RESUME_STORE = namespaces.RESUME_STORE;
 
+	const locals = partial<APIContext["locals"]>({
+		runtime: partial<TestRuntime>({ env: partial<TestRuntime["env"]>(env) }),
+	});
+
+	if (c.owner) locals.owner = c.owner;
+
 	return partial<APIContext>({
 		request: new Request(step.url, {
 			method: step.method ?? "POST",
@@ -308,9 +316,7 @@ function contextFor(
 			body: step.body,
 		}),
 		url: new URL(step.url),
-		locals: partial<APIContext["locals"]>({
-			runtime: partial<TestRuntime>({ env: partial<TestRuntime["env"]>(env) }),
-		}),
+		locals,
 	});
 }
 

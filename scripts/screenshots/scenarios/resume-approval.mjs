@@ -1,6 +1,6 @@
-// A fictional request gets a deliberate confirmation page, then an expired-request
+// A fictional request gets a protected owner confirmation page, then an expired-request
 // answer when approved. The link cannot match a stored request in the local preview.
-const path = "/api/resume-approve?id=00000000-0000-4000-8000-000000000000";
+const path = "/owner/resume-approve?id=00000000-0000-4000-8000-000000000000";
 
 export default {
 	title: "Resume approval",
@@ -18,8 +18,9 @@ export default {
 					file: `resume-approval-${name}-${viewport}.png`,
 					path,
 					viewport,
+					owner: true,
 					expectedResponses: expired
-						? [{ path: "/api/resume-approve", status: 404 }]
+						? [{ path: "/owner/resume-approve", status: 404 }]
 						: [],
 					prepare: async (page) => {
 						const button = page.getByRole("button", {
@@ -32,7 +33,7 @@ export default {
 
 						const answer = page.waitForResponse(
 							(response) =>
-								new URL(response.url()).pathname === "/api/resume-approve" &&
+								new URL(response.url()).pathname === "/owner/resume-approve" &&
 								response.request().method() === "POST",
 						);
 

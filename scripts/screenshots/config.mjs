@@ -308,6 +308,7 @@ const PAGE_NAMES_BY_FILE = {
 
 const SCENARIO_NAMES_BY_FILE = {
 	"src/pages/api/resume-approve.ts": ["resume-approval"],
+	"src/pages/owner/resume-approve.ts": ["resume-approval"],
 	"src/components/Footer.astro": ["mobile-contact"],
 	"src/scripts/pinned-contact.ts": ["mobile-contact"],
 	"src/pages/index.astro": ["mobile-contact"],

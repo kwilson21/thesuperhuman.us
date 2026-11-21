@@ -60,7 +60,7 @@ export const requestResume = (submission: ResumeRequestSubmission) =>
 		yield* Effect.promise(() => createResumeRequest(store, request, id, now));
 
 		const approvalUrl = new URL(
-			`/api/resume-approve?id=${id}`,
+			`/owner/resume-approve?id=${id}`,
 			origin,
 		).toString();
 
