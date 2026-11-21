@@ -389,6 +389,14 @@ describe("screenshot coverage", () => {
 								],
 							}
 						: {},
+				kvPut: (binding: string, key: string, value: string) => {
+					expect(binding).toBe("RESUME_STORE");
+					expect(key).toBe("req:screenshot-resume");
+					expect(JSON.parse(value)).toMatchObject({
+						name: "Sample Requester",
+						email: "requester@example.test",
+					});
+				},
 				capture: async ({ file, path }: { file: string; path: string }) => {
 					captured.push({ scenario, path });
 

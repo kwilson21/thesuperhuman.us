@@ -118,7 +118,7 @@ const NOT_SENT = refuse(
 );
 
 const LINK =
-	"owner@example.test: https://thesuperhuman.us/api/resume-approve?id=id-1";
+	"owner@example.test: https://thesuperhuman.us/owner/resume-approve?id=id-1";
 
 const STORED = 'req:id-1 {"expirationTtl":604800}';
 

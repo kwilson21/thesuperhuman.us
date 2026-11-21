@@ -155,6 +155,28 @@ describe("middleware.onRequest", () => {
 		expect(next).toHaveBeenCalled();
 	});
 
+	it("rejects cross-site owner approval form submissions", async () => {
+		verifyOwnerAccess.mockResolvedValueOnce({ email: "owner@example.com" });
+
+		const context = makeContext(
+			"https://thesuperhuman.us/owner/resume-approve",
+		);
+
+		context.request = new Request(context.url, {
+			method: "POST",
+			headers: {
+				origin: "https://attacker.example",
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			body: "id=fictional-token",
+		});
+		const next = vi.fn(async () => new Response("should not reach the route"));
+		const response = await run(context, next);
+
+		expect(response.status).toBe(403);
+		expect(next).not.toHaveBeenCalled();
+	});
+
 	it("protects future owner APIs by namespace", async () => {
 		verifyOwnerAccess.mockResolvedValueOnce(null);
 		const ctx = makeContext("https://thesuperhuman.us/api/owner/campaigns");
@@ -560,6 +582,7 @@ describe("middleware.onRequest with the real owner check", () => {
 	const protectedPaths = [
 		"/owner",
 		"/owner/requests",
+		"/owner/resume-approve",
 		"/api/owner",
 		"/api/owner/campaigns",
 	];

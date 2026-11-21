@@ -20,7 +20,7 @@ interface ResumeKv extends KvLike {
 	delete(key: string): Promise<void>;
 }
 
-const TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+export const RESUME_REQUEST_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 function key(id: string): string {
 	return `req:${id}`;
@@ -34,7 +34,7 @@ export async function createResumeRequest(
 ): Promise<string> {
 	const payload: StoredResumeRequest = { ...request, ts: now };
 	await kv.put(key(id), JSON.stringify(payload), {
-		expirationTtl: TTL_SECONDS,
+		expirationTtl: RESUME_REQUEST_TTL_SECONDS,
 	});
 
 	return id;
