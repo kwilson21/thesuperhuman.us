@@ -39,6 +39,11 @@ export class SubmissionIdClash extends ChangedSinceRead {
 /** The most a request's details may hold once written as JSON. */
 const DETAILS_LIMIT = 16_000;
 
+// Software answers hold fewer than 7,200 characters (at most 2 JSON characters each), and a full outline holds
+// 5,240 text/quote/answer characters (at most 6 each), plus under 2,000 characters of keys and punctuation.
+// Keep the original bound for every other intake; field and lane validation still runs before this storage guard.
+const SOFTWARE_DETAILS_LIMIT = 48_000;
+
 /** The insert of the request row. */
 const requestStatement = (
 	db: D1Database,
@@ -86,7 +91,10 @@ export const insertRequest = (request: NewOwnerRequest) =>
 		const db = yield* MusicDb;
 		const detailsJson = JSON.stringify(request.details ?? {});
 
-		if (detailsJson.length > DETAILS_LIMIT)
+		const limit =
+			request.kind === "software" ? SOFTWARE_DETAILS_LIMIT : DETAILS_LIMIT;
+
+		if (detailsJson.length > limit)
 			return yield* Effect.fail(new BriefTooLarge());
 
 		// The id is made before the time, as the batch always was.
