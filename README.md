@@ -177,6 +177,7 @@ Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the 
 2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and an approval link to `/owner/resume-approve`.
 3. Opening `/owner/resume-approve?id=<uuid>` requires the existing owner Cloudflare Access check and only renders a confirmation form. The owner must submit it; the same-origin `POST /owner/resume-approve` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token after successful delivery. GET and HEAD never read or consume the request. Existing `/api/resume-approve` GET links redirect safely to the owner page; its POST is disabled.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
+5. The owner-only Today page also lists pending requests from the existing `RESUME_STORE` `req:` records. It reads at most two 50-key pages and shows when the list is incomplete; missing or failed storage is reported as unavailable, not as an empty queue. Review opens the same explicit confirmation route as the email shortcut.
 
 ## Audio site
 
