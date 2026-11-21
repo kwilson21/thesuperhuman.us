@@ -141,7 +141,7 @@ function approvalNotificationBody(
 		req.note ? "Note:" : null,
 		req.note ? req.note : null,
 		"",
-		"Approve and send the resume by clicking this link (single-use, expires in 7 days):",
+		"Open this link, then choose Approve and send resume on the confirmation page (expires in 7 days):",
 		approvalUrl,
 		"",
 		"To deny: simply ignore this email. The request will expire on its own.",

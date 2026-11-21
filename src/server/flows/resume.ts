@@ -1,9 +1,8 @@
 // The resume flows: sequences that act between decisions, so they are Effect programs that call services (not pure rules).
-// A visitor asks for
-// the resume (`requestResume`): the request is stored for seven days and the owner is emailed a single-use link. The owner
-// opens the link (`approveResume`): the PDF is emailed to the visitor and the request is deleted, only once the email
-// has gone. Each flow reads what it needs through services and fails with a named refusal; a refusal carries facts, and
-// the route words and escapes the page. The time, the id and the origin are plain inputs.
+// A visitor asks for the resume (`requestResume`): the request is stored for seven days and the owner is emailed a
+// single-use link. The owner explicitly confirms that link (`approveResume`): the PDF is emailed to the visitor and the
+// request is deleted only once the email has gone. Each flow reads what it needs through services and fails with a named
+// refusal; a refusal carries facts, and the route words and escapes the page. The time, the id and the origin are plain inputs.
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { resumeApprovalMessage, resumeDeliveryMessage } from "../../lib/resend";

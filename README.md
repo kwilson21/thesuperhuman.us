@@ -174,8 +174,8 @@ Cloudflare applies `_headers` to static assets, so `src/middleware.ts` adds the 
 ## Resume request flow
 
 1. A visitor requests the general resume via the form on `/about` (name/email/company/note + Turnstile). New requests always use the general audience; stored legacy approvals retain their original audience.
-2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and a one-click approval link.
-3. The operator clicks the approval link. `GET /api/resume-approve?id=<uuid>` looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token. Single-use; the link can't be replayed.
+2. `POST /api/resume-request` validates, rate-limits, and stores a single-use token in KV (`req:<uuid>`, 7-day TTL). It emails the operator (`CONTACT_TO_EMAIL`) with the request details and an approval link.
+3. Opening `GET /api/resume-approve?id=<uuid>` only renders a confirmation form. The operator must submit it; `POST /api/resume-approve` requires an exact same-origin `Origin`, looks up the token, reads the matching PDF from KV (`pdf:<audience>`), emails it to the requester as an attachment, and deletes the token after successful delivery. GET and HEAD never read or consume the request.
 4. The approval link's "credential" is the UUID itself (~122 bits of entropy). Because delivery is bound to the requester's email stored in KV (not the URL), a leaked or intercepted link cannot redirect delivery elsewhere.
 
 ## Audio site
