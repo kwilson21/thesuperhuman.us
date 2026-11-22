@@ -14,6 +14,7 @@ import {
 	seedProject,
 	worldServices,
 } from "../helpers/audio-project-world";
+import { partial } from "../helpers/doubles";
 import { musicWorld } from "../helpers/music-world";
 
 // The owner's publish and revoke of a project file as stories, with the real flows against the real schema, the project and
@@ -152,6 +153,27 @@ describe("publishing a file", () => {
 			refused: "FileNotPublishable",
 		});
 		expect(status(world, "r1")).toEqual({ status: "uploaded" });
+	});
+
+	it("judges the project from facts read after the object's size is known, as the write's own conditions did", async () => {
+		// The booking is paid while R2 answers the head. Today every project condition is evaluated by the write, after the head,
+		// so the file is published.
+		const world = musicWorld();
+		seedProject(world, "in_progress", { booking: "open" });
+		seedFile(world, "r1");
+
+		const objects = memoryBucket({
+			head: async () => {
+				world.sql.exec("UPDATE audio_payments SET booking_status='paid'");
+
+				return partial<R2Object>({ size: 5 });
+			},
+		});
+
+		expect(await publish(world, objects.bucket, "r1").ended).toMatchObject({
+			done: expect.any(Number),
+		});
+		expect(status(world, "r1")).toEqual({ status: "published" });
 	});
 
 	it("needs the balance paid for a final, and a final replaces the live review", async () => {
