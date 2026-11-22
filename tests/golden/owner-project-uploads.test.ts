@@ -35,14 +35,14 @@ import {
 // parts. POST carries four JSON actions (start, complete, abort, recover); PUT carries one raw part of the file in
 // the body, with the upload id and part number in the query.
 //
-//   POST start      beginProjectUpload: checks the project can take a file (paid booking, a working stage), opens an R2
+//   POST start      startUpload (src/server/flows/audio-project-uploads.ts): checks the project can take a file (paid booking, a working stage), opens an R2
 //                   multipart upload, records it in audio_project_uploads; the R2 upload is aborted again when the record
 //                   cannot be written.
 //   PUT             one part (the part sizes are fixed by byte_size: 10 MiB each, the last one shorter); R2 uploadPart.
-//   POST complete   finishProjectUpload: R2 complete with the part list (or the object already in R2), size check, the
+//   POST complete   finishUpload: R2 complete with the part list (or the object already in R2), size check, the
 //                   audio_project_files row (status uploaded), the upload row deleted. A saved file id is the upload id.
 //   POST recover    the same without a part list: only when R2 already holds the object.
-//   POST abort      abortProjectUpload: the row goes to "discarding", the R2 object or multipart upload is removed, the row
+//   POST abort      abortUpload: the row goes to "discarding", the R2 object or multipart upload is removed, the row
 //                   is deleted; with a file already saved from the upload only the row is deleted.
 //
 // Response branches, and the cases that reach them (names start with the topic):

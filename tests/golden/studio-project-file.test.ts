@@ -33,8 +33,9 @@ import {
 // a published file of their own project. It decides who can hear private client work, so each reason to refuse is a case
 // on its own, from a base where everything is right (a review file at stage review_ready, booking paid, a live session).
 //
-// Every response branch of the handler, clientProjectFile and fileAvailable, streamClientProjectFile,
-// recordProjectFileAccess (src/lib/audio-project-files.ts), mediaRange (src/lib/music-media.ts), and its cases:
+// Every response branch of the handler, the readProjectFile flow (src/server/flows/studio-project-file.ts: the session, the
+// rule serveProjectFile, the object reads and the access record `recordFileAccess` in src/server/audio-project-store.ts),
+// mediaRange (src/lib/music-media.ts), and its cases:
 //
 //   404 text "File not found" + private, no-store  (the same answer for every refusal, so a client learns nothing)
 //     portal flag unset, "false", "TRUE" (read first, before the bindings)

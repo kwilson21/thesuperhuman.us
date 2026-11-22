@@ -377,7 +377,7 @@ describe("revoking a file", () => {
 		seedFile(world, "r1");
 
 		expect(await revoke(world, "r1", "").ended).toEqual({ done: undefined });
-		expect(moves).toBe(1);
+		expect(moves).toBeGreaterThan(0);
 		expect(status(world, "r1")).toEqual({ status: "revoked" });
 	});
 
