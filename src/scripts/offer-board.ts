@@ -270,7 +270,9 @@ export function setupOfferBoard() {
 		const box =
 			focused instanceof HTMLElement &&
 			focused !== document.body &&
-			!focused.closest("[data-offer-board]")
+			!focused.closest("[data-offer-board]") &&
+			// The page's main column takes focus when the owner clicks plain text; it holds the board, so it is no field.
+			!focused.contains(root)
 				? focused.getBoundingClientRect()
 				: null;
 
@@ -1055,9 +1057,20 @@ export function setupOfferBoard() {
 		node.dataset.status = card.status;
 		node.querySelector<HTMLElement>("[data-card-origin]")!.textContent =
 			originLabel(card);
-		node.querySelector<HTMLElement>("[data-card-text]")!.textContent =
-			card.text;
+		const shown = node.querySelector<HTMLElement>("[data-card-text]")!;
 		const input = node.querySelector<HTMLInputElement>("[data-card-input]")!;
+		const editor = node.querySelector<HTMLElement>("[data-card-editor]")!;
+
+		// An open editor the owner has not typed in follows a reply that rewords its card, so Save never writes the old
+		// words back as the owner's; words the owner typed stay.
+		if (
+			!editor.hidden &&
+			shown.textContent !== card.text &&
+			oneLine(input.value) === shown.textContent
+		)
+			input.value = card.text;
+
+		shown.textContent = card.text;
 		input.setAttribute("aria-label", `Edit “${card.text}”`);
 		input.maxLength = offerTextLimits[card.lane];
 		const hint = node.querySelector<HTMLElement>("[data-card-hint]")!;
@@ -1088,7 +1101,6 @@ export function setupOfferBoard() {
 		reason.textContent = reason.hidden ? "" : `Why: ${card.reason}`;
 		const actions = node.querySelector<HTMLElement>("[data-card-actions]")!;
 		const wanted = actionsFor(card);
-		const editor = node.querySelector<HTMLElement>("[data-card-editor]")!;
 
 		if (!editor.hidden && !wanted.some(([act]) => act === "edit")) {
 			const editing = editor.contains(document.activeElement);

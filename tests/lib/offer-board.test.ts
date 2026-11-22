@@ -824,3 +824,24 @@ describe("found in the offer board's thirtieth review", () => {
 		expect(performance.now() - start).toBeLessThan(1000);
 	});
 });
+
+describe("found in the offer board's thirty-first review", () => {
+	it("keeps a card whose reason is too long to show, without the reason", () => {
+		const reply = readOfferReply({
+			cards: [
+				{
+					lane: "milestones",
+					text: "Design direction",
+					reason: "Because ".repeat(30),
+					deliverables: ["A homepage design"],
+					acceptance: ["The band approves the homepage"],
+					daysLow: 2,
+					daysHigh: 3,
+				},
+			],
+		});
+
+		expect(reply?.cards).toHaveLength(1);
+		expect(reply?.cards[0]?.reason).toBe("");
+	});
+});

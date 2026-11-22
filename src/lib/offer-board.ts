@@ -307,7 +307,10 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 		if (!read.ok) continue;
 		const card = read.value;
 		const words = oneLine(card.text);
-		const reason = oneLine(card.reason);
+		const said = oneLine(card.reason);
+
+		// A reason too long to show is left out; the card stays (a reason is only a note on why).
+		const reason = said.length > OFFER_REASON_MAX ? "" : said;
 
 		// The model puts a milestone's detail on the card; the route's answer nests it under `detail`.
 		const detail =
@@ -319,7 +322,6 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			!words ||
 			words.length > offerTextLimits[card.lane] ||
 			pricesOrLinks(words) ||
-			reason.length > OFFER_REASON_MAX ||
 			pricesOrLinks(reason) ||
 			(card.lane === "milestones" && !detail)
 		)

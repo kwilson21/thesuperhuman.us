@@ -2130,6 +2130,76 @@ function check(name, ok, detail = "") {
 		);
 		await page.setViewportSize({ width: 1280, height: 800 });
 
+		// "Show N updates" never leaves an untouched open editor with its card's old words, so Save cannot write them back as
+		// the owner's edit (the thirty-first review).
+		await fresh();
+		await card("outcome").getByRole("button", { name: /^Edit/ }).click();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const rewordRequest = await next();
+		const rewordReply = scriptedOfferReply(rewordRequest.request().postData());
+
+		rewordReply.cards[0].text = "A band website that books more shows";
+		await release(rewordRequest, rewordReply);
+		await page.waitForTimeout(400);
+		await page.locator("[data-offer-held]").click();
+
+		const followed = await card("outcome")
+			.locator("[data-card-input]")
+			.inputValue();
+
+		check(
+			"Show N updates gives an untouched open editor its card's new words",
+			followed === "A band website that books more shows",
+			followed,
+		);
+
+		// A click on plain text focuses the page's main column, which holds the board: it is no field to keep, so with the
+		// board above the screen nothing below it moves (the thirty-first review: the editor moved 43 px).
+		await fresh();
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+		await page.evaluate(() => {
+			window.scrollBy(
+				0,
+				document.querySelector("[data-offer-board]").getBoundingClientRect()
+					.bottom + 10,
+			);
+			document.querySelector("#owner-main").focus({ preventScroll: true });
+		});
+
+		const mainFocused = await page.evaluate(
+			() => document.activeElement?.id === "owner-main",
+		);
+
+		const underMain = await next(20000);
+
+		const editorTop = () =>
+			page
+				.locator('[name="summary"]')
+				.first()
+				.evaluate((element) => element.getBoundingClientRect().top);
+
+		const editorAt = await editorTop();
+		const longerMarket = scriptedOfferReply(underMain.request().postData());
+
+		longerMarket.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		longerMarket.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		await release(underMain, longerMarket);
+		await page.waitForTimeout(600);
+		check(
+			"with the page's main column focused, a reply moves nothing below a board above the screen",
+			mainFocused && Math.abs((await editorTop()) - editorAt) < 1,
+			`${mainFocused} ${editorAt} -> ${await editorTop()}`,
+		);
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page
