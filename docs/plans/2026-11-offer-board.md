@@ -29,13 +29,16 @@ and the lanes scroll inside a box no taller than about two thirds of the screen.
 so prices that fill in never move a card under the pointer, and a price row is redrawn only when what it says changes,
 so a focused button in it stays. A reply waits while it would move something under the owner: while their pointer
 rests on the cards or the price rows, while focus is among the cards or on a price row's button, during a press of any
-board button (from pointer down to its click), while a card editor is open, and until the cards have been still for 3
-seconds after a finger on them or a scroll of them (as the living brief's board). A reply that changes only the size or
+board button (from pointer down to its click), while a card editor is open, while a finger rests on the cards, and
+until the cards have been still for 3 seconds after that finger lifts or a scroll of them (as the living brief's board). A reply that changes only the size or
 figure waits only where the market row would show the change. A press of Suggest or Undo outside the cards is not
 that: a waiting reply lands before it, so the press's own message is said last. Its button ("Show N updates") sits beside Undo in the header, so
 it moves nothing either, focusing it does not apply the reply, and its arrival is announced once. The board is not
 saved across a reload: the offer editor's own draft is, and Suggest asks again. A reply that lands while the owner types
-in a field below the board keeps that field where it was on screen, though the price rows above it may change height.
+in a field below the board keeps that field where it was on screen, though the price rows above it may change height;
+a field scrolled out of view is left alone, so the page never moves under someone reading the board. The day-value row
+counts a used milestone while its row is in the offer editor, renamed or not, and is redrawn when a row is added or
+removed there.
 
 ### What to charge
 

@@ -695,3 +695,46 @@ describe("found in the offer board's twenty-seventh review", () => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
+
+describe("found in the offer board's twenty-eighth review", () => {
+	it.each([
+		"A budget of 5,000 and 8 weeks to launch",
+		"Fee 4,500 and 6 weeks of work",
+		"Price 2,400 and 2 rounds of revisions",
+		"A fixed fee of 4,800 and 2 revision rounds",
+		"Fees are 1,500 per milestone",
+		"The fee will be about 4,500",
+		"Budget was 5,000",
+		"Costs range from 2,000 to 4,000",
+		"Budget totals 4,500",
+		"A 4,500 fee covers design and build",
+		"The 1,200 deposit is due on signing",
+		"El presupuesto es de 5.000",
+		"Le coût est de 3 000",
+		"Il prezzo è di 3.000",
+		"O orçamento é de 5.000",
+		"Die Kosten betragen 5.000",
+		"Der Preis liegt bei 3.000",
+		"A day rate of 600",
+		"Fee between 20 and 30 per page",
+	])(
+		"drops %s: money joined by and, after a verb, or before its money word",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Milestones total 3",
+		"Pages in total: 12.",
+		"Screens in total: 8",
+		"Two releases at a rate of 1 per week.",
+		"Estimated between 1,500 and 2,000 pages",
+		"Import 3,000 invoices from the old system",
+		"Price is 3 pages long",
+		"The fee will cover 3 rounds",
+		"Rate limits of 60 per minute",
+	])("keeps %s: a count after total, rate or a verb", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});

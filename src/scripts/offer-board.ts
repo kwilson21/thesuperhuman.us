@@ -200,6 +200,7 @@ export function setupOfferBoard() {
 		hoveringPrices = false,
 		pressing = false,
 		touchedAt = 0,
+		fingerDown = false,
 		quietTimer: ReturnType<typeof setTimeout> | undefined,
 		pressNumber = 0,
 		lastFailure: string | null = null,
@@ -255,23 +256,59 @@ export function setupOfferBoard() {
 	let pendingFull: string | null = null;
 
 	/** A message the owner both sees in the status line and hears. */
+	/**
+	 * Measures a field outside the board that has focus and can be seen, and returns a step that puts it back where it was
+	 * on screen once the board above it has changed height (Chrome's scroll anchoring does not always, and Safari has
+	 * none). A field scrolled out of view is left alone, so the page never moves under someone reading the board.
+	 */
+	const keepTypedField = () => {
+		const focused = document.activeElement;
+
+		const box =
+			focused instanceof HTMLElement &&
+			focused !== document.body &&
+			!focused.closest("[data-offer-board]")
+				? focused.getBoundingClientRect()
+				: null;
+
+		// Seen: its top and its first line are on screen (a tall text area may run past the bottom).
+		const kept =
+			box &&
+			box.top >= 0 &&
+			box.top + Math.min(box.height, 48) <= window.innerHeight
+				? focused
+				: null;
+
+		return () => {
+			if (kept?.isConnected && box)
+				window.scrollBy(0, kept.getBoundingClientRect().top - box.top);
+		};
+	};
+
 	const say = (text: string) => {
+		const keep = keepTypedField();
+
 		pendingFull = null;
 		status.style.minHeight = "";
 		status.textContent = text;
 		announce(text);
+		keep();
 	};
 
 	/** Words the board writes on its own, while the owner may be among the cards: the line keeps its height. */
 	const quietly = (text: string) => {
+		const keep = keepTypedField();
+
 		pendingFull = null;
 		status.style.minHeight = `${status.offsetHeight}px`;
 		status.textContent = text;
+		keep();
 	};
 
 	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply. The
 	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
 	const interacting = () =>
+		fingerDown ||
 		Date.now() - touchedAt < QUIET ||
 		hovering ||
 		hoveringPrices ||
@@ -832,7 +869,7 @@ export function setupOfferBoard() {
 				card.lane === "milestones" &&
 				details.has(card.id) &&
 				used.has(card.id) &&
-				rowOf(card) !== null,
+				usedIn.get(card.id)?.isConnected === true,
 		);
 
 		const counted = (inOffer.length ? inOffer : onBoard).slice(0, 3);
@@ -1254,7 +1291,7 @@ export function setupOfferBoard() {
 		replied = true;
 
 		// A newer reply replaces updates that were waiting; focus on their button, about to hide, goes to the heading.
-		const replaced = held !== null && held !== reply;
+		const replaced = held !== null && held !== reply ? held.changes : 0;
 		const showFocused = document.activeElement === heldButton;
 
 		const result = applyReplyIn(
@@ -1277,19 +1314,10 @@ export function setupOfferBoard() {
 		held = null;
 
 		// A field below the board that the owner is typing in stays put when the board above it grows or shrinks.
-		const typing =
-			document.activeElement instanceof HTMLElement &&
-			document.activeElement !== document.body &&
-			!document.activeElement.closest("[data-offer-board]")
-				? document.activeElement
-				: null;
-
-		const typingAt = typing?.getBoundingClientRect().top ?? 0;
+		const keep = keepTypedField();
 
 		render();
-
-		if (typing?.isConnected)
-			window.scrollBy(0, typing.getBoundingClientRect().top - typingAt);
+		keep();
 
 		if (showFocused) heading.focus({ preventScroll: true });
 
@@ -1314,9 +1342,11 @@ export function setupOfferBoard() {
 						: "Up to date with your draft.";
 
 		// The reply to the page's last request says so: the board asks nothing more on this page.
-		const said = replaced
-			? `${done} It replaces the updates that were waiting.`
-			: done;
+		const said = !replaced
+			? done
+			: replaced === 1
+				? `${done} A newer answer replaced the update that was waiting.`
+				: `${done} A newer answer replaced the ${replaced} updates that were waiting.`;
 
 		const full = reply.last ? `${said} ${PAGE_LIMIT}` : said;
 
@@ -1968,6 +1998,34 @@ export function setupOfferBoard() {
 	cardsBox.addEventListener("pointerdown", (event) => {
 		if (event.pointerType === "touch") noteTouch();
 	});
+	// A finger resting on the cards holds replies for as long as it is down; the moment begins when it lifts.
+	cardsBox.addEventListener(
+		"touchstart",
+		() => {
+			fingerDown = true;
+			noteTouch();
+		},
+		{ passive: true },
+	);
+
+	const lifted = (event: TouchEvent) => {
+		if (!fingerDown || event.touches.length > 0) return;
+		fingerDown = false;
+		noteTouch();
+	};
+
+	document.addEventListener("touchend", lifted, {
+		capture: true,
+		passive: true,
+	});
+	document.addEventListener("touchcancel", lifted, {
+		capture: true,
+		passive: true,
+	});
+	// A finger lifted while the window is in the background is never reported, so leaving the window ends the hold.
+	window.addEventListener("blur", () => {
+		fingerDown = false;
+	});
 	cardsBox.addEventListener("wheel", noteTouch, { passive: true });
 	cardsBox.addEventListener("touchmove", noteTouch, { passive: true });
 
@@ -2067,5 +2125,15 @@ export function setupOfferBoard() {
 		schedule();
 	});
 	form.addEventListener("change", () => schedule());
+
+	// A milestone row added or removed in the editor (Remove milestone fires no input event) changes which used milestones
+	// the day-value estimate counts, so the prices are redrawn.
+	const milestoneList = form.querySelector("[data-milestones]");
+
+	if (milestoneList)
+		new MutationObserver(() => render()).observe(milestoneList, {
+			childList: true,
+		});
+
 	render();
 }

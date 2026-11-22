@@ -1732,7 +1732,8 @@ function check(name, ok, detail = "") {
 			detail: null,
 		});
 		await release(underFinger, moreCards);
-		await page.waitForTimeout(500);
+		// The finger rests, still down, past the 3 seconds a lifted finger holds a reply for (the twenty-eighth review).
+		await page.waitForTimeout(3500);
 
 		const heldUnderFinger =
 			(await isHeld()) && Math.abs((await milestoneTop()) - fingerTop) < 1;
@@ -1743,7 +1744,7 @@ function check(name, ok, detail = "") {
 		});
 		await page.waitForTimeout(3500);
 		check(
-			"a finger on the cards holds a reply, which lands once they have been still for 3 seconds",
+			"a finger on the cards holds a reply while it is down, which lands once they have been still for 3 seconds",
 			heldUnderFinger && !(await isHeld()),
 			`${fingerTop} -> ${await milestoneTop()}`,
 		);
@@ -1784,6 +1785,128 @@ function check(name, ok, detail = "") {
 			"a field below the board keeps its place while a reply redraws the prices above it",
 			Math.abs((await fieldTop()) - typingTop) < 1,
 			`${typingTop} -> ${await fieldTop()}`,
+		);
+
+		// The same without scroll anchoring (as in Safari), at phone width, where the status line also changes height after
+		// the redraw (the twenty-eighth review: the field moved 22 px when the line shrank).
+		await page.setViewportSize({ width: 390, height: 844 });
+		await fresh();
+		await page.addStyleTag({
+			content: "* { overflow-anchor: none !important; }",
+		});
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Not this/ })
+			.click();
+		await page.mouse.move(2, 2);
+
+		const longLine = await page.locator("[data-offer-status]").textContent();
+
+		await page.evaluate(() => {
+			const field = document.querySelector('[name="summary"]');
+
+			window.scrollBy(0, field.getBoundingClientRect().top - 440);
+		});
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+
+		const unanchored = await next(20000);
+		const unanchoredTop = await fieldTop();
+		const extraQuestion = scriptedOfferReply(unanchored.request().postData());
+
+		extraQuestion.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		await release(unanchored, extraQuestion);
+		await page.waitForTimeout(600);
+		check(
+			"without scroll anchoring, a field below the board keeps its place through the redraw and the status line",
+			Math.abs((await fieldTop()) - unanchoredTop) < 1,
+			`${longLine} | ${unanchoredTop} -> ${await fieldTop()} | ${await page.locator("[data-offer-status]").textContent()}`,
+		);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		// The day-value row follows the editor's milestone rows: removing a used milestone's row (the editor's Remove fires
+		// no input event) takes its days out at once, and renaming a row keeps them (the twenty-eighth review: the row kept
+		// the removed milestone, and a rename dropped one).
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await card("milestones", 1)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await page.mouse.move(2, 2);
+
+		await rows
+			.first()
+			.locator('[name="milestoneName"]')
+			.fill("Our own name for it");
+
+		const renamed = await page.locator("[data-price-day]").textContent();
+		const afterRename = await next(20000);
+
+		if (afterRename) await release(afterRename);
+
+		await page.waitForFunction(() =>
+			document
+				.querySelector("[data-offer-status]")
+				?.textContent?.startsWith("Up to date"),
+		);
+		await rows.last().locator("[data-remove-milestone]").click();
+
+		const removed = await page.locator("[data-price-day]").textContent();
+
+		check(
+			"the day-value row keeps a renamed milestone and drops a removed one at once",
+			/for 2 used milestones/.test(renamed) &&
+				/for 1 used milestone\b/.test(removed),
+			`${renamed} | ${removed}`,
+		);
+
+		// A reply never scrolls the page to keep a focused field that is out of view: someone reading the board above it
+		// keeps their place (the twenty-eighth review: the board jumped up by the price rows' growth).
+		await fresh();
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+		await page.mouse.move(2, 2);
+		await page.evaluate(() =>
+			document
+				.querySelector("#offer-board-title")
+				.scrollIntoView({ block: "start" }),
+		);
+
+		const headingAt = () =>
+			page.evaluate(
+				() =>
+					document.querySelector("#offer-board-title").getBoundingClientRect()
+						.top,
+			);
+
+		const summaryHidden = await page.evaluate(
+			() =>
+				document.querySelector('[name="summary"]').getBoundingClientRect()
+					.top >= window.innerHeight,
+		);
+
+		const readingTop = await headingAt();
+		const unseen = await next(20000);
+		const growing = scriptedOfferReply(unseen.request().postData());
+
+		growing.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(unseen, growing);
+		await page.waitForTimeout(600);
+		check(
+			"a reply never scrolls the page to keep a focused field that is out of view",
+			summaryHidden && Math.abs((await headingAt()) - readingTop) < 1,
+			`${summaryHidden} ${readingTop} -> ${await headingAt()}`,
 		);
 
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
