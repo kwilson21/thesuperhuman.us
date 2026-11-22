@@ -8,9 +8,9 @@ Routes: the owner's project routes `messages`, `uploads` (POST and PUT), `files/
 Branches, each cut from the one before (heads at the last review round; the record's own commit follows the top head):
 
 - bottom layer `claude/golden-sqlite-sequence`: PR 343, merged to `main` on 2026-11-16 at head `6e02b72f` (merge commit `51cbc017`). A counter row at 0 is no state in the golden digests, every golden fixture was re-recorded under that rule, and a proof script shows the re-record changed only digests. It is merged, so the open stack starts on `main`.
-- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `09067a33`. The two messages routes, and the area's store, answers and input readers.
-- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `422b942d`. The uploads route, the owner file route and the studio file route, and the project and file machines.
-- layer 3 `claude/effect-15-audio-projects`: PR 365, head `23cc52f5`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
+- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `52242c3b`. The two messages routes, and the area's store, answers and input readers.
+- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `b7acdb2d`. The uploads route, the owner file route and the studio file route, and the project and file machines.
+- layer 3 `claude/effect-15-audio-projects`: PR 365, head `81b784be`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
 
 AI assistance: the code on every branch was written with AI assistance, tests first. The owner reviews the pull requests.
 
@@ -63,12 +63,12 @@ What the conversion keeps equal to today's on purpose: the project's stage a cli
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f33effae`, the latest at the final round, which contains the merged bottom layer) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `23cc52f5`, before this record's own commit:
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f9480f78`, the latest at the final round, which contains the merged bottom layer and the sign-in model and fixes) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `81b784be`, before this record's own commit:
 
 - `format:check`: "Checked 1039 files in 114ms. No fixes applied". `lint`: no findings. `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15091 tests passed, 1 skipped (15092), tree clean afterwards.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15100 tests passed, 1 skipped (15101), tree clean afterwards.
 - `golden:neutral --all claude/effect-15-audio-projects-files HEAD`: "compared 80 fixtures and 9369 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL"; layer 2 against layer 1 (3 of 80 fixtures differ) and layer 1 against `origin/main` (2 of 80) are also NEUTRAL.
-- `verify:quint:all`: exit 0. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `check`: 0 errors, 0 warnings, 16 hints.
+- `verify:quint:all`: exit 0. `tests/scripts/quint-run.test.ts`: 52 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `check`: 0 errors, 0 warnings, 16 hints.
 - `git diff origin/main HEAD -- docs/verification.md` shows no dropped line of `main`.
 
 The test database refuses a statement with more than 100 bound parameters, as D1 does, and the file guards and the replacement of live reviews bind the file ids as one JSON value, so a version with more than a hundred published files still publishes and revokes (stories with 120 files in `tests/flows/audio-project-files-stories.test.ts`).
