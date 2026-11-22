@@ -431,9 +431,14 @@ describe("the model", () => {
 
 		expect(model).toBe(BOARD_MODEL);
 		expect(inputs).toMatchObject({
-			response_format: { type: "json_schema", json_schema: BOARD_REPLY_SCHEMA },
+			response_format: {
+				type: "json_schema",
+				json_schema: { name: "board_reply", schema: BOARD_REPLY_SCHEMA },
+			},
 			temperature: 0.2,
 			max_tokens: 700,
+			// Thinking would spend the 700 tokens and no JSON would come back.
+			chat_template_kwargs: { enable_thinking: false },
 		});
 		expect(inputs.messages[0]).toEqual({
 			role: "system",
@@ -541,6 +546,35 @@ describe("the model", () => {
 		});
 	});
 
+	it("reads a chat-completion reply, the form the current model answers in, the same as a response", async () => {
+		run.mockResolvedValueOnce({ response: JSON.stringify(reply) });
+		const fromResponse = await readJson(await POST(context()));
+
+		run.mockResolvedValueOnce({
+			object: "chat.completion",
+			choices: [
+				{
+					index: 0,
+					message: { role: "assistant", content: JSON.stringify(reply) },
+					finish_reason: "stop",
+				},
+			],
+		});
+
+		expect(await readJson(await POST(context()))).toEqual(fromResponse);
+	});
+
+	it("reads a chat-completion reply without text as an unreadable reply", async () => {
+		run.mockResolvedValueOnce({ object: "chat.completion", choices: [] });
+		const noChoices = await POST(context());
+
+		run.mockResolvedValueOnce({ response: "Sure! Here are some ideas" });
+		const unreadable = await POST(context());
+
+		expect(noChoices.status).toBe(unreadable.status);
+		expect(await readJson(noChoices)).toEqual(await readJson(unreadable));
+	});
+
 	it("reads a reply sent as JSON text", async () => {
 		run.mockResolvedValueOnce({ response: JSON.stringify(reply) });
 
@@ -625,7 +659,7 @@ describe("the model", () => {
 		},
 	);
 
-	it("gives up after eight seconds", async () => {
+	it("gives up after twenty seconds", async () => {
 		vi.useRealTimers();
 		vi.useFakeTimers();
 
@@ -642,7 +676,7 @@ describe("the model", () => {
 			}),
 		);
 
-		await vi.advanceTimersByTimeAsync(8001);
+		await vi.advanceTimersByTimeAsync(20001);
 		const result = await exit;
 
 		expect(Exit.isFailure(result) && JSON.stringify(result.cause)).toContain(

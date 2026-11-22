@@ -64,8 +64,8 @@ const GAP = 4000;
 /** How long to wait after a failed request. */
 const BACKOFF = 20000;
 
-/** How long the page waits for an answer (the route gives the model eight seconds). */
-const TIMEOUT = 12000;
+/** How long the page waits for an answer (the route gives the model twenty seconds). */
+const TIMEOUT = 25000;
 
 /** Failures in a row before the board stops asking for this page. */
 const FAILURES = 3;
