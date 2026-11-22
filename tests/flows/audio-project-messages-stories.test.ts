@@ -342,6 +342,40 @@ describe("a client's and the owner's messages", () => {
 		});
 	});
 
+	it("counts in one window for the rule and the write: a message that leaves the window after the lookup is not counted", async () => {
+		const world = musicWorld();
+		await seeded(world);
+
+		// Twelve messages, all inside the window at the lookup (at AT) and the oldest of them outside it two seconds later.
+		for (let i = 0; i < 12; i += 1)
+			world.sql
+				.prepare(
+					"INSERT INTO audio_project_messages(request_id,actor,actor_id,body,created_at) VALUES ('song-1','client',?,?,?)",
+				)
+				.run(
+					CLIENT,
+					`Note ${i}`,
+					new Date(
+						AT.getTime() - 299_000 + (i === 0 ? 0 : 1000 * i),
+					).toISOString(),
+				);
+
+		// The lookup reads the clock first, then the facts of the send and, for the write, the same reading.
+		const reads = [0, 2000, 2000, 2000];
+
+		expect(
+			await ended(
+				world,
+				sendClientMessage({
+					id: "song-1",
+					token: TOKEN,
+					body: "Once more",
+					now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
+				}),
+			),
+		).toMatchObject({ done: { body: "Once more" } });
+	});
+
 	it("answers 429 before any other refusal after the lookup", async () => {
 		const world = musicWorld();
 		await seeded(world);
