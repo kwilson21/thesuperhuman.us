@@ -100,7 +100,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 - N/A, 8.9 Launch scope with payments off: the flag's handling is unchanged; with payments off the route still answers 503 before any Stripe call.
 - UNVERIFIED, 8.11 Keep payments off until the Stripe test-mode lifecycle passes: `wrangler.jsonc` has the flag set to `"true"` already. A test-mode booking invoice was created on a local build on 2026-11-22, but no booking and balance lifecycle (payment, webhooks, balance invoice) was run.
 - UNVERIFIED, 8.14 Rollback procedures and 8.15 `owner:health` on the target: not run.
-- PASS (local tests only), 8.12 Repeated invoice actions create no duplicate invoice: the reservation and idempotency behaviour is unchanged and the recorded "stuck reservation" sequence differs only in its first status. In Stripe test mode on a local build (2026-11-22), a retry after a failed creation answered 409 and nothing was recorded (case 2); after the provoked conflict in case 4, Stripe still held one invoice for the original customer. A repeat with a valid key was not run: UNVERIFIED in Stripe test mode.
+- PASS (local tests only), 8.12 Repeated invoice actions create no duplicate invoice: the reservation and idempotency behaviour is unchanged and the recorded "stuck reservation" sequence differs only in its first status. In Stripe test mode on a local build (2026-11-22), a retry after a failed creation answered 409 and nothing was recorded (case 2); after the provoked conflict in case 4, Stripe created no new customer or invoice. A repeat with a valid key was not run: UNVERIFIED in Stripe test mode.
 - PASS (local, by review), 8.13 No Stripe secret or customer identifier in responses: every body on the changed path is `{"ok": false}`.
 
 ## Merge and deployment (added after the merge)
@@ -121,7 +121,7 @@ On 2026-11-22 the owner payment route was run against Stripe's test mode. The bu
 | 1. Made-up test-mode key, which Stripe refuses | 409 | 502, body `{"ok": false}`, header `cache-control: private, no-store` | No customer or invoice. The booking stayed not created, and the creation reservation stayed set. |
 | 2. Retry of the same action after case 1 | 409 | 409, body `{"ok": false}` | Nothing. The reservation blocks it. |
 | 3. Valid test-mode key, create the booking invoice | 200 | 200 | Invoice recorded as open, with an https hosted link. Stripe held exactly one invoice for that customer. |
-| 4. Reused idempotency key with different parameters (see the note below the table) | 409 | 502, body `{"ok": false}`, header `cache-control: private, no-store` | Nothing recorded locally. Stripe created no customer for the new email and still held one invoice for the original customer. |
+| 4. Reused idempotency key with different parameters (see the note below the table) | 409 | 502, body `{"ok": false}`, header `cache-control: private, no-store` | Nothing recorded locally. Stripe created no new customer or invoice. |
 
 Case 1: the route does not log Stripe's answer. The local trace shows that the Worker's one outbound call returned a response (the trace shows no host, path or status for it) before the 502, and the same kind of key sent straight to Stripe got 401. So the 401 is inferred, not read from the Worker.
 
