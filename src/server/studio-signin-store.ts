@@ -11,19 +11,21 @@
 // the hashes), and decides nothing. Its only SQL that can refuse is the guards C1 to C9 of the design, which re-check
 // at write time what the rule read.
 //
-// Every statement's SQL text and every batch's statements and order are, byte for byte and with the same values bound,
-// the ones the golden corpora (tests/golden/studio-*.test.ts) recorded from the routes' code in
+// Every route statement's SQL text and every route batch's statements and order are, byte for byte and with the same
+// values bound, the ones the golden corpora (tests/golden/studio-*.test.ts) recorded from the routes' code in
 // src/lib/audio-client-access.ts, and tests/api/studio-signin-noninterference.test.ts schedules a request's batches by
-// their leading SQL and their length. tests/server/studio-signin-store.test.ts holds every text and batch to the
-// corpora. The issue's and the entry's write batches run for every request, bound to do nothing when the rule or the
-// machine refused, so every request makes the same round trips with the same statements whatever the address.
+// their leading SQL and their length. tests/server/studio-signin-store.test.ts holds every route text and batch to the
+// corpora; the access closure's statements are held by tests/golden/owner-project-access.test.ts. The issue's and the
+// entry's write batches run for every request, bound to do nothing when the rule or the machine refused, so every
+// request makes the same round trips with the same statements whatever the address.
 //
-// Failures. One failure for the area: a rejected read or statement is a StudioSigninStoreFailed carrying what the
-// database raised in `failure`, which the route logs once (logUnexpected) before its fixed answer. A batch whose guard
-// raised (the issue's C1 and C2, the discard's C8; `raisedByJsonGuard`) is GuardRefused: the facts changed since the
-// read. It is never retried: the code flow answers it as a refusal, and the discard swallows it. No statement here has
-// a unique constraint that a rule's facts depend on (the browser's row is deleted before its new row is inserted), so
-// nothing is ChangedSinceRead.
+// Failures. One failure for the area: a rejected route read or statement is a StudioSigninStoreFailed carrying what the
+// database raised in `failure`, which the route logs once (logUnexpected) before its fixed answer. AR2 and AR3 run in
+// the audio project store's revocation batch, so their failure is that store's; AR5's failure is logged by its caller
+// (src/server/flows/audio-project-access.ts), which goes on. A batch whose guard raised (the issue's C1 and C2, the
+// discard's C8; `raisedByJsonGuard`) is GuardRefused: the facts changed since the read. It is never retried: the code
+// flow answers it as a refusal, and the discard swallows it. No statement here has a unique constraint that a rule's
+// facts depend on (the browser's row is deleted before its new row is inserted), so nothing is ChangedSinceRead.
 //
 // The access closure's statements (AR2, AR3 and AR5 of docs/plans/2026-11-audio-projects-conversion.md, section 4) are
 // at the end. They write `audio_client_sessions`, `audio_client_signin_codes` and the retired sign-in codes table. The
