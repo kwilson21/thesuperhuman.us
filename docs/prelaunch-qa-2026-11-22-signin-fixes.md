@@ -50,8 +50,9 @@ Rollback revision: `84d20dda`, the revision of `main` before the merge; or `git 
   `tests/api/studio-access.test.ts` cover each fix; five of them fail against the old routes, and the short-key cases
   pass on both, since they pin behaviour that does not change.
 - Reviews: Codex's code and security reviews of `8d47e542` found nothing. An independent review found two stale
-  documents (the README's migration note and `docs/verification.md`, which still said a database fault answers 503) and
-  a count, fixed in `9ed3c1f5`.
+  documents (the README's migration note and `docs/verification.md`, which still said a database fault answers 503),
+  fixed in `9ed3c1f5`, and a count in the PR description (11 changed cases, which counted the renamed case twice; it
+  is 10), corrected in the description.
 - CI on `9ed3c1f5` before merge: all 20 check runs succeeded, the `neutrality` check and the Workers preview build
   (20:39:02 UTC) among them.
 - After merge, on `f9480f78`: the Workers build succeeded (20:40:43 UTC) and `validate` succeeded (20:42:26 UTC).
