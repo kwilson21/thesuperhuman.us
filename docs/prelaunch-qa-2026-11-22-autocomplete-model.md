@@ -4,10 +4,12 @@ Date: November 22, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/eager-brown-sadmx4`
 Pull request: [#358](https://github.com/kwilson21/thesuperhuman.us/pull/358)
+Revision: the pull request's head when it is merged, which the merge commit names. The code and the golden fixture are final
+as of `7c61a71f`; later commits change only this record, code comments and a test file's header.
 Target: production `https://thesuperhuman.us`, the project brief's suggestions (`POST /api/software/brief/suggest`).
-Decisions and merge authorization: Kazon Wilson, in conversation, asked Claude Code on November 16, 2026 to decide and merge
-the open website work, and on November 22, 2026 gave the Cloudflare token Workers AI permission so the models could be
-measured. Built and measured by Claude Code; reviewed by independent Claude subagents and Codex.
+Authorization: Kazon Wilson authorized this change and its merge in conversation (November 16 and 22, 2026), and on November
+22 gave the Cloudflare token Workers AI permission so the models could be measured. The implementation, the measurements
+and independent review passes were done with Claude Code; Codex also reviewed the pull request.
 Rollback revision: `2f93a646` (`origin/main` when this record was written; re-check at merge time). Rolling back restores
 a model Cloudflare no longer serves, so a rollback leaves suggestions off as they are now.
 

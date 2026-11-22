@@ -37,11 +37,12 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //                        writes throw, the rate-limit binding throws
 //     model              answers with a newline, a quote, a control character, over 100 characters, nothing, only
 //                        whitespace, no response string, null, a bare string (500, a fixed line that does not quote the reply); throws (503, the error is not logged, a fixed line is);
-//                        the chat-completion form (choices[0].message.content) with text, empty content, no choices or
+//                        the chat-completion form (choices[0].message.content) with empty content, no choices or
 //                        content that is not text
 //   500 { suggestion: "" }  the store, the limiter or any other unexpected failure (logged through logUnexpected)
 //   200 { suggestion: " words" }  the model's reply trimmed, cut to six words, a leading space only when the text does not
-//                        end in whitespace; every question; every earlier path; straight apostrophes
+//                        end in whitespace; every question; every earlier path; straight apostrophes; the reply's text
+//                        in the chat-completion form (choices[0].message.content), the form the current model answers in
 //   200 { suggestion: "", passRequired: true }   no cookie, malformed, expired, too far in the future, another address,
 //                        another secret, a forged signature, the right cookie among others, a cookie whose name only
 //                        starts with the pass name
