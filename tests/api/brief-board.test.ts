@@ -659,6 +659,23 @@ describe("the model", () => {
 		},
 	);
 
+	it("answers 503 busy when the model has not answered after thirty seconds, with the reservation kept", async () => {
+		vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+		vi.setSystemTime(NOW);
+		run.mockReturnValueOnce(new Promise(() => {}));
+
+		const pending = POST(context());
+
+		// The pass and the reservation are checked first; the thirty seconds start when the model is asked.
+		await vi.waitFor(() => expect(run).toHaveBeenCalled());
+		await vi.advanceTimersByTimeAsync(30_001);
+		const response = await pending;
+
+		expect(await readJson(response)).toEqual({ ok: false, reason: "busy" });
+		expect(response.status).toBe(503);
+		expect(counts()[`${DAY} board:site`]).toBe(1);
+	});
+
 	it("waits thirty seconds for the model, then gives up", async () => {
 		vi.useRealTimers();
 		vi.useFakeTimers();
