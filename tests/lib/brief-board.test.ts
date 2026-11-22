@@ -512,6 +512,16 @@ describe("the outline sent with the brief", () => {
 			ok: true,
 			value: outline,
 		});
+		// A character outside the basic plane is a pair of surrogates, not a lone one.
+		expect(
+			readBriefOutline(
+				[{ lane: "parts", text: "Gigs 🎸", origin: "wrote" }],
+				ANSWERS,
+			),
+		).toEqual({
+			ok: true,
+			value: [{ lane: "parts", text: "Gigs 🎸", origin: "wrote" }],
+		});
 		expect(readBriefOutline(undefined, ANSWERS)).toEqual({
 			ok: true,
 			value: undefined,
@@ -544,6 +554,10 @@ describe("the outline sent with the brief", () => {
 			],
 			[{ lane: "parts", text: "Costs $500", origin: "kept" }],
 			[{ lane: "parts", text: "Two\nlines", origin: "wrote" }],
+			// A lone surrogate is refused like a control character, in the text, the passage and the answer.
+			[{ lane: "parts", text: "Shows\ud800", origin: "wrote" }],
+			[{ ...outline[0], quote: "upcoming shows near them\udc00" }],
+			[{ ...outline[1], answer: "Me\ud800" }],
 			[{ lane: "parts", text: "", origin: "wrote" }],
 			[{ lane: "nowhere", text: "X", origin: "wrote" }],
 			Array.from({ length: 3 }, (_, i) => ({

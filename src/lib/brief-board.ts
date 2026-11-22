@@ -185,12 +185,13 @@ export const laneCount = (board: Board, lane: Lane) =>
 
 // ---- Text ---------------------------------------------------------------------------------------------------------
 
+/** Control characters, line and paragraph separators, and lone surrogates (which the brief's own fields refuse too). */
 const CONTROLS = new RegExp(
-	"[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]",
-	"g",
+	"[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029\\p{Cs}]",
+	"gu",
 );
 
-/** One line of plain text: control characters removed, spaces collapsed, trimmed. */
+/** One line of plain text: control characters and lone surrogates removed, spaces collapsed, trimmed. */
 export const oneLine = (text: string) =>
 	text.replace(CONTROLS, " ").replace(/\s+/g, " ").trim();
 
