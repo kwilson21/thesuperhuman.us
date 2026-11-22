@@ -25,12 +25,12 @@ No copy, markup, style, route, binding, secret, migration or workflow change. Th
 
 Local runs: macOS arm64, Node 26.13.1, on commit `336f4fae`, in the pull request worktree.
 
-- New tests failed before the fix, as they should: the label test with `expected '' to be '0:00 / 2:05'`, and the failed-audio test with `expected false to be true`. The third new test (metadata not yet loaded, then a `loadedmetadata` event) passed before and after; it guards the existing behaviour. A fourth test, added after review, pins the order of the two checks (an audio with both an error and loaded metadata shows the failed state); it failed when the two checks were swapped locally (`expected false to be true`), and the swap was then undone. The failed-audio test also asserts that the message is shown and reads "could not load".
+- New tests failed before the fix, as they should: the label test with `expected '' to be '0:00 / 2:05'`, and the failed-audio test with `expected false to be true`. The third new test (metadata not yet loaded, then a `loadedmetadata` event) passed before and after; it guards the existing behaviour. A fourth test, added after review, pins the order of the two checks (an audio with both an error and loaded metadata shows the failed state); it failed when the two checks were swapped locally (`expected false to be true`), and the swap was then undone. The failed-audio test also asserts that the message is shown and contains "could not load".
 - `pnpm run format`: no fixes applied.
 - `pnpm run lint`: no findings, exit 0.
 - `pnpm run check`: 0 errors, 0 warnings, 16 hints.
 - `pnpm test`: 387 test files passed; 15,016 tests passed, 3 skipped.
-- `pnpm run build`: complete, exit 0, and the client bundle and client graph tests passed with `REQUIRE_CLIENT_BUNDLE=1` (112 tests). Both were run on `91c85bdd`; the only commit since changes two test files.
+- `pnpm run build`: complete, exit 0, and the client bundle and client graph tests passed with `REQUIRE_CLIENT_BUNDLE=1` (112 tests). Both were run on `91c85bdd`; the commits since change only this record and two test files.
 
 Limits:
 
@@ -40,6 +40,7 @@ Limits:
 ### Reviews
 
 - An independent review of head `1d0ebebf` found nothing that had to change. It confirmed that the page's script runs once per load, that showing the failed state at setup matches what the existing error listener does, and that the new tests run the real setup code. It asked for three test improvements (the order test, the visible-message assertions and the removal of unused test scaffolding), which are in `336f4fae`, and for the header wording of this record.
+- A second independent review, of head `03ddfad6`, found the added tests and the code sound: the scaffolding removal is complete, no assertion was weakened, the order test would catch a swap of the two checks, and nothing under `src/` or `scripts/` changed after the first review. It found one wrong sentence in this record (which commits followed `91c85bdd`), corrected in the commit after it.
 - The Greptile and Codex reviews on the pull request had not reported when this record was written: UNVERIFIED.
 
 ## Checklist
@@ -75,7 +76,7 @@ Limits:
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits.
-- PASS, 7.2 Exact diff review: 5 files changed besides this record, all named under Scope. Independent review of `1d0ebebf` (see Reviews). The Greptile and Codex reviews had not reported when written: UNVERIFIED.
+- PASS, 7.2 Exact diff review: 5 files changed besides this record, all named under Scope. Independent reviews of `1d0ebebf` and `03ddfad6` (see Reviews). The Greptile and Codex reviews had not reported when written: UNVERIFIED.
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: none changed.
 - PASS, 7.4 Rollback version preserved: see Rollback revision above.
 - UNVERIFIED, 7.5 After authorized deployment: not merged when this record was written.
