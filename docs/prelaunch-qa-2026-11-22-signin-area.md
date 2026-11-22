@@ -139,7 +139,9 @@ decide that a guard raised with `raisedByJsonGuard` (`src/server/guarded-save.ts
 anywhere down the error's cause chain, where the old `guardRaised` read only the top-level message. D1 puts the text in
 both, so every guard the corpora raise is matched the same way; only an error carrying the text in a cause and not in
 its own message would be read differently (a guard refusal now, a store failure before), and no database call here
-makes one.
+makes one. And the background discard reuses the nonce's and the code's hashes the issue made, where the old
+`discardUndeliveredCode` hashed them again; a hash failing there, which printed the fixed line before, can no longer
+happen, and no input is known to have reached it.
 
 ## Golden neutrality
 
