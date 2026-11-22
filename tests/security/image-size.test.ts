@@ -507,7 +507,7 @@ describe("exif is read only inside its own block", () => {
 			imageSize(
 				riff([
 					extended(1920, 1080, 0x08),
-					lossy(10, 10),
+					lossy(1920, 1080),
 					chunkOf("EXIF", tiffRaw([], { ifd: 16 }).slice(0, 8)),
 					chunkOf("JUNK", fakeIfd(1)),
 				]),
@@ -564,7 +564,7 @@ describe("webp", () => {
 	it("reads the largest extended canvas", () => {
 		expect(
 			imageSize(
-				riff([extended(16777216, 16777216), lossy(10, 10)]),
+				riff([extended(16777216, 16777216, 0x02), lossy(10, 10)]),
 				"image/webp",
 			),
 		).toEqual({ width: 16777216, height: 16777216 });
@@ -594,7 +594,7 @@ describe("webp", () => {
 
 	it("reads the canvas of an extended image", () => {
 		expect(
-			imageSize(riff([extended(1920, 1080), lossy(10, 10)]), "image/webp"),
+			imageSize(riff([extended(1920, 1080), lossy(1920, 1080)]), "image/webp"),
 		).toEqual({ width: 1920, height: 1080 });
 		expect(imageSize(real("webpExtended"), "image/webp")).toEqual({
 			width: 4,
@@ -607,7 +607,7 @@ describe("webp", () => {
 			imageSize(
 				riff([
 					extended(1920, 1080, 0x08),
-					lossy(10, 10),
+					lossy(1920, 1080),
 					chunkOf("EXIF", tiff(6, "II")),
 				]),
 				"image/webp",
@@ -617,7 +617,7 @@ describe("webp", () => {
 			imageSize(
 				riff([
 					extended(1920, 1080, 0x08),
-					lossy(10, 10),
+					lossy(1920, 1080),
 					chunkOf("EXIF", [...text("Exif"), 0, 0, ...tiff(8, "MM")]),
 				]),
 				"image/webp",
@@ -630,7 +630,7 @@ describe("webp", () => {
 			imageSize(
 				riff([
 					extended(1920, 1080, 0x08),
-					lossy(10, 10),
+					lossy(1920, 1080),
 					chunkOf("EXIF", tiff(1, "II")),
 				]),
 				"image/webp",
@@ -659,5 +659,185 @@ describe("anything unreadable", () => {
 		expect(imageSize(real("png"), "image/gif")).toBeNull();
 		expect(imageSize(real("png"), "image/jpeg")).toBeNull();
 		expect(imageSize(new Uint8Array(), "image/png")).toBeNull();
+	});
+});
+
+/** A PNG chunk (the checksum is not read by the size reader). */
+const pngChunk = (type: string, body: number[]) => [
+	...u32be(body.length),
+	...text(type),
+	...body,
+	0,
+	0,
+	0,
+	0,
+];
+
+const pngBytes = (width: number, height: number, middle: number[][]) =>
+	Uint8Array.from([
+		137,
+		80,
+		78,
+		71,
+		13,
+		10,
+		26,
+		10,
+		...pngChunk("IHDR", [...u32be(width), ...u32be(height), 8, 6, 0, 0, 0]),
+		...middle.flat(),
+		...pngChunk("IDAT", [1, 2, 3]),
+		...pngChunk("IEND", []),
+	]);
+
+/** The Exif block a macOS screenshot carries: IFD0 holds only the ExifIFD pointer, the Exif directory holds sizes and a comment. */
+function screenshotExif(width: number, height: number) {
+	const comment = [...text("ASCII"), 0, 0, 0, ...text("Screenshot")],
+		subIfd = 26,
+		commentAt = subIfd + 2 + 3 * 12 + 4;
+
+	return [
+		...text("MM"),
+		...u16be(42),
+		...u32be(8),
+		...u16be(1),
+		...u16be(0x8769),
+		...u16be(4),
+		...u32be(1),
+		...u32be(subIfd),
+		...u32be(0),
+		...u16be(3),
+		...u16be(0x9286),
+		...u16be(7),
+		...u32be(comment.length),
+		...u32be(commentAt),
+		...u16be(0xa002),
+		...u16be(4),
+		...u32be(1),
+		...u32be(width),
+		...u16be(0xa003),
+		...u16be(4),
+		...u32be(1),
+		...u32be(height),
+		...u32be(0),
+		...comment,
+	];
+}
+
+const screenshotXmp = (width: number, height: number) =>
+	pngChunk("iTXt", [
+		...text("XML:com.adobe.xmp"),
+		0,
+		0,
+		0,
+		0,
+		0,
+		...text(
+			`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/" exif:PixelXDimension="${width}" exif:PixelYDimension="${height}"/></rdf:RDF></x:xmpmeta>`,
+		),
+	]);
+
+describe("files that ordinary tools write", () => {
+	it("reads a macOS screenshot PNG with pHYs, eXIf and XMP", () => {
+		const bytes = pngBytes(2880, 1800, [
+			pngChunk("pHYs", [...u32be(5669), ...u32be(5669), 1]),
+			pngChunk("eXIf", screenshotExif(2880, 1800)),
+			screenshotXmp(2880, 1800),
+		]);
+
+		expect(imageSize(bytes, "image/png")).toEqual({
+			width: 2880,
+			height: 1800,
+		});
+	});
+
+	it("reads a plain export PNG, with and without sRGB and pHYs", () => {
+		expect(imageSize(pngBytes(640, 480, []), "image/png")).toEqual({
+			width: 640,
+			height: 480,
+		});
+		expect(
+			imageSize(
+				pngBytes(640, 480, [
+					pngChunk("sRGB", [0]),
+					pngChunk("pHYs", [...u32be(2835), ...u32be(2835), 1]),
+				]),
+				"image/png",
+			),
+		).toEqual({ width: 640, height: 480 });
+	});
+
+	it("reads a plain lossless WebP and a baseline JPEG with only JFIF", () => {
+		expect(imageSize(riff([lossless(800, 600)]), "image/webp")).toEqual({
+			width: 800,
+			height: 600,
+		});
+		expect(
+			imageSize(
+				jpegRaw(
+					jpegSegment(0xe0, [...text("JFIF"), 0, 1, 1, 0, 0, 1, 0, 1, 0, 0]),
+				),
+				"image/jpeg",
+			),
+		).toEqual({ width: 800, height: 600 });
+	});
+});
+
+describe("webp canvas and frame", () => {
+	it("gives null for a still extended image whose canvas differs from its frame", () => {
+		expect(
+			imageSize(riff([extended(80, 40), lossy(40, 20)]), "image/webp"),
+		).toBeNull();
+		expect(
+			imageSize(riff([extended(80, 40), lossless(40, 20)]), "image/webp"),
+		).toBeNull();
+	});
+
+	it("keeps the canvas when it equals the frame", () => {
+		expect(
+			imageSize(riff([extended(40, 20), lossy(40, 20)]), "image/webp"),
+		).toEqual({ width: 40, height: 20 });
+		expect(
+			imageSize(riff([extended(40, 20), lossless(40, 20)]), "image/webp"),
+		).toEqual({ width: 40, height: 20 });
+	});
+
+	it("keeps the canvas of an animated file whose frames are smaller", () => {
+		const frame = chunkOf("ANMF", [
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			39,
+			0,
+			0,
+			19,
+			0,
+			0,
+			10,
+			0,
+			0,
+			0,
+			...lossy(40, 20),
+		]);
+
+		expect(
+			imageSize(
+				riff([
+					extended(80, 40, 0x02),
+					chunkOf("ANIM", [0, 0, 0, 0, 0, 0]),
+					frame,
+				]),
+				"image/webp",
+			),
+		).toEqual({ width: 80, height: 40 });
+		// An ANIM chunk alone marks it animated, whatever the flag says.
+		expect(
+			imageSize(
+				riff([extended(80, 40), chunkOf("ANIM", [0, 0, 0, 0, 0, 0]), frame]),
+				"image/webp",
+			),
+		).toEqual({ width: 80, height: 40 });
 	});
 });
