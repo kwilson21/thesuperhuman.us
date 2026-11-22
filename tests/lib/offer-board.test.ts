@@ -788,3 +788,39 @@ describe("found in the offer board's twenty-ninth review", () => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
+
+describe("found in the offer board's thirtieth review", () => {
+	it.each([
+		"A 2,000 non-refundable deposit",
+		"A 4,500 one-time fee",
+		"Take a 1,500 one-off fee for setup",
+		"A 500 set-up fee",
+		"A 1,500 up-front deposit",
+		"A 4,500 fixed-price fee",
+	])(
+		"drops %s: a hyphenated word between the amount and its money word",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Migrate the 2,000 fee records",
+		"Import the 2026 budget from the spreadsheet",
+		"Match 1,200 deposit transactions",
+	])("keeps %s", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+
+	// The reader tests the AI's reasons only at a bounded length (both tests were quadratic on long runs).
+	it.each([
+		["sizeReason", "-.".repeat(40000)],
+		["figureReason", "-.".repeat(40000)],
+		["sizeReason", `1${" 000".repeat(20000)}`],
+	])("reads a long %s quickly", (key, text) => {
+		const start = performance.now();
+
+		readOfferReply({ cards: [], [key]: text });
+		expect(performance.now() - start).toBeLessThan(1000);
+	});
+});

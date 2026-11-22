@@ -351,9 +351,11 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			figure <= MARKET_USD_MAX
 				? figure
 				: null,
-		// The reason may name the figure, but never a link (a bare domain included, as in every other text).
+		// The reason may name the figure, but never a link (a bare domain included, as in every other text). Read at a
+		// bounded length too: the link test is not linear in every text a model could write.
 		figureReason:
-			Predicate.isString(figureReason) && !hasLink(figureReason)
+			Predicate.isString(figureReason) &&
+			!hasLink(oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2 + 40))
 				? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
 				: "",
 	};

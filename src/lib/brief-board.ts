@@ -525,11 +525,12 @@ const MONEY = new RegExp(
 // Kosten betragen 5.000"), except after "invoices", "payments", "deposits" and "charges", which also name things an
 // offer counts ("Invoices are about 40 a month"). In English a large amount may come first, after "a", "the" or the
 // like, before "budget", "fee", "deposit" or "retainer", perhaps with one word between ("A 4,500 fee", "the 2,500
-// launch fee"), but not a year ("the 2026 budget") nor before a counted noun ("the 2,000 fee records"). "Total" and
-// "rate" also count things ("Milestones total 3", "a rate of 1 per week"), so after them a large amount is money, and a
-// small one only with cents, a currency, a period after a slash, "flat" or "upfront", or with two digits and "per", "a"
-// or "each" after it ("a rate of 25 per page"); after "rate", two digits that end a sentence are money too ("billed at
-// a rate of 95."). A rate named by its period ("day rate", "monthly rate") is a money word of its own.
+// launch fee", "a 4,500 one-time fee"), but not a year ("the 2026 budget") nor before a counted noun ("the 2,000 fee
+// records"). "Total" and "rate" also count things ("Milestones total 3", "a rate of 1 per week"), so after them a large
+// amount is money, and a small one only with cents, a currency, a period after a slash, "flat" or "upfront", or with
+// two digits and "per", "a" or "each" after it ("a rate of 25 per page"); after "rate", two digits that end a sentence
+// are money too ("billed at a rate of 95."). A rate named by its period ("day rate", "monthly rate") is a money word of
+// its own.
 // Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"), and so do a
 // one-digit amount after "total" or "rate" ("a rate of 5 per hour"), two digits that end a sentence after "total" ("in
 // total: 12."), and an amount after a verb that follows a plural money word ("Payments are 2,500 a month"); a large number
@@ -624,7 +625,7 @@ const COUNTED_NOUN =
  * A large amount before a money word, after "a", "the" or the like ("A 4,500 fee", "the 2,500 launch fee"), but not a
  * year ("the 2026 budget") nor before a counted noun ("the 2,000 fee records").
  */
-const AMOUNT_THEN_MONEY_WORD = `(?<![\\p{L}\\p{N}])(?:a|an|the|this|that|our|your|their|its|one)\\s+(?!(?:19|20)\\d{2}(?![\\d,.]))${LARGE_AMOUNT}(?:[\\s-]+\\p{L}+)?[\\s-]+(?:budget|fee|deposit|retainer)(?!\\p{L})(?!\\s+${COUNTED_NOUN}(?!\\p{L}))`;
+const AMOUNT_THEN_MONEY_WORD = `(?<![\\p{L}\\p{N}])(?:a|an|the|this|that|our|your|their|its|one)\\s+(?!(?:19|20)\\d{2}(?![\\d,.]))${LARGE_AMOUNT}(?:[\\s-]+\\p{L}+(?:-\\p{L}+)*)?[\\s-]+(?:budget|fee|deposit|retainer)(?!\\p{L})(?!\\s+${COUNTED_NOUN}(?!\\p{L}))`;
 
 /** Currency symbols the living brief does not list, before the amount ("₽5 000", "₺50.000", "₪20,000"). */
 const OTHER_SYMBOL_BEFORE = "[₽₺₪₱₫]\\s?\\d";

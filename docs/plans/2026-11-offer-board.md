@@ -36,8 +36,10 @@ that: a waiting reply lands before it, so the press's own message is said last. 
 it moves nothing either, focusing it does not apply the reply, and its arrival is announced once. The board is not
 saved across a reload: the offer editor's own draft is, and Suggest asks again. A reply that lands while the owner types
 in a field below the board keeps that field where it was on screen, though the price rows above it may change height;
-a field scrolled out of view is left alone, so the page never moves under someone reading the board. With the board
-wholly above the screen, nothing below it moves. The day-value row counts a used milestone while its row is in the
+so does a focused field beside the board, and one that can be seen only in part. A field scrolled out of view is left
+alone, so the page never moves under someone reading the board; with no field to keep and the board wholly above the
+screen, nothing below it moves. Messages shown on the status line, and the redraws while the owner edits a milestone
+row, keep the same rule. The day-value row counts a used milestone while its row is in the
 offer editor and holds something, renamed or not (a row another milestone fills again counts once), and is redrawn when
 a row is added, removed or edited there.
 

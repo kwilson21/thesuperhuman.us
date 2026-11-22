@@ -258,19 +258,13 @@ export function setupOfferBoard() {
 	let pendingFull: string | null = null;
 
 	/**
-	 * Measures what the owner is looking at below the board and returns a step that puts it back where it was on screen
-	 * once the board has changed height (Chrome's scroll anchoring does not always, and Safari has none). With the board
-	 * wholly above the screen, everything below it stays put. Otherwise a field outside the board that has focus and can
-	 * be seen, even in part, stays put; one scrolled out of view is left alone, so the page never moves under someone
-	 * reading the board.
+	 * Measures what the owner is looking at outside the board and returns a step that puts it back where it was on screen
+	 * once the board has changed height (Chrome's scroll anchoring does not always, and Safari has none). A field outside
+	 * the board that has focus and can be seen, even in part, stays put, below the board or beside it. Without one, with
+	 * the board wholly above the screen, everything below it stays put. Otherwise nothing moves: a field scrolled out of
+	 * view is left alone, so the page never moves under someone reading the board.
 	 */
 	const keepPlace = () => {
-		const boardBottom = root.getBoundingClientRect().bottom;
-
-		if (boardBottom <= 0)
-			return () =>
-				window.scrollBy(0, root.getBoundingClientRect().bottom - boardBottom);
-
 		const focused = document.activeElement;
 
 		const box =
@@ -280,12 +274,17 @@ export function setupOfferBoard() {
 				? focused.getBoundingClientRect()
 				: null;
 
-		const kept =
-			box && box.bottom > 0 && box.top < window.innerHeight ? focused : null;
+		if (focused && box && box.bottom > 0 && box.top < window.innerHeight)
+			return () => {
+				if (focused.isConnected)
+					window.scrollBy(0, focused.getBoundingClientRect().top - box.top);
+			};
+
+		const boardBottom = root.getBoundingClientRect().bottom;
 
 		return () => {
-			if (kept?.isConnected && box)
-				window.scrollBy(0, kept.getBoundingClientRect().top - box.top);
+			if (boardBottom <= 0)
+				window.scrollBy(0, root.getBoundingClientRect().bottom - boardBottom);
 		};
 	};
 
@@ -554,7 +553,6 @@ export function setupOfferBoard() {
 		say(`Set the fee to ${dollars(fee)}. Change it in the offer if you like.`);
 	}
 
-	/** The row a used milestone went to, while it still holds that milestone's name (mutant fee-any-row). */
 	/** Whether a row Use filled is still in the editor and holds anything Use fills (the owner may have emptied it). */
 	function holdsMilestone(fieldset: HTMLElement | undefined) {
 		return (
@@ -567,6 +565,7 @@ export function setupOfferBoard() {
 		);
 	}
 
+	/** The row a used milestone went to, while it still holds that milestone's name (mutant fee-any-row). */
 	function rowOf(card: OfferCard) {
 		const fieldset = usedIn.get(card.id);
 
@@ -2080,8 +2079,12 @@ export function setupOfferBoard() {
 
 			// Already announced when it came; shown now, not announced twice.
 			pendingFull = null;
+
+			const keep = keepPlace();
+
 			status.style.minHeight = "";
 			status.textContent = text;
+			keep();
 		}
 	};
 
@@ -2149,8 +2152,12 @@ export function setupOfferBoard() {
 			(field instanceof HTMLInputElement ||
 				field instanceof HTMLTextAreaElement) &&
 			MILESTONE_FIELDS.some((name) => name === field.name)
-		)
+		) {
+			const keep = keepPlace();
+
 			render();
+			keep();
+		}
 
 		schedule();
 	});
@@ -2161,7 +2168,12 @@ export function setupOfferBoard() {
 	const milestoneList = form.querySelector("[data-milestones]");
 
 	if (milestoneList)
-		new MutationObserver(() => render()).observe(milestoneList, {
+		new MutationObserver(() => {
+			const keep = keepPlace();
+
+			render();
+			keep();
+		}).observe(milestoneList, {
 			childList: true,
 		});
 

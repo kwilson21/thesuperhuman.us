@@ -2049,6 +2049,87 @@ function check(name, ok, detail = "") {
 			`${summaryHidden} ${readingTop} -> ${await headingAt()}`,
 		);
 
+		// A focused field beside the board (the right-hand column) keeps its place when the board, scrolled above the
+		// screen, grows (the thirtieth review: the decline message moved 43 px).
+		await page.setViewportSize({ width: 1280, height: 600 });
+		await fresh();
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+		await page.locator("#software-decline").click();
+		await page.keyboard.type("Thank you for");
+		await page.mouse.move(2, 2);
+		await page.evaluate(() =>
+			window.scrollBy(
+				0,
+				document.querySelector("[data-offer-board]").getBoundingClientRect()
+					.bottom + 5,
+			),
+		);
+
+		const besideTop = () =>
+			page
+				.locator("#software-decline")
+				.evaluate((element) => element.getBoundingClientRect().top);
+
+		const besideSeen = await page.evaluate(() => {
+			const box = document
+				.querySelector("#software-decline")
+				.getBoundingClientRect();
+
+			return box.bottom > 0 && box.top < window.innerHeight;
+		});
+
+		const besideReply = await next(20000);
+		const besideAt = await besideTop();
+		const taller = scriptedOfferReply(besideReply.request().postData());
+
+		taller.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		taller.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(besideReply, taller);
+		await page.waitForTimeout(600);
+		check(
+			"a focused field beside the board keeps its place when the board above the screen grows",
+			besideSeen && Math.abs((await besideTop()) - besideAt) < 1,
+			`${besideSeen} ${besideAt} -> ${await besideTop()}`,
+		);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		// At 200% text the owner header never scrolls sideways (the thirtieth review: Pricing widened the widths at which it
+		// did, pushing the link or the owner's address off screen).
+		await page.goto(new URL("/owner/pricing", targetUrl).href);
+		await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+
+		const sideways = [];
+
+		for (const width of [720, 870, 1000, 1100, 1160]) {
+			await page.setViewportSize({ width, height: 800 });
+
+			if (
+				await page.evaluate(() =>
+					[...document.querySelectorAll(".owner-header *")].some(
+						(element) =>
+							element.getBoundingClientRect().right >
+							document.documentElement.clientWidth + 1,
+					),
+				)
+			)
+				sideways.push(width);
+		}
+
+		check(
+			"at 200% text the owner header never scrolls sideways",
+			sideways.length === 0,
+			sideways.join(", "),
+		);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page
