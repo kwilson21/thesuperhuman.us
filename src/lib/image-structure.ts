@@ -245,31 +245,58 @@ export function isCompleteImage(bytes: Uint8Array, type: string) {
 	}
 }
 
-/** The Orientation tag of the TIFF block at `start` (the start of an EXIF block, with or without its "Exif" prefix), or undefined when there is none. A block that runs past the data throws a RangeError. */
-function exifOrientation(b: Uint8Array, start: number) {
+/**
+ * The Orientation of the EXIF block held in `b` from `start` to `end` (the block's own bytes, with or without its
+ * "Exif\0\0" prefix): the value 1 to 8, undefined when the block is readable and has no Orientation tag, and null when
+ * the block cannot be read with certainty. Nothing outside `start` to `end` is read: an IFD offset or entry that falls
+ * outside it makes the block unreadable. The Orientation entry must be one SHORT with a value from 1 to 8.
+ */
+function exifOrientation(b: Uint8Array, start: number, end: number) {
+	if (start < 0 || start > end || end > b.length) return null;
 	const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
 
-	if (ascii(b, start, 4) === "Exif" && b[start + 4] === 0) start += 6;
+	if (
+		end - start >= 6 &&
+		ascii(b, start, 4) === "Exif" &&
+		b[start + 4] === 0 &&
+		b[start + 5] === 0
+	)
+		start += 6;
+
+	if (end - start < 8) return null;
 	const order = ascii(b, start, 2);
 
-	if (order !== "II" && order !== "MM") return undefined;
+	if (order !== "II" && order !== "MM") return null;
 	const little = order === "II";
 
-	if (view.getUint16(start + 2, little) !== 42) return undefined;
+	if (view.getUint16(start + 2, little) !== 42) return null;
+	const offset = view.getUint32(start + 4, little);
 
-	const ifd = start + view.getUint32(start + 4, little),
+	if (offset < 8 || offset > end - start - 2) return null;
+	const ifd = start + offset,
 		count = view.getUint16(ifd, little);
+
+	if (ifd + 2 + count * 12 > end) return null;
+	let found: number | undefined;
 
 	for (let i = 0; i < count; i++) {
 		const entry = ifd + 2 + i * 12;
 
-		if (view.getUint16(entry, little) === 0x0112)
-			return view.getUint16(entry + 2, little) === 3
-				? view.getUint16(entry + 8, little)
-				: undefined;
+		if (view.getUint16(entry, little) !== 0x0112) continue;
+		const value = view.getUint16(entry + 8, little);
+
+		if (
+			found !== undefined ||
+			view.getUint16(entry + 2, little) !== 3 ||
+			view.getUint32(entry + 4, little) !== 1 ||
+			value < 1 ||
+			value > 8
+		)
+			return null;
+		found = value;
 	}
 
-	return undefined;
+	return found;
 }
 
 type ImageSize = { width: number; height: number };
@@ -293,9 +320,17 @@ function pngSize(b: Uint8Array) {
 
 		// The browser turns the image by its Orientation; the size shown is not guessed here.
 		if (type === "eXIf") {
-			const orientation = exifOrientation(b, position + 8);
+			const orientation = exifOrientation(
+				b,
+				position + 8,
+				position + 8 + length,
+			);
 
-			if (orientation !== undefined && orientation !== 1) return null;
+			if (
+				orientation === null ||
+				(orientation !== undefined && orientation !== 1)
+			)
+				return null;
 		}
 
 		if (type === "IEND") break;
@@ -310,7 +345,8 @@ function jpegSize(b: Uint8Array) {
 
 	let position = 2,
 		frame: ImageSize | null = null,
-		orientation: number | undefined;
+		orientation: number | undefined,
+		exifSeen = false;
 
 	while (position < b.length) {
 		if (b[position] !== 0xff) return null;
@@ -339,11 +375,19 @@ function jpegSize(b: Uint8Array) {
 
 		if (
 			marker === 0xe1 &&
-			orientation === undefined &&
+			length >= 8 &&
 			ascii(b, position + 2, 4) === "Exif" &&
-			b[position + 6] === 0
-		)
-			orientation = exifOrientation(b, position + 2);
+			b[position + 6] === 0 &&
+			b[position + 7] === 0
+		) {
+			// Only one Exif block is expected; with a second, which one the browser reads is not certain.
+			if (exifSeen) return null;
+			exifSeen = true;
+			const read = exifOrientation(b, position + 2, position + length);
+
+			if (read === null) return null;
+			orientation = read;
+		}
 
 		position += length;
 	}
@@ -365,9 +409,17 @@ function webpSize(b: Uint8Array) {
 
 	for (const chunk of chunks) {
 		if (chunk.type !== "EXIF") continue;
-		const orientation = exifOrientation(b, chunk.body);
+		const orientation = exifOrientation(
+			b,
+			chunk.body,
+			chunk.body + chunk.length,
+		);
 
-		if (orientation !== undefined && orientation !== 1) return null;
+		if (
+			orientation === null ||
+			(orientation !== undefined && orientation !== 1)
+		)
+			return null;
 	}
 
 	const [first] = chunks,
@@ -412,8 +464,10 @@ function webpSize(b: Uint8Array) {
 
 /**
  * The pixel size a browser shows for `bytes`, a complete image of `type`, or null when it is not certain: an unreadable
- * header, a zero size, or (for PNG and WebP) an Orientation other than 1, which turns the picture by an amount decided
- * in the browser. A JPEG with Orientation 5 to 8 is returned with width and height exchanged. It never throws.
+ * header, a zero size, an EXIF block that cannot be read with certainty (it is read only inside its own segment or
+ * chunk, and a second Exif segment in a JPEG counts as unreadable), or (for PNG and WebP) an Orientation other than 1,
+ * which turns the picture by an amount decided in the browser. A JPEG with Orientation 5 to 8 is returned with width and
+ * height exchanged. A wrong size is a defect, null is not. It never throws.
  */
 export function imageSize(bytes: Uint8Array, type: string): ImageSize | null {
 	try {

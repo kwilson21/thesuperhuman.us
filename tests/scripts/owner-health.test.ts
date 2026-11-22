@@ -365,7 +365,7 @@ it("detects incomplete schemas and passes only after 0028", async () => {
 			"utf8",
 		),
 	);
-	// 0028 adds the update image size columns the client project and owner update pages read.
+	// 0028 adds the update image size columns that `sharedSoftwareUpdates` (client project page, owner update page, owner request project panel) and the owner image upload name.
 	expect((await ownerHealth(fixture)).checks).toContainEqual(
 		expect.objectContaining({ id: "schema", status: "attention" }),
 	);
