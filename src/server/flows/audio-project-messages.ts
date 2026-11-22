@@ -42,7 +42,7 @@ import {
 import { openStudioSession } from "../rules/agreement-session";
 import type { StoredProject } from "../rules/audio-project-messages";
 
-/** A write's time, its window and so its session guard, taken from the clock at the write and not at the lookup. */
+/** A write's time, its window and so its session guard, taken from the clock reading made for the action's facts and not at the lookup. */
 const stamped = <Write extends { at: string; windowStart: string }>(
 	write: Write,
 	at: Date,
@@ -162,20 +162,23 @@ export const sendClientMessage = (input: {
 
 		// The stage the rule decides from is read now, with the count, and not taken from the lookup: the owner's actions can move it
 		// in between, and today the write's own guard reads it at write time.
-		const facts = yield* readSendFacts(input.id, windowStart(seen.at)).pipe(
+		// The clock is read once for the facts and the write: the rule's count and the guard's count use one window.
+		const at = input.now();
+
+		const facts = yield* readSendFacts(input.id, windowStart(at)).pipe(
 			Effect.flatMap(withProject),
 		);
 
 		const write = yield* postClientMessage.decide(
-			{ body, at: seen.at },
+			{ body, at },
 			{ project: facts.project, count: facts.count },
 		);
 
-		// The write reads the clock again, as the old write did: its session guard and its window use that reading.
+		// The write uses that reading: its session guard and its window are the rule's.
 		const saved = yield* insertClientMessage(
 			input.id,
 			seen.tokenHash,
-			stamped(write, input.now()),
+			stamped(write, at),
 		);
 
 		return yield* saved === null
@@ -200,7 +203,9 @@ export const answerLatestReview = (input: {
 			null,
 		);
 
-		const facts = yield* readReviewFacts(input.id, windowStart(seen.at)).pipe(
+		const at = input.now();
+
+		const facts = yield* readReviewFacts(input.id, windowStart(at)).pipe(
 			Effect.flatMap(withProject),
 		);
 
@@ -209,13 +214,13 @@ export const answerLatestReview = (input: {
 				decision: input.decision,
 				reviewId: input.reviewId,
 				text,
-				at: seen.at,
+				at,
 			},
 			facts,
 		);
 
 		// Stopping closes this project's access in the same write, so the review stops playing.
-		const written = stamped(write, input.now());
+		const written = stamped(write, at);
 
 		const saved =
 			written.decision === "stopped"
