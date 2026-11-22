@@ -50,7 +50,7 @@ function context(
 	body: JsonObject = input,
 	env: Partial<TestRuntime["env"]> = {},
 ): APIContext {
-	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; Ai["run"] is overloaded and generic, so a Mock cannot be typed as it, and the route calls it with a model name and inputs and reads only its response field.
+	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; Ai["run"] is overloaded and generic, so a Mock cannot be typed as it, and the route calls it with a model name and inputs and reads its response field, or the chat-completion text when there is none.
 	return partial<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",

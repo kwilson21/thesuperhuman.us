@@ -56,7 +56,7 @@ Thinking models spend the 12 tokens thinking and answer with empty text, so `ena
 Gemma's answers with thinking off, for example: "be able to find music.", "the menu and order online.", "one master
 file.".
 
-Cost at the site-wide cap of 10,000 suggestions a day: the measured calls used 58 input tokens and about 8 output tokens
+Cost at the site-wide cap of 10,000 suggestions a day: one measured call with no earlier answers used 58 input tokens and 7 output tokens
 (about $0.08 a day at the cap); a request that carries the most earlier answers the route accepts is about 600 input
 tokens (`docs/plans/2026-11-living-brief.md`), about $0.62 a day at the cap.
 
