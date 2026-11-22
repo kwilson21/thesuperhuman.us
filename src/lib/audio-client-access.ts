@@ -1,7 +1,7 @@
 // The studio client's cookies and session reads, the owner's list of failed code emails, the clean-up of the retired codes
 // table, and the allowance count the signing area's link issuance still calls. The sign-in itself (issuing a code,
 // entering it, discarding an undelivered one, signing out, and the routes' allowances) is in src/server: the flows
-// signin-code.ts, signin-session.ts and signin-sign-out.ts, over src/server/signin-store.ts.
+// signin-code.ts, signin-session.ts and signin-sign-out.ts, over src/server/studio-signin-store.ts.
 import {
 	CODE_LIFETIME_MS,
 	hashValue,

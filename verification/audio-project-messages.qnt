@@ -6,7 +6,7 @@
 //   the read:    the session is read first, and ONE batch reads the project (revoked, stage), the latest published review, the
 //                decisions since it and the revision rounds begun (the model takes both as one step: a session that ends
 //                between the two reads is the same fact as one that ends after the batch, and the write re-checks it); the
-//                rule decides from those plain columns (src/server/rules/audio-project-messages.ts, to be written). The
+//                rule decides from those plain columns (src/server/rules/audio-project-messages.ts). The
 //                rule reads the client's message count with the batch and refuses a full window (ClientRateLimited), and the
 //                write keeps `count < cap` as its guard, so a request that read room and lost it is refused by the write; a
 //                refused write is followed by the count read (M6), which answers 429 before the other refusals

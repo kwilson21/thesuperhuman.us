@@ -1,6 +1,6 @@
 // The outside calls of the agreement routes that the shared services file does not already name: the agreement mail
 // (src/lib/audio-resend.ts sendAudioMessage, which answers every outcome as a value) and the studio allowance counter (the
-// studio sign-in area's count, `countAllowance` in src/server/signin-store.ts, decided by `takeAllowance` in
+// studio sign-in area's count, `countAllowance` in src/server/studio-signin-store.ts, decided by `takeAllowance` in
 // src/server/rules/studio-allowance.ts). Each live service wraps what the route called before, with the secret the
 // request's env gives. A call that rejects is a defect: the route answers its fixed sentence as a 500 and logs it through
 // logUnexpected, as the old routes' catch did.
@@ -11,7 +11,7 @@ import { sendAudioMessage } from "../lib/audio-resend";
 import { keyedHash } from "../lib/client-portal";
 import { allowanceTimes, takeAllowance } from "./rules/studio-allowance";
 import { MusicDb } from "./services";
-import { countAllowance } from "./signin-store";
+import { countAllowance } from "./studio-signin-store";
 
 /** What Resend said about one message: sent, refused, or not known (the send may have happened). */
 export type MailOutcome = "sent" | "refused" | "uncertain";
@@ -93,7 +93,7 @@ export const liveAgreementAllowance = (db: D1Database, secret: string) =>
 				const count = yield* countAllowance(key, allowanceTimes(at)).pipe(
 					Effect.provideService(MusicDb, db),
 					Effect.catchTags({
-						SigninStoreFailed: (failed) =>
+						StudioSigninStoreFailed: (failed) =>
 							Effect.fail(
 								new AgreementAllowanceFailed({ failure: failed.failure }),
 							),

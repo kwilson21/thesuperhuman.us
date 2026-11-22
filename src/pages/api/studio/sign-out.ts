@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			Effect.map(() => signedOut(secure)),
 			Effect.catchTags({
 				SigninHashFailed: (failure) => failed(failure.failure),
-				SigninStoreFailed: (failure) => failed(failure.failure),
+				StudioSigninStoreFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's own answer as a 500, logged once without what was sent.

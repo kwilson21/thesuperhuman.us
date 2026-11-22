@@ -42,6 +42,13 @@ export const prerender = false;
 
 const ROUTE = "/api/software-inquiry";
 
+/**
+ * The most a brief's body may hold, in bytes. The largest brief the form allows with the fullest outline the board can
+ * send, every field (the security token included) at its longest in a script of three bytes a character (Chinese,
+ * Japanese or Korean), is about 44,500 bytes (tests/api/software-inquiry.test.ts). It was 32,768 before the board was on.
+ */
+const BODY_MAX = 49_152;
+
 /** A failure the form answers with the temporary sentence, logged as it always was. */
 const failed = loggedAnswer(ROUTE, () => intakeTemporarilyUnavailable(500));
 
@@ -85,7 +92,7 @@ function readOutline(body: JsonValue, input: SoftwareInput): OutlineRead {
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
-	const body = await musicRequest(request, 32768);
+	const body = await musicRequest(request, BODY_MAX);
 
 	if (body instanceof Response) return body;
 	const result = validateSoftwareInquiry(body);

@@ -23,7 +23,7 @@ import { SESSION_LIFETIME_MS } from "../../lib/client-portal";
 import { codeAllows, codeStateOf } from "../machines/signin-code";
 import { enterCode, NoCodeToTry } from "../rules/signin-complete";
 import { SigninKeys } from "../signin-services";
-import { readEntryFacts, writeEntry } from "../signin-store";
+import { readEntryFacts, writeEntry } from "../studio-signin-store";
 import { type Allowance, useAllowance, wellFormedPending } from "./signin-code";
 
 /**

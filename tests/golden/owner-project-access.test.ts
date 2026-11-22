@@ -27,7 +27,7 @@ import {
 } from "./areas/owner-audio";
 
 // The golden corpus for POST /api/owner/projects/[id]/access: the owner closes a client's access to a project
-// ({action:"revoke"}). revokeProjectAccess (src/lib/audio-project-revocation.ts) runs one batch: it stamps the project
+// ({action:"revoke"}). revokeProjectAccess (src/server/flows/audio-project-access.ts) runs one batch (revokeAccessBatch in src/server/audio-project-store.ts, with the studio sign-in store's two statements): it stamps the project
 // revoked (with a revocation id), revokes every unrevoked session of the request's email, deletes that email's sign-in
 // code, and writes the audit row. Sessions and codes belong to the email, not to the project, so a client's other
 // projects lose their sessions too (cases "another project of the same email").

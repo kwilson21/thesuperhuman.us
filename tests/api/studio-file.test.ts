@@ -8,10 +8,11 @@ import { byteRange, bytesStream } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { GET, HEAD } from "~/pages/api/studio/projects/[id]/files/[fileId]";
 import { signedInClient } from "../helpers/studio-signin";
-import {
-	clientProjectFile,
-	privateProjectObjectKey,
-} from "~/lib/audio-project-files";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { privateProjectObjectKey } from "~/lib/audio-project-files";
+import { readProjectFile } from "~/server/flows/studio-project-file";
+import { AudioBucket, MusicDb } from "~/server/services";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -108,6 +109,29 @@ beforeEach(async () => {
 		},
 	});
 });
+
+/** What the client's read of a file answers at `at`: the name of the refusal, or "shown". */
+const answerAt = (fileId: string, at: Date) =>
+	Effect.runPromise(
+		readProjectFile({
+			requestId: "song-1",
+			fileId,
+			token,
+			download: false,
+			method: "HEAD",
+			range: null,
+			now: () => at,
+		}).pipe(
+			Effect.map(() => "shown"),
+			Effect.catch((failure) => Effect.succeed(failure._tag)),
+			Effect.provide(
+				Context.merge(
+					Context.make(MusicDb, db),
+					Context.make(AudioBucket, bucket),
+				),
+			),
+		),
+	);
 
 function context(
 	fileId = "review-1",
@@ -216,29 +240,17 @@ it("keeps final files hidden until paid and blocks expired or revoked access", a
 	expect(
 		sql.prepare("SELECT access_kind FROM audio_project_file_access").all(),
 	).toEqual([{ access_kind: "download" }]);
-	expect(
-		await clientProjectFile(
-			db,
-			"song-1",
-			"final-1",
-			token,
-			new Date(expires.getTime() + 1),
-		),
-	).toBeNull();
+	expect(await answerAt("final-1", new Date(expires.getTime() + 1))).toBe(
+		"FileHidden",
+	);
 	const tooLong = new Date(now);
 	tooLong.setUTCFullYear(tooLong.getUTCFullYear() + 2);
 	sql
 		.prepare("UPDATE audio_project_files SET expires_at=? WHERE id='final-1'")
 		.run(tooLong.toISOString());
-	expect(
-		await clientProjectFile(
-			db,
-			"song-1",
-			"final-1",
-			token,
-			new Date(expires.getTime() + 1),
-		),
-	).toBeNull();
+	expect(await answerAt("final-1", new Date(expires.getTime() + 1))).toBe(
+		"FileHidden",
+	);
 	sql
 		.prepare("UPDATE audio_projects SET revoked_at=? WHERE request_id='song-1'")
 		.run(now.toISOString());

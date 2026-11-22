@@ -72,7 +72,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				// A code key under 32 characters, found at the first keyed hash before any statement: answered as a missing key.
 				CodeKeyUnusable: () => Effect.succeed(signinUnavailable()),
 				SigninHashFailed: (failure) => failed(failure.failure),
-				SigninStoreFailed: (failure) => failed(failure.failure),
+				StudioSigninStoreFailed: (failure) => failed(failure.failure),
 			}),
 		),
 		// A defect is the route's fixed sentence as a 500, logged once without what was sent.

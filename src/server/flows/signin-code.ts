@@ -41,7 +41,7 @@ import {
 	sweepExpired,
 	writeDiscard,
 	writeIssue,
-} from "../signin-store";
+} from "../studio-signin-store";
 
 /** An allowance: the scope its key is counted under, and the most uses a five-minute window allows. */
 export type Allowance = { readonly scope: string; readonly limit: number };
@@ -174,7 +174,7 @@ const deliver = (
 				}),
 				Effect.catchTags({
 					// Keep private details out of logs. The next request can issue a fresh code.
-					SigninStoreFailed: () =>
+					StudioSigninStoreFailed: () =>
 						Effect.sync(() =>
 							console.error("Studio code delivery or cleanup failed."),
 						),

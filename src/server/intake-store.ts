@@ -36,8 +36,13 @@ export class SubmissionIdClash extends ChangedSinceRead {
 	}
 }
 
-/** The most a request's details may hold once written as JSON. */
-const DETAILS_LIMIT = 16_000;
+/**
+ * The most a request's details may hold once written as JSON. The largest brief the form allows is about 14,300 characters;
+ * with the fullest outline the board can send (every card carrying its longest passage, every question answered, every
+ * field made of characters that double in JSON) it is about 25,700 (tests/api/software-inquiry.test.ts), so the limit
+ * leaves room for both.
+ */
+const DETAILS_LIMIT = 32_000;
 
 /** The insert of the request row. */
 const requestStatement = (

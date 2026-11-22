@@ -13,23 +13,24 @@ import {
 	readEntryFacts,
 	readIssueFacts,
 	revokeSession,
-	SigninStoreFailed,
+	StudioSigninStoreFailed,
 	sweepExpired,
 	writeDiscard,
 	writeEntry,
 	writeIssue,
-} from "../../src/server/signin-store";
+} from "../../src/server/studio-signin-store";
 import { boundStatement } from "../helpers/d1";
 import { double, partial } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { freshMusicDb, type Seed, seed } from "../golden/harness/db";
 import * as rows from "../golden/harness/rows";
 
-// The studio sign-in store (src/server/signin-store.ts) against the real schema on node:sqlite: what each read finds,
-// what each batch writes, what each guard (C1 to C9 of docs/plans/2026-11-studio-signin-conversion.md) refuses, and the
-// failure each answers with (SigninStoreFailed for a rejection, GuardRefused for a raised guard). And its SQL against the
-// golden corpora of the three routes: every statement text and every batch's statements, in order, are ones the routes
-// ran when the corpora were recorded, and every batch and statement the corpora recorded is one the store runs.
+// The studio sign-in store (src/server/studio-signin-store.ts) against the real schema on node:sqlite: what each read
+// finds, what each batch writes, what each guard (C1 to C9 of docs/plans/2026-11-studio-signin-conversion.md) refuses,
+// and the failure each answers with (StudioSigninStoreFailed for a rejection, GuardRefused for a raised guard). And its
+// SQL against the golden corpora of the three routes: every statement text and every batch's statements, in order, are
+// ones the routes ran when the corpora were recorded, and every batch and statement the corpora recorded is one the
+// store runs.
 
 const ADDRESS = "grace@example.test";
 const OTHER = "ada@example.test";
@@ -682,7 +683,7 @@ describe("sign-out", () => {
 });
 
 describe("failures", () => {
-	it("is SigninStoreFailed, carrying what the database raised, for a rejected read, batch or statement", async () => {
+	it("is StudioSigninStoreFailed, carrying what the database raised, for a rejected read, batch or statement", async () => {
 		const runs = [
 			readIssueFacts(ADDRESS),
 			sweepExpired({ address: ADDRESS, at: NOW, sweep: { expired: [] } }),
@@ -719,14 +720,14 @@ describe("failures", () => {
 		for (const effect of runs) {
 			const failure = await signinWorld(/audio_client/).failed(effect);
 
-			expect(failure).toBeInstanceOf(SigninStoreFailed);
-			expect(failure instanceof SigninStoreFailed && failure.failure).toEqual(
-				new Error("d1 down"),
-			);
+			expect(failure).toBeInstanceOf(StudioSigninStoreFailed);
+			expect(
+				failure instanceof StudioSigninStoreFailed && failure.failure,
+			).toEqual(new Error("d1 down"));
 		}
 	});
 
-	it("is SigninStoreFailed, not GuardRefused, when a guarded batch fails for another reason", async () => {
+	it("is StudioSigninStoreFailed, not GuardRefused, when a guarded batch fails for another reason", async () => {
 		const world = signinWorld();
 
 		// The guard holds (the unused code is there), and the audit insert after it fails.
@@ -743,7 +744,7 @@ describe("failures", () => {
 					discard: { auditRequestIds: [] },
 				}),
 			),
-		).toBeInstanceOf(SigninStoreFailed);
+		).toBeInstanceOf(StudioSigninStoreFailed);
 	});
 });
 

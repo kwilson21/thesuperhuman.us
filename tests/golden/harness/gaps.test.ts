@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { APIContext } from "astro";
 import { describe, expect, it } from "vitest";
-import { multipartUploadGone } from "~/lib/audio-project-uploads";
+import { multipartUploadGone } from "~/lib/object-store-errors";
 import { isWholeRecording } from "./fixtures";
 import {
 	aiAfter,

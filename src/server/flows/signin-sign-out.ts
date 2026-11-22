@@ -7,7 +7,7 @@
 // text.
 import * as Effect from "effect/Effect";
 import { SigninKeys } from "../signin-services";
-import { revokeSession } from "../signin-store";
+import { revokeSession } from "../studio-signin-store";
 
 /** A session token is 72 characters of hex and dashes, in either case (src/lib/audio-client-access.ts). */
 const TOKEN_FORMAT = /^[0-9a-f-]{72}$/i;

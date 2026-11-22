@@ -10,7 +10,10 @@ import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { hashValue, keyedHash } from "~/lib/client-portal";
-import { revokeProjectAccess } from "~/lib/audio-project-revocation";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { revokeProjectAccess } from "~/server/flows/audio-project-access";
+import { MusicDb } from "~/server/services";
 import {
 	applyStudioRetention,
 	previewStudioRetention,
@@ -980,7 +983,18 @@ describe("a request for one address does not change what an attacker sees of ano
 									? "p-full"
 									: undefined;
 
-						if (id) await revokeProjectAccess(db, id, "owner");
+						if (id)
+							await Effect.runPromise(
+								revokeProjectAccess({
+									requestId: id,
+									ownerEmail: "owner",
+									now: () => new Date(),
+									newId: () => crypto.randomUUID(),
+								}).pipe(
+									Effect.ignore,
+									Effect.provideContext(Context.make(MusicDb, db)),
+								),
+							);
 					}),
 				],
 				pairs: own(),

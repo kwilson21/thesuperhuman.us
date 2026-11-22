@@ -1,199 +1,165 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/client-portal";
+import * as Effect from "effect/Effect";
 import {
-	abortProjectUpload,
-	beginProjectUpload,
-	expectedPartLength,
-	finishProjectUpload,
-	getProjectUpload,
-	maxPartEtagLength,
-	readBodyWithin,
-	maxProjectFileSize,
-	ownerProjectCanUpload,
-	putProjectUploadPart,
-	uploadPartSize,
-	UploadBeingDiscarded,
-} from "~/lib/audio-project-uploads";
-import { objectStoreUnavailable } from "~/lib/object-store-errors";
+	checkFileDetails,
+	invalidFilePart,
+	ownerAccessRequired,
+	partNotUploaded,
+	partUploadUnavailable,
+	sentence,
+	uploadNotSaved,
+	uploadSaveUnavailable,
+	uploadsPortalOff,
+	uploadsUnavailable,
+} from "~/lib/audio-project-answers";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
+import type {
+	AudioProjectStoreFailed,
+	ObjectStoreFailed,
+} from "~/server/audio-project-store";
+import type { UploadGone } from "~/server/rules/audio-project-uploads";
+import { readPartQuery, readUploadCommand } from "~/server/audio-project-input";
+import {
+	abortUpload,
+	finishUpload,
+	putUploadPart,
+	startUpload,
+} from "~/server/flows/audio-project-uploads";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/owner/projects/[id]/uploads";
-const id = z.uuid();
 
-const start = z.object({
-	action: z.literal("start"),
-	version: z.enum(["review", "final"]),
-	displayName: z.string().trim().min(1).max(160),
-	mediaType: z.enum(["audio/mpeg", "audio/wav"]),
-	byteSize: z.number().int().min(1).max(maxProjectFileSize),
-});
+/** A failure of the database or of R2, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, uploadNotSaved);
 
-const complete = z.object({
-	action: z.literal("complete"),
-	uploadId: id,
-	parts: z
-		.array(
-			z.object({
-				partNumber: z.number().int().positive(),
-				etag: z.string().min(1).max(maxPartEtagLength),
-			}),
-		)
-		.min(1)
-		.max(Math.ceil(maxProjectFileSize / uploadPartSize)),
-	// Waveform bars from the owner's browser. Optional: a file without them shows a plain bar.
-	peaks: z.array(z.number().int().min(0).max(100)).min(16).max(400).optional(),
-});
-
-const abort = z.object({ action: z.literal("abort"), uploadId: id });
-const recover = z.object({ action: z.literal("recover"), uploadId: id });
-const input = z.discriminatedUnion("action", [start, complete, abort, recover]);
-
-const fail = (error: string, status: number) =>
-	Response.json({ ok: false, error }, { status });
+const partFailed = loggedAnswer(ROUTE, partNotUploaded);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
-	if (!locals.owner) return fail("Owner access required.", 403);
+	if (!locals.owner) return ownerAccessRequired();
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env)) return fail("Not found.", 404);
+	if (!clientPortalEnabled(env)) return uploadsPortalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "AUDIO"]);
 
-	if (!params.id || !env.MUSIC_DB || !env.AUDIO)
-		return fail("Private uploads are unavailable.", 503);
+	if (!bindings.ok || !params.id) return uploadsUnavailable();
 	const body = await musicRequest(request, 34_000);
 
 	if (body instanceof Response) return body;
-	const parsed = input.safeParse(body);
+	const command = readUploadCommand(body);
 
-	if (!parsed.success)
-		return fail("Check the file details and try again.", 400);
+	if (!command.ok) return checkFileDetails();
+	const requestId = params.id;
+	const input = command.value;
 
-	try {
-		if (parsed.data.action === "start") {
-			const upload = await beginProjectUpload(
-				env.MUSIC_DB,
-				env.AUDIO,
-				params.id,
-				parsed.data,
-			);
+	const gone = {
+		UploadGone: (refusal: UploadGone) =>
+			Effect.succeed(sentence(refusal.say, 404)),
+	};
 
-			if (!upload)
-				return fail("This project is not ready for file upload.", 409);
+	const unsaved = {
+		ObjectStoreUnavailable: () => Effect.succeed(uploadSaveUnavailable()),
+		ObjectStoreFailed: (failure: ObjectStoreFailed) => failed(failure.failure),
+		AudioProjectStoreFailed: (failure: AudioProjectStoreFailed) =>
+			failed(failure.failure),
+	};
 
-			return Response.json({
-				ok: true,
-				uploadId: upload.id,
-				partSize: uploadPartSize,
-			});
-		}
+	const program =
+		input.action === "start"
+			? startUpload({
+					requestId,
+					version: input.version,
+					displayName: input.displayName,
+					mediaType: input.mediaType,
+					byteSize: input.byteSize,
+					now: () => new Date(),
+					newId: () => crypto.randomUUID(),
+				}).pipe(
+					Effect.map((started) =>
+						Response.json({
+							ok: true,
+							uploadId: started.id,
+							partSize: started.partSize,
+						}),
+					),
+					Effect.catchTags({
+						UploadNotReady: (refusal) =>
+							Effect.succeed(sentence(refusal.say, 409)),
+						...unsaved,
+					}),
+				)
+			: input.action === "abort"
+				? abortUpload({ requestId, uploadId: input.uploadId }).pipe(
+						Effect.map(() => Response.json({ ok: true })),
+						Effect.catchTags({ ...gone, ...unsaved }),
+					)
+				: finishUpload({
+						requestId,
+						uploadId: input.uploadId,
+						parts: input.action === "complete" ? input.parts : null,
+						peaks: input.action === "complete" ? (input.peaks ?? null) : null,
+						now: () => new Date(),
+					}).pipe(
+						Effect.map((fileId) => Response.json({ ok: true, fileId })),
+						Effect.catchTags({
+							...gone,
+							UploadNotFinishable: (refusal) =>
+								Effect.succeed(sentence(refusal.say, 409)),
+							UploadSizeMismatch: (refusal) =>
+								Effect.succeed(sentence(refusal.say, 409)),
+							...unsaved,
+						}),
+					);
 
-		const upload = await getProjectUpload(
-			env.MUSIC_DB,
-			params.id,
-			parsed.data.uploadId,
-		);
-
-		if (!upload) return fail("This upload is no longer available.", 404);
-
-		if (parsed.data.action === "abort") {
-			await abortProjectUpload(env.MUSIC_DB, env.AUDIO, upload);
-
-			return Response.json({ ok: true });
-		}
-
-		const result = await finishProjectUpload(
-			env.MUSIC_DB,
-			env.AUDIO,
-			upload,
-			parsed.data.action === "complete" ? parsed.data.parts : null,
-			undefined,
-			parsed.data.action === "complete" ? (parsed.data.peaks ?? null) : null,
-		);
-
-		if (result === "unavailable")
-			return fail("The upload could not be saved. Please try again.", 503);
-
-		if (result !== "saved")
-			return fail(
-				result === "size-mismatch"
-					? "The file size did not match. It was not published."
-					: "This upload cannot be finished now.",
-				409,
-			);
-
-		return Response.json({ ok: true, fileId: upload.id });
-	} catch (error) {
-		if (objectStoreUnavailable(error))
-			return fail("The upload could not be saved. Please try again.", 503);
-
-		logUnexpected(ROUTE, error);
-
-		return fail("The upload could not be saved. Please try again.", 500);
-	}
+	return runRoute(bindings.services, program, {
+		route: ROUTE,
+		answer: uploadNotSaved,
+	});
 };
 
 export const PUT: APIRoute = async ({ params, request, locals }) => {
-	if (!locals.owner) return fail("Owner access required.", 403);
+	if (!locals.owner) return ownerAccessRequired();
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env)) return fail("Not found.", 404);
+	if (!clientPortalEnabled(env)) return uploadsPortalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "AUDIO"]);
 
-	if (!params.id || !env.MUSIC_DB || !env.AUDIO)
-		return fail("Private uploads are unavailable.", 503);
+	if (!bindings.ok || !params.id) return uploadsUnavailable();
 	const url = new URL(request.url);
-	const uploadId = id.safeParse(url.searchParams.get("uploadId"));
-	const partNumber = Number(url.searchParams.get("part"));
 
-	if (!uploadId.success || !Number.isInteger(partNumber) || !request.body)
-		return fail("Invalid file part.", 400);
+	const query = readPartQuery(
+		url.searchParams.get("uploadId"),
+		url.searchParams.get("part"),
+		request.body !== null,
+	);
 
-	try {
-		const upload = await getProjectUpload(
-			env.MUSIC_DB,
-			params.id,
-			uploadId.data,
-		);
+	if (!query.ok || request.body === null) return invalidFilePart();
 
-		if (!upload) return fail("This upload is no longer available.", 404);
+	const program = putUploadPart({
+		requestId: params.id,
+		uploadId: query.value.uploadId,
+		part: query.value.part,
+		contentLength: request.headers.get("content-length"),
+		body: request.body,
+	}).pipe(
+		Effect.map((part) => Response.json({ ok: true, part })),
+		Effect.catchTags({
+			UploadGone: (refusal) => Effect.succeed(sentence(refusal.say, 404)),
+			UploadNotReady: (refusal) => Effect.succeed(sentence(refusal.say, 409)),
+			PartWrongSize: (refusal) => Effect.succeed(sentence(refusal.say, 400)),
+			PartNotUploadable: (refusal) =>
+				Effect.succeed(sentence(refusal.say, 409)),
+			ObjectStoreUnavailable: () => Effect.succeed(partUploadUnavailable()),
+			ObjectStoreFailed: (failure) => partFailed(failure.failure),
+			AudioProjectStoreFailed: (failure) => partFailed(failure.failure),
+		}),
+	);
 
-		if (!(await ownerProjectCanUpload(env.MUSIC_DB, params.id, upload.version)))
-			return fail("This project is not ready for file upload.", 409);
-		const length = expectedPartLength(upload.byte_size, partNumber);
-
-		if (
-			length === null ||
-			(request.headers.has("content-length") &&
-				Number(request.headers.get("content-length")) !== length)
-		) {
-			return fail("This file part has the wrong size.", 400);
-		}
-
-		// A part is at most 10 MiB. Buffering gives R2 a known length in workerd and in local dev,
-		// and reading stops as soon as the body passes the expected size.
-		const body = await readBodyWithin(request.body, length);
-
-		if (!body || body.byteLength !== length)
-			return fail("This file part has the wrong size.", 400);
-
-		const part = await putProjectUploadPart(
-			env.AUDIO,
-			upload,
-			partNumber,
-			body,
-		);
-
-		return Response.json({ ok: true, part });
-	} catch (error) {
-		if (error instanceof UploadBeingDiscarded)
-			return fail("This part could not be uploaded. Please try again.", 409);
-
-		if (objectStoreUnavailable(error))
-			return fail("This part could not be uploaded. Please try again.", 503);
-
-		logUnexpected(ROUTE, error);
-
-		return fail("This part could not be uploaded. Please try again.", 500);
-	}
+	return runRoute(bindings.services, program, {
+		route: ROUTE,
+		answer: partNotUploaded,
+	});
 };

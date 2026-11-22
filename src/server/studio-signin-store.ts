@@ -1,22 +1,38 @@
-// What the studio sign-in routes (POST /api/studio/code, /api/studio/session and /api/studio/sign-out) read from and write
-// to MUSIC_DB (the MusicDb service), one function per statement or batch the routes run, in the order of
-// docs/plans/2026-11-studio-signin-conversion.md, section 4. A read returns the rows as facts, and the rules in
-// src/server/rules/signin-*.ts and studio-allowance.ts decide from them; a write binds the values a rule decided and the
-// values the flow read (the time, the hashes), and decides nothing. Its only SQL that can refuse is the guards C1 to C9 of
-// the design, which re-check at write time what the rule read.
+// The studio sign-in area's store: every statement of MUSIC_DB's sign-in tables (`audio_client_signin_codes`,
+// `audio_client_sessions`, `audio_client_allowances`, the sign-in audit rows and the retired sign-in codes table), one
+// function per statement or batch, over the MusicDb service. CLAUDE.md asks for one store file per area; the audio
+// projects conversion (#365) opened this file with the statements that close a client's sign-in when a project's access
+// closes, and the sign-in conversion (docs/plans/2026-11-studio-signin-conversion.md, section 4) moved its own
+// statements here.
 //
-// Every statement's SQL text and every batch's statements and order are the ones src/lib/audio-client-access.ts runs, byte
-// for byte, with the same values bound: the golden corpora (tests/golden/studio-*.test.ts) recorded them, and
-// tests/api/studio-signin-noninterference.test.ts schedules a request's batches by their leading SQL and their length.
-// tests/server/signin-store.test.ts holds every text and batch to the corpora. The issue's and the entry's write batches
-// run for every request, bound to do nothing when the rule or the machine refused, so every request makes the same round
-// trips with the same statements whatever the address.
+// The sign-in routes (POST /api/studio/code, /api/studio/session and /api/studio/sign-out), in the order of the
+// design's section 4. A read returns the rows as facts, and the rules in src/server/rules/signin-*.ts and
+// studio-allowance.ts decide from them; a write binds the values a rule decided and the values the flow read (the time,
+// the hashes), and decides nothing. Its only SQL that can refuse is the guards C1 to C9 of the design, which re-check
+// at write time what the rule read.
 //
-// Failures. A rejected read or statement is a SigninStoreFailed carrying what the database raised in `failure`, which the
-// route logs once (logUnexpected) before its fixed answer. A batch whose guard raised (the issue's C1 and C2, the
-// discard's C8; `raisedByJsonGuard`) is GuardRefused: the facts changed since the read. It is never retried: the code
-// flow answers it as a refusal, and the discard swallows it. No statement here has a unique constraint that a rule's
-// facts depend on (the browser's row is deleted before its new row is inserted), so nothing is ChangedSinceRead.
+// Every statement's SQL text and every batch's statements and order are the ones src/lib/audio-client-access.ts ran
+// before the conversion, byte for byte, with the same values bound: the golden corpora (tests/golden/studio-*.test.ts)
+// recorded them, and tests/api/studio-signin-noninterference.test.ts schedules a request's batches by their leading SQL
+// and their length. tests/server/studio-signin-store.test.ts holds every text and batch to the corpora. The issue's and
+// the entry's write batches run for every request, bound to do nothing when the rule or the machine refused, so every
+// request makes the same round trips with the same statements whatever the address.
+//
+// Failures. One failure for the area: a rejected read or statement is a StudioSigninStoreFailed carrying what the
+// database raised in `failure`, which the route logs once (logUnexpected) before its fixed answer. A batch whose guard
+// raised (the issue's C1 and C2, the discard's C8; `raisedByJsonGuard`) is GuardRefused: the facts changed since the
+// read. It is never retried: the code flow answers it as a refusal, and the discard swallows it. No statement here has
+// a unique constraint that a rule's facts depend on (the browser's row is deleted before its new row is inserted), so
+// nothing is ChangedSinceRead.
+//
+// The access closure's statements (AR2, AR3 and AR5 of docs/plans/2026-11-audio-projects-conversion.md, section 4) are
+// at the end. They write `audio_client_sessions`, `audio_client_signin_codes` and the retired sign-in codes table. The
+// first two are statements of the access revocation's batch, so they are built over the batch's database and run with
+// the project's own statements; the third is run alone, after the batch. The client's email is selected by request id
+// inside each statement (a lookup by key, not a decision), so the statement acts on the client's email as it is at the
+// write, and binding an email read earlier would end the sessions of an address the request no longer has. AR2 and AR3
+// are linked to the revocation by its id: a request that lost the revoke to another one ends no session and deletes no
+// code.
 //
 // No statement reads the clock or makes a random value: the times, the hashes and the allowance's key are parameters.
 import * as Data from "effect/Data";
@@ -35,23 +51,26 @@ import type { SweepWrite } from "./rules/signin-sweep";
 import type { AllowanceCount, AllowanceTimes } from "./rules/studio-allowance";
 import { MusicDb } from "./services";
 
-/** The music database failed, and no guard says the facts changed. `failure` is for the log. */
-export class SigninStoreFailed extends Data.TaggedError("SigninStoreFailed")<{
-	readonly failure: unknown;
-}> {}
+/**
+ * A statement of the studio sign-in tables failed, and no guard says the facts changed. `failure` is the cause, for the
+ * caller's log.
+ */
+export class StudioSigninStoreFailed extends Data.TaggedError(
+	"StudioSigninStoreFailed",
+)<{ readonly failure: unknown }> {}
 
-/** Runs one database call; a rejection is a SigninStoreFailed. */
+/** Runs one database call; a rejection is a StudioSigninStoreFailed. */
 const asked = <A>(run: (db: D1Database) => Promise<A>) =>
 	Effect.gen(function* () {
 		const db = yield* MusicDb;
 
 		return yield* Effect.tryPromise({
 			try: () => run(db),
-			catch: (failure) => new SigninStoreFailed({ failure }),
+			catch: (failure) => new StudioSigninStoreFailed({ failure }),
 		});
 	});
 
-/** Runs one batch with a guard: a guard that raised is GuardRefused, any other rejection a SigninStoreFailed. */
+/** Runs one batch with a guard: a guard that raised is GuardRefused, any other rejection a StudioSigninStoreFailed. */
 const guarded = (statements: (db: D1Database) => D1PreparedStatement[]) =>
 	Effect.gen(function* () {
 		const db = yield* MusicDb;
@@ -61,7 +80,7 @@ const guarded = (statements: (db: D1Database) => D1PreparedStatement[]) =>
 			catch: (failure) =>
 				failure instanceof Error && raisedByJsonGuard(failure)
 					? new GuardRefused()
-					: new SigninStoreFailed({ failure }),
+					: new StudioSigninStoreFailed({ failure }),
 		});
 	});
 
@@ -437,3 +456,58 @@ export const revokeSession = (tokenHash: string, at: string) =>
 			.bind(at, tokenHash)
 			.run(),
 	).pipe(Effect.asVoid);
+
+// ---- access closure (the audio project's access revocation, #365) ----
+
+/** AR2, compare-and-set: every open session of the client the request names is ended, while the revocation is this request's. */
+export const endClientSessions = (
+	db: D1Database,
+	requestId: string,
+	revocationId: string,
+	at: string,
+) =>
+	db
+		.prepare(`UPDATE audio_client_sessions SET revoked_at=? WHERE revoked_at IS NULL AND email=(
+      SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE p.request_id=? AND p.access_revocation_id=?)`)
+		.bind(at, requestId, revocationId);
+
+/** AR3, compare-and-set: the sign-in codes of the client the request names are deleted, while the revocation is this request's. */
+export const deleteClientSigninCodes = (
+	db: D1Database,
+	requestId: string,
+	revocationId: string,
+) =>
+	db
+		.prepare(`DELETE FROM audio_client_signin_codes WHERE email=(
+      SELECT r.email FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE p.request_id=? AND p.access_revocation_id=?)`)
+		.bind(requestId, revocationId);
+
+/**
+ * AR5, write guarded by key, best effort after the revocation: the codes of the retired sign-in table. A table that is already
+ * dropped (migration 0028, issue 271) is silent and not a failure; any other failure is a `StudioSigninStoreFailed` the
+ * caller logs and goes on from.
+ */
+export const deleteRetiredClientCodes = (requestId: string) =>
+	Effect.gen(function* () {
+		const db = yield* MusicDb;
+
+		yield* Effect.tryPromise({
+			try: () =>
+				db
+					.prepare(
+						"DELETE FROM audio_client_codes WHERE email=(SELECT email FROM owner_requests WHERE id=?)",
+					)
+					.bind(requestId)
+					.run(),
+			catch: (cause) => new StudioSigninStoreFailed({ failure: cause }),
+		}).pipe(
+			Effect.catchTag("StudioSigninStoreFailed", (failure) =>
+				failure.failure instanceof Error &&
+				/no such table/i.test(failure.failure.message)
+					? Effect.void
+					: Effect.fail(failure),
+			),
+		);
+	});

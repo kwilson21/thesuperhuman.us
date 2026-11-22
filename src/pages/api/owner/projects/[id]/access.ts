@@ -1,53 +1,56 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
+import * as Effect from "effect/Effect";
+import {
+	accessNotClosed,
+	checkAccessCommand,
+	portalOff,
+	projectAccessUnavailable,
+	sentence,
+} from "~/lib/audio-project-answers";
 import { clientPortalEnabled } from "~/lib/client-portal";
-import { revokeProjectAccess } from "~/lib/audio-project-revocation";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
+import { readAccessCommand } from "~/server/audio-project-input";
+import { revokeProjectAccess } from "~/server/flows/audio-project-access";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/owner/projects/[id]/access";
-const input = z.object({ action: z.literal("revoke") });
+
+/** A failure of the database, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, accessNotClosed);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!clientPortalEnabled(env)) return portalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
-	if (!env.MUSIC_DB || !params.id)
-		return Response.json(
-			{ ok: false, error: "Project access is temporarily unavailable." },
-			{ status: 503 },
-		);
+	if (!bindings.ok || !params.id) return projectAccessUnavailable();
 	const body = await musicRequest(request, 1024);
 
 	if (body instanceof Response) return body;
 
-	if (!input.safeParse(body).success)
-		return Response.json({ ok: false }, { status: 400 });
+	if (!readAccessCommand(body).ok) return checkAccessCommand();
 
-	try {
-		if (
-			!(await revokeProjectAccess(env.MUSIC_DB, params.id, locals.owner.email))
-		) {
-			return Response.json(
-				{ ok: false, error: "Project access is already closed." },
-				{ status: 409 },
-			);
-		}
+	const program = revokeProjectAccess({
+		requestId: params.id,
+		ownerEmail: locals.owner.email,
+		now: () => new Date(),
+		newId: () => crypto.randomUUID(),
+	}).pipe(
+		Effect.map(() => Response.json({ ok: true })),
+		Effect.catchTags({
+			AccessAlreadyClosed: (refusal) =>
+				Effect.succeed(sentence(refusal.say, 409)),
+			AudioProjectStoreFailed: (failure) => failed(failure.failure),
+		}),
+	);
 
-		return Response.json({ ok: true });
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return Response.json(
-			{
-				ok: false,
-				error: "Project access could not be closed. Please try again.",
-			},
-			{ status: 500 },
-		);
-	}
+	return runRoute(bindings.services, program, {
+		route: ROUTE,
+		answer: accessNotClosed,
+	});
 };

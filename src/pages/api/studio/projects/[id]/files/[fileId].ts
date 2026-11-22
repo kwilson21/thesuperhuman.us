@@ -1,83 +1,73 @@
 import type { APIRoute } from "astro";
+import * as Effect from "effect/Effect";
 import { studioSessionFromRequest } from "~/lib/audio-client-access";
-import { clientPortalEnabled } from "~/lib/client-portal";
 import {
-	clientProjectFile,
-	recordProjectFileAccess,
-	sizeMismatchResponse,
-	streamClientProjectFile,
-} from "~/lib/audio-project-files";
-import { objectStoreUnavailable } from "~/lib/object-store-errors";
-import { logUnexpected } from "~/server/failure";
+	fileHidden,
+	fileRangeRefused,
+	fileSizeDiffers,
+	fileUnavailable,
+	privateAudioFailed,
+	privateAudioUnavailable,
+	projectFileBytes,
+} from "~/lib/audio-project-answers";
+import { clientPortalEnabled } from "~/lib/client-portal";
+import { loggedAnswer } from "~/server/answers";
+import { readProjectFile } from "~/server/flows/studio-project-file";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/studio/projects/[id]/files/[fileId]";
 
-const hidden = () =>
-	new Response("File not found", {
-		status: 404,
-		headers: { "cache-control": "private, no-store" },
-	});
+/** A failure of the database or of R2, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, privateAudioFailed);
+
+/** The stored object is another size than the file's row: logged once, with a fixed line, and answered 500. */
+const sizeDiffers = loggedAnswer(ROUTE, fileSizeDiffers);
 
 const serve: APIRoute = async ({ params, request, locals }) => {
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env)) return hidden();
+	if (!clientPortalEnabled(env)) return fileHidden();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB", "AUDIO"]);
 
-	if (!env.MUSIC_DB || !env.AUDIO)
-		return new Response("Private audio is temporarily unavailable", {
-			status: 503,
-			headers: { "cache-control": "private, no-store" },
-		});
+	if (!bindings.ok) return privateAudioUnavailable();
 	const token = studioSessionFromRequest(request);
 
-	if (!token || !params.id || !params.fileId) return hidden();
+	if (!token || !params.id || !params.fileId) return fileHidden();
 	const download = new URL(request.url).searchParams.get("download") === "1";
 
-	try {
-		const file = await clientProjectFile(
-			env.MUSIC_DB,
-			params.id,
-			params.fileId,
-			token,
-		);
+	const program = readProjectFile({
+		requestId: params.id,
+		fileId: params.fileId,
+		token,
+		download,
+		method: request.method,
+		range: request.headers.get("range"),
+		now: () => new Date(),
+	}).pipe(
+		Effect.map((read) => projectFileBytes(read, download)),
+		Effect.catchTags({
+			FileHidden: () => Effect.succeed(fileHidden()),
+			ObjectMissing: () => Effect.succeed(fileUnavailable()),
+			ObjectSizeDiffers: () =>
+				sizeDiffers(
+					new Error("The stored object has another size than the file row."),
+				),
+			ProjectFileRangeRefused: (refused) =>
+				Effect.succeed(fileRangeRefused(refused.file, download, refused.size)),
+			ObjectStoreUnavailable: () => Effect.succeed(privateAudioUnavailable()),
+			ObjectStoreFailed: (failure) => failed(failure.failure),
+			AudioProjectStoreFailed: (failure) => failed(failure.failure),
+			AgreementStoreFailed: (failure) => failed(failure.failure),
+			HashFailed: (failure) => failed(failure.failure),
+		}),
+	);
 
-		if (!file || (download && !file.downloadable)) return hidden();
-
-		const response = await streamClientProjectFile(
-			request,
-			env.AUDIO,
-			file,
-			download,
-		);
-
-		if (response === "size-mismatch") {
-			logUnexpected(
-				ROUTE,
-				new Error("The stored object has another size than the file row."),
-			);
-
-			return sizeMismatchResponse();
-		}
-
-		if (
-			request.method === "GET" &&
-			(response.status === 200 || response.status === 206)
-		) {
-			await recordProjectFileAccess(env.MUSIC_DB, file.id, token, download);
-		}
-
-		return response;
-	} catch (error) {
-		const unavailable = objectStoreUnavailable(error);
-
-		if (!unavailable) logUnexpected(ROUTE, error);
-
-		return new Response("Private audio is temporarily unavailable", {
-			status: unavailable ? 503 : 500,
-			headers: { "cache-control": "private, no-store" },
-		});
-	}
+	return runRoute(bindings.services, program, {
+		route: ROUTE,
+		answer: privateAudioFailed,
+	});
 };
 
 export const GET = serve;

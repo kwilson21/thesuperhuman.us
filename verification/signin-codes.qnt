@@ -1,10 +1,10 @@
 // Quint model of the studio sign-in codes of email addresses, with browsers that know the address and, for some of them, the code,
 // and of the studio sessions an accepted code makes.
 // Code modelled: the sign-in flows src/server/flows/signin-code.ts (requestCode, issueSigninCode, discardUndelivered),
-//   signin-session.ts (signIn, enterSigninCode) and signin-sign-out.ts (signOut), over src/server/signin-store.ts, the
+//   signin-session.ts (signIn, enterSigninCode) and signin-sign-out.ts (signOut), over src/server/studio-signin-store.ts, the
 //   session reads such as clientProjectsForSession in src/lib/audio-client-access.ts, the routes
-//   src/pages/api/studio/code.ts, session.ts and sign-out.ts, the studio pages that read a session, and the pending
-//   sign-in and session cookies they set and read. Each access.ts:<line> and code.ts:<line> below cites
+//   src/pages/api/studio/code.ts, session.ts and sign-out.ts, the studio pages that read a session, and the pending sign-in
+//   and session cookies they set and read. Each access.ts:<line> and code.ts:<line> below cites
 //   src/lib/audio-client-access.ts and the route at f9480f78, before the conversion moved that code to the flows.
 // See docs/verification.md ("The sign-in codes model") for what is and is not covered.
 //

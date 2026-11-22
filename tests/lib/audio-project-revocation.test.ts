@@ -1,16 +1,13 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
-import {
-	revokeProjectAccess,
-	revokeProjectFile,
-} from "~/lib/audio-project-revocation";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { revokeProjectAccess as revokeAccessFlow } from "~/server/flows/audio-project-access";
+import { MusicDb } from "~/server/services";
 import { double } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
-import {
-	failingRetiredCleanup,
-	retiredCleanupLogLine,
-} from "../helpers/retired-codes-failure";
+import { failingRetiredCleanup } from "../helpers/retired-codes-failure";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -18,6 +15,30 @@ const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
+/** Closes a project's access through the flow: true when it closed, false when it was closed already; a failed batch rejects. */
+async function revokeProjectAccess(
+	db: D1Database,
+	requestId: string,
+	actor: string,
+	now: Date,
+): Promise<boolean> {
+	return Effect.runPromise(
+		revokeAccessFlow({
+			requestId,
+			ownerEmail: actor,
+			now: () => now,
+			newId: () => crypto.randomUUID(),
+		}).pipe(
+			Effect.as(true),
+			Effect.catchTag("AccessAlreadyClosed", () => Effect.succeed(false)),
+			Effect.catchTag("AudioProjectStoreFailed", (failure) =>
+				Effect.die(failure.failure),
+			),
+			Effect.provideContext(Context.make(MusicDb, db)),
+		),
+	);
+}
 
 const now = new Date("2026-09-22T12:00:00Z");
 
@@ -61,64 +82,6 @@ function fixture() {
 
 	return { sql, db };
 }
-
-it("removes a published review immediately and records a client update once", async () => {
-	const { sql, db } = fixture();
-	expect(
-		await revokeProjectFile(
-			db,
-			"song-1",
-			"review-1",
-			"owner@example.com",
-			"",
-			now,
-		),
-	).toBeNull();
-
-	const result = await revokeProjectFile(
-		db,
-		"song-1",
-		"review-1",
-		"owner@example.com",
-		"I need to replace this review.",
-		now,
-	);
-
-	expect(result?.updateId).toBeGreaterThan(0);
-	expect(
-		sql
-			.prepare(
-				"SELECT status,revoked_by FROM audio_project_files WHERE id='review-1'",
-			)
-			.get(),
-	).toEqual({ status: "revoked", revoked_by: "owner@example.com" });
-	expect(
-		sql
-			.prepare("SELECT stage FROM audio_projects WHERE request_id='song-1'")
-			.get(),
-	).toEqual({ stage: "in_progress" });
-	expect(
-		sql
-			.prepare(
-				"SELECT body,notification_status FROM audio_project_updates WHERE id=?",
-			)
-			.get(result?.updateId),
-	).toEqual({
-		body: "I need to replace this review.",
-		notification_status: "pending",
-	});
-	expect(
-		await revokeProjectFile(
-			db,
-			"song-1",
-			"review-1",
-			"owner@example.com",
-			"Again",
-			now,
-		),
-	).toBeNull();
-	sql.close();
-});
 
 it("closes project access, invalidates sessions and codes, and writes one audit event", async () => {
 	const { sql, db } = fixture();
@@ -223,46 +186,6 @@ it("leaves delivered work available when its request is resolved", () => {
 	sql.close();
 });
 
-it("reopens a completed project when its only final is revoked, so a replacement can ship", async () => {
-	const { sql, db } = fixture();
-	sql
-		.prepare(`INSERT INTO audio_project_files
-    (id,request_id,version,object_key,display_name,media_type,byte_size,status,uploaded_at,published_at,expires_at)
-    VALUES ('final-1','song-1','final','studio/projects/song-1/final-1.wav','Final','audio/wav',5,'published',?,?,?)`)
-		.run(now.toISOString(), now.toISOString(), "2027-09-22T12:00:00Z");
-	sql
-		.prepare(
-			"UPDATE audio_projects SET stage='complete',completed_at=? WHERE request_id='song-1'",
-		)
-		.run(now.toISOString());
-
-	const result = await revokeProjectFile(
-		db,
-		"song-1",
-		"final-1",
-		"owner@example.com",
-		"That export was wrong; a corrected final is coming.",
-		now,
-	);
-
-	expect(result?.updateId).toBeGreaterThan(0);
-	expect(
-		sql
-			.prepare(
-				"SELECT stage,completed_at FROM audio_projects WHERE request_id='song-1'",
-			)
-			.get(),
-	).toEqual({ stage: "in_progress", completed_at: null });
-	expect(
-		sql
-			.prepare(
-				"SELECT action,actor FROM audio_project_audit WHERE request_id='song-1' ORDER BY id DESC LIMIT 1",
-			)
-			.get(),
-	).toEqual({ action: "stage-changed", actor: "owner@example.com" });
-	sql.close();
-});
-
 // audio_client_codes is the retired sign-in codes table; closing a client's access still clears the address from it, and
 // works once a later migration has dropped it.
 it("clears the closed address from the retired sign-in codes table too", async () => {
@@ -296,7 +219,7 @@ it("still closes access when the retired sign-in codes table has been dropped", 
 
 // The cleanup of the retired table is best effort: the revocation has committed, so a failure there must not be reported
 // as a failed revocation.
-it("closes access and answers true when the retired-table cleanup fails, and logs a fixed line", async () => {
+it("closes access and answers true when the retired-table cleanup fails, and logs it once", async () => {
 	const { sql, db } = fixture();
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -315,7 +238,8 @@ it("closes access and answers true when the retired-table cleanup fails, and log
 			)
 			.get(),
 	).toEqual({ revoked_at: now.toISOString() });
-	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(String(log.mock.calls[0]?.[0])).toContain("retired sign-in codes");
 	expect(JSON.stringify(log.mock.calls)).not.toContain("example.com");
 	log.mockRestore();
 	sql.close();

@@ -1,12 +1,12 @@
 // The studio allowance: at most `limit` uses per five-minute window for one scope and subject (an address, a client IP
 // address, or an address with the browser's cookie hash), counted in D1 under a keyed hash of the scope and subject.
 // The code and session routes count through it, and so does the agreement link route. Decided from the uses the
-// counting upsert returned for the window (the stale windows pruned and the use counted in one batch,
-// `countAllowance` in src/server/signin-store.ts) and the limit: refused with AllowanceSpent when the count is over the
-// limit, or when no count came back (docs/plans/2026-11-studio-signin-conversion.md, sections 2 and 4). Writes nothing:
-// the use was counted by the read. None of the guards C1 to C9 re-checks it, and none needs to: the count is itself the
-// atomic write (the upsert's `uses=uses+1`), so two requests at once each see their own count. Nothing here reads a
-// clock: the time is an input, and `allowanceTimes` works out the two times the count binds from it.
+// counting upsert returned for the window (the stale windows pruned and the use counted in one batch, `countAllowance`
+// in src/server/studio-signin-store.ts) and the limit: refused with AllowanceSpent when the count is over the limit, or
+// when no count came back (docs/plans/2026-11-studio-signin-conversion.md, sections 2 and 4). Writes nothing: the use
+// was counted by the read. None of the guards C1 to C9 re-checks it, and none needs to: the count is itself the atomic
+// write (the upsert's `uses=uses+1`), so two requests at once each see their own count. Nothing here reads a clock: the
+// time is an input, and `allowanceTimes` works out the two times the count binds from it.
 import * as Data from "effect/Data";
 import { alwaysWrites, term, unless } from "../terms";
 
