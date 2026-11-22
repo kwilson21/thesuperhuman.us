@@ -95,9 +95,7 @@ Two sources of variation between runs are fixed in the capture tooling, not in t
 
 ## Audio player waits
 
-The studio's project players show `0:00` until the audio's metadata has loaded, then `0:00 / <duration>`. `media.mjs` waits for the metadata first. If the metadata has not loaded within 15 seconds, the capture fails with a message naming the metadata wait. The capture then dispatches the same `loadedmetadata` event the page listens for, so the page's own render runs, and waits until every label shows its duration. If that second wait times out, the capture fails with a message about the label, not the metadata.
-
-This is a workaround for an open site bug, not a fix. `src/scripts/project-player.ts` only renders the label on `loadedmetadata`, `timeupdate` and `ended`. If the metadata loads before the script attaches its listener, the label stays at `0:00`, and the load-error message is hidden by the same race. The owner has not yet decided whether to fix the site, so the workaround stays. The screenshot therefore shows the label a visitor sees when the race does not happen. It does not show the bug.
+The studio's project players show `0:00` until the audio's metadata has loaded, then `0:00 / <duration>`. `media.mjs` waits for the metadata before each capture. If the metadata has not loaded within 15 seconds, the capture fails with a message naming the metadata wait. The capture then waits until every label shows its duration; if that wait times out, the capture fails with a message about the label, not the metadata. The site's player renders the label as soon as the metadata is available, including when the metadata loaded before its script ran, so the capture waits for the page to show the duration and does not change the page.
 
 ## Scenario seeds
 
