@@ -498,17 +498,19 @@ function webpSize(b: Uint8Array) {
 }
 
 /**
+ * The pixel size a browser shows for `bytes`, a complete image of `type`, with width and height exchanged for a JPEG
+ * with Orientation 5 to 8, or null when it is not certain.
+ *
+ * It returns null for an unreadable header or a zero size; for a JPEG whose EXIF is unreadable, whose Orientation tag
+ * is malformed, that has a second Exif segment, whose Exif segment has a sixth byte that is not 0, or that has another
+ * APP1 segment before its Exif one (see `jpegSize`); for a PNG or WebP whose EXIF is unreadable or gives an Orientation
+ * other than 1; and for a still extended WebP whose canvas differs from its frame. It never throws.
+ *
  * Known limits: these rarer shapes are not detected, and each can give a size that some browsers do not use. They are
  * an Orientation tag stored outside the first EXIF directory (in the Exif, GPS or second directory), an orientation
  * given only in XMP inside a PNG, and EXIF resolution tags that make a browser scale the image. The effect is that the
  * reserved shape is wrong and the image shifts when it loads; nothing is distorted, because the CSS sets
  * `height: auto`.
- *
- * The pixel size a browser shows for `bytes`, a complete image of `type`, or null when it is not certain: an unreadable
- * header, a zero size, an EXIF block that cannot be read with certainty (it is read only inside its own segment or
- * chunk, and a second Exif segment in a JPEG counts as unreadable), or (for PNG and WebP) an Orientation other than 1,
- * which turns the picture by an amount decided in the browser. A JPEG with Orientation 5 to 8 is returned with width and
- * height exchanged. It returns null rather than a size it cannot be sure of. It never throws.
  */
 export function imageSize(bytes: Uint8Array, type: string): ImageSize | null {
 	try {
