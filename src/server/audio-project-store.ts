@@ -557,11 +557,16 @@ const guardedBatch = (statements: (db: D1Database) => D1PreparedStatement[]) =>
  * SQL that holds when the rows `from` (a FROM clause with its WHERE, binding `values`) are exactly the files `ids`: as many rows
  * as ids, and every id among them. No order of the rows is relied on. Returns the SQL and the values it binds.
  */
+type GuardSql = {
+	readonly sql: string;
+	readonly bind: readonly (string | number)[];
+};
+
 function exactlyTheFiles(
 	from: string,
 	values: readonly (string | number)[],
 	ids: readonly string[],
-): { readonly sql: string; readonly bind: readonly (string | number)[] } {
+): GuardSql {
 	const count = `(SELECT count(*) ${from})=?`;
 
 	if (ids.length === 0) return { sql: count, bind: [...values, 0] };
