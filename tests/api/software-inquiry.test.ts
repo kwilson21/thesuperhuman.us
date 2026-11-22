@@ -1946,6 +1946,7 @@ it("stores the largest brief with the fullest outline in a script of three bytes
 	};
 
 	const quote = `b${pad(78)}c${pad(79)}d`;
+
 	const fill = (length: number, index: number) =>
 		`${pad(length - 1)}${"abcdefghijklmnopq"[index]}`;
 
