@@ -112,9 +112,13 @@ it("sends only allowed answer context with a twelve-token cap", async () => {
 	expect(await (await POST(context())).json()).toEqual({
 		suggestion: " in a shared spreadsheet",
 	});
+	// The model Cloudflare still serves (the first one was retired on 2026-11-20), with its thinking off: thinking would
+	// spend the twelve tokens and answer with empty text.
+	expect(run.mock.calls[0][0]).toBe("@cf/google/gemma-4-26b-a4b-it");
 	expect(run.mock.calls[0][1]).toMatchObject({
 		max_tokens: 12,
 		temperature: 0.1,
+		chat_template_kwargs: { enable_thinking: false },
 	});
 	expect(JSON.stringify(run.mock.calls)).not.toContain("test");
 });
