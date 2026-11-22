@@ -55,10 +55,10 @@ Rollback revision: `f33effae`, the revision of `main` before the merge; or `git 
 - **PASS · Checks, reviews, rollback.** See above.
 - **PASS, decided after release · The expiry gap.** Asked of the owner on 2026-11-22; the owner answered "You decide"
   (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is (the code was valid at
-  the entry's clock reading, and the gap, from that reading through two hashes and two round trips to the write, is
-  milliseconds after a ten-minute life). The alternative, re-checking expiry at write time, needed a second clock
-  reading that the non-interference test's clock guard fails on. The model records today's behaviour, so nothing
-  changes.
+  the entry's clock reading, and the gap, from that reading through three hashes (the two before the read batch and the
+  session token's after it) and two round trips to the write, is milliseconds after a ten-minute life). The alternative,
+  re-checking expiry at write time, needed a second clock reading that the non-interference test's clock guard fails on.
+  The model records today's behaviour, so nothing changes.
 - **N/A · Bindings, migrations.** None.
 - **PASS · Production revision and live check.** Deployed `84d20dda`; the site answered 200.
 

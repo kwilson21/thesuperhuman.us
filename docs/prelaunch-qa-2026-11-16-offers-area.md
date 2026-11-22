@@ -60,13 +60,13 @@ the model in #317; records `docs/prelaunch-qa-2026-11-15-offers-model-and-fixes.
   is. Impact: neither can happen in the corpus (it answers every email at once), and live it needs the question's or
   decline's emails to stall past their own 10-second timeouts or the worker to stop the actor. If it did, the first
   batch is saved and the client email's outcome is unknown, yet the sentence asks for a retry where the after-email
-  answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with the open wording of those after-email
-  answers, whether this should also say to reload; the owner answered "You decide" (in conversation, 2026-11-22), and
-  Claude Code decided as recommended: keep this answer as it is (two emails that each time out take 20 seconds, inside
-  the 30-second wait, so this path needs the actor to stop or a call to ignore its own 10-second abort), keep the
-  approved "Reload before you try again" on the after-email answers (the sentence begins "The email was sent", so the
-  owner knows that trying again sends the client email a second time, and changing the wording would not prevent it),
-  and keep the sentences this conversion added as written. Nothing changes.
+  answers ask for a reload. Follow-up: the owner was asked on 2026-11-16, with whether those after-email answers should
+  say "Reload before taking another action", whether this one should also say to reload; the owner answered "You decide"
+  (in conversation, 2026-11-22), and Claude Code decided: keep this answer as it is (two emails that each time out take
+  20 seconds, inside the 30-second wait, so this path needs the actor to stop or a call to ignore its own 10-second
+  abort), keep the approved "Reload before you try again" on the after-email answers (the sentence begins "The email was
+  sent", so the owner knows that trying again sends the client email a second time, and changing the wording would not
+  prevent it), and keep the sentences this conversion added as written. Nothing changes.
 
 ## The conversion (the third PR)
 
