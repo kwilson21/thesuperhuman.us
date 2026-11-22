@@ -13,7 +13,7 @@ import {
 	readOfferReply,
 } from "../../lib/offer-board";
 import type { MarketRange } from "../../lib/pricing-reference";
-import { decideAndSave } from "../guarded-save";
+import { alwaysDecideAndSave } from "../guarded-save";
 import {
 	type OfferBrief,
 	readOfferRequest,
@@ -46,7 +46,7 @@ export const suggestOffer = (asked: OfferSuggestion) =>
 		const day = now.toISOString().slice(0, 10);
 		let brief: OfferBrief | null = null;
 
-		yield* decideAndSave({
+		yield* alwaysDecideAndSave({
 			facts: readOfferRequest(id, day).pipe(
 				Effect.tap((read) =>
 					Effect.sync(() => {
@@ -55,10 +55,7 @@ export const suggestOffer = (asked: OfferSuggestion) =>
 				),
 				Effect.map((read) => read.facts),
 			),
-			decide: (facts) =>
-				reserveOfferSuggestion
-					.decide({ day }, facts)
-					.pipe(Effect.map(Option.some)),
+			decide: (facts) => reserveOfferSuggestion.decide({ day }, facts),
 			save: reserveOfferBudget,
 		});
 

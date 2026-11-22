@@ -1671,6 +1671,121 @@ function check(name, ok, detail = "") {
 
 		if (pressedRequest) await release(pressedRequest);
 
+		// A finger on the cards holds a reply until they have been still for a moment, so nothing moves under it (the
+		// twenty-seventh review: a touch scroll did not count, and cards jumped up to 314 px under the finger). Touch is
+		// emulated on this page for the check only.
+		await page.setViewportSize({ width: 390, height: 844 });
+		await fresh();
+
+		const touch = await page.context().newCDPSession(page);
+
+		await touch.send("Emulation.setTouchEmulationEnabled", {
+			enabled: true,
+			maxTouchPoints: 1,
+		});
+		await page.evaluate(() =>
+			document
+				.querySelector("#offer-board-title")
+				.scrollIntoView({ block: "start" }),
+		);
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const underFinger = await next();
+		const scroller = await page.locator("[data-offer-scroll]").boundingBox();
+
+		const finger = {
+			x: scroller.x + 120,
+			y: scroller.y + scroller.height - 120,
+		};
+
+		await touch.send("Input.dispatchTouchEvent", {
+			type: "touchStart",
+			touchPoints: [finger],
+		});
+
+		for (let step = 1; step <= 6; step++) {
+			await touch.send("Input.dispatchTouchEvent", {
+				type: "touchMove",
+				touchPoints: [{ x: finger.x, y: finger.y - step * 25 }],
+			});
+			await page.waitForTimeout(40);
+		}
+
+		const milestoneTop = () =>
+			card("milestones").evaluate(
+				(element) => element.getBoundingClientRect().top,
+			);
+
+		const isHeld = () =>
+			page
+				.locator("[data-offer-held]")
+				.evaluate((element) => !element.hasAttribute("data-idle"));
+
+		const fingerTop = await milestoneTop();
+		const moreCards = scriptedOfferReply(underFinger.request().postData());
+
+		moreCards.cards.unshift({
+			ref: "",
+			lane: "outcome",
+			text: "A band website that sells out shows and keeps fans coming back",
+			reason: "",
+			detail: null,
+		});
+		await release(underFinger, moreCards);
+		await page.waitForTimeout(500);
+
+		const heldUnderFinger =
+			(await isHeld()) && Math.abs((await milestoneTop()) - fingerTop) < 1;
+
+		await touch.send("Input.dispatchTouchEvent", {
+			type: "touchEnd",
+			touchPoints: [],
+		});
+		await page.waitForTimeout(3500);
+		check(
+			"a finger on the cards holds a reply, which lands once they have been still for 3 seconds",
+			heldUnderFinger && !(await isHeld()),
+			`${fingerTop} -> ${await milestoneTop()}`,
+		);
+		await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+		await touch.detach();
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		// A field below the board keeps its place while the owner types in it and a reply redraws the prices above it (the
+		// twenty-seventh review: the offer editor's Summary jumped 22 to 44 px between two typed words).
+		await fresh();
+		await page.evaluate(() => {
+			const field = document.querySelector('[name="summary"]');
+
+			window.scrollBy(0, field.getBoundingClientRect().top - 440);
+		});
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+
+		const following = await next(20000);
+
+		await page.keyboard.type(" and find");
+
+		const fieldTop = () =>
+			page
+				.locator('[name="summary"]')
+				.first()
+				.evaluate((element) => element.getBoundingClientRect().top);
+
+		const typingTop = await fieldTop();
+		const longerReason = scriptedOfferReply(following.request().postData());
+
+		longerReason.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(following, longerReason);
+		await page.waitForTimeout(600);
+		await page.keyboard.type(" shows");
+		check(
+			"a field below the board keeps its place while a reply redraws the prices above it",
+			Math.abs((await fieldTop()) - typingTop) < 1,
+			`${typingTop} -> ${await fieldTop()}`,
+		);
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page

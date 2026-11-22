@@ -529,14 +529,14 @@ const MONEY = new RegExp(
 
 /** A money word, in the languages listed above, standing as a word of its own. */
 const OFFER_MONEY_WORD =
-	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
+	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|deposits?|payments?|pay|total|rates?|charges?|invoices?|retainers?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
 
 /**
  * What may stand between a money word and its amount: a colon, then up to two of these words, each perhaps followed by
  * a colon ("of", "is about", "of around", ": roughly", "von ca.").
  */
 const OFFER_CONNECTOR =
-	"\\s*(?:[:：]\\s*)?(?:(?:of|is|at|around|about|under|over|roughly|approximately|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,2}";
+	"\\s*(?:[:：]\\s*)?(?:(?:of|is|at|around|about|under|over|roughly|approximately|between|from|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,2}";
 
 /** A scale word after a number, in the languages listed above ("thousand", "mil", "millones", "Tausend", "тыс.", "bin"). */
 const SCALE =
@@ -552,7 +552,7 @@ const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
 
 /** A range after an amount ("to 6", "- 8", "– 1,200"). */
-const OFFER_RANGE = `(?:\\s*(?:to|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?(?:k|${SCALE})(?![\\p{L}]))?)?`;
+const OFFER_RANGE = `(?:\\s*(?:to|and|-|–|a|à|bis)\\s*\\d[\\d,.]*(?:\\s?(?:k|${SCALE})(?![\\p{L}]))?)?`;
 
 /** Units of time, and things an offer counts, in the languages listed above. */
 const OFFER_UNITS =

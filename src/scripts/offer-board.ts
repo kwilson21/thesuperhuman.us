@@ -55,6 +55,9 @@ const IDLE = 3000;
 /** The least time between two requests. */
 const GAP = 10000;
 
+/** How long a finger on the cards, or the cards scrolling, holds a reply after it stops (as the living brief's board). */
+const QUIET = 3000;
+
 /** The milestone fields Use fills. Use fills a row only when these are all empty, and a row it added goes on Undo only when they are empty again. */
 const MILESTONE_FIELDS = [
 	"milestoneName",
@@ -196,6 +199,8 @@ export function setupOfferBoard() {
 		hovering = false,
 		hoveringPrices = false,
 		pressing = false,
+		touchedAt = 0,
+		quietTimer: ReturnType<typeof setTimeout> | undefined,
 		pressNumber = 0,
 		lastFailure: string | null = null,
 		timer: ReturnType<typeof setTimeout> | undefined,
@@ -267,6 +272,7 @@ export function setupOfferBoard() {
 	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply. The
 	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
 	const interacting = () =>
+		Date.now() - touchedAt < QUIET ||
 		hovering ||
 		hoveringPrices ||
 		pressing ||
@@ -821,7 +827,14 @@ export function setupOfferBoard() {
 				details.has(card.id),
 		);
 
-		const inOffer = onBoard.filter((card) => used.has(card.id));
+		const inOffer = board.cards.filter(
+			(card) =>
+				card.lane === "milestones" &&
+				details.has(card.id) &&
+				used.has(card.id) &&
+				rowOf(card) !== null,
+		);
+
 		const counted = (inOffer.length ? inOffer : onBoard).slice(0, 3);
 		const days = counted.flatMap((card) => details.get(card.id) ?? []);
 
@@ -1057,7 +1070,40 @@ export function setupOfferBoard() {
 			).focus();
 	}
 
+	/**
+	 * The first card showing in the cards' box and where it sits. The box takes no scroll anchor (overflow-anchor is off, so
+	 * the page never follows a card in it, and Safari has none), so a redraw keeps that card in place itself.
+	 */
+	function boxAnchor() {
+		if (cardsBox.scrollTop === 0) return null;
+
+		const top = cardsBox.getBoundingClientRect().top;
+
+		const node = [
+			...cardsBox.querySelectorAll<HTMLElement>("[data-card]"),
+		].find((each) => each.getBoundingClientRect().bottom > top);
+
+		return node?.dataset.card
+			? {
+					id: node.dataset.card,
+					offset: node.getBoundingClientRect().top - top,
+				}
+			: null;
+	}
+
+	function keepAnchor(anchor: { id: string; offset: number } | null) {
+		const node = anchor ? nodes.get(anchor.id) : undefined;
+
+		if (!anchor || !node?.isConnected) return;
+		cardsBox.scrollTop +=
+			node.getBoundingClientRect().top -
+			cardsBox.getBoundingClientRect().top -
+			anchor.offset;
+	}
+
 	function render() {
+		const anchor = boxAnchor();
+
 		const alive = new Set(
 			board.cards
 				.filter((card) => card.status !== "dismissed")
@@ -1169,6 +1215,7 @@ export function setupOfferBoard() {
 		askButton.textContent = replied
 			? "Suggest again"
 			: "Suggest an offer with AI";
+		keepAnchor(anchor);
 		drawPrices();
 	}
 
@@ -1206,6 +1253,10 @@ export function setupOfferBoard() {
 	function apply(reply: Held, shown = false) {
 		replied = true;
 
+		// A newer reply replaces updates that were waiting; focus on their button, about to hide, goes to the heading.
+		const replaced = held !== null && held !== reply;
+		const showFocused = document.activeElement === heldButton;
+
 		const result = applyReplyIn(
 			OFFER_LANE_CONFIG,
 			board,
@@ -1224,7 +1275,23 @@ export function setupOfferBoard() {
 
 		sizing = reply.sizing.size ? reply.sizing : sizing;
 		held = null;
+
+		// A field below the board that the owner is typing in stays put when the board above it grows or shrinks.
+		const typing =
+			document.activeElement instanceof HTMLElement &&
+			document.activeElement !== document.body &&
+			!document.activeElement.closest("[data-offer-board]")
+				? document.activeElement
+				: null;
+
+		const typingAt = typing?.getBoundingClientRect().top ?? 0;
+
 		render();
+
+		if (typing?.isConnected)
+			window.scrollBy(0, typing.getBoundingClientRect().top - typingAt);
+
+		if (showFocused) heading.focus({ preventScroll: true });
 
 		const added = `${result.added} new ${result.added === 1 ? "suggestion" : "suggestions"}.`;
 
@@ -1247,7 +1314,11 @@ export function setupOfferBoard() {
 						: "Up to date with your draft.";
 
 		// The reply to the page's last request says so: the board asks nothing more on this page.
-		const full = reply.last ? `${done} ${PAGE_LIMIT}` : done;
+		const said = replaced
+			? `${done} It replaces the updates that were waiting.`
+			: done;
+
+		const full = reply.last ? `${said} ${PAGE_LIMIT}` : said;
 
 		// While the owner is among the cards the line keeps its height and a short form, so the cards do not move under the
 		// pointer or finger; the whole sentence is still announced, and Suggest says the limit again.
@@ -1883,6 +1954,23 @@ export function setupOfferBoard() {
 		apply(held, true);
 		heading.focus();
 	});
+
+	// A finger on the cards, or the cards scrolling by finger or wheel, holds replies until the cards have been still for a
+	// moment (as the living brief's board). A tap on the header's buttons (Suggest, Show updates, Undo) does not count, so
+	// the reply a tap on Suggest asks for is not held; nor does a scroll the page makes itself (moving focus, keeping a card
+	// in place).
+	const noteTouch = () => {
+		touchedAt = Date.now();
+		clearTimeout(quietTimer);
+		quietTimer = setTimeout(() => left(), QUIET + 50);
+	};
+
+	cardsBox.addEventListener("pointerdown", (event) => {
+		if (event.pointerType === "touch") noteTouch();
+	});
+	cardsBox.addEventListener("wheel", noteTouch, { passive: true });
+	cardsBox.addEventListener("touchmove", noteTouch, { passive: true });
+
 	cardsBox.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")
 			hovering = true;

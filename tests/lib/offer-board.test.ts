@@ -665,3 +665,33 @@ describe("found in the offer board's twenty-second review", () => {
 		},
 	);
 });
+
+describe("found in the offer board's twenty-seventh review", () => {
+	it.each([
+		"A deposit of 1,500 before work starts",
+		"Payment of 2,500 due at launch, the rest in two weeks",
+		"Budget between 2,000 and 4,000 limits the page count",
+		"Hosting, at a rate of 25 per month, paid by the client",
+		"A five-page site for a total of 4,500, built in four weeks.",
+		"Invoice 1,200 on approval",
+		"Total 4,500",
+		"Charge 5,000 at launch",
+		"Retainer 1,200 monthly",
+		"Budget from 2,000 to 4,000",
+	])(
+		"drops %s: a money word the test did not list, or a range by between or from",
+		(text) => {
+			expect(pricesOrLinks(text)).toBe(true);
+		},
+	);
+
+	it.each([
+		"Total 120 products in the catalogue",
+		"Estimate from 3 to 4 weeks",
+		"Charge 2 rounds of revisions to the next milestone",
+		"A conversion rate of 30% on the booking form",
+		"Payment in two milestones, half before each starts",
+	])("keeps %s: a count, a duration or a rate that is not money", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});
