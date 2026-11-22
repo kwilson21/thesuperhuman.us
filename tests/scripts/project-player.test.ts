@@ -159,7 +159,7 @@ function mountPlayer(media: {
 
 	vi.stubGlobal("document", { querySelectorAll: () => [player] });
 
-	return { audio, toggle, seek, time, player };
+	return { audio, toggle, seek, time, problem, status, player };
 }
 
 it("renders the duration from metadata that loaded before the script ran, without any event", () => {
@@ -178,7 +178,7 @@ it("shows the unavailable state from an error that happened before the script ra
 	// SAFETY: the script reads only the error's truthiness, so a plain object with a code stands in for MediaError.
 	const failed = { code: 4 } as MediaError;
 
-	const { toggle, seek, player } = mountPlayer({
+	const { toggle, seek, problem, status, player } = mountPlayer({
 		readyState: 0,
 		duration: NaN,
 		error: failed,
@@ -189,6 +189,26 @@ it("shows the unavailable state from an error that happened before the script ra
 	expect(player.classList.classes.has("unavailable")).toBe(true);
 	expect(toggle.disabled).toBe(true);
 	expect(seek.disabled).toBe(true);
+	expect(problem.hidden).toBe(false);
+	expect(status.textContent).toContain("could not load");
+});
+
+it("treats an error as unavailable even when metadata has also loaded, and does not render the duration", () => {
+	// SAFETY: the script reads only the error's truthiness, so a plain object with a code stands in for MediaError.
+	const failed = { code: 4 } as MediaError;
+
+	const { toggle, seek, time, player } = mountPlayer({
+		readyState: 1,
+		duration: 125,
+		error: failed,
+	});
+
+	setupProjectPlayers();
+
+	expect(player.classList.classes.has("unavailable")).toBe(true);
+	expect(toggle.disabled).toBe(true);
+	expect(seek.disabled).toBe(true);
+	expect(time.textContent).toBe("");
 });
 
 it("leaves the label alone until metadata loads, then renders on loadedmetadata", () => {

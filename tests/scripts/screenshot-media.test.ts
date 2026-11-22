@@ -17,7 +17,6 @@ type FakeAudio = {
 	src: string;
 	error: { code: number } | null;
 	readyState: number;
-	dispatchEvent: (event: { type: string }) => void;
 };
 
 function player(
@@ -26,16 +25,12 @@ function player(
 		error?: { code: number } | null;
 		readyState?: number;
 		label?: string;
-		events?: string[];
 	} = {},
 ): FakePlayer {
 	const audio: FakeAudio = {
 		src: options.src ?? "/a.mp3",
 		error: options.error ?? null,
 		readyState: options.readyState ?? 0,
-		dispatchEvent: (event) => {
-			options.events?.push(event.type);
-		},
 	};
 
 	const time = { textContent: options.label ?? "0:00" };
@@ -51,26 +46,16 @@ function player(
 }
 
 // Runs a page-side function in a fresh context whose document lists the given players.
-function inPage(
-	fn: () => boolean | void,
-	players: FakePlayer[],
-): boolean | undefined {
+function inPage(fn: () => boolean, players: FakePlayer[]): boolean {
 	const sandbox: Context = createContext({
 		document: {
 			querySelectorAll: (selector: string) =>
 				selector === "[data-project-player]" ? players : [],
 		},
-		Event: class {
-			type: string;
-
-			constructor(type: string) {
-				this.type = type;
-			}
-		},
 	});
 
 	// SAFETY: the page function returns a boolean (playersSettled or metadataLoaded), as typed above.
-	return runInContext(`(${fn.toString()})()`, sandbox) as boolean | undefined;
+	return runInContext(`(${fn.toString()})()`, sandbox) as boolean;
 }
 
 describe("metadataLoaded", () => {
