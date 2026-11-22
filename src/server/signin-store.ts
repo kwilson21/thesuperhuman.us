@@ -408,7 +408,7 @@ export const writeEntry = (batch: EntryBatch) => {
  */
 export const countAllowance = (key: string, times: AllowanceTimes) =>
 	asked(async (db): Promise<AllowanceCount> => {
-		const [, counted] = await db.batch<{ uses: number }>([
+		const [, counted] = await db.batch<{ uses: number | null }>([
 			db
 				.prepare("DELETE FROM audio_client_allowances WHERE window_start<=?")
 				.bind(times.staleAt),
@@ -420,7 +420,9 @@ export const countAllowance = (key: string, times: AllowanceTimes) =>
 
 		const row = counted.results[0];
 
-		return { uses: row ? Number(row.uses) : null };
+		// No row, or a row without a count, is no count: the rule refuses it, as today's `Infinity` did. The schema makes
+		// `uses` NOT NULL, so this is only a guard.
+		return { uses: row?.uses == null ? null : Number(row.uses) };
 	});
 
 // ---- sign-out (POST /api/studio/sign-out) ----

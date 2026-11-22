@@ -2763,6 +2763,20 @@ const zodRead = (parsed: { success: boolean; data?: RawValue }) =>
 const effectRead = (read: { ok: true; value: RawValue } | { ok: false }) =>
 	read.ok ? { ok: true as const, value: read.value } : { ok: false as const };
 
+/**
+ * Texts at a length limit counted in characters, with surrogate pairs and lone surrogates, where UTF-16 units and
+ * characters disagree: Zod 4 measures `max` in characters once the text is over it in units.
+ */
+const atCharacterLimit = (max: number) => [
+	`${"a".repeat(max - 1)}\u{1F600}`,
+	`${"a".repeat(max)}\u{1F600}`,
+	"\u{1F600}".repeat(max),
+	"\u{1F600}".repeat(max + 1),
+	`${"a".repeat(max - 1)}\uD83D`,
+	"\uD83D".repeat(max),
+	"\uDE00".repeat(max + 1),
+];
+
 describe("the studio code request body against the frozen Zod 4 schema", () => {
 	const bases: Body[] = [
 		{ email: "ada@example.com", turnstileToken: "token-1" },
@@ -2770,8 +2784,8 @@ describe("the studio code request body against the frozen Zod 4 schema", () => {
 	];
 
 	const pools = {
-		email: [...emails, ...texts(320), ...notStrings],
-		turnstileToken: [...texts(2048), ...notStrings],
+		email: [...emails, ...texts(320), ...atCharacterLimit(320), ...notStrings],
+		turnstileToken: [...texts(2048), ...atCharacterLimit(2048), ...notStrings],
 	} satisfies Pools;
 
 	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
@@ -2805,7 +2819,7 @@ describe("the studio code entry body against the frozen Zod 4 schema", () => {
 	];
 
 	const pools = {
-		email: [...emails, ...texts(320), ...notStrings],
+		email: [...emails, ...texts(320), ...atCharacterLimit(320), ...notStrings],
 		code: [
 			"12345678",
 			"00000000",
@@ -2905,7 +2919,7 @@ describe("the client address against the frozen Zod 4 normalizer", () => {
 		`${"a".repeat(314)}K@c.dd`,
 	];
 
-	const cores = [...emails, ...texts(320), ...odd];
+	const cores = [...emails, ...texts(320), ...atCharacterLimit(320), ...odd];
 
 	it("answers every address as the Zod normalizer did", () => {
 		const found = differential(

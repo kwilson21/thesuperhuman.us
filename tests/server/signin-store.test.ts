@@ -20,7 +20,7 @@ import {
 	writeIssue,
 } from "../../src/server/signin-store";
 import { boundStatement } from "../helpers/d1";
-import { double } from "../helpers/doubles";
+import { double, partial } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { freshMusicDb, type Seed, seed } from "../golden/harness/db";
 import * as rows from "../golden/harness/rows";
@@ -616,6 +616,29 @@ describe("the allowance", () => {
 			{ key: "k1", window_start: NOW, uses: 2 },
 			{ key: "k2", window_start: NOW, uses: 1 },
 		]);
+	});
+
+	it("answers no count when the counted row comes back without one, so the rule refuses it", async () => {
+		const statement = double<D1PreparedStatement>({});
+		statement.bind = () => statement;
+
+		const db = double<D1Database>({
+			prepare: () => statement,
+			// The two results the store reads: the prune's, then the upsert's row with no count.
+			batch: async <T>() => [
+				partial<D1Result<T>>({ results: [] }),
+				partial<D1Result<T>>({
+					// SAFETY: T is the row type the store asks for ({ uses, window_start }); this row is that shape with no count.
+					results: [{ uses: null, window_start: NOW }] as T[],
+				}),
+			],
+		});
+
+		expect(
+			await Effect.runPromise(
+				countAllowance("k1", at(NOW)).pipe(Effect.provideService(MusicDb, db)),
+			),
+		).toEqual({ uses: null });
 	});
 
 	it("prunes a window exactly five minutes old, and keeps one a millisecond younger", async () => {
