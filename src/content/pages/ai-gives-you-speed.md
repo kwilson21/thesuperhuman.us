@@ -1,4 +1,5 @@
 ---
+
 title: "AI Gives You Speed. Engineering Gives It Direction."
 description: "Why I give AI smaller tasks, check what it builds, and adjust the next step."
 ---
@@ -17,7 +18,7 @@ I think the opposite is true.
 
 ## Prompt Drift Is Often a Direction Problem
 
-The term *prompt drift* gets used in a few related ways. In production LLM systems, it can refer to changes in behavior as prompts, context, models, tools, or surrounding data evolve. Here I'm using it for the engineering failure mode I encounter most in agentic development: accumulated AI decisions gradually carrying an implementation away from the outcome I intended.
+The term _prompt drift_ gets used in a few related ways. In production LLM systems, it can refer to changes in behavior as prompts, context, models, tools, or surrounding data evolve. Here I'm using it for the engineering failure mode I encounter most in agentic development: accumulated AI decisions gradually carrying an implementation away from the outcome I intended.
 
 Most of that drift comes from one of two situations.
 

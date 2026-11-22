@@ -98,6 +98,16 @@ direction, and no schema in this repository uses CASCADE or SET NULL today. What
   to a table that moved across the response boundary, none of which change a digest;
 - the trigger-hit markers: an injected failure or interleave that, after the conversion, hits another operation or table.
 
+**A counter row at 0 is no state.** The digest of a database leaves out a `sqlite_sequence` row whose `seq` is 0 (a corpus
+rule, not a format change: the shape of a record is the same). For an AUTOINCREMENT table a counter row at 0 and no
+counter row give the same next id (SQLite takes the larger of the stored counter and the table's largest rowid), so no
+later statement can tell them apart, and a refused `INSERT ... SELECT` that creates one is not a write a rule moved out of
+SQL may be asked to repeat. Every other counter is still state. `tests/golden/harness/digest.test.ts` shows both halves, and
+`node scripts/golden-sequence-proof.mjs <from> [<to>]` proves a re-record after the rule changed only digests (by an
+exact list of paths), never gained a counter row, left every counter above 0 as it was, and has the same fixtures in both
+revisions. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
+the proof, not with `golden:neutral`.
+
 What is deliberately not compared, because a conversion may change it: the D1 statements themselves. So one UPDATE
 replaced by a DELETE and an INSERT of the same row, an INSERT OR REPLACE, an upsert turned into an UPDATE, a statement
 split into a read and a guarded write, and writes to different tables reordered between the same two effects are all
@@ -245,15 +255,17 @@ each binding the route uses, and multi-step sequences.
 ```ts
 const cases: Case[] = [
 	{
-		name: "review a new request",            // unique within the area; it is the fixture key
-		music: { seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] } },
+		name: "review a new request", // unique within the area; it is the fixture key
+		music: {
+			seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] },
+		},
 		steps: [
 			{
-				as: asOwner(),                     // asVisitor(), asClient(email), asClientCookie(token)
+				as: asOwner(), // asVisitor(), asClient(email), asClientCookie(token)
 				path: "/api/owner/requests/r1",
 				params: { id: "r1" },
-				json: { action: "review" },        // or body: "{bad" for raw text
-				advanceMs: 60_000,                 // move the clock before this request
+				json: { action: "review" }, // or body: "{bad" for raw text
+				advanceMs: 60_000, // move the clock before this request
 				dump: { music: ["owner_requests", "owner_request_audit"] },
 			},
 		],

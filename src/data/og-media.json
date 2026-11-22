@@ -141,13 +141,13 @@
   },
   "home": {
     "image": "/og/home-feaa0743d2.png",
-    "video": "/og/home-3d557ab871.mp4",
+    "video": "/og/home-e4fba17fa8.mp4",
     "width": 1200,
     "height": 630,
     "durationMs": 7000,
     "imageBytes": 439902,
-    "videoBytes": 627105,
-    "frames": "46a5bc0eb55e3a3a",
+    "videoBytes": 652405,
+    "frames": "833c6ee593b57002",
     "inputs": [
       "public/fonts/kazon-name-display.woff2",
       "public/fonts/libron-v0.25/Libron-Regular.woff2",
@@ -158,7 +158,7 @@
       "src/assets/projects/tally/transactions-demo-2026-09-26.webp",
       "src/assets/site/studio-v1.webp"
     ],
-    "source": "0844ed7d24a9a538",
+    "source": "a291aa6339243e1f",
     "encoding": "5341c8ca6c6bf333"
   },
   "music-old-news": {

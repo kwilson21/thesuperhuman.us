@@ -254,6 +254,12 @@
   @media (max-width: 380px) { .site-button { white-space: normal; text-align: center; } }
 
   .site-button-large { min-height: 52px; font-size: 1.0625rem; padding-inline: min(1.75rem, 8.75vw); gap: .6rem; }
+  /* Optical balance: only labelled icon buttons opt in. Keep the hit area and
+     text-side inset; the lighter icon side needs one spacing step less. */
+  .site-button-trailing { padding-inline-end: var(--space-4); gap: var(--space-2); }
+  .site-button-leading { padding-inline-start: var(--space-4); gap: var(--space-2); }
+  .site-button-large.site-button-trailing { padding-inline-end: min(var(--space-5), 6.25vw); }
+  .site-button-icon { flex-shrink: 0; }
   .site-button-large span { transition: transform var(--dur-hover) var(--ease-site); }
   @media (hover: hover) and (pointer: fine) {
     .site-button:hover:not(:disabled) { color: var(--paper); background: var(--ink); border-color: var(--ink); }

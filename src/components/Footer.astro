@@ -7,7 +7,7 @@ interface Props {
 	buttonLabel?: string;
 	buttonPath?: string;
 	id?: string;
-	/** The pinned phone button. Invitation pages have it; Home, a quiet page, asks for it too. */
+	/** Invitation pages have the phone action; contact and intake pages stay quiet. */
 	pinned?: boolean;
 }
 
@@ -37,11 +37,11 @@ const privacyHref = mainHref("/privacy");
 const homeHref = mainHref("/");
 const year = new Date().getFullYear();
 ---
-{pinned && <div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large" href={mainHref(buttonPath)}>{buttonLabel}</a></div>}
+{pinned && <div class="contact-track" data-contact-track><div class="pinned-contact" data-pinned-contact hidden><a class="site-button site-button-large site-button-trailing" href={mainHref(buttonPath)}>{buttonLabel} <span class="site-button-icon" aria-hidden="true">→</span></a></div></div>}
 <footer class="compact-footer site-shell">
   <div class:list={['closing-panel', { 'closing-panel--quiet': variant === 'quiet' }]} id={id}>
     {variant === 'quiet' && <a class="footer-name" href={homeHref}><PersonalName variant="full" /></a>}
-    {variant === 'invitation' && <a class="site-button site-button-large" href={mainHref(buttonPath)} data-closing-button>{buttonLabel} <span aria-hidden="true">→</span></a>}
+    {variant === 'invitation' && <a class="site-button site-button-large site-button-trailing" href={mainHref(buttonPath)} data-closing-button>{buttonLabel} <span class="site-button-icon" aria-hidden="true">→</span></a>}
     <nav aria-label="Elsewhere"><a href="https://github.com/kwilson21">GitHub</a><a href="https://www.linkedin.com/in/kazonwilson/">LinkedIn</a><a href={audioHref}>Audio</a><a href={hireHref}>Work with me</a><a href="https://ko-fi.com/kazonwilson">Support my work</a><a href={privacyHref}>Privacy</a></nav>
     <p class="closing-legal">The Superhuman Group LLC · {year}</p>
   </div>
@@ -52,6 +52,9 @@ const year = new Date().getFullYear();
   setupPinnedContact();
 </script>
 <style>
+  /* Hallmark · component: contact handoff · genre: editorial · design-system: design.md
+     Pre-emit critique: Philosophy 5 · Hierarchy 4 · Execution 4 · Specificity 5 · Restraint 5 · Variety 4 */
+  .compact-footer, .pinned-contact { --contact-gutter: min(var(--site-gutter), max(24px, 7.5vw)); --contact-panel-inset: min(1.25rem, 6.25vw); --contact-action-max: 15rem; }
   /* The side gutter is rem-based, so it doubles with enlarged text and squeezes the closing panel at phone widths. Capped by the viewport, and never below 24px, it equals the site gutter at every width at the default size. */
   .compact-footer { margin-top: var(--site-section-space); padding-inline: min(var(--site-gutter), max(24px, 7.5vw)); padding-bottom: var(--space-8); }
   .closing-panel { display: grid; justify-items: center; text-align: center; padding: 3rem 2rem 2.25rem; background: var(--panel); border-radius: var(--radius-panel); }
@@ -70,15 +73,24 @@ const year = new Date().getFullYear();
   /* The Get in touch button may wrap its label at any width, so enlarged text reflows inside the panel. */
   .closing-panel .site-button-large { white-space: normal; text-align: center; }
   .closing-legal { margin: 1rem 0 0; color: var(--muted); font-size: .875rem; text-wrap: balance; }
-  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } }
+  @media (max-width: 600px) { .closing-panel { border-radius: 28px; padding: 3rem min(1.25rem, 6.25vw) 1.75rem; } .closing-panel [data-closing-button] { width: min(100%, var(--contact-action-max)); box-sizing: border-box; } }
+  .contact-track { display: none; }
   .pinned-contact { display: none; }
   @media (max-width: 600px) {
-    .pinned-contact:not([hidden]) { display: flex; position: fixed; inset: auto 0 0 0; z-index: 4; padding: var(--space-3) var(--site-gutter) calc(var(--space-4) + env(safe-area-inset-bottom)); background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); pointer-events: none; }
-    .pinned-contact .site-button { pointer-events: auto; width: 100%; }
-    .pinned-contact[data-at-end] { display: none; }
+    :global(body:has([data-contact-track])) { position: relative; }
+    .contact-track { display: block; position: absolute; inset: 0 0 var(--contact-track-bottom, 0px); pointer-events: none; z-index: 4; }
+    .pinned-contact:not([hidden]) { display: flex; position: sticky; top: max(0px, calc(100dvh - var(--contact-height, 0px))); z-index: 4; padding: var(--space-3) calc(var(--contact-gutter) + var(--contact-panel-inset)) calc(var(--space-4) + env(safe-area-inset-bottom)); pointer-events: none; }
+    .pinned-contact::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, color-mix(in srgb, var(--paper) 96%, transparent) 55%, transparent); }
+    .pinned-contact .site-button { pointer-events: auto; width: min(100%, var(--contact-action-max)); margin-inline: auto; box-sizing: border-box; white-space: normal; text-align: center; }
+    /* Keep the slot's geometry while the same visible link docks into it. */
+    [data-closing-button][data-contact-proxy] { visibility: hidden; }
+    .pinned-contact[data-docked]::before { opacity: 0; }
+    @media (prefers-reduced-motion: no-preference) {
+      .pinned-contact::before { transition: opacity var(--dur-hover) var(--ease-site); }
+    }
     :global(body:has(.mobile-menu[open])) .pinned-contact { display: none; }
     :global(body:has(main :is(input, textarea, select):focus)) .pinned-contact { display: none; }
     :global(html:has([data-pinned-contact]:not([hidden]))) { scroll-padding-bottom: 5.5rem; }
   }
-  @media print { .pinned-contact { display: none !important; } }
+  @media print { .pinned-contact { display: none !important; } [data-closing-button][data-contact-proxy] { visibility: visible; } }
 </style>

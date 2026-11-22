@@ -213,7 +213,7 @@ describe("POST /api/resume-request", () => {
 		expect(resendCall).toBeTruthy();
 		const body = JSON.parse(String(resendCall?.[1]?.body));
 		expect(body.to).toEqual(["kazon.wilson@thesuperhuman.us"]);
-		expect(body.text).toContain("/api/resume-approve?id=");
+		expect(body.text).toContain("/owner/resume-approve?id=");
 		expect(body.text).toContain("general");
 	});
 });

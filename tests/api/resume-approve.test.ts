@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { APIContext } from "astro";
-import { GET } from "~/pages/api/resume-approve";
+import {
+	GET as legacyGet,
+	HEAD as legacyHead,
+	POST as legacyPost,
+} from "~/pages/api/resume-approve";
+import {
+	GET as ownerGet,
+	HEAD as ownerHead,
+	POST as ownerPost,
+} from "~/pages/owner/resume-approve";
 import { double, partial, fakeKv } from "../helpers/doubles";
 import type { TestRuntime } from "../helpers/runtime";
 
@@ -18,221 +27,226 @@ function makeBinaryKv(
 	storedRequests: Partial<Record<string, typeof sampleRequest>> = {},
 ) {
 	return fakeKv({
-		get: vi.fn(async (k: string, type?: string) => {
-			if (type === "arrayBuffer") {
-				return pdfs[k] ?? null;
-			}
+		get: vi.fn(async (key: string, type?: string) => {
+			if (type === "arrayBuffer") return pdfs[key] ?? null;
+			const request = storedRequests[key];
 
-			const r = storedRequests[k];
-
-			return r === undefined ? null : JSON.stringify(r);
+			return request === undefined ? null : JSON.stringify(request);
 		}),
 		put: vi.fn(),
 		delete: vi.fn(),
 	});
 }
 
-function makeContext(id: string | null, kv: ReturnType<typeof makeBinaryKv>) {
-	const url =
-		id === null
-			? "https://thesuperhuman.us/api/resume-approve"
-			: `https://thesuperhuman.us/api/resume-approve?id=${id}`;
+function makeContext(
+	kv: ReturnType<typeof makeBinaryKv>,
+	method: "GET" | "HEAD" | "POST",
+	options: {
+		id?: string;
+		origin?: string;
+		path?: string;
+		owner?: boolean;
+		malformed?: boolean;
+	} = {},
+) {
+	const origin = "https://thesuperhuman.us";
+	const path = options.path ?? "/owner/resume-approve";
+	const url = `${origin}${path}${options.id === undefined ? "?id=abc" : `?id=${encodeURIComponent(options.id)}`}`;
+	const headers = new Headers();
+	let body: string | undefined;
 
-	return partial<APIContext>({
-		request: new Request(url, { method: "GET" }),
-		url: new URL(url),
-		locals: {
-			runtime: partial<TestRuntime>({
-				env: partial<TestRuntime["env"]>({
-					RESEND_API_KEY: "key",
-					CONTACT_FROM_EMAIL: "noreply@thesuperhuman.us",
-					RATE_LIMIT: kv,
-					RESUME_STORE: kv,
-				}),
+	if (method === "POST") {
+		headers.set("content-type", "application/x-www-form-urlencoded");
+
+		if (options.origin !== undefined) headers.set("origin", options.origin);
+		body = options.malformed
+			? "%"
+			: new URLSearchParams({ id: options.id ?? "abc" }).toString();
+	}
+
+	const request = new Request(url, { method, headers, body });
+
+	const locals = partial<APIContext["locals"]>({
+		runtime: partial<TestRuntime>({
+			env: partial<TestRuntime["env"]>({
+				RESEND_API_KEY: "key",
+				CONTACT_FROM_EMAIL: "noreply@thesuperhuman.us",
+				RATE_LIMIT: kv,
+				RESUME_STORE: kv,
 			}),
-		},
+		}),
 	});
+
+	if (options.owner) locals.owner = { email: "owner@example.test" };
+
+	return partial<APIContext>({ request, url: new URL(url), locals });
 }
 
 let fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
 
 beforeEach(() => {
 	fetchMock = vi.fn<typeof fetch>(async (url) => {
-		if (String(url).includes("resend.com")) {
-			return double<Response>({
-				ok: true,
-				json: async () => ({ id: "em_1" }),
-			});
-		}
+		if (String(url).includes("resend.com"))
+			return double<Response>({ ok: true, json: async () => ({ id: "em_1" }) });
 
 		return double<Response>({ ok: false, json: async () => ({}) });
 	});
 	vi.stubGlobal("fetch", fetchMock);
 });
 
-describe("GET /api/resume-approve", () => {
-	it("returns 400 HTML when id is missing", async () => {
+function expectPrivateResponse(
+	response: Response,
+	formAction: "self" | "none" = "self",
+) {
+	expect(response.headers.get("cache-control")).toBe("private, no-store");
+	expect(response.headers.get("referrer-policy")).toBe("strict-origin");
+	expect(response.headers.get("x-robots-tag")).toContain("noindex");
+	expect(response.headers.get("content-security-policy")).toContain(
+		"form-action '" + formAction + "'",
+	);
+}
+
+describe("legacy /api/resume-approve", () => {
+	it("preserves outstanding GET links by redirecting into the protected owner page", async () => {
 		const kv = makeBinaryKv({});
-		const res = await GET(makeContext(null, kv));
-		expect(res.status).toBe(400);
-		expect(res.headers.get("content-type")).toContain("text/html");
-	});
 
-	it("returns 404 HTML when id is not in KV", async () => {
-		const kv = makeBinaryKv({});
-		const res = await GET(makeContext("does-not-exist", kv));
-		expect(res.status).toBe(404);
-		const text = await res.text();
-		expect(text).toMatch(/already processed|expired|not found/i);
-	});
-
-	it("returns 500 HTML when the PDF is missing from KV", async () => {
-		const kv = makeBinaryKv({}, { "req:abc": sampleRequest });
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(500);
-		// Request should NOT be deleted on failure, so operator can retry after fixing.
-		expect(kv.delete).not.toHaveBeenCalled();
-	});
-
-	it("still fulfills a stored legacy DoD request and consumes it only after delivery", async () => {
-		const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer; // "%PDF-"
-		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": sampleRequest });
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(200);
-		expect(res.headers.get("content-type")).toContain("text/html");
-
-		const text = await res.text();
-		expect(text).toContain("jane@example.com");
-		expect(text).toMatch(/sent/i);
-
-		expect(kv.delete).toHaveBeenCalledWith("req:abc");
-
-		const resendCall = fetchMock.mock.calls.find(([input]) =>
-			String(input).includes("resend.com"),
+		const response = await legacyGet(
+			makeContext(kv, "GET", { path: "/api/resume-approve" }),
 		);
 
-		expect(resendCall).toBeTruthy();
-		const body = JSON.parse(String(resendCall?.[1]?.body));
-		expect(body.to).toEqual(["jane@example.com"]);
-		expect(body.attachments).toHaveLength(1);
-		expect(body.attachments[0].filename).toBe("kazon-wilson-resume-dod.pdf");
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe(
+			"/owner/resume-approve?id=abc",
+		);
+		expect(kv.get).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(response, "none");
 	});
 
-	it("does not delete the request when send fails", async () => {
-		const pdf = new ArrayBuffer(4);
-		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": sampleRequest });
-		fetchMock.mockResolvedValue(
-			double<Response>({
-				ok: false,
-				status: 500,
-				json: async () => ({}),
+	it("keeps HEAD non-mutating and makes the legacy POST incapable of delivery", async () => {
+		const kv = makeBinaryKv({});
+
+		const head = await legacyHead(
+			makeContext(kv, "HEAD", { path: "/api/resume-approve" }),
+		);
+
+		const post = await legacyPost(
+			makeContext(kv, "POST", {
+				path: "/api/resume-approve",
+				origin: "https://thesuperhuman.us",
 			}),
 		);
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(500);
+
+		expect(head.status).toBe(303);
+		expect(post.status).toBe(405);
+		expect(post.headers.get("allow")).toBe("GET, HEAD");
+		expect(kv.get).not.toHaveBeenCalled();
 		expect(kv.delete).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(head, "none");
+		expectPrivateResponse(post, "none");
 	});
 });
 
-describe("GET /api/resume-approve escapes visitor text", () => {
-	const hostileRequest = {
-		...sampleRequest,
-		name: "<img src=x onerror=alert(1)>",
-		email: "<svg/onload=alert(1)>@x.co",
-	};
+describe("owner resume approval", () => {
+	it("refuses unauthenticated GET and POST without reading or delivering", async () => {
+		const kv = makeBinaryKv({});
+		const get = await ownerGet(makeContext(kv, "GET"));
 
-	// SAFETY: the route reads `audience` back from KV without checking it against the audience union; this fake stores the hostile string as written so the test exercises that path.
-	const hostileAudienceRequest = {
-		...hostileRequest,
-		audience: "<b>dod</b>" as typeof sampleRequest.audience,
-	};
+		const post = await ownerPost(
+			makeContext(kv, "POST", { origin: "https://thesuperhuman.us" }),
+		);
 
-	function expectEscaped(text: string, raw: string[], escaped: string[]) {
-		for (const markup of raw) {
-			expect(text).not.toContain(markup);
-		}
+		expect(get.status).toBe(403);
+		expect(post.status).toBe(403);
+		expect(kv.get).not.toHaveBeenCalled();
+		expect(kv.delete).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(get);
+		expectPrivateResponse(post);
+	});
 
-		for (const entity of escaped) {
-			expect(text).toContain(entity);
-		}
-	}
+	it("authenticated GET renders one explicit confirmation and performs no delivery", async () => {
+		const kv = makeBinaryKv({});
+		const response = await ownerGet(makeContext(kv, "GET", { owner: true }));
+		const text = await response.text();
+		expect(response.status).toBe(200);
+		expect(text).toContain('method="post"');
+		expect(text).toContain('name="id" value="abc"');
+		expect(text).toContain("Approve and send resume");
+		expect(text).not.toContain("jane@example.com");
+		expect(text).not.toContain("https://fonts.");
+		expect(kv.get).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(response);
+	});
 
-	it("escapes the name and email on the Resume not sent page", async () => {
-		const pdf = new ArrayBuffer(4);
-		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": hostileRequest });
-		fetchMock.mockResolvedValue(
-			double<Response>({
-				ok: false,
-				status: 500,
-				json: async () => ({}),
+	it("authenticated HEAD never reads or delivers", async () => {
+		const kv = makeBinaryKv({});
+		const response = await ownerHead(makeContext(kv, "HEAD", { owner: true }));
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("");
+		expect(kv.get).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(response);
+	});
+
+	it("same-origin authenticated POST delivers only to the stored requester", async () => {
+		const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer;
+		const kv = makeBinaryKv({ "pdf:dod": pdf }, { "req:abc": sampleRequest });
+
+		const response = await ownerPost(
+			makeContext(kv, "POST", {
+				owner: true,
+				origin: "https://thesuperhuman.us",
 			}),
 		);
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(500);
 
-		expectEscaped(
-			await res.text(),
-			["<img", "<svg"],
-			[
-				"Request is for &lt;img src=x onerror=alert(1)&gt; (&lt;svg/onload=alert(1)&gt;@x.co).",
-			],
+		expect(response.status).toBe(200);
+		expect(await response.text()).toContain("Resume sent");
+		expect(kv.delete).toHaveBeenCalledWith("req:abc");
+
+		const resend = fetchMock.mock.calls.find(([input]) =>
+			String(input).includes("resend.com"),
 		);
+
+		expect(resend).toBeTruthy();
+		expect(JSON.parse(String(resend?.[1]?.body)).to).toEqual([
+			"jane@example.com",
+		]);
+		expectPrivateResponse(response);
 	});
 
-	it("escapes the audience and email on the Resume sent page", async () => {
-		const pdf = new ArrayBuffer(4);
+	it("rejects cross-origin POST before reading or delivering", async () => {
+		const kv = makeBinaryKv({});
 
-		const kv = makeBinaryKv(
-			{ "pdf:<b>dod</b>": pdf },
-			{ "req:abc": hostileAudienceRequest },
-		);
-
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(200);
-
-		expectEscaped(
-			await res.text(),
-			["<b>", "<svg", "<img"],
-			[
-				"Delivered the <strong>&lt;b&gt;dod&lt;/b&gt;</strong> resume to <strong>&lt;svg/onload=alert(1)&gt;@x.co</strong>.",
-			],
-		);
-	});
-
-	it("escapes the audience on the Resume not in storage page", async () => {
-		const kv = makeBinaryKv({}, { "req:abc": hostileAudienceRequest });
-
-		const res = await GET(makeContext("abc", kv));
-		expect(res.status).toBe(500);
-
-		expectEscaped(
-			await res.text(),
-			["<b>"],
-			["<code>pdf:&lt;b&gt;dod&lt;/b&gt;</code>"],
-		);
-	});
-
-	it("shows an apostrophe and an ampersand in a name as escaped text", async () => {
-		const pdf = new ArrayBuffer(4);
-
-		const kv = makeBinaryKv(
-			{ "pdf:dod": pdf },
-			{ "req:abc": { ...sampleRequest, name: "O'Neil & Sons" } },
-		);
-
-		fetchMock.mockResolvedValue(
-			double<Response>({
-				ok: false,
-				status: 500,
-				json: async () => ({}),
+		const response = await ownerPost(
+			makeContext(kv, "POST", {
+				owner: true,
+				origin: "https://attacker.example",
 			}),
 		);
-		const res = await GET(makeContext("abc", kv));
 
-		expectEscaped(
-			await res.text(),
-			["O'Neil & Sons"],
-			["Request is for O&#39;Neil &amp; Sons (jane@example.com)."],
+		expect(response.status).toBe(403);
+		expect(kv.get).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(response);
+	});
+
+	it("keeps expired capabilities safe and retryable without delivering", async () => {
+		const pdf = new ArrayBuffer(4);
+		const kv = makeBinaryKv({ "pdf:dod": pdf });
+
+		const response = await ownerPost(
+			makeContext(kv, "POST", {
+				owner: true,
+				origin: "https://thesuperhuman.us",
+			}),
 		);
+
+		expect(response.status).toBe(404);
+		expect(kv.delete).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expectPrivateResponse(response);
 	});
 });

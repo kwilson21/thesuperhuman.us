@@ -1,0 +1,77 @@
+# Contact handoff refinement
+
+Hallmark component audit and scoped refinement. Design-system reference: design.md.
+Pre-emit critique: Philosophy 5, Hierarchy 4, Execution 4, Specificity 5,
+Restraint 5, Variety 4. Execution is conditional on hosted rendered QA.
+
+## Audit findings
+
+0 critical · 0 major · 2 minor component consistency findings:
+- Abrupt handoff: display removal provides no visual continuity between fixed and
+  footer actions. Replace only that handoff with a brief token-timed fade and 4px
+  settle; reduced motion remains immediate.
+- Inconsistent action geometry: the phone footer action is content-width while
+  the pinned action fills a wider gutter. Use the same phone horizontal bounds
+  and arrow on both links, preserving desktop layout.
+
+No new palette, typography, panel, card, decorative imagery or attention loop.
+The existing deliberate hover arrow nudge is enough; no bounce, pulse or shimmer.
+The CTA is navigation, so artificial loading/error/success states do not apply.
+
+## Implementation and accessibility
+
+The hidden pinned container becomes inert immediately, preventing an invisible
+duplicate from remaining clickable or keyboard-focusable during the fade.
+The normal footer remains available without JavaScript. Menu/input-focus/print
+suppression is preserved. Only motion-enabled visitors get the transition.
+Both phone actions use identical outer-plus-panel inset math and retain reflow
+for enlarged text. Contact and intake destinations remain quiet.
+
+## Verification
+
+- 111 focused tests passed; lint, formatter, whitespace and design gates passed.
+- Astro check and final-head hosted CI/rendered review pending at this checkpoint.
+- Screenshot scenario now checks matching x/width at 320/375/414px, existing 768px
+  suppression, and hide/return/inert under both reduced and normal motion.
+- Prior task established local Chromium cannot create its required socket.
+  Use hosted capture; do not treat source inspection as a rendered motion pass.
+- No merge or publication authorized for this refinement. Previous #350
+  approval applied only to that release.
+- No data, routes, forms, consent, payments, assets or dependencies changed.
+
+
+## Named Hallmark provenance and follow-up
+
+The project vendors Hallmark v1.1 from Nutlope/hallmark (adopted in #208).
+For the owner's explicit reference, also read the upstream v2 README, SKILL,
+redesign/audit and microinteraction guidance at
+https://github.com/Nutlope/hallmark. This is a component polish, not a new theme:
+keep the locked design.md, typography, terracotta/paper tokens, panel shape,
+copy and routes. Motion clarifies a state change; no autonomous attention loop.
+The existing arrow and instant reduced-motion preference belong to the locked
+site system, not a claim that the entire page passes every upstream v2 gate.
+
+Head7330ad0 passed rendered capture including matching mobile bounds and normal/
+reduced-motion transitions. Two broader reflow source checks caught changed CSS
+expression spellings, not changed geometry. Restored the footer's original
+viewport-capped padding expressions unchanged, preserving those regression tests;
+the pinned gutter uses the identical arithmetic. All component tests are rerun.
+The upstream v2 rendered sloplint has not been run: no whole-site v2 certification
+is claimed, and the scoped hosted browser assertions remain the evidence.
+
+## Revision after owner watched the clip
+
+The owner found both directions of the fade swap unsatisfactory. Replaced the
+swap with continuous docking: one visible phone link stays fixed until it meets
+the real footer slot, then follows that slot pixel-for-pixel. On reverse scroll
+it becomes fixed at the same position. The button itself has no independent
+fade/settle; only its floating background wash fades, instant with reduced motion.
+The original footer link remains a sized, inert/hidden placeholder on mobile,
+and the real no-JS/desktop/print link. Focus transfers between proxy and original
+on breakpoint changes. Scroll work is coalesced to animation frames; resize,
+restored scroll and text/layout changes update the docking position.
+
+Regression coverage now checks positions just before/after the crossing in
+both directions, mobile widths and desktop, normal/reduced motion, and only
+one interactive link. A new real browser recording is required before approval.
+Previous clip and fade-only observations are superseded. No publication approved.

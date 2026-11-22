@@ -345,6 +345,39 @@ const sql = (command) => {
 	}
 };
 
+// Seed disposable local KV state for owner-page screenshots without calling the public intake or email services.
+const kvPut = (binding, key, value) => {
+	if (binding !== "RESUME_STORE")
+		throw new Error(`Unsupported screenshot KV binding: ${binding}`);
+	sqlStep();
+	const scope = scopeName();
+	const started = timings.now();
+
+	try {
+		return execFileSync(
+			process.execPath,
+			[
+				resolve("node_modules/wrangler/bin/wrangler.js"),
+				"kv",
+				"key",
+				"put",
+				key,
+				value,
+				`--binding=${binding}`,
+				"--local",
+				"--config",
+				resolve(".screenshots/wrangler.json"),
+				"--persist-to",
+				resolve(".wrangler/state"),
+			],
+			{ encoding: "utf8", env: { ...process.env, CI: "1" } },
+		);
+	} finally {
+		timings.add(scope, "kv", timings.now() - started);
+		timings.count(scope, "kv");
+	}
+};
+
 async function ownerFetch(path, body, method = "POST", headers = {}) {
 	await nextStep();
 	scenarioPaths.push(new URL(BASE + path).pathname);
@@ -655,6 +688,7 @@ try {
 				base: BASE,
 				capture,
 				sql,
+				kvPut,
 				ownerFetch,
 			});
 

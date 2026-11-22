@@ -191,7 +191,9 @@ describe("software service sheet", () => {
 		expect(layout).not.toContain("sheet.workflow");
 		expect(layout).not.toContain("sheet.idea");
 		expect(layout).toContain('class="row-visual"');
-		expect(layout).toContain('class="site-button row-button"');
+		expect(layout).toContain(
+			'class="site-button site-button-trailing row-button"',
+		);
 		expect(layout).toContain('<WorkDiagram kind="bonus" />');
 		expect(layout).toContain("lyft.figure.before");
 		expect(layout).toContain("lyft.figure.after");
