@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Branches: `claude/effect-1-foundation` (layer 1, pull request #244, the foundation) and `claude/effect-2-contact` (layer 2, stacked on layer 1)
 Pull requests: #244 for layer 1; layer 2 has no pull request yet when this record is written. Layer 2 contains layer 1 at `3fa54f8b`, which includes main's `085db0f3` (the security fix from pull request #245, merged to main as `1e7bb596` and live).
 Target: production `https://thesuperhuman.us`
-Reviewer: layer 2 was built by a Claude Sonnet subagent. An independent review ran a differential comparison of the old and converted routes on 13,500 generated requests (4,500 per route, three seeds) and found 0 differences, before the escaping change below; that run is not a review of the whole diff. Code, security and Greptile review of the layer 2 head are UNVERIFIED (see Delivery status). This record does not certify the checks listed as UNVERIFIED.
+Reviewer: layer 2 was built with Claude Code. An independent review ran a differential comparison of the old and converted routes on 13,500 generated requests (4,500 per route, three seeds) and found 0 differences, before the escaping change below; that run is not a review of the whole diff. Code, security and Greptile review of the layer 2 head are UNVERIFIED (see Delivery status). This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: re-check `origin/main` with `git fetch` before merge; this record does not name one.
 
 ## Scope
@@ -20,7 +20,7 @@ The intent is no behavior change: the same status, headers and body for every re
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: use Effect for rules, Effect Schema for input and XState with the bridge, matching Tally; convert one area at a time; no behavior change.
-- Owner, in conversation, 2026-11-12: authorize Claude subagents to write code in this repository, tests first, with independent review.
+- Owner, in conversation, 2026-11-12: authorize Claude Code to write code in this repository, tests first, with independent review.
 
 ## Evidence and limits
 
@@ -122,7 +122,7 @@ Known current behaviours, kept unchanged and worth fixing later:
 ## Delivery status and remaining gates
 
 - UNVERIFIED: CI (`validate`) and Cloudflare Workers Builds on the heads of #244 and of the layer 2 pull request.
-- UNVERIFIED: Greptile, Codex and independent Claude reviews of the layer 2 head (the pull request is #244 for the foundation; layer 2 has none yet).
+- UNVERIFIED: Greptile, Codex and independent reviews of the layer 2 head (the pull request is #244 for the foundation; layer 2 has none yet).
 - UNVERIFIED: the contact form, resume request and approval link in a real browser, with a live Turnstile site key and a delivered email.
 - UNVERIFIED: live verification after deployment.
 
@@ -130,4 +130,4 @@ No deployment is authorized by this record.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
 
-Built by a Claude Sonnet subagent. This record does not certify the checks listed as UNVERIFIED.
+Built with Claude Code. This record does not certify the checks listed as UNVERIFIED.

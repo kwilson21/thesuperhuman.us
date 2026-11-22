@@ -36,10 +36,13 @@ import { IP, ORIGIN, rawVisit, visit } from "./areas/public";
 //     budget             site already at 10000, visitor at 300, the site row filling after the visitor row, the reads or
 //                        writes throw, the rate-limit binding throws
 //     model              answers with a newline, a quote, a control character, over 100 characters, nothing, only
-//                        whitespace, no response string, null, a bare string (500, a fixed line that does not quote the reply); throws (503, the error is not logged, a fixed line is)
+//                        whitespace, no response string, null, a bare string (500, a fixed line that does not quote the reply); throws (503, the error is not logged, a fixed line is);
+//                        the chat-completion form (choices[0].message.content) with empty content, no choices or
+//                        content that is not text
 //   500 { suggestion: "" }  the store, the limiter or any other unexpected failure (logged through logUnexpected)
 //   200 { suggestion: " words" }  the model's reply trimmed, cut to six words, a leading space only when the text does not
-//                        end in whitespace; every question; every earlier path; straight apostrophes
+//                        end in whitespace; every question; every earlier path; straight apostrophes; the reply's text
+//                        in the chat-completion form (choices[0].message.content), the form the current model answers in
 //   200 { suggestion: "", passRequired: true }   no cookie, malformed, expired, too far in the future, another address,
 //                        another secret, a forged signature, the right cookie among others, a cookie whose name only
 //                        starts with the pass name
@@ -639,6 +642,52 @@ const cases: Case[] = [
 	single("the model answers with a string itself", good, {
 		ai: [aiValue("and send them")],
 	}),
+	// The current model answers in the chat-completion form, with its text in choices[0].message.content and no response.
+	single("the model answers in the chat-completion form", good, {
+		ai: [
+			aiValue({
+				object: "chat.completion",
+				choices: [
+					{
+						index: 0,
+						message: { role: "assistant", content: "and send them" },
+						finish_reason: "stop",
+					},
+				],
+			}),
+		],
+	}),
+	single(
+		"the model answers in the chat-completion form with empty content",
+		good,
+		{
+			ai: [
+				aiValue({
+					object: "chat.completion",
+					choices: [{ index: 0, message: { role: "assistant", content: "" } }],
+				}),
+			],
+		},
+	),
+	single(
+		"the model answers in the chat-completion form with no choices",
+		good,
+		{
+			ai: [aiValue({ object: "chat.completion", choices: [] })],
+		},
+	),
+	single(
+		"the model answers in the chat-completion form with content that is not text",
+		good,
+		{
+			ai: [
+				aiValue({
+					object: "chat.completion",
+					choices: [{ index: 0, message: { role: "assistant", content: 5 } }],
+				}),
+			],
+		},
+	),
 	answer(
 		"the model answers with a reply of more than six words and tabs",
 		"a b c d e f g h",

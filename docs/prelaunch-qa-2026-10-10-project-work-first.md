@@ -25,7 +25,7 @@ Read repository instructions, coding approach, project-journal protocol, publica
 
 Merged local `origin/main` at `28873a64` with no conflicts. Git automatically combined `tests/pages/software-offer.test.ts`. Both parents and signing changes are retained. No fetch was performed. Git reported a sandbox denial for `packed-refs.lock`; the actual merge commit and feature branch HEAD were verified. Jolli's commit hook reported no memory generation because network access was unavailable.
 
-**No migration in this PR.** Migrations 0021 through 0025 are already in production, per the supplied owner/orchestrator record. This job did not query the remote migration ledger or database. `db/music.sql` is byte-identical to `LC_ALL=C cat migrations/music/*.sql` (local `cmp` passed); the feature diff adds no schema or migration files.
+**No migration in this PR.** Migrations 0021 through 0025 are already in production, per the record supplied for this job. This job did not query the remote migration ledger or database. `db/music.sql` is byte-identical to `LC_ALL=C cat migrations/music/*.sql` (local `cmp` passed); the feature diff adds no schema or migration files.
 
 Inspected the feature diff against main: 17 files, including page/components, review helper, milestone guards, message labels, owner composer, screenshot scenario and regression tests. No dependency or generated-image additions. Untracked `.jolli/` is excluded.
 

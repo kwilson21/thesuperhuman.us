@@ -8,7 +8,7 @@ inspection confirms that the local `origin/main` ref resolves to this revision.
 PR branch commit chain: `5e3ac1ed` -> the documentation commit that last touches this file, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-astro-roadmap.md`.
 Merge method and record revision: this chain is preserved on `main` only by a merge-commit merge, the method planned for this PR and used for recent PRs #157, #158, #165, #171 and #172. A squash or rebase merge would not preserve these hashes; if either were used, the deployed revision would have to be identified by the PR number and its merge commit instead, and this record would need a note saying so. A commit cannot embed its own hash; the final handoff supplies the exact hash.
 Target: production `https://thesuperhuman.us`
-Reviewer: Codex (gpt-6.1-sol), local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
+Reviewer: Codex, local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
 Rollback revision: `5e3ac1edaf6bd9cc92319611c3272730fbf170f2` = current production per the caller's observation on 2026-10-10 at about 17:40 UTC. Workers Builds completed with success, and `npm run owner:health -- --remote --post-deploy` reported 9 of 9 PASS. This offline run did not independently verify that observation.
 
 Scope: documentation-only. No code, dependency, public copy, page, asset, route or migration change. The roadmap prose is repository documentation, not rendered site copy. A merge still triggers a production build of identical site output; deployment and live verification remain UNVERIFIED until after merge, checked with Workers Builds and `npm run owner:health -- --remote --post-deploy`.

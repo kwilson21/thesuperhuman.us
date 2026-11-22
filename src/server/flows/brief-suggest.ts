@@ -67,7 +67,33 @@ export type SuggestSubmission = {
 	readonly now: () => number;
 };
 
-/** The reply's text, read as the route always read it: a missing or non-string response is empty, and a value that cannot have a field is a failure. */
+/**
+ * The text of a chat-completion reply, `choices[0].message.content`, which is how the current model answers (it has no
+ * `response` field). Anything else is empty.
+ */
+const chatText = <Reply>(reply: Reply) => {
+	const choices =
+		Predicate.isObjectOrArray(reply) && Predicate.hasProperty(reply, "choices")
+			? reply.choices
+			: undefined;
+
+	const first = Array.isArray(choices) ? choices[0] : undefined;
+
+	const message =
+		Predicate.isObjectOrArray(first) && Predicate.hasProperty(first, "message")
+			? first.message
+			: undefined;
+
+	return Predicate.isObjectOrArray(message) &&
+		Predicate.hasProperty(message, "content")
+		? message.content
+		: "";
+};
+
+/**
+ * The reply's text: its `response` read as the route always read it (a missing or non-string response is empty), or, when
+ * the reply has no `response`, the chat-completion text. A value that cannot have a field is a failure.
+ */
 const replyText = <Reply>(reply: Reply) => {
 	if (!reply) return Effect.succeed("");
 
@@ -79,7 +105,9 @@ const replyText = <Reply>(reply: Reply) => {
 			}),
 		);
 
-	const text = Predicate.hasProperty(reply, "response") ? reply.response : "";
+	const text = Predicate.hasProperty(reply, "response")
+		? reply.response
+		: chatText(reply);
 
 	return Effect.succeed(Predicate.isString(text) ? text.trim() : "");
 };

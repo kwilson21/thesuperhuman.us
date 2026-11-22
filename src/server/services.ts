@@ -466,6 +466,15 @@ export const liveSuggestLimits = (limiters: {
 			}).pipe(Effect.map((answer) => answer.success)),
 	});
 
+/**
+ * The autocomplete's model. Cloudflare retired the first one, `@cf/meta/llama-3.2-1b-instruct`, on 2026-11-20 (every call
+ * then answered 410). Measured on 2026-11-22 through the REST API with this route's prompt, 12 tokens and temperature 0.1:
+ * ten typed answers came back in 491 ms at the median and 579 ms at the slowest, all inside the route's 1,200 ms, each a
+ * short continuation. It is the cheapest model measured: $0.10 per million input tokens and $0.30 per million output. It
+ * answers in the chat-completion form, which `replyText` in src/server/flows/brief-suggest.ts reads.
+ */
+export const SUGGEST_MODEL = "@cf/google/gemma-4-26b-a4b-it";
+
 /** The model's answer: the reply as Workers AI gave it, or a timeout. */
 export type AssistantReply =
 	| { readonly kind: "answered"; readonly value: unknown }
@@ -484,7 +493,7 @@ export const liveAssistant = (ai: Ai) =>
 
 				const race = Promise.race([
 					ai
-						.run("@cf/meta/llama-3.2-1b-instruct", {
+						.run(SUGGEST_MODEL, {
 							messages: [
 								{
 									role: "system",
@@ -495,6 +504,9 @@ export const liveAssistant = (ai: Ai) =>
 							],
 							temperature: 0.1,
 							max_tokens: 12,
+							// Gemma 4 thinks before it answers unless told not to, and the thinking spends all 12 tokens: the
+							// answer comes back empty.
+							chat_template_kwargs: { enable_thinking: false },
 						})
 						.then(
 							(value): AssistantReply => ({ kind: "answered", value }),
