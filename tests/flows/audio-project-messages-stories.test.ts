@@ -377,6 +377,34 @@ describe("a client's and the owner's messages", () => {
 		expect(messages(world)).toEqual([]);
 	});
 
+	it("leaves an owner's message unread when the session expires after lookup", async () => {
+		const world = musicWorld();
+		await seeded(world);
+		await ended(
+			world,
+			sendOwnerMessage({
+				id: "song-1",
+				ownerEmail: OWNER,
+				body: "Ready for you",
+				now: now(),
+			}),
+		);
+		world.sql
+			.prepare("UPDATE audio_client_sessions SET expires_at=?")
+			.run(new Date(AT.getTime() + 1000).toISOString());
+		const reads = [0, 2000];
+		await ended(
+			world,
+			markOwnerMessageReadByClient({
+				id: "song-1",
+				token: TOKEN,
+				messageId: 1,
+				now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
+			}),
+		);
+		expect(messages(world)[0]?.read_at).toBeNull();
+	});
+
 	it("refuses a review answer when the session ends between the lookup and the write", async () => {
 		const world = musicWorld();
 		await seeded(world);

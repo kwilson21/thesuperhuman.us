@@ -219,12 +219,10 @@ export const markOwnerMessageReadByClient = (input: {
 }) =>
 	Effect.gen(function* () {
 		const seen = yield* clientProject(input);
+		const at = input.now();
 		const message = yield* readMessage(input.id, input.messageId);
 
-		const decided = yield* markRead.decide(
-			{ reader: "client", at: seen.at },
-			message,
-		);
+		const decided = yield* markRead.decide({ reader: "client", at }, message);
 
 		if (Option.isSome(decided))
 			yield* markOwnerMessageRead(
