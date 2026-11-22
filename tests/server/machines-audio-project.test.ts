@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	audioProject,
+	KEEPING_STAGES,
 	PROJECT_EVENTS,
 	PROJECT_MOVES,
 	PROJECT_STAGES,
@@ -70,8 +71,31 @@ describe("a project's stage", () => {
 		expect(stageAllows("complete", "PUBLISH_FINAL")).toBe(false);
 	});
 
+	it("lets a note in every stage but files_under_review and complete, and a date move in every stage but complete", () => {
+		expect(KEEPING_STAGES.PROGRESS).toEqual([
+			"accepted",
+			"in_progress",
+			"review_ready",
+			"revision_in_progress",
+			"final_files_ready",
+		]);
+		expect(KEEPING_STAGES.REVISE_DATE).toEqual([
+			"files_under_review",
+			"accepted",
+			"in_progress",
+			"review_ready",
+			"revision_in_progress",
+			"final_files_ready",
+		]);
+
+		for (const stage of KEEPING_STAGES.PROGRESS)
+			expect(next(audioProject, stage, "PROGRESS")).toBe(stage);
+	});
+
 	it("reads each move's list from the machine, and each move sets one stage", () => {
-		for (const event of PROJECT_EVENTS) {
+		for (const event of PROJECT_EVENTS.filter(
+			(name) => name !== "PROGRESS" && name !== "REVISE_DATE",
+		)) {
 			expect(PROJECT_MOVES[event].from).toEqual(sourcesOf(audioProject, event));
 
 			for (const stage of PROJECT_MOVES[event].from)
