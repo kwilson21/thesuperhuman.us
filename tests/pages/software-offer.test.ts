@@ -959,10 +959,12 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 
 		expect(html).toContain("Respond to requested changes");
 		expect(html).toContain("Please fix the client form.");
+
 		// The revision source image is sized by its CSS (max-width and auto height), so it carries no size attributes.
 		const revisionImage = html.match(
 			/<img[^>]*updates\/old-review\/visual[^>]*>/,
 		)![0];
+
 		expect(revisionImage).not.toMatch(/ width="/);
 		expect(revisionImage).not.toMatch(/ height="/);
 		expect(

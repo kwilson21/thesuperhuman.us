@@ -273,6 +273,7 @@ function exifOrientation(b: Uint8Array, start: number, end: number) {
 	const offset = view.getUint32(start + 4, little);
 
 	if (offset < 8 || offset > end - start - 2) return null;
+
 	const ifd = start + offset,
 		count = view.getUint16(ifd, little);
 
@@ -409,6 +410,7 @@ function webpSize(b: Uint8Array) {
 
 	for (const chunk of chunks) {
 		if (chunk.type !== "EXIF") continue;
+
 		const orientation = exifOrientation(
 			b,
 			chunk.body,
