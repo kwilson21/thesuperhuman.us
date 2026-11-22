@@ -2781,7 +2781,6 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(currentHandoffFiles).toContain(
 			"Support within the correction period.",
 		);
-
 		expect(currentHandoffFiles).not.toContain("<img");
 		expect(currentHandoffFiles).not.toContain("Open work");
 

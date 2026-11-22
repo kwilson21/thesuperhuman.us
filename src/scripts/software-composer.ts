@@ -16,25 +16,19 @@ export function setupSoftwareComposer() {
 	const email = form.querySelector<HTMLInputElement>("[name=email_client]")!,
 		alt = form.querySelector<HTMLInputElement>("[name=visual_alt]")!;
 
-	let emailChosen = Boolean(root.dataset.id),
-		hasVisual = Boolean(
-			preview
-				.querySelector<HTMLImageElement>("[data-preview-image]")
-				?.getAttribute("src"),
-		);
-
-	const updateId = root.dataset.id || crypto.randomUUID();
-
-	let savedVisual =
-		preview
-			.querySelector<HTMLImageElement>("[data-preview-image]")
-			?.getAttribute("src") || "";
-
-	// The saved image's size attributes, put back when a chosen file is rejected; null when it had none.
+	// The saved image, read once for its source and its size attributes.
 	const savedImage = preview.querySelector<HTMLImageElement>(
 		"[data-preview-image]",
 	);
 
+	let emailChosen = Boolean(root.dataset.id),
+		hasVisual = Boolean(savedImage?.getAttribute("src"));
+
+	const updateId = root.dataset.id || crypto.randomUUID();
+
+	let savedVisual = savedImage?.getAttribute("src") || "";
+
+	// The saved image's size attributes, put back when a chosen file is rejected; null when it had none.
 	let savedWidth = savedImage?.getAttribute("width") ?? null,
 		savedHeight = savedImage?.getAttribute("height") ?? null;
 

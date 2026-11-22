@@ -406,6 +406,43 @@ function jpegSize(b: Uint8Array) {
 		: frame;
 }
 
+/** The size in the header of a VP8 or VP8L chunk, or null when it is not one or its header is wrong. */
+function webpFrameSize(
+	b: Uint8Array,
+	chunk: { type: string; body: number; length: number },
+) {
+	const { body, length } = chunk;
+
+	if (chunk.type === "VP8 ") {
+		if (
+			length < 10 ||
+			b[body + 3] !== 0x9d ||
+			b[body + 4] !== 0x01 ||
+			b[body + 5] !== 0x2a
+		)
+			return null;
+
+		return sized(
+			((b[body + 7] << 8) | b[body + 6]) & 0x3fff,
+			((b[body + 9] << 8) | b[body + 8]) & 0x3fff,
+		);
+	}
+
+	if (chunk.type === "VP8L") {
+		if (length < 5 || b[body] !== 0x2f) return null;
+
+		const bits =
+			b[body + 1] |
+			(b[body + 2] << 8) |
+			(b[body + 3] << 16) |
+			(b[body + 4] << 24);
+
+		return sized((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
+	}
+
+	return null;
+}
+
 function webpSize(b: Uint8Array) {
 	if (b.length < 20 || ascii(b, 0, 4) !== "RIFF" || ascii(b, 8, 4) !== "WEBP")
 		return null;
@@ -429,47 +466,44 @@ function webpSize(b: Uint8Array) {
 			return null;
 	}
 
-	const [first] = chunks,
-		body = first.body;
+	const [first] = chunks;
 
 	if (first.type === "VP8X") {
 		if (first.length < 10) return null;
-		const le24 = (at: number) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16);
 
-		return sized(le24(body + 4) + 1, le24(body + 7) + 1);
-	}
+		const le24 = (at: number) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16),
+			canvas = sized(le24(first.body + 4) + 1, le24(first.body + 7) + 1);
 
-	if (first.type === "VP8 ") {
-		if (
-			first.length < 10 ||
-			b[body + 3] !== 0x9d ||
-			b[body + 4] !== 0x01 ||
-			b[body + 5] !== 0x2a
-		)
-			return null;
+		// An animation shows its canvas. A still image is decoded from its frame, and a browser that finds a canvas of
+		// another size rejects it, so the size is not given.
+		if (b[first.body] & 0x02 || chunks.some((chunk) => chunk.type === "ANIM"))
+			return canvas;
 
-		return sized(
-			((b[body + 7] << 8) | b[body + 6]) & 0x3fff,
-			((b[body + 9] << 8) | b[body + 8]) & 0x3fff,
+		const frame = chunks.find(
+			(chunk) => chunk.type === "VP8 " || chunk.type === "VP8L",
 		);
+
+		if (!frame || !canvas) return null;
+
+		const still = webpFrameSize(b, frame);
+
+		return still &&
+			still.width === canvas.width &&
+			still.height === canvas.height
+			? canvas
+			: null;
 	}
 
-	if (first.type === "VP8L") {
-		if (first.length < 5 || b[body] !== 0x2f) return null;
-
-		const bits =
-			b[body + 1] |
-			(b[body + 2] << 8) |
-			(b[body + 3] << 16) |
-			(b[body + 4] << 24);
-
-		return sized((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
-	}
-
-	return null;
+	return webpFrameSize(b, first);
 }
 
 /**
+ * Known limits: these rarer shapes are not detected, and each can give a size that some browsers do not use. They are
+ * an Orientation tag stored outside the first EXIF directory (in the Exif, GPS or second directory), an orientation
+ * given only in XMP inside a PNG, and EXIF resolution tags that make a browser scale the image. The effect is that the
+ * reserved shape is wrong and the image shifts when it loads; nothing is distorted, because the CSS sets
+ * `height: auto`.
+ *
  * The pixel size a browser shows for `bytes`, a complete image of `type`, or null when it is not certain: an unreadable
  * header, a zero size, an EXIF block that cannot be read with certainty (it is read only inside its own segment or
  * chunk, and a second Exif segment in a JPEG counts as unreadable), or (for PNG and WebP) an Orientation other than 1,
