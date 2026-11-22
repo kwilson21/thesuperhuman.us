@@ -393,6 +393,20 @@ describe("the visitor's actions", () => {
 		expect(undo(board)).toBe(board);
 	});
 
+	it("cuts the visitor's words at their limit without leaving half an emoji, so the outline still sends", () => {
+		// Each text is one character too long, and its last character is an emoji: a pair of surrogates.
+		let board = addNote(emptyBoard(), "parts", `${"x".repeat(59)}🎸`);
+		expect(board.cards[0].text).toBe("x".repeat(59));
+		board = editCard(board, "c1", `${"y".repeat(59)}🎸`);
+		expect(board.cards[0].text).toBe("y".repeat(59));
+		board = addNote(board, "questions", "Who adds dates?");
+		board = answerCard(board, "c2", `${"z".repeat(239)}🎸`);
+		expect(board.cards[1].answer).toBe("z".repeat(239));
+		expect(readBriefOutline(briefOutline(board, ANSWERS), ANSWERS).ok).toBe(
+			true,
+		);
+	});
+
 	it("adds and removes the visitor's notes; Undo restores a removed note, and a reply does not offer it back", () => {
 		let board = addNote(emptyBoard(), "parts", "Press kit");
 		board = addNote(board, "parts", "Lyrics");
@@ -512,6 +526,16 @@ describe("the outline sent with the brief", () => {
 			ok: true,
 			value: outline,
 		});
+		// A character outside the basic plane is a pair of surrogates, not a lone one.
+		expect(
+			readBriefOutline(
+				[{ lane: "parts", text: "Gigs 🎸", origin: "wrote" }],
+				ANSWERS,
+			),
+		).toEqual({
+			ok: true,
+			value: [{ lane: "parts", text: "Gigs 🎸", origin: "wrote" }],
+		});
 		expect(readBriefOutline(undefined, ANSWERS)).toEqual({
 			ok: true,
 			value: undefined,
@@ -544,6 +568,10 @@ describe("the outline sent with the brief", () => {
 			],
 			[{ lane: "parts", text: "Costs $500", origin: "kept" }],
 			[{ lane: "parts", text: "Two\nlines", origin: "wrote" }],
+			// A lone surrogate is refused like a control character, in the text, the passage and the answer.
+			[{ lane: "parts", text: "Shows\ud800", origin: "wrote" }],
+			[{ ...outline[0], quote: "upcoming shows near them\udc00" }],
+			[{ ...outline[1], answer: "Me\ud800" }],
 			[{ lane: "parts", text: "", origin: "wrote" }],
 			[{ lane: "nowhere", text: "X", origin: "wrote" }],
 			Array.from({ length: 3 }, (_, i) => ({

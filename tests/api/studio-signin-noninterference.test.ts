@@ -10,7 +10,10 @@ import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 import { POST as requestCode } from "~/pages/api/studio/code";
 import { POST as completeCode } from "~/pages/api/studio/session";
 import { hashValue, keyedHash } from "~/lib/client-portal";
-import { revokeProjectAccess } from "~/lib/audio-project-revocation";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { revokeProjectAccess } from "~/server/flows/audio-project-access";
+import { MusicDb } from "~/server/services";
 import {
 	applyStudioRetention,
 	previewStudioRetention,
@@ -980,7 +983,18 @@ describe("a request for one address does not change what an attacker sees of ano
 									? "p-full"
 									: undefined;
 
-						if (id) await revokeProjectAccess(db, id, "owner");
+						if (id)
+							await Effect.runPromise(
+								revokeProjectAccess({
+									requestId: id,
+									ownerEmail: "owner",
+									now: () => new Date(),
+									newId: () => crypto.randomUUID(),
+								}).pipe(
+									Effect.ignore,
+									Effect.provideContext(Context.make(MusicDb, db)),
+								),
+							);
 					}),
 				],
 				pairs: own(),
@@ -1221,10 +1235,16 @@ describe("regression checks from earlier rounds", () => {
 		fresh();
 		stubFetch();
 		sql.exec("DROP TABLE audio_client_signin_codes");
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const response = await ask("x", ADDR.client, K1, false);
+		try {
+			const response = await ask("x", ADDR.client, K1, false);
 
-		expect(response.status).toBe(503);
-		expect(mails).toHaveLength(0);
+			expect(response.status).toBe(500);
+			expect(mails).toHaveLength(0);
+			expect(errors).toHaveBeenCalledOnce();
+		} finally {
+			errors.mockRestore();
+		}
 	});
 });

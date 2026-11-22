@@ -580,7 +580,11 @@ it("guards origin, content type, size, and missing bindings", async () => {
 		(await POST(context(base, { origin: "https://evil.example" }))).status,
 	).toBe(403);
 	expect((await POST(context("{}", { type: "text/plain" }))).status).toBe(415);
-	expect((await POST(context({ padding: "x".repeat(33000) }))).status).toBe(
+	// The body may hold 49,152 bytes: one just under is read (and refused as a brief), one just over is not read.
+	expect((await POST(context({ padding: "x".repeat(49_100) }))).status).toBe(
+		400,
+	);
+	expect((await POST(context({ padding: "x".repeat(49_200) }))).status).toBe(
 		413,
 	);
 	expect((await POST(context(base, { db: null }))).status).toBe(503);
@@ -1906,20 +1910,120 @@ describe("the living brief's outline", () => {
 	});
 });
 
+/** The largest website brief the form allows, made of characters that double in JSON. */
+const largestBrief = {
+	...websiteInput,
+	purpose: `${'"'.repeat(1999)}x`,
+	currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
+	existing: '"'.repeat(2000),
+	company: '"'.repeat(120),
+	timingReason: '"'.repeat(500),
+	budgetNote: '"'.repeat(200),
+	approver: "other",
+	approverRole: '"'.repeat(120),
+};
+
 it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
-	const response = await POST(
-		context({
-			...websiteInput,
-			purpose: `${'"'.repeat(1999)}x`,
-			currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
-			existing: '"'.repeat(2000),
-			company: '"'.repeat(120),
-			timingReason: '"'.repeat(500),
-			budgetNote: '"'.repeat(200),
-			approver: "other",
-			approverRole: '"'.repeat(120),
+	const response = await POST(context(largestBrief));
+
+	expect(response.status).toBe(200);
+});
+
+it("stores the largest brief with the fullest outline in a script of three bytes a character", async () => {
+	// "…" is one character, three bytes in UTF-8 and not part of a word, so every field is as heavy in bytes as text in
+	// Chinese, Japanese or Korean; each passage's three words are still the purpose's first three. The name, the email
+	// and the security token are at their longest too (a real token is ASCII, so this one is heavier than any).
+	const pad = (length: number) => "…".repeat(length);
+
+	const brief = {
+		...largestBrief,
+		name: pad(100),
+		email: `${"a".repeat(64)}@${"b".repeat(50)}.test`,
+		turnstileToken: pad(2048),
+		purpose: `b…c…d${pad(1994)}x`,
+		currentUrl: `https://a.example.test/?${pad(2024)}`,
+		existing: pad(2000),
+		company: pad(120),
+		timingReason: pad(500),
+		budgetNote: pad(200),
+		approverRole: pad(120),
+	};
+
+	const quote = `b${pad(78)}c${pad(79)}d`;
+
+	const fill = (length: number, index: number) =>
+		`${pad(length - 1)}${"abcdefghijklmnopq"[index]}`;
+
+	const lanes = [
+		["purpose", 2, 140],
+		["audience", 3, 80],
+		["parts", 8, 60],
+		["questions", 4, 140],
+	] as const;
+
+	let index = 0;
+
+	const outline = lanes.flatMap(([lane, count, length]) =>
+		Array.from({ length: count }, () => {
+			const text = fill(length, index);
+			const answer = fill(240, index);
+
+			index += 1;
+
+			return lane === "questions"
+				? { lane, text, origin: "answers", quote, answer }
+				: { lane, text, origin: "answers", quote };
 		}),
 	);
 
+	const body = JSON.stringify({ ...brief, outline });
+	const response = await POST(context(body));
+
 	expect(response.status).toBe(200);
+	expect(JSON.parse(savedRequest().details_json).outline).toHaveLength(17);
+	// About 44,500 bytes: past the old limit of 32,768, within the new one of 49,152.
+	expect(new TextEncoder().encode(body).length).toBeGreaterThan(44_000);
+});
+
+it("stores the largest brief with the fullest outline the board can send, every field at its longest", async () => {
+	// Every card is read from the answers, so each carries a passage at its longest, and every question has an answer.
+	// A passage is matched word by word, so its three words are the purpose's first three and the rest of it doubles in
+	// JSON, like every other field. Each text ends in its own letter so no two cards are the same idea.
+	const brief = { ...largestBrief, purpose: `b"c"d${'"'.repeat(1994)}x` };
+	const quote = `b${'"'.repeat(78)}c${'"'.repeat(79)}d`;
+
+	const fill = (length: number, index: number) =>
+		`${'"'.repeat(length - 1)}${"abcdefghijklmnopq"[index]}`;
+
+	const lanes = [
+		["purpose", 2, 140],
+		["audience", 3, 80],
+		["parts", 8, 60],
+		["questions", 4, 140],
+	] as const;
+
+	let index = 0;
+
+	const outline = lanes.flatMap(([lane, count, length]) =>
+		Array.from({ length: count }, () => {
+			const text = fill(length, index);
+			const answer = fill(240, index);
+
+			index += 1;
+
+			return lane === "questions"
+				? { lane, text, origin: "answers", quote, answer }
+				: { lane, text, origin: "answers", quote };
+		}),
+	);
+
+	const response = await POST(context(JSON.stringify({ ...brief, outline })));
+
+	expect(response.status).toBe(200);
+
+	const details = savedRequest().details_json;
+
+	expect(JSON.parse(details).outline).toHaveLength(17);
+	// About 25,700 characters, the outline about 11,500 of them: the worst case, well past the old limit of 16,000.
+	expect(details.length).toBeGreaterThan(25_000);
 });

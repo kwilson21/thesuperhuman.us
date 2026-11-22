@@ -280,8 +280,8 @@ in rows), with `now` and ids passed in as thunks:
 |---|---|
 | `revokeProjectAccess` | read project (plain); rule; batch (AR1 to AR4; AR2 and AR3 select the client's email by request id inside the statement, as today); best-effort `deleteRetiredCodes` after the batch, as today ("no such table" is silent; any other failure logs once through `logUnexpected`, a change of log text) |
 | `queueInvitation`, `retryUpdateNotice` | read notice and open facts in one batch; `queueNotice`; guarded write; then `waitUntil` delivery |
-| `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | read; `claimNotice`; claim (CAS); read recipient facts; rule; `Mail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today. The four fixed `console.error` sentences of the background delivery ("Studio invitation email state is uncertain." and the update, file and revocation versions), written when the `waitUntil` task rejects while the task still settles fulfilled, are kept as they are: they are not moved to `logUnexpected`. Three of the four are recorded in corpus cases on main; "Studio file revocation notice state is uncertain." is in no fixture there, and the fixes PR adds the case that records it, "outage: the revocation notice's claim fails after the revoke". The `audio-intake` corpus also records the invitation sentence, through `ProjectInvitationFailed` (`flows/audio-intake.ts`), so the rewired `ProjectInvitation.deliver` must still fail with that tag, and `audio-intake` is an affected corpus |
-| `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); one batch for the project and request; the lookup rule (404, nothing after it runs, no count read); the text checks (400, as today, before any count); then one batch of what the action's rule needs (latest review, decisions since it, rounds used, the client's message count); the rule (the count first); guarded insert (section 4). A refused write is caught with `Effect.catchTag` on its refusal tag, the count is read again (M6), and the flow fails again with `ClientRateLimited` when it is full and with the same named refusal otherwise, so no refusal is swallowed and the route maps each tag. `markRead` reads no count: it ends in a guarded update after the lookup and answers `{ok:true}`, so a read with a full window still answers `{ok:true}` and sets `read_at` (corpus "read with 12 client messages in the window"). `postOwnerMessage` has no session: it is O1 (the project read), then the text check, then M1 |
+| `deliverNotice` (the invitation and an update notice share it, each with its own conditions, section 4) | claim first (CAS, with no read and no rule ahead of it: a read ahead of the claim adds a turn, and the public intake's background then sends the owner's notice before the claim is written, which the intake corpus records; the claim keeps today's conditions as its compare-and-set guard, and a notice it does not take is quietly nothing to do); read recipient facts; rule; `StudioNoticeMail.send`; outcome write (CAS). `tapError` and `catchTag` mark the notice failed when the recipient read fails, as today. The four fixed `console.error` sentences of the background delivery ("Studio invitation email state is uncertain." and the update, file and revocation versions), written when the `waitUntil` task rejects while the task still settles fulfilled, are kept as they are: they are not moved to `logUnexpected`. Three of the four are recorded in corpus cases on main; "Studio file revocation notice state is uncertain." is in no fixture there, and the fixes PR adds the case that records it, "outage: the revocation notice's claim fails after the revoke". The `audio-intake` corpus also records the invitation sentence, through `ProjectInvitationFailed` (`flows/audio-intake.ts`), so the rewired `ProjectInvitation.deliver` must still fail with that tag, and `audio-intake` is an affected corpus |
+| `postOwnerMessage`, `postClientMessage`, `answerReview`, `markRead` | the studio session by its own read (`readStudioSession`, a separate statement); one batch for the project and request; the lookup rule (404, nothing after it runs, no count read); the text checks (400, as today, before any count); then one batch of what the action's rule needs (the project as it is now, so the stage the rule decides from is not the one the lookup read earlier, then latest review, decisions since it, rounds used, the client's message count); the rule (the count first); guarded insert (section 4). A refused write is caught with `Effect.catchTag` on its refusal tag, the count is read again (M6), and the flow fails again with `ClientRateLimited` when it is full and with the same named refusal otherwise, so no refusal is swallowed and the route maps each tag. `markRead` reads no count: it ends in a guarded update after the lookup and answers `{ok:true}`, so a read with a full window still answers `{ok:true}` and sets `read_at` (corpus "read with 12 client messages in the window"). `postOwnerMessage` has no session: it is O1 (the project read), then the text check, then M1 |
 | `saveProjectUpdate` | one read batch; the action's rule; guarded batch (U1 to U16); a lost guard answers 409, no retry |
 | `startUpload`, `putPart`, `finishUpload`, `abortUpload` | the section 6 protocol; R2 calls through `AudioBucket` with `Effect.tryPromise`, as `agreement-download` reads its bucket |
 | `publishFile`, `revokeFile` | `publishFile`, in today's order: one read batch (the file, the project, the request, the payments, the live review ids); the file rule (uploaded, object key matches); R2 `head`, and the size rule; then the project rule (open, not withdrawn, booking paid, balance paid for a final, stage allows the version), so an R2 failure on an unpublishable project is still 500 and the 12 refused publishes in the corpus keep their `head`; guarded batch through `decideAndSave` (P3's guard); `waitUntil` notice delivery. `revokeFile`: read, rule, guarded batch through `decideAndSave` (the retry re-decides the stage reset, section 4, FR3); the file's own guard answers 409 at once |
@@ -327,8 +327,8 @@ the guard refuses, as today.
 The stage reset after a file revoke (FR3) is a decision, so a rule makes it. `revokeFile` reads the file and the version's
 other published files (their ids) and the stage, and decides the reset: reset when no other published file of the version
 is left and the stage is the one the version resets (`review_ready` for a review; `final_files_ready` or `complete` for a
-final). The batch carries a guard that the version's other published files are the ones the rule read and that the stage is
-the one it read; the guard raises, the whole batch rolls back, and `decideAndSave` asks again on fresh facts, so the retry
+final). The batch carries a guard that the version's other published files are the ones the rule read and, only when the rule
+decided the reset, that the stage is the one it read (a revoke that decided none does not depend on the stage); the guard raises, the whole batch rolls back, and `decideAndSave` asks again on fresh facts, so the retry
 re-decides (three tries). Two finals revoked at once both still succeed, as today: the first batch passes its guard and
 revokes without a reset (the rule saw the other final), the second finds the others moved, rolls back, reads again, sees
 none left, and revokes with the reset. The file's own guard is separate and is not a retry: the file update still requires
@@ -352,7 +352,7 @@ drops the guard and the retry).
 | AR5 | DELETE `audio_client_codes` WHERE `email=(subquery)`, best effort (audio-client-access.ts) | (d) | (b): the email stays selected by request id inside the statement, as today, so a best-effort cleanup after the batch acts on the client's email as it is then and not on a snapshot taken before the batch; it has no revocation link today and gets none. A "no such table" failure stays silent: it becomes the normal case once migration 0028 drops `audio_client_codes` (issue #271). Any other failure logs once through `logUnexpected`, which changes the log text (today `console.error` with the error class only); no answer changes |
 | FR1 | SELECT `version,status` of the file (revocation.ts:50) | (a) | (a) |
 | FR2 | UPDATE the file to revoked WHERE `status=?` AND EXISTS open project (revocation.ts:66) | (c)+(d) | (c): the read status and an open project; the rule refuses a closed project first; an empty `RETURNING` answers 409, no retry |
-| FR3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file AND the file update landed (`EXISTS(file id=? AND revocation_id=?)`, revocation.ts:75-78) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read), the same revocation-id link to this request's file update (kept: a file update refused because the project closed in between resets nothing), and a batch guard that the other published files are the ones read; a moved guard rolls the batch back and `decideAndSave` re-decides |
+| FR3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file AND the file update landed (`EXISTS(file id=? AND revocation_id=?)`, revocation.ts:75-78) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read), the same revocation-id link to this request's file update (kept: a file update refused because the project closed in between resets nothing), and a batch guard that the other published files are the ones read and, when the reset was decided, that the stage is the one read; a moved guard rolls the batch back and `decideAndSave` re-decides |
 | FR4 | INSERT audit WHERE `changes()=1` (revocation.ts:91, which counts FR3's row) | (d) | (b), written with FR3 only when the rule decided the reset, and keeping the link: it is written only if FR3 changed the stage |
 | FR5 | INSERT `audio_project_updates` from the file's revocation id (revocation.ts:100) | (b) | (b) |
 | P1 | SELECT the file (publishing.ts:26) | (a) | (a), with the project, request and payments in the same batch |
@@ -377,7 +377,7 @@ drops the guard and the retry).
 | M4 | UPDATE `audio_projects` revoked WHERE EXISTS the stopped decision, in the stop batch (messages.ts:192) | (d) | (c), in the same batch as M3, and keeping its link: the `EXISTS` of the stopped decision row this request just wrote, as today (not a comparison of `revoked_at` with this request's `now`, which two requests in the same millisecond share) |
 | M5 | INSERT audit `client-stopped` WHERE EXISTS the stopped decision (messages.ts:197) | (d) | (b): written in the stop batch with M4, keeping its link as today: the `EXISTS` of the stopped decision row, which keys on the request, `review_decision='stopped'` and `created_at` equal to this request's `now`. Two stops by the same client in the same millisecond therefore both write a `client-stopped` audit row while the loser answers 409; that is today's behaviour and is kept |
 | M6 | SELECT the rate count (messages.ts:259) | (a), after a refused write | (a), in the read batch and again after a refused write; 429 beats every other refusal after the lookup (section 2) |
-| M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b) |
+| M7 | UPDATE the owner's read mark WHERE id, request, actor, `read_at IS NULL` (messages.ts:280) | (b) | (b): the rule `markRead` reads the message's actor and `read_at` first; the write keeps its key, the actor and `read_at IS NULL` |
 | M8 | UPDATE the client's read mark WHERE EXISTS(session, project, request) (messages.ts:292) | (d) | (c): the session and access conditions stay as the write's guard (`token_hash`, session not revoked and not expired, project open, request not withdrawn), plus `read_at IS NULL`; the rule `markRead` reads first. The corpus case "read when the session is revoked after the lookup" fires its hook before this statement and records `read_at` null, so an unguarded write would set it |
 | U1 | INSERT a progress note WHERE stage and access (updates.ts) | (d) | (c) |
 | U2, U3, U4 | accept: UPDATE the project (`files_under_review`, `updated_at`, open, request reviewed), INSERT the update, INSERT the audit by `changes()=1` (updates.ts) | (c)+(d), (d), (d) | (c), (b), (b): each insert keeps its link to the guarded update as today, `changes()=1` for the update row and for the audit (as FR4 keeps its link). A comparison of the project's `updated_at` with this request's `now` is not used: two accepts in the same millisecond with the same due date would both match it and both write rows while one answers 409 |
@@ -557,6 +557,13 @@ a publish or a file revoke, today's code has no such outcome, because it never r
 route's existing sentence for that refusal (FileNotPublishable's for a publish, FileNotRevocable's for a revoke), as the house
 rule says a lost race answers. It is reachable only when the other files or the stage move on each of three reads.
 
+A second named change: a client's message and a client's answer read the rate count with the action's facts before the write
+(section 2, "the rate limit is a fact first"), where today only a refused write reaches that read. A failing count statement
+therefore answers 500 with the route's sentence, logged once, for a request that today would have been saved. The reason is
+the offers precedent (a condition only a guard checks is first a fact the rule reads, with the guard kept at the write); the
+order of the reads is not changed to avoid it. The stories pin the 500 (`tests/flows/audio-project-messages-stories.test.ts`) and
+`tests/api/audio-project-outages.test.ts` pins it with the route's log line.
+
 Today's behaviour, kept (not defects and not questions):
 
 - Closing one project's access ends every session of the client's email (revocation.ts:19). A project is gated by its own
@@ -590,9 +597,27 @@ is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId` (Z
 
 ## 9. The PR stack
 
-1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes. It merges before
-   the fixes PR (the stack order), and the fixes PR is cut from it.
+1. `claude/effect-15-audio-projects-design`: this document and the three models. No `src/` file changes. It merged before
+   the fixes PR (the stack order), and the fixes PR was cut from it.
 2. `claude/effect-15-audio-projects-fixes`: F1 to F5, each reproduced by a failing test first; fixture re-records in
-   commits that contain fixture files only.
-3. `claude/effect-15-audio-projects`: the conversion; the record `docs/prelaunch-qa-2026-11-15-audio-projects.md`; step 7
-   marked converted in the plan.
+   commits that contain fixture files only. It merged before the conversion.
+3. The conversion, as a bottom layer and three conversion layers, each conversion layer converting whole routes, standing
+   alone and neutral against the layer below (`golden:neutral --all <below> <tip>` prints NEUTRAL, D1 statements
+   changing only):
+   0. `claude/golden-sqlite-sequence` (from `main`): the golden corpus rule that a `sqlite_sequence` row at 0 is no state
+      (a counter row at 0 and no row give the same next id), every golden fixture re-recorded under it, and the proof
+      `scripts/golden-sequence-proof.mjs` that the re-record changed only digests. It is the bottom of the stack, so the
+      layers above compare against fixtures recorded under one rule.
+   1. `claude/effect-15-audio-projects-messages` (from `claude/golden-sqlite-sequence`): the owner and studio messages
+      routes. It creates the area's store file `src/server/audio-project-store.ts`, the answers module
+      `src/lib/audio-project-answers.ts`, the input readers in `src/server/audio-project-input.ts` with their frozen copies
+      and differential tests, and the rules and flows for messages, read marks, responses and the rate window. It deletes the five writers of
+      `src/lib/audio-project-messages.ts` that only these routes called.
+   2. `claude/effect-15-audio-projects-files` (from layer 1): the uploads route (POST and PUT), the owner file route and the
+      studio file route. Publish, file revoke with its carried first-read status and the `decideAndSave` stage reset, the
+      upload protocol and the R2 code mapping of section 3. The machines `audioProject` and `projectFile` land here, the
+      first layer whose store takes a stage or status list.
+   3. `claude/effect-15-audio-projects` (from layer 2): the access, invitation and updates routes and the notices (claims,
+      delivery in `waitUntil`, retries with today's 60 second cutoff). AR2, AR3 and AR5 go in
+      `src/server/studio-signin-store.ts` (section 4). The machine `projectNotice` lands here. It adds the record
+      `docs/prelaunch-qa-2026-11-15-audio-projects.md` and marks step 7 converted in the plan.

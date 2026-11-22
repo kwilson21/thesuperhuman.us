@@ -1,101 +1,76 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/client-portal";
+import * as Effect from "effect/Effect";
 import {
-	markProjectMessagesRead,
-	postOwnerProjectMessage,
-	validateProjectMessage,
-} from "~/lib/audio-project-messages";
+	checkYourMessage,
+	messageNotSaved,
+	ownerMessagesUnavailable,
+	portalOff,
+	projectHidden,
+	sentence,
+	writeNotAccepted,
+} from "~/lib/audio-project-answers";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
+import { readOwnerMessageCommand } from "~/server/audio-project-input";
+import {
+	markClientMessageReadByOwner,
+	sendOwnerMessage,
+} from "~/server/flows/audio-project-messages";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/owner/projects/[id]/messages";
 
-const inputSchema = z.discriminatedUnion("action", [
-	z.object({ action: z.literal("send"), body: z.unknown() }),
-	z.object({
-		action: z.literal("read"),
-		messageId: z.number().int().positive(),
-	}),
-]);
+/** A failure of the database, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, messageNotSaved);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!clientPortalEnabled(env)) return portalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
-	if (!env.MUSIC_DB)
-		return Response.json(
-			{ ok: false, error: "Project messages are temporarily unavailable." },
-			{ status: 503 },
-		);
+	if (!bindings.ok) return ownerMessagesUnavailable();
 
-	if (!params.id) return Response.json({ ok: false }, { status: 404 });
+	if (!params.id) return projectHidden();
 	const body = await musicRequest(request, 8192);
 
 	if (body instanceof Response) return body;
-	const parsed = inputSchema.safeParse(body);
+	const command = readOwnerMessageCommand(body);
 
-	if (!parsed.success)
-		return Response.json(
-			{ ok: false, error: "Check your message and try again." },
-			{ status: 400 },
-		);
+	if (!command.ok) return checkYourMessage();
+	const id = params.id;
+	const input = command.value;
 
-	try {
-		const project = await env.MUSIC_DB.prepare(
-			"SELECT request_id FROM audio_projects WHERE request_id=?",
-		)
-			.bind(params.id)
-			.first();
+	const program =
+		input.action === "read"
+			? markClientMessageReadByOwner({
+					id,
+					messageId: input.messageId,
+					now: () => new Date(),
+				}).pipe(Effect.map(() => Response.json({ ok: true })))
+			: sendOwnerMessage({
+					id,
+					ownerEmail: locals.owner.email,
+					body: input.body,
+					now: () => new Date(),
+				}).pipe(Effect.map((message) => Response.json({ ok: true, message })));
 
-		if (!project) return Response.json({ ok: false }, { status: 404 });
-
-		if (parsed.data.action === "read") {
-			await markProjectMessagesRead(
-				env.MUSIC_DB,
-				params.id,
-				"owner",
-				parsed.data.messageId,
-			);
-
-			return Response.json({ ok: true });
-		}
-
-		const message = validateProjectMessage(parsed.data.body);
-
-		if (!message)
-			return Response.json(
-				{
-					ok: false,
-					error:
-						"Write up to 4,000 characters. Shared links must start with https://.",
-				},
-				{ status: 400 },
-			);
-
-		const saved = await postOwnerProjectMessage(
-			env.MUSIC_DB,
-			params.id,
-			locals.owner.email,
-			message,
-		);
-
-		if (!saved) return Response.json({ ok: false }, { status: 409 });
-
-		return Response.json({ ok: true, message: saved });
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return Response.json(
-			{
-				ok: false,
-				error: "Your message could not be saved. Please try again.",
-			},
-			{ status: 500 },
-		);
-	}
+	return runRoute(
+		bindings.services,
+		program.pipe(
+			Effect.catchTags({
+				ProjectHidden: () => Effect.succeed(projectHidden()),
+				MessageTextInvalid: (refusal) =>
+					Effect.succeed(sentence(refusal.say, 400)),
+				MessageNotAccepted: () => Effect.succeed(writeNotAccepted()),
+				AudioProjectStoreFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		// A defect is the route's fixed sentence, logged once.
+		{ route: ROUTE, answer: messageNotSaved },
+	);
 };

@@ -50,7 +50,7 @@ function context(
 	body: JsonObject = input,
 	env: Partial<TestRuntime["env"]> = {},
 ): APIContext {
-	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; Ai["run"] is overloaded and generic, so a Mock cannot be typed as it, and the route calls it with a model name and inputs and reads only its response field.
+	// SAFETY: run is the vi.fn that stands in for the Workers AI binding; Ai["run"] is overloaded and generic, so a Mock cannot be typed as it, and the route calls it with a model name and inputs and reads its response field, or the chat-completion text when there is none.
 	return partial<APIContext>({
 		request: new Request("https://example.com/api/software/brief/suggest", {
 			method: "POST",
@@ -112,11 +112,31 @@ it("sends only allowed answer context with a twelve-token cap", async () => {
 	expect(await (await POST(context())).json()).toEqual({
 		suggestion: " in a shared spreadsheet",
 	});
+	// The model Cloudflare still serves (the first one was retired on 2026-11-20), with its thinking off: thinking would
+	// spend the twelve tokens and answer with empty text.
+	expect(run.mock.calls[0][0]).toBe("@cf/google/gemma-4-26b-a4b-it");
 	expect(run.mock.calls[0][1]).toMatchObject({
 		max_tokens: 12,
 		temperature: 0.1,
+		chat_template_kwargs: { enable_thinking: false },
 	});
 	expect(JSON.stringify(run.mock.calls)).not.toContain("test");
+});
+
+it("reads a chat-completion reply, the form the current model answers in", async () => {
+	run.mockResolvedValueOnce({
+		object: "chat.completion",
+		choices: [
+			{
+				index: 0,
+				message: { role: "assistant", content: " in a shared calendar" },
+			},
+		],
+	});
+
+	expect(await (await POST(context())).json()).toEqual({
+		suggestion: " in a shared calendar",
+	});
 });
 
 it.each([

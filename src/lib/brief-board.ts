@@ -202,14 +202,19 @@ export const laneCount = <L extends string>(board: Board<L>, lane: L) =>
 
 // ---- Text ---------------------------------------------------------------------------------------------------------
 
+/** Control characters, line and paragraph separators, and lone surrogates (which the brief's own fields refuse too). */
 const CONTROLS = new RegExp(
-	"[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]",
-	"g",
+	"[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029\\p{Cs}]",
+	"gu",
 );
 
-/** One line of plain text: control characters removed, spaces collapsed, trimmed. */
+/** One line of plain text: control characters and lone surrogates removed, spaces collapsed, trimmed. */
 export const oneLine = (text: string) =>
 	text.replace(CONTROLS, " ").replace(/\s+/g, " ").trim();
+
+/** One line of at most `limit` characters; a cut through an emoji leaves no half of it behind. */
+export const clipped = (text: string, limit: number) =>
+	oneLine(oneLine(text).slice(0, limit));
 
 /** Text for comparing a passage with the answers: case, spacing, quote marks and dashes ignored. */
 export const comparable = (text: string) =>
@@ -1236,7 +1241,7 @@ export function editCardIn<L extends string>(
 	const card = find(board, id);
 
 	if (!card || card.status === "dismissed") return board;
-	const words = oneLine(text).slice(0, config.textLimits[card.lane]);
+	const words = clipped(text, config.textLimits[card.lane]);
 
 	if (!words || words === card.text) return board;
 
@@ -1264,7 +1269,7 @@ export function answerCardIn<L extends string>(
 	answer: string,
 ): Board<L> {
 	const card = find(board, id);
-	const words = oneLine(answer).slice(0, ANSWER_MAX);
+	const words = clipped(answer, ANSWER_MAX);
 
 	if (
 		!card ||
@@ -1370,7 +1375,7 @@ export function addNoteIn<L extends string>(
 	lane: L,
 	text: string,
 ): Board<L> {
-	const words = oneLine(text).slice(0, config.textLimits[lane]);
+	const words = clipped(text, config.textLimits[lane]);
 
 	if (!words || laneCount(board, lane) >= config.limits[lane]) return board;
 	const id = `c${board.nextId}`;

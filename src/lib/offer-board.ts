@@ -6,6 +6,7 @@ import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 import {
 	type LaneConfig,
+	clipped,
 	hasLink,
 	oneLine,
 	ownField,
@@ -342,7 +343,7 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 		sizeReason:
 			Predicate.isString(sizeReason) &&
 			!pricesOrLinks(oneLine(sizeReason).slice(0, OFFER_REASON_MAX + 40))
-				? oneLine(sizeReason).slice(0, OFFER_REASON_MAX)
+				? clipped(sizeReason, OFFER_REASON_MAX)
 				: "",
 		figureUsd:
 			Predicate.isNumber(figure) &&
@@ -356,7 +357,7 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 		figureReason:
 			Predicate.isString(figureReason) &&
 			!hasLink(oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2 + 40))
-				? oneLine(figureReason).slice(0, OFFER_REASON_MAX * 2)
+				? clipped(figureReason, OFFER_REASON_MAX * 2)
 				: "",
 	};
 }

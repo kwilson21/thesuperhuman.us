@@ -60,7 +60,7 @@ const oversized = (): SoftwareInput => {
 	if (input.path !== "workflow")
 		throw new Error("the story's brief is a workflow");
 
-	return { ...input, today: "x".repeat(17_000) };
+	return { ...input, today: "x".repeat(33_000) };
 };
 
 const REQUESTS = "rl:software:203.0.113.7";

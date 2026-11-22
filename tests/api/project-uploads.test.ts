@@ -2,7 +2,8 @@ import type { APIContext } from "astro";
 import { expect, it } from "vitest";
 import { POST, PUT } from "~/pages/api/owner/projects/[id]/uploads";
 import { double, partial } from "../helpers/doubles";
-import { rowD1 } from "../helpers/sqlite-d1";
+import { AT, seedProject } from "../helpers/audio-project-world";
+import { musicWorld } from "../helpers/music-world";
 import { testRuntime } from "../helpers/runtime";
 
 const uuid = "98f3c6a7-9d1e-4f44-ae41-74db25122e14";
@@ -32,21 +33,16 @@ it("fails closed without owner access or the portal gate", async () => {
 	expect((await POST(context)).status).toBe(404);
 });
 
-/** The upload row and the owner-request row that the part route reads, as the test's database serves them. */
-function uploadDb(extra: Record<string, string> = {}): D1Database {
-	return rowD1(
-		(query): Record<string, string | number | null> =>
-			query.includes("audio_project_uploads")
-				? {
-						id: uuid,
-						request_id: "song-1",
-						object_key: "studio/projects/song-1/test.wav",
-						upload_id: "r2-id",
-						byte_size: 10,
-						...extra,
-					}
-				: { "1": 1 },
-	);
+/** The real schema with a paid project at in_progress and a pending 10 byte upload, as the part route reads them. */
+function uploadDb(): D1Database {
+	const world = musicWorld();
+	seedProject(world, "in_progress");
+	world.sql
+		.prepare(`INSERT INTO audio_project_uploads(id,request_id,upload_id,object_key,version,display_name,media_type,byte_size,state,created_at)
+      VALUES (?,'song-1','r2-id','studio/projects/song-1/test.wav','review','Song','audio/wav',10,'pending',?)`)
+		.run(uuid, AT.toISOString());
+
+	return world.db;
 }
 
 it("rejects a wrongly sized part before sending it to R2", async () => {
@@ -106,7 +102,7 @@ it("checks the received part size even without a content-length header", async (
 			owner: { email: "owner@example.com" },
 			runtime: testRuntime({
 				AUDIO_CLIENT_PORTAL_ENABLED: "true",
-				MUSIC_DB: uploadDb({ state: "pending" }),
+				MUSIC_DB: uploadDb(),
 				AUDIO: double<R2Bucket>({
 					resumeMultipartUpload: () => {
 						reachedR2 = true;

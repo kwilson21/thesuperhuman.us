@@ -117,7 +117,7 @@ access reads it back.
   this release does not touch; `npm run build` completed; asset QA matched 35
   production files; the publicist gate passed locally for 38 entries. CI runs
   the gate with private note lookup.
-- **PASS · Exact diff.** Independent review agents ran on every pushed head. The
+- **PASS · Exact diff.** Independent review passes ran on every pushed head. The
   last pass found no blocking issues, and every verified finding from earlier
   passes was fixed and re-reviewed. No secrets, resume files, dependencies or unrelated runtime
   changes are present.

@@ -11,13 +11,13 @@ import {
 } from "~/lib/music-request";
 import { loggedAnswer } from "~/server/answers";
 import { submitIntake } from "~/server/flows/audio-intake";
+import { liveProjectInvitation } from "~/server/flows/audio-project-notices";
 import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
 	liveBackground,
 	liveOwnerAlert,
 	liveOwnerNotice,
-	liveProjectInvitation,
 	liveTurnstileCheck,
 } from "~/server/services";
 

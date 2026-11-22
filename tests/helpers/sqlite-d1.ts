@@ -19,6 +19,18 @@ export type SqliteRow = Record<string, SQLOutputValue>;
  */
 const RETURNS_ROWS = /^\s*SELECT\b|\bRETURNING\b/i;
 
+/** D1 allows at most this many bound parameters in one statement; a statement over it fails, as it does on D1. */
+const D1_MAX_BOUND_PARAMETERS = 100;
+
+function withinD1Limit(args: SQLInputValue[]): SQLInputValue[] {
+	if (args.length > D1_MAX_BOUND_PARAMETERS)
+		throw new Error(
+			`D1_ERROR: too many SQL variables (${args.length} bound, at most ${D1_MAX_BOUND_PARAMETERS})`,
+		);
+
+	return args;
+}
+
 /** A row, typed as the row type `T` that the caller names. */
 function rowAs<T>(row: SqliteRow): T {
 	// SAFETY: node:sqlite and D1 both return one object per row, keyed by the column names of the statement's SELECT or RETURNING list; T is the row type the src caller of all(), first() or batch() names for that statement, and a rowD1 row is a partial fake carrying only the columns the tested path reads.
@@ -51,7 +63,7 @@ export function sqliteD1(
 ): D1Database {
 	const members = (query: string, args: SQLInputValue[]) => ({
 		first: async <T>() => {
-			const row = database.prepare(query).get(...args);
+			const row = database.prepare(query).get(...withinD1Limit(args));
 
 			return row === undefined ? null : rowAs<T>(row);
 		},
@@ -59,11 +71,14 @@ export function sqliteD1(
 			d1Result(
 				database
 					.prepare(query)
-					.all(...args)
+					.all(...withinD1Limit(args))
 					.map((row) => rowAs<T>(row)),
 			),
 		run: async <T>() =>
-			d1Result<T>([], Number(database.prepare(query).run(...args).changes)),
+			d1Result<T>(
+				[],
+				Number(database.prepare(query).run(...withinD1Limit(args)).changes),
+			),
 	});
 
 	return double<D1Database>({
@@ -74,6 +89,7 @@ export function sqliteD1(
 			try {
 				const results = items.map((item) => {
 					const { query, args } = boundStatement(item);
+					withinD1Limit(args);
 					const prepared = database.prepare(query);
 
 					return returnsRows.test(query)

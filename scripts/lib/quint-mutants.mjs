@@ -57,7 +57,7 @@ export const discountMutants = {
 };
 
 // verification/signin-codes.qnt: studio sign-in codes bound to the browser that asked, with requests whose responses can
-// arrive in any order. Module name -> the property its change must break.
+// arrive in any order, and the sessions an accepted code makes. Module name -> the property its change must break.
 export const signinMutants = {
 	signinSingleRow: { property: "clientNeverLockedOut" },
 	signinEvictOldest: { property: "clientNeverLockedOut" },
@@ -78,6 +78,15 @@ export const signinMutants = {
 	signinSweepUnguarded: { property: "liveCodeNeverSwept" },
 	signinDeleteByCookie: { property: "noCrossAddressEffect" },
 	signinEntryByCookie: { property: "noCrossAddressEffect" },
+	signinWriteNoUsedGuard: { property: "oneSessionPerCode" },
+	signinAcceptUncounted: { property: "attemptsBounded" },
+	signinSessionUnmatched: { property: "sessionOnlyFromAcceptedCode" },
+	signinSignOutUnguarded: { property: "revokedStaysRevoked" },
+	signinNoSessionInsert: { property: "everyAcceptMakesSession" },
+	signinSessionCodeExpiry: { property: "sessionOpensOnlyWhileActive" },
+	signinSessionWriteTime: { property: "sessionOpensOnlyWhileActive" },
+	signinOpenIgnoresExpiry: { property: "sessionOpensOnlyWhileActive" },
+	signinOpenIgnoresRevoked: { property: "sessionOpensOnlyWhileActive" },
 };
 
 // verification/music-playback.qnt: one playthrough's playback events delivered by a retrying player to concurrent handlers
@@ -304,14 +313,19 @@ export const models = [
 	},
 	{
 		file: "verification/signin-codes.qnt",
-		current: ["signin"],
+		// The code from no code, and from the starting point "spent" (the client's code with one attempt left), where an accept
+		// that needs its own counted attempt is reached (docs/verification.md, "The sign-in codes model").
+		current: ["signin", "signinSpent"],
 		mutants: signinMutants,
-		equivalents: [],
+		// The accept without its own `used_at IS NULL`: the counted attempt in the same batch requires it, and the accept
+		// requires that attempt (`changes()=1`).
+		equivalents: ["signinAcceptNoUsed"],
 		exhaustive: [],
-		// Its rarest mutant takes about 6,000 random runs to find (the rest a few hundred), so each mutant check allows 12,000; the
-		// run that must pass makes 8,000, which costs about 8 s of one core.
-		samples: "12000",
-		passSamples: "8000",
+		// Its rarest mutant (signinOpenIgnoresExpiry) takes about 17,600 random runs to find with the fixed seed (the rest at
+		// most about 5,200), so each mutant check allows 30,000. Each run that must pass makes 20,000, past that rarest race,
+		// which costs about 33 s of one core.
+		samples: "30000",
+		passSamples: "20000",
 	},
 	{
 		file: "verification/music-playback.qnt",
