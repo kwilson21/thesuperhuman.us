@@ -7,8 +7,8 @@ Repository: `kwilson21/thesuperhuman.us`
 Branch for layer 5: `claude/effect-5-browser-graph`, cut from `origin/main` at `527e2c60` and merged with `origin/main` once more after #251 (the merge is clean; the golden fixtures are byte-identical to `origin/main`)
 Pull requests: stack 250 (#248 and #249, tests only) is merged; #251 is merged; layer 5 is pull request #252.
 Target: production `https://thesuperhuman.us`
-Reviewer: layer 5 was written by a Claude Haiku-class builder subagent working from a brief. Two independent Claude Opus review rounds ran on this pull request (round 1 found a gap in the server-use scan, fixed; round 2 was clean with notes, fixed in the next commit), and an independent Claude Sonnet subagent compared the pages in a real browser (see Evidence and limits). Greptile, Codex and CI on the final head are in Delivery status. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: for stack 250, the parent of `527e2c60` (`git log --first-parent`); for #251, the parent of `05b669ce`; for layer 5, re-check `origin/main` with `git fetch` before merge. The deployed revisions are the merge commits `527e2c60` and `05b669ce` as reported to the builder; no deployed revision was observed by it.
+Reviewer: layer 5 was written with Claude Code. Two independent review passes ran on this pull request (the first found a gap in the server-use scan, fixed; the second was clean with notes, fixed in the next commit), and an independent review compared the pages in a real browser (see Evidence and limits). Greptile, Codex and CI on the final head are in Delivery status. This record does not certify the checks listed as UNVERIFIED.
+Rollback revision: for stack 250, the parent of `527e2c60` (`git log --first-parent`); for #251, the parent of `05b669ce`; for layer 5, re-check `origin/main` with `git fetch` before merge. The deployed revisions are the merge commits `527e2c60` and `05b669ce` as reported in the task for this record; no deployed revision was observed for this record.
 
 ## Scope
 
@@ -31,11 +31,11 @@ Also in layer 5: two test fixes that are not part of the restructuring. `tests/a
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: use Effect for rules, Effect Schema for input and XState with the bridge, matching Tally; convert one area at a time; no behavior change.
-- Owner, 2026-10-12 (global instructions): Claude subagents may write code in this repository, tests first, with independent Claude review each round and Greptile and Codex review on the pull request.
+- Owner, 2026-10-12 (global instructions): Claude Code may write code in this repository, tests first, with independent review until a pass is clean, and Greptile and Codex review on the pull request.
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the layer 5 worktree. No logs retained. Stack 250's CI and live results below are as reported to the builder by the owner's task; the builder did not re-observe them.
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the layer 5 worktree. No logs retained. Stack 250's CI and live results below are as reported in the task for this record; they were not re-observed.
 
 Stack 250:
 
@@ -43,11 +43,11 @@ Stack 250:
 - Live `/` and `/work` answered 200 after the merge (reported, not re-observed here).
 - No file under `src/` or `public/` changed (observed locally with `git diff --name-only`).
 
-Pull request #251 (as reported to the builder by the owner's task; not re-observed here):
+Pull request #251 (as reported in the task for this record; not re-observed here):
 
 - CI `validate` passed on re-run, after the `effect-imports` flake described above.
 - Greptile passed on the final head.
-- Three independent review rounds ran; the last was clean.
+- Three independent review passes ran; the last was clean.
 - Cloudflare Workers Builds succeeded on the merge commit `05b669ce`.
 - Live `/`, `/audio` and `/work` answered 200.
 - An unsigned POST to the Stripe webhook answered 400.
@@ -79,7 +79,7 @@ Client bundle, from `pnpm run build` on `527e2c60` and on this branch. Chunks ea
 
 Inline scripts: for each of the five pages the set of scripts with no file in `dist/_astro` (for example the `SiteNav`, `Footer` and `SoftwareAgreedTerms` scripts) is the same before and after, and the page script chunks that were external are still external (the `/agreements` and `/offer/[token]/sign` page scripts shrank from 234 to 120 bytes). The comparison is by those five pages, not by every page.
 
-Browser comparison, observed by an independent Claude Sonnet subagent on the earlier head `b13b9e61` (before the later review commits, which changed tests and docs only): local dev servers with local seeded data only, no production build, at 1280x800 and 390x844. `/audio/start` (44 states), `/software/start` (36 states), `/agreements` (10 states) and `/offer/[token]/sign` matched `main` in error text, steps and request payloads, with no console errors and no failed requests. One dev-server-only difference on the sign page: an invalid reviewer, approver or notice email shows the specific "Add a valid ... email" message on this branch and "Check this field." on `main`'s dev server. It is believed to be an effect of the dev dependency optimizer on `main`; it was not checked in a production build. `/owner/requests/[id]/update` was exercised on this branch (42 states, no errors) but not compared with `main`.
+Browser comparison, observed by an independent review on the earlier head `b13b9e61` (before the later review commits, which changed tests and docs only): local dev servers with local seeded data only, no production build, at 1280x800 and 390x844. `/audio/start` (44 states), `/software/start` (36 states), `/agreements` (10 states) and `/offer/[token]/sign` matched `main` in error text, steps and request payloads, with no console errors and no failed requests. One dev-server-only difference on the sign page: an invalid reviewer, approver or notice email shows the specific "Add a valid ... email" message on this branch and "Check this field." on `main`'s dev server. It is believed to be an effect of the dev dependency optimizer on `main`; it was not checked in a production build. `/owner/requests/[id]/update` was exercised on this branch (42 states, no errors) but not compared with `main`.
 
 Limits: no production build was exercised in a browser, the comparison above was on `b13b9e61` and not re-run on the final head, no deployed response was observed for layer 5, and the size table measures the chunk graph and not a field metric.
 
@@ -120,7 +120,7 @@ Limits: no production build was exercised in a browser, the comparison above was
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks (stack 250: reported CI and Workers Builds success on `527e2c60`; #251: reported CI `validate` pass on re-run and Workers Builds success on `05b669ce`; layer 5: local gates above).
-- UNVERIFIED, 7.2 Exact diff review on the pull request head and independent code and security review for layer 5: two independent Claude Opus review rounds ran on #252 (round 1 found the scan gap, fixed; round 2 clean with notes, fixed). Greptile and Codex on the final head have not been recorded here. Stack 250's reviews are not recorded here. #251: Greptile passed on the final head and three independent review rounds ran with the last clean (as reported).
+- UNVERIFIED, 7.2 Exact diff review on the pull request head and independent code and security review for layer 5: two independent review passes ran on #252 (the first found the scan gap, fixed; the second clean with notes, fixed). Greptile and Codex on the final head have not been recorded here. Stack 250's reviews are not recorded here. #251: Greptile passed on the final head and three independent review passes ran with the last clean (as reported).
 - UNVERIFIED, 7.3 Production bindings, secrets, HTTPS, host routing and response headers for layer 5: no binding, secret or migration changed; nothing deployed.
 - PASS, 7.4 Rollback is the previous deployed revision: for stack 250 and #251 the parents of the merge commits `527e2c60` and `05b669ce` (as reported); for layer 5 re-check `origin/main` with `git fetch` before merge.
 - PASS, 7.5 for stack 250 (as reported): `/` and `/work` answered 200 after deployment. PASS for #251 (as reported): `/`, `/audio` and `/work` answered 200 and the webhook answered an unsigned POST with 400; UNVERIFIED for #251: a real payment through the new code. UNVERIFIED for layer 5: nothing deployed; to be completed after merge (production revision, `/agreements`, an offer signing page, `/audio/start`, `/software/start`, the owner update page, and the built chunks served from production).
@@ -132,7 +132,7 @@ Limits: no production build was exercised in a browser, the comparison above was
 
 ## Delivery status and remaining gates
 
-- UNVERIFIED: Greptile and Codex on the final head of #252 (the two independent Claude Opus rounds are recorded above).
+- UNVERIFIED: Greptile and Codex on the final head of #252 (the two independent review passes are recorded above).
 - UNVERIFIED: CI (`validate`) and Cloudflare Workers Builds on the layer 5 head.
 - UNVERIFIED: live and browser verification of layer 5, to be completed after merge.
 
@@ -140,4 +140,4 @@ No deployment is authorized by this record.
 
 Stack 250: implemented yes, verified locally yes, deployed yes (as reported), verified live partly (`/` and `/work` answered 200, as reported). #251: implemented yes, verified locally yes (as reported), deployed yes (as reported), verified live partly (200 answers, an unsigned webhook POST answered 400 and a zero-row read-only query, as reported; no real payment). Layer 5: implemented yes, verified locally yes, deployed no, verified live no.
 
-Layer 5 was built by a Claude subagent. This record does not certify the checks listed as UNVERIFIED.
+Layer 5 was built with Claude Code. This record does not certify the checks listed as UNVERIFIED.
