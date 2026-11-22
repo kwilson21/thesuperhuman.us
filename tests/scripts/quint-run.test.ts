@@ -278,6 +278,7 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 
 		for (const mutant of [
 			"signinSessionCodeExpiry",
+			"signinSessionWriteTime",
 			"signinOpenIgnoresExpiry",
 			"signinOpenIgnoresRevoked",
 		] as const)

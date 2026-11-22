@@ -280,9 +280,11 @@ point, as the audio project files model does for its rare races.
 16. `revokedStaysRevoked`: a sign-out never moves `revoked_at` once it is set; it stays the time of the first sign-out
     that reached the session.
 17. `everyAcceptMakesSession`, the converse of 14: every accepted code makes a session. The accept's token names
-    exactly one session, made from the code the accept marked used, for the browser that entered it and the code's
-    address; and a session cookie a browser holds always names a session, so the cookie the route sets on an accept
-    names one.
+    exactly one session, and a session cookie a browser holds always names a session, so the cookie the route sets on
+    an accept names one. Only those two parts can fail (mutant `NoSessionInsert`). The property also compares the
+    session's key, version, browser and address with the accept's, but that comparison holds by construction:
+    `guessWrite` writes the session and the accept in one step from the same key, browser and code row, and no later
+    step changes those fields, so as the model is written that comparison cannot fail.
 18. `sessionOpensOnlyWhileActive`: a session opens nothing once it has expired or been revoked. A studio page opens
     only for a session that is active (`sessionActive`: unexpired and not revoked) at the time the page reads the
     clock, and a session lives its full lifetime: it is created at the time its accepted entry read and expires the
@@ -319,6 +321,7 @@ such an accept as a comparison (mutant `AcceptUncounted`).
 | `SignOutUnguarded` | The sign-out sets `revoked_at` whatever it holds (no `revoked_at IS NULL`, C9). Counterexample (seed `0x1`, 18 states): a browser signs in, signs out keeping its cookie, and signs out again a tick later, which moves `revoked_at` | `revokedStaysRevoked` |
 | `NoSessionInsert` | An accepted entry makes no session (the session insert, C6, is skipped), though the route still sets the session cookie. Counterexample (seed `0x1`, 13 states, about 160 runs): the client's browser asks for a code and enters it, the code is accepted and the browser's cookie names no session | `everyAcceptMakesSession` |
 | `SessionCodeExpiry` | The session insert takes its expiry from the code row it selects (`expires_at`, the code's ten minutes) instead of the entry's time plus the session lifetime. Counterexample (seed `0x1`, 13 states, about 160 runs): the client signs in at time 2 and the session expires at 4, with the code, instead of at 6 | `sessionOpensOnlyWhileActive` |
+| `SessionWriteTime` | The session is created at the time its write runs, and expires the session lifetime after that, instead of at the time the entry read (the half of property 18 that `SessionCodeExpiry` cannot reach, since it keeps the creation time). Counterexample (seed `0x1`, 16 states, about 730 runs): the client's other browser asks for a code for address 2 and enters it at time 0, the clock moves to 1 before the entry's write, and the session is created at 1 and expires at 5 instead of at 0 and 4 | `sessionOpensOnlyWhileActive` |
 | `OpenIgnoresExpiry` | The session read of a studio page does not check `expires_at>?`. Counterexample (seed `0x1`, 15 states, about 17,600 runs): the client signs in at time 0, the session expires at 4, and at time 4 a page still opens | `sessionOpensOnlyWhileActive` |
 | `OpenIgnoresRevoked` | The session read of a studio page does not check `revoked_at IS NULL`. Counterexample (seed `0x1`, 18 states, about 2,100 runs): the client signs in at time 2, signs out at time 4 keeping its cookie, and a page still opens | `sessionOpensOnlyWhileActive` |
 
@@ -429,6 +432,16 @@ the project checks of the project routes and `last_seen_at` are not modelled. Of
 per-address email allowance (`code-email`) is modelled, as one fixed window per address; `code-ip`, `session-ip`
 and `session-requester` are still not. Their clock readings come before the request's own and they decide only whether
 the request goes on, which the route-level test covers.
+
+Two other writes to the sessions are not modelled either:
+- Closing a project's access also revokes every session of that address, in the same batch
+  (`src/lib/audio-project-revocation.ts:19`, `src/lib/software-projects.ts:694`). The model's `closeProject` only
+  marks the project closed and revokes no session.
+- Retention deletes session rows (`scripts/studio-retention.mjs:654`): those that expired, were revoked or were last
+  seen more than 30 days earlier. A delete in the model would break property 17 as it is stated (the accept's token
+  would name no session), but not what it protects for a real browser: the session cookie's `Max-Age` is the 14-day
+  session lifetime, set once on the accept, and each of those three times comes after the session was made, so the
+  cookie has expired at least 16 days before retention deletes its row.
 
 Limits that remain, stated so they are not mistaken for properties:
 - **Guessing budget.** Guesses against one address are limited per code, not per address. Each code has 5 attempts and the address's email allowance admits 3 codes per five minutes, so an attacker who asks for codes can make at most 15 guesses per five minutes (4,320 a day, about a 4.3e-5 chance per day against 10^8 codes), up from 10 per five minutes before this change. Each code asked for costs a solved captcha and sends the client an email (864 a day). In exchange, nobody can guess against or use up the client's own code. A per-address guess limit is deliberately not added, because it would let a stranger lock the client out again.

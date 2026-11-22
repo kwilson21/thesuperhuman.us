@@ -73,6 +73,8 @@ module signinCodes {
   //                          route still sets the session cookie
   //   "session-code-expiry"  the session insert takes its expiry from the code row it selects (`expires_at`, the
   //                          code's ten minutes) instead of the entry's time plus the session lifetime
+  //   "session-write-time"   the session is created at the time its write runs, and expires the session lifetime after
+  //                          that, instead of at the time the entry read
   //   "open-ignores-expiry"  the session read of a studio page does not check `expires_at>?`
   //   "open-ignores-revoked" the session read of a studio page does not check `revoked_at IS NULL`
   //   "accept-no-used"       an equivalent mutant (it keeps every property): the accept without its own `used_at IS NULL`. The
@@ -475,12 +477,13 @@ module signinCodes {
     // C6: the session insert selects the row of (cookie value, address) whose stored token is this entry's, so only an accepted entry
     // makes a session ("session-unmatched" selects the row by cookie value and address alone; "no-session-insert"
     // makes none). The session is created at the entry's time and expires at that time plus the session lifetime
-    // (access.ts:363, 385-387; "session-code-expiry" takes the code row's expiry), and the route sets the session
-    // cookie only when the accept returned its row.
+    // (access.ts:363, 385-387; "session-code-expiry" takes the code row's expiry, and "session-write-time" uses the
+    // time the write runs for both), and the route sets the session cookie only when the accept returned its row.
     val stored = if (c != 0) afterAccept.get(k) else blank
     val sessionMade = MUTANT != "no-session-insert" and c != 0 and stored.present
       and (MUTANT == "session-unmatched" or stored.token == tok)
-    val sessionExpires = if (MUTANT == "session-code-expiry") stored.expires else tr + SESSION_LIFE
+    val sessionCreated = if (MUTANT == "session-write-time") now else tr
+    val sessionExpires = if (MUTANT == "session-code-expiry") stored.expires else sessionCreated + SESSION_LIFE
     // A sign-in writes an audit entry for the address's projects (and, for entry-by-cookie, for the other address's too).
     val newAudit =
       if (success) (if (byCookie) audit.set(fl.a, audit.get(fl.a) + 1).set(3 - fl.a, audit.get(3 - fl.a) + 1) else audit.set(fl.a, audit.get(fl.a) + 1))
@@ -493,7 +496,7 @@ module signinCodes {
       nextToken' = nextToken + 1,
       sessions' = if (sessionMade)
           sessions.put(tok, {
-            b: b, a: stored.addr, key: k, ver: stored.ver, created: tr, expires: sessionExpires,
+            b: b, a: stored.addr, key: k, ver: stored.ver, created: sessionCreated, expires: sessionExpires,
             revokedAt: -1, firstRevokedAt: -1,
           })
         else sessions,
@@ -699,9 +702,12 @@ module signinCodes {
   val revokedStaysRevoked = sessions.keys().forall(tok => sessions.get(tok).revokedAt == sessions.get(tok).firstRevokedAt)
 
   // 17. Every accepted code makes a session (the converse of 14): the accept's token names a session (exactly one, as
-  //     the session table is keyed by the token) made from the code the accept marked used, for the browser that
-  //     entered it and the code's address; and a session cookie a browser holds always names a session, so the cookie
-  //     the route sets on an accept names one.
+  //     the session table is keyed by the token), and a session cookie a browser holds always names a session, so the
+  //     cookie the route sets on an accept names one. Only those two parts can fail. The comparison of the session's
+  //     key, version, browser and address with the accept's holds by construction: `guessWrite` writes both in one step
+  //     from the same `k`, `b` and row `r` (the session reads the row after the count and the accept, which change
+  //     neither its version nor its address), and no later step changes those fields, so as the model is written that
+  //     comparison cannot fail.
   val everyAcceptMakesSession = and {
     acceptLog.forall(x => sessions.keys().contains(x.tok) and {
       val s = sessions.get(x.tok)
@@ -760,6 +766,7 @@ module signinSessionUnmatched { import signinCodes(MUTANT = "session-unmatched")
 module signinSignOutUnguarded { import signinCodes(MUTANT = "sign-out-unguarded").* }
 module signinNoSessionInsert { import signinCodes(MUTANT = "no-session-insert").* }
 module signinSessionCodeExpiry { import signinCodes(MUTANT = "session-code-expiry").* }
+module signinSessionWriteTime { import signinCodes(MUTANT = "session-write-time").* }
 module signinOpenIgnoresExpiry { import signinCodes(MUTANT = "open-ignores-expiry").* }
 module signinOpenIgnoresRevoked { import signinCodes(MUTANT = "open-ignores-revoked").* }
 

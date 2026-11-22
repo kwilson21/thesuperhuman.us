@@ -84,6 +84,7 @@ export const signinMutants = {
 	signinSignOutUnguarded: { property: "revokedStaysRevoked" },
 	signinNoSessionInsert: { property: "everyAcceptMakesSession" },
 	signinSessionCodeExpiry: { property: "sessionOpensOnlyWhileActive" },
+	signinSessionWriteTime: { property: "sessionOpensOnlyWhileActive" },
 	signinOpenIgnoresExpiry: { property: "sessionOpensOnlyWhileActive" },
 	signinOpenIgnoresRevoked: { property: "sessionOpensOnlyWhileActive" },
 };

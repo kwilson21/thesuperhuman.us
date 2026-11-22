@@ -1,6 +1,9 @@
-// Scheduling hints from passing Validate run 43776550129; the sign-in hints from run 45058915252 (PR #360), and for the
-// two sign-in mutants the page-open step added or changed, a local timing scaled by that run's ratio for
-// signinSweepUnguarded before the change (31.9 s there, 27.0 s locally). They never change a check's inputs.
+// Scheduling hints from passing Validate run 43776550129; the sign-in hints from run 45058915252 (PR #360). For
+// signinOpenIgnoresExpiry, which the page-open step added, a local timing scaled by that run's ratio for
+// signinSweepUnguarded before the step (31.9 s there, 27.0 s locally). For signinSweepUnguarded since the step
+// (found in about 4,200 runs), a local timing (5.8 s) scaled by that run's ratio for signinChargeAnyVersion (about
+// 5,170 runs), whose counterexample the step did not change (8.9 s there, 7.3 s locally, one run at a time). They
+// never change a check's inputs.
 const passSeconds = {
 	audio: 96.4,
 	software: 68.2,
@@ -23,7 +26,8 @@ const passSeconds = {
 // A mutant stops at its first violation, which most find within a few seconds (3 unless named here).
 const violationSeconds = {
 	signinOpenIgnoresExpiry: 34,
-	signinSweepUnguarded: 13,
+	signinChargeAnyVersion: 9,
+	signinSweepUnguarded: 7,
 };
 
 /** A missing shard means the original complete local run; malformed input fails closed. */
