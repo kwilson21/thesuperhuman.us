@@ -286,6 +286,20 @@ it.each(["", "/saved-visual"])(
 	},
 );
 
+it("drops the stored width and height from the preview when a new file replaces its image", () => {
+	const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:next");
+	const page = fixture(true, "/saved-visual");
+	const image = page.elements.get("[data-preview-image]")!;
+	page.fields.visual.files = [
+		{ name: "next.png", size: 100, type: "image/png" },
+	];
+	page.fileChange();
+	expect(image.src).toBe("blob:next");
+	expect(image.removeAttribute).toHaveBeenCalledWith("width");
+	expect(image.removeAttribute).toHaveBeenCalledWith("height");
+	create.mockRestore();
+});
+
 it("restores the saved endpoint after uploading and then rejecting another replacement", async () => {
 	vi.stubGlobal("confirm", () => true);
 	vi.stubGlobal(

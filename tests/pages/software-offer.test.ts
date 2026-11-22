@@ -939,6 +939,12 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 		sql.exec(
 			"UPDATE software_project_updates SET next_step='Keep the saved next step.' WHERE id='revision-draft'",
 		);
+		sql.exec(
+			"UPDATE software_project_updates SET visual_key='revision-image',visual_alt='The first view.',visual_width=300,visual_height=200 WHERE id='old-review'",
+		);
+		sql.exec(
+			"UPDATE software_project_updates SET visual_key='draft-image',visual_alt='The revised view.',visual_width=640,visual_height=480 WHERE id='revision-draft'",
+		);
 
 		const html = await container.renderToString(composer, {
 			request: new Request(
@@ -953,6 +959,12 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 
 		expect(html).toContain("Respond to requested changes");
 		expect(html).toContain("Please fix the client form.");
+		expect(html.match(/<img[^>]*updates\/old-review\/visual[^>]*>/)![0]).toMatch(
+			/width="300"[^>]*height="200"|height="200"[^>]*width="300"/,
+		);
+		expect(
+			html.match(/<img[^>]*updates\/revision-draft\/visual[^>]*>/)![0],
+		).toMatch(/width="640"[^>]*height="480"|height="480"[^>]*width="640"/);
 		expect(html).toContain("Saved new evidence");
 		expect(html).toContain("Saved second check");
 
@@ -2499,6 +2511,43 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(quiet).toContain("Open v1 ↗");
 		expect(quiet).not.toContain('aria-label="Next steps"');
 		expect(quiet).not.toContain("data-software-review");
+
+		// An image with no stored size renders with no width or height. Both must be positive whole numbers to appear.
+		const progressImage = (page: string, id: string) =>
+			page.match(new RegExp(`<img[^>]*updates/${id}/visual[^>]*>`))![0];
+
+		expect(progressImage(quiet, "progress")).not.toMatch(/width=|height=/);
+
+		for (const [width, height] of [
+			["640", "NULL"],
+			["NULL", "480"],
+			["0", "480"],
+			["640", "-1"],
+			["6.5", "480"],
+		]) {
+			sql.exec(
+				`UPDATE software_project_updates SET visual_width=${width},visual_height=${height} WHERE id='progress'`,
+			);
+			expect(progressImage(await render(), "progress")).not.toMatch(
+				/width=|height=/,
+			);
+		}
+
+		sql.exec(
+			`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,visual_key,visual_alt,visual_width,visual_height,what_changed,created_by,created_at,updated_at,shared_at) VALUES ('earlier','r','progress','shared',0,'Earlier progress','v0','concept','earlier-image','An earlier sketch.',320,200,'I sketched it.','owner','2026-09-01','2026-09-01','2026-09-01')`,
+		);
+		sql.exec(
+			"UPDATE software_project_updates SET visual_width=640,visual_height=480 WHERE id='progress'",
+		);
+
+		const sized = await render();
+		expect(progressImage(sized, "progress")).toMatch(
+			/width="640"[^>]*height="480"|height="480"[^>]*width="640"/,
+		);
+		expect(progressImage(sized, "earlier")).toMatch(
+			/width="320"[^>]*height="200"|height="200"[^>]*width="320"/,
+		);
+		sql.exec("DELETE FROM software_project_updates WHERE id='earlier'");
 		sql.exec("DELETE FROM software_project_updates WHERE id='progress'");
 		sql.exec(
 			`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,what_changed,preview_url,delivered_deliverables_json,created_by,created_at,updated_at,shared_at,review_window_days) VALUES ('v2','r','delivery_review','shared',0,'Tracker','Delivery v2','working_preview','I added CSV import. Please try the sample. More internal detail.','https://example.com/preview','["Status view"]','owner','2026-10-01','2026-10-01','2026-10-01',5)`,
