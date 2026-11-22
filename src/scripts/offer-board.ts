@@ -858,7 +858,7 @@ export function setupOfferBoard() {
 
 		if (total > low) {
 			sayPrice(
-				`Your milestone fees add up to ${exactDollars(total)}, more than this range’s low end of ${exactDollars(low)}. The whole-project range must start at the offer total or above, so it was not filled. Change the fees, or type a range in the offer.`,
+				`Your milestone fees add up to ${exactDollars(total)}, more than ${low === high ? "this figure" : "this range’s low end"} of ${exactDollars(low)}. The whole-project range must start at the offer total or above, so it was not filled. Change the fees, or type a range in the offer.`,
 				from,
 			);
 
@@ -885,7 +885,7 @@ export function setupOfferBoard() {
 		}
 
 		sayPrice(
-			`Filled the whole-project range the client sees as an estimate: ${exactDollars(low)} to ${exactDollars(high)}. Nothing is saved until you save the draft.`,
+			`Filled the whole-project range the client sees as an estimate: ${low === high ? exactDollars(low) : `${exactDollars(low)} to ${exactDollars(high)}`}. Nothing is saved until you save the draft.`,
 			from,
 		);
 	}
@@ -2094,10 +2094,9 @@ export function setupOfferBoard() {
 			hovering = true;
 	});
 
-	// The price rows are redrawn by a reply too, so a mouse resting on them holds one.
-	const prices = root
-		.querySelector<HTMLElement>("[data-price-day]")
-		?.closest("dl");
+	// The price rows are redrawn by a reply too, so a mouse resting anywhere in the pricing section (the rows, the
+	// caption below them, its heading) holds one, the same area as focus on its links and buttons.
+	const prices = root.querySelector<HTMLElement>(".offer-pricing");
 
 	prices?.addEventListener("pointerenter", (event) => {
 		if (event.pointerType === "mouse" || event.pointerType === "pen")

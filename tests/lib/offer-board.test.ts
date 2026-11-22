@@ -886,3 +886,25 @@ describe("found in the offer board's thirty-second review", () => {
 		expect(OFFER_INSTRUCTIONS).toContain("A new card has an empty ref.");
 	});
 });
+
+describe("found in the offer board's thirty-third review", () => {
+	const reasonOf = (reason: string) =>
+		readOfferReply({
+			cards: [{ lane: "inputs", text: "Hosting access", reason }],
+		})?.cards ?? [];
+
+	it("measures a reason after collapsing its spaces, so a long one is never shown cut", () => {
+		const cards = reasonOf(
+			`Needed early.${" ".repeat(250)}${"The client must give the hosting login before the build starts. ".repeat(3)}`,
+		);
+
+		expect(cards).toHaveLength(1);
+		expect(cards[0]?.reason).toBe("");
+	});
+
+	it("drops a card whose reason names money after a long run of new lines", () => {
+		expect(
+			reasonOf(`Similar sites:${"\n".repeat(330)}about 5,000 dollars`),
+		).toHaveLength(0);
+	});
+});

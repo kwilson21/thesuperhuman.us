@@ -2254,6 +2254,29 @@ function check(name, ok, detail = "") {
 			dayLine,
 		);
 
+		// A mouse resting anywhere in the pricing section, the caption below the rows included, holds a reply that would
+		// redraw them, so a row's button never slides under the pointer (the thirty-third review).
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const captionHold = await next();
+
+		await page.locator(".offer-pricing .offer-caption").hover();
+
+		const captionRows = scriptedOfferReply(captionHold.request().postData());
+
+		captionRows.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(captionHold, captionRows);
+		await page.waitForTimeout(500);
+		check(
+			"a mouse resting on the pricing caption holds a reply that would redraw the rows",
+			await page
+				.locator("[data-offer-held]")
+				.evaluate((element) => !element.hasAttribute("data-idle")),
+		);
+		await page.mouse.move(2, 2);
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page

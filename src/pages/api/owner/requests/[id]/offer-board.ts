@@ -8,6 +8,7 @@ import type { APIRoute } from "astro";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { musicRequest } from "~/lib/music-request";
+import { OFFER_CONTENT_MAX } from "~/lib/offer-board";
 import { suggestOffer } from "~/server/flows/offer-board";
 import { readOfferBoardInput } from "~/server/offer-board-input";
 import { liveOfferModel } from "~/server/offer-board-model";
@@ -35,7 +36,9 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner)
 		return Response.json({ ok: false }, { status: 403, headers: noStore });
 
-	const body = await musicRequest(request, 64 * 1024);
+	// Room for the page's whole content limit in any script: OFFER_CONTENT_MAX characters at up to 4 bytes each, plus
+	// the request's own JSON.
+	const body = await musicRequest(request, OFFER_CONTENT_MAX * 4 + 16 * 1024);
 
 	if (body instanceof Response) return body;
 	const read = readOfferBoardInput(body);

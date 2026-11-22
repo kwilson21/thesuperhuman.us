@@ -75,7 +75,7 @@ const updated = pricing.updatedAt
           <tbody>{PRICING_KINDS.flatMap(kind => PRICING_SIZES.map(size => { const range = marketRange(market, kind, size); return <tr><th scope="row">{kindLabels[kind]}</th><td>{sizeLabels[size]}</td><td>{range ? (range.lowUsd === range.highUsd ? dollars(range.lowUsd) : `${dollars(range.lowUsd)} to ${dollars(range.highUsd)}`) : 'No figure'}</td><td>{range?.definition ?? ''}</td></tr>; }))}</tbody>
         </table>
         </div>
-        {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}
+        {market.dayRate && <p>Senior independent developers: {market.dayRate.lowUsd === market.dayRate.highUsd ? dollars(market.dayRate.lowUsd) : `${dollars(market.dayRate.lowUsd)} to ${dollars(market.dayRate.highUsd)}`} a day, for reference.</p>}
         {market.caveats.length > 0 && <details><summary>Caveats ({market.caveats.length})</summary><ul class="pricing-caveats" role="list">{market.caveats.map(caveat => <li>{caveat}</li>)}</ul></details>}
         {market.sources.length > 0 && <details><summary>Sources ({market.sources.length})</summary><ol class="pricing-sources">{market.sources.map(source => <li value={source.id}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}<span class="visually-hidden"> (opens in a new tab)</span></a>{(source.published || source.kind) && <span class="pricing-source-meta">{[source.published, source.kind].filter((part): part is string => Boolean(part)).map((part) => part.replace(/(\d)-(\d)/g, '$1\u2011$2')).join('\u00a0· ')}</span>}</li>)}</ol></details>}
       </div> : null}

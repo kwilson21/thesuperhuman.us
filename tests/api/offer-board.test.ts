@@ -695,3 +695,16 @@ describe("the owner's past offers, for the pricing panel", () => {
 		]);
 	});
 });
+
+describe("found in the offer board's thirty-third review", () => {
+	it("reads a request at the page's content limit in a script of three bytes a character", async () => {
+		const cards = Array.from({ length: 55 }, (_, index) => ({
+			ref: `c${index + 1}`,
+			lane: "questions",
+			text: "问".repeat(400),
+			state: "open",
+		}));
+
+		expect((await POST(context({ ...body, cards }))).status).toBe(200);
+	});
+});
