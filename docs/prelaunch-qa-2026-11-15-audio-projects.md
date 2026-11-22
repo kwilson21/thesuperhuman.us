@@ -8,9 +8,9 @@ Routes: the owner's project routes `messages`, `uploads` (POST and PUT), `files/
 Branches, each cut from the one before (heads at the last review round; the record's own commit follows the top head):
 
 - bottom layer `claude/golden-sqlite-sequence`: PR 343, merged to `main` on 2026-11-16 at head `6e02b72f` (merge commit `51cbc017`). A counter row at 0 is no state in the golden digests, every golden fixture was re-recorded under that rule, and a proof script shows the re-record changed only digests. It is merged, so the open stack starts on `main`.
-- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `2d739c27`. The two messages routes, and the area's store, answers and input readers.
-- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `09938cee`. The uploads route, the owner file route and the studio file route, and the project and file machines.
-- layer 3 `claude/effect-15-audio-projects`: PR 365, head `e3f6f214`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
+- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `6a5749ad`. The two messages routes, and the area's store, answers and input readers.
+- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `ac370117`. The uploads route, the owner file route and the studio file route, and the project and file machines.
+- layer 3 `claude/effect-15-audio-projects`: PR 365, head `a37ee189`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
 
 AI assistance: the code on every branch was written with AI assistance, tests first. The owner reviews the pull requests.
 
@@ -63,10 +63,10 @@ What the conversion keeps equal to today's on purpose: the project's stage a cli
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f33effae`, the latest at the final round, which contains the merged bottom layer) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `e3f6f214`, before this record's own commit:
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f33effae`, the latest at the final round, which contains the merged bottom layer) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `a37ee189`, before this record's own commit:
 
 - `format:check`: "Checked 1039 files in 114ms. No fixes applied". `lint`: no findings. `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15083 tests passed, 1 skipped (15084), tree clean afterwards.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15090 tests passed, 1 skipped (15091), tree clean afterwards.
 - `golden:neutral --all claude/effect-15-audio-projects-files HEAD`: "compared 80 fixtures and 9369 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL"; layer 2 against layer 1 (3 of 80 fixtures differ) and layer 1 against `origin/main` (2 of 80) are also NEUTRAL.
 - `verify:quint:all`: exit 0. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `check`: 0 errors, 0 warnings, 16 hints.
 - `git diff origin/main HEAD -- docs/verification.md` shows no dropped line of `main`.
@@ -95,7 +95,9 @@ Layer 3, `8c13a94b` (the top layer against the files layer):
 
 Final review rounds, fixture-only commits on layer 2 and on layer 3: `owner-project-file` 74 of 145 cases (every publish and revoke case that reaches the batch) and `owner-project-uploads` 1 of 200 cases ("flow: start, put the part, complete, then publish the file"), for the batch guards of that round (a count and a membership check of each file a guard names, no reliance on an order, and a revoke that decided no reset no longer compares the stage).
 
-A last round re-recorded `owner-project-file` for the ids bound as one value: 5 of 145 cases ("publish: a second review replaces the first", "revoke: the other published review keeps the stage at review_ready", "revoke: the other published final keeps a completed project complete", "life: publish a review, publish a second that replaces it, revoke the second, publish a final" and "publish: a final revokes the live review").
+The last round, for the review threads on the messages pull request, re-recorded `studio-projects-messages` on the messages layer (114 of 215 cases: 110 of the send, read and respond matrix, "a message with a mailto", the two "two reviews published ..." cases and "respond with 12 messages while the project is complete") and `owner-project-file` and `owner-project-uploads` on layers 2 and 3 for a publish's second read of the project (50 of 145 cases, and 1 of 200: "flow: start, put the part, complete, then publish the file"). No commit of the messages layer mixes source and fixture files: the two commits that touch its fixtures (`1664ccfb`, `e6863102`) contain fixture files only.
+
+The review rounds re-recorded `owner-project-file` for the ids bound as one value: 5 of 145 cases ("publish: a second review replaces the first", "revoke: the other published review keeps the stage at review_ready", "revoke: the other published final keeps a completed project complete", "life: publish a review, publish a second that replaces it, revoke the second, publish a final" and "publish: a final revokes the live review").
 
 UNVERIFIED: none of the routes was run against a real D1, R2 bucket, Resend account or the deployed worker; the corpus uses an in-memory SQLite database with the real schema, an in-memory bucket and a scripted fetch. R2's error codes are read from the end of their messages as R2 writes them, which the tests feed in the same words. The exhaustive ordering run of the sign-in non-interference test (`SIGNIN_EXHAUSTIVE=1`) was not run; the sampled run passes with the revoke now a flow. The Quint models were not changed by this conversion.
 
