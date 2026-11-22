@@ -8,11 +8,16 @@ import {
 	pendingSignInFromRequest,
 	takeStudioAllowance,
 } from "~/lib/audio-client-access";
-import { clientPortalEnabled, normalizeClientEmail } from "~/lib/client-portal";
+import {
+	clientPortalEnabled,
+	codeKeyUsable,
+	normalizeClientEmail,
+} from "~/lib/client-portal";
 import { sendAudioMessage } from "~/lib/audio-resend";
 import { musicRequest } from "~/lib/music-request";
 import { verifyTurnstile } from "~/lib/turnstile";
 import { studioCodeEmail } from "~/lib/client-emails";
+import { logUnexpected } from "~/server/failure";
 
 // A code request issues a code bound to the browser that asked (the pending sign-in cookie, see audio-client-access.ts).
 // A browser that sent its cookie gets the same value back whatever the outcome. Two requests from one browser at the same
@@ -21,6 +26,8 @@ import { studioCodeEmail } from "~/lib/client-emails";
 // code does not work. That is accepted: the email allowance (3 per five minutes) bounds it. A browser that sent no cookie
 // and sends two requests at once has no value to share, so its responses can overwrite each other and it asks again.
 export const prerender = false;
+
+const ROUTE = "/api/studio/code";
 
 const inputSchema = z.object({
 	email: z.string().max(320),
@@ -31,6 +38,13 @@ const generic = {
 	ok: true,
 	message: "If this email has a studio project, a sign-in code is on its way.",
 };
+
+// 503 for a binding or secret that is missing or unusable, 500 for any other fault of the site. The sentence is the same.
+const failed = (status: 500 | 503) =>
+	Response.json(
+		{ ok: false, error: "Studio sign-in is temporarily unavailable." },
+		{ status },
+	);
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
@@ -45,10 +59,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		!env.RESEND_API_KEY ||
 		!env.CONTACT_FROM_EMAIL
 	)
-		return Response.json(
-			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-			{ status: 503 },
-		);
+		return failed(503);
 	const body = await musicRequest(request, 4096);
 
 	if (body instanceof Response) return body;
@@ -67,6 +78,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 			{ status: 400 },
 		);
 	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+
+	// The first allowance makes the first keyed hash, which refuses a code key under 32 characters. That key is answered as
+	// a missing one, here, before any statement.
+	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY)) return failed(503);
 
 	try {
 		if (
@@ -132,33 +147,38 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		if (issued) {
 			const { code, nonce } = issued;
 
-			locals.runtime.ctx.waitUntil(
-				(async () => {
-					const sent = await sendAudioMessage({
-						apiKey: env.RESEND_API_KEY,
-						payload: {
-							from: env.CONTACT_FROM_EMAIL,
-							to: [email],
-							subject: "Your studio sign-in code",
-							...studioCodeEmail(code),
-						},
-					});
+			const delivery = (async () => {
+				const sent = await sendAudioMessage({
+					apiKey: env.RESEND_API_KEY,
+					payload: {
+						from: env.CONTACT_FROM_EMAIL,
+						to: [email],
+						subject: "Your studio sign-in code",
+						...studioCodeEmail(code),
+					},
+				});
 
-					// Discard only a confirmed rejection. After a timeout or provider error the email may still
-					// arrive, so that code stays usable until it expires.
-					if (!sent.ok && !sent.uncertain)
-						await discardUndeliveredCode(
-							env.MUSIC_DB!,
-							email,
-							code,
-							nonce,
-							env.AUDIO_CLIENT_CODE_KEY!,
-						);
-				})().catch(() => {
-					// Keep private details out of logs. The next request can issue a fresh code.
-					console.error("Studio code delivery or cleanup failed.");
-				}),
-			);
+				// Discard only a confirmed rejection. After a timeout or provider error the email may still
+				// arrive, so that code stays usable until it expires.
+				if (!sent.ok && !sent.uncertain)
+					await discardUndeliveredCode(
+						env.MUSIC_DB!,
+						email,
+						code,
+						nonce,
+						env.AUDIO_CLIENT_CODE_KEY!,
+					);
+			})().catch(() => {
+				// Keep private details out of logs. The next request can issue a fresh code.
+				console.error("Studio code delivery or cleanup failed.");
+			});
+
+			// The email goes out after the response. A request with no execution context (Workers always give one) waits for
+			// it before answering instead, as Background.defer does (src/server/services.ts).
+			const { ctx } = locals.runtime;
+
+			if (ctx) ctx.waitUntil(delivery);
+			else await delivery;
 		}
 
 		// Every answer sets the same cookie value whether or not a code was issued.
@@ -170,10 +190,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				),
 			},
 		});
-	} catch {
-		return Response.json(
-			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-			{ status: 503 },
-		);
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
+		return failed(500);
 	}
 };

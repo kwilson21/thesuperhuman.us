@@ -1073,7 +1073,7 @@ describe("races", () => {
 });
 
 describe("the deploy order", () => {
-	it("answers 503 and stores nothing when the 0027 migration has not been applied", async () => {
+	it("answers 500, logs once and stores nothing when the 0027 migration has not been applied", async () => {
 		const before = new DatabaseSync(":memory:");
 
 		for (const name of readdirSync(
@@ -1090,11 +1090,17 @@ describe("the deploy order", () => {
 		before.exec(`INSERT INTO owner_requests(id,kind,email,summary,status,created_at,updated_at)
       VALUES ('song-1','service','${address}','A song','new','2026-09-20T12:00:00Z','2026-09-20T12:00:00Z')`);
 		db = sqliteD1(before);
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const response = await ask();
+		try {
+			const response = await ask();
 
-		expect(response.status).toBe(503);
-		expect(mails).toHaveLength(0);
+			expect(response.status).toBe(500);
+			expect(mails).toHaveLength(0);
+			expect(errors).toHaveBeenCalledOnce();
+		} finally {
+			errors.mockRestore();
+		}
 	});
 
 	it("leaves the old table alone, so the code running before the deploy keeps working on the migrated database", () => {

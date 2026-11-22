@@ -27,11 +27,17 @@ export async function hashValue(value: string): Promise<string> {
 	);
 }
 
+/** Whether a code key is long enough for `keyedHash`, which refuses one under 32 characters. */
+export function codeKeyUsable(secret: string): boolean {
+	return secret.length >= 32;
+}
+
 export async function keyedHash(
 	secret: string,
 	message: string,
 ): Promise<string> {
-	if (secret.length < 32) throw new Error("Studio code key is not configured.");
+	if (!codeKeyUsable(secret))
+		throw new Error("Studio code key is not configured.");
 
 	const key = await crypto.subtle.importKey(
 		"raw",
