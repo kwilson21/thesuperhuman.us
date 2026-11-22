@@ -8,12 +8,16 @@ import {
 } from "~/lib/audio-client-access";
 import {
 	clientPortalEnabled,
+	codeKeyUsable,
 	hashValue,
 	normalizeClientEmail,
 } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+
+const ROUTE = "/api/studio/session";
 
 const inputSchema = z.object({
 	email: z.string().max(320),
@@ -32,6 +36,13 @@ const notThisBrowser = () =>
 		{ status: 401 },
 	);
 
+// 503 for a binding or secret that is missing or unusable, 500 for any other fault of the site. The sentence is the same.
+const failed = (status: 500 | 503) =>
+	Response.json(
+		{ ok: false, error: "Studio sign-in is temporarily unavailable." },
+		{ status },
+	);
+
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
 
@@ -39,10 +50,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		return new Response("Not found", { status: 404 });
 
 	if (!env?.MUSIC_DB || !env.AUDIO_CLIENT_CODE_KEY) {
-		return Response.json(
-			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-			{ status: 503 },
-		);
+		return failed(503);
 	}
 
 	const body = await musicRequest(request, 4096);
@@ -62,6 +70,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
 	// A code only works in the browser that asked for it. Without that browser's cookie nothing is looked up, charged or
 	// counted, so someone who only knows the address cannot use up anyone's attempts or allowances.
 	if (!pending) return notThisBrowser();
+
+	// The first allowance makes the first keyed hash, which refuses a code key under 32 characters. That key is answered as
+	// a missing one, here, before any statement.
+	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY)) return failed(503);
 
 	try {
 		const allowed =
@@ -103,10 +115,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		// needs it for the second sign-in. A used code cannot be used again, and the cookie is HttpOnly, random and useless without a code.
 
 		return Response.json({ ok: true }, { headers });
-	} catch {
-		return Response.json(
-			{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-			{ status: 503 },
-		);
+	} catch (error) {
+		logUnexpected(ROUTE, error);
+
+		return failed(500);
 	}
 };

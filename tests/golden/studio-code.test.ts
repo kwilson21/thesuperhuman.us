@@ -41,8 +41,8 @@ import {
 //   handler gates
 //   404 text "Not found"                  portal flag unset, "false", "TRUE" (case matters); the flag is read before any binding
 //   503 "temporarily unavailable"         no MUSIC_DB, no Turnstile secret, no code key, no Resend key, no from address, a
-//                                         secret that is the empty string, a code key under 32 characters (keyedHash throws
-//                                         inside the try, so it is the catch-all 503, with no statement run)
+//                                         secret that is the empty string, a code key under 32 characters (checked after the
+//                                         address, where the first keyed hash would refuse it, with no statement run)
 //   musicRequest
 //   403 Forbidden                         no Origin, another site, http scheme, other port
 //   415 JSON required                     text/plain, urlencoded form, no content type
@@ -78,10 +78,10 @@ import {
 //                                         code is bound to that value and the address (it is read back by the sign-in steps
 //                                         through the cookie jar, which a successful sign-in no longer clears)
 //   mail outcomes (background)            200 sent; 4xx and 429 discard the code (audit "code-delivery-failed", row deleted);
-//                                         5xx, network down keep it; the discard batch failing is swallowed (console.error,
-//                                         which a corpus does not capture); SITE_ORIGIN unset and custom
-//   503 catch                             each batch failing (first allowance, second allowance, issue), no ctx (the code is
-//                                         stored, no mail is sent, the visitor gets 503)
+//                                         5xx, network down keep it; the discard batch failing is swallowed (one fixed
+//                                         console.error line); SITE_ORIGIN unset and custom; no ctx (the email is sent and
+//                                         the code's fate settled before the generic 200)
+//   500 catch, logged once                each batch failing (first allowance, second allowance, issue)
 //   who is asking                         owner and a signed-in client are treated as visitors
 //   sequences into POST /api/studio/session
 
@@ -676,7 +676,7 @@ const cases: Case[] = [
 			},
 		],
 	}),
-	open("no ctx: the code is stored, nothing is sent, the visitor gets 503", {
+	open("no ctx: the email is sent before the visitor gets the generic 200", {
 		noContext: true,
 	}),
 	open("SITE_ORIGIN is unset", { omit: ["SITE_ORIGIN"] }),
