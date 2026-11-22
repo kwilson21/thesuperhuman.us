@@ -50,12 +50,12 @@ model extension merged as #360 and the behaviour fixes S1 to S3 as #367 (records
   property forbids. The rule files `signin-issue.ts` and `signin-complete.ts` record it.
 - **Decided after release · The expiry gap.** Asked of the owner on 2026-11-22 with #360; the owner answered "You
   decide" (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is. An entry that
-  read its code just before the code expired is accepted just after, in the gap of one round trip between its read and
-  its write batch (`docs/verification.md`, "What the time alignment found (for the owner)"). The options were: keep the
-  code as it is (the code was valid when the entry read it, and the gap is one round trip after a ten-minute life), or
-  re-check expiry at write time, which needs a second clock reading that the non-interference test's clock guard fails
-  on today. The conversion keeps today's behaviour, so it neither widens nor closes the gap; a change, if asked for, is
-  a behaviour fix in its own pull request.
+  read its code just before the code expired is accepted just after, in the gap between its clock reading (made before
+  its two hashes and its read batch) and its write batch (`docs/verification.md`, "What the time alignment found (for
+  the owner)"). The options were: keep the code as it is (the code was valid at the entry's clock reading, and the gap
+  is milliseconds after a ten-minute life), or re-check expiry at write time, which needs a second clock reading that
+  the non-interference test's clock guard fails on today. The conversion keeps today's behaviour, so it neither widens
+  nor closes the gap; a change, if asked for, is a behaviour fix in its own pull request.
 
 ## The conversion
 

@@ -25,9 +25,10 @@ Rollback revision: `f33effae`, the revision of `main` before the merge; or `git 
 
 - The finding: once the model binds the time a request read, as the code does, the earlier statement of
   `deadCodeNeverSignsIn` (expiry judged when the write runs) fails: an entry that read just before its code expired is
-  accepted just after, in the gap of one round trip between its read and its write batch. The model now states what
-  the code guarantees (expired at the time the entry read); the old statement is kept, outside the checked set, as
-  `expiredAtWriteNeverSignsIn`. Written up in `docs/verification.md`, "What the time alignment found (for the owner)".
+  accepted just after, in the gap between its clock reading (made before its two hashes and its read batch) and its
+  write batch. The model now states what the code guarantees (expired at the time the entry read); the old statement is
+  kept, outside the checked set, as `expiredAtWriteNeverSignsIn`. Written up in `docs/verification.md`, "What the time
+  alignment found (for the owner)".
 - Reviews: Codex's review of the first head (`fd38cae1`) raised two points (no property read a session's expiry, and
   nothing required an accepted code to make a session), both fixed in `f90b5294` with properties 17 and 18 and four
   mutants. Independent Claude Code passes: the first found five points (a documentation error about the design's
@@ -53,10 +54,11 @@ Rollback revision: `f33effae`, the revision of `main` before the merge; or `git 
 
 - **PASS · Checks, reviews, rollback.** See above.
 - **PASS, decided after release · The expiry gap.** Asked of the owner on 2026-11-22; the owner answered "You decide"
-  (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is (the code was valid when
-  the entry read it, and the gap is one round trip after a ten-minute life). The alternative, re-checking expiry at
-  write time, needed a second clock reading that the non-interference test's clock guard fails on. The model records
-  today's behaviour, so nothing changes.
+  (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is (the code was valid at
+  the entry's clock reading, and the gap, from that reading through two hashes and two round trips to the write, is
+  milliseconds after a ten-minute life). The alternative, re-checking expiry at write time, needed a second clock
+  reading that the non-interference test's clock guard fails on. The model records today's behaviour, so nothing
+  changes.
 - **N/A · Bindings, migrations.** None.
 - **PASS · Production revision and live check.** Deployed `84d20dda`; the site answered 200.
 
