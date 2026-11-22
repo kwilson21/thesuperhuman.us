@@ -1,9 +1,9 @@
-// The studio sign-in area's store: every statement of MUSIC_DB's sign-in tables (`audio_client_signin_codes`,
-// `audio_client_sessions`, `audio_client_allowances`, the sign-in audit rows and the retired sign-in codes table), one
+// The studio sign-in area's store: the studio sign-in routes' statements and the access closure's (AR2, AR3, AR5), one
 // function per statement or batch, over the MusicDb service. CLAUDE.md asks for one store file per area; the audio
 // projects conversion (#365) opened this file with the statements that close a client's sign-in when a project's access
-// closes, and the sign-in conversion (docs/plans/2026-11-studio-signin-conversion.md, section 4) moved its own
-// statements here.
+// closes, and the sign-in conversion (docs/plans/2026-11-studio-signin-conversion.md, section 4) adds the routes'
+// statements beside them. Other areas read or write the same tables from their own files (the agreement store, the
+// software projects' access closure, the audio project store's session joins); those statements are not here.
 //
 // The sign-in routes (POST /api/studio/code, /api/studio/session and /api/studio/sign-out), in the order of the
 // design's section 4. A read returns the rows as facts, and the rules in src/server/rules/signin-*.ts and
@@ -11,12 +11,12 @@
 // the hashes), and decides nothing. Its only SQL that can refuse is the guards C1 to C9 of the design, which re-check
 // at write time what the rule read.
 //
-// Every statement's SQL text and every batch's statements and order are the ones src/lib/audio-client-access.ts ran
-// before the conversion, byte for byte, with the same values bound: the golden corpora (tests/golden/studio-*.test.ts)
-// recorded them, and tests/api/studio-signin-noninterference.test.ts schedules a request's batches by their leading SQL
-// and their length. tests/server/studio-signin-store.test.ts holds every text and batch to the corpora. The issue's and
-// the entry's write batches run for every request, bound to do nothing when the rule or the machine refused, so every
-// request makes the same round trips with the same statements whatever the address.
+// Every statement's SQL text and every batch's statements and order are, byte for byte and with the same values bound,
+// the ones the golden corpora (tests/golden/studio-*.test.ts) recorded from the routes' code in
+// src/lib/audio-client-access.ts, and tests/api/studio-signin-noninterference.test.ts schedules a request's batches by
+// their leading SQL and their length. tests/server/studio-signin-store.test.ts holds every text and batch to the
+// corpora. The issue's and the entry's write batches run for every request, bound to do nothing when the rule or the
+// machine refused, so every request makes the same round trips with the same statements whatever the address.
 //
 // Failures. One failure for the area: a rejected read or statement is a StudioSigninStoreFailed carrying what the
 // database raised in `failure`, which the route logs once (logUnexpected) before its fixed answer. A batch whose guard
