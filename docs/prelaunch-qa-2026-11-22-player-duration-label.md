@@ -4,7 +4,7 @@ Date: November 22, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/player-duration-label`
 Target: production `https://thesuperhuman.us`
-Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
+Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `0097b63f`, the revision of `main` this branch was cut from. If `main` moves before the merge, the rollback point is the merge commit's first parent, and to undo only this change, revert the merge commit.
 
 ## Scope
@@ -23,14 +23,14 @@ No copy, markup, style, route, binding, secret, migration or workflow change. Th
 
 ## Evidence and limits
 
-Local runs: macOS arm64, Node 26.13.1, on commit `91c85bdd`, in the pull request worktree.
+Local runs: macOS arm64, Node 26.13.1, on commit `336f4fae`, in the pull request worktree.
 
-- New tests failed before the fix, as they should: the label test with `expected '' to be '0:00 / 2:05'`, and the failed-audio test with `expected false to be true`. The third new test (metadata not yet loaded, then a `loadedmetadata` event) passed before and after; it guards the existing behaviour.
+- New tests failed before the fix, as they should: the label test with `expected '' to be '0:00 / 2:05'`, and the failed-audio test with `expected false to be true`. The third new test (metadata not yet loaded, then a `loadedmetadata` event) passed before and after; it guards the existing behaviour. A fourth test, added after review, pins the order of the two checks (an audio with both an error and loaded metadata shows the failed state); it failed when the two checks were swapped locally (`expected false to be true`), and the swap was then undone. The failed-audio test also asserts that the message is shown and reads "could not load".
 - `pnpm run format`: no fixes applied.
 - `pnpm run lint`: no findings, exit 0.
 - `pnpm run check`: 0 errors, 0 warnings, 16 hints.
-- `pnpm test`: 387 test files passed; 15,015 tests passed, 3 skipped.
-- `pnpm run build`: complete, exit 0. The client bundle and client graph tests passed with `REQUIRE_CLIENT_BUNDLE=1` (112 tests).
+- `pnpm test`: 387 test files passed; 15,016 tests passed, 3 skipped.
+- `pnpm run build`: complete, exit 0, and the client bundle and client graph tests passed with `REQUIRE_CLIENT_BUNDLE=1` (112 tests). Both were run on `91c85bdd`; the only commit since changes two test files.
 
 Limits:
 
@@ -39,7 +39,8 @@ Limits:
 
 ### Reviews
 
-- Independent review, and the Greptile and Codex reviews on the pull request, had not reported when this record was written: UNVERIFIED.
+- An independent review of head `1d0ebebf` found nothing that had to change. It confirmed that the page's script runs once per load, that showing the failed state at setup matches what the existing error listener does, and that the new tests run the real setup code. It asked for three test improvements (the order test, the visible-message assertions and the removal of unused test scaffolding), which are in `336f4fae`, and for the header wording of this record.
+- The Greptile and Codex reviews on the pull request had not reported when this record was written: UNVERIFIED.
 
 ## Checklist
 
@@ -74,7 +75,7 @@ Limits:
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits.
-- UNVERIFIED, 7.2 Exact diff review: 5 files changed before this record was added (112 insertions, 68 deletions). Independent and bot reviews had not reported when written.
+- PASS, 7.2 Exact diff review: 5 files changed besides this record, all named under Scope. Independent review of `1d0ebebf` (see Reviews). The Greptile and Codex reviews had not reported when written: UNVERIFIED.
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: none changed.
 - PASS, 7.4 Rollback version preserved: see Rollback revision above.
 - UNVERIFIED, 7.5 After authorized deployment: not merged when this record was written.
@@ -95,4 +96,4 @@ Implemented: yes. Verified locally: yes. Verified in CI: not yet read. Deployed:
 
 This record does not by itself authorize deployment. Merging to `main` deploys production and needs the owner's authorization.
 
-Decisions and merge authorization: Kazon Wilson. Implementation and independent review passes were done with Claude Code. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
+Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
