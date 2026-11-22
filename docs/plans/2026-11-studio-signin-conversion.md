@@ -17,8 +17,16 @@ Decided before this design, and not asked again:
 - Owner, 2026-11-15: "Effect schema as our only validator no zod use from us"; stacked conversion PRs.
 - Owner, 2026-11-15 ("Go"): the order of `docs/plans/2026-11-effect-conversion.md`, in which this is step 2.
 
-This design asks the owner nothing new. The fixes keep today's sentences and change only the status code, and no
-answer a visitor sees changes in wording.
+The fixes keep today's sentences and change only the status code, and no answer a visitor sees changes in wording.
+
+**One question for the owner: a lost race on these routes.** The 2026-11-14 decision says a lost race answers 409.
+Here a lost race (a guard C1 to C8 failing because the facts changed after the read) answers like a refusal today: the
+generic 200 on a code request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a
+stranger something about an address they do not own: that it had a project, or room for a code, when the request
+read it. That is what the non-interference property forbids (the model's `outcomeIndependentOfAddress`, and
+`tests/api/studio-signin-noninterference.test.ts`, which compares the answers across the target address's states).
+Recommended: keep today's answers, recorded as an exception to the 409 rule for the code and session routes. Until the
+owner answers, the conversion keeps them as they are, as every conversion keeps behaviour.
 
 ## The area today
 
@@ -79,10 +87,12 @@ points and pass it in.
 
 ## 1. The machines
 
-Two machines in `src/server/machines/`, asked through `next()` (`src/server/machines/next.ts`). Neither stores a
-status column: a code's state is read from its row (`used_at`, `expires_at`, `attempts`), and a session's from
-`revoked_at` and `expires_at`. A machine says which moves its state allows; the rules in section 2 add the facts of
-the address (its projects, its other codes) and the typed code's hash.
+One machine, the sign-in code, in `src/server/machines/`, asked through `next()` (`src/server/machines/next.ts`). It
+stores no status column: a code's state is derived from its row, in this order: no row is `none`; `used_at` set is
+`used`; `expires_at` at or before the time read is `expired`; attempts at the limit is `locked`; otherwise `live`. The
+machine says which moves that state allows; the rules in section 2 add the facts of the address (its projects, its
+other codes) and the typed code's hash. The studio session is drawn below but gets no machine: sign-out decides
+nothing (section 1, "The studio session").
 
 **The guards** re-check, at write time, what the decision relied on. The IDs are used below.
 
@@ -105,24 +115,30 @@ replaces that row before it inserts (access.ts:182-192), so the insert never col
 
 ```mermaid
 stateDiagram-v2
-    [*] --> live: ISSUE (a project is open, the address has room; C1, C2)
+    [*] --> none
+    none --> live: ISSUE (a project is open, the address has room; C1, C2)
     live --> live: ENTER, wrong (attempts + 1; C4)
-    live --> used: ENTER, right, a project open (C4, C5, C1; a session is made, C6)
     live --> locked: ENTER, wrong, the last attempt (C4)
-    live --> live: ISSUE again from the same browser (the row is replaced: a new code)
-    live --> gone: DISCARD (the email was refused; C8)
+    live --> used: ENTER, right, a project open (C4, C5, C1; a session is made, C6)
+    live --> live: ISSUE from the same browser (the row is replaced: a new code)
+    locked --> live: ISSUE from the same browser (the row is replaced)
+    used --> live: ISSUE from the same browser (the row is replaced)
+    expired --> live: ISSUE from the same browser (the row is replaced)
+    live --> none: DISCARD (the email was refused; C8)
+    locked --> none: DISCARD (C8)
+    expired --> none: DISCARD (C8; an unused code past its lifetime)
     live --> expired: the lifetime passes (a fact of the clock, not a move)
     locked --> expired: the lifetime passes
-    used --> expired: the lifetime passes
-    expired --> gone: SWEEP (the next code request for the address; C3)
-    expired --> live: ISSUE from the same browser (the row is replaced)
-    gone --> [*]
 ```
 
-`locked` is a live row whose attempts reached the limit: ENTER is refused there, as on `used` and `expired`, with the
-one invalid-or-expired answer. ISSUE from the same browser replaces the row in every state but `gone`, where it is an
-insert. The machine has no move for another browser: its requests read and write only rows of its own cookie value
-and address, which is what the model's `othersUntouched` and `noCrossAddressEffect` check.
+ENTER is allowed only from `live`; from `none`, `locked`, `used` and `expired` it is refused with the one
+invalid-or-expired answer (`NoCodeToTry`). ISSUE is allowed from every state: the browser's own row for the address is
+replaced, or inserted from `none`. DISCARD is allowed from `live`, `locked` and `expired`, and refused from `used` and
+`none` (`NothingToDiscard`), as `decideDiscard` does today. A `used` row stays `used` after its lifetime (the order
+above), and is swept with the expired rows: the sweep is not a move of this machine but the sweep rule's choice of
+rows whose `expires_at` has passed, whatever their state (section 2). The machine has no move for another browser:
+its requests read and write only rows of its own cookie value and address, which is what the model's
+`othersUntouched` and `noCrossAddressEffect` check.
 
 ### The studio session
 
@@ -135,9 +151,10 @@ stateDiagram-v2
     revoked --> revoked: SIGN_OUT (nothing written; revoked_at is kept)
 ```
 
-Sign-out reads nothing first. Its one statement is the move and its guard; the route answers 200 whether the token was
-unknown, live, expired or already revoked, so the machine is a diagram and a test of `next()`, and the flow asks it
-nothing at run time. This keeps sign-out at one statement, as today.
+This is a picture of the session's life, not a machine module. Sign-out reads nothing and decides nothing: the route
+answers 200 whether the token was unknown, live, expired or already revoked, and its one statement's guard (C9) is
+the only condition, a compare-and-set that SQL keeps. So sign-out has no rule and no machine, and stays at one
+statement, as today; the model checks the session's life (section 7).
 
 ## 2. The rules
 
@@ -154,10 +171,10 @@ guard re-checks it.
 
 The bodies are today's functions, moved; `decideIssue` splits into `sweepCodes` and `issueCode`, which decide from the
 same facts read once. `sameHash` (the constant-time compare) moves with `enterCode`. `ENTER` is asked of the code
-machine from the row's state before the facts of the address are looked at, so a used, expired or locked code is
-refused by the machine and the rule never sees it. `ISSUE` is allowed from every state (the browser's own row is
-replaced), so the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts` is deleted with its
-last caller.
+machine from the row's state before the facts of the address are looked at, so a used, expired or locked code is refused
+by the machine and the rule never sees it; `DISCARD` likewise. `ISSUE` is allowed from every state (the browser's own
+row is replaced), so the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts` is deleted with
+its last caller.
 
 No refusal is shown to the visitor by name. `NoOpenProject`, `AddressFull` and a refused guard answer the generic 200;
 `NoCodeToTry`, a wrong code and a refused guard answer the one 401. The names are for the tests and the flows.
@@ -209,8 +226,11 @@ on `sendAudioMessage`, as the offers area's `liveOfferMail` is (`src/server/offe
 keys in this route's order (from, to, subject, then the email's own fields, code.ts:139-144), so the request Resend sees
 is byte for byte today's; `MailRefused` is the confirmed rejection that discards the code and `MailUncertain` keeps it.
 `SigninKeys` is the code key's keyed hash and the plain hash, with `Effect.tryPromise`. A code key under 32 characters
-is checked with the other bindings, before any statement, and answers today's 503, as a missing secret does; today it is
-the same 503, reached by the throw inside the `try`.
+fails the first keyed hash, where it fails today: on the code route after the body and the address are read, in the
+`code-ip` allowance (code.ts:73; client-portal.ts:34); on the session route after the pending cookie is checked, in the
+`session-ip` allowance (session.ts:68). It fails there as `CodeKeyUnusable` and answers today's 503 before any
+statement, so a malformed body still answers 400 and a missing cookie 401. Sign-out uses only the plain hash and needs
+no code key (sign-out.ts:19; access.ts:646).
 
 **The address.** `normalizeClientEmail` (client-portal.ts:7-14) moves from Zod to Effect Schema, with the Zod schema
 frozen in `tests/fixtures/legacy-validators/` and a block in `tests/server/validators-differential.test.ts` (Zod 4's
@@ -237,7 +257,10 @@ passes `{ route, answer }` to `runRoute`, so a defect is logged once and answere
 
 | Outcome | Code route | Session route | Sign-out route |
 |---|---|---|---|
-| A binding missing, or a code key under 32 characters | 503, today's sentence | 503, today's sentence | 503 `{ok:false, localSignedOut:true}`, cookie cleared |
+| No `MUSIC_DB` | 503, today's sentence | 503, today's sentence | 503 `{ok:false, localSignedOut:true}`, cookie cleared |
+| No Turnstile secret, Resend key or from address | 503, today's sentence | not needed | not needed |
+| No code key | 503, today's sentence | 503, today's sentence | not needed |
+| A code key under 32 characters (`CodeKeyUnusable`, at the first keyed hash) | 503, today's sentence | 503, today's sentence | not needed |
 | `SigninStoreFailed`, a hash failure, a defect | 500, today's sentence (fix S1) | 500, today's sentence (fix S1) | 500 `{ok:false, localSignedOut:true}`, cookie cleared (fix S2) |
 | Every other answer | as today | as today | as today |
 
@@ -249,8 +272,9 @@ Each goes in its own PR before the conversion, with its changed golden cases exp
   failure included, answers 503 "Studio sign-in is temporarily unavailable." (code.ts:173-177, session.ts:106-110) and
   logs nothing. Fixed: a store failure, a hash failure and a defect answer 500 with the same sentence and are logged
   once through `logUnexpected`. The sign-in page shows `error` for any answer that is not ok
-  (`src/scripts/studio-sign-in.ts:44-45, 151`), so a visitor sees the same sentence. The code-key check moves before
-  the first statement and keeps 503 (section 4).
+  (`src/scripts/studio-sign-in.ts:44-45, 151`), so a visitor sees the same sentence. A code key under 32 characters
+  keeps its 503, at the point where it fails today (section 4); only a store failure, a hash failure and a defect
+  become 500.
 - **S2. A database failure answers 500 on sign-out.** Today 503 `{ok:false, localSignedOut:true}` with the cookie
   cleared and the fixed log line "Studio session revocation failed." (sign-out.ts:30-36). Fixed: 500 with the same
   body and cookie, logged once through `logUnexpected`. The sign-out script reads `response.ok` and `localSignedOut`,
@@ -299,7 +323,7 @@ There is no money rule here, so no LemmaScript contract. The golden corpora (`st
 
 ## Open questions from reading the code
 
-None that need the owner. Two notes for review: the background discard reads the clock after the email, which the
-clock guard allows because it runs after the gated batches of the request; and `listStudioSignInFailures` reads the
-audit rows this area writes, so the audit's action names (`code-issued`, `code-delivery-failed`, `signed-in`) do not
-change.
+Beyond the lost-race question above, none that need the owner. Two notes for review: the background discard reads the
+clock after the email, which the clock guard allows because it runs after the gated batches of the request; and
+`listStudioSignInFailures` reads the audit rows this area writes, so the audit's action names (`code-issued`,
+`code-delivery-failed`, `signed-in`) do not change.
