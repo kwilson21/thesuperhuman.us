@@ -8,9 +8,9 @@ Routes: the owner's project routes `messages`, `uploads` (POST and PUT), `files/
 Branches, each cut from the one before (heads at the last review round; the record's own commit follows the top head):
 
 - bottom layer `claude/golden-sqlite-sequence`: PR 343, merged to `main` on 2026-11-16 at head `6e02b72f` (merge commit `51cbc017`). A counter row at 0 is no state in the golden digests, every golden fixture was re-recorded under that rule, and a proof script shows the re-record changed only digests. It is merged, so the open stack starts on `main`.
-- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `6a5749ad`. The two messages routes, and the area's store, answers and input readers.
-- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `ac370117`. The uploads route, the owner file route and the studio file route, and the project and file machines.
-- layer 3 `claude/effect-15-audio-projects`: PR 365, head `a37ee189`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
+- layer 1 `claude/effect-15-audio-projects-messages`: PR 344, now targeting `main`, head `09067a33`. The two messages routes, and the area's store, answers and input readers.
+- layer 2 `claude/effect-15-audio-projects-files`: PR 364, head `422b942d`. The uploads route, the owner file route and the studio file route, and the project and file machines.
+- layer 3 `claude/effect-15-audio-projects`: PR 365, head `23cc52f5`. The access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
 
 AI assistance: the code on every branch was written with AI assistance, tests first. The owner reviews the pull requests.
 
@@ -51,7 +51,7 @@ After the conversion no statement of the area decides an outcome. Every read is 
 - A client's message and a client's answer read the rate count with the action's facts before the write, where today only a refused write reaches that read. A failing count statement therefore answers 500 with the route's sentence, logged once, for a request that today would have been saved. The design names this change (sections 2 and 7), the stories and `tests/api/audio-project-outages.test.ts` pin it, and the order of the reads is not changed.
 - When the retries of a publish or a file revoke run out (three reads each moved the facts), the answer is 409 with the route's existing sentence; today's code never retries.
 
-What the conversion keeps equal to today's on purpose: the project's stage a client's message or answer is decided from is read in the batch just before the decision (so an owner's move between the client's lookup and the decision is seen, as the write's guard sees it today), a publish judges the project from facts read after the object's head (as the write's own conditions were evaluated then), and the read mark reads the clock once after the lookup.
+What the conversion keeps equal to today's on purpose: the project's stage a client's message or answer is decided from is read in the batch just before the decision (so an owner's move between the client's lookup and the decision is seen, as the write's guard sees it today), a publish judges the project from facts read after the object's head (as the write's own conditions were evaluated then), the read mark reads the clock once after the lookup, and a client's send or answer reads it once for its facts and its write, so the rule's count and the guard's count use one window (the recount after a refused write reads it afresh).
 
 ## Judgment calls (mine, for the owner to confirm)
 
@@ -63,10 +63,10 @@ What the conversion keeps equal to today's on purpose: the project's stage a cli
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f33effae`, the latest at the final round, which contains the merged bottom layer) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `a37ee189`, before this record's own commit:
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each open branch took `origin/main` (at `f33effae`, the latest at the final round, which contains the merged bottom layer) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `23cc52f5`, before this record's own commit:
 
 - `format:check`: "Checked 1039 files in 114ms. No fixes applied". `lint`: no findings. `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15090 tests passed, 1 skipped (15091), tree clean afterwards.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15091 tests passed, 1 skipped (15092), tree clean afterwards.
 - `golden:neutral --all claude/effect-15-audio-projects-files HEAD`: "compared 80 fixtures and 9369 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL"; layer 2 against layer 1 (3 of 80 fixtures differ) and layer 1 against `origin/main` (2 of 80) are also NEUTRAL.
 - `verify:quint:all`: exit 0. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `check`: 0 errors, 0 warnings, 16 hints.
 - `git diff origin/main HEAD -- docs/verification.md` shows no dropped line of `main`.
