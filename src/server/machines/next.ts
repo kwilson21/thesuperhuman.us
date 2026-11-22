@@ -1,6 +1,11 @@
 import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
-import { type AnyStateMachine, initialTransition, transition } from "xstate";
+import {
+	type AnyStateMachine,
+	createMachine,
+	initialTransition,
+	transition,
+} from "xstate";
 
 /** An event to ask about: its type alone, or a complete event object (`{ type, ...payload }`) for a guard that reads it. */
 export type MachineEvent =
@@ -9,6 +14,14 @@ export type MachineEvent =
 
 const eventOf = (event: MachineEvent) =>
 	Predicate.isString(event) ? { type: event } : event;
+
+// XState draws one random value per process the first time an actor is made, which `can` does: the prefix of its
+// execution ids, 16 bytes from crypto.getRandomValues (createExecutionIdPrefix in xstate's createActor). Asked once here,
+// as this module loads, that draw is made at start-up rather than inside the first request that asks a machine, where it
+// moved every random value drawn after it in that request (a second sign-in code, a pending cookie value). The golden
+// corpora seed the random values per case, so a case run alone (`vitest -t`) drew it and its later codes no longer
+// matched the fixture, while the same case in a full run, after an earlier case had drawn it, did.
+initialTransition(createMachine({}))[0].can({ type: "" });
 
 /** The row's own context for the guards: plain values, one per key. */
 export type MachineContext = {
