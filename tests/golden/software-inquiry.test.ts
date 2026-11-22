@@ -29,8 +29,8 @@ import {
 // Every response branch and effect path, and the cases that reach them:
 //
 //   musicRequest (src/lib/music-request.ts)
-//   403 / 415 / 400 / 413 / 400        the same five guards as audio-intake: Origin, content type, no body, over 32768
-//                                      bytes, text that is not JSON
+//   403 / 415 / 400 / 413 / 400        the same five guards as audio-intake (Origin, content type, no body, too large,
+//                                      text that is not JSON), with a limit of 49152 bytes rather than 32768
 //   400 { errors }  validateSoftwareInquiry (src/lib/software-inquiry.ts)
 //     path                             missing, unknown, not text, each of the four paths valid
 //     common fields                    name, email, company, timing (every value, bad value), timingDate (valid date,
@@ -415,6 +415,11 @@ const cases: Case[] = [
 	raw(
 		"a body over 32768 bytes",
 		JSON.stringify({ ...workflow, today: "x".repeat(33_000) }),
+		jsonHeaders,
+	),
+	raw(
+		"a body over 49152 bytes",
+		JSON.stringify({ ...workflow, today: "x".repeat(50_000) }),
 		jsonHeaders,
 	),
 	raw("text that is not JSON", "{not json", jsonHeaders),

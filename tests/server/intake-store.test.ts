@@ -49,7 +49,7 @@ describe("insertRequest", () => {
 
 		const failure = await run(
 			world,
-			request(undefined, { note: "x".repeat(16_000) }),
+			request(undefined, { note: "x".repeat(32_000) }),
 		);
 
 		expect(failure).toBeInstanceOf(BriefTooLarge);
