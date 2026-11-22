@@ -160,8 +160,8 @@ any of that: the Quint model lets any number of requests overlap and arrive in a
   (`count < cap`), then the model.
 - `BoardModel` (`src/server/services.ts`, live in `src/server/brief-board-model.ts`) calls `@cf/zai-org/glm-4.7-flash`
   with its thinking off, in JSON Mode (`response_format: json_schema`, the schema named `board_reply`), temperature 0.2,
-  at most 700 output tokens and a 30 second timeout; the page waits 35 seconds. Until November 22, 2026 it was set to
-  call `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with an 8 second timeout, which most measured replies overran
+  at most 700 output tokens and a 30 second timeout; the page waits 35 seconds. Before PR #362 it was set to call
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with an 8 second timeout, which most measured replies overran
   (`docs/prelaunch-qa-2026-11-22-board-on.md`). Its failures are `BoardModelFailed` and `BoardModelTimedOut`.
 - `src/lib/brief-board.ts` holds the reply reader, the lane limits and the checks in section 2, shared by the server and
   the browser. It is pure and reads every object field by field with `src/lib/fields.ts`: a `Schema.Struct`, `Array`

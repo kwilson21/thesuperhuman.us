@@ -7,8 +7,8 @@ Pull request: [#362](https://github.com/kwilson21/thesuperhuman.us/pull/362)
 Revision: the pull request's head when it is merged, which the merge commit names.
 Target: production `https://thesuperhuman.us`: the project brief at `/software/start`, `POST /api/software/brief/board`
 and `POST /api/software-inquiry`.
-Reviewer: built, measured and independently reviewed with Claude Code, with review passes on the final head. Codex
-reviewed the pull request at `fa4697dc` (code and security, no findings), not the later commits. This record does not
+Reviewer: built, measured and independently reviewed with Claude Code; the review passes and the pull request list the
+heads they ran on. Codex reviewed the pull request at `fa4697dc` (code and security, no findings), not the later commits. This record does not
 certify the checks listed as UNVERIFIED.
 Rollback revision: `988ed91a` (`origin/main` when this record was last updated; re-check at merge time, and the merge
 message names it). Turning the board off needs no rollback: set `SOFTWARE_BOARD_ENABLED` to `"false"` in
@@ -20,20 +20,22 @@ Earlier record for the board itself (design, rules, accessibility, privacy, test
 
 Kazon Wilson, in conversation:
 
-- November 16, 2026: delegated the open decisions on the living brief stack and authorized merging it. The board went to
-  `main` switched off, to be turned on once its model was measured (earlier record).
-- November 22, 2026: asking about the board's model, said "you decide everything, you're free to merge"; gave the
-  Cloudflare token Workers AI permission so the models could be measured; and, after the first measurements, answered
-  "Yes" to this plan: switch the board to GLM 4.7 Flash with thinking off ("about a fifth of the 70B" in cost), raise
-  its timeout from 8 seconds to "about 15 seconds", handle the 16,000-character storage limit, and "Measure again on the
-  live site, then switch it on."
+- November 16, 2026: asking about the board's model ("what model is the 70b one? Are we able to get high tps in the
+  responses?"), said "you decide everything, you're free to merge", delegating the open decisions on the living brief
+  stack and authorizing its merge. The board went to `main` switched off, to be turned on once its model was measured
+  (earlier record).
+- November 22, 2026: added Workers AI permission to the Cloudflare token ("done, added the permissions") so the models
+  could be measured. Claude Code then asked before this visitor-facing change, and after the first measurements he
+  answered "Yes" to this plan: switch the board to GLM 4.7 Flash with thinking off ("about a fifth of the 70B" in cost),
+  raise its timeout from 8 seconds to "about 15 seconds", handle the 16,000-character storage limit, and "Measure again
+  on the live site, then switch it on."
 
-Decisions taken under that delegation, not the owner's own:
+Decisions taken under the November 16 delegation, not the owner's own:
 
-- **Switched on before the live measurement.** The plan was "Measure again on the live site, then switch it on." The
-  live route answers 503 while the switch is off, so the order is reversed: measured again through the REST API (below),
-  switched on with this merge, measured on the live site after deploy. If live replies fail or are slow, the switch goes
-  back to `"false"`.
+- **Switched on before the live measurement.** The plan he approved measured on the live site first. The live route
+  answers 503 while the switch is off, so that order cannot be followed as written; it is reversed: measured again
+  through the REST API (below), switched on with this merge, measured on the live site right after deploy. If live
+  replies fail or are slow, the switch goes back to `"false"`. The owner may want to confirm this order.
 - **The time limit is 30 s, not about 15 s.** On the long brief the route accepts, 2 of 10 replies took over 20 s and
   one 33.1 s. A reply the route gives up on is lost, the page waits 20 s before asking again, and three failures in a
   row stop the board for that page, so a later limit brings a slow outline sooner. The page waits 35 s.
@@ -64,7 +66,9 @@ Decisions taken under that delegation, not the owner's own:
   longest passage, every question answered, every field made of characters that double in JSON) it stores about 25,700.
   Without the change, the visitor would be told to shorten a brief the form had accepted.
 - `src/pages/api/software-inquiry.ts`: the body may hold 49,152 bytes (it was 32,768).
-- `tests/golden/fixtures/software-inquiry.json.gz`: re-recorded in its own commit (rule 1 of `tests/golden/README.md`).
+- `tests/golden/fixtures/software-inquiry.json.gz`: re-recorded in its own commit under rule 1 of
+  `tests/golden/README.md` (a behaviour change); the change was decided under the owner's delegation (above), not agreed
+  with him directly.
   2 of 208 cases differ: "a body over 32768 bytes" is now read and refused as a brief (400, "Keep this under 2000
   characters.") rather than as too large (413), and a new case, "a body over 49152 bytes", answers 413.
 - `wrangler.jsonc`: `SOFTWARE_BOARD_ENABLED` is `"true"`.
@@ -145,8 +149,9 @@ times as much per request.
 
 ### 5. Forms and sensitive flows
 - Server validation, Turnstile pass, rate limits and daily reservation: PASS. Unchanged and covered by
-  `tests/api/brief-board.test.ts` (38 tests, including the chat-completion reply, and that the route is still waiting
-  just before 30 s and has given up just after).
+  `tests/api/brief-board.test.ts` (39 tests, including the chat-completion reply; that the model call is still pending
+  just before 30 s and times out just after; and that the route answers a model with no answer after 30 s as 503 busy,
+  with the reservation kept).
 - Stored size: PASS. `tests/api/software-inquiry.test.ts` stores the largest brief with the fullest outline (about 25,700
   characters) and fails at the old limit; it also sends that brief in a script of three bytes a character with every
   field, the security token included, at its longest (about 44,500 bytes), which fails at the old body limit, and checks
@@ -167,7 +172,7 @@ times as much per request.
   left for the owner to decide.
 
 ### 7. Release and final QA
-- Type, test, lint, format and build checks: PASS at the head that carries this record (Node 26): `pnpm run lint` no
+- Type, test, lint, format and build checks: PASS at the head named in the pull request (Node 26): `pnpm run lint` no
   findings, `pnpm run format:check` clean, `pnpm run check` 0 errors and 0 warnings, `pnpm test` all files passing,
   `pnpm run build` complete, `client-bundle.test.ts` with `REQUIRE_CLIENT_BUNDLE=1` passing. The pull request lists the
   counts.
