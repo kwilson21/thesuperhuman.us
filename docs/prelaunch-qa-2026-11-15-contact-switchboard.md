@@ -86,7 +86,7 @@ On `0d62305` plus the review fixes (local, Linux, Node 22, Chromium through Play
 
 ## Reviews
 
-Two independent review agents read the diff, with Codex's code and security reviews on the pull request.
+Two independent review passes read the diff, with Codex's code and security reviews on the pull request.
 
 - Codex (code and security, head `1b89ea1`): no findings.
 - Correctness and security review: no security findings. Fixed: a press on the jack under the reaching plug landed on the drag handle and did nothing; a stopped load left the board busy; the pending put-through was not cancelled when the visitor left first; following `/contact#message` lost focus on the form's heading; and a browser that restores form state on reload could skip the brief's choice screen (the brief now reads the path the link named from the page, `data-linked-path`).
@@ -127,7 +127,7 @@ A tenth review, of that fix, found it made fast reaches worse: the pull-in carri
 
 An eleventh review, of `a7cab7c`, found no defects. It measured the drawing within 0.016px of the cable at rest after the drop-in, a stretch of at most 2.24 and a distance from the cable of at most 21px across 30 to 240 Hz and five phases (the earlier drawings fail both test limits), at most 2.56 times a link's length on an 8,000 px/s drag at 240 Hz (9.24 before), and at most 1.23 after a layout change mid-reach (4.7 to 6.3 before); and it confirmed each of the tests fails on its mutant. One limit: no test covers `settle()` calling `shiftChain` (the tests call it directly); that was checked in Chromium, where an idle resize draws the cable at its own length.
 
-Design choices for Kazon. On November 16 Kazon answered "idk how to answer the other design choices", so the builder chose (recorded in `design.md`, for review on the pull request): 1 A, 2 B (by a general rule: the pinned button steps aside while any other filled button is on screen) and 3 A.
+Design choices for Kazon. On November 16 Kazon answered "idk how to answer the other design choices", so Claude Code chose (recorded in `design.md`, for review on the pull request): 1 A, 2 B (by a general rule: the pinned button steps aside while any other filled button is on screen) and 3 A.
 
 1. From 1100px the six columns wrap each title to two lines and the descriptions run 13 to 17 characters a line at 1280px (6 to 10 at 1100px). A: as built. B: the side layout up to about 1400px. C: a 3 × 2 grid with the cable hanging between the rows.
 2. Home's first phone screen now has two filled pills, "Start a project" and the pinned Get in touch. A: as built. B: show the pinned button only after the hero's button has scrolled away. C: no pinned button on Home, since its contact section has its own button.

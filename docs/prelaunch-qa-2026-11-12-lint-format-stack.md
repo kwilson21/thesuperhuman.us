@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Branches: a stack of six, bottom to top: `claude/lint-1-tooling`, `claude/lint-2-format`, `claude/lint-3-client-scripts`, `claude/lint-4-fix-tests`, `claude/lint-5-fix-source`, `claude/lint-6-review-fixes`
 Pull requests: #234 to #239, linked as GitHub stack 240 (`https://github.com/kwilson21/thesuperhuman.us/stack/240`), bottom to top `claude/lint-1-tooling` #234, `claude/lint-2-format` #235, `claude/lint-3-client-scripts` #236, `claude/lint-4-fix-tests` #237, `claude/lint-5-fix-source` #238, `claude/lint-6-review-fixes` #239
 Target: production `https://thesuperhuman.us`
-Reviewer: built by Claude Haiku and Sonnet subagents; reviewed by independent Claude Opus and Sonnet subagents in several rounds. This record does not certify the checks listed as UNVERIFIED.
+Reviewer: built and independently reviewed with Claude Code. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `a96411f531ed6d99632d2056544242f093c997aa` (local `origin/main` when this record was written; re-check with `git fetch` before merge)
 
 ## Scope
@@ -95,7 +95,7 @@ Pre-existing defect found, not changed here: a JSON `null` body to `src/pages/ap
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits for the numbers at each layer tip and at the final head.
-- PASS, 7.2 Exact diff, dependency, generated-file and public-artifact review on the pull request heads as first pushed (`f3413cdc`, `5355bb25`, `ffdb7fdf`, `c6f6cbd6`, `1037a886`, `eafc2724`): independent Claude review on local heads, then Greptile and Codex code and security reviews on all six pull requests (see Delivery status). UNVERIFIED for the new head that the review-fix commits create.
+- PASS, 7.2 Exact diff, dependency, generated-file and public-artifact review on the pull request heads as first pushed (`f3413cdc`, `5355bb25`, `ffdb7fdf`, `c6f6cbd6`, `1037a886`, `eafc2724`): independent review on local heads, then Greptile and Codex code and security reviews on all six pull requests (see Delivery status). UNVERIFIED for the new head that the review-fix commits create.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers (not deployed): no binding, secret or migration changed, but no deployed response was observed.
 - PASS, 7.4 Rollback version preserved: revision `a96411f531ed6d99632d2056544242f093c997aa` is local `origin/main` when this record was written; re-check with `git fetch` before merge.
 - UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring (not deployed): nothing deployed.
@@ -125,4 +125,4 @@ No deployment is authorized by this record.
 
 Implemented: yes. Verified locally: yes. Deployed: no. Verified live: no.
 
-Built by Claude Haiku and Sonnet subagents; reviewed by independent Claude Opus and Sonnet subagents. This record does not certify the checks listed as UNVERIFIED.
+Built and independently reviewed with Claude Code. This record does not certify the checks listed as UNVERIFIED.
