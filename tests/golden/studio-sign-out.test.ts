@@ -28,8 +28,8 @@ import {
 //
 //   404 text "Not found"                  portal flag unset, "false", "TRUE"; read before the database binding, and with no
 //                                         set-cookie header
-//   503 {ok:false,localSignedOut:true}    no MUSIC_DB (the cookie is cleared anyway); the revoking statement fails (cookie
-//                                         cleared anyway)
+//   503 {ok:false,localSignedOut:true}    no MUSIC_DB (the cookie is cleared anyway)
+//   500 {ok:false,localSignedOut:true}    the revoking statement fails (cookie cleared anyway, logged once)
 //   200 {ok:true} + cleared cookie        no cookie (no statement), another cookie only, a cookie that is not 72 characters of
 //                                         hex and dashes, 73 characters, a name with a prefix, spaces around the equals sign,
 //                                         an unknown token (UPDATE changes nothing), a live session (revoked), an already

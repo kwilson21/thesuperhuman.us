@@ -37,8 +37,9 @@ import {
 //
 //   handler gates
 //   404 text "Not found"                  portal flag unset, "false", "TRUE"; flag read before any binding
-//   503 "temporarily unavailable"         no MUSIC_DB, no code key, a code key under 32 characters (keyedHash throws in the
-//                                         try, so the catch answers). The Turnstile secret and the Resend key are not needed
+//   503 "temporarily unavailable"         no MUSIC_DB, no code key, a code key under 32 characters (checked after the
+//                                         pending cookie, where the first keyed hash would refuse it, with no statement run).
+//                                         The Turnstile secret and the Resend key are not needed
 //   musicRequest                          403 no Origin, another site, http, other port; 415 text/plain and form body; 400
 //                                         Missing request; 413 at 4097 bytes (4096 accepted); 400 Invalid JSON, empty body;
 //                                         a charset on the content type is accepted
@@ -63,7 +64,7 @@ import {
 //   200 {ok:true} + cookie                audio project, software project, both (two audit rows), resolved request, an email
 //                                         written in capitals, a client who already has a session, the right code on the fifth
 //                                         attempt, a withdrawn request next to an active one (audit row for both)
-//   503 catch                             each batch failing, a session insert that collides (batch rolled back, code stays
+//   500 catch, logged once                each batch failing, a session insert that collides (batch rolled back, code stays
 //                                         unused)
 //   who is asking                         the owner and a client who already has a cookie are treated as visitors
 //   sequences                             sign in twice with one code, with two codes (two sessions), two clients
