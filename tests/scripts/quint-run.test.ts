@@ -234,7 +234,7 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(16);
+		expect(properties.length).toBeGreaterThanOrEqual(18);
 		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
 
 		for (const { property } of Object.values<{ property: string }>(
@@ -272,6 +272,18 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 		expect(signinMutants.signinSignOutUnguarded).toEqual({
 			property: "revokedStaysRevoked",
 		});
+		expect(signinMutants.signinNoSessionInsert).toEqual({
+			property: "everyAcceptMakesSession",
+		});
+
+		for (const mutant of [
+			"signinSessionCodeExpiry",
+			"signinOpenIgnoresExpiry",
+			"signinOpenIgnoresRevoked",
+		] as const)
+			expect(signinMutants[mutant]).toEqual({
+				property: "sessionOpensOnlyWhileActive",
+			});
 	});
 });
 

@@ -1,7 +1,9 @@
 // Quint model of the studio sign-in codes of email addresses, with browsers that know the address and, for some of them, the code,
 // and of the studio sessions an accepted code makes.
-// Code modelled: src/lib/audio-client-access.ts (issueClientCode, completeClientCode, discardUndeliveredCode, revokeClientSession),
-//   the routes src/pages/api/studio/code.ts, session.ts and sign-out.ts, and the pending sign-in and session cookies they set and read.
+// Code modelled: src/lib/audio-client-access.ts (issueClientCode, completeClientCode, discardUndeliveredCode,
+//   revokeClientSession, and the session reads such as clientProjectsForSession), the routes
+//   src/pages/api/studio/code.ts, session.ts and sign-out.ts, the studio pages that read a session, and the pending
+//   sign-in and session cookies they set and read.
 // See docs/verification.md ("The sign-in codes model") for what is and is not covered.
 //
 // Time. A code request and an entry each read the clock once, before their read batch, and bind that time in every later
@@ -67,6 +69,12 @@ module signinCodes {
   //   "session-unmatched"    the session insert selects the code row by cookie value and address only, not by the accepted entry's
   //                          token (C6), so an entry that was not accepted makes a session too
   //   "sign-out-unguarded"   the sign-out sets `revoked_at` whether or not it is set (no `revoked_at IS NULL`, C9)
+  //   "no-session-insert"    an accepted entry makes no session (the session insert, C6, is skipped), though the
+  //                          route still sets the session cookie
+  //   "session-code-expiry"  the session insert takes its expiry from the code row it selects (`expires_at`, the
+  //                          code's ten minutes) instead of the entry's time plus the session lifetime
+  //   "open-ignores-expiry"  the session read of a studio page does not check `expires_at>?`
+  //   "open-ignores-revoked" the session read of a studio page does not check `revoked_at IS NULL`
   //   "accept-no-used"       an equivalent mutant (it keeps every property): the accept without its own `used_at IS NULL`. The
   //                          counted attempt in the same batch requires `used_at IS NULL` and the accept requires that attempt
   //                          (`changes()=1`), so the check is redundant (docs/verification.md, "The sign-in codes model")
@@ -100,12 +108,15 @@ module signinCodes {
     created: int, expires: int, used: bool, present: bool, rehashed: bool, token: int,
   }
   // A studio session (`audio_client_sessions`), keyed by its token. b: the browser the entry came from, which gets the session cookie.
-  // a: the address, selected from the code row. key and ver: the code row the insert selected (a ghost). expires: the entry's time
-  // plus the session lifetime. revokedAt: when sign-out revoked it, -1 for NULL. firstRevokedAt: the time of the first sign-out that
-  // reached it, -1 none (a ghost).
-  type Session = { b: int, a: int, key: int, ver: int, expires: int, revokedAt: int, firstRevokedAt: int }
-  // An accept: the entry's token, and the code it marked used (its key and version, the browser that owns it and its address).
-  type Accept = { tok: int, key: int, ver: int, owner: int, a: int }
+  // a: the address, selected from the code row. key and ver: the code row the insert selected (a ghost).
+  // created: the entry's time (`created_at`). expires: the entry's time plus the session lifetime.
+  // revokedAt: when sign-out revoked it, -1 for NULL. firstRevokedAt: the time of the first sign-out that reached it,
+  // -1 none (a ghost).
+  type Session = { b: int, a: int, key: int, ver: int, created: int, expires: int, revokedAt: int, firstRevokedAt: int }
+  // An accept: the entry's token, the code it marked used (its key and version, the browser that owns it and its
+  // address), the browser that entered it (b, which the route gives the session cookie) and the time the entry read
+  // (at).
+  type Accept = { tok: int, key: int, ver: int, owner: int, a: int, b: int, at: int }
   // A code request is four steps, matching the code's batches: the server READS the address's facts (sendRead), then runs the CLEAN-UP
   // batch (sendClear: the address's expired rows), then WRITES in one guarded batch after other steps may have changed the facts
   // (sendWrite), then the browser receives the response and stores the cookie value it carries (receive). Several can be in flight.
@@ -132,6 +143,7 @@ module signinCodes {
     badSweep: bool,         // a request's clean-up removed a code that was live (unused and unexpired) when it ran
     badOutcome: bool,       // a code request ended in an error, which only a request that issues can do: its outcome depends on the address
     badFrame: bool,         // a request or entry for one address changed a row of another address
+    badOpen: bool,          // a studio page opened for a session that was expired or revoked when the page read it
   }
 
   var rows: int -> Row
@@ -165,12 +177,13 @@ module signinCodes {
     phase: "idle", b: 0, a: 0, t: 0, right: false, c: 0, at: 0,
     sPresent: false, sUsed: false, sExp: 0, sAtt: 0, sVer: 0, sOpen: false,
   }
-  val blankSession: Session = { b: 0, a: 0, key: 0, ver: 0, expires: 0, revokedAt: -1, firstRevokedAt: -1 }
+  val blankSession: Session = { b: 0, a: 0, key: 0, ver: 0, created: 0, expires: 0, revokedAt: -1, firstRevokedAt: -1 }
 
   pure def isLive(r: Row, t: int): bool = r.issued and r.present and not(r.used) and t < r.expires
 
-  // A session is active while it is unexpired and not revoked (what the session reads check, `expires_at>? AND revoked_at IS NULL`).
-  // Sign-out does not read it: an expired session is revoked too.
+  // A session is active while it is unexpired and not revoked: what the session reads check
+  // (`expires_at>? AND revoked_at IS NULL`, `openStudio`). Sign-out does not read it: an expired session is revoked
+  // too.
   pure def sessionActive(s: Session, t: int): bool = t < s.expires and s.revokedAt < 0
 
   // What the counted attempt's write re-checks (the guard re-checking what the guess read, at the time the entry read). The mutants
@@ -200,12 +213,14 @@ module signinCodes {
 
   // The starting point. Every run starts with no code, except the runs of "accept-uncounted" and "only-spent" (the pass run
   // `signinSpent`, which changes no rule), which start from "spent": browser 0 (the client's) asked for a code for address 1 at
-  // time 0 and entered one wrong code, so its code has one attempt left. That is the state the model reaches from no code in five
-  // steps at time 0 (the request's read, clean-up and write, which store the code, an audit entry and one use of the address's
-  // allowance, then the entry's read and write; browser 0 already holds the cookie value the response carries). The race of
-  // "accept-uncounted" (two entries in flight when one attempt is left) needs three entries of one code before it expires: from no
-  // code the fixed seed found it only after about 84,000 runs (and not within 150,000 once entries were picked only for rows that
-  // exist), so it starts here, and `signinSpent` checks the code from the same point.
+  // time 0 and entered one wrong code, so its code has one attempt left. That is the state the model reaches from no
+  // code in six steps at time 0: the request's read, clean-up and write, which store the code, an audit entry and one
+  // use of the address's allowance; the entry's read and write, which spend one attempt and one session token (so the
+  // next token is 2); and the response's arrival, which leaves browser 0 with the cookie value it already held.
+  // The race of "accept-uncounted" (two entries in flight when one attempt is left) needs three entries of one code
+  // before it expires: from no code the fixed seed found it only after about 84,000 runs (and not within 150,000 once
+  // entries were picked only for rows that exist), so it starts here, and `signinSpent` checks the code from the same
+  // point.
   val spent = MUTANT == "accept-uncounted" or MUTANT == "only-spent"
   val spentRow: Row = {
     issued: true, owner: CLIENT, addr: 1, ver: 1, delivered: true, attempts: 1, own: 1, compared: 1,
@@ -220,7 +235,7 @@ module signinCodes {
     now' = 0, nextId' = 3, winStart' = Map(1 -> 0, 2 -> 0), winUses' = Map(1 -> (if (spent) 1 else 0), 2 -> 0),
     ghost' = {
       noCookieSignIn: false, badSignIn: false, lateSignIn: false, clientRejected: false, badCharge: false, badAudit: false, badSweep: false,
-      badOutcome: false, badFrame: false,
+      badOutcome: false, badFrame: false, badOpen: false,
     },
     flights' = 1.to(MAX_FLIGHTS).mapBy(_ => idleFlight),
     lastIssued' = 0.to(3).mapBy(b => if (spent and b == CLIENT) 1 else 0),
@@ -230,7 +245,7 @@ module signinCodes {
     audit' = Map(1 -> (if (spent) 1 else 0), 2 -> 0),
     sessions' = Map(),
     sessionCookie' = 0.to(3).mapBy(_ => 0),
-    nextToken' = 1,
+    nextToken' = if (spent) 2 else 1,
     acceptLog' = Set(),
   }
 
@@ -458,10 +473,14 @@ module signinCodes {
         rows.keys().mapBy(i => if (accepts(rows.get(i), tr) and rows.get(i).addr == fl.a) { ...rows.get(i), attempts: rows.get(i).attempts + 1 } else rows.get(i))
       else rows
     // C6: the session insert selects the row of (cookie value, address) whose stored token is this entry's, so only an accepted entry
-    // makes a session ("session-unmatched" selects the row by cookie value and address alone). The session expires at the entry's
-    // time plus the session lifetime, and the route sets the session cookie only when the accept returned its row.
+    // makes a session ("session-unmatched" selects the row by cookie value and address alone; "no-session-insert"
+    // makes none). The session is created at the entry's time and expires at that time plus the session lifetime
+    // (access.ts:363, 385-387; "session-code-expiry" takes the code row's expiry), and the route sets the session
+    // cookie only when the accept returned its row.
     val stored = if (c != 0) afterAccept.get(k) else blank
-    val sessionMade = c != 0 and stored.present and (MUTANT == "session-unmatched" or stored.token == tok)
+    val sessionMade = MUTANT != "no-session-insert" and c != 0 and stored.present
+      and (MUTANT == "session-unmatched" or stored.token == tok)
+    val sessionExpires = if (MUTANT == "session-code-expiry") stored.expires else tr + SESSION_LIFE
     // A sign-in writes an audit entry for the address's projects (and, for entry-by-cookie, for the other address's too).
     val newAudit =
       if (success) (if (byCookie) audit.set(fl.a, audit.get(fl.a) + 1).set(3 - fl.a, audit.get(3 - fl.a) + 1) else audit.set(fl.a, audit.get(fl.a) + 1))
@@ -473,10 +492,15 @@ module signinCodes {
       gflights' = gflights.set(g, idleGuess),
       nextToken' = nextToken + 1,
       sessions' = if (sessionMade)
-          sessions.put(tok, { b: b, a: stored.addr, key: k, ver: stored.ver, expires: tr + SESSION_LIFE, revokedAt: -1, firstRevokedAt: -1 })
+          sessions.put(tok, {
+            b: b, a: stored.addr, key: k, ver: stored.ver, created: tr, expires: sessionExpires,
+            revokedAt: -1, firstRevokedAt: -1,
+          })
         else sessions,
       sessionCookie' = if (success) sessionCookie.set(b, tok) else sessionCookie,
-      acceptLog' = if (success) acceptLog.union(Set({ tok: tok, key: k, ver: r.ver, owner: r.owner, a: r.addr })) else acceptLog,
+      acceptLog' =
+        if (success) acceptLog.union(Set({ tok: tok, key: k, ver: r.ver, owner: r.owner, a: r.addr, b: b, at: tr }))
+        else acceptLog,
       ghost' = { ...ghost,
         noCookieSignIn: ghost.noCookieSignIn or bare,
         badSignIn: ghost.badSignIn or (success and (r.used or tr >= r.expires)) or (bare and (rt.used or tr >= rt.expires)),
@@ -511,6 +535,29 @@ module signinCodes {
     }
   }
 
+  // ---- Opening a studio page (clientProjectsForSession and the other session reads) ----------------------------
+  // Browser b opens a studio page with its session cookie. Each session read reads the clock as it is called, before
+  // its session statement (access.ts:471, 557-558, 706), so the step's own time is the time it binds. The page opens
+  // only while the session is active (`expires_at>? AND revoked_at IS NULL`; "open-ignores-expiry" and
+  // "open-ignores-revoked" each drop one of the two). It writes nothing the model holds (`last_seen_at` is not
+  // modelled), so only the ghost changes.
+  action openStudio(b: int): bool = {
+    val tok = sessionCookie.get(b)
+    val s = if (sessions.keys().contains(tok)) sessions.get(tok) else blankSession
+    val opens =
+      if (MUTANT == "open-ignores-expiry") s.revokedAt < 0
+      else if (MUTANT == "open-ignores-revoked") now < s.expires
+      else sessionActive(s, now)
+    all {
+      tok != 0,
+      sessions.keys().contains(tok),
+      ghost' = { ...ghost, badOpen: ghost.badOpen or (opens and not(sessionActive(s, now))) },
+      rows' = rows, cookie' = cookie, now' = now, nextId' = nextId, winStart' = winStart, winUses' = winUses,
+      flights' = flights, lastIssued' = lastIssued, exempt' = exempt, open' = open, gflights' = gflights,
+      audit' = audit, keepSessions,
+    }
+  }
+
   // ---- Time ----------------------------------------------------------------------------------------------------------
   action tick = all {
     now < MAX_NOW,
@@ -522,6 +569,8 @@ module signinCodes {
   // Each step picks only what it can do: an idle slot for a new request, a request in the phase a step needs, a guess that means
   // something (a browser with a cookie enters the right or a wrong code for one of its own issued rows; a browser with none types the
   // address of an issued row and its code or a wrong one; only browsers 0 and 1 can know a code), a browser that holds a session.
+  // Such a browser signs out or opens a page in one choice, so adding the page left how often the other steps are
+  // picked as it was.
   def inPhase(ph: str): Set[int] = flights.keys().filter(f => flights.get(f).phase == ph)
 
   // The entries that can happen, as (browser, address, the row whose code it types): a browser with a cookie types a code for one of
@@ -551,7 +600,7 @@ module signinCodes {
     guessWrite(g),
     nondet b = 0.to(3).filter(b => sessionCookie.get(b) != 0).oneOf()
     nondet kept = Set(true, false).oneOf()
-    signOut(b, kept),
+    any { signOut(b, kept), openStudio(b) },
     tick,
   }
 
@@ -649,10 +698,35 @@ module signinCodes {
   // 16. A sign-out never moves `revoked_at` once it is set: it stays the time of the first sign-out that reached the session (C9).
   val revokedStaysRevoked = sessions.keys().forall(tok => sessions.get(tok).revokedAt == sessions.get(tok).firstRevokedAt)
 
+  // 17. Every accepted code makes a session (the converse of 14): the accept's token names a session (exactly one, as
+  //     the session table is keyed by the token) made from the code the accept marked used, for the browser that
+  //     entered it and the code's address; and a session cookie a browser holds always names a session, so the cookie
+  //     the route sets on an accept names one.
+  val everyAcceptMakesSession = and {
+    acceptLog.forall(x => sessions.keys().contains(x.tok) and {
+      val s = sessions.get(x.tok)
+      s.key == x.key and s.ver == x.ver and s.b == x.b and s.a == x.a
+    }),
+    0.to(3).forall(b => sessionCookie.get(b) != 0 implies sessions.keys().contains(sessionCookie.get(b))),
+  }
+
+  // 18. A session opens nothing once it has expired or been revoked: a studio page opens only for a session that is
+  //     active (`sessionActive`) at the time the page reads the clock. And a session lives its full lifetime: it is
+  //     created at the time its accepted entry read, and expires the session lifetime after that (and with 16,
+  //     `revoked_at` is the time of the first sign-out).
+  val sessionOpensOnlyWhileActive = and {
+    not(ghost.badOpen),
+    sessions.keys().forall(tok => {
+      val s = sessions.get(tok)
+      s.expires == s.created + SESSION_LIFE and acceptLog.forall(x => x.tok == tok implies x.at == s.created)
+    }),
+  }
+
   val allProperties = and {
     clientNeverLockedOut, cookieRequired, othersUntouched, attemptsBounded, emailsBounded, deadCodeNeverSignsIn,
     liveRowsBounded, cookieOpensEmailedCode, noCrossAddressEffect, chargeOnlyTheCodeRead, noAuditForClosedProject,
     outcomeIndependentOfAddress, liveCodeNeverSwept, sessionOnlyFromAcceptedCode, oneSessionPerCode, revokedStaysRevoked,
+    everyAcceptMakesSession, sessionOpensOnlyWhileActive,
   }
 }
 
@@ -684,6 +758,10 @@ module signinWriteNoUsedGuard { import signinCodes(MUTANT = "write-no-used-guard
 module signinAcceptUncounted { import signinCodes(MUTANT = "accept-uncounted").* }
 module signinSessionUnmatched { import signinCodes(MUTANT = "session-unmatched").* }
 module signinSignOutUnguarded { import signinCodes(MUTANT = "sign-out-unguarded").* }
+module signinNoSessionInsert { import signinCodes(MUTANT = "no-session-insert").* }
+module signinSessionCodeExpiry { import signinCodes(MUTANT = "session-code-expiry").* }
+module signinOpenIgnoresExpiry { import signinCodes(MUTANT = "open-ignores-expiry").* }
+module signinOpenIgnoresRevoked { import signinCodes(MUTANT = "open-ignores-revoked").* }
 
 // An equivalent mutant: it must keep every property (scripts/lib/quint-mutants.mjs, the model's `equivalents`).
 module signinAcceptNoUsed { import signinCodes(MUTANT = "accept-no-used").* }

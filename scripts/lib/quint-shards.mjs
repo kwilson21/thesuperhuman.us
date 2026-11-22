@@ -1,9 +1,13 @@
-// Scheduling hints from passing Validate run 43776550129. They never change a check's inputs.
+// Scheduling hints from passing Validate run 43776550129; the sign-in hints from run 45058915252 (PR #360), and for the
+// two sign-in mutants the page-open step added or changed, a local timing scaled by that run's ratio for
+// signinSweepUnguarded before the change (31.9 s there, 27.0 s locally). They never change a check's inputs.
 const passSeconds = {
 	audio: 96.4,
 	software: 68.2,
 	discount: 106.1,
-	signin: 26,
+	signin: 81,
+	signinSpent: 75,
+	signinAcceptNoUsed: 41,
 	music: 9.8,
 	inquiry: 13.6,
 	budget: 7.5,
@@ -14,6 +18,12 @@ const passSeconds = {
 	softwareNoReadUnmatched: 72.7,
 	discountSecondBatchNoSendingGuard: 107.6,
 	discountAcceptedOnlyCheck: 98.6,
+};
+
+// A mutant stops at its first violation, which most find within a few seconds (3 unless named here).
+const violationSeconds = {
+	signinOpenIgnoresExpiry: 34,
+	signinSweepUnguarded: 13,
 };
 
 /** A missing shard means the original complete local run; malformed input fails closed. */
@@ -58,7 +68,10 @@ export function partitionChecks(checks, total) {
 		.map((check, index) => ({
 			check,
 			index,
-			seconds: check.kind === "pass" ? (passSeconds[check.main] ?? 30) : 3,
+			seconds:
+				check.kind === "pass"
+					? (passSeconds[check.main] ?? 30)
+					: (violationSeconds[check.main] ?? 3),
 		}))
 		.sort((a, b) => b.seconds - a.seconds || a.index - b.index);
 

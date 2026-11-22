@@ -82,6 +82,10 @@ export const signinMutants = {
 	signinAcceptUncounted: { property: "attemptsBounded" },
 	signinSessionUnmatched: { property: "sessionOnlyFromAcceptedCode" },
 	signinSignOutUnguarded: { property: "revokedStaysRevoked" },
+	signinNoSessionInsert: { property: "everyAcceptMakesSession" },
+	signinSessionCodeExpiry: { property: "sessionOpensOnlyWhileActive" },
+	signinOpenIgnoresExpiry: { property: "sessionOpensOnlyWhileActive" },
+	signinOpenIgnoresRevoked: { property: "sessionOpensOnlyWhileActive" },
 };
 
 // verification/music-playback.qnt: one playthrough's playback events delivered by a retrying player to concurrent handlers
@@ -273,9 +277,9 @@ export const models = [
 		// requires that attempt (`changes()=1`).
 		equivalents: ["signinAcceptNoUsed"],
 		exhaustive: [],
-		// Its rarest mutant (signinSweepUnguarded) takes about 17,000 random runs to find with the fixed seed (the rest at most
-		// about 5,000), so each mutant check allows 30,000. Each run that must pass makes 20,000, past that rarest race, which
-		// costs about 33 s of one core.
+		// Its rarest mutant (signinOpenIgnoresExpiry) takes about 17,600 random runs to find with the fixed seed (the rest at
+		// most about 5,200), so each mutant check allows 30,000. Each run that must pass makes 20,000, past that rarest race,
+		// which costs about 33 s of one core.
 		samples: "30000",
 		passSamples: "20000",
 	},

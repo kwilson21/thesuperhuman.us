@@ -167,11 +167,11 @@ File: `verification/signin-codes.qnt`, written before the code that fixes it (th
 `signinSpent`, which starts from the point "spent" described under "Actions"), one module per mutant
 (`scripts/lib/quint-mutants.mjs`, `signinMutants`) and one equivalent mutant (`signinAcceptNoUsed`). It is registered
 in `scripts/lib/quint-mutants.mjs` with up to 20 steps per run. Each mutant check allows 30,000 random runs: with the
-fixed seed the rarest mutant (`SweepUnguarded`) takes about 17,000 to find and the next rarest about 5,000; a run
-stops at its first violation, so most take a few hundred or fewer. Each run that must pass (the two pass runs and the
-equivalent mutant) makes 20,000 (`passSamples`), past that rarest race; one takes about 33 seconds of one core on a
-4-core Linux container (2026-11-22; 8,000 runs of the model before sessions took about 16 there), and all the sign-in
-checks together about 4 minutes of one core (before, about 2). A step picks
+fixed seed the rarest mutant (`OpenIgnoresExpiry`) takes about 17,600 to find and the next rarest (`ChargeAnyVersion`)
+about 5,200; a run stops at its first violation, so most take a few hundred or fewer. Each run that must pass (the two
+pass runs and the equivalent mutant) makes 20,000 (`passSamples`), past that rarest race; one takes about 33 seconds of
+one core on a 4-core Linux container (2026-11-22; 8,000 runs of the model before sessions took about 16 there), and
+all the sign-in checks together about 4 and a half minutes of one core (before sessions, about 2). A step picks
 only choices that can happen (an idle slot, a request in the phase a step needs, an entry for a row that exists, a
 browser that holds a session), which cut the time to find the mutants by about four times when it was first done;
 the invoice models make 100,000 and the discount model 10,000. There is no Apalache run for it.
@@ -198,21 +198,25 @@ An accepted code makes one studio session, and the browser that entered it gets 
 ```mermaid
 stateDiagram-v2
     [*] --> active: a code is accepted (the session insert selects the row holding this entry's token, C6)
+    active --> active: a studio page opens (its read needs expires_at after now and revoked_at NULL)
     active --> revoked: sign-out (sets revoked_at only while it is NULL, C9)
     active --> expired: the session lifetime passes
     expired --> revoked: sign-out (an expired session is revoked too)
     revoked --> revoked: sign-out (nothing written; revoked_at is kept)
 ```
 
+An expired or revoked session opens no page.
+
 **State.** The rows (one per cookie value and address, as in the table's primary key: owner browser, the address each code is for, which code it holds, attempts, the guesses its owner made, created and expiry times, used, present), which row each browser's cookie names, the requests and entries in progress (each with the facts it read), whether each address's project is open, the time, and the emails allowance window of each address. Two addresses, each with a project that is open to begin with and that can be closed at any time. Browsers: the client's own (0, which holds a pending value from an earlier visit), the client's other browser that can read the inbox but holds no cookie (1), a stranger who knows the address and never learns a code (2, which also holds a value), and a second stranger with none (3). Numbers are scaled from the code: 2 attempts (5), 2 emails per window (3), a window of 2 ticks (5 minutes), a lifetime of 2 ticks (10 minutes), 1 live row per address (6). `signin-codes.qnt` sets `CAP = 1`: a cap of one is the smallest that a random search reaches at once, and what is checked is that the cap holds, that it is never made room for by dropping another browser's live code, and that a write cannot get past it. The allowance is kept per address, as in the code, and the email arrives the moment a code is issued.
 
 The model also holds the sessions (`audio_client_sessions`, keyed by token: the browser that entered the code, the
-address, which code row and version it was made from, its expiry, `revoked_at`, and as a ghost the time of the first
-sign-out that reached it), each browser's session cookie, the token each code row stored when it was accepted
-(`session_token_hash`), and a ghost log of every accept (the entry's token and the code it marked used). Two entries
-can be in progress at once (`MAX_GUESSES` 2), so two tabs can enter one code at the same time. A session lives 4 ticks
-(code: 14 days). That is not to scale: at 5 minutes a tick, 14 days is 4,032 ticks, past the 10 ticks of a run; 4
-keeps the order (a session outlives the code that made it, 2 ticks) and lets a session expire within a run.
+address, which code row and version it was made from, when it was created and when it expires, `revoked_at`, and as a
+ghost the time of the first sign-out that reached it), each browser's session cookie, the token each code row stored
+when it was accepted (`session_token_hash`), and a ghost log of every accept (the entry's token, the code it marked
+used, the browser that entered it and the time the entry read). Two entries can be in progress at once
+(`MAX_GUESSES` 2), so two tabs can enter one code at the same time. A session lives 4 ticks (code: 14 days). That
+is not to scale: at 5 minutes a tick, 14 days is 4,032 ticks, past the 10 ticks of a run; 4 keeps the order (a
+session outlives the code that made it, 2 ticks) and lets a session expire within a run.
 
 **Actions.** A code request is four steps, one for each of the code's batches: read the facts, which are the address's rows only (`sendRead`), delete the address's expired rows it read, each only while it still holds the code that was read (`sendClear`), a guarded write that may find the facts changed (`sendWrite`, which replaces the browser's row for this address and inserts; it fails with an error outcome if the insert collides on the key), and the browser storing the cookie value the response carries (`receive`, which stores nothing after an error). Entering a code is two: read the row of the browser's value and the address (`guessRead`), then the guarded writes (`guessWrite`). Three requests and two entries are in progress at once, any other step can happen between a read and its write, a project is closed only in such a gap (a closing anywhere else can only end the run), a response can arrive in any order, and time passes (`tick`). There is no separate sweep step: the clean-up of expired rows is part of a request. Every step of a code request (read, clean-up, write) and of an entry (read, the counted attempt, the accept) records in a ghost flag (`badFrame`) whether it changed a row (any field: attempts, code, used, present) or an audit entry of an address other than its own. The model keeps a count of audit entries for each address (a code issued and a sign-in each write one) for this; the allowance windows other than the per-address email allowance are not modelled, and the frame property does not check the session rows, so it does not cover them (the route-level test does; a session is made only from a code of the entry's own address, which property 14 checks). A browser can send the right code only if it can read the inbox (browsers 0 and 1); the strangers always send a wrong code.
 
@@ -233,17 +237,24 @@ stored token is this entry's) and the audit entry (C7). Every entry makes a toke
 `signOut` is the browser that holds a session cookie signing out: one statement at the step's own time (the route
 reads the clock just before it), which sets `revoked_at` only while it is NULL (C9), whether or not the session has
 expired. Every answer clears the cookie, but the browser can keep it: the answer was lost, or another tab sent the
-same cookie before the first answer cleared it.
+same cookie before the first answer cleared it. `openStudio` is a browser that holds a session cookie opening a studio
+page. The session reads (`clientProjectsForSession` and the others, `access.ts:471`, `557-558` and `706`) read the
+clock as they are called and return the session only while `expires_at>?` and `revoked_at IS NULL`, so the step uses
+its own time and the page opens only while the session is active (`sessionActive`). It writes nothing the model holds
+(`last_seen_at` is not modelled). Signing out and opening a page are one choice of a step, so the other steps are
+picked as often as before the page was added. With the fixed seed, 19 of the 23 earlier mutants end in the same
+counterexample as before; `ReuseUsed`, `SweepUnguarded`, `AcceptUncounted` and `SignOutUnguarded` end in others.
 
 **The starting point "spent".** Every run starts with no code, except `signinSpent` (no rule changed) and the mutant
 `AcceptUncounted`, which start from the point "spent": the client's browser asked for a code for address 1 at time 0
-and entered one wrong code, so the code has one attempt left. That is a state the model reaches from no code in five
-steps at time 0 (the request's read, clean-up and write, then the entry's read and write), with the code, its audit
-entry and one use of the address's allowance stored. The race in which the accept's `changes()=1` matters (two
-entries in flight when one attempt is left) needs three entries of one code before it expires. From no code, with the
-fixed seed, the search found it only after about 84,000 runs, and not within 150,000 once an entry was picked only for
-a row that exists; from "spent" it takes a few hundred. `signinSpent` checks the code from the same point, as the audio
-project files model does for its rare races.
+and entered one wrong code, so the code has one attempt left. That is a state the model reaches from no code in six
+steps at time 0 (the request's read, clean-up and write, the entry's read and write, and the response's arrival),
+with the code, its audit entry and one use of the address's allowance stored. The entry's write spent one session
+token, so `init` sets the next token to 2 there, as that run would. The race in which the accept's `changes()=1`
+matters (two entries in flight when one attempt is left) needs three entries of one code before it expires. From no
+code, with the fixed seed, the search found it only after about 84,000 runs, and not within 150,000 once an entry was
+picked only for a row that exists; from "spent" it takes a few hundred. `signinSpent` checks the code from the same
+point, as the audio project files model does for its rare races.
 
 **Properties** (all must hold in every state):
 1. `clientNeverLockedOut`: a client who asked for a code and enters it correctly from the same browser while it is valid is signed in unless that browser used up its own attempts, whatever others do (others asking for codes up to the allowance included). As states: the client's current row is still there, with attempts left and its code unchanged, and no correct entry of it was refused.
@@ -268,6 +279,14 @@ project files model does for its rare races.
 15. `oneSessionPerCode`: one code makes at most one session, also when two right entries of it are in flight.
 16. `revokedStaysRevoked`: a sign-out never moves `revoked_at` once it is set; it stays the time of the first sign-out
     that reached the session.
+17. `everyAcceptMakesSession`, the converse of 14: every accepted code makes a session. The accept's token names
+    exactly one session, made from the code the accept marked used, for the browser that entered it and the code's
+    address; and a session cookie a browser holds always names a session, so the cookie the route sets on an accept
+    names one.
+18. `sessionOpensOnlyWhileActive`: a session opens nothing once it has expired or been revoked. A studio page opens
+    only for a session that is active (`sessionActive`: unexpired and not revoked) at the time the page reads the
+    clock, and a session lives its full lifetime: it is created at the time its accepted entry read and expires the
+    session lifetime after that.
 
 With two entries in flight, `attemptsBounded` (property 4) also covers the accept's `changes()=1` (C5): an accept
 after another entry spent the last attempt is a guess compared with the code beyond the limit, and the model counts
@@ -295,23 +314,29 @@ such an accept as a comparison (mutant `AcceptUncounted`).
 | `NoCapGuard` | The write does not re-check the address's live codes, only the count read earlier | `liveRowsBounded` |
 | `FreshCookie` | Each response carries a fresh cookie value and a refused one an unrelated value (the code before this change): a later response, a refused one included, can overwrite the cookie of the code an earlier request of the browser emailed | `cookieOpensEmailedCode` |
 | `WriteNoUsedGuard` | Neither the counted attempt nor the accept re-checks `used_at IS NULL` at write time; the decision still refuses a code read as used. Counterexample (seed `0x1`, 16 states): two right entries of one code read it unused, and both are accepted, so it makes two sessions | `oneSessionPerCode` |
-| `AcceptUncounted` | The accept does not need its entry's attempt to have been counted (no `changes()=1`, C5). From "spent" (seed `0x1`, 10 states): a right and a wrong entry both read one attempt left, the wrong one spends it, and the right one is accepted uncounted, a third guess compared with a code of two attempts | `attemptsBounded` |
-| `SessionUnmatched` | The session insert selects the code row by cookie value and address only, not by the accepted entry's token (C6). Counterexample (seed `0x1`, 11 states): a stranger asks for a code for its own address and enters a wrong code, and a session is made | `sessionOnlyFromAcceptedCode` |
-| `SignOutUnguarded` | The sign-out sets `revoked_at` whatever it holds (no `revoked_at IS NULL`, C9). Counterexample (seed `0x1`, 15 states): a browser signs in, signs out keeping its cookie, and signs out again a tick later, which moves `revoked_at` | `revokedStaysRevoked` |
+| `AcceptUncounted` | The accept does not need its entry's attempt to have been counted (no `changes()=1`, C5). From "spent" (seed `0x1`, 12 states): a right and a wrong entry both read one attempt left, the wrong one spends it, and the right one is accepted uncounted, a third guess compared with a code of two attempts | `attemptsBounded` |
+| `SessionUnmatched` | The session insert selects the code row by cookie value and address only, not by the accepted entry's token (C6). Counterexample (seed `0x1`, 11 states): a stranger asks for a code for an address and enters a wrong code, and a session is made | `sessionOnlyFromAcceptedCode` |
+| `SignOutUnguarded` | The sign-out sets `revoked_at` whatever it holds (no `revoked_at IS NULL`, C9). Counterexample (seed `0x1`, 18 states): a browser signs in, signs out keeping its cookie, and signs out again a tick later, which moves `revoked_at` | `revokedStaysRevoked` |
+| `NoSessionInsert` | An accepted entry makes no session (the session insert, C6, is skipped), though the route still sets the session cookie. Counterexample (seed `0x1`, 13 states, about 160 runs): the client's browser asks for a code and enters it, the code is accepted and the browser's cookie names no session | `everyAcceptMakesSession` |
+| `SessionCodeExpiry` | The session insert takes its expiry from the code row it selects (`expires_at`, the code's ten minutes) instead of the entry's time plus the session lifetime. Counterexample (seed `0x1`, 13 states, about 160 runs): the client signs in at time 2 and the session expires at 4, with the code, instead of at 6 | `sessionOpensOnlyWhileActive` |
+| `OpenIgnoresExpiry` | The session read of a studio page does not check `expires_at>?`. Counterexample (seed `0x1`, 15 states, about 17,600 runs): the client signs in at time 0, the session expires at 4, and at time 4 a page still opens | `sessionOpensOnlyWhileActive` |
+| `OpenIgnoresRevoked` | The session read of a studio page does not check `revoked_at IS NULL`. Counterexample (seed `0x1`, 18 states, about 2,100 runs): the client signs in at time 2, signs out at time 4 keeping its cookie, and a page still opens | `sessionOpensOnlyWhileActive` |
 
 **Equivalent mutant.** `AcceptNoUsed`, the accept without its own `used_at IS NULL` (`access.ts:371-383`), keeps
 every property, and the driver checks that it does. The counted attempt in the same batch requires `used_at IS NULL`
 (`access.ts:366-369`) and the accept requires that attempt (`changes()=1`), and a batch is one transaction, so the
 accept's own check is a second line of defence: the second of two right entries counts nothing and so accepts nothing.
-The design (`docs/plans/2026-11-studio-signin-conversion.md`, section 7) proposed it as the mutant for
-`oneSessionPerCode`; `WriteNoUsedGuard`, which drops the check from both statements, is the one that breaks it.
+The design (`docs/plans/2026-11-studio-signin-conversion.md`, section 7) proposed `WriteNoUsedGuard`, which drops
+`used_at IS NULL` from both statements, as the mutant for `oneSessionPerCode`, and noted that the accept's own check
+alone is not enough, since the counted attempt's check and C5 already stop the second entry; `AcceptNoUsed` confirms
+that note.
 `ReuseUsed` also breaks `oneSessionPerCode`, but it also drops the decision's own check of the code read, and it is
 the mutant for `deadCodeNeverSignsIn` (the driver maps each mutant to one property).
 
 **What the time alignment found (for the owner).** Once the model binds the time each request and entry read, as the
 code does, the earlier property 6 ("a used or expired code never signs anyone in", expiry judged when the write runs)
 fails; every other property holds. Counterexample (seed `0x1`, run `signin` against `expiredAtWriteNeverSignsIn`,
-found within about 2,100 runs, 19 states, shortened to the steps that matter):
+found within about 2,100 runs, 20 states, shortened to the steps that matter):
 
 1. Time 2: the client's browser asks for a code for address 2. Its request reads the clock (2), and its write, which
    runs at time 3, stores a code created at 2 that expires at 4.
@@ -328,7 +353,8 @@ write re-checks `used_at IS NULL`, which needs no time) or had expired at the ti
 a write that re-checks expiry against a later time (a clock read just before the write batch, bound in its guards),
 at the cost of a second clock reading after the first gated batch, which the non-interference test's clock guard
 (`watchClock`) fails on today. Nothing under `src/` changed with this model. The owner decides. Both pass runs also
-passed 100,000 runs each once (2026-11-22), past the 20,000 CI makes, with no other property failing.
+passed 100,000 runs each (2026-11-22, again once properties 17 and 18 and the page step were added), past the 20,000
+CI makes, with no other property failing.
 
 **How the code is arranged.** Nothing decides in SQL: the facts are read, a pure function decides (`decideIssue`, `decideComplete` and `decideDiscard` in `src/lib/signin-code-rules.ts`, unit-tested over every combination in `tests/lib/signin-code-rules.test.ts`), and the write keeps only statements that re-check, at write time, a fact the decision relied on, or that write values the decision computed. Which codes are live (unused, expiring after now), whether a project is open and whether there is room are all decided in those functions from rows that were read. They are plain functions in `src/lib`, not `rule()` in `src/server/rules/`, because `src/lib` may not load from `src/server` and these functions are called from the routes and many tests; they are written as the same named conditions so they convert unchanged when the studio area is converted. A statement that repeats a predicate such as "unused and unexpired" is a guard: it exists to notice that a fact changed since it was read, and the decision was already made in TypeScript.
 
@@ -396,11 +422,12 @@ The normal run (`pnpm test`) takes a deterministic sample of the three-request s
 
 **What it does not cover.** The captcha, per-IP allowances, email delivery failure and the discard of an undelivered code, the project check (an address with no project gets no row and the same answer, with the same cookie value either way: the value the browser sent, or a fresh one), and what the client types. The model has two addresses, three code requests and two entries in flight; the route-level enumeration test covers the code itself. The address's email allowance (3 per five minutes) and live-code cap are shared by everyone who asks for that address, so they bound how many codes can exist, not who asked for them; property 1 is about a client who already has a code. The code before the cookie binding paused 30 seconds before replacing a row; the fixed code has no pause, and the email allowance bounds the mail (the mutants `SingleRow` and `ReplaceLive` keep the old pause).
 
-Sessions are covered: made only by an accepted entry, at most one per code, expiring by time, and revoked once by
-sign-out. What reads a session afterwards (the studio pages and project routes, which check `expires_at` and
-`revoked_at`) is not modelled, nor is its `last_seen_at`. Of the allowance windows only the per-address email
-allowance (`code-email`) is modelled, as one fixed window per address; `code-ip`, `session-ip` and
-`session-requester` are still not. Their clock readings come before the request's own and they decide only whether
+Sessions are covered: every accepted entry makes one and nothing else does, one code makes at most one, a
+session lives the session lifetime from the entry's time and opens a studio page only while it is unexpired and
+unrevoked, and sign-out revokes it once. A page's session read is one step (`openStudio`); what the page then shows,
+the project checks of the project routes and `last_seen_at` are not modelled. Of the allowance windows only the
+per-address email allowance (`code-email`) is modelled, as one fixed window per address; `code-ip`, `session-ip`
+and `session-requester` are still not. Their clock readings come before the request's own and they decide only whether
 the request goes on, which the route-level test covers.
 
 Limits that remain, stated so they are not mistaken for properties:
