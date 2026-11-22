@@ -192,19 +192,25 @@ inputs at the point the route reads them today, and builds no response text.
   it hands the delivery to `Background.defer`: send the email, and on a confirmed rejection run `discardCode` (read the
   clock, read, decide, write). A failure there is logged with today's fixed line. The cookie value is decided here (the
   one sent, else the new code's, else a fresh one) and returned with the outcome, never the outcome alone.
-- `signin-session.ts`, `enterCode`: with no well-formed cookie, stop with the refusal before any read; count
+- `signin-session.ts`, `signIn`: with no well-formed cookie, stop with the refusal before any read; count
   `session-ip`, then `session-requester` (each reading the clock); read the clock; read (one batch); decide; write
   (one batch, run for every entry and bound to match no row when the rule refused, as today, access.ts:296-298); return
   the token only when the accept's `RETURNING` row came back. The token is made and hashed on
   every entry, accepted or not, as today, so a right and a wrong code do the same work.
 - `signin-sign-out.ts`, `signOut`: with no well-formed token, nothing; else read the clock and revoke (one statement).
 
-The flows keep every round trip the routes make today, in the same order and with the same batches, so each golden
-corpus differs only in D1 statement text where any differs at all.
+The flows keep every round trip the routes make today, in the same order and with the same batches. They sequence
+the read, the decisions, the sweep and the write by hand, with the rules' `decide` and `Effect.match`, rather than
+through `decideAndSave` or `alwaysDecideAndSave` (`src/server/guarded-save.ts:109-151`): those read the facts on each
+try and skip the save on a refusal, while the code request reads once for two rules and runs its write batch for every
+answer, and neither route retries a refused guard.
 
 ## 4. The store and the services
 
-**`src/server/signin-store.ts`**, one function per statement or batch over `MusicDb`, each with `Effect.tryPromise`:
+**`src/server/signin-store.ts`**, one function per statement or batch over `MusicDb`, each with `Effect.tryPromise`.
+Every statement keeps today's SQL text and every batch its shape, byte for byte: the golden corpora then see the same
+D1 statements, and the non-interference test, which schedules a request's batches by their leading SQL and their
+length (`tests/api/studio-signin-noninterference.test.ts:137-152`), passes unchanged.
 
 | Function | Statements | Today |
 |---|---|---|
@@ -235,8 +241,9 @@ no code key (sign-out.ts:19; access.ts:646).
 **The address.** `normalizeClientEmail` (client-portal.ts:7-14) moves from Zod to Effect Schema, with the Zod schema
 frozen in `tests/fixtures/legacy-validators/` and a block in `tests/server/validators-differential.test.ts` (Zod 4's
 email pattern, trimmed and lower-cased, at most 320). It keeps its signature, so the agreement callers
-(`src/lib/agreement-access.ts`, `src/server/flows/agreement-link.ts`) do not change. The three request shapes become
-Effect Schema readers in `src/server/signin-input.ts`, their Zod schemas frozen the same way.
+(`src/lib/agreement-access.ts`, `src/server/flows/agreement-link.ts`) do not change. The two request shapes (code and
+session; sign-out has no body) become Effect Schema readers in `src/server/signin-input.ts`, their Zod schemas frozen
+the same way.
 
 **What stays in `src/lib`.** The cookie helpers (pure), the session reads the studio pages and the project routes use
 (`clientProjectForSession`, `clientProjectsForSession`, `clientSoftwareProjectsForSession`, steps 6 and 7),
@@ -244,11 +251,14 @@ Effect Schema readers in `src/server/signin-input.ts`, their Zod schemas frozen 
 `reserveStudioAllowance` for its last caller, `issueAgreementLink` (`src/lib/agreement-access.ts`, the signing area,
 step 3, which deletes it). The converted agreement link route stops calling it: `liveAgreementAllowance`
 (`src/server/agreement-services.ts:71-83`) counts through `countAllowance` and `takeAllowance`, with the same two
-statements, so the `agreements-link` corpus stays neutral. `issueClientCode`, `discardUndeliveredCode`,
+statements and its signature `(db, secret)` kept, so the `agreements-link` corpus stays neutral and its test callers
+(`tests/security/rate-order.test.ts`, `tests/flows/agreement-link-stories.test.ts`,
+`tests/lib/software-agreements.test.ts`) do not change. `issueClientCode`, `discardUndeliveredCode`,
 `completeClientCode`, `takeStudioAllowance` and `revokeClientSession` are deleted, and the tests that call them
-(`tests/lib/audio-client-access.test.ts`, `tests/lib/audio-client-signin-binding.test.ts`, and the setup in
-`tests/api/project-messages.test.ts`, `tests/api/studio-file.test.ts`, `tests/lib/audio-project-messages.test.ts` and
-`tests/lib/software-projects.test.ts`) move to the flows or to seeded rows.
+(`tests/lib/audio-client-access.test.ts`, `tests/lib/audio-client-signin-binding.test.ts`,
+`tests/lib/signin-code-rules.test.ts`, and the setup in `tests/api/project-messages.test.ts`,
+`tests/api/studio-file.test.ts`, `tests/lib/audio-project-messages.test.ts` and `tests/lib/software-projects.test.ts`)
+move to the flows or to seeded rows.
 
 ## 5. The answers
 
@@ -266,7 +276,7 @@ passes `{ route, answer }` to `runRoute`, so a defect is logged once and answere
 
 ### Behaviour fixes
 
-Each goes in its own PR before the conversion, with its changed golden cases explained there.
+They go in one PR before the conversion, with each changed golden case explained there.
 
 - **S1. A database failure answers 500 on the code and session routes.** Today any throw inside the `try`, a D1
   failure included, answers 503 "Studio sign-in is temporarily unavailable." (code.ts:173-177, session.ts:106-110) and
@@ -279,6 +289,14 @@ Each goes in its own PR before the conversion, with its changed golden cases exp
   cleared and the fixed log line "Studio session revocation failed." (sign-out.ts:30-36). Fixed: 500 with the same
   body and cookie, logged once through `logUnexpected`. The sign-out script reads `response.ok` and `localSignedOut`,
   not the status (`src/scripts/studio-sign-out.ts:17-25`), so the page behaves the same.
+
+- **S3. With no execution context, the code's email is waited for.** Today, with no `ctx` (never in production; the
+  corpus case "no ctx", `tests/golden/studio-code.test.ts:679-681`), `locals.runtime.ctx.waitUntil` throws after the
+  issue batch (code.ts:135), so the code is stored, no email is sent and the visitor gets 503. The converted route
+  hands the delivery to `Background.defer`, which waits for the work when there is no context
+  (`src/server/services.ts:545-558`), as the audio intake and the software inquiry already do: the email is sent and
+  the visitor gets the generic 200 and its cookie. Production always has a context, so no visitor sees a change; the
+  fix makes this route behave as the other converted routes do, and goes in the same PR as S1 and S2.
 
 The background delivery keeps its fixed log line: it runs after the response, and no answer depends on it.
 
@@ -297,33 +315,45 @@ The background delivery keeps its fixed log line: it runs after the response, an
 sessions and the allowance windows (`docs/verification.md`, "The sign-in codes model"). The step's plan asks for
 codes, attempts and sessions under parallel requests, so a model PR before the fixes extends it:
 
-1. **The issue's time.** The model stamps a new code with the write step's time; the code stamps it with the time read
-   before its read batch (#333's record, "Known and not changed"). The model is changed to stamp with the read step's
-   time, so a request that waits between its read and its write issues a code that expires sooner and counts the
-   address's live codes at the time it read. Every property must still hold; one that fails is a behaviour finding
-   and goes to the owner before any code changes.
-2. **Sessions.** A session row is made by the accept's write and revoked by sign-out; a session expires by time. New
-   properties: `sessionOnlyFromAcceptedCode` (every session comes from one accepted code of its browser and address),
-   `oneSessionPerCode` (two right entries in flight at once make one session), and `revokedStaysRevoked` (a sign-out
-   never moves `revoked_at` once set). Each with a mutant that breaks it, kept in the model and failing in CI: the
-   session insert not matched to the accepted token, the accept without `changes()=1`, and a sign-out without C9.
+1. **The time a request read.** The code reads the clock once, before its read batch, and binds that time in every
+   later statement: the issue's stamp and its cap guard (access.ts:126-127, 179), the sweep (access.ts:154-158), and
+   the entry's guards (access.ts:366-372). The model uses each step's own time instead: `sendWrite` stamps with it
+   (#333's record, "Known and not changed"), and `sendClear` and `guessWrite` compare with it
+   (`verification/signin-codes.qnt:211, 345-346`). All three are changed to the time the request's read step saw.
+   Expected: `deadCodeNeverSignsIn` fails, since an entry that read just before its code expired and writes just after
+   is accepted, today, in that gap of one round trip. That is a behaviour finding and goes to the owner with the model
+   PR, before any code changes: either the property is stated at the time the entry read (what the code does now), or
+   the write re-checks against a later time. Any other property that fails is handled the same way.
+2. **Sessions.** A session row is made by the accept's write and revoked by sign-out; a session expires by time.
+   `MAX_GUESSES` goes from 1 to 2 (`signin-codes.qnt:65`), so two entries of one code can be in flight at once. New
+   properties, each with a mutant that breaks it, kept in the model and failing in CI:
+   `sessionOnlyFromAcceptedCode` (every session comes from one accepted code of its browser and address; mutant: the
+   session insert not matched to the accepted token), `oneSessionPerCode` (two right entries in flight make one
+   session; mutant: the accept without its own `used_at IS NULL`, access.ts:372), and `revokedStaysRevoked` (a
+   sign-out never moves `revoked_at` once set; mutant: a sign-out without C9). With two entries in flight, the
+   accept's `changes()=1` (C5) is what `attemptsBounded` needs (an accept after another entry spent the last
+   attempt); a mutant without it is added there if none of today's breaks it.
 
 There is no money rule here, so no LemmaScript contract. The golden corpora (`studio-code`, `studio-session`,
-`studio-sign-out`, and `agreements-link` for the allowance) must be NEUTRAL under `pnpm run golden:neutral` against
+`studio-sign-out`, `agreements-link` for the allowance and the address, and `offer-link`, which reaches
+`normalizeClientEmail` through `issueAgreementLink`) must be NEUTRAL under `pnpm run golden:neutral` against
 `main` after the fixes merge; the non-interference test and the clock guard must pass unchanged.
 
 ## 8. The PR order
 
 1. This design.
 2. The model extension (section 7), with `docs/verification.md` updated.
-3. The fixes S1 and S2, one PR, re-recording the changed cases in a commit of their own.
+3. The fixes S1, S2 and S3, one PR, re-recording the changed cases in a commit of their own.
 4. The conversion, a stack of two PRs merged into `main` as one, with the `conversion` label: the input readers, the
    machines, the rules and the store; then the services, the flows, the three routes, the agreement allowance and the
    deletions, with the `golden:neutral` output in the second PR and a release record.
 
 ## Open questions from reading the code
 
-Beyond the lost-race question above, none that need the owner. Two notes for review: the background discard reads the
-clock after the email, which the clock guard allows because it runs after the gated batches of the request; and
+Beyond the lost-race question above, and the expiry finding the model PR is expected to bring (section 7), none that
+need the owner. Two notes for review: the background discard reads the clock after the email (access.ts:215), after
+the request's gated batches. The clock guard would record that reading (`watchClock` watches every reading after the
+first gated batch, background included); it never fires there only because the test's mail stub accepts every email.
+The conversion keeps the reading where it is, so the audit's `occurred_at` does not move. And
 `listStudioSignInFailures` reads the audit rows this area writes, so the audit's action names (`code-issued`,
 `code-delivery-failed`, `signed-in`) do not change.
