@@ -226,3 +226,91 @@ owner's request page and notice, and in the visitor's copy. Without an outline, 
 - Unit tests for the shared module, route tests on the golden harness's fakes (D1, rate limits, AI), the inquiry route
   with and without an outline, the existing brief-flow tests unchanged, and Playwright runs of the page with a scripted
   model (`scripts/screenshots/brief-board-script.mjs`) that answers late and out of order.
+
+## 10. Proposed: the outline as its own steps
+
+Status: proposed on November 22, 2026, not built. The owner's feedback on the live page: the board beside the answer box
+is too much at once, and two explanations are wordy. He chose one screen per lane inside the step-by-step brief
+("2, per section") and asked that going back to edit an answer be handled with care. When this is built, sections 1,
+2.6 and 4 are rewritten to match and this section is removed.
+
+### 10.1 Approaches considered
+
+| Approach | Trade-off | Outcome |
+|---|---|---|
+| Keep the board on the answer screens, under the box (a sideways strip or a short list) | Smallest change, but the outline still competes with the writing | Rejected by the owner |
+| One outline screen after the written answers, four lanes side by side | One extra step; sideways scrolling on narrow screens | Not chosen |
+| One screen per lane, each phrased as a question | Reads like the rest of the brief; four extra steps | Chosen |
+
+### 10.2 What the visitor sees
+
+- The written questions are one column: heading, hint, "See example answers", the answer box, and under it the existing
+  AI line with Privacy and "Turn off". The footnote "Plain language is fine. …" is removed for every path (it is set in
+  `configureQuestions` in `src/scripts/software-inquiry.ts` as well as in the page), and so is the board's explanation
+  paragraph ("While the outline is on, …"). Each card still carries its own origin label.
+- The side board, its sticky panel, "Your brief so far", the pulse link, "Show the outline", "Pause the outline" and
+  "Use the plain form" are removed.
+- Four lane screens follow the written questions, in lane order. Website: path, purpose, the four lanes, what you have
+  today, who updates it, timing, budget, contact, review (12 dots). Web app and workflow: path, two written questions,
+  the four lanes, timing, budget, contact, review (11 dots).
+- A lane screen has the lane's question as its heading, a one-line hint, the lane's cards in a list that scrolls inside
+  a bounded box, the lane's Add control, the lane's own set-aside list, Undo, and one link, "Skip these, no AI outline".
+  Card actions are unchanged: Keep, Edit, Not this, and Answer on a question.
+- Headings (new copy, for the owner to approve). The outline does not speak as Kazon, so none says "I".
+
+| Lane | Website | Web app | Workflow |
+|---|---|---|---|
+| `purpose` | Is this what it’s for? | Is this what it’s for? | Is this what should change? |
+| `audience` | Who is it for? | Who will use it? | Who does the work? |
+| `parts` | Which pages does it need? | What should people be able to do? | What are the steps today? |
+| `questions` | What’s still undecided? | What’s still undecided? | What’s still undecided? |
+
+  Hint with cards: "From your answers. Keep, change or add your own." Hint with none: "Add your own, or go on."
+
+### 10.3 Going back and editing an answer
+
+The reconciliation in section 2 (rules 1 to 5 and 7) is unchanged, so an edited answer already behaves as follows: cards
+the visitor kept, edited, answered or added are never changed; a kept card whose passage is deleted is sent as kept,
+without the passage; an open card read from the answers is withdrawn when its passage goes; open suggestions may be
+reworded or withdrawn. What is new:
+
+1. **The steps are fixed.** While the outline is in the brief, all four lane screens are in the plan, in the same order,
+   whatever the cards are. An empty lane shows its question and Add. The dots never change because an answer changed.
+2. **Requests follow the writing, not the board.** The page asks for the outline while a written question is showing
+   (the same 1.5 second pause, 4 second spacing, six words and 24 per page) and while a lane screen is showing (after a
+   card action, 8 seconds). Moving between steps does not abort a request. Nothing is asked on the other steps.
+3. **Replies apply at once, except to the lane on screen.** For the lane the visitor is looking at, a reply only adds
+   cards at the end of the list; its changes to, and withdrawals of, cards already listed wait until the visitor leaves
+   that screen. Every other lane takes the reply in full. This replaces rule 6 and the "Show updates" button.
+4. **A lane says what changed.** Each lane remembers the cards it showed when the visitor last left it. On return after
+   an answer changed, a line under the hint says what is different ("1 new, 1 removed since you edited your answer").
+   While a request is waiting or in flight the screen shows "Reading your answers…" in the same place.
+5. **Nothing is sent unseen.** A card read from the answers is sent unless removed, so one that arrived in a lane after
+   the visitor last left it is listed on the review step under "New since you last looked", with a link to its lane.
+   Next is never blocked. The server's refusal sentence (`outlineMismatch`, "Go back to your first answer, …") is
+   reworded to point at the outline screens.
+6. **A restored draft** keeps the step it was on, the cards and each lane's last-seen list, as today's draft keeps the
+   board.
+
+### 10.4 Without the AI
+
+- "Turn off" under an answer box stops the outline's AI, as today. The four lane screens stay and work by hand.
+- "Skip these, no AI outline" on a lane screen takes the four screens out of the plan, sends no outline and stops its
+  requests (today's plain form). The review step then offers "Add the outline back".
+- At a limit, after three failures or with the switch off on the server, the lane screens work by hand and say so once.
+- With `SOFTWARE_BOARD_ENABLED` off the page has no lane screens, exactly as it has no board today.
+
+### 10.5 What changes in the code and the checks
+
+- `verification/brief-board.qnt` first: the visible-board condition becomes the lane on screen, the held state becomes
+  per lane, and a property "no listed card on the lane on screen changes or leaves" gets a mutant. Run
+  `pnpm run verify:quint:exhaustive` before the rule changes.
+- `src/pages/software/start.astro`, `src/components/BriefBoard.astro` (becomes the four lane sections),
+  `src/scripts/software-inquiry.ts` (plans, footnote, review), `src/scripts/brief-board.ts`, `src/lib/brief-board.ts`
+  (last-seen lists, the refusal sentence), the styles, `src/pages/privacy.astro` where it describes the board beside the
+  answers, `tests/scripts/brief-flow.test.ts` and `scripts/screenshots/scenarios/software-board.mjs` (each lane screen,
+  and a go-back-and-edit run).
+- The route, the model call, the limits, the cost and what is stored are unchanged.
+
+Left to the builder: the list's bounded height on a phone, the wording of the status announcements for screen readers,
+and how the last-seen list is stored in the draft.
