@@ -426,11 +426,13 @@ describe("how Effect is imported", () => {
 		expect(() => offendersUnder(root, EXCLUDED)).toThrow(/listed no file/);
 	});
 
+	// This walks and parses every tracked source file, about 2.5 s alone and more when the CI shard runs other files in
+	// parallel; on 2026-11-22 it ran past 5 s on main's Validate run. The limit is the walk's, not a unit test's.
 	it("never imports from the bare effect specifier", () => {
 		const offenders = offendersUnder(repository, EXCLUDED).filter(
 			(file) => file !== "tests/architecture/effect-imports.test.ts",
 		);
 
 		expect(offenders).toEqual([]);
-	});
+	}, 30_000);
 });
