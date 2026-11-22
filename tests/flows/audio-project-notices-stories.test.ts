@@ -1,14 +1,20 @@
 import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { partial } from "../helpers/doubles";
 import {
+	deliverInBackground,
 	deliverInvitation,
 	deliverUpdateNotice,
 	queueProjectInvitation,
 	queueProjectUpdateNotice,
 } from "../../src/server/flows/audio-project-notices";
 import { MusicDb, liveStudioNoticeMail } from "../../src/server/services";
-import { endedWith, seedProject } from "../helpers/audio-project-world";
+import {
+	backgroundWorld,
+	endedWith,
+	seedProject,
+} from "../helpers/audio-project-world";
 import { musicWorld } from "../helpers/music-world";
 import { stubResend } from "../helpers/resend-fetch";
 
@@ -256,5 +262,34 @@ describe("an update's email", () => {
 		);
 		expect(emails).toHaveLength(0);
 		expect(update(world)).toEqual({ notification_status: "failed" });
+	});
+});
+
+describe("a delivery started in the background", () => {
+	it("prints the notice's fixed line, and settles, when the delivery fails or dies", async () => {
+		const world = musicWorld();
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const background = backgroundWorld();
+
+		const run = (delivery: Parameters<typeof deliverInBackground>[0]) =>
+			Effect.runPromise(
+				deliverInBackground(
+					delivery,
+					"Studio update email state is uncertain.",
+				).pipe(
+					Effect.provideContext(
+						Context.merge(Context.make(MusicDb, world.db), background.services),
+					),
+				),
+			);
+
+		await run(Effect.die(new Error("a defect")));
+		await run(Effect.succeed(undefined));
+
+		expect(log.mock.calls).toEqual([
+			["Studio update email state is uncertain."],
+		]);
+		log.mockRestore();
 	});
 });
