@@ -7,8 +7,8 @@ Repository: the personal website repository
 Branch for layer 7: `claude/effect-7-validators`, cut from `origin/main` at `2f0969ac` (the merge of #254)
 Pull requests: #255 is merged as `88551410`; #254 is merged as `2f0969ac`; layer 7 has no pull request number yet.
 Target: production
-Reviewer: layer 7 was written by a Claude builder subagent working from a brief (tests first). One independent Claude Opus correctness round ran (see Evidence and limits); a UI and copy review, Greptile and Codex on the pull request head are not recorded here and are in Delivery status as UNVERIFIED. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: for #255, the parent of `88551410`; for #254, the parent of `2f0969ac` (`git log --first-parent`); for layer 7, re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
+Reviewer: layer 7 was written with Claude Code, tests first. One independent correctness review pass ran (see Evidence and limits); a UI and copy review, Greptile and Codex on the pull request head are not recorded here and are in Delivery status as UNVERIFIED. This record does not certify the checks listed as UNVERIFIED.
+Rollback revision: for #255, the parent of `88551410`; for #254, the parent of `2f0969ac` (`git log --first-parent`); for layer 7, re-check `origin/main` with `git fetch` before merge. No deployed revision was observed for this record.
 
 ## Scope
 
@@ -27,11 +27,11 @@ Owner decision, 2026-11-13: validation moves from Zod to Effect Schema everywher
 
 - Owner, in conversation, 2026-11-12: use Effect for rules, Effect Schema for input and XState with the bridge, matching Tally; convert one area at a time; no behavior change.
 - Owner, in conversation, 2026-11-13: validation moves from Zod to Effect Schema everywhere, browser forms included; about 26 KB gzip per form page accepted.
-- Owner, 2026-10-12 (global instructions): Claude subagents may write code in this repository, tests first, with independent Claude review each round and Greptile and Codex review on the pull request.
+- Owner, 2026-10-12 (global instructions): Claude Code may write code in this repository, tests first, with independent review until a pass is clean, and Greptile and Codex review on the pull request.
 
 ## Evidence and limits
 
-All layer 7 runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the layer 7 worktree. No logs retained. Results for #255 and #254 below are as reported to the builder by the owner's task; the builder did not re-observe them.
+All layer 7 runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the layer 7 worktree. No logs retained. Results for #255 and #254 below are as reported in the task for this record; they were not re-observed.
 
 Pull request #255 (as reported, not re-observed here):
 
@@ -42,7 +42,7 @@ Pull request #255 (as reported, not re-observed here):
 Pull request #254 (as reported, not re-observed here):
 
 - CI `validate`, Greptile and Workers Builds passed on the final head.
-- Two independent review rounds ran.
+- Two independent review passes ran.
 - A read-only production query for parked paid events returned zero rows.
 - Live verification of the merge commit `2f0969ac`: UNVERIFIED, to be recorded in the next pull request.
 - NOT verified: no real payment was run through the new code.
@@ -79,7 +79,7 @@ The inputs are seeded and per field cover: missing, `null`, every wrong type Zod
 
 Changes to existing tests and shared helpers, for the reviewer: `tests/server/edge.test.ts` renamed the `other` body kind to `bigint` (the body kinds now follow Zod's names: `nan`, `bigint`, `symbol`, `function`, `promise`, `map`, `set` and `date` replace `other`, and `receivedKind` names a promise, a map, a set and a date); `tests/api/software-inquiry.test.ts` lost two assertions on the Zod source text of the `updates` choice (the behavior below them, a plain "Choose one." sentence for a missing or unknown value, is still asserted); `tests/lib/software-agreements.test.ts` calls `parseClientAgreement` and `readClientAgreement` where it called `clientAgreementSchema`. `fieldOf` and `stringField` in `src/lib/fields.ts` no longer run an Effect (a filter then a synchronous decode), which also changes the already converted contact and resume paths (`src/server/contact-input.ts`), held there by `tests/server/edge-equivalence.test.ts` and the golden corpus, both passing. Parameters that took `unknown` now take `RawValue`, an alias of `unknown` that the repository's Oxlint rule accepts; it is a naming change, not a narrower type.
 
-Round 2 of the independent review, on head `b629b4f2` (a Claude correctness round): 361 hand-built byte-for-byte comparisons of parsed values, error maps and types, with no difference in any response, status, stored value, hash or rendered value. It found that a value failing two checks gave only the last issue (the errors map was the same, since the last sentence per path wins); the readers now keep every issue in Zod's order and the differential compares the whole list. It also found that the owner action's parsed value differed from Zod's (a `expectedAttempt` key present as `undefined`, `action` last, two retry members); the value and the type now match, compared as `JSON.stringify` and by `expectTypeOf` against the frozen schemas for `AgreementDetails`, `Contractor`, `AttachmentQuery` and `OwnerAgreementAction`. The walker also refuses `toStandardSchemaV1`, `toStandardJSONSchemaV1`, `toEncoderXml` and any `["~standard"]` access, and `tests/architecture/lib-server-imports.test.ts` is back with no exception: no `src/lib` file imports a value from `src/server`. Greptile and Codex code review found nothing on head `b629b4f2`.
+The second independent review pass on layer 7, on head `b629b4f2` (correctness): 361 hand-built byte-for-byte comparisons of parsed values, error maps and types, with no difference in any response, status, stored value, hash or rendered value. It found that a value failing two checks gave only the last issue (the errors map was the same, since the last sentence per path wins); the readers now keep every issue in Zod's order and the differential compares the whole list. It also found that the owner action's parsed value differed from Zod's (a `expectedAttempt` key present as `undefined`, `action` last, two retry members); the value and the type now match, compared as `JSON.stringify` and by `expectTypeOf` against the frozen schemas for `AgreementDetails`, `Contractor`, `AttachmentQuery` and `OwnerAgreementAction`. The walker also refuses `toStandardSchemaV1`, `toStandardJSONSchemaV1`, `toEncoderXml` and any `["~standard"]` access, and `tests/architecture/lib-server-imports.test.ts` is back with no exception: no `src/lib` file imports a value from `src/server`. Greptile and Codex code review found nothing on head `b629b4f2`.
 
 Real-browser comparison (done): production builds of commit `5041a615` against its base, at 1280x800 and 390x844. `/audio/start` 114 plus 36 cases, `/software/start` 163 plus 43, `/agreements` 9, offer and sign pages 163 plus 82. Every error text, field, step, focus and payload was identical. Scope: it predates the agreement details and owner action schemas (they are server-side and are covered by the differential tests and the golden corpus). Not covered: the server's responses after submitting the audio and software forms (stubbed), the signature submit, and real touch devices.
 
@@ -104,9 +104,9 @@ Guard experiments (each by editing a real browser script, running the walker and
 - A script importing `effect/Layer`: the source walker failed, and so did the bundle test (the `~effect/Layer` marker).
 - A script importing `astro/zod`: the source walker failed (it reaches `zod`), and the bundle test failed twice (the `ZodString` and `ZodEffects` markers, and `zod` not on the reviewed package list).
 
-Independent review: one Claude Opus correctness round on commit `5041a615` found no behavior difference: 1,424 hand-written inputs agreed with the Zod validators, and a 448-input comparison of the contact and resume readers on the old and new helpers (`fieldOf` and `stringField` no longer run an Effect) agreed too. The real-browser comparison is recorded below.
+Independent review: one correctness pass on commit `5041a615` found no behavior difference: 1,424 hand-written inputs agreed with the Zod validators, and a 448-input comparison of the contact and resume readers on the old and new helpers (`fieldOf` and `stringField` no longer run an Effect) agreed too. The real-browser comparison is recorded below.
 
-Guards added after that round: the walker now also fails, from the syntax tree, on any Schema entry point named `decode*`, `encode*`, `validate*`, `asserts*` or `make*Effect` that is not on a short synchronous allowlist, so `decodeUnknownPromise` and its aliased, string-literal and re-exported forms fail (fixtures in `tests/architecture/client-graph.test.ts`); no `src/lib` file imports a value from `src/server` any more. The frozen validator copies list their live imports from `src` in a header, and the link checks and type guards they used were frozen into the software inquiry copy.
+Guards added after that pass: the walker now also fails, from the syntax tree, on any Schema entry point named `decode*`, `encode*`, `validate*`, `asserts*` or `make*Effect` that is not on a short synchronous allowlist, so `decodeUnknownPromise` and its aliased, string-literal and re-exported forms fail (fixtures in `tests/architecture/client-graph.test.ts`); no `src/lib` file imports a value from `src/server` any more. The frozen validator copies list their live imports from `src` in a header, and the link checks and type guards they used were frozen into the software inquiry copy.
 
 Limits: the browser comparison above is of `5041a615` and not of the final head, and it did not exercise the owner agreement schemas (server-side). The differential tests exercise the validators, not the pages, and the golden corpus covers the routes. No deployed response was observed for layer 7, and the size table measures the chunk graph and not a field metric. The exotic wrong types (bigint, symbol, function, date, map, set, promise, `NaN`) are matched, but no caller can send most of them.
 
@@ -145,7 +145,7 @@ Limits: the browser comparison above is of `5041a615` and not of the final head,
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks: layer 7 local gates above (format, build, bundle test, `pnpm test` twice, Quint, publicist gate, oxlint, golden fixtures); #255 and #254 as reported. `pnpm run check`: 0 errors, 0 warnings, 19 hints (717 files). `verify:dafny` not run here (Dafny is not installed).
-- UNVERIFIED, 7.2 Exact diff review on the pull request head and independent code and security review for layer 7: one Claude Opus correctness round ran on `5041a615` (no behavior difference, nothing blocking); a security and a UI and copy round have not been run. #254: Greptile passed on the final head and two independent review rounds ran (as reported).
+- UNVERIFIED, 7.2 Exact diff review on the pull request head and independent code and security review for layer 7: one correctness review pass ran on `5041a615` (no behavior difference, nothing blocking); a security and a UI and copy pass have not been run. #254: Greptile passed on the final head and two independent review passes ran (as reported).
 - UNVERIFIED, 7.3 Production bindings, secrets, HTTPS, host routing and response headers for layer 7: no binding, secret or migration changed; nothing deployed.
 - PASS, 7.4 Rollback is the previous deployed revision: the parents of `88551410` and `2f0969ac`; for layer 7 re-check `origin/main` with `git fetch` before merge.
 - PASS, 7.5 for #255 (as reported): `/`, `/audio/start`, `/software/start`, `/agreements` and `/work` answered 200 after the merge. UNVERIFIED for #254: live verification of the merge commit, to be recorded in the next pull request. UNVERIFIED for layer 7: nothing deployed; to be completed after merge (production revision, `/audio/start`, `/software/start`, `/agreements`, an offer signing page, a real submission of each form, and the built chunks served from production).
@@ -157,7 +157,7 @@ Limits: the browser comparison above is of `5041a615` and not of the final head,
 
 ## Delivery status and remaining gates
 
-- Greptile and Codex code review found nothing on `b629b4f2` (as reported). UNVERIFIED: a security-focused review round on the final head.
+- Greptile and Codex code review found nothing on `b629b4f2` (as reported). UNVERIFIED: a security-focused review pass on the final head.
 - UNVERIFIED: CI (`validate`) and Cloudflare Workers Builds on the layer 7 head.
 - UNVERIFIED: live and browser verification of layer 7, to be completed after merge.
 
@@ -165,4 +165,4 @@ No deployment is authorized by this record.
 
 #255: implemented yes, deployed yes (Workers Builds on the merge commit, as reported), verified live partly (200 answers and 404 for the manifest, as reported); its local runs are not recorded here. #254: implemented yes; CI, Greptile and Workers Builds passed on the final head (as reported), the deployment of the merge commit was not observed (UNVERIFIED); verified live no (to be recorded in the next pull request; no real payment). Layer 7: implemented yes, verified locally yes, deployed no, verified live no.
 
-Layer 7 was built by a Claude subagent. This record does not certify the checks listed as UNVERIFIED.
+Layer 7 was built with Claude Code. This record does not certify the checks listed as UNVERIFIED.

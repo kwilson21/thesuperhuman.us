@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#208](https://github.com/kwilson21/thesuperhuman.us/pull/208), "Make Hallmark the site's design standard, with credit", squash-merged to `main` as `362dac5f` on October 22, 2026, pinned to head `3c247304`  
 Branch: `claude/hallmark-design-standard`, with `main` merged in after #209 (`ab5704f5`)  
 Target: production `https://thesuperhuman.us` after merge  
-Reviewer: Claude Code agents, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
+Reviewer: Claude Code, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
 Scope: tooling and docs that make Hallmark the design standard, plus one public sentence. The PR adds:
 - the vendored skill;
 - `design.md` and `docs/design-standard.md`;
@@ -43,7 +43,7 @@ Rollback revision: `4a0ef9b8` (#206), `main` immediately before this PR merged. 
 - **N/A · Search, accessibility, performance, forms, privacy, owner center and signing.**
   - Only one sentence changes on one page.
   - No route, metadata, form, data flow, header, binding or dependency changes. The vendored skill is not served.
-- **PASS · Post-deployment verification.** Before the merge, `validate`, Screenshots `capture` and Workers Builds succeeded on `3c247304`. The production Workers Builds check on `362dac5f` succeeded at 17:18:20 UTC. At 17:18 UTC the coordinating Claude Code session loaded `/building/personal-website` on production with Playwright (Chromium) at 1280x800, 390x844 and 320x640: status 200, the credit sentence and its Hallmark link present, no horizontal overflow and no page errors.
+- **PASS · Post-deployment verification.** Before the merge, `validate`, Screenshots `capture` and Workers Builds succeeded on `3c247304`. The production Workers Builds check on `362dac5f` succeeded at 17:18:20 UTC. At 17:18 UTC `/building/personal-website` was loaded on production with Playwright (Chromium) at 1280x800, 390x844 and 320x640: status 200, the credit sentence and its Hallmark link present, no horizontal overflow and no page errors.
 - **PASS · Receipt.** Implemented: yes. Verified locally: yes. Deployed: yes (`362dac5f`, 17:18:20 UTC). Verified live: yes, for the check above.
 
 Deployed and verified live on October 22, 2026.

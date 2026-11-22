@@ -191,7 +191,7 @@ Rollback: preserve `5137d3d17b88c5c34c642869613bb757650e89cf`, current origin/ma
 
 ## Independent merge review
 
-PASS: independent correctness/security and UI/copy agents reviewed all 12 conflict resolutions and their callers. Both reported no verified findings. These reviews cover the integration diff, not a new review of the entire PR #158 head or rendered screenshots.
+PASS: independent correctness/security and UI/copy reviews covered all 12 conflict resolutions and their callers. Both reported no verified findings. These reviews cover the integration diff, not a new review of the entire PR #158 head or rendered screenshots.
 
 ## Remaining release work
 
