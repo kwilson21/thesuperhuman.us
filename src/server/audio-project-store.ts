@@ -568,6 +568,32 @@ const guardedBatch = (statements: (db: D1Database) => D1PreparedStatement[]) =>
 		});
 	});
 
+/**
+ * SQL that holds when the rows `from` (a FROM clause with its WHERE, binding `values`) are exactly the files `ids`: as many rows
+ * as ids, and every id among them. No order of the rows is relied on. Returns the SQL and the values it binds.
+ */
+type GuardSql = {
+	readonly sql: string;
+	readonly bind: readonly (string | number)[];
+};
+
+function exactlyTheFiles(
+	from: string,
+	values: readonly (string | number)[],
+	ids: readonly string[],
+): GuardSql {
+	const count = `(SELECT count(*) ${from})=?`;
+
+	if (ids.length === 0) return { sql: count, bind: [...values, 0] };
+
+	const members = `(SELECT count(*) ${from} AND id IN (${ids.map(() => "?").join(",")}))=?`;
+
+	return {
+		sql: `${count} AND ${members}`,
+		bind: [...values, ids.length, ...values, ...ids, ids.length],
+	};
+}
+
 /** The batch guard: the batch rolls back, and `decideAndSave` decides again, unless `condition` holds. */
 const batchGuard = (db: D1Database, condition: string) =>
 	db.prepare(
@@ -679,15 +705,14 @@ export const publishFileBatch = (write: PublishWrite) =>
 		const settled =
 			write.version === "final" ? " AND pay.balance_status='paid'" : "";
 
+		const liveReviews = exactlyTheFiles(
+			"FROM audio_project_files WHERE request_id=? AND version='review' AND status='published' AND id<>?",
+			[write.requestId, write.fileId],
+			write.supersedes,
+		);
+
 		return [
-			batchGuard(
-				db,
-				`(SELECT json_group_array(id) FROM (SELECT id FROM audio_project_files WHERE request_id=? AND version='review' AND status='published' AND id<>? ORDER BY id))=?`,
-			).bind(
-				write.requestId,
-				write.fileId,
-				JSON.stringify([...write.supersedes].sort()),
-			),
+			batchGuard(db, liveReviews.sql).bind(...liveReviews.bind),
 			db
 				.prepare(`UPDATE audio_project_files SET status='published',downloadable=?,published_at=?,expires_at=?,publication_id=?
       WHERE id=? AND request_id=? AND ${statusIn(FILE_MOVES.PUBLISH)}
@@ -825,17 +850,24 @@ export const revokeFileBatch = (write: RevokeWrite) =>
 
 		const published = write.status === "published";
 
+		// The stage is compared only when the rule decided a reset from it: a revoke that decided none does not depend on it.
+		const stageHeld = write.reset
+			? {
+					sql: "(SELECT stage FROM audio_projects WHERE request_id=?)=? AND ",
+					bind: [write.requestId, write.stage],
+				}
+			: { sql: "", bind: [] };
+
+		const others = exactlyTheFiles(
+			"FROM audio_project_files WHERE request_id=? AND version=? AND status='published' AND id<>?",
+			[write.requestId, write.version, write.fileId],
+			write.others,
+		);
+
 		return [
-			batchGuard(
-				db,
-				`(SELECT stage FROM audio_projects WHERE request_id=?)=? AND (SELECT json_group_array(id) FROM (SELECT id FROM audio_project_files WHERE request_id=? AND version=? AND status='published' AND id<>? ORDER BY id))=?`,
-			).bind(
-				write.requestId,
-				write.stage,
-				write.requestId,
-				write.version,
-				write.fileId,
-				JSON.stringify([...write.others].sort()),
+			batchGuard(db, `${stageHeld.sql}${others.sql}`).bind(
+				...stageHeld.bind,
+				...others.bind,
 			),
 			db
 				.prepare(`UPDATE audio_project_files SET status='revoked',revoked_at=?,revoked_by=?,revocation_id=?

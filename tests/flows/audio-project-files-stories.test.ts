@@ -366,6 +366,30 @@ describe("revoking a file", () => {
 		expect(stage(world)).toEqual({ stage: "review_ready" });
 	});
 
+	it("revokes a draft although the stage moves under every try, because no reset was decided from it", async () => {
+		const stages = ["review_ready", "revision_in_progress", "in_progress"];
+		let moves = 0;
+
+		const world = musicWorld({
+			beforeStatement: [
+				/UPDATE audio_project_files SET status='revoked',revoked_at=\?,revoked_by/,
+				() => {
+					world.sql.exec(
+						`UPDATE audio_projects SET stage='${stages[moves % stages.length]}'`,
+					);
+					moves += 1;
+				},
+			],
+		});
+
+		seedProject(world, "in_progress");
+		seedFile(world, "r1");
+
+		expect(await revoke(world, "r1", "").ended).toEqual({ done: undefined });
+		expect(moves).toBeGreaterThan(0);
+		expect(status(world, "r1")).toEqual({ status: "revoked" });
+	});
+
 	it("refuses a revoke in a closed project", async () => {
 		const world = musicWorld();
 		seedProject(world, "review_ready");
