@@ -659,7 +659,7 @@ describe("the model", () => {
 		},
 	);
 
-	it("gives up after twenty seconds", async () => {
+	it("waits thirty seconds for the model, then gives up", async () => {
 		vi.useRealTimers();
 		vi.useFakeTimers();
 
@@ -676,7 +676,17 @@ describe("the model", () => {
 			}),
 		);
 
-		await vi.advanceTimersByTimeAsync(20001);
+		let settled = false;
+
+		void exit.then(() => {
+			settled = true;
+		});
+
+		await vi.advanceTimersByTimeAsync(29_999);
+
+		expect(settled).toBe(false);
+
+		await vi.advanceTimersByTimeAsync(2);
 		const result = await exit;
 
 		expect(Exit.isFailure(result) && JSON.stringify(result.cause)).toContain(
