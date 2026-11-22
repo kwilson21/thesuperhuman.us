@@ -74,7 +74,7 @@ const services = (
 		Context.add(Turnstile, { verify: () => Effect.void }),
 		Context.add(Mail, {
 			send: (message) =>
-				Effect.suspend(() => {
+				Effect.suspend((): Effect.Effect<void, MailRefused | MailUncertain> => {
 					log.push(`mail ${message.to.join(",")}`);
 
 					switch (options.mail ?? "sent") {
