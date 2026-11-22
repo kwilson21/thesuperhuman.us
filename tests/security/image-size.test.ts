@@ -303,7 +303,7 @@ describe("jpeg", () => {
 describe("jpeg segment walking", () => {
 	const size = { width: 800, height: 600 };
 
-	it("ignores an XMP segment before the Exif segment", () => {
+	it("gives null when an XMP segment comes before the Exif segment", () => {
 		expect(
 			imageSize(
 				jpegRaw([
@@ -312,7 +312,112 @@ describe("jpeg segment walking", () => {
 				]),
 				"image/jpeg",
 			),
+		).toBeNull();
+	});
+
+	it("keeps the swapped size when the XMP segment comes after the Exif segment", () => {
+		expect(
+			imageSize(
+				jpegRaw([
+					...exifSegment(tiffRaw([orientationEntry(6)])),
+					...xmpSegment(),
+				]),
+				"image/jpeg",
+			),
 		).toEqual({ width: 600, height: 800 });
+	});
+
+	it("keeps the unswapped size when there is an XMP segment and no Exif", () => {
+		expect(imageSize(jpegRaw(xmpSegment()), "image/jpeg")).toEqual(size);
+	});
+
+	it("gives null for an Exif segment whose sixth byte is not zero", () => {
+		const odd = (sixth: number) =>
+			jpegSegment(0xe1, [
+				...text("Exif"),
+				0,
+				sixth,
+				...tiffRaw([orientationEntry(6)]),
+			]);
+
+		expect(imageSize(jpegRaw(odd(0xff)), "image/jpeg")).toBeNull();
+		expect(imageSize(jpegRaw(odd(1)), "image/jpeg")).toBeNull();
+	});
+
+	it("gives null when an odd Exif segment is followed by a normal one", () => {
+		expect(
+			imageSize(
+				jpegRaw([
+					...jpegSegment(0xe1, [
+						...text("Exif"),
+						0,
+						1,
+						...tiffRaw([{ tag: 0x010f, type: 3, count: 1, value: 1 }]),
+					]),
+					...exifSegment(tiffRaw([orientationEntry(6)])),
+				]),
+				"image/jpeg",
+			),
+		).toBeNull();
+	});
+
+	it.each(["II", "MM"] as const)(
+		"keeps the size of an ordinary camera file after JFIF (%s)",
+		(order) => {
+			const exif = (orientation: number) =>
+				tiffRaw(
+					[
+						{ tag: 0x010f, type: 3, count: 1, value: 1 },
+						orientationEntry(orientation),
+						{ tag: 0x8769, type: 4, count: 1, value: 0x40 },
+					],
+					{ order },
+				);
+			const jfif = jpegSegment(0xe0, [
+				...text("JFIF"),
+				0,
+				1,
+				1,
+				0,
+				0,
+				1,
+				0,
+				1,
+				0,
+				0,
+			]);
+
+			expect(
+				imageSize(
+					jpegRaw([...jfif, ...exifSegment(exif(1))]),
+					"image/jpeg",
+				),
+			).toEqual(size);
+			expect(
+				imageSize(
+					jpegRaw([...jfif, ...exifSegment(exif(6))]),
+					"image/jpeg",
+				),
+			).toEqual({ width: 600, height: 800 });
+		},
+	);
+
+	it("swaps a 4032 by 3024 frame with Orientation 6", () => {
+		const bytes = Uint8Array.from([
+			0xff,
+			0xd8,
+			...exifSegment(tiffRaw([orientationEntry(6)])),
+			...jpegSegment(0xc0, [8, ...u16be(3024), ...u16be(4032), 1, 1, 0x11, 0]),
+			...jpegSegment(0xda, [1, 1, 0, 0, 63, 0]),
+			0x12,
+			0xff,
+			0xd9,
+		]);
+
+		expect(imageSize(bytes, "image/jpeg")).toEqual({
+			width: 3024,
+			height: 4032,
+		});
 	});
 
 	it("skips fill bytes between segments", () => {

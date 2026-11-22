@@ -430,6 +430,63 @@ it("restores the saved endpoint after uploading and then rejecting another repla
 	create.mockRestore();
 });
 
+it("puts no saved size on the uploaded image when a later file is rejected", async () => {
+	vi.stubGlobal("confirm", () => true);
+	vi.stubGlobal(
+		"FormData",
+		class {
+			getAll() {
+				return [];
+			}
+			has() {
+				return false;
+			}
+			*[Symbol.iterator]() {
+				yield ["title", "Title"];
+			}
+		},
+	);
+	vi.stubGlobal("location", { assign: vi.fn() });
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockImplementation(async () =>
+			Response.json({
+				id: "draft",
+				updatedAt: "now",
+				projectUpdatedAt: "project-saved",
+			}),
+		),
+	);
+	const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+	const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:next");
+
+	const page = fixture(true, "/saved-visual");
+	const image = page.elements.get("[data-preview-image]")!;
+	expect(image.getAttribute("width")).toBe("640");
+	page.fields.visual_alt.value = "A visual";
+	Object.defineProperty(page.fields.visual, "value", {
+		set: () => {
+			page.fields.visual.files = [];
+		},
+		get: () => "",
+	});
+	page.fields.visual.files = [
+		{ name: "next.png", size: 100, type: "image/png" },
+	];
+	page.fileChange();
+	page.submit();
+	await vi.waitFor(() => expect(location.assign).toHaveBeenCalled());
+	page.fields.visual.files = [
+		{ name: "rejected.pdf", size: 100, type: "application/pdf" },
+	];
+	page.fileChange();
+	expect(image.src).toBe("/api/owner/requests/r/updates/draft/visual");
+	expect(image.getAttribute("width")).toBeNull();
+	expect(image.getAttribute("height")).toBeNull();
+	revoke.mockRestore();
+	create.mockRestore();
+});
+
 it("carries each saved project version through a visual upload and share", async () => {
 	vi.stubGlobal("confirm", () => true);
 	vi.stubGlobal(
