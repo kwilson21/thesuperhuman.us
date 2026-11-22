@@ -1,8 +1,9 @@
 # The living brief: design
 
-Status: built for review. Live interpretation is behind `SOFTWARE_BOARD_ENABLED`, which is `"false"` in
-`wrangler.jsonc` until the owner approves the spending envelope in section 6. Stacked on PR #286 (example answers and
-the contact confirmation), which it builds on and does not change.
+Status: on from the merge of PR #362. Live interpretation is behind `SOFTWARE_BOARD_ENABLED`, `"true"` in
+`wrangler.jsonc`; `"false"` turns it off. On November 22, 2026 the owner approved moving the board to a faster model and
+switching it on; the order and the limits were decided under his delegation (`docs/prelaunch-qa-2026-11-22-board-on.md`).
+Built on PR #286 (example answers and the contact confirmation), which it does not change.
 
 Inspired by "Beyond Taking Turns": instead of a chatbot that waits for its turn, the visitor and the system shape one
 shared artifact at the same time. The visitor keeps writing; a board beside the answer boxes fills in an outline of the
@@ -157,9 +158,11 @@ any of that: the Quint model lets any number of requests overlap and arrive in a
   two Cloudflare rate limits under their own `board:` keys, then a daily reservation in `brief_suggestion_budget` under
   the scopes `board:<visitor hash>` and `board:site`, decided by `src/server/rules/brief-board.ts` and guarded in SQL
   (`count < cap`), then the model.
-- `BoardModel` (`src/server/services.ts`) calls `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with JSON Mode
-  (`response_format: json_schema`), temperature 0.2, at most 700 output tokens and an 8 second timeout. Its failures are
-  `BoardModelFailed` and `BoardModelTimedOut`.
+- `BoardModel` (`src/server/services.ts`, live in `src/server/brief-board-model.ts`) calls `@cf/zai-org/glm-4.7-flash`
+  with its thinking off, in JSON Mode (`response_format: json_schema`, the schema named `board_reply`), temperature 0.2,
+  at most 700 output tokens and a 30 second timeout; the page waits 35 seconds. Before PR #362 it was set to call
+  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with an 8 second timeout, which most measured replies overran
+  (`docs/prelaunch-qa-2026-11-22-board-on.md`). Its failures are `BoardModelFailed` and `BoardModelTimedOut`.
 - `src/lib/brief-board.ts` holds the reply reader, the lane limits and the checks in section 2, shared by the server and
   the browser. It is pure and reads every object field by field with `src/lib/fields.ts`: a `Schema.Struct`, `Array`
   or `Record` decoder brings Effect's concurrent parser into the browser bundle, which the client bundle check refuses.
@@ -171,28 +174,33 @@ any of that: the Quint model lets any number of requests overlap and arrive in a
 
 ## 6. Cost and limits
 
-Prices from Cloudflare's pricing page (read 2026-11-15): $0.011 per 1,000 neurons, 10,000 neurons a day free across the
-account. `llama-3.3-70b-instruct-fp8-fast` is 26,668 neurons per million input tokens and 204,805 per million output
-tokens. The autocomplete's `llama-3.2-1b-instruct` is 2,457 and 18,252.
+Prices from Cloudflare's model catalogue (read through its API on 2026-11-22): the board's `glm-4.7-flash` is $0.0605
+per million input tokens and $0.40 per million output tokens; the autocomplete's `gemma-4-26b-a4b-it` is $0.10 and
+$0.30. Workers AI gives 10,000 neurons a day free across the account (pricing page, read 2026-11-15).
 
-| Call | Input | Output | Neurons | Cost |
-|---|---|---|---|---|
-| Autocomplete (today) | about 600 tokens | at most 12 | about 1.7 | about $0.00002 |
-| Board, typical | about 1,800 tokens | about 350 | about 120 | about $0.0013 |
-| Board, largest allowed | 7,000 characters of answers and board, about 3,300 tokens | 700 (the cap) | about 231 | about $0.0025 |
+| Call | Input | Output | Cost |
+|---|---|---|---|
+| Autocomplete | about 600 tokens | at most 12 | about $0.00006 |
+| Board, a short brief (measured) | about 475 tokens | about 314 | about $0.00015 |
+| Board, a long brief (measured) | 1,262 tokens | about 561 | about $0.00030 |
+| Board, largest allowed | 7,000 characters of answers and board, about 3,300 tokens | 700 (the cap) | about $0.00048 |
 
-A board call costs 70 to 130 autocomplete calls, so the autocomplete's limits (300 per visitor and 10,000 for the site
-each day) would allow up to about $25 a day. The board therefore has its own limits:
+A board call costs up to about eight autocomplete calls, so the autocomplete's limits (300 per visitor and 10,000 for the
+site each day) would allow up to about $4.80 a day. The board therefore has its own limits:
 
 - per page: at most 24 requests; at least 4 seconds apart, after 1.5 seconds without typing;
 - per visitor (the same daily IP hash as the autocomplete): 40 a day;
 - per site: 150 a day.
 
-At the site limit, every call at its largest: 150 × 231 = 34,650 neurons, about $0.38 a day before the free allocation,
-at most about $12 a month. The character limit is not a token limit: text in scripts that take more tokens per
-character could roughly double the input, about $0.53 a day and $16 a month at most. A typical brief takes 8 to 15
-calls, so 150 a day is 10 to 18 briefs. When a limit is reached the board says so and keeps working by hand; the brief
-is never affected.
+At the site limit, every call at its largest: 150 × $0.00048, about $0.07 a day before the free allocation, at most
+about $2.20 a month. The character limit is not a token limit: text in scripts that take more tokens per character could
+roughly double the input, about $0.10 a day and $3 a month at most. A typical brief takes 8 to 15 calls, so 150 a day
+is 10 to 18 briefs. When a limit is reached the board says so and keeps working by hand; the brief is never affected.
+
+The envelope first put to the owner (`docs/prelaunch-qa-2026-11-15-living-brief.md`) priced the first model,
+`llama-3.3-70b-instruct-fp8-fast`, at 26,668 and 204,805 neurons per million input and output tokens ($0.011 per 1,000
+neurons): about $0.0025 for the largest call, at most about $0.38 a day and $12 a month, or $16 in scripts that double
+the input.
 
 ## 7. Privacy
 

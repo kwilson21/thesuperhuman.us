@@ -3,8 +3,8 @@ import {
 	concurrentWriteToKey,
 	multipartPartInvalid,
 	multipartUploadGone,
-} from "~/lib/audio-project-uploads";
-import { objectStoreUnavailable } from "~/lib/object-store-errors";
+	objectStoreUnavailable,
+} from "~/lib/object-store-errors";
 
 // R2 writes its error code at the end of the message, "... (10043)". A message that has the number somewhere else is not that error.
 describe("R2 error codes are read from the end of the message", () => {

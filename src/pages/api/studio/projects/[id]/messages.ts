@@ -1,201 +1,122 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
+import * as Effect from "effect/Effect";
 import {
-	clientProjectForSession,
-	studioSessionFromRequest,
-} from "~/lib/audio-client-access";
+	checkYourMessage,
+	messageNotSaved,
+	noStudioSession,
+	portalOff,
+	projectHidden,
+	sentence,
+	studioMessagesUnavailable,
+	writeNotAccepted,
+} from "~/lib/audio-project-answers";
+import { studioSessionFromRequest } from "~/lib/audio-client-access";
 import { clientPortalEnabled } from "~/lib/client-portal";
-import {
-	clientMessageRateLimited,
-	markProjectMessagesRead,
-	postClientProjectMessage,
-	postClientReviewDecision,
-	validateProjectMessage,
-} from "~/lib/audio-project-messages";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
+import { readStudioMessageCommand } from "~/server/audio-project-input";
+import {
+	answerLatestReview,
+	markOwnerMessageReadByClient,
+	sendClientMessage,
+} from "~/server/flows/audio-project-messages";
+import type { AgreementStoreFailed } from "~/server/agreement-store";
+import type { HashFailed } from "~/server/agreement-services";
+import type { AudioProjectStoreFailed } from "~/server/audio-project-store";
+import type {
+	ChangesNeedNotes,
+	ClientRateLimited,
+	MessageNotAccepted,
+	MessageTextInvalid,
+	ProjectHidden,
+	ReviewNotAnswerable,
+} from "~/server/rules/audio-project-messages";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable, type MusicDb } from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/studio/projects/[id]/messages";
 
-const inputSchema = z.discriminatedUnion("action", [
-	z.object({ action: z.literal("send"), body: z.unknown() }),
-	z.object({
-		action: z.literal("read"),
-		messageId: z.number().int().positive(),
-	}),
-	// Approval and stopping need no notes; a change request does.
-	z.object({
-		action: z.literal("respond"),
-		reviewId: z.string().min(1).max(100),
-		decision: z.enum(["approved", "changes", "stopped"]),
-		body: z.unknown(),
-	}),
-]);
+/** Everything an action of this route can end in besides its answer. */
+type Ended =
+	| ProjectHidden
+	| MessageTextInvalid
+	| ChangesNeedNotes
+	| ClientRateLimited
+	| ReviewNotAnswerable
+	| MessageNotAccepted
+	| AudioProjectStoreFailed
+	| AgreementStoreFailed
+	| HashFailed;
 
-/** A respond body as the client sent it; validateProjectMessage checks the text. */
-function isTextBody(value: unknown): value is string {
-	return typeof value === "string";
-}
-
-const defaultText = {
-	approved: "I approve this mix.",
-	stopped: "I’m stopping the project here.",
-};
+/** A failure of the database or of hashing the token, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, messageNotSaved);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!clientPortalEnabled(env)) return portalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
-	if (!env.MUSIC_DB)
-		return Response.json(
-			{ ok: false, error: "Studio messages are temporarily unavailable." },
-			{ status: 503 },
-		);
+	if (!bindings.ok) return studioMessagesUnavailable();
 	const token = studioSessionFromRequest(request);
 
-	if (!token || !params.id)
-		return Response.json({ ok: false }, { status: 401 });
+	if (!token || !params.id) return noStudioSession();
 	const body = await musicRequest(request, 8192);
 
 	if (body instanceof Response) return body;
-	const parsed = inputSchema.safeParse(body);
+	const command = readStudioMessageCommand(body);
 
-	if (!parsed.success)
-		return Response.json(
-			{ ok: false, error: "Check your message and try again." },
-			{ status: 400 },
-		);
+	if (!command.ok) return checkYourMessage();
+	const id = params.id;
+	const input = command.value;
+	const now = () => new Date();
 
-	try {
-		const project = await clientProjectForSession(
-			env.MUSIC_DB,
-			token,
-			params.id,
-		);
-
-		if (!project) return Response.json({ ok: false }, { status: 404 });
-
-		if (parsed.data.action === "read") {
-			await markProjectMessagesRead(
-				env.MUSIC_DB,
-				params.id,
-				"client",
-				parsed.data.messageId,
-				token,
-			);
-
-			return Response.json({ ok: true });
+	const program = ((): Effect.Effect<Response, Ended, MusicDb> => {
+		switch (input.action) {
+			case "read":
+				return markOwnerMessageReadByClient({
+					id,
+					token,
+					messageId: input.messageId,
+					now,
+				}).pipe(Effect.map(() => Response.json({ ok: true })));
+			case "respond":
+				return answerLatestReview({
+					id,
+					token,
+					reviewId: input.reviewId,
+					decision: input.decision,
+					body: input.body,
+					now,
+				}).pipe(Effect.map((message) => Response.json({ ok: true, message })));
+			case "send":
+				return sendClientMessage({ id, token, body: input.body, now }).pipe(
+					Effect.map((message) => Response.json({ ok: true, message })),
+				);
 		}
+	})();
 
-		if (parsed.data.action === "respond") {
-			const { decision } = parsed.data;
-
-			const notes =
-				isTextBody(parsed.data.body) && parsed.data.body.trim()
-					? validateProjectMessage(parsed.data.body)
-					: null;
-
-			if (decision === "changes" && !notes)
-				return Response.json(
-					{
-						ok: false,
-						error: "Write the changes you would like, up to 4,000 characters.",
-					},
-					{ status: 400 },
-				);
-
-			if (isTextBody(parsed.data.body) && parsed.data.body.trim() && !notes)
-				return Response.json(
-					{
-						ok: false,
-						error:
-							"Write up to 4,000 characters. Shared links must start with https://.",
-					},
-					{ status: 400 },
-				);
-
-			// Stopping closes this project's access in the same write, so the review stops playing.
-			const saved = await postClientReviewDecision(
-				env.MUSIC_DB,
-				params.id,
-				token,
-				parsed.data.reviewId,
-				decision,
-				// The empty text is unreachable: "changes" without notes returned above.
-				notes ?? (decision === "changes" ? "" : defaultText[decision]),
-			);
-
-			if (!saved) {
-				if (await clientMessageRateLimited(env.MUSIC_DB, params.id)) {
-					return Response.json(
-						{
-							ok: false,
-							error:
-								"Please wait a few minutes before sending another message.",
-						},
-						{ status: 429 },
-					);
-				}
-
-				return Response.json(
-					{
-						ok: false,
-						error:
-							"That answer is not available for this review. Refresh the page to see where your song stands.",
-					},
-					{ status: 409 },
-				);
-			}
-
-			return Response.json({ ok: true, message: saved });
-		}
-
-		const message = validateProjectMessage(parsed.data.body);
-
-		if (!message)
-			return Response.json(
-				{
-					ok: false,
-					error:
-						"Write up to 4,000 characters. Shared links must start with https://.",
-				},
-				{ status: 400 },
-			);
-
-		const saved = await postClientProjectMessage(
-			env.MUSIC_DB,
-			params.id,
-			token,
-			message,
-		);
-
-		if (!saved) {
-			if (await clientMessageRateLimited(env.MUSIC_DB, params.id)) {
-				return Response.json(
-					{
-						ok: false,
-						error: "Please wait a few minutes before sending another message.",
-					},
-					{ status: 429 },
-				);
-			}
-
-			return Response.json({ ok: false }, { status: 409 });
-		}
-
-		return Response.json({ ok: true, message: saved });
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return Response.json(
-			{
-				ok: false,
-				error: "Your message could not be saved. Please try again.",
-			},
-			{ status: 500 },
-		);
-	}
+	return runRoute(
+		bindings.services,
+		program.pipe(
+			Effect.catchTags({
+				ProjectHidden: () => Effect.succeed(projectHidden()),
+				MessageTextInvalid: (refusal) =>
+					Effect.succeed(sentence(refusal.say, 400)),
+				ChangesNeedNotes: (refusal) =>
+					Effect.succeed(sentence(refusal.say, 400)),
+				ClientRateLimited: (refusal) =>
+					Effect.succeed(sentence(refusal.say, 429)),
+				ReviewNotAnswerable: (refusal) =>
+					Effect.succeed(sentence(refusal.say, 409)),
+				MessageNotAccepted: () => Effect.succeed(writeNotAccepted()),
+				AudioProjectStoreFailed: (failure) => failed(failure.failure),
+				AgreementStoreFailed: (failure) => failed(failure.failure),
+				HashFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		// A defect is the route's fixed sentence, logged once.
+		{ route: ROUTE, answer: messageNotSaved },
+	);
 };

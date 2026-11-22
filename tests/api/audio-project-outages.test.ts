@@ -85,6 +85,19 @@ function world(seed: Seed = {}) {
 	return sqliteD1(sql);
 }
 
+/** The same database, but a batch holding a matching statement rejects when it runs, with text that must never reach a client. */
+function failingBatch(db: D1Database, pattern: RegExp): D1Database {
+	return double<D1Database>({
+		prepare: (query: string) => db.prepare(query),
+		batch: async <T>(items: D1PreparedStatement[]) => {
+			if (items.some((item) => pattern.test(boundStatement(item).query)))
+				throw new Error(LEAK);
+
+			return db.batch<T>(items);
+		},
+	});
+}
+
 /** The same database, but a statement whose SQL matches throws with text that must never reach a client. */
 function failing(db: D1Database, pattern: RegExp): D1Database {
 	return double<D1Database>({
@@ -159,6 +172,8 @@ const outages: {
 	sentence: string;
 	seed?: Seed;
 	owner?: boolean;
+	/** The statement fails when the batch runs, not when it is prepared. */
+	inBatch?: boolean;
 }[] = [
 	{
 		name: "closing access",
@@ -177,7 +192,7 @@ const outages: {
 	{
 		name: "an owner message",
 		handler: messages,
-		pattern: /SELECT request_id FROM audio_projects/,
+		pattern: /SELECT request_id,stage,revoked_at FROM audio_projects/,
 		request: () => post(`${owner}/messages`, { action: "send", body: "Hello" }),
 		sentence: "Your message could not be saved. Please try again.",
 	},
@@ -235,7 +250,27 @@ const outages: {
 		pattern: /SELECT version,status FROM audio_project_files/,
 		request: () =>
 			post(`${owner}/files/file-1`, { action: "revoke", note: "Mistake" }),
-		sentence: "The file could not be published. Please try again.",
+		sentence: "The file could not be revoked. Please try again.",
+	},
+	{
+		name: "revoking a file, at the write",
+		handler: ownerFile,
+		pattern:
+			/UPDATE audio_project_files SET status='revoked',revoked_at=\?,revoked_by/,
+		request: () =>
+			post(`${owner}/files/file-1`, { action: "revoke", note: "Mistake" }),
+		seed: { draft: true },
+		sentence: "The file could not be revoked. Please try again.",
+		inBatch: true,
+	},
+	{
+		name: "a client message whose count read fails",
+		handler: studioMessages,
+		pattern: /SELECT count\(\*\) AS total FROM audio_project_messages/,
+		request: () =>
+			post(`${studio}/messages`, { action: "send", body: "Hello" }, cookie),
+		sentence: "Your message could not be saved. Please try again.",
+		owner: false,
 	},
 	{
 		name: "a client message",
@@ -252,7 +287,10 @@ describe("an unexpected failure answers 500 with the route's sentence", () => {
 	for (const outage of outages)
 		it(outage.name, async () => {
 			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-			const db = failing(world(outage.seed), outage.pattern);
+
+			const db = outage.inBatch
+				? failingBatch(world(outage.seed), outage.pattern)
+				: failing(world(outage.seed), outage.pattern);
 
 			const response = await outage.handler(
 				context(db, outage.request(), { owner: outage.owner }),
@@ -264,6 +302,7 @@ describe("an unexpected failure answers 500 with the route's sentence", () => {
 			expect(text).toContain(outage.sentence);
 			expect(text).not.toContain(LEAK);
 			// The log line names the route by its path, as the converted routes do.
+			expect(logged).toHaveBeenCalledTimes(1);
 			expect(String(logged.mock.calls[0]?.[0])).toMatch(
 				/^\/api\/(owner|studio)\/projects\/\[id\]\/.* failed unexpectedly:/,
 			);

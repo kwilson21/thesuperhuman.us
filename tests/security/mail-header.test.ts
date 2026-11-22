@@ -135,7 +135,7 @@ it("keeps line breaks and tabs in the two free-text answers", () => {
 	).toBe(true);
 });
 
-it("never stores more than the request limit for the most expensive answers it accepts", () => {
+it("stores at most 16,000 characters, half the request limit, for the most expensive answers it accepts", () => {
 	const cost = (character: string) => {
 		const answer = validateIntake({
 			...base,

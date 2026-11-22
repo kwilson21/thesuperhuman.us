@@ -28,8 +28,8 @@ import {
 } from "./areas/owner-audio";
 
 // The golden corpus for POST /api/owner/projects/[id]/updates, the notice half: the email a saved update sends to the
-// client (deliverProjectUpdateNotice, run in ctx.waitUntil after the response) and the retry_email action
-// (queueProjectNoticeForDelivery). The stage changes are in owner-project-updates.test.ts.
+// client (deliverUpdateNotice in src/server/flows/audio-project-notices.ts, run in ctx.waitUntil after the response) and the retry_email action
+// (queueProjectUpdateNotice, the same file). The stage changes are in owner-project-updates.test.ts.
 //
 //   Notice states      pending -> sending (claim) -> sent | failed; a send that is "uncertain" leaves the row sending
 //   email: Resend      200, 202 (sent); 400, 401, 403, 422, 429 (failed); 500, 503, network down, timeout (uncertain, the
@@ -66,7 +66,8 @@ const resend = (answer: ReturnType<typeof json>) => byHost({ resend: answer });
 
 const CLAIM = /UPDATE audio_project_updates SET notification_status='sending'/;
 
-const RECIPIENT = /SELECT r\.email FROM owner_requests r JOIN audio_projects p/;
+const RECIPIENT =
+	/SELECT r\.email,r\.kind,r\.status,p\.revoked_at FROM owner_requests r JOIN audio_projects p/;
 
 const FINAL = /UPDATE audio_project_updates SET notification_status=\?/;
 
