@@ -7,10 +7,11 @@ follows"):
 - [#368](https://github.com/kwilson21/thesuperhuman.us/pull/368), `claude/signin-convert-1`, targets `main`: the
   Effect Schema readers of the two request bodies and the address normalizer, the sign-in code machine, the rule files,
   and the area's store.
-- PR B, `claude/signin-convert-2`, targets #368: the services, the three flows, the three routes with their fixed
-  answers, the agreement link's allowance, the deletions, and this record. Not opened yet.
+- [#370](https://github.com/kwilson21/thesuperhuman.us/pull/370), `claude/signin-convert-2`, targets #368: the
+  services, the three flows, the three routes with their fixed answers, the agreement link's allowance, the deletions,
+  and this record.
 
-The stack merges `main` at `56f14759` (into #368 as `507aa44d`, then into PR B as `e4b37554`).
+The stack merges `main` at `56f14759` (into #368 as `507aa44d`, then into #370 as `e4b37554`).
 Merge facts (the merge commits, their heads and times, the `conversion` label): to be recorded after merge.
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). Implementation and its review passes were done with Claude Code; Codex reviewed #368.
@@ -74,21 +75,25 @@ model extension merged as #360 and the behaviour fixes S1 to S3 as #367 (records
   access closure's statements on the same tables, so the area keeps one store and one failure there.
   `tests/server/studio-signin-store.test.ts` holds every statement and batch to the three corpora.
 
-### PR B: the services, the flows, the routes and the deletions
+### #370: the services, the flows, the routes and the deletions
 
 - Services, `src/server/signin-services.ts`: `SigninKeys` (the code key's keyed hash and the plain hash, each
-  `Effect.tryPromise`; a code key under 32 characters fails the first keyed hash as `CodeKeyUnusable`, before any
-  statement, and answers 503 as before) and the area's `Mail` on `sendAudioMessage`, with the payload keys in the code
-  route's order (from, to, subject, html, text), so Resend sees byte-identical requests. `MailRefused` discards the
-  code, `MailUncertain` keeps it. Turnstile and the background are the shared `Turnstile` and `Background`.
+  `Effect.tryPromise`, and `usable`, which refuses a code key under 32 characters as `CodeKeyUnusable`; the code and
+  session flows ask it before their first allowance, where the routes checked `codeKeyUsable`, so the 503 comes before
+  any clock reading or statement, as before) and the area's `Mail` on `sendAudioMessage`, with the payload keys in the
+  code route's order (from, to, subject, html, text), so Resend sees byte-identical requests. `MailRefused` discards
+  the code, `MailUncertain` keeps it. Turnstile and the background are the shared `Turnstile` and `Background`.
 - Flows, `src/server/flows/`: `signin-code.ts` (`requestCode`; `issueSigninCode`, `discardUndelivered` and the shared
   `useAllowance`), `signin-session.ts` (`signIn`; `enterSigninCode`) and `signin-sign-out.ts` (`signOut`). They keep the
   routes' round trips, batches and order; every clock reading at the same point (each allowance as it is counted, the
   issue once before its read, the entry once before its read, the discard after the email); the code drawn, then the
   browser's value, then (for a new browser with no code issued) a fresh value; the issue's write batch run for every
   answer, bound to do nothing on a refusal; a refused guard answered like a refusal and not retried; the delivery
-  through `Background.defer`; the discard swallowing only its two refusals, so a store failure still reaches the fixed
-  line "Studio code delivery or cleanup failed."; a token made and hashed on every entry.
+  through `Background.defer`, with the email rendered inside it; the discard swallowing only its two refusals, so a
+  store failure still reaches the fixed line "Studio code delivery or cleanup failed."; a defect in the delivery (the
+  render, the send or the discard) caught with `Effect.catchDefect` and written as the same line, as the old route's
+  `.catch` did for any rejection, so the background settles fulfilled and the visitor keeps the generic 200 and the
+  cookie, with or without an execution context; a token made and hashed on every entry.
 - Routes, `src/pages/api/studio/`: the portal flag's 404 first, `bindingsOrUnavailable(env, ["MUSIC_DB"])` with the
   route's secrets (code: Turnstile secret, code key, Resend key, from address; session: code key; sign-out: none),
   `musicRequest`, the readers, then `runRoute(services, program, { route, answer })` under the names the routes logged
@@ -103,9 +108,12 @@ model extension merged as #360 and the behaviour fixes S1 to S3 as #367 (records
   helpers, the session reads (steps 6 and 7), `listStudioSignInFailures` and `deleteRetiredCodes`. The code and session
   lifetimes moved to `src/lib/client-portal.ts`, which the flows and the cookies both read.
 - Tests that called the deleted functions run the flows through `tests/helpers/studio-signin.ts`;
-  `tests/flows/studio-signin-stories.test.ts` (11 stories) holds the order of clock readings and batches, a guard that
-  no longer holds at the issue's write, a refused, an uncertain and a failed-discard email, the token every entry makes,
-  a short code key, sign-out, and the agreement allowance's statements.
+  `tests/flows/studio-signin-stories.test.ts` (14 stories) holds the order of clock readings and batches, a guard that
+  no longer holds at the issue's write, a refused, an uncertain and a failed-discard email, a mail service that dies
+  (with and without an execution context: the fixed line once, the generic 200 and the cookie), the token every entry
+  makes, a short code key on both routes with no clock reading or statement before the refusal, sign-out, and the
+  agreement allowance's statements. A render that throws is not reached by a story: the email is rendered by a module
+  the flow imports, and the lint forbids module mocking; it is inside the same caught delivery.
 
 ### Departures from the design, and why
 
@@ -122,14 +130,20 @@ model extension merged as #360 and the behaviour fixes S1 to S3 as #367 (records
   guard; a store failure still reaches the background's fixed line.
 - `useAllowance` lives in `signin-code.ts` and the session flow imports it, rather than a fourth flow file.
 - Sign-out gets `liveSigninKeys(undefined)`: it asks only for the plain hash and needs no code key.
+- The design has a short code key fail at the first keyed hash, inside the first allowance. That allowance reads the
+  clock before its hash, while the routes checked `codeKeyUsable` before it, so the flows ask `SigninKeys.usable` first
+  instead: the refusal comes at the routes' point, with no clock reading before it.
 
-What the old routes answered otherwise, outside the corpora: a defect inside the background delivery (none is known;
-every call there answers its failures as values or named errors) would no longer write the fixed line; with an
-execution context it rejects the `waitUntil` promise, and without one it reaches the route's fixed 500.
+What the converted routes do otherwise, outside the corpora, with no input known to reach it: the guarded batches
+decide that a guard raised with `raisedByJsonGuard` (`src/server/guarded-save.ts`), which matches "malformed JSON"
+anywhere down the error's cause chain, where the old `guardRaised` read only the top-level message. D1 puts the text in
+both, so every guard the corpora raise is matched the same way; only an error carrying the text in a cause and not in
+its own message would be read differently (a guard refusal now, a store failure before), and no database call here
+makes one.
 
 ## Golden neutrality
 
-Run on PR B at `e4b37554` (PR B with #368 and `main` at `56f14759` merged in), quoted as they printed:
+Run on #370 at `e4b37554` (#370 with #368 and `main` at `56f14759` merged in), quoted as they printed:
 
 ```
 $ node scripts/golden-neutral.mjs --all origin/main HEAD
@@ -143,8 +157,21 @@ compared 80 fixtures and 9370 cases; 0 of 80 fixtures differ
 golden:neutral: identical, 9370 cases
 ```
 
-And on #368 at `87762fe4`, from `origin/main` (`56f14759`): `identical, 9370 cases`. No fixture was re-recorded: every
-case of every corpus is byte for byte the old routes' recording, the D1 statements included.
+And on #368 at `87762fe4`, from `origin/main` (`56f14759`): `identical, 9370 cases`.
+
+After the review fixes (the background delivery's defect caught, the code key checked before the first clock reading,
+the store's header), on #370 at `520b2329` with #368 at `3502382a` merged in. `main` is now `93158d0d`, which adds only
+a record document since `56f14759`:
+
+```
+$ pnpm run golden:neutral --all origin/main HEAD
+golden:neutral: from origin/main (93158d0d4606) to HEAD (520b2329ca65)
+compared 80 fixtures and 9370 cases; 0 of 80 fixtures differ
+golden:neutral: identical, 9370 cases
+```
+
+No fixture was re-recorded: every case of every corpus is byte for byte the old routes' recording, the D1 statements
+included.
 
 ## Evidence
 
@@ -164,6 +191,15 @@ Run at `e4b37554` (this record is committed after it and changes documentation o
 - Single golden cases run alone (`vitest -t`): the sequence "ask, sign in, ask again at once, then the old code again",
   "Resend refuses the email (422): the code is discarded", the no-ctx case, the session corpus's "then the right code"
   cases and the sign-out corpus's real sign-ins pass.
+- After the review fixes, at `520b2329`: `tests/flows/studio-signin-stories.test.ts`, `tests/golden/studio-*.test.ts`,
+  `agreements-link`, `offer-link` and `tests/architecture`: `Test Files  21 passed (21)`,
+  `Tests  1505 passed | 2 skipped (1507)` (the client-bundle test skips without a build); before the fixes, the new and
+  tightened stories failed (the mail's defect answered 500 without a context and rejected `waitUntil` with one; the
+  short key read the clock once). `tests/api/studio-*.test.ts`, run on the same code before its last comment and format
+  edits: `Test Files  5 passed (5)`, `Tests  82 passed (82)`; the non-interference test once more:
+  `Tests  30 passed (30)` (141 seconds), its clock guard included. `pnpm run check`: `0 errors`, `0 warnings`,
+  `16 hints`. `pnpm run lint`: no findings. `pnpm run format`: `No fixes applied.` `pnpm run copy:check`: passed. The
+  build and the full suite were not repeated.
 
 UNVERIFIED until checked:
 
@@ -192,8 +228,8 @@ UNVERIFIED until checked:
 - **PASS · Queries.** The same statements, batches and order as before (the corpora are byte-identical, D1 included):
   three round trips per code request and two per entry whatever the address, one statement per sign-out.
 - **PASS · Failures.** A store or hash failure answers the route's fixed 500 and is logged once through
-  `logUnexpected`; a defect answers the same through `runRoute`; a short code key answers 503 before any statement; the
-  background discard's store failure writes the fixed line.
+  `logUnexpected`; a defect answers the same through `runRoute`; a short code key answers 503 before any clock reading
+  or statement; the background discard's store failure and any defect in the background delivery write the fixed line.
 
 ## 5. Forms and sensitive flows
 
@@ -216,7 +252,7 @@ UNVERIFIED until checked:
 - **In progress · Reviews.** #368: Codex's code and security reviews found nothing; an independent review found a guard
   missing for a counted row whose count is null (the store now answers no count, refused as the old `Infinity` was) and
   a test gap (differential cases at the exact character limits), both fixed in `2aa90db6`. Later commits on #368 (the
-  merge of `main` and the store's move into `studio-signin-store.ts`) and PR B: reviews to be recorded.
+  merge of `main` and the store's move into `studio-signin-store.ts`) and #370: reviews to be recorded.
 - **To be recorded after merge · Merge facts, post-merge CI, production revision and live check.**
 
 ## 8. Private owner center
