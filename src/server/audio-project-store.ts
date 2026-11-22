@@ -586,11 +586,13 @@ function exactlyTheFiles(
 
 	if (ids.length === 0) return { sql: count, bind: [...values, 0] };
 
-	const members = `(SELECT count(*) ${from} AND id IN (${ids.map(() => "?").join(",")}))=?`;
+	// The ids are one bound value, a JSON array, because D1 allows at most 100 bound parameters in a statement and nothing caps
+	// the files of a version.
+	const members = `(SELECT count(*) ${from} AND id IN (SELECT value FROM json_each(?)))=?`;
 
 	return {
 		sql: `${count} AND ${members}`,
-		bind: [...values, ids.length, ...values, ...ids, ids.length],
+		bind: [...values, ids.length, ...values, JSON.stringify(ids), ids.length],
 	};
 }
 
@@ -734,13 +736,13 @@ export const publishFileBatch = (write: PublishWrite) =>
 				: [
 						db
 							.prepare(`UPDATE audio_project_files SET status='revoked',revoked_at=?
-      WHERE request_id=? AND version='review' AND ${statusIn(FILE_MOVES.SUPERSEDE)} AND id<>? AND id IN (${write.supersedes.map(() => "?").join(",")})
+      WHERE request_id=? AND version='review' AND ${statusIn(FILE_MOVES.SUPERSEDE)} AND id<>? AND id IN (SELECT value FROM json_each(?))
         AND EXISTS(SELECT 1 FROM audio_project_files WHERE id=? AND publication_id=?)`)
 							.bind(
 								write.at,
 								write.requestId,
 								write.fileId,
-								...write.supersedes,
+								JSON.stringify(write.supersedes),
 								write.fileId,
 								write.publicationId,
 							),

@@ -407,3 +407,52 @@ describe("revoking a file", () => {
 		expect(status(world, "r1")).toEqual({ status: "published" });
 	});
 });
+
+describe("a version with more than a hundred published files", () => {
+	// D1 allows at most 100 bound parameters in a statement, and nothing caps the files of a version, so the guards bind the
+	// ids as one value.
+	it("publishes a review over 120 live ones, revoking each", async () => {
+		const world = musicWorld();
+		seedProject(world, "review_ready");
+
+		for (let i = 0; i < 120; i += 1)
+			seedFile(world, `old-${i}`, {
+				status: "published",
+				published_at: AT.toISOString(),
+			});
+
+		seedFile(world, "r-new");
+		const objects = memoryBucket();
+		objects.objects.set("studio/projects/song-1/r-new.mp3", 5);
+
+		expect(await publish(world, objects.bucket, "r-new").ended).toMatchObject({
+			done: expect.any(Number),
+		});
+		expect(
+			world.sql
+				.prepare(
+					"SELECT count(*) AS live FROM audio_project_files WHERE status='published'",
+				)
+				.get(),
+		).toEqual({ live: 1 });
+	});
+
+	it("revokes one of 120 published finals and keeps the stage", async () => {
+		const world = musicWorld();
+		seedProject(world, "final_files_ready");
+
+		for (let i = 0; i < 120; i += 1)
+			seedFile(world, `f-${i}`, {
+				version: "final",
+				status: "published",
+				published_at: AT.toISOString(),
+				expires_at: "2027-11-13T12:00:00.000Z",
+			});
+
+		expect(await revoke(world, "f-0", "Take one is withdrawn.").ended).toEqual({
+			done: undefined,
+		});
+		expect(stage(world)).toEqual({ stage: "final_files_ready" });
+		expect(status(world, "f-0")).toEqual({ status: "revoked" });
+	});
+});
