@@ -22,16 +22,16 @@ changes a case production never reaches (a request with no execution context, wh
 route behaves as the other converted routes do there; it rests on the shape those routes already have
 (`src/server/services.ts:545-558`), not on a new decision.
 
-**One question for the owner: a lost race on these routes.** The 2026-11-14 decision says a lost race answers 409. Here
-a lost race (a guard C1, C2, C4 or C5 failing because the facts changed after the read; C3, C6, C7, C8 and C9 change no
-answer: a sweep that misses a row deletes nothing, the discard swallows its raised guard (access.ts:260-263), and the
-session, audit and sign-out guards only decide what is written) answers like a refusal today: the generic 200 on a code
-request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a stranger something about an
-address they do not own: on the code route, that it had an open project and room for a code when the request read it
-(the guard raises only after a decision to issue). That is what the non-interference property forbids (the model's
+**Decided, an exception to the 409 rule: a lost race on these routes.** Owner, 2026-11-22, in conversation: "Yes,
+record the exception." The 2026-11-14 decision says a lost race answers 409. Here a lost race (a guard C1, C2, C4 or C5
+failing because the facts changed after the read; C3, C6, C7, C8 and C9 change no answer: a sweep that misses a row
+deletes nothing, the discard swallows its raised guard (access.ts:260-263), and the session, audit and sign-out guards
+only decide what is written) keeps answering like a refusal, as it does today: the generic 200 on a code request
+(access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a stranger something about an address
+they do not own: on the code route, that it had an open project and room for a code when the request read it (the
+guard raises only after a decision to issue). That is what the non-interference property forbids (the model's
 `outcomeIndependentOfAddress`, and `tests/api/studio-signin-noninterference.test.ts`, which compares the answers across
-the target address's states). Recommended: keep today's answers, recorded as an exception to the 409 rule for the code
-and session routes. Until the owner answers, the conversion keeps them as they are, as every conversion keeps behaviour.
+the target address's states). The exception covers the code and session routes only.
 
 ## The area today
 
@@ -367,10 +367,9 @@ There is no money rule here, so no LemmaScript contract. The golden corpora (`st
 
 ## Open questions from reading the code
 
-Beyond the lost-race question above, and the expiry finding the model PR is expected to bring (section 7), none that
-need the owner. Two notes for review: the background discard reads the clock after the email (access.ts:215), after
-the request's gated batches. The clock guard would record that reading (`watchClock` watches every reading after the
-first gated batch, background included); it never fires there only because the test's mail stub accepts every email.
-The conversion keeps the reading where it is, so the audit's `occurred_at` does not move. And
-`listStudioSignInFailures` reads the audit rows this area writes, so the audit's action names (`code-issued`,
-`code-delivery-failed`, `signed-in`) do not change.
+Beyond the expiry finding the model PR is expected to bring (section 7), none that need the owner. Two notes for review:
+the background discard reads the clock after the email (access.ts:215), after the request's gated batches. The clock
+guard would record that reading (`watchClock` watches every reading after the first gated batch, background included);
+it never fires there only because the test's mail stub accepts every email. The conversion keeps the reading where it
+is, so the audit's `occurred_at` does not move. And `listStudioSignInFailures` reads the audit rows this area writes, so
+the audit's action names (`code-issued`, `code-delivery-failed`, `signed-in`) do not change.
