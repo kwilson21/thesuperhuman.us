@@ -127,7 +127,7 @@ export const fileNotPublished = () =>
 
 const FILE_NOT_REVOKED = "The file could not be revoked. Please try again.";
 
-/** The revoke could not be saved: a failure of the database, or a defect. 500, logged once by the route. Owner decision 2026-11-22. */
+/** The revoke could not be saved: a failure of the database, or a defect. 500, logged once by the route. */
 export const fileNotRevoked = () =>
 	Response.json({ ok: false, error: FILE_NOT_REVOKED }, { status: 500 });
 
