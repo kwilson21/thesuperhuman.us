@@ -44,7 +44,7 @@ export const deleteClientSigninCodes = (
 
 /**
  * AR5, write guarded by key, best effort after the revocation: the codes of the retired sign-in table. A table that is already
- * dropped (migration 0028, issue 271) is silent and not a failure; any other failure is a `StudioSigninStoreFailed` the
+ * dropped (a later migration, issue 271) is silent and not a failure; any other failure is a `StudioSigninStoreFailed` the
  * caller logs and goes on from.
  */
 export const deleteRetiredClientCodes = (requestId: string) =>

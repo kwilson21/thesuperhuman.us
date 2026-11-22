@@ -341,13 +341,20 @@ function pngSize(b: Uint8Array) {
 	return sized(view.getUint32(16), view.getUint32(20));
 }
 
+/**
+ * The size of a JPEG, with width and height exchanged for Orientation 5 to 8. It returns null in three cases beyond an
+ * unreadable file: an APP1 segment starting "Exif\0" whose sixth byte is not 0, a second Exif segment, and any other
+ * APP1 segment (XMP for example) before the Exif one. Browsers differ on which EXIF block they read, so wherever they
+ * could disagree the answer is null.
+ */
 function jpegSize(b: Uint8Array) {
 	if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
 
 	let position = 2,
 		frame: ImageSize | null = null,
 		orientation: number | undefined,
-		exifSeen = false;
+		exifSeen = false,
+		otherApp1 = false;
 
 	while (position < b.length) {
 		if (b[position] !== 0xff) return null;
@@ -374,20 +381,18 @@ function jpegSize(b: Uint8Array) {
 			if (!frame) return null;
 		}
 
-		if (
-			marker === 0xe1 &&
-			length >= 8 &&
-			ascii(b, position + 2, 4) === "Exif" &&
-			b[position + 6] === 0 &&
-			b[position + 7] === 0
-		) {
-			// Only one Exif block is expected; with a second, which one the browser reads is not certain.
-			if (exifSeen) return null;
-			exifSeen = true;
-			const read = exifOrientation(b, position + 2, position + length);
+		if (marker === 0xe1) {
+			if (length >= 7 && ascii(b, position + 2, 5) === "Exif\0") {
+				// Browsers differ on the sixth byte, so only Exif\0\0 is read, and on which block they read when there
+				// is more than one APP1 or Exif segment; the size is returned only when every browser would read the same.
+				if (length < 8 || b[position + 7] !== 0 || exifSeen || otherApp1)
+					return null;
+				exifSeen = true;
+				const read = exifOrientation(b, position + 2, position + length);
 
-			if (read === null) return null;
-			orientation = read;
+				if (read === null) return null;
+				orientation = read;
+			} else if (!exifSeen) otherApp1 = true;
 		}
 
 		position += length;
@@ -469,7 +474,7 @@ function webpSize(b: Uint8Array) {
  * header, a zero size, an EXIF block that cannot be read with certainty (it is read only inside its own segment or
  * chunk, and a second Exif segment in a JPEG counts as unreadable), or (for PNG and WebP) an Orientation other than 1,
  * which turns the picture by an amount decided in the browser. A JPEG with Orientation 5 to 8 is returned with width and
- * height exchanged. A wrong size is a defect, null is not. It never throws.
+ * height exchanged. It returns null rather than a size it cannot be sure of. It never throws.
  */
 export function imageSize(bytes: Uint8Array, type: string): ImageSize | null {
 	try {

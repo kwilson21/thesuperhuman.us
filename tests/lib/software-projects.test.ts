@@ -2025,7 +2025,7 @@ function sizedPng(width: number, height: number, rotated = false) {
 	]);
 }
 
-it("stores the pixel size of an uploaded visual, replaces it with the next one and stores NULL when it cannot be read", async () => {
+it("stores the pixel size of each upload, or NULL when it is not certain", async () => {
 	await start();
 
 	const saved = await draft();

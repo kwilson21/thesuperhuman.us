@@ -2782,6 +2782,9 @@ it("puts the named review work first through partial, complete, accepted and han
 			"Support within the correction period.",
 		);
 
+		expect(currentHandoffFiles).not.toContain("<img");
+		expect(currentHandoffFiles).not.toContain("Open work");
+
 		// An image in the handoff strip carries its stored size.
 		sql.exec(
 			"UPDATE software_project_updates SET visual_key='handoff-image',visual_alt='The handed-over tool.',visual_width=1200,visual_height=800 WHERE id='handoff'",
@@ -2800,9 +2803,6 @@ it("puts the named review work first through partial, complete, accepted and han
 		sql.exec(
 			"UPDATE software_project_updates SET visual_key=NULL,visual_alt='',visual_width=NULL,visual_height=NULL WHERE id='handoff'",
 		);
-		html = await render();
-		expect(currentHandoffFiles).not.toContain("<img");
-		expect(currentHandoffFiles).not.toContain("Open work");
 		sql.exec(
 			`INSERT INTO software_project_updates(id,request_id,kind,status,milestone_index,title,artifact_version,evidence_type,what_changed,next_step,client_request,created_by,created_at,updated_at,shared_at) VALUES ('later','r','progress','shared',0,'Later work','Aftercare V3','working_preview','I updated the operating guide.','Check in next week.','Read the guide.','owner','2026-10-04','2026-10-04','2026-10-04')`,
 		);

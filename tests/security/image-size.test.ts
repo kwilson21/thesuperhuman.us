@@ -388,16 +388,10 @@ describe("jpeg segment walking", () => {
 			]);
 
 			expect(
-				imageSize(
-					jpegRaw([...jfif, ...exifSegment(exif(1))]),
-					"image/jpeg",
-				),
+				imageSize(jpegRaw([...jfif, ...exifSegment(exif(1))]), "image/jpeg"),
 			).toEqual(size);
 			expect(
-				imageSize(
-					jpegRaw([...jfif, ...exifSegment(exif(6))]),
-					"image/jpeg",
-				),
+				imageSize(jpegRaw([...jfif, ...exifSegment(exif(6))]), "image/jpeg"),
 			).toEqual({ width: 600, height: 800 });
 		},
 	);
