@@ -35,6 +35,12 @@ import * as Predicate from "effect/Predicate";
 /** The save found the facts changed since the rule read them. Never shown to a person: the rule is asked again. */
 export class ChangedSinceRead extends Data.TaggedError("ChangedSinceRead") {}
 
+/**
+ * A compare-and-set guard refused the batch: what the rule read has changed since. Never retried: the area answers it
+ * as its design says (the offers area with the reads after a refused batch, the studio sign-in like a refusal).
+ */
+export class GuardRefused extends Data.TaggedError("GuardRefused") {}
+
 const MAX_CAUSE_DEPTH = 5;
 
 /** Whether the message of `cause`, or of any cause down its chain (five levels at most, so a loop ends), matches. */

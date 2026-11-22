@@ -21,12 +21,16 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 - Converted: contact and resume (3 routes), the public music routes (2 routes), the agreement access routes (3 routes), publication (the work feed, the OAuth and MCP route, `.well-known` and the MCP probe; three PRs: fixes, conversion, and the MCP tools without Zod), the public intake routes (4 routes: audio intake, software inquiry, brief pass and brief suggest; PRs 300 and 301), the media routes (3 routes: `music/file`, `audio/file` and `og/[name].mp4`; fixes and conversion in one stack, record `docs/prelaunch-qa-2026-11-15-media.md`), and the owner brief copy route (step 8 is complete; the claim of the client's copy is one flow for the public form and the owner).
 - Converted: the audio project routes (step 7: the owner's messages, uploads, file, access, invitation and updates routes and the studio's messages and file routes, and the notices the owner's routes send), a stack of a bottom layer and three conversion layers; record `docs/prelaunch-qa-2026-11-15-audio-projects.md`.
 - Converted: the software offers route (step 1, `owner/requests/[id]/software.ts`), a stack of three PRs (334, 337 and
-  341) merged to `main` on 2026-11-16 as `a9f30919`; record `docs/prelaunch-qa-2026-11-16-offers-area.md`. The counts
-  below leave it out.
-- Not converted: 22 route files (24 of the 48 files under `src/pages/api` do not call `runRoute`, by `grep -L`; two of those need no conversion: `resume-approve.ts`, a redirect with no logic, and the publication route, which re-exports the converted OAuth route), 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
-  components (all reads), 19 files under `src/` that use Zod (18 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
-  parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
-  Stripe reconciliation are operator scripts.
+  341) merged to `main` on 2026-11-16 as `a9f30919`; record `docs/prelaunch-qa-2026-11-16-offers-area.md`.
+- Converted: the studio sign-in routes (step 2: `studio/code.ts`, `session.ts`, `sign-out.ts`), a stack of two PRs (368
+  and 370) merged to `main` on 2026-11-22 as `4330705d`; record `docs/prelaunch-qa-2026-11-22-signin-area.md`.
+- Not converted (counted on 2026-11-22 after step 2): 19 route files (21 of the 48 files under `src/pages/api` do not
+  call `runRoute`, by `grep -L`; two of those need no conversion: `resume-approve.ts`, a redirect with no logic, and the
+  publication route, which re-exports the converted OAuth route), 2 `.astro` pages that write (both `verify.astro`), 28
+  SQL reads in `.astro` pages and components (all reads), 16 files under `src/` that use Zod (15 import `zod` or
+  `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and
+  `scripts/prepare-music.mjs` parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue
+  handler; retention and Stripe reconciliation are operator scripts.
 - Every route has a golden corpus (recorded in PRs 246, 248 and 249, and for the three media routes at the bottom of their stack).
 
 ## Rules this order follows
@@ -73,9 +77,20 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    `docs/prelaunch-qa-2026-11-16-offers-area.md`).
 2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts`, `audio-client-access.ts` and `client-portal.ts`
    (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule
-   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this
-   area) merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model.
-   Design: `docs/plans/2026-11-studio-signin-conversion.md`.
+   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this area)
+   merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model. Design:
+   `docs/plans/2026-11-studio-signin-conversion.md`. The model extension and the fixes S1 to S3 merged (#360, #367).
+   Converted and merged to `main` on 2026-11-22 as `4330705d` (#370 merged into #368, then #368 into `main`); record
+   `docs/prelaunch-qa-2026-11-22-signin-area.md`. The first PR (#368) holds the Effect
+   Schema readers and address normalizer (`src/server/signin-input.ts`, `src/lib/client-portal.ts`), the code machine
+   (`src/server/machines/signin-code.ts`), the rules (`src/server/rules/signin-*.ts`, `studio-allowance.ts`) and the
+   store (`src/server/studio-signin-store.ts`). The second holds the services (`src/server/signin-services.ts`), the
+   flows (`src/server/flows/signin-code.ts`, `signin-session.ts`, `signin-sign-out.ts`), the three routes with their
+   fixed answers (`src/lib/studio-signin.ts`), the agreement link's allowance (`liveAgreementAllowance` counts through
+   the store and the rule), and the deletions (`issueClientCode`, `discardUndeliveredCode`, `completeClientCode`,
+   `takeStudioAllowance`, `revokeClientSession` and `src/lib/signin-code-rules.ts`). `reserveStudioAllowance` stays in
+   `src/lib/audio-client-access.ts` for its last caller, `issueAgreementLink` (step 3 deletes it), with the cookie
+   helpers, the session reads (steps 6 and 7), `listStudioSignInFailures` and `deleteRetiredCodes`.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and
