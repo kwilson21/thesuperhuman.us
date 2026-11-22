@@ -8,7 +8,7 @@ Branch for layer 5: `claude/effect-5-browser-graph`, cut from `origin/main` at `
 Pull requests: stack 250 (#248 and #249, tests only) is merged; #251 is merged; layer 5 is pull request #252.
 Target: production `https://thesuperhuman.us`
 Reviewer: layer 5 was written with Claude Code. Two independent review passes ran on this pull request (the first found a gap in the server-use scan, fixed; the second was clean with notes, fixed in the next commit), and an independent review compared the pages in a real browser (see Evidence and limits). Greptile, Codex and CI on the final head are in Delivery status. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: for stack 250, the parent of `527e2c60` (`git log --first-parent`); for #251, the parent of `05b669ce`; for layer 5, re-check `origin/main` with `git fetch` before merge. The deployed revisions are the merge commits `527e2c60` and `05b669ce` as reported in the task for this record; no deployed revision was observed.
+Rollback revision: for stack 250, the parent of `527e2c60` (`git log --first-parent`); for #251, the parent of `05b669ce`; for layer 5, re-check `origin/main` with `git fetch` before merge. The deployed revisions are the merge commits `527e2c60` and `05b669ce` as reported in the task for this record; no deployed revision was observed for this record.
 
 ## Scope
 

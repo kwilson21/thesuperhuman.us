@@ -99,7 +99,7 @@ Authorization:
 - **Reviews:**
   - Both GitHub review threads, on `render.mjs` and the README, are resolved.
   - Codex reviewed only the first commit, `1e97193`. Greptile has not reviewed the PR.
-  - As CLAUDE.md requires without a Greptile review, independent review passes ran on each new head, with every finding checked: 13 confirmed findings fixed in `c376c19`, 6 in `03b4d48`, 1 in `4de8fb9`, 1 wording fix in `8e6e9cc`, and a fifth pass on `8e6e9cc` that found nothing. Those results were observed in the session; their transcripts are not in the repository.
+  - As CLAUDE.md requires without a Greptile review, independent review passes ran on each new head, with every finding checked: 13 confirmed findings fixed in `c376c19`, 6 in `03b4d48`, 1 in `4de8fb9`, 1 wording fix in `8e6e9cc`, and a fifth pass on `8e6e9cc` that found nothing. Those results were observed during the work; their transcripts are not in the repository.
 - **Screenshots:**
   - The PR description's table names 14 captures under `pr-203/8e6e9cc/` on the `screenshots` branch.
   - Seven were fetched: home, not-found and building-the-engineers-daily, each at desktop and phone, plus services-phone.
@@ -149,7 +149,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - The owner's portrait already appears on `/building/personal-website`.
     - `ffprobe` shows 0 audio streams in all 22 videos.
   - The PR retires the old card, which carried the superseded line "Building with AI".
-  - `docs/asset-reviews/link-previews.md` says "ready for production". It lists Claude Code as the reviewer ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
+  - `docs/asset-reviews/link-previews.md` says "ready for production". It names Claude Code as reviewer ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
 - **PASS · 1.3 Explain who does what; professional claims.**
   - The PR changes no page copy.
   - The scenes repeat existing explanatory lines word for word, and the copy test passed. Examples:

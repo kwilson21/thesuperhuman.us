@@ -24,7 +24,7 @@ On October 22, 2026, the owner asked for this work once the Hallmark feedback wo
 
 - **Checks at `2b319b12`:** `npm test`: 141 files, 1,757 passed, 1 skipped (the agreement PDF test that needs a private file). `npm run build` passed, including `assets:check` (79 files match their review records), `copy:check`, `design:check` (6 gates) and the publicist gate. The build's warnings (the `SESSION` binding note, two empty content folders, a zod comment) predate this change.
 - **Renders:** `node scripts/og-video/render.mjs` with `CHROMIUM_PATH=/opt/pw-browsers/chromium`. For every scene the renderer reported fonts loaded, no overflow, no text wider than its box and a last frame matching the first.
-- **Visual check:** every new poster was compared with a 1280 × 800 screenshot of its live page, and inspected the building and project-kaillera-next posters and home's frame at 2.6 s at full size. Other moments of each loop, where only the label face changed, were not inspected frame by frame. No separate review ran, per the owner's instruction above.
+- **Visual check:** every new poster was compared with a 1280 × 800 screenshot of its live page, and the building and project-kaillera-next posters and home's frame at 2.6 s were inspected at full size. Other moments of each loop, where only the label face changed, were not inspected frame by frame. No separate review pass ran, per the owner's instruction above.
 - **Not done before the merge:** no request to a branch preview; no real device.
 
 PASS means the evidence named here was observed.
