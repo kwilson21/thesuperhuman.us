@@ -1,5 +1,5 @@
 import { setup } from "xstate";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { next, sourcesOf } from "../../src/server/machines/next";
 
 const request = setup({}).createMachine({
@@ -24,6 +24,19 @@ const request = setup({}).createMachine({
 });
 
 describe("next", () => {
+	// First in the file, so it is the file's first question to a machine: XState's one random draw per process (its
+	// execution id prefix) was made when next.ts loaded, not here, inside a request.
+	it("draws no random value, even the first time a machine is asked", () => {
+		const draws = vi.spyOn(crypto, "getRandomValues");
+
+		try {
+			expect(next(request, "new", "REVIEW")).toBe("reviewed");
+			expect(draws).not.toHaveBeenCalled();
+		} finally {
+			draws.mockRestore();
+		}
+	});
+
 	it("gives the state an allowed event moves to", () => {
 		expect(next(request, "new", "REVIEW")).toBe("reviewed");
 		expect(next(request, "resolved", "REOPEN")).toBe("new");

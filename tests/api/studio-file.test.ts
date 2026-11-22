@@ -7,7 +7,7 @@ import type { TestRuntime } from "../helpers/runtime";
 import { byteRange, bytesStream } from "../helpers/r2";
 import { sqliteD1 } from "../helpers/sqlite-d1";
 import { GET, HEAD } from "~/pages/api/studio/projects/[id]/files/[fileId]";
-import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
+import { signedInClient } from "../helpers/studio-signin";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { privateProjectObjectKey } from "~/lib/audio-project-files";
@@ -65,15 +65,7 @@ beforeEach(async () => {
 			"UPDATE audio_projects SET stage='review_ready' WHERE request_id='song-2'",
 		)
 		.run();
-	const code = (await issueClientCode(db, "artist@example.com", secret, now))!;
-	token = (await completeClientCode(
-		db,
-		"artist@example.com",
-		code.code,
-		code.nonce,
-		secret,
-		now,
-	))!;
+	token = await signedInClient(db, secret, "artist@example.com", now);
 
 	const insertFile = sql.prepare(`INSERT INTO audio_project_files
     (id,request_id,version,object_key,display_name,media_type,byte_size,downloadable,status,uploaded_at,published_at,expires_at)

@@ -44,7 +44,7 @@ After the conversion no statement of the area decides an outcome. Every read is 
 - Owner, 2026-11-14: an unexpected store failure answers 500 with the route's fixed sentence, a lost race is 409, 503 is for a missing binding or a known unavailable dependency.
 - Owner, 2026-11-15 (recorded in the plan): no Zod in our code at the end.
 - Owner, 2026-11-15: asked who may write the code of this conversion in this repository, the owner delegated the choice ("You decide"), and the conversion was written under that delegation.
-- Open question for the owner (design, "What the owner is asked"): whether a failed file revoke gets a sentence of its own. Today's sentence, "The file could not be published. Please try again.", stays on the revoke path with status 500; no new copy was written.
+- Owner decision, 2026-11-22: a failed file revoke has its own sentence, "The file could not be revoked. Please try again." (status 500). A failed publish keeps its sentence.
 
 ## Differences from today's answers
 

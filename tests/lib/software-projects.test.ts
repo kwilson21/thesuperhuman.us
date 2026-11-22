@@ -29,10 +29,8 @@ import {
 	clientSoftwareProjectsForSession,
 	clientProjectForSession,
 	clientProjectsForSession,
-	issueClientCode,
-	completeClientCode,
-	discardUndeliveredCode,
 } from "~/lib/audio-client-access";
+import { signedInClient, studioSignin } from "../helpers/studio-signin";
 import {
 	clearUnmetRevisionEvidence,
 	sharedSoftwareUpdates,
@@ -336,15 +334,7 @@ async function draft() {
 }
 
 async function session(email = "alex@example.com") {
-	const code = await issueClientCode(db, email, secret);
-
-	return (await completeClientCode(
-		db,
-		email,
-		code!.code,
-		code!.nonce,
-		secret,
-	))!;
+	return signedInClient(db, secret, email);
 }
 
 async function shareReview(
@@ -1710,14 +1700,10 @@ it("software-only codes and sessions are scoped across both project kinds and re
 
 it("refuses sign-in when the only project closes after code issuance, and audits undelivered software codes", async () => {
 	await start();
-	const code = (await issueClientCode(db, "alex@example.com", secret))!;
-	await discardUndeliveredCode(
-		db,
-		"alex@example.com",
-		code.code,
-		code.nonce,
-		secret,
-	);
+	const signin = studioSignin(db, secret);
+
+	// Resend refuses the code's email, so the code is discarded and the failure audited.
+	await signin.issue("alex@example.com", new Date(), null, "refused");
 	expect(
 		sql
 			.prepare(
@@ -1725,16 +1711,10 @@ it("refuses sign-in when the only project closes after code issuance, and audits
 			)
 			.all(),
 	).toEqual([{ action: "code-delivery-failed" }]);
-	const second = (await issueClientCode(db, "alex@example.com", secret))!;
+	const second = (await signin.issue("alex@example.com"))!;
 	sql.exec("UPDATE software_projects SET revoked_at='now'");
 	expect(
-		await completeClientCode(
-			db,
-			"alex@example.com",
-			second.code,
-			second.nonce,
-			secret,
-		),
+		await signin.enter("alex@example.com", second.code, second.nonce),
 	).toBeNull();
 });
 

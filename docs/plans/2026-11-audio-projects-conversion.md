@@ -12,10 +12,9 @@ step 0 split changed, cite the file only.
 
 ## What the owner is asked
 
-1. One question: should a failed file revoke get a sentence of its own? Today it answers with the publish route's sentence,
-   "The file could not be published. Please try again.", because the route has one `catch` for both actions (section 7,
-   "Left for the owner"). A sentence that names the revoke is new copy. If the answer is no, today's sentence stays on the
-   revoke path, with the status 500, which is what the fixes do.
+1. One question, answered: a failed file revoke has its own sentence. Owner decision, 2026-11-22:
+   a failed revoke answers 500 with "The file could not be revoked. Please try again.", and a failed publish keeps "The file
+   could not be published. Please try again." (section 7, "Left for the owner").
 2. Nothing else is asked. F1 to F5 in section 7 follow the house failure rules (an unexpected failure answers 500 and is
    logged once; a refused request or a lost race answers 409; no new sentences). Two behaviours are today's and the design
    keeps both (section 7, "Today's behaviour, kept"): closing one project's access ends the client's sessions for all of that
@@ -544,9 +543,11 @@ Each is fixed on `claude/effect-15-audio-projects-fixes`, tests first, by the st
 
 Not fixed, with the reason:
 
-- Left for the owner (a new sentence is a copy choice). A failed file revoke answers with the publish route's sentence, "The file could not be published. Please
-  try again." (files/[fileId].ts:114), because the route has one `catch` for both actions. A sentence that names the revoke
-  is a new copy line, so it is the owner's; today's sentence is kept on the revoke path with the status 500.
+- Owner decision, 2026-11-22. A failed file revoke answers 500 with its own sentence, "The
+  file could not be revoked. Please try again." (`src/lib/audio-project-answers.ts`, `fileNotRevoked`, used on the revoke path
+  of `files/[fileId].ts`). A failed publish keeps "The file could not be published. Please try again." Statuses, logging and
+  every other answer are unchanged. Golden: three `owner-project-file` cases change (the revoke read fails, the revoke batch
+  fails, and the rolled-back revoke batch); the rest are neutral.
 - The invitation's outcome write requires an open project (invitations.ts:58), so an email sent just after a revoke leaves
   the invitation at `sending`, while the update notice's write has no such condition. Both are harmless (the project is
   closed) and neutral to keep. The notices model has both: the invitation's writes need an open project, the update
