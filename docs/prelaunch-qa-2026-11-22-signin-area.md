@@ -11,17 +11,16 @@ follows"):
   services, the three flows, the three routes with their fixed answers, the agreement link's allowance, the deletions,
   and this record.
 
-The stack merges `main` at `56f14759` (into #368 as `507aa44d`, then into #370 as `e4b37554`).
-Merged on 2026-11-22, both with the `conversion` label: #370 into #368 at 23:15:45 UTC as `aafb3ef3` (head
-`763ced6a`), and #368 into `main` at 23:19:37 UTC as `4330705d` (head `aafb3ef3`). `main` had moved to `93158d0d`
-(#363, one record document) since the stack last merged it; the merge commit includes it.
-Target: production `https://thesuperhuman.us`
-Decisions: Kazon Wilson (below). Implementation and its review passes were done with Claude Code; Codex reviewed #368.
-Rollback revision: `93158d0d`, the revision of `main` before the stack merged; deploying it rolls the site back. In
-git, first revert the merge of [#371](https://github.com/kwilson21/thesuperhuman.us/pull/371) (this record's merge
-facts and the plans marked merged edit files the area added or changed), then `git revert -m 1 4330705d`. Tested on a
-copy of `main` with #371 merged: both reverts applied cleanly and the tree then equals `93158d0d`; reverting
-`4330705d` alone stops with conflicts in both plans and in this record.
+The stack merges `main` at `56f14759` (into #368 as `507aa44d`, then into #370 as `e4b37554`). Merged on 2026-11-22,
+both with the `conversion` label: #370 into #368 at 23:15:45 UTC as `aafb3ef3` (head `763ced6a`), and #368 into `main`
+at 23:19:37 UTC as `4330705d` (head `aafb3ef3`). `main` had moved to `93158d0d` (#363, one record document) since the
+stack last merged it; the merge commit includes it. Target: production `https://thesuperhuman.us` Decisions: Kazon
+Wilson (below). Implementation and its review passes were done with Claude Code; Codex reviewed #368 and #370. Rollback
+revision: `93158d0d`, the revision of `main` before the stack merged; deploying it rolls the site back. In git, first
+revert the merge of [#371](https://github.com/kwilson21/thesuperhuman.us/pull/371) (this record's merge facts and the
+plans marked merged edit files the area added or changed), then `git revert -m 1 4330705d`. Tested on a copy of `main`
+with #371 merged: both reverts applied cleanly and the tree then equals `93158d0d`; reverting `4330705d` alone stops
+with conflicts in both plans and in this record.
 
 ## Scope
 
@@ -256,15 +255,15 @@ UNVERIFIED until checked:
 - **PASS · Checks and neutrality.** See "Golden neutrality" and "Evidence".
 - **N/A · Bindings, migrations.** None.
 - **UNVERIFIED, with no owner-accepted exception · The expiry gap.** Under "Owner decisions".
-- **PASS · Reviews.** #368: Codex's code and security reviews found nothing; an independent review found a guard
-  missing for a counted row whose count is null (the store now answers no count, refused as the old `Infinity` was) and
-  a test gap (differential cases at the exact character limits), both fixed in `2aa90db6`; a review of the merge of
-  `main` and the store's move into `studio-signin-store.ts` found two inaccurate comments, fixed in `3502382a`. #370:
-  Codex's code and security reviews found nothing; an independent review found that a defect in the background
-  delivery was no longer caught as today (fixed with `catchDefect` and the email built inside the deferred effect), that
-  a short code key read the clock before its 503 (fixed: the key is asked first), and two unobservable differences now
-  recorded above, fixed in `567da5bb`. A review of those fixes found the store header still overclaimed for the access
-  closure's statements and the record missed the discard's reuse of the issue's hashes, fixed in `098120f2` and
+- **PASS · Reviews.** #368: Codex's code and security reviews found nothing; an independent review found a guard missing
+  for a counted row whose count is null (the store now answers no count, refused as the old `Infinity` was) and a test
+  gap (differential cases at the exact character limits), both fixed in `2aa90db6`; a review of the merge of `main` and
+  the store's move into `studio-signin-store.ts` found two inaccurate comments, fixed in `3502382a`. #370: Codex's code
+  and security reviews found nothing; an independent review found that a defect in the background delivery was no longer
+  caught as today (fixed with `catchDefect` and the email built inside the deferred effect), that a short code key read
+  the clock before its 503 (fixed: the key is asked first), and two unobservable differences now recorded above, fixed
+  in `520b2329` and recorded in `567da5bb`. A review of those fixes found the store header still overclaimed for the
+  access closure's statements and the record missed the discard's reuse of the issue's hashes, fixed in `098120f2` and
   `763ced6a`, which change comments and this record only and were checked against those two points. CI on each final
   head before its merge: #370 `763ced6a` and #368 `098120f2`, then #368 `aafb3ef3` after #370 merged into it, each with
   all 20 check runs succeeding, `neutrality` and the Workers preview build among them.
