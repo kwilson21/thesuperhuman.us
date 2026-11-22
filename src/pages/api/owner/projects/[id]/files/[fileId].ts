@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import {
 	checkFileAction,
 	fileNotPublished,
+	fileNotRevoked,
 	filePublicationUnavailable,
 	filePublishUnavailable,
 	portalOff,
@@ -27,8 +28,9 @@ import {
 export const prerender = false;
 const ROUTE = "/api/owner/projects/[id]/files/[fileId]";
 
-/** A failure of the database or of R2, logged once without what was sent, and answered with the route's fixed sentence. The revoke says it too. */
+/** A failure of the database or of R2, logged once without what was sent, and answered with the route's fixed sentence: the publish's, or the revoke's own. */
 const failed = loggedAnswer(ROUTE, fileNotPublished);
+const failedRevoke = loggedAnswer(ROUTE, fileNotRevoked);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
@@ -58,6 +60,11 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 			failed(failure.failure),
 	};
 
+	const loggedRevoke = {
+		AudioProjectStoreFailed: (failure: { readonly failure: unknown }) =>
+			failedRevoke(failure.failure),
+	};
+
 	if (command.value.action === "revoke") {
 		const program = revokeProjectFile({
 			requestId,
@@ -79,13 +86,13 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 							409,
 						),
 					),
-				...logged,
+				...loggedRevoke,
 			}),
 		);
 
 		return runRoute(Context.merge(bindings.services, notices), program, {
 			route: ROUTE,
-			answer: fileNotPublished,
+			answer: fileNotRevoked,
 		});
 	}
 
