@@ -215,3 +215,74 @@ export const projectFileBytes = (
 		headers,
 	});
 };
+
+// ---- the access, invitation and updates routes ----
+
+/** The access route has no database or project id on this deployment: a deliberate 503. */
+export const projectAccessUnavailable = () =>
+	Response.json(
+		{ ok: false, error: "Project access is temporarily unavailable." },
+		{ status: 503 },
+	);
+
+/** A body that is not the access route's one command. */
+export const checkAccessCommand = () =>
+	Response.json({ ok: false }, { status: 400 });
+
+/** The access could not be closed: a failure of the database, or a defect. 500, logged once by the route. */
+export const accessNotClosed = () =>
+	Response.json(
+		{
+			ok: false,
+			error: "Project access could not be closed. Please try again.",
+		},
+		{ status: 500 },
+	);
+
+/** The invitation route has no database, project id or execution context: a deliberate 503. */
+export const projectInvitationsUnavailable = () =>
+	Response.json(
+		{ ok: false, error: "Project invitations are temporarily unavailable." },
+		{ status: 503 },
+	);
+
+/** A body that is not the invitation route's command. */
+export const checkInvitation = () =>
+	Response.json(
+		{ ok: false, error: "Check the invitation and try again." },
+		{ status: 400 },
+	);
+
+/** The invitation could not be queued: a failure of the database, or a defect. 500, logged once by the route. */
+export const invitationNotQueued = () =>
+	Response.json(
+		{
+			ok: false,
+			error: "The invitation could not be queued. Please try again.",
+		},
+		{ status: 500 },
+	);
+
+/** The updates route has no database, project id or execution context: a deliberate 503. */
+export const projectUpdatesUnavailable = () =>
+	Response.json(
+		{ ok: false, error: "Project updates are temporarily unavailable." },
+		{ status: 503 },
+	);
+
+/** A body that is not one of the updates route's commands. */
+export const checkUpdate = () =>
+	Response.json(
+		{ ok: false, error: "Check the update and try again." },
+		{ status: 400 },
+	);
+
+/** The update could not be saved: a failure of the database, or a defect. 500, logged once by the route. */
+export const updateNotSaved = () =>
+	Response.json(
+		{
+			ok: false,
+			error: "The project update could not be saved. Please try again.",
+		},
+		{ status: 500 },
+	);

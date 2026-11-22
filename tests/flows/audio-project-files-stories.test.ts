@@ -111,9 +111,18 @@ describe("publishing a file", () => {
 				file_id: "r1",
 			},
 		]);
-		expect(run.background.delivered).toEqual([
-			"done" in result ? result.done : -1,
+		expect(run.background.mails).toEqual([
+			{
+				to: "artist@example.com",
+				subject: "Your studio project has an update",
+				kind: "update",
+			},
 		]);
+		expect(
+			world.sql
+				.prepare("SELECT notification_status FROM audio_project_updates")
+				.get(),
+		).toEqual({ notification_status: "sent" });
 	});
 
 	it("refuses a blank owner before reading anything, an object that is missing or the wrong size, and a project that cannot take it", async () => {
@@ -251,7 +260,7 @@ describe("revoking a file", () => {
 				notification_status: "pending",
 			},
 		]);
-		expect(run.background.delivered).toHaveLength(1);
+		expect(run.background.mails).toHaveLength(1);
 
 		expect(await revoke(world, "r1", "Again").ended).toEqual({
 			refused: "FileNotRevocable",

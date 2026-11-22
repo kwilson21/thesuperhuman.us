@@ -5,7 +5,8 @@ import {
 	AudioBucket,
 	Background,
 	MusicDb,
-	ProjectUpdateNotice,
+	StudioNoticeMail,
+	type StudioNoticeOutcome,
 } from "../../src/server/services";
 import { double, partial } from "./doubles";
 import { musicWorld } from "./music-world";
@@ -100,9 +101,9 @@ export function memoryBucket(members: Partial<R2Bucket> = {}) {
 	return { bucket, objects, deleted };
 }
 
-/** What the file flows start in the background: the notices they ask for, and the fixed lines they log. */
-export function backgroundWorld() {
-	const delivered: number[] = [];
+/** What the flows start in the background, and the studio notices they send: each is recorded, and the provider says `answer`. */
+export function backgroundWorld(answer: StudioNoticeOutcome = "sent") {
+	const mails: { to: string; subject: string; kind: string }[] = [];
 	const defers: number[] = [];
 
 	const services = Context.merge(
@@ -113,15 +114,17 @@ export function backgroundWorld() {
 					defers.push(work.length);
 				}).pipe(Effect.andThen(Effect.all(work, { discard: true }))),
 		}),
-		Context.make(ProjectUpdateNotice, {
-			deliver: (updateId) =>
+		Context.make(StudioNoticeMail, {
+			send: (notice) =>
 				Effect.sync(() => {
-					delivered.push(updateId);
+					mails.push(notice);
+
+					return answer;
 				}),
 		}),
 	);
 
-	return { services, delivered, defers };
+	return { services, mails, defers };
 }
 
 /** The services of a flow that reads the database and the bucket. */

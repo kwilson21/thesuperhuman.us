@@ -9,12 +9,11 @@ import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import type { IntakeInput } from "../lib/audio-intake";
-import { deliverProjectInvitation } from "../lib/audio-project-invitations";
-import { deliverProjectUpdateNotice } from "../lib/audio-project-updates";
 import {
 	sendAudioMessage,
 	sendOwnerRequestNotice,
 	sendSoftwareRequestNotice,
+	sendStudioSignInNotice,
 } from "../lib/audio-resend";
 import type { StoredSoftwarePath } from "../lib/software-inquiry";
 import type { AudioPayment } from "../lib/audio-payments";
@@ -600,8 +599,9 @@ export class ProjectInvitationFailed extends Data.TaggedError(
 ) {}
 
 /**
- * The studio invitation for a request whose client portal is on (src/lib/audio-project-invitations.ts
- * `deliverProjectInvitation`, which the owner routes share). Best effort in the flow, as the owner notice is.
+ * The studio invitation for a request whose client portal is on (the invitation delivery flow in
+ * src/server/flows/audio-project-notices.ts, which the owner route shares; its live service is built there). Best effort in the
+ * flow, as the owner notice is.
  */
 export class ProjectInvitation extends Context.Service<
 	ProjectInvitation,
@@ -612,42 +612,57 @@ export class ProjectInvitation extends Context.Service<
 	}
 >()("site/ProjectInvitation") {}
 
-/** The studio invitation through the project store in `db` and Resend, with the env the request gives. */
-export const liveProjectInvitation = (db: D1Database, env: Env) =>
-	Context.make(ProjectInvitation, {
-		deliver: (requestId) =>
-			Effect.tryPromise({
-				try: () => deliverProjectInvitation(db, requestId, env),
-				catch: () => new ProjectInvitationFailed(),
-			}),
-	});
-
-/** The studio update notice could not be delivered or its state is uncertain. */
-export class ProjectUpdateNoticeFailed extends Data.TaggedError(
-	"ProjectUpdateNoticeFailed",
+/** The studio notice could not be sent: the provider call itself failed. */
+export class StudioNoticeMailFailed extends Data.TaggedError(
+	"StudioNoticeMailFailed",
 ) {}
 
-/**
- * The email of one stored update to the client (src/lib/audio-project-updates.ts `deliverProjectUpdateNotice`, which claims
- * the notice, finds the recipient and sends). A file's publish and revoke start it in the background.
- */
-export class ProjectUpdateNotice extends Context.Service<
-	ProjectUpdateNotice,
-	{
-		readonly deliver: (
-			updateId: number,
-		) => Effect.Effect<void, ProjectUpdateNoticeFailed>;
-	}
->()("site/ProjectUpdateNotice") {}
+/** What the provider did with a studio notice: sent it, refused it, did not answer (it may or may not have gone out), or was never asked. */
+export type StudioNoticeOutcome =
+	| "sent"
+	| "refused"
+	| "uncertain"
+	| "unconfigured";
 
-/** The update notice through the project store in `db` and Resend, with the env the request gives. */
-export const liveProjectUpdateNotice = (db: D1Database, env: Env) =>
-	Context.make(ProjectUpdateNotice, {
-		deliver: (updateId) =>
-			Effect.tryPromise({
-				try: () => deliverProjectUpdateNotice(db, updateId, env),
-				catch: () => new ProjectUpdateNoticeFailed(),
-			}),
+/**
+ * The email of a studio notice to the client, the invitation or an update (src/lib/audio-resend.ts `sendStudioSignInNotice`).
+ * Not asking is part of the answer: with no key or from address on this deployment the provider is never called. A refusal and
+ * an answer that never came are outcomes; only the call itself failing is a failure.
+ */
+export class StudioNoticeMail extends Context.Service<
+	StudioNoticeMail,
+	{
+		readonly send: (notice: {
+			readonly to: string;
+			readonly subject: string;
+			readonly kind: "invitation" | "update";
+		}) => Effect.Effect<StudioNoticeOutcome, StudioNoticeMailFailed>;
+	}
+>()("site/StudioNoticeMail") {}
+
+/** The studio notice through Resend, with the env the request gives. */
+export const liveStudioNoticeMail = (env: Env) =>
+	Context.make(StudioNoticeMail, {
+		send: (notice) =>
+			env.RESEND_API_KEY && env.CONTACT_FROM_EMAIL
+				? Effect.tryPromise({
+						try: () =>
+							sendStudioSignInNotice(
+								env.RESEND_API_KEY ?? "",
+								env.CONTACT_FROM_EMAIL ?? "",
+								notice.to,
+								notice.subject,
+								notice.kind,
+								env.SITE_ORIGIN,
+							),
+						catch: () => new StudioNoticeMailFailed(),
+					}).pipe(
+						Effect.map(
+							(sent): StudioNoticeOutcome =>
+								sent.uncertain ? "uncertain" : sent.ok ? "sent" : "refused",
+						),
+					)
+				: Effect.succeed("unconfigured"),
 	});
 
 /** What the provider did with the client's copy: sent it, refused it, did not answer (it may or may not have gone out), or was never asked. */

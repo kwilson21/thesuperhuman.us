@@ -1,13 +1,13 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
-import { revokeProjectAccess } from "~/lib/audio-project-revocation";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { revokeProjectAccess as revokeAccessFlow } from "~/server/flows/audio-project-access";
+import { MusicDb } from "~/server/services";
 import { double } from "../helpers/doubles";
 import { sqliteD1 } from "../helpers/sqlite-d1";
-import {
-	failingRetiredCleanup,
-	retiredCleanupLogLine,
-} from "../helpers/retired-codes-failure";
+import { failingRetiredCleanup } from "../helpers/retired-codes-failure";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -15,6 +15,30 @@ const schema = readFileSync(
 	new URL("../../db/music.sql", import.meta.url),
 	"utf8",
 );
+
+/** Closes a project's access through the flow: true when it closed, false when it was closed already; a failed batch rejects. */
+async function revokeProjectAccess(
+	db: D1Database,
+	requestId: string,
+	actor: string,
+	now: Date,
+): Promise<boolean> {
+	return Effect.runPromise(
+		revokeAccessFlow({
+			requestId,
+			ownerEmail: actor,
+			now: () => now,
+			newId: () => crypto.randomUUID(),
+		}).pipe(
+			Effect.as(true),
+			Effect.catchTag("AccessAlreadyClosed", () => Effect.succeed(false)),
+			Effect.catchTag("AudioProjectStoreFailed", (failure) =>
+				Effect.die(failure.failure),
+			),
+			Effect.provideContext(Context.make(MusicDb, db)),
+		),
+	);
+}
 
 const now = new Date("2026-09-22T12:00:00Z");
 
@@ -195,7 +219,7 @@ it("still closes access when the retired sign-in codes table has been dropped", 
 
 // The cleanup of the retired table is best effort: the revocation has committed, so a failure there must not be reported
 // as a failed revocation.
-it("closes access and answers true when the retired-table cleanup fails, and logs a fixed line", async () => {
+it("closes access and answers true when the retired-table cleanup fails, and logs it once", async () => {
 	const { sql, db } = fixture();
 	const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -214,7 +238,8 @@ it("closes access and answers true when the retired-table cleanup fails, and log
 			)
 			.get(),
 	).toEqual({ revoked_at: now.toISOString() });
-	expect(log).toHaveBeenCalledWith(retiredCleanupLogLine);
+	expect(log).toHaveBeenCalledTimes(1);
+	expect(String(log.mock.calls[0]?.[0])).toContain("retired sign-in codes");
 	expect(JSON.stringify(log.mock.calls)).not.toContain("example.com");
 	log.mockRestore();
 	sql.close();

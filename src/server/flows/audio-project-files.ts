@@ -29,7 +29,10 @@ import {
 	revokeActor,
 	revokeInProject,
 } from "../rules/audio-project-files";
-import { Background, ProjectUpdateNotice } from "../services";
+import {
+	deliverInBackground,
+	deliverUpdateNotice,
+} from "./audio-project-notices";
 
 /** The first and every later try: the facts already read the first time, a fresh read after. */
 const firstThenFresh = <Facts, Failure, Needs>(
@@ -56,23 +59,6 @@ const drawnOnce = (draw: () => string) =>
 					: Effect.succeed(already),
 			),
 		);
-	});
-
-/** The client's notice of an update, started in the background; a failure of it is the fixed line `uncertain` says. */
-const noticeInBackground = (updateId: number, uncertain: string) =>
-	Effect.gen(function* () {
-		const background = yield* Background;
-		const notice = yield* ProjectUpdateNotice;
-
-		yield* background.defer([
-			notice
-				.deliver(updateId)
-				.pipe(
-					Effect.catchTag("ProjectUpdateNoticeFailed", () =>
-						Effect.sync(() => console.error(uncertain)),
-					),
-				),
-		]);
 	});
 
 /** The owner publishes an uploaded file to the client. The update's id. */
@@ -121,8 +107,8 @@ export const publishProjectFile = (input: {
 		if (saved.saved === null)
 			return yield* Effect.fail(new FileNotPublishable());
 
-		yield* noticeInBackground(
-			saved.saved,
+		yield* deliverInBackground(
+			deliverUpdateNotice({ updateId: saved.saved, now: input.now }),
 			"Studio file notice state is uncertain.",
 		);
 
@@ -188,8 +174,11 @@ export const revokeProjectFile = (input: {
 		if (saved.saved === null) return yield* Effect.fail(new FileNotRevocable());
 
 		if (saved.saved.updateId !== null)
-			yield* noticeInBackground(
-				saved.saved.updateId,
+			yield* deliverInBackground(
+				deliverUpdateNotice({
+					updateId: saved.saved.updateId,
+					now: input.now,
+				}),
 				"Studio file revocation notice state is uncertain.",
 			);
 	});

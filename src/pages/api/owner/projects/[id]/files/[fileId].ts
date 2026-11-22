@@ -21,7 +21,7 @@ import { runRoute } from "~/server/run";
 import {
 	bindingsOrUnavailable,
 	liveBackground,
-	liveProjectUpdateNotice,
+	liveStudioNoticeMail,
 } from "~/server/services";
 
 export const prerender = false;
@@ -51,10 +51,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 	const fileId = params.fileId;
 	const ownerEmail = locals.owner.email;
 
-	const notices = Context.merge(
-		liveProjectUpdateNotice(db, env),
-		liveBackground(ctx),
-	);
+	const notices = Context.merge(liveStudioNoticeMail(env), liveBackground(ctx));
 
 	const logged = {
 		AudioProjectStoreFailed: (failure: { readonly failure: unknown }) =>

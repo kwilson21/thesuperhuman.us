@@ -35,6 +35,21 @@ import type {
 } from "./rules/audio-project-files";
 import type { StoredUpload } from "./rules/audio-project-uploads";
 import type { StoredClientFile } from "./rules/studio-project-file";
+import {
+	endClientSessions,
+	deleteClientSigninCodes,
+} from "./studio-signin-store";
+import { KEEPING_STAGES } from "./machines/audio-project";
+import {
+	NOTICE_MOVES,
+	type NoticeStatus,
+	NOTICE_STATUSES,
+} from "./machines/project-notice";
+import type {
+	StoredNoticeRequest,
+	StoredRecipient,
+} from "./rules/audio-project-notices";
+import type { StoredOwnerState } from "./rules/audio-project-updates";
 import type {
 	StoredDecision,
 	StoredFile,
@@ -1185,3 +1200,571 @@ export const abortMultipart = (upload: StoredUpload) =>
 				? new MultipartGone({ failure: cause })
 				: objectFailure(cause),
 	);
+
+// ---- access, notices and updates (docs/plans/2026-11-audio-projects-conversion.md, section 4) ----
+
+/** `column IN ('a','b')`, the stages a move is allowed from, as the machine lists them. */
+const stagesIn = (column: string, stages: readonly ProjectStage[]) =>
+	`${column} IN (${stages.map(stageLiteral).join(",")})`;
+
+/** `column IN ('a','b')` for notice statuses a move is allowed from. */
+const noticeIn = (column: string, statuses: readonly NoticeStatus[]) =>
+	`${column} IN (${statuses
+		.map((status) => {
+			if (!NOTICE_STATUSES.includes(status))
+				throw new Error(`Not a status the machine names: ${status}`);
+
+			return `'${status}'`;
+		})
+		.join(",")})`;
+
+/**
+ * AR1 to AR4 in ONE batch (one transaction): the project's access closes while it is open, the client's sessions end and the
+ * sign-in codes of the client the request names are deleted (the studio sign-in store's statements, linked to this
+ * revocation by its id), and the audit row is written. True when AR1 changed the project, false when another request closed it
+ * first.
+ */
+export const revokeAccessBatch = (write: {
+	readonly requestId: string;
+	readonly actor: string;
+	readonly at: string;
+	readonly revocationId: string;
+}) =>
+	asked(async (db) => {
+		const [changed] = await db.batch([
+			db
+				.prepare(`UPDATE audio_projects SET revoked_at=?,updated_at=?,access_revocation_id=?
+      WHERE request_id=? AND revoked_at IS NULL RETURNING request_id`)
+				.bind(write.at, write.at, write.revocationId, write.requestId),
+			endClientSessions(db, write.requestId, write.revocationId, write.at),
+			deleteClientSigninCodes(db, write.requestId, write.revocationId),
+			db
+				.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'revoked',?,? FROM audio_projects WHERE request_id=? AND access_revocation_id=?`)
+				.bind(write.actor, write.at, write.requestId, write.revocationId),
+		]);
+
+		return (changed?.results.length ?? 0) > 0;
+	});
+
+/** What the queue and the claim of a notice read of the request. */
+const NoticeRequestRow = Schema.Struct({
+	kind: text,
+	status: text,
+	email: text,
+});
+
+const NoticeStateRow = Schema.Struct({
+	status: Schema.Literals(NOTICE_STATUSES),
+	attempted_at: maybeText,
+	request_id: text,
+});
+
+const OpenRow = Schema.Struct({ revoked_at: maybeText });
+
+const RecipientRow = Schema.Struct({
+	email: text,
+	kind: text,
+	status: text,
+	revoked_at: maybeText,
+});
+
+const RequestIdRow = Schema.Struct({ request_id: text });
+
+/** What a notice's queue and claim read: the notice's status, the project's access and the request. */
+export type NoticeFacts = {
+	readonly notice: {
+		readonly status: NoticeStatus;
+		readonly attempted_at: string | null;
+	} | null;
+	readonly project: { readonly revoked_at: string | null } | null;
+	readonly request: StoredNoticeRequest | null;
+};
+
+/** I-read: plain reads in ONE batch (one snapshot): the invitation's status, the project's access and the request. */
+export const readInvitationFacts = (requestId: string) =>
+	batched((db) => [
+		db
+			.prepare(
+				"SELECT invitation_status AS status,invitation_attempted_at AS attempted_at,request_id FROM audio_projects WHERE request_id=?",
+			)
+			.bind(requestId),
+		db
+			.prepare("SELECT revoked_at FROM audio_projects WHERE request_id=?")
+			.bind(requestId),
+		db
+			.prepare("SELECT kind,status,email FROM owner_requests WHERE id=?")
+			.bind(requestId),
+	]).pipe(
+		Effect.flatMap(([notices, projects, requests]) =>
+			Effect.all({
+				notice: rowsOf(NoticeStateRow, notices ?? []),
+				project: rowsOf(OpenRow, projects ?? []),
+				request: rowsOf(NoticeRequestRow, requests ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): NoticeFacts => ({
+				notice: rows.notice[0] ?? null,
+				project: rows.project[0] ?? null,
+				request: rows.request[0] ?? null,
+			}),
+		),
+	);
+
+/** N-read: plain reads in ONE batch: an update's notice status, the project's access and the request. */
+export const readUpdateNoticeFacts = (requestId: string, updateId: number) =>
+	batched((db) => [
+		db
+			.prepare(
+				"SELECT notification_status AS status,notification_attempted_at AS attempted_at,request_id FROM audio_project_updates WHERE id=? AND request_id=?",
+			)
+			.bind(updateId, requestId),
+		db
+			.prepare("SELECT revoked_at FROM audio_projects WHERE request_id=?")
+			.bind(requestId),
+		db
+			.prepare("SELECT kind,status,email FROM owner_requests WHERE id=?")
+			.bind(requestId),
+	]).pipe(
+		Effect.flatMap(([notices, projects, requests]) =>
+			Effect.all({
+				notice: rowsOf(NoticeStateRow, notices ?? []),
+				project: rowsOf(OpenRow, projects ?? []),
+				request: rowsOf(NoticeRequestRow, requests ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): NoticeFacts => ({
+				notice: rows.notice[0] ?? null,
+				project: rows.project[0] ?? null,
+				request: rows.request[0] ?? null,
+			}),
+		),
+	);
+
+/** What a notice's queue writes. */
+export type QueueWrite = {
+	readonly confirmed: boolean;
+	readonly staleBefore: string;
+};
+
+/**
+ * I5, compare-and-set: the invitation is queued again while it is pending or failed, or sending after the owner confirmed it
+ * did not go out and the last attempt is past the cutoff, the project is open and the request is a service with an email that
+ * is not withdrawn. True when a row changed.
+ */
+export const queueInvitation = (requestId: string, write: QueueWrite) =>
+	returned(RequestIdRow, (db) =>
+		db
+			.prepare(`UPDATE audio_projects SET invitation_status='pending',invitation_attempted_at=NULL
+    WHERE request_id=? AND (${noticeIn("invitation_status", NOTICE_MOVES.QUEUE)} OR
+      (${noticeIn("invitation_status", NOTICE_MOVES.QUEUE_RETRYABLE)} AND ?=1 AND invitation_attempted_at<=?)) AND revoked_at IS NULL
+      AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND kind='service' AND status<>'withdrawn' AND email<>'')
+    RETURNING request_id`)
+			.bind(requestId, write.confirmed ? 1 : 0, write.staleBefore, requestId),
+	).pipe(Effect.map((row) => row !== null));
+
+/**
+ * N5, compare-and-set: an update's notice is queued again under the same conditions as the invitation's, with no kind check on
+ * the request. True when a row changed.
+ */
+export const queueUpdateNotice = (
+	requestId: string,
+	updateId: number,
+	write: QueueWrite,
+) =>
+	returned(IdRow, (db) =>
+		db
+			.prepare(`UPDATE audio_project_updates SET notification_status='pending',notification_attempted_at=NULL
+    WHERE id=? AND request_id=? AND (${noticeIn("notification_status", NOTICE_MOVES.QUEUE)} OR
+      (${noticeIn("notification_status", NOTICE_MOVES.QUEUE_RETRYABLE)} AND ?=1 AND notification_attempted_at<=?))
+      AND EXISTS(SELECT 1 FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+        WHERE p.request_id=? AND p.revoked_at IS NULL AND r.status<>'withdrawn' AND r.email<>'')
+    RETURNING id`)
+			.bind(
+				updateId,
+				requestId,
+				write.confirmed ? 1 : 0,
+				write.staleBefore,
+				requestId,
+			),
+	).pipe(Effect.map((row) => row !== null));
+
+/**
+ * I1, compare-and-set: the invitation is claimed while it is pending, the project is open and the request is a service with
+ * an email that is not withdrawn. The request's id, or null when nothing was claimed.
+ */
+export const claimInvitation = (requestId: string, at: string) =>
+	returned(RequestIdRow, (db) =>
+		db
+			.prepare(`UPDATE audio_projects SET invitation_status='sending',invitation_attempted_at=?
+    WHERE request_id=? AND ${noticeIn("invitation_status", NOTICE_MOVES.CLAIM)} AND revoked_at IS NULL
+      AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND kind='service' AND status<>'withdrawn' AND email<>'')
+    RETURNING request_id`)
+			.bind(at, requestId, requestId),
+	).pipe(Effect.map((row) => row?.request_id ?? null));
+
+/**
+ * N1, compare-and-set: an update's notice is claimed while it is pending. It has no access condition: a closed project's
+ * notice is claimed, finds no recipient and ends failed. The notice's request id, or null.
+ */
+export const claimUpdateNotice = (updateId: number, at: string) =>
+	returned(RequestIdRow, (db) =>
+		db
+			.prepare(`UPDATE audio_project_updates SET notification_status='sending',notification_attempted_at=?
+    WHERE id=? AND ${noticeIn("notification_status", NOTICE_MOVES.CLAIM)} RETURNING request_id`)
+			.bind(at, updateId),
+	).pipe(Effect.map((row) => row?.request_id ?? null));
+
+/** I2 and N2: plain read: the request and its project's access, whom a notice goes to. Null with no project. */
+export const readRecipient = (requestId: string) =>
+	readAll(RecipientRow, (db) =>
+		db
+			.prepare(`SELECT r.email,r.kind,r.status,p.revoked_at FROM owner_requests r JOIN audio_projects p ON p.request_id=r.id
+      WHERE r.id=?`)
+			.bind(requestId),
+	).pipe(Effect.map((rows): StoredRecipient | null => rows[0] ?? null));
+
+/** I3, compare-and-set: the invitation is marked failed while it is sending and the project is open (the recipient read failed). */
+export const failInvitation = (requestId: string) =>
+	asked((db) =>
+		db
+			.prepare(`UPDATE audio_projects SET invitation_status='failed'
+      WHERE request_id=? AND ${noticeIn("invitation_status", NOTICE_MOVES.FAIL)} AND revoked_at IS NULL`)
+			.bind(requestId)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** N3, compare-and-set: an update's notice is marked failed while it is sending, whatever the project's access. */
+export const failUpdateNotice = (updateId: number) =>
+	asked((db) =>
+		db
+			.prepare(`UPDATE audio_project_updates SET notification_status='failed'
+      WHERE id=? AND ${noticeIn("notification_status", NOTICE_MOVES.FAIL)}`)
+			.bind(updateId)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** I4, compare-and-set: the invitation's outcome, while it is sending and the project is open. A sent email just after a revoke leaves it sending. */
+export const settleInvitation = (
+	requestId: string,
+	outcome: {
+		readonly status: "sent" | "failed";
+		readonly sentAt: string | null;
+	},
+) =>
+	asked((db) =>
+		db
+			.prepare(`UPDATE audio_projects SET invitation_status=?,invitation_sent_at=?
+    WHERE request_id=? AND ${noticeIn("invitation_status", NOTICE_MOVES.SEND)} AND revoked_at IS NULL`)
+			.bind(outcome.status, outcome.sentAt, requestId)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** N4, compare-and-set: an update's notice outcome, while it is sending, whatever the project's access. */
+export const settleUpdateNotice = (
+	updateId: number,
+	outcome: {
+		readonly status: "sent" | "failed";
+		readonly sentAt: string | null;
+	},
+) =>
+	asked((db) =>
+		db
+			.prepare(`UPDATE audio_project_updates SET notification_status=?,notification_sent_at=?
+    WHERE id=? AND ${noticeIn("notification_status", NOTICE_MOVES.SEND)}`)
+			.bind(outcome.status, outcome.sentAt, updateId)
+			.run(),
+	).pipe(Effect.asVoid);
+
+/** An update as the route answers it: the columns of `audio_project_updates` in the order the answer's JSON writes them. */
+const UPDATE_COLUMNS =
+	"id,request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at,notification_status,notification_attempted_at,file_id,milestone";
+
+const SavedUpdateRow = Schema.Struct({
+	id: Schema.Number,
+	request_id: text,
+	kind: Schema.Literals([
+		"accepted",
+		"progress",
+		"work_started",
+		"date_changed",
+	]),
+	body: text,
+	reason: Schema.NullOr(
+		Schema.Literals([
+			"protect_song",
+			"client_clarification",
+			"schedule_conflict",
+		]),
+	),
+	previous_due_at: maybeText,
+	new_due_at: maybeText,
+	actor: text,
+	created_at: text,
+	notification_status: Schema.Literals(NOTICE_STATUSES),
+	notification_attempted_at: maybeText,
+	file_id: maybeText,
+	milestone: Schema.NullOr(Schema.Literals(["revision_started", "completed"])),
+});
+
+export type SavedUpdate = typeof SavedUpdateRow.Type;
+
+const OwnerStateRow = Schema.Struct({
+	stage: text,
+	current_due_at: maybeText,
+	original_due_at: maybeText,
+	updated_at: text,
+	revoked_at: maybeText,
+	request_status: text,
+	email: text,
+	booking_status: maybeText,
+	balance_status: maybeText,
+});
+
+const VersionRow = Schema.Struct({ version: Version });
+
+/** What an owner's update reads: the project's state, the request and the payments, and the versions of the published files. */
+export type OwnerUpdateFacts = {
+	readonly state: StoredOwnerState | null;
+	readonly published: readonly { readonly version: "review" | "final" }[];
+};
+
+/** U17: plain reads in ONE batch (one snapshot): the project with its request and payments, and the published files. */
+export const readOwnerUpdateFacts = (requestId: string) =>
+	batched((db) => [
+		db
+			.prepare(`SELECT p.stage,p.current_due_at,p.original_due_at,p.updated_at,p.revoked_at,
+    r.status AS request_status,r.email,pay.booking_status,pay.balance_status
+    FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+    LEFT JOIN audio_payments pay ON pay.request_id=p.request_id WHERE p.request_id=?`)
+			.bind(requestId),
+		db
+			.prepare(
+				"SELECT version FROM audio_project_files WHERE request_id=? AND status='published'",
+			)
+			.bind(requestId),
+	]).pipe(
+		Effect.flatMap(([states, published]) =>
+			Effect.all({
+				states: rowsOf(OwnerStateRow, states ?? []),
+				published: rowsOf(VersionRow, published ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): OwnerUpdateFacts => ({
+				state: rows.states[0] ?? null,
+				published: rows.published,
+			}),
+		),
+	);
+
+/** What an owner's update writes, whichever action it is. */
+export type UpdateWrite = {
+	readonly actor: string;
+	readonly body: string;
+	readonly at: string;
+	/** The project's `updated_at` as read, which the write compares. */
+	readonly updatedAt: string;
+};
+
+/** U1, compare-and-set: a progress note, written while the stage takes one, the project is open and the request is not withdrawn. */
+export const addProgressNote = (requestId: string, write: UpdateWrite) =>
+	returned(SavedUpdateRow, (db) =>
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
+      SELECT p.request_id,'progress',?,?,? FROM audio_projects p JOIN owner_requests r ON r.id=p.request_id
+      WHERE p.request_id=? AND ${stagesIn("p.stage", KEEPING_STAGES.PROGRESS)}
+        AND p.revoked_at IS NULL AND r.status<>'withdrawn' RETURNING ${UPDATE_COLUMNS}`)
+			.bind(write.body, write.actor, write.at, requestId),
+	);
+
+/** The batch every stage-moving update runs: the guarded UPDATE, the client's update row and the audit row. The update row, or null when the guard changed nothing. */
+const savedBatch = (statements: (db: D1Database) => D1PreparedStatement[]) =>
+	asked(async (db) => {
+		const [changed, update] = await db.batch(statements(db));
+
+		return changed?.results.length ? (update?.results[0] ?? null) : null;
+	}).pipe(
+		Effect.flatMap((found) =>
+			found === null
+				? Effect.succeed(null)
+				: rowsOf(SavedUpdateRow, [found]).pipe(
+						Effect.map((rows) => rows[0] ?? null),
+					),
+		),
+	);
+
+/**
+ * U2 to U4 in ONE batch: the project is accepted (compare-and-set on the stage, the `updated_at` read, an open project and a
+ * reviewed request), then the client's update and the audit row, each written only while that UPDATE changed the row
+ * (`changes()=1`).
+ */
+export const acceptProject = (
+	requestId: string,
+	write: UpdateWrite & { readonly dueDate: string },
+) => {
+	const to = stageLiteral(PROJECT_MOVES.ACCEPT.to);
+
+	return savedBatch((db) => [
+		db
+			.prepare(`UPDATE audio_projects SET stage=${to},original_due_at=?,current_due_at=?,updated_at=?
+        WHERE request_id=? AND ${stagesIn("stage", PROJECT_MOVES.ACCEPT.from)} AND updated_at=? AND revoked_at IS NULL
+        AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status='reviewed') RETURNING request_id`)
+			.bind(
+				write.dueDate,
+				write.dueDate,
+				write.at,
+				requestId,
+				write.updatedAt,
+				requestId,
+			),
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,new_due_at,actor,created_at)
+        SELECT request_id,'accepted',?,?,?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND original_due_at=? AND changes()=1 RETURNING ${UPDATE_COLUMNS}`)
+			.bind(
+				write.body,
+				write.dueDate,
+				write.actor,
+				write.at,
+				requestId,
+				write.at,
+				write.dueDate,
+			),
+		db
+			.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+        SELECT request_id,'accepted',?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND original_due_at=? AND changes()=1`)
+			.bind(write.actor, write.at, requestId, write.at, write.dueDate),
+	]);
+};
+
+/** U5 to U7 in ONE batch: work starts while the project is accepted, open, not withdrawn and the booking is paid. */
+export const startWork = (requestId: string, write: UpdateWrite) => {
+	const to = stageLiteral(PROJECT_MOVES.START_WORK.to);
+
+	return savedBatch((db) => [
+		db
+			.prepare(`UPDATE audio_projects SET stage=${to},updated_at=?
+        WHERE request_id=? AND ${stagesIn("stage", PROJECT_MOVES.START_WORK.from)} AND updated_at=? AND revoked_at IS NULL
+        AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn')
+        AND EXISTS(SELECT 1 FROM audio_payments WHERE request_id=? AND booking_status='paid') RETURNING request_id`)
+			.bind(write.at, requestId, write.updatedAt, requestId, requestId),
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at)
+        SELECT request_id,'work_started',?,?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1 RETURNING ${UPDATE_COLUMNS}`)
+			.bind(write.body, write.actor, write.at, requestId, write.at),
+		db
+			.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+        SELECT request_id,'stage-changed',?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1`)
+			.bind(write.actor, write.at, requestId, write.at),
+	]);
+};
+
+/** U8 to U10 in ONE batch: a revision begins while the review is ready and a review is still published (the guard keeps it). */
+export const beginRevision = (requestId: string, write: UpdateWrite) => {
+	const to = stageLiteral(PROJECT_MOVES.BEGIN_REVISION.to);
+
+	return savedBatch((db) => [
+		db
+			.prepare(`UPDATE audio_projects SET stage=${to},updated_at=?
+        WHERE request_id=? AND ${stagesIn("stage", PROJECT_MOVES.BEGIN_REVISION.from)} AND updated_at=? AND revoked_at IS NULL
+          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn')
+          AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='review' AND status='published')
+        RETURNING request_id`)
+			.bind(write.at, requestId, write.updatedAt, requestId, requestId),
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
+        SELECT request_id,'progress',?,?,?,'revision_started' FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1 RETURNING ${UPDATE_COLUMNS}`)
+			.bind(write.body, write.actor, write.at, requestId, write.at),
+		db
+			.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+        SELECT request_id,'stage-changed',?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1`)
+			.bind(write.actor, write.at, requestId, write.at),
+	]);
+};
+
+/** U11 to U13 in ONE batch: the project completes while the final is ready, both payments are paid and a final is still published (the guard keeps it). */
+export const completeProject = (requestId: string, write: UpdateWrite) => {
+	const to = stageLiteral(PROJECT_MOVES.COMPLETE.to);
+
+	return savedBatch((db) => [
+		db
+			.prepare(`UPDATE audio_projects SET stage=${to},completed_at=?,updated_at=?
+        WHERE request_id=? AND ${stagesIn("stage", PROJECT_MOVES.COMPLETE.from)} AND updated_at=? AND revoked_at IS NULL
+          AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status IN ('reviewed','resolved'))
+          AND EXISTS(SELECT 1 FROM audio_payments WHERE request_id=? AND booking_status='paid' AND balance_status='paid')
+          AND EXISTS(SELECT 1 FROM audio_project_files WHERE request_id=? AND version='final' AND status='published')
+        RETURNING request_id`)
+			.bind(
+				write.at,
+				write.at,
+				requestId,
+				write.updatedAt,
+				requestId,
+				requestId,
+				requestId,
+			),
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,actor,created_at,milestone)
+        SELECT request_id,'progress',?,?,?,'completed' FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1 RETURNING ${UPDATE_COLUMNS}`)
+			.bind(write.body, write.actor, write.at, requestId, write.at),
+		db
+			.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+        SELECT request_id,'completed',?,? FROM audio_projects
+        WHERE request_id=? AND stage=${to} AND updated_at=? AND changes()=1`)
+			.bind(write.actor, write.at, requestId, write.at),
+	]);
+};
+
+/** U14 to U16 in ONE batch: the due date moves while the project is not complete, is open and the request is not withdrawn. */
+export const reviseDate = (
+	requestId: string,
+	write: UpdateWrite & {
+		readonly dueDate: string;
+		readonly currentDueAt: string;
+		readonly reason: string;
+	},
+) =>
+	savedBatch((db) => [
+		db
+			.prepare(`UPDATE audio_projects SET current_due_at=?,updated_at=?
+      WHERE request_id=? AND current_due_at=? AND updated_at=? AND ${stagesIn("stage", KEEPING_STAGES.REVISE_DATE)} AND revoked_at IS NULL
+        AND EXISTS(SELECT 1 FROM owner_requests WHERE id=? AND status<>'withdrawn')
+      RETURNING request_id`)
+			.bind(
+				write.dueDate,
+				write.at,
+				requestId,
+				write.currentDueAt,
+				write.updatedAt,
+				requestId,
+			),
+		db
+			.prepare(`INSERT INTO audio_project_updates(request_id,kind,body,reason,previous_due_at,new_due_at,actor,created_at)
+      SELECT request_id,'date_changed',?,?,?,?,?,? FROM audio_projects
+      WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1 RETURNING ${UPDATE_COLUMNS}`)
+			.bind(
+				write.body,
+				write.reason,
+				write.currentDueAt,
+				write.dueDate,
+				write.actor,
+				write.at,
+				requestId,
+				write.dueDate,
+				write.at,
+			),
+		db
+			.prepare(`INSERT INTO audio_project_audit(request_id,action,actor,occurred_at)
+      SELECT request_id,'date-changed',?,? FROM audio_projects
+      WHERE request_id=? AND current_due_at=? AND updated_at=? AND changes()=1`)
+			.bind(write.actor, write.at, requestId, write.dueDate, write.at),
+	]);
