@@ -187,7 +187,7 @@ export const deliverUpdateNotice = (input: {
 
 /**
  * Starts a delivery in the background (ctx.waitUntil), at this point of the request. The delivery runs with the services the
- * request has; a failure of it, whatever it was, leaves the notice where it was and logs the one fixed line `uncertain` says.
+ * request has; a failure or a defect of it leaves the notice where it was and logs the one fixed line `uncertain` says.
  */
 export const deliverInBackground = (
 	delivery: Effect.Effect<
@@ -210,6 +210,8 @@ export const deliverInBackground = (
 					StudioNoticeMailFailed: () =>
 						Effect.sync(() => console.error(uncertain)),
 				}),
+				// A defect is the same state: the old `.catch` printed the line for any rejection, and the task settles fulfilled.
+				Effect.catchDefect(() => Effect.sync(() => console.error(uncertain))),
 			),
 		]);
 	});
