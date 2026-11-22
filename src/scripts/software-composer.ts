@@ -558,6 +558,7 @@ export function setupSoftwareComposer() {
 
 		if (objectUrl) URL.revokeObjectURL(objectUrl);
 		objectUrl = URL.createObjectURL(image);
+
 		const previewImage = preview.querySelector<HTMLImageElement>(
 			"[data-preview-image]",
 		)!;

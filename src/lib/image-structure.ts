@@ -256,6 +256,7 @@ function exifOrientation(b: Uint8Array, start: number) {
 	const little = order === "II";
 
 	if (view.getUint16(start + 2, little) !== 42) return undefined;
+
 	const ifd = start + view.getUint32(start + 4, little),
 		count = view.getUint16(ifd, little);
 
@@ -368,6 +369,7 @@ function webpSize(b: Uint8Array) {
 
 		if (orientation !== undefined && orientation !== 1) return null;
 	}
+
 	const [first] = chunks,
 		body = first.body;
 
@@ -395,6 +397,7 @@ function webpSize(b: Uint8Array) {
 
 	if (first.type === "VP8L") {
 		if (first.length < 5 || b[body] !== 0x2f) return null;
+
 		const bits =
 			b[body + 1] |
 			(b[body + 2] << 8) |
