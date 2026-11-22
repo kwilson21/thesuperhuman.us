@@ -1,6 +1,6 @@
 import type { APIContext } from "astro";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { double, partial } from "../helpers/doubles";
+import { double, fakeD1, partial } from "../helpers/doubles";
 import type { JsonObject } from "../helpers/json";
 import type { TestRuntime } from "../helpers/runtime";
 import { sqliteD1, type SqliteDatabase } from "../helpers/sqlite-d1";
@@ -20,7 +20,14 @@ const ROUTE_IP = "0.0.0.0";
 
 type StudioContext = APIContext & { pending: Promise<unknown>[] };
 
-type Options = { enabled?: boolean; database?: D1Database; cookie?: string };
+type Options = {
+	enabled?: boolean;
+	database?: D1Database;
+	cookie?: string;
+	codeKey?: string;
+	// No execution context, as a request outside Workers has.
+	noContext?: boolean;
+};
 
 let sql: SqliteDatabase, db: D1Database;
 
@@ -75,7 +82,13 @@ async function exhaustAllowance(scope: string, subject: string) {
 function context(
 	path: string,
 	body: JsonObject,
-	{ enabled = true, database = db, cookie }: Options = {},
+	{
+		enabled = true,
+		database = db,
+		cookie,
+		codeKey = CODE_KEY,
+		noContext = false,
+	}: Options = {},
 ): StudioContext {
 	const pending: Promise<unknown>[] = [];
 
@@ -86,29 +99,31 @@ function context(
 
 	if (cookie) headers.set("cookie", cookie);
 
+	const runtime = partial<TestRuntime>({
+		env: partial<TestRuntime["env"]>({
+			AUDIO_CLIENT_PORTAL_ENABLED: enabled ? "true" : "false",
+			AUDIO_CLIENT_CODE_KEY: codeKey,
+			MUSIC_DB: database,
+			TURNSTILE_SECRET_KEY: "test",
+			RESEND_API_KEY: "test",
+			CONTACT_FROM_EMAIL: "noreply@example.com",
+		}),
+	});
+
+	if (!noContext)
+		runtime.ctx = double<ExecutionContext>({
+			waitUntil: vi.fn((work: Promise<unknown>) => {
+				pending.push(work);
+			}),
+		});
+
 	return partial<StudioContext>({
 		request: new Request(`https://thesuperhuman.us${path}`, {
 			method: "POST",
 			headers,
 			body: JSON.stringify(body),
 		}),
-		locals: {
-			runtime: partial<TestRuntime>({
-				ctx: double<ExecutionContext>({
-					waitUntil: vi.fn((work: Promise<unknown>) => {
-						pending.push(work);
-					}),
-				}),
-				env: partial<TestRuntime["env"]>({
-					AUDIO_CLIENT_PORTAL_ENABLED: enabled ? "true" : "false",
-					AUDIO_CLIENT_CODE_KEY: CODE_KEY,
-					MUSIC_DB: database,
-					TURNSTILE_SECRET_KEY: "test",
-					RESEND_API_KEY: "test",
-					CONTACT_FROM_EMAIL: "noreply@example.com",
-				}),
-			}),
-		},
+		locals: { runtime },
 		pending,
 	});
 }
@@ -166,6 +181,7 @@ beforeEach(() => {
 afterEach(() => {
 	sql.close();
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 describe("studio access routes", () => {
@@ -353,9 +369,10 @@ describe("studio access routes", () => {
 		).toEqual({ total: 0 });
 	});
 
-	it("clears the browser cookie when session revocation fails", async () => {
+	it("answers 500, clears the browser cookie and logs once when session revocation fails", async () => {
 		seedProject();
 		const token = await signIn();
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const failing = double<D1Database>({
 			prepare: () => {
@@ -367,9 +384,15 @@ describe("studio access routes", () => {
 		ctx.request.headers.set("cookie", `studio_session=${token}`);
 		const response = await signOut(ctx);
 
-		expect(response.status).toBe(503);
+		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({ ok: false, localSignedOut: true });
 		expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+		expect(errors).toHaveBeenCalledOnce();
+		expect(errors).toHaveBeenCalledWith(
+			"/api/studio/sign-out failed unexpectedly:",
+			"Error",
+			"Database unavailable",
+		);
 		expect(
 			sql
 				.prepare(
@@ -377,5 +400,214 @@ describe("studio access routes", () => {
 				)
 				.get(),
 		).toEqual({ total: 1 });
+	});
+});
+
+describe("studio sign-in faults", () => {
+	const SHORT_KEY = "k".repeat(31);
+	const PENDING = `__Host-studio_pending=${"1".repeat(64)}`;
+
+	const unavailable = {
+		ok: false,
+		error: "Studio sign-in is temporarily unavailable.",
+	};
+
+	// A database that refuses every use and records it, so a test can show a route made no statement.
+	function untouched() {
+		const prepare = vi.fn((): D1PreparedStatement => {
+			throw new Error("no statement expected");
+		});
+
+		return { prepare, database: fakeD1({ prepare }) };
+	}
+
+	// The real database, with every batch failing as D1 does when it is down.
+	const down = () =>
+		fakeD1({
+			prepare: (query) => db.prepare(query),
+			batch: async () => {
+				throw new Error("D1_ERROR: d1 down");
+			},
+		});
+
+	let errors: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		errors = vi.spyOn(console, "error").mockImplementation(() => {});
+	});
+
+	it("reads the code request's body before the code key, so a short key still answers a bad body with 400", async () => {
+		const { prepare, database } = untouched();
+
+		const invalid = await requestCode(
+			context(
+				"/api/studio/code",
+				{ email: "not an email", turnstileToken: "challenge" },
+				{ database, codeKey: SHORT_KEY },
+			),
+		);
+
+		const noToken = await requestCode(
+			context("/api/studio/code", { email }, { database, codeKey: SHORT_KEY }),
+		);
+
+		expect(invalid.status).toBe(400);
+		expect(await invalid.json()).toEqual({
+			ok: false,
+			error: "Enter a valid email address.",
+		});
+		expect(noToken.status).toBe(400);
+		expect(await noToken.json()).toEqual({
+			ok: false,
+			error: "Enter your email and complete the security check.",
+		});
+		expect(prepare).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+	});
+
+	it("answers a code request with a short code key with 503, before any statement or check, and logs nothing", async () => {
+		const { prepare, database } = untouched();
+
+		const response = await requestCode(
+			context(
+				"/api/studio/code",
+				{ email, turnstileToken: "challenge" },
+				{ database, codeKey: SHORT_KEY },
+			),
+		);
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual(unavailable);
+		expect(prepare).not.toHaveBeenCalled();
+		expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+		expect(errors).not.toHaveBeenCalled();
+	});
+
+	it("checks the pending cookie before the code key, so a short key still answers a missing cookie with 401", async () => {
+		const { prepare, database } = untouched();
+
+		const response = await completeCode(
+			context(
+				"/api/studio/session",
+				{ email, code: "12345678" },
+				{ database, codeKey: SHORT_KEY },
+			),
+		);
+
+		expect(response.status).toBe(401);
+		expect(prepare).not.toHaveBeenCalled();
+	});
+
+	it("answers an entry with a short code key with 503, before any statement, and logs nothing", async () => {
+		const { prepare, database } = untouched();
+
+		const response = await completeCode(
+			context(
+				"/api/studio/session",
+				{ email, code: "12345678" },
+				{ database, codeKey: SHORT_KEY, cookie: PENDING },
+			),
+		);
+
+		expect(response.status).toBe(503);
+		expect(await response.json()).toEqual(unavailable);
+		expect(prepare).not.toHaveBeenCalled();
+		expect(errors).not.toHaveBeenCalled();
+	});
+
+	it("answers a code request with 500 and logs once when the database fails", async () => {
+		const response = await requestCode(
+			context(
+				"/api/studio/code",
+				{ email, turnstileToken: "challenge" },
+				{ database: down() },
+			),
+		);
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual(unavailable);
+		expect(errors).toHaveBeenCalledOnce();
+		expect(errors).toHaveBeenCalledWith(
+			"/api/studio/code failed unexpectedly:",
+			"Error",
+			"D1_ERROR: d1 down",
+		);
+	});
+
+	it("answers an entry with 500 and logs once when the database fails", async () => {
+		const response = await completeCode(
+			context(
+				"/api/studio/session",
+				{ email, code: "12345678" },
+				{ database: down(), cookie: PENDING },
+			),
+		);
+
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual(unavailable);
+		expect(errors).toHaveBeenCalledOnce();
+		expect(errors).toHaveBeenCalledWith(
+			"/api/studio/session failed unexpectedly:",
+			"Error",
+			"D1_ERROR: d1 down",
+		);
+	});
+
+	it("sends the code before answering when the request has no execution context", async () => {
+		seedProject();
+
+		const ctx = context(
+			"/api/studio/code",
+			{ email, turnstileToken: "challenge" },
+			{ noContext: true },
+		);
+
+		const response = await requestCode(ctx);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			ok: true,
+			message:
+				"If this email has a studio project, a sign-in code is on its way.",
+		});
+		// Nothing was left to run after the answer: the email had already gone.
+		expect(ctx.pending).toEqual([]);
+		expect(emails).toHaveLength(1);
+
+		browser = /__Host-studio_pending=([0-9a-f]{64})/.exec(
+			response.headers.get("set-cookie") ?? "",
+		)?.[1];
+
+		const entered = await completeCode(
+			context(
+				"/api/studio/session",
+				{ email, code: sentCode() },
+				{ cookie: browserCookie() },
+			),
+		);
+
+		expect(entered.status).toBe(200);
+	});
+
+	it("discards a refused code before answering when the request has no execution context", async () => {
+		seedProject();
+		emails = stubResend({ resend: [{ status: 422 }] });
+
+		const response = await requestCode(
+			context(
+				"/api/studio/code",
+				{ email, turnstileToken: "challenge" },
+				{ noContext: true },
+			),
+		);
+
+		expect(response.status).toBe(200);
+		expect(emails).toHaveLength(1);
+		expect(
+			sql
+				.prepare("SELECT COUNT(*) AS total FROM audio_client_signin_codes")
+				.get(),
+		).toEqual({ total: 0 });
+		expect(errors).not.toHaveBeenCalled();
 	});
 });
