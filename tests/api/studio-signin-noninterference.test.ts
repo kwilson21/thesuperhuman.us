@@ -1235,10 +1235,16 @@ describe("regression checks from earlier rounds", () => {
 		fresh();
 		stubFetch();
 		sql.exec("DROP TABLE audio_client_signin_codes");
+		const errors = vi.spyOn(console, "error").mockImplementation(() => {});
 
-		const response = await ask("x", ADDR.client, K1, false);
+		try {
+			const response = await ask("x", ADDR.client, K1, false);
 
-		expect(response.status).toBe(503);
-		expect(mails).toHaveLength(0);
+			expect(response.status).toBe(500);
+			expect(mails).toHaveLength(0);
+			expect(errors).toHaveBeenCalledOnce();
+		} finally {
+			errors.mockRestore();
+		}
 	});
 });

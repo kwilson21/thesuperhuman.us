@@ -5,8 +5,11 @@ import {
 	studioSessionFromRequest,
 } from "~/lib/audio-client-access";
 import { clientPortalEnabled } from "~/lib/client-portal";
+import { logUnexpected } from "~/server/failure";
 
 export const prerender = false;
+
+const ROUTE = "/api/studio/sign-out";
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
@@ -27,12 +30,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 		if (token) await revokeClientSession(env.MUSIC_DB, token);
 
 		return Response.json({ ok: true }, { headers });
-	} catch {
-		console.error("Studio session revocation failed.");
+	} catch (error) {
+		logUnexpected(ROUTE, error);
 
 		return Response.json(
 			{ ok: false, localSignedOut: true },
-			{ status: 503, headers },
+			{ status: 500, headers },
 		);
 	}
 };
