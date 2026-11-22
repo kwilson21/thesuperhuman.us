@@ -62,7 +62,11 @@ function multipart(handle: Partial<R2MultipartUpload> = {}) {
 	return { ...state, bucket, aborted, opened };
 }
 
-const start = (world: World, bucket: R2Bucket, version = "review" as const) =>
+const start = (
+	world: World,
+	bucket: R2Bucket,
+	version: "review" | "final" = "review",
+) =>
 	endedWith(
 		startUpload({
 			requestId: "song-1",
