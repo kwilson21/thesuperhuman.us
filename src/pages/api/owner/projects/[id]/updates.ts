@@ -1,121 +1,88 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
-import { clientPortalEnabled } from "~/lib/client-portal";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import {
-	deliverProjectUpdateNotice,
-	queueProjectNoticeForDelivery,
-	saveProjectUpdate,
-} from "~/lib/audio-project-updates";
-import { validProjectDate } from "~/lib/project-dates";
+	checkUpdate,
+	portalOff,
+	projectUpdatesUnavailable,
+	sentence,
+	updateNotSaved,
+} from "~/lib/audio-project-answers";
+import { clientPortalEnabled } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import { loggedAnswer } from "~/server/answers";
+import { readUpdateCommand } from "~/server/audio-project-input";
+import {
+	retryProjectUpdateEmail,
+	saveProjectUpdate,
+} from "~/server/flows/audio-project-updates";
+import { runRoute } from "~/server/run";
+import {
+	bindingsOrUnavailable,
+	liveBackground,
+	liveStudioNoticeMail,
+} from "~/server/services";
 
 export const prerender = false;
 const ROUTE = "/api/owner/projects/[id]/updates";
-const note = z.string().trim().min(1).max(1000);
-const date = z.string().refine(validProjectDate);
 
-const inputSchema = z.discriminatedUnion("action", [
-	z.object({ action: z.literal("accept"), dueDate: date, body: note }),
-	z.object({ action: z.literal("progress"), body: note }),
-	z.object({ action: z.literal("start_work"), body: note }),
-	z.object({ action: z.literal("begin_revision"), body: note }),
-	z.object({ action: z.literal("complete"), body: note }),
-	z.object({
-		action: z.literal("revise_date"),
-		dueDate: date,
-		reason: z.enum([
-			"protect_song",
-			"client_clarification",
-			"schedule_conflict",
-		]),
-		body: note,
-	}),
-	z.object({
-		action: z.literal("retry_email"),
-		updateId: z.number().int().positive(),
-		confirmedNotSent: z.boolean().optional(),
-	}),
-]);
+/** A failure of the database, logged once without what was sent, and answered with the route's fixed sentence. */
+const failed = loggedAnswer(ROUTE, updateNotSaved);
 
 export const POST: APIRoute = async ({ params, request, locals }) => {
 	if (!locals.owner) return Response.json({ ok: false }, { status: 403 });
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!clientPortalEnabled(env)) return portalOff();
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
+	const ctx = locals.runtime.ctx;
 
-	if (!env.MUSIC_DB || !locals.runtime.ctx || !params.id) {
-		return Response.json(
-			{ ok: false, error: "Project updates are temporarily unavailable." },
-			{ status: 503 },
-		);
-	}
-
+	if (!bindings.ok || !ctx || !params.id) return projectUpdatesUnavailable();
 	const body = await musicRequest(request, 8192);
 
 	if (body instanceof Response) return body;
-	const parsed = inputSchema.safeParse(body);
+	const command = readUpdateCommand(body);
 
-	if (!parsed.success)
-		return Response.json(
-			{ ok: false, error: "Check the update and try again." },
-			{ status: 400 },
-		);
+	if (!command.ok) return checkUpdate();
+	const requestId = params.id;
+	const input = command.value;
 
-	try {
-		if (parsed.data.action === "retry_email") {
-			const requeued = await queueProjectNoticeForDelivery(
-				env.MUSIC_DB,
-				params.id,
-				parsed.data.updateId,
-				parsed.data.confirmedNotSent,
-			);
+	const services = Context.merge(
+		bindings.services,
+		Context.merge(liveStudioNoticeMail(env), liveBackground(ctx)),
+	);
 
-			if (!requeued)
-				return Response.json(
-					{ ok: false, error: "This email cannot be retried here." },
-					{ status: 409 },
+	const program =
+		input.action === "retry_email"
+			? retryProjectUpdateEmail({
+					requestId,
+					updateId: input.updateId,
+					confirmedNotSent: input.confirmedNotSent ?? false,
+					now: () => new Date(),
+				}).pipe(
+					Effect.map(() => Response.json({ ok: true })),
+					Effect.catchTags({
+						NoticeNotQueueable: (refusal) =>
+							Effect.succeed(sentence(refusal.say, 409)),
+						AudioProjectStoreFailed: (failure) => failed(failure.failure),
+					}),
+				)
+			: saveProjectUpdate({
+					requestId,
+					ownerEmail: locals.owner.email,
+					command: input,
+					now: () => new Date(),
+				}).pipe(
+					Effect.map((update) => Response.json({ ok: true, update })),
+					Effect.catchTags({
+						ProjectCannotTakeUpdate: (refusal) =>
+							Effect.succeed(sentence(refusal.say, 409)),
+						AudioProjectStoreFailed: (failure) => failed(failure.failure),
+					}),
 				);
-			locals.runtime.ctx.waitUntil(
-				deliverProjectUpdateNotice(
-					env.MUSIC_DB,
-					parsed.data.updateId,
-					env,
-				).catch(() => console.error("Studio update email state is uncertain.")),
-			);
 
-			return Response.json({ ok: true });
-		}
-
-		const update = await saveProjectUpdate(
-			env.MUSIC_DB,
-			params.id,
-			locals.owner.email,
-			parsed.data,
-		);
-
-		if (!update)
-			return Response.json(
-				{ ok: false, error: "This project cannot take that update right now." },
-				{ status: 409 },
-			);
-		locals.runtime.ctx.waitUntil(
-			deliverProjectUpdateNotice(env.MUSIC_DB, update.id, env).catch(() =>
-				console.error("Studio update email state is uncertain."),
-			),
-		);
-
-		return Response.json({ ok: true, update });
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return Response.json(
-			{
-				ok: false,
-				error: "The project update could not be saved. Please try again.",
-			},
-			{ status: 500 },
-		);
-	}
+	return runRoute(services, program, {
+		route: ROUTE,
+		answer: updateNotSaved,
+	});
 };

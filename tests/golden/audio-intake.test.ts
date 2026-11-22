@@ -549,7 +549,9 @@ const cases: Case[] = [
 	single(
 		"looking up the invitation recipient throws",
 		good,
-		fails(/SELECT r.email FROM owner_requests r JOIN audio_projects/),
+		fails(
+			/SELECT r.email,r.kind,r.status,p.revoked_at FROM owner_requests r JOIN audio_projects/,
+		),
 	),
 	single(
 		"recording the invitation result throws",
