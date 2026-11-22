@@ -42,7 +42,7 @@ Limits:
 
 - An independent review of head `1d0ebebf` found nothing that had to change. It confirmed that the page's script runs once per load, that showing the failed state at setup matches what the existing error listener does, and that the new tests run the real setup code. It asked for three test improvements (the order test, the visible-message assertions and the removal of unused test scaffolding), which are in `336f4fae`, and for the header wording of this record.
 - A second independent review, of head `03ddfad6`, found the added tests and the code sound: the scaffolding removal is complete, no assertion was weakened, the order test would catch a swap of the two checks, and nothing under `src/` or `scripts/` changed after the first review. It found one wrong sentence in this record (which commits followed `91c85bdd`), corrected in the commit after it.
-- Codex's code review and security review of `03ddfad6` found no issues (observed on GitHub, 2026-11-22). The final head `65d66b56` differs from it only by one sentence of this record. Greptile left no review on this pull request.
+- Codex's code review and security review of `03ddfad6` found no issues (observed on GitHub, 2026-11-22). The final head `65d66b56` differs from it only in this record: one corrected sentence, one changed word, the added bullet about the second review, and the heads named in checklist item 7.2. An independent check of `65d66b56` confirmed that the commit touches only this record and found its statements true to the history; it did not re-read the test changes. Codex did not review `65d66b56`. Greptile left no review on this pull request.
 
 ## Checklist
 
@@ -89,6 +89,7 @@ Limits:
 
 ## Remaining work and follow-ups
 
+- Open the captured image of the studio project page from the Screenshots run and look at the player's label. The run succeeding shows the automated wait for a duration completed; nobody has looked at the image.
 - A real-browser check of the player with a real file, by the owner or after deployment.
 
 ## Delivery status
