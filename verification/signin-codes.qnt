@@ -1,9 +1,11 @@
 // Quint model of the studio sign-in codes of email addresses, with browsers that know the address and, for some of them, the code,
 // and of the studio sessions an accepted code makes.
-// Code modelled: src/lib/audio-client-access.ts (issueClientCode, completeClientCode, discardUndeliveredCode,
-//   revokeClientSession, and the session reads such as clientProjectsForSession), the routes
+// Code modelled: the sign-in flows src/server/flows/signin-code.ts (requestCode, issueSigninCode, discardUndelivered),
+//   signin-session.ts (signIn, enterSigninCode) and signin-sign-out.ts (signOut), over src/server/signin-store.ts, the
+//   session reads such as clientProjectsForSession in src/lib/audio-client-access.ts, the routes
 //   src/pages/api/studio/code.ts, session.ts and sign-out.ts, the studio pages that read a session, and the pending
-//   sign-in and session cookies they set and read.
+//   sign-in and session cookies they set and read. Each access.ts:<line> and code.ts:<line> below cites
+//   src/lib/audio-client-access.ts and the route at f9480f78, before the conversion moved that code to the flows.
 // See docs/verification.md ("The sign-in codes model") for what is and is not covered.
 //
 // Time. A code request and an entry each read the clock once, before their read batch, and bind that time in every later
@@ -256,7 +258,7 @@ module signinCodes {
     sessions' = sessions, sessionCookie' = sessionCookie, nextToken' = nextToken, acceptLog' = acceptLog,
   }
 
-  // ---- Asking for a code (code.ts, issueClientCode) ----------------------------------------------------------------
+  // ---- Asking for a code (code.ts, issueSigninCode) ----------------------------------------------------------------
   // READ. The browser sends its pending cookie, if any. The allowance counts first (a fixed window opened by its first use, one per
   // address). The facts are read the same way whatever the address, and only about this address: whether its project is open, how
   // many live codes it has other than the browser's own, and its expired rows. A browser with no cookie is given a newly allocated
@@ -397,11 +399,11 @@ module signinCodes {
     keepSessions,
   }
 
-  // ---- Entering a code (session.ts, completeClientCode) ------------------------------------------------------------
+  // ---- Entering a code (session.ts, enterSigninCode) --------------------------------------------------------------
   // Browser b sends its pending cookie (if any), the address and the code of row t. A browser can send the right code only if it can
   // read the inbox (browsers 0 and 1); the strangers always send a wrong code. READ: the row of (the browser's value, the address), as
   // it is (present, used, expiry, attempts, which code it holds, whether the address's project is open). Without a cookie nothing is
-  // looked up. The time read here is the entry's time (`at`): the code reads the clock once, as `completeClientCode` is called, before
+  // looked up. The time read here is the entry's time (`at`): the code reads the clock once, at the start of `enterSigninCode`, before
   // this batch (access.ts:315, 324), and binds it in the decision and in every guard of the write.
   action guessRead(g: int, b: int, a: int, t: int, right: bool): bool = {
     val c = cookie.get(b)
@@ -418,7 +420,7 @@ module signinCodes {
     }
   }
 
-  // WRITE. The rule (decideComplete) decides from what was read, at the time the entry read: count the attempt if the code was live
+  // WRITE. The machine and the rule (enterCode) decide from what was read, at the time the entry read: count the attempt if the code was live
   // with attempts left, and accept if it is also the right code and the project was open. The write is one batch of guards
   // re-checking the same facts, with the same time, and that the row still holds the code that was read (access.ts:365-398):
   //   C4, the counted attempt: only on that code, while it is unused, unexpired at the entry's time and under the limit (the
@@ -516,8 +518,8 @@ module signinCodes {
     }
   }
 
-  // ---- Signing out (sign-out.ts, revokeClientSession) --------------------------------------------------------------
-  // Browser b sends its session cookie. The route reads the clock as it calls `revokeClientSession`, just before its one statement
+  // ---- Signing out (sign-out.ts, signOut) ---------------------------------------------------------------------------
+  // Browser b sends its session cookie. The flow (`signOut`) reads the clock just before its one statement
   // (access.ts:640-653), so the step's own time is the time it binds. The statement sets `revoked_at` only while it is NULL (C9; the
   // "sign-out-unguarded" mutant sets it whatever it holds), whether the session has expired or not. Every answer clears the cookie,
   // but the browser can still hold it (kept): the answer was lost, or another tab sent the same cookie before the first answer
