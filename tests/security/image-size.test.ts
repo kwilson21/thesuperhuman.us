@@ -42,7 +42,45 @@ function tiff(orientation: number, order: "II" | "MM") {
 	];
 }
 
-function pngWith(width: number, height: number, exif?: number[]) {
+type Entry = { tag: number; type: number; count: number; value: number };
+
+/** A TIFF block built entry by entry, so a test can make the entries wrong or point the IFD somewhere else. */
+function tiffRaw(
+	entries: Entry[],
+	{ order = "MM", ifd = 8 }: { order?: "II" | "MM"; ifd?: number } = {},
+) {
+	const le = order === "II",
+		short = (n: number) => (le ? u16be(n).reverse() : u16be(n)),
+		long = (n: number) => (le ? u32le(n) : u32be(n));
+
+	return [
+		...text(order),
+		...short(42),
+		...long(ifd),
+		...short(entries.length),
+		...entries.flatMap((e) => [
+			...short(e.tag),
+			...short(e.type),
+			...long(e.count),
+			...(e.type === 3 ? [...short(e.value), 0, 0] : long(e.value)),
+		]),
+		...long(0),
+	];
+}
+
+const orientationEntry = (value: number, type = 3, count = 1): Entry => ({
+	tag: 0x0112,
+	type,
+	count,
+	value,
+});
+
+function pngWith(
+	width: number,
+	height: number,
+	exif?: number[],
+	idat: number[] = [1, 2, 3],
+) {
 	const chunk = (type: string, body: number[]) => [
 		...u32be(body.length),
 		...text(type),
@@ -64,7 +102,7 @@ function pngWith(width: number, height: number, exif?: number[]) {
 		10,
 		...chunk("IHDR", [...u32be(width), ...u32be(height), 8, 2, 0, 0, 0]),
 		...(exif ? chunk("eXIf", exif) : []),
-		...chunk("IDAT", [1, 2, 3]),
+		...chunk("IDAT", idat),
 		...chunk("IEND", []),
 	]);
 }
@@ -91,6 +129,36 @@ function jpegWith(
 		...segment(0xdb, [0, ...new Array(64).fill(8)]),
 		...segment(frame, [8, ...u16be(height), ...u16be(width), 1, 1, 0x11, 0]),
 		...segment(0xda, [1, 1, 0, 0, 63, 0]),
+		0x12,
+		0x34,
+		0xff,
+		0xd9,
+	]);
+}
+
+const jpegSegment = (marker: number, body: number[]) => [
+	0xff,
+	marker,
+	...u16be(body.length + 2),
+	...body,
+];
+
+const exifSegment = (tiffBytes: number[]) =>
+	jpegSegment(0xe1, [...text("Exif"), 0, 0, ...tiffBytes]);
+
+const xmpSegment = () =>
+	jpegSegment(0xe1, [...text("http://ns.adobe.com/xap/1.0/"), 0, 1, 2, 3]);
+
+/** A JPEG of 800 by 600 with `before` (raw bytes) between the start marker and the tables. */
+function jpegRaw(before: number[], after: number[] = []) {
+	return Uint8Array.from([
+		0xff,
+		0xd8,
+		...before,
+		...jpegSegment(0xdb, [0, ...new Array(64).fill(8)]),
+		...jpegSegment(0xc0, [8, ...u16be(600), ...u16be(800), 1, 1, 0x11, 0]),
+		...after,
+		...jpegSegment(0xda, [1, 1, 0, 0, 63, 0]),
 		0x12,
 		0x34,
 		0xff,
@@ -232,7 +300,176 @@ describe("jpeg", () => {
 	});
 });
 
+describe("jpeg segment walking", () => {
+	const size = { width: 800, height: 600 };
+
+	it("ignores an XMP segment before the Exif segment", () => {
+		expect(
+			imageSize(
+				jpegRaw([
+					...xmpSegment(),
+					...exifSegment(tiffRaw([orientationEntry(6)])),
+				]),
+				"image/jpeg",
+			),
+		).toEqual({ width: 600, height: 800 });
+	});
+
+	it("skips fill bytes between segments", () => {
+		expect(
+			imageSize(
+				jpegRaw([0xff, 0xff, 0xff, ...xmpSegment(), 0xff, 0xff]),
+				"image/jpeg",
+			),
+		).toEqual(size);
+	});
+
+	it("skips standalone TEM and restart markers", () => {
+		expect(
+			imageSize(jpegRaw([0xff, 0x01, 0xff, 0xd0, 0xff, 0xd7]), "image/jpeg"),
+		).toEqual(size);
+	});
+
+	it("gives null when two Exif segments are present", () => {
+		const exif = exifSegment(tiffRaw([orientationEntry(1)]));
+
+		expect(imageSize(jpegRaw([...exif, ...exif]), "image/jpeg")).toBeNull();
+		expect(
+			imageSize(
+				jpegRaw(exif, exifSegment(tiffRaw([orientationEntry(6)]))),
+				"image/jpeg",
+			),
+		).toBeNull();
+	});
+
+	it("keeps the size for readable Exif with no Orientation tag", () => {
+		expect(
+			imageSize(
+				jpegRaw(
+					exifSegment(tiffRaw([{ tag: 0x010f, type: 3, count: 1, value: 1 }])),
+				),
+				"image/jpeg",
+			),
+		).toEqual(size);
+		expect(imageSize(jpegRaw(exifSegment(tiffRaw([]))), "image/jpeg")).toEqual(
+			size,
+		);
+	});
+});
+
+describe("exif is read only inside its own block", () => {
+	// An IFD offset that points past the end of the block, where a later segment holds a plausible IFD.
+	const fakeIfd = (value: number) => [
+		0,
+		1,
+		...u16be(0x0112),
+		...u16be(3),
+		...u32be(1),
+		...u16be(value),
+		0,
+		0,
+	];
+
+	it("gives null for a JPEG whose IFD offset is past its segment", () => {
+		expect(
+			imageSize(
+				jpegRaw([
+					0xff,
+					0xe1,
+					...u16be(16),
+					...text("Exif"),
+					0,
+					0,
+					...text("MM"),
+					0,
+					0x2a,
+					...u32be(0x0c),
+					...jpegSegment(0xfe, fakeIfd(6)),
+				]),
+				"image/jpeg",
+			),
+		).toBeNull();
+	});
+
+	it("gives null for a PNG whose IFD offset is past its eXIf chunk", () => {
+		// The eXIf body is 8 bytes; the next chunk's data starts 12 bytes after it (CRC, length, type).
+		expect(
+			imageSize(
+				pngWith(640, 480, tiffRaw([], { ifd: 20 }).slice(0, 8), fakeIfd(1)),
+				"image/png",
+			),
+		).toBeNull();
+	});
+
+	it("gives null for a WebP whose IFD offset is past its EXIF chunk", () => {
+		// The EXIF body is 8 bytes; the next chunk's data starts 8 bytes after it (type, length).
+		expect(
+			imageSize(
+				riff([
+					extended(1920, 1080, 0x08),
+					lossy(10, 10),
+					chunkOf("EXIF", tiffRaw([], { ifd: 16 }).slice(0, 8)),
+					chunkOf("JUNK", fakeIfd(1)),
+				]),
+				"image/webp",
+			),
+		).toBeNull();
+	});
+
+	it("gives null when the IFD is cut short", () => {
+		const whole = tiffRaw([orientationEntry(6)]);
+
+		for (const cut of [9, 10, 14, 20])
+			expect(
+				imageSize(jpegRaw(exifSegment(whole.slice(0, cut))), "image/jpeg"),
+			).toBeNull();
+	});
+
+	it("gives null for Orientation with a count other than 1", () => {
+		expect(
+			imageSize(
+				jpegRaw(exifSegment(tiffRaw([orientationEntry(6, 3, 2)]))),
+				"image/jpeg",
+			),
+		).toBeNull();
+	});
+
+	it("gives null for Orientation of a type other than SHORT", () => {
+		expect(
+			imageSize(
+				jpegRaw(exifSegment(tiffRaw([orientationEntry(6, 4)]))),
+				"image/jpeg",
+			),
+		).toBeNull();
+	});
+
+	it("gives null for Orientation values outside 1 to 8", () => {
+		for (const value of [0, 9])
+			expect(
+				imageSize(
+					jpegRaw(exifSegment(tiffRaw([orientationEntry(value)]))),
+					"image/jpeg",
+				),
+			).toBeNull();
+	});
+
+	it("gives null for Exif that cannot be read", () => {
+		expect(
+			imageSize(jpegRaw(exifSegment(text("XX*\0"))), "image/jpeg"),
+		).toBeNull();
+	});
+});
+
 describe("webp", () => {
+	it("reads the largest extended canvas", () => {
+		expect(
+			imageSize(
+				riff([extended(16777216, 16777216), lossy(10, 10)]),
+				"image/webp",
+			),
+		).toEqual({ width: 16777216, height: 16777216 });
+	});
+
 	it("reads a lossy image", () => {
 		expect(imageSize(riff([lossy(320, 200)]), "image/webp")).toEqual({
 			width: 320,

@@ -231,7 +231,7 @@ it("reports attention when the request audit trigger is missing", async () => {
 	);
 });
 
-it("detects incomplete schemas and passes only after 0027", async () => {
+it("detects incomplete schemas and passes only after 0028", async () => {
 	const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 	const db = new DatabaseSync(":memory:");
 

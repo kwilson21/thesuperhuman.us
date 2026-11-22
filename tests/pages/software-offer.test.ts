@@ -959,9 +959,12 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 
 		expect(html).toContain("Respond to requested changes");
 		expect(html).toContain("Please fix the client form.");
-		expect(
-			html.match(/<img[^>]*updates\/old-review\/visual[^>]*>/)![0],
-		).toMatch(/width="300"[^>]*height="200"|height="200"[^>]*width="300"/);
+		// The revision source image is sized by its CSS (max-width and auto height), so it carries no size attributes.
+		const revisionImage = html.match(
+			/<img[^>]*updates\/old-review\/visual[^>]*>/,
+		)![0];
+		expect(revisionImage).not.toMatch(/ width="/);
+		expect(revisionImage).not.toMatch(/ height="/);
 		expect(
 			html.match(/<img[^>]*updates\/revision-draft\/visual[^>]*>/)![0],
 		).toMatch(/width="640"[^>]*height="480"|height="480"[^>]*width="640"/);
@@ -2516,7 +2519,12 @@ it("puts the named review work first through partial, complete, accepted and han
 		const progressImage = (page: string, id: string) =>
 			page.match(new RegExp(`<img[^>]*updates/${id}/visual[^>]*>`))![0];
 
-		expect(progressImage(quiet, "progress")).not.toMatch(/width=|height=/);
+		const noSize = (tag: string) => {
+			expect(tag).not.toMatch(/ width="/);
+			expect(tag).not.toMatch(/ height="/);
+		};
+
+		noSize(progressImage(quiet, "progress"));
 
 		for (const [width, height] of [
 			["640", "NULL"],
@@ -2528,9 +2536,7 @@ it("puts the named review work first through partial, complete, accepted and han
 			sql.exec(
 				`UPDATE software_project_updates SET visual_width=${width},visual_height=${height} WHERE id='progress'`,
 			);
-			expect(progressImage(await render(), "progress")).not.toMatch(
-				/width=|height=/,
-			);
+			noSize(progressImage(await render(), "progress"));
 		}
 
 		sql.exec(
@@ -2773,6 +2779,26 @@ it("puts the named review work first through partial, complete, accepted and han
 		expect(currentHandoffFiles).toContain(
 			"Support within the correction period.",
 		);
+
+		// An image in the handoff strip carries its stored size.
+		sql.exec(
+			"UPDATE software_project_updates SET visual_key='handoff-image',visual_alt='The handed-over tool.',visual_width=1200,visual_height=800 WHERE id='handoff'",
+		);
+		html = await render();
+
+		const handoffImage = html
+			.slice(
+				html.indexOf("Your files"),
+				html.indexOf("</section>", html.indexOf("Your files")),
+			)
+			.match(/<img[^>]*updates\/handoff\/visual[^>]*>/)![0];
+
+		expect(handoffImage).toContain(' width="1200"');
+		expect(handoffImage).toContain(' height="800"');
+		sql.exec(
+			"UPDATE software_project_updates SET visual_key=NULL,visual_alt='',visual_width=NULL,visual_height=NULL WHERE id='handoff'",
+		);
+		html = await render();
 		expect(currentHandoffFiles).not.toContain("<img");
 		expect(currentHandoffFiles).not.toContain("Open work");
 		sql.exec(
