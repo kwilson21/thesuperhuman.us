@@ -13,20 +13,24 @@ Decided before this design, and not asked again:
   area at a time; a conversion changes no behaviour.
 - Owner, 2026-11-14: an unexpected database or store failure answers 500 with the route's fixed sentence and never the
   error's own text; a lost race or a stale version 409; 503 only for a missing binding or a known unavailable
-  dependency. The two behaviour fixes in section 5 follow from this decision, as the offers area's F2 did.
+  dependency. Fixes S1 and S2 in section 5 follow from this decision, as the offers area's F2 did.
 - Owner, 2026-11-15: "Effect schema as our only validator no zod use from us"; stacked conversion PRs.
 - Owner, 2026-11-15 ("Go"): the order of `docs/plans/2026-11-effect-conversion.md`, in which this is step 2.
 
-The fixes keep today's sentences and change only the status code, and no answer a visitor sees changes in wording.
+S1 and S2 keep today's sentences and change only the status code, so no answer a visitor sees changes in wording. S3
+changes a case production never reaches (a request with no execution context, which Workers always give), so that the
+route behaves as the other converted routes do there; it rests on the shape those routes already have
+(`src/server/services.ts:545-558`), not on a new decision.
 
-**One question for the owner: a lost race on these routes.** The 2026-11-14 decision says a lost race answers 409.
-Here a lost race (a guard C1 to C8 failing because the facts changed after the read) answers like a refusal today: the
-generic 200 on a code request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a
-stranger something about an address they do not own: that it had a project, or room for a code, when the request
-read it. That is what the non-interference property forbids (the model's `outcomeIndependentOfAddress`, and
-`tests/api/studio-signin-noninterference.test.ts`, which compares the answers across the target address's states).
-Recommended: keep today's answers, recorded as an exception to the 409 rule for the code and session routes. Until the
-owner answers, the conversion keeps them as they are, as every conversion keeps behaviour.
+**One question for the owner: a lost race on these routes.** The 2026-11-14 decision says a lost race answers 409. Here
+a lost race (a guard C1, C2, C4 or C5 failing because the facts changed after the read; C3 and C8 answer nothing, since
+the sweep's miss is silent and the discard runs after the response) answers like a refusal today: the generic 200 on a
+code request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a stranger something about
+an address they do not own: on the code route, that it had an open project and room for a code when the request read it
+(the guard raises only after a decision to issue). That is what the non-interference property forbids (the model's
+`outcomeIndependentOfAddress`, and `tests/api/studio-signin-noninterference.test.ts`, which compares the answers across
+the target address's states). Recommended: keep today's answers, recorded as an exception to the 409 rule for the code
+and session routes. Until the owner answers, the conversion keeps them as they are, as every conversion keeps behaviour.
 
 ## The area today
 
@@ -134,11 +138,13 @@ stateDiagram-v2
 ENTER is allowed only from `live`; from `none`, `locked`, `used` and `expired` it is refused with the one
 invalid-or-expired answer (`NoCodeToTry`). ISSUE is allowed from every state: the browser's own row for the address is
 replaced, or inserted from `none`. DISCARD is allowed from `live`, `locked` and `expired`, and refused from `used` and
-`none` (`NothingToDiscard`), as `decideDiscard` does today. A `used` row stays `used` after its lifetime (the order
-above), and is swept with the expired rows: the sweep is not a move of this machine but the sweep rule's choice of
-rows whose `expires_at` has passed, whatever their state (section 2). The machine has no move for another browser:
-its requests read and write only rows of its own cookie value and address, which is what the model's
-`othersUntouched` and `noCrossAddressEffect` check.
+`none` (`NothingToDiscard`), as `decideDiscard` does today. The discard's read selects only `used_at` (access.ts:226),
+and the store keeps that statement, so the discard derives its state from it alone: no row is `none`, `used_at` set is
+`used`, and any other row is asked as `live`; the three unused states are allowed alike, so the answer is the same. A
+`used` row stays `used` after its lifetime (the order above), and is swept with the expired rows: the sweep is not a
+move of this machine but the sweep rule's choice of rows whose `expires_at` has passed, whatever their state (section
+2). The machine has no move for another browser: its requests read and write only rows of its own cookie value and
+address, which is what the model's `othersUntouched` and `noCrossAddressEffect` check.
 
 ### The studio session
 
@@ -165,16 +171,18 @@ guard re-checks it.
 |---|---|---|---|---|
 | `signin-sweep.ts` | `sweepCodes` (`alwaysWrites`, no refusals: the sweep is written whatever the issue's answer) | `now`, the address's code rows | none | the expired rows to delete, each with the code it held |
 | `signin-issue.ts` | `issueCode` | the address, the browser's cookie hash, `now`, the projects, the address's code rows | `NoOpenProject`, `AddressFull` | the audit ids, and the cap for C2 |
-| `signin-complete.ts` | `enterCode` | the stored code or none, the projects, `now`, the limit, the typed code's hash | `NoCodeToTry` | count the attempt; accept or not; the audit ids |
-| `signin-discard.ts` | `discardCode` | the stored code or none, the projects | `NothingToDiscard` (its `nothingToDoIf`) | the audit ids |
+| `signin-complete.ts` | `enterCode` (`alwaysWrites`) | the stored hash of a `live` code, the projects, the typed code's hash | none (the machine refuses first) | count the attempt; accept or not; the audit ids |
+| `signin-discard.ts` | `discardCode` (`alwaysWrites`) | the projects | none (the machine refuses first) | the audit ids |
 | `studio-allowance.ts` | `takeAllowance` | the uses counted, the limit | `AllowanceSpent` | nothing |
 
 The bodies are today's functions, moved; `decideIssue` splits into `sweepCodes` and `issueCode`, which decide from the
-same facts read once. `sameHash` (the constant-time compare) moves with `enterCode`. `ENTER` is asked of the code
-machine from the row's state before the facts of the address are looked at, so a used, expired or locked code is refused
-by the machine and the rule never sees it; `DISCARD` likewise. `ISSUE` is allowed from every state (the browser's own
-row is replaced), so the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts` is deleted with
-its last caller.
+same facts read once. `sameHash` (the constant-time compare) moves with `enterCode`. Each check has one owner. `ENTER`
+and `DISCARD` are asked of the code machine first, from the row's state; a refused `next()` is answered by the flow
+with `NoCodeToTry` or `NothingToDiscard`, the `Data.TaggedError` classes those two rule files export, and the rules
+never see such a row, so they take no `now`, limit or missing row and refuse nothing. A test holds the machine's
+refusals to `decideComplete`'s and `decideDiscard`'s over every row state. `ISSUE` is allowed from every state (the
+browser's own row is replaced), so the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts`
+is deleted with its last caller.
 
 No refusal is shown to the visitor by name. `NoOpenProject`, `AddressFull` and a refused guard answer the generic 200;
 `NoCodeToTry`, a wrong code and a refused guard answer the one 401. The names are for the tests and the flows.
@@ -192,11 +200,11 @@ inputs at the point the route reads them today, and builds no response text.
   it hands the delivery to `Background.defer`: send the email, and on a confirmed rejection run `discardCode` (read the
   clock, read, decide, write). A failure there is logged with today's fixed line. The cookie value is decided here (the
   one sent, else the new code's, else a fresh one) and returned with the outcome, never the outcome alone.
-- `signin-session.ts`, `signIn`: with no well-formed cookie, stop with the refusal before any read; count
-  `session-ip`, then `session-requester` (each reading the clock); read the clock; read (one batch); decide; write
-  (one batch, run for every entry and bound to match no row when the rule refused, as today, access.ts:296-298); return
-  the token only when the accept's `RETURNING` row came back. The token is made and hashed on
-  every entry, accepted or not, as today, so a right and a wrong code do the same work.
+- `signin-session.ts`, `signIn`: with no well-formed cookie, stop with the refusal before any read; count `session-ip`,
+  then `session-requester` (each reading the clock); read the clock; read (one batch); decide; write (one batch, run for
+  every entry and bound to match no row when the machine refused ENTER, as today, access.ts:296-298); return the token
+  only when the accept's `RETURNING` row came back. The token is made and hashed on every entry, accepted or not, as
+  today, so a right and a wrong code do the same work.
 - `signin-sign-out.ts`, `signOut`: with no well-formed token, nothing; else read the clock and revoke (one statement).
 
 The flows keep every round trip the routes make today, in the same order and with the same batches. They sequence
@@ -210,7 +218,7 @@ answer, and neither route retries a refused guard.
 **`src/server/signin-store.ts`**, one function per statement or batch over `MusicDb`, each with `Effect.tryPromise`.
 Every statement keeps today's SQL text and every batch its shape, byte for byte: the golden corpora then see the same
 D1 statements, and the non-interference test, which schedules a request's batches by their leading SQL and their
-length (`tests/api/studio-signin-noninterference.test.ts:137-152`), passes unchanged.
+length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes unchanged.
 
 | Function | Statements | Today |
 |---|---|---|
@@ -318,8 +326,9 @@ codes, attempts and sessions under parallel requests, so a model PR before the f
 1. **The time a request read.** The code reads the clock once, before its read batch, and binds that time in every
    later statement: the issue's stamp and its cap guard (access.ts:126-127, 179), the sweep (access.ts:154-158), and
    the entry's guards (access.ts:366-372). The model uses each step's own time instead: `sendWrite` stamps with it
-   (#333's record, "Known and not changed"), and `sendClear` and `guessWrite` compare with it
-   (`verification/signin-codes.qnt:211, 345-346`). All three are changed to the time the request's read step saw.
+   (`verification/signin-codes.qnt:253`; #333's record, "Known and not changed") and counts live codes with it in its
+   cap guard (`liveAt`, qnt:240-241), `sendClear` compares with it (qnt:211), and `guessWrite` decides and guards with
+   it (qnt:341, 345). All four are changed to the time the request's read step saw.
    Expected: `deadCodeNeverSignsIn` fails, since an entry that read just before its code expired and writes just after
    is accepted, today, in that gap of one round trip. That is a behaviour finding and goes to the owner with the model
    PR, before any code changes: either the property is stated at the time the entry read (what the code does now), or
@@ -329,10 +338,13 @@ codes, attempts and sessions under parallel requests, so a model PR before the f
    properties, each with a mutant that breaks it, kept in the model and failing in CI:
    `sessionOnlyFromAcceptedCode` (every session comes from one accepted code of its browser and address; mutant: the
    session insert not matched to the accepted token), `oneSessionPerCode` (two right entries in flight make one
-   session; mutant: the accept without its own `used_at IS NULL`, access.ts:372), and `revokedStaysRevoked` (a
-   sign-out never moves `revoked_at` once set; mutant: a sign-out without C9). With two entries in flight, the
-   accept's `changes()=1` (C5) is what `attemptsBounded` needs (an accept after another entry spent the last
-   attempt); a mutant without it is added there if none of today's breaks it.
+   session; mutant: `used_at IS NULL` dropped from both the count and the accept, access.ts:368 and 372, which
+   today's `reuse-used` may already be once two entries can be in flight; the accept's own check alone is not
+   enough, since the count's check and C5 already stop the second entry), and `revokedStaysRevoked` (a sign-out never
+   moves `revoked_at` once set; mutant: a sign-out without C9). With two entries in flight, the accept's
+   `changes()=1` (C5) is what `attemptsBounded` needs (an accept after another entry spent the last attempt); a
+   mutant without it is added there if none of today's breaks it, and its uncounted accept must count as a
+   comparison in the model (`compared` rises only on a counted guess today, qnt:357-358), or it breaks nothing.
 
 There is no money rule here, so no LemmaScript contract. The golden corpora (`studio-code`, `studio-session`,
 `studio-sign-out`, `agreements-link` for the allowance and the address, and `offer-link`, which reaches
@@ -345,7 +357,7 @@ There is no money rule here, so no LemmaScript contract. The golden corpora (`st
 2. The model extension (section 7), with `docs/verification.md` updated.
 3. The fixes S1, S2 and S3, one PR, re-recording the changed cases in a commit of their own.
 4. The conversion, a stack of two PRs merged into `main` as one, with the `conversion` label: the input readers, the
-   machines, the rules and the store; then the services, the flows, the three routes, the agreement allowance and the
+   machine, the rules and the store; then the services, the flows, the three routes, the agreement allowance and the
    deletions, with the `golden:neutral` output in the second PR and a release record.
 
 ## Open questions from reading the code
