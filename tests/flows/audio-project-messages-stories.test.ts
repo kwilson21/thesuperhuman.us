@@ -393,15 +393,19 @@ describe("a client's and the owner's messages", () => {
 			.prepare("UPDATE audio_client_sessions SET expires_at=?")
 			.run(new Date(AT.getTime() + 1000).toISOString());
 		const reads = [0, 2000];
-		await ended(
-			world,
-			markOwnerMessageReadByClient({
-				id: "song-1",
-				token: TOKEN,
-				messageId: 1,
-				now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
-			}),
-		);
+
+		// The mark ends as it always did, quietly: the route answers {ok:true}, and the row stays unread.
+		expect(
+			await ended(
+				world,
+				markOwnerMessageReadByClient({
+					id: "song-1",
+					token: TOKEN,
+					messageId: 1,
+					now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
+				}),
+			),
+		).toEqual({ done: undefined });
 		expect(messages(world)[0]?.read_at).toBeNull();
 	});
 

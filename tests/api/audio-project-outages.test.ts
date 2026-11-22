@@ -238,6 +238,15 @@ const outages: {
 		sentence: "The file could not be published. Please try again.",
 	},
 	{
+		name: "a client message whose count read fails",
+		handler: studioMessages,
+		pattern: /SELECT count\(\*\) AS total FROM audio_project_messages/,
+		request: () =>
+			post(`${studio}/messages`, { action: "send", body: "Hello" }, cookie),
+		sentence: "Your message could not be saved. Please try again.",
+		owner: false,
+	},
+	{
 		name: "a client message",
 		handler: studioMessages,
 		pattern: /audio_client_sessions/,
@@ -264,6 +273,7 @@ describe("an unexpected failure answers 500 with the route's sentence", () => {
 			expect(text).toContain(outage.sentence);
 			expect(text).not.toContain(LEAK);
 			// The log line names the route by its path, as the converted routes do.
+			expect(logged).toHaveBeenCalledTimes(1);
 			expect(String(logged.mock.calls[0]?.[0])).toMatch(
 				/^\/api\/(owner|studio)\/projects\/\[id\]\/.* failed unexpectedly:/,
 			);
