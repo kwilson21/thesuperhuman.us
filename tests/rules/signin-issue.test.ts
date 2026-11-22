@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { CODE_ON_ITS_WAY } from "../../src/lib/studio-signin";
 import {
 	type AddressCode,
-	CODE_ON_ITS_WAY,
 	type IssueFacts,
 	issueCode,
 	LIVE_CODES_PER_ADDRESS,

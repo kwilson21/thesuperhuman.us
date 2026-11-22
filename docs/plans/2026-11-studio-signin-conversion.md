@@ -1,9 +1,12 @@
 # Studio sign-in: conversion design
 
-Status: proposed 2026-11-22, as the design PR for step 2 of `docs/plans/2026-11-effect-conversion.md`, reviewed before
-any conversion code; this PR changes nothing under `src/`. Every claim about today's code cites a file and line on
-`origin/main` at `2f93a646`. `code.ts`, `session.ts` and `sign-out.ts` below mean the files of that name in
-`src/pages/api/studio/`, and `access.ts` means `src/lib/audio-client-access.ts`.
+Status: converted, not yet merged (2026-11-22): the model extension (#360) and the fixes S1 to S3 (#367) merged, and the
+conversion is a stack of two PRs, the readers, machine, rules and store (#368), then the services, flows, routes, the
+agreement allowance and the deletions, to be merged into `main` as one. Proposed 2026-11-22 as the design PR for step 2
+of `docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR changed nothing under `src/`.
+Every claim about "today's code" means the code before the conversion and cites a file and line on `origin/main` at
+`2f93a646`. `code.ts`, `session.ts` and `sign-out.ts` below mean the files of that name in `src/pages/api/studio/`, and
+`access.ts` means `src/lib/audio-client-access.ts`.
 
 ## Owner decisions
 

@@ -8,7 +8,7 @@ import { sqliteD1 } from "../helpers/sqlite-d1";
 import type { JsonObject } from "../helpers/json";
 import { POST as clientPost } from "~/pages/api/studio/projects/[id]/messages";
 import { POST as ownerPost } from "~/pages/api/owner/projects/[id]/messages";
-import { completeClientCode, issueClientCode } from "~/lib/audio-client-access";
+import { signedInClient } from "../helpers/studio-signin";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -31,14 +31,7 @@ beforeEach(async () => {
 		.run(new Date().toISOString(), new Date().toISOString());
 
 	db = sqliteD1(sql);
-	const code = (await issueClientCode(db, "artist@example.com", secret))!;
-	token = (await completeClientCode(
-		db,
-		"artist@example.com",
-		code.code,
-		code.nonce,
-		secret,
-	))!;
+	token = await signedInClient(db, secret, "artist@example.com");
 });
 
 function context(

@@ -19,11 +19,8 @@
 // request never makes extra round trips that depend on the address. Nothing here reads a clock, a store or a random
 // value: the time and the cookie value's hash are inputs.
 import * as Data from "effect/Data";
+import { CODE_ON_ITS_WAY } from "../../lib/studio-signin";
 import { alwaysWrites, term, unless } from "../terms";
-
-/** The answer every code request gives, whether or not a code was issued. */
-export const CODE_ON_ITS_WAY =
-	"If this email has a studio project, a sign-in code is on its way.";
 
 /** The address has no project that is open: none, or each one's request is withdrawn. */
 export class NoOpenProject extends Data.TaggedError("NoOpenProject") {

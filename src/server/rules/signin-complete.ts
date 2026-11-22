@@ -19,6 +19,7 @@
 // code and NoCodeToTry all answer the one 401, so the answer never tells a stranger what state an address's code is in.
 // None is retried. Nothing here reads a clock, a store or a random value.
 import * as Data from "effect/Data";
+import { CODE_INVALID_OR_EXPIRED } from "../../lib/studio-signin";
 import type { CodeRow } from "../machines/signin-code";
 import { alwaysWrites } from "../terms";
 import { anyProjectOpen, auditIdsOf, type SigninProject } from "./signin-issue";
@@ -28,8 +29,7 @@ import { anyProjectOpen, auditIdsOf, type SigninProject } from "./signin-issue";
  * wrong code and a browser that did not ask also get.
  */
 export class NoCodeToTry extends Data.TaggedError("NoCodeToTry") {
-	readonly say =
-		"That code is invalid or expired. Enter it in the browser where you asked for it, or request a new one here.";
+	readonly say = CODE_INVALID_OR_EXPIRED;
 }
 
 /** The browser's code row for the address, as the entry reads it: its state's columns and the hash of its code. */
