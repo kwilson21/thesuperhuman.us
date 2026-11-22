@@ -1,7 +1,7 @@
 // What the owner does with a project's file: publish an uploaded one and revoke a published or uploaded one. Each runs in the
 // order the routes always did (docs/plans/2026-11-audio-projects-conversion.md, section 3). A publish names the owner, reads the
 // file with the project's facts in ONE batch, judges the file, asks R2 for the object and judges its size, draws the
-// publication id, then judges the project and saves through `alwaysDecideAndSave`: the live review files it replaces are the
+// publication id, then reads the facts again, judges the project from them and saves through `alwaysDecideAndSave`: the live review files it replaces are the
 // batch guard's facts, so a review published in between makes the guard raise and the project is judged again (three tries). A
 // revoke names the owner, then reads the file, the project and the published files in ONE batch, judges the file (still the
 // status the first read saw: that status is carried across the tries), draws the revocation id, judges the project and the
@@ -30,19 +30,6 @@ import {
 	revokeInProject,
 } from "../rules/audio-project-files";
 import { Background, ProjectUpdateNotice } from "../services";
-
-/** The first and every later try: the facts already read the first time, a fresh read after. */
-const firstThenFresh = <Facts, Failure, Needs>(
-	first: Facts,
-	read: Effect.Effect<Facts, Failure, Needs>,
-) =>
-	Effect.gen(function* () {
-		const tries = yield* Ref.make(0);
-
-		return Ref.getAndUpdate(tries, (count) => count + 1).pipe(
-			Effect.flatMap((count) => (count === 0 ? Effect.succeed(first) : read)),
-		);
-	});
 
 /** A value drawn once, when it is first asked for, and the same value after (an id the retries of a save share). */
 const drawnOnce = (draw: () => string) =>
@@ -100,7 +87,8 @@ export const publishProjectFile = (input: {
 		expiry.setUTCFullYear(expiry.getUTCFullYear() + 1);
 
 		const saved = yield* alwaysDecideAndSave({
-			facts: yield* firstThenFresh(first, readPublishFacts(requestId, fileId)),
+			// The project is judged from facts read now, after the object's head, as the write's own conditions were evaluated then.
+			facts: readPublishFacts(requestId, fileId),
 			decide: (facts) => publishableProject.decide({ file }, facts),
 			save: (write) =>
 				publishFileBatch({
