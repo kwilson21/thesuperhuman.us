@@ -639,6 +639,52 @@ const cases: Case[] = [
 	single("the model answers with a string itself", good, {
 		ai: [aiValue("and send them")],
 	}),
+	// The current model answers in the chat-completion form, with its text in choices[0].message.content and no response.
+	single("the model answers in the chat-completion form", good, {
+		ai: [
+			aiValue({
+				object: "chat.completion",
+				choices: [
+					{
+						index: 0,
+						message: { role: "assistant", content: "and send them" },
+						finish_reason: "stop",
+					},
+				],
+			}),
+		],
+	}),
+	single(
+		"the model answers in the chat-completion form with empty content",
+		good,
+		{
+			ai: [
+				aiValue({
+					object: "chat.completion",
+					choices: [{ index: 0, message: { role: "assistant", content: "" } }],
+				}),
+			],
+		},
+	),
+	single(
+		"the model answers in the chat-completion form with no choices",
+		good,
+		{
+			ai: [aiValue({ object: "chat.completion", choices: [] })],
+		},
+	),
+	single(
+		"the model answers in the chat-completion form with content that is not text",
+		good,
+		{
+			ai: [
+				aiValue({
+					object: "chat.completion",
+					choices: [{ index: 0, message: { role: "assistant", content: 5 } }],
+				}),
+			],
+		},
+	),
 	answer(
 		"the model answers with a reply of more than six words and tabs",
 		"a b c d e f g h",

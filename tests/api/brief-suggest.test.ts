@@ -123,6 +123,22 @@ it("sends only allowed answer context with a twelve-token cap", async () => {
 	expect(JSON.stringify(run.mock.calls)).not.toContain("test");
 });
 
+it("reads a chat-completion reply, the form the current model answers in", async () => {
+	run.mockResolvedValueOnce({
+		object: "chat.completion",
+		choices: [
+			{
+				index: 0,
+				message: { role: "assistant", content: " in a shared calendar" },
+			},
+		],
+	});
+
+	expect(await (await POST(context())).json()).toEqual({
+		suggestion: " in a shared calendar",
+	});
+});
+
 it.each([
 	{ ...input, name: "Private" },
 	{ ...input, earlier: { email: "private@example.com" } },
