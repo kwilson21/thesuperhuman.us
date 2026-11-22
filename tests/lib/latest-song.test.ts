@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { latestSongWaveform } from "~/lib/latest-song";
-import type { MusicCatalog } from "~/lib/music-catalog";
+import { latestRelease, type MusicCatalog } from "~/lib/music-catalog";
 
 /** A catalog of releases (id, status, date, its one recording) and the comparisons that carry waveforms. */
 function catalog(
@@ -68,4 +68,31 @@ it("leaves the edge to its drawn phrase when no released song has a waveform", (
 	expect(
 		latestSongWaveform(catalog([["no-ab", "released", "2026-10-01"]], {})),
 	).toBeUndefined();
+});
+
+it("passes over a release without a date for a dated one, as the headphones do", () => {
+	const music = catalog(
+		[
+			["undated", "released", undefined],
+			["old-news", "released", "2026-09-16"],
+		],
+		{ undated: [0.9, 0.9], "old-news": [0.2, 0.4] },
+	);
+
+	expect(latestSongWaveform(music)).toEqual([0.2, 0.4]);
+	expect(latestRelease(music)?.id).toBe("old-news");
+});
+
+it("draws a release without a date when it is the only one with a waveform", () => {
+	expect(
+		latestSongWaveform(
+			catalog(
+				[
+					["undated", "released", undefined],
+					["no-ab", "released", "2026-10-01"],
+				],
+				{ undated: [0.9, 0.9] },
+			),
+		),
+	).toEqual([0.9, 0.9]);
 });

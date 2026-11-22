@@ -83,6 +83,10 @@ export const REDIRECTS = {
 
 /** Pages that need seeded data. The coverage test checks the named scenario captures the route. */
 export const SCENARIO_PAGES = {
+	"src/pages/owner/index.astro": {
+		scenario: "owner-today-resume",
+		route: "/owner",
+	},
 	"src/pages/agreements.astro": {
 		scenario: "software-signing",
 		route: "/agreements",
@@ -307,6 +311,13 @@ const PAGE_NAMES_BY_FILE = {
 };
 
 const SCENARIO_NAMES_BY_FILE = {
+	"src/pages/api/resume-approve.ts": ["resume-approval"],
+	"src/pages/owner/resume-approve.ts": ["resume-approval"],
+	"src/lib/resume-requests-today.ts": ["owner-today-resume"],
+	"src/pages/owner/index.astro": ["owner-today-resume"],
+	"src/components/Footer.astro": ["mobile-contact"],
+	"src/scripts/pinned-contact.ts": ["mobile-contact"],
+	"src/pages/index.astro": ["mobile-contact"],
 	"src/pages/contact.astro": ["contact-switchboard"],
 	"src/components/Switchboard.astro": ["contact-switchboard"],
 	"src/components/ContactForm.astro": ["contact-switchboard", "contact-hold"],

@@ -23,7 +23,7 @@ const DIRECTORY = "tests/golden/fixtures";
 // The only paths a re-record may change. Every pattern is anchored at both ends, so a dumped row (`.steps[0].state...`),
 // a `touched` list or any other field never matches by sharing a key name with a digest.
 const ALLOWED = [
-	/^\.steps\[\d+\]\.digest\.(music|publication|r2|kv)$/,
+	/^\.steps\[\d+\]\.digest\.(music|publication)$/,
 	/^\.steps\[\d+\]\.digest\.atResponse\.(music|publication)$/,
 	/^\.effects\[\d+\]\.state\.(music|publication)$/,
 	/^\.finalState\.(music|publication)\.sha256$/,
