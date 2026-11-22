@@ -1926,7 +1926,12 @@ it("stores the largest brief the form allows: its details stay under the cap, so
 });
 
 it("stores the largest brief with the fullest outline the board can send, every field at its longest", async () => {
-	// Each text ends in its own letter so no two cards are the same idea; the rest doubles in JSON.
+	// Every card is read from the answers, so each carries a passage at its longest, and every question has an answer.
+	// A passage is matched word by word, so its three words are the purpose's first three and the rest of it doubles in
+	// JSON, like every other field. Each text ends in its own letter so no two cards are the same idea.
+	const brief = { ...largestBrief, purpose: `b"c"d${'"'.repeat(1994)}x` };
+	const quote = `b${'"'.repeat(78)}c${'"'.repeat(79)}d`;
+
 	const fill = (length: number, index: number) =>
 		`${'"'.repeat(length - 1)}${"abcdefghijklmnopq"[index]}`;
 
@@ -1947,15 +1952,18 @@ it("stores the largest brief with the fullest outline the board can send, every 
 			index += 1;
 
 			return lane === "questions"
-				? { lane, text, origin: "kept", answer }
-				: { lane, text, origin: "kept" };
+				? { lane, text, origin: "answers", quote, answer }
+				: { lane, text, origin: "answers", quote };
 		}),
 	);
 
-	const response = await POST(
-		context(JSON.stringify({ ...largestBrief, outline })),
-	);
+	const response = await POST(context(JSON.stringify({ ...brief, outline })));
 
 	expect(response.status).toBe(200);
-	expect(JSON.parse(savedRequest().details_json).outline).toHaveLength(17);
+
+	const details = savedRequest().details_json;
+
+	expect(JSON.parse(details).outline).toHaveLength(17);
+	// About 25,700 characters, the outline about 11,500 of them: the worst case, well past the old limit of 16,000.
+	expect(details.length).toBeGreaterThan(25_000);
 });
