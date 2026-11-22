@@ -35,8 +35,8 @@
 		"AGREEMENT_RETENTION_BINDING_ID": "AUDIO:superhuman-audio",
 
 		"SOFTWARE_SUGGESTIONS_ENABLED": "true",
-		// The living brief's board (docs/plans/2026-11-living-brief.md). On since the owner's decision of 2026-11-22
-		// (docs/prelaunch-qa-2026-11-22-board-on.md); "false" turns it off without a code change.
+		// The living brief's board (docs/plans/2026-11-living-brief.md). On from the merge of #362, which the owner approved
+		// on 2026-11-22 (docs/prelaunch-qa-2026-11-22-board-on.md); "false" turns it off without a code change.
 		"SOFTWARE_BOARD_ENABLED": "true",
 		"CONTACT_TO_EMAIL": "kazon.wilson@thesuperhuman.us",
 		// Resend sends from the verified subdomain notifs.thesuperhuman.us;

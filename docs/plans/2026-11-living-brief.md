@@ -1,8 +1,9 @@
 # The living brief: design
 
-Status: on. Live interpretation is behind `SOFTWARE_BOARD_ENABLED`, `"true"` in `wrangler.jsonc` since November 22,
-2026, when the owner approved turning it on with a faster model (`docs/prelaunch-qa-2026-11-22-board-on.md`); `"false"`
-turns it off. Built on PR #286 (example answers and the contact confirmation), which it does not change.
+Status: on from the merge of PR #362. Live interpretation is behind `SOFTWARE_BOARD_ENABLED`, `"true"` in
+`wrangler.jsonc`; `"false"` turns it off. On November 22, 2026 the owner approved moving the board to a faster model and
+switching it on; the order and the limits were decided under his delegation (`docs/prelaunch-qa-2026-11-22-board-on.md`).
+Built on PR #286 (example answers and the contact confirmation), which it does not change.
 
 Inspired by "Beyond Taking Turns": instead of a chatbot that waits for its turn, the visitor and the system shape one
 shared artifact at the same time. The visitor keeps writing; a board beside the answer boxes fills in an outline of the
@@ -159,8 +160,8 @@ any of that: the Quint model lets any number of requests overlap and arrive in a
   (`count < cap`), then the model.
 - `BoardModel` (`src/server/services.ts`, live in `src/server/brief-board-model.ts`) calls `@cf/zai-org/glm-4.7-flash`
   with its thinking off, in JSON Mode (`response_format: json_schema`, the schema named `board_reply`), temperature 0.2,
-  at most 700 output tokens and a 30 second timeout; the page waits 35 seconds. Until November 22, 2026 it called
-  `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with an 8 second timeout, which most measured replies overran
+  at most 700 output tokens and a 30 second timeout; the page waits 35 seconds. Until November 22, 2026 it was set to
+  call `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with an 8 second timeout, which most measured replies overran
   (`docs/prelaunch-qa-2026-11-22-board-on.md`). Its failures are `BoardModelFailed` and `BoardModelTimedOut`.
 - `src/lib/brief-board.ts` holds the reply reader, the lane limits and the checks in section 2, shared by the server and
   the browser. It is pure and reads every object field by field with `src/lib/fields.ts`: a `Schema.Struct`, `Array`
@@ -181,7 +182,7 @@ $0.30. Workers AI gives 10,000 neurons a day free across the account (pricing pa
 |---|---|---|---|
 | Autocomplete | about 600 tokens | at most 12 | about $0.00006 |
 | Board, a short brief (measured) | about 475 tokens | about 314 | about $0.00015 |
-| Board, a long brief (measured) | 1,981 tokens | about 566 | about $0.00035 |
+| Board, a long brief (measured) | 1,262 tokens | about 561 | about $0.00030 |
 | Board, largest allowed | 7,000 characters of answers and board, about 3,300 tokens | 700 (the cap) | about $0.00048 |
 
 A board call costs up to about eight autocomplete calls, so the autocomplete's limits (300 per visitor and 10,000 for the

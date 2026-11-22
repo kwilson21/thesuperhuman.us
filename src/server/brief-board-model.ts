@@ -18,10 +18,11 @@ import { BoardModel, BoardModelFailed, BoardModelTimedOut } from "./services";
 /**
  * The board's model, asked in JSON Mode with its thinking off (thinking spends the 700 tokens and no JSON comes back).
  * Measured on 2026-11-22 through the Workers AI REST API with this file's own request: `@cf/zai-org/glm-4.7-flash`
- * answered every one of 42 requests with valid JSON. On short briefs (about 470 input tokens, 20 runs) it took 6.8 s at
- * the median and 17.4 s at the slowest; on long ones (1,262 and 1,981 input tokens, 22 runs, about 560 output tokens)
- * 10.5 s at the median and 33.1 s at the slowest. The first model, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, took
- * 8.7 s at the median on short briefs (about 30 tokens a second) at about five times the price. Workers AI does not
+ * answered every one of 42 requests with valid JSON. On short briefs (about 475 input tokens, 20 runs) it took 6.8 s at
+ * the median and 17.4 s at the slowest; on a long one (1,262 input tokens, about 560 output, 10 runs) 11.9 s and 33.1 s;
+ * on a stress test with more cards than the route accepts (1,981 input tokens, 12 runs) 9.7 s and 21.9 s. The first
+ * model, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, took 8.7 s at the median on short briefs (about 30 tokens a
+ * second) at about five times the price. Workers AI's speed varies from call to call, and it does not
  * stream JSON Mode, so the whole reply is awaited while the visitor keeps writing.
  */
 export const BOARD_MODEL = "@cf/zai-org/glm-4.7-flash";
@@ -31,7 +32,7 @@ export const BOARD_MAX_TOKENS = 700;
 
 /**
  * How long the route waits for the model: 41 of the 42 measured replies came within it. A reply the route gives up on is
- * lost and the page then waits 20 s before asking again, so a later limit brings a slow outline sooner. Below the page's
+ * lost, and the page then waits 20 s before asking again, so a later limit brings a slow outline sooner. Below the page's
  * own limit (35 s).
  */
 export const BOARD_TIMEOUT_MS = 30000;
