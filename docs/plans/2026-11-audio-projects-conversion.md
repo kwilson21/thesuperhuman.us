@@ -327,8 +327,8 @@ the guard refuses, as today.
 The stage reset after a file revoke (FR3) is a decision, so a rule makes it. `revokeFile` reads the file and the version's
 other published files (their ids) and the stage, and decides the reset: reset when no other published file of the version
 is left and the stage is the one the version resets (`review_ready` for a review; `final_files_ready` or `complete` for a
-final). The batch carries a guard that the version's other published files are the ones the rule read and that the stage is
-the one it read; the guard raises, the whole batch rolls back, and `decideAndSave` asks again on fresh facts, so the retry
+final). The batch carries a guard that the version's other published files are the ones the rule read and, only when the rule
+decided the reset, that the stage is the one it read (a revoke that decided none does not depend on the stage); the guard raises, the whole batch rolls back, and `decideAndSave` asks again on fresh facts, so the retry
 re-decides (three tries). Two finals revoked at once both still succeed, as today: the first batch passes its guard and
 revokes without a reset (the rule saw the other final), the second finds the others moved, rolls back, reads again, sees
 none left, and revokes with the reset. The file's own guard is separate and is not a retry: the file update still requires
@@ -352,7 +352,7 @@ drops the guard and the retry).
 | AR5 | DELETE `audio_client_codes` WHERE `email=(subquery)`, best effort (audio-client-access.ts) | (d) | (b): the email stays selected by request id inside the statement, as today, so a best-effort cleanup after the batch acts on the client's email as it is then and not on a snapshot taken before the batch; it has no revocation link today and gets none. A "no such table" failure stays silent: it becomes the normal case once migration 0028 drops `audio_client_codes` (issue #271). Any other failure logs once through `logUnexpected`, which changes the log text (today `console.error` with the error class only); no answer changes |
 | FR1 | SELECT `version,status` of the file (revocation.ts:50) | (a) | (a) |
 | FR2 | UPDATE the file to revoked WHERE `status=?` AND EXISTS open project (revocation.ts:66) | (c)+(d) | (c): the read status and an open project; the rule refuses a closed project first; an empty `RETURNING` answers 409, no retry |
-| FR3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file AND the file update landed (`EXISTS(file id=? AND revocation_id=?)`, revocation.ts:75-78) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read), the same revocation-id link to this request's file update (kept: a file update refused because the project closed in between resets nothing), and a batch guard that the other published files are the ones read; a moved guard rolls the batch back and `decideAndSave` re-decides |
+| FR3 | UPDATE the stage to `in_progress` WHERE stage IN and NOT EXISTS another published file AND the file update landed (`EXISTS(file id=? AND revocation_id=?)`, revocation.ts:75-78) | (d) | (c): written only when the rule decided the reset; `stage=?` (the stage read), the same revocation-id link to this request's file update (kept: a file update refused because the project closed in between resets nothing), and a batch guard that the other published files are the ones read and, when the reset was decided, that the stage is the one read; a moved guard rolls the batch back and `decideAndSave` re-decides |
 | FR4 | INSERT audit WHERE `changes()=1` (revocation.ts:91, which counts FR3's row) | (d) | (b), written with FR3 only when the rule decided the reset, and keeping the link: it is written only if FR3 changed the stage |
 | FR5 | INSERT `audio_project_updates` from the file's revocation id (revocation.ts:100) | (b) | (b) |
 | P1 | SELECT the file (publishing.ts:26) | (a) | (a), with the project, request and payments in the same batch |
