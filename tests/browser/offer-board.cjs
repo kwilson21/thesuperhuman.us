@@ -2200,6 +2200,60 @@ function check(name, ok, detail = "") {
 			`${mainFocused} ${editorAt} -> ${await editorTop()}`,
 		);
 
+		// Focus on a link or button anywhere in the pricing section holds a reply that would redraw the rows, as on a row's
+		// own button (the thirty-second review: a focused past offer or the caption's link moved when the rows grew).
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const priceHold = await next();
+
+		await page.locator(".offer-pricing .offer-caption a").focus();
+		await page.mouse.move(2, 2);
+
+		const grownRows = scriptedOfferReply(priceHold.request().postData());
+
+		grownRows.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(priceHold, grownRows);
+		await page.waitForTimeout(500);
+		check(
+			"focus on the pricing caption's link holds a reply that would redraw the rows",
+			await page
+				.locator("[data-offer-held]")
+				.evaluate((element) => !element.hasAttribute("data-idle")),
+		);
+
+		// Equal ends read as one figure: "1 working day", not "1 to 1 working days" (the thirty-second review).
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const evenDays = await next();
+		const oneDay = scriptedOfferReply(evenDays.request().postData());
+
+		const firstMilestone = oneDay.cards.find(
+			(each) => each.lane === "milestones",
+		);
+
+		firstMilestone.detail.daysLow = 1;
+		firstMilestone.detail.daysHigh = 1;
+		await release(evenDays, oneDay);
+		await page.waitForFunction(() =>
+			document
+				.querySelector("[data-offer-status]")
+				?.textContent?.startsWith("Up to date"),
+		);
+
+		const dayLine = await card("milestones")
+			.locator("[data-card-detail] li")
+			.last()
+			.textContent();
+
+		check(
+			"a milestone of one day reads as one working day",
+			dayLine === "1 working day",
+			dayLine,
+		);
+
 		// At the page's limit the board says it no longer follows the draft, the first time the draft moves on.
 		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
 		await page

@@ -93,6 +93,23 @@ type Held = {
 const dollars = (cents: number) =>
 	`$${Math.round(cents / 100).toLocaleString("en-US")}`;
 
+/** "$800 to $1,000", or one figure when both ends read the same. */
+const dollarSpan = (lowCents: number, highCents: number) =>
+	dollars(lowCents) === dollars(highCents)
+		? dollars(lowCents)
+		: `${dollars(lowCents)} to ${dollars(highCents)}`;
+
+/** "2 to 3 days", or one figure when both ends are the same ("1 day", "half a day"); `working` says "working days". */
+const daySpan = (low: number, high: number, working = false) => {
+	const kind = working ? "working " : "";
+
+	if (low !== high) return `${low} to ${high} ${kind}days`;
+
+	if (low === 0.5) return `half a ${kind}day`;
+
+	return low === 1 ? `1 ${kind}day` : `${low} ${kind}days`;
+};
+
 /** An amount to the cent when it has cents: what fills the offer. */
 const exactDollars = (cents: number) =>
 	`$${(cents / 100).toLocaleString("en-US", {
@@ -313,6 +330,17 @@ export function setupOfferBoard() {
 
 	// Only the cards move when a reply applies, so only the owner's pointer or focus among them holds a reply. The
 	// "Show updates" button counts too, so moving to it never applies (and hides) what it would show.
+	/** Focus on a button or link in the pricing section: a reply's redraw of the rows can move it. */
+	const pricesFocused = () => {
+		const active = document.activeElement;
+
+		return (
+			active instanceof HTMLElement &&
+			active.matches("a, button") &&
+			active.closest(".offer-pricing") !== null
+		);
+	};
+
 	const interacting = () =>
 		fingerDown ||
 		Date.now() - touchedAt < QUIET ||
@@ -321,10 +349,9 @@ export function setupOfferBoard() {
 		pressing ||
 		cardsBox.contains(document.activeElement) ||
 		document.activeElement === heldButton ||
-		// A price row is redrawn when a reply applies, so focus on its buttons holds a reply too.
-		Boolean(
-			document.activeElement?.closest("[data-price-day], [data-price-market]"),
-		) ||
+		// The price rows are redrawn when a reply applies and can change height, so focus on a control among them (a row's
+		// button, a past offer, the caption's link) holds a reply too.
+		pricesFocused() ||
 		[...cardsBox.querySelectorAll<HTMLElement>("[data-card-editor]")].some(
 			(editor) => !editor.hidden,
 		);
@@ -916,7 +943,7 @@ export function setupOfferBoard() {
 			const high = days.reduce((sum, item) => sum + item.daysHigh, 0);
 
 			dayParts.push(
-				`${dollars(estimate.lowCents)} to ${dollars(estimate.highCents)}: ${low} to ${high} days for ${counted.length} ${inOffer.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
+				`${dollarSpan(estimate.lowCents, estimate.highCents)}: ${daySpan(low, high)} for ${counted.length} ${inOffer.length ? "used" : "suggested"} ${counted.length === 1 ? "milestone" : "milestones"}, at your day value, plus ${pricing.contingencyPercent}% on the high end. `,
 				rangeButton(
 					estimate.lowCents,
 					estimate.highCents,
@@ -934,7 +961,7 @@ export function setupOfferBoard() {
 
 		if (range && pricing.market && sizing?.size) {
 			marketParts.push(
-				`The AI reads this as a ${sizing.size} ${kindNoun}${sizing.sizeReason ? ` (its reason: “${clause(sizing.sizeReason)}”)` : ""}. Your research (${day(pricing.market.researchedOn)}) puts a ${sizing.size} ${kindNoun} at ${dollars(range.lowUsd * 100)} to ${dollars(range.highUsd * 100)}. `,
+				`The AI reads this as a ${sizing.size} ${kindNoun}${sizing.sizeReason ? ` (its reason: “${clause(sizing.sizeReason)}”)` : ""}. Your research (${day(pricing.market.researchedOn)}) puts a ${sizing.size} ${kindNoun} at ${dollarSpan(range.lowUsd * 100, range.highUsd * 100)}. `,
 			);
 
 			if (sizing.figureUsd !== null) {
@@ -1087,7 +1114,7 @@ export function setupOfferBoard() {
 				? [
 						...detail.deliverables.map((item) => `Delivers: ${item}`),
 						...detail.acceptance.map((item) => `Check: ${item}`),
-						`${detail.daysLow} to ${detail.daysHigh} working days`,
+						daySpan(detail.daysLow, detail.daysHigh, true),
 					].map((text) => {
 						const item = document.createElement("li");
 						item.textContent = text;
@@ -1443,11 +1470,7 @@ export function setupOfferBoard() {
 				);
 			}).length +
 			(reply.sizing.size &&
-			(pressing ||
-				hoveringPrices ||
-				document.activeElement?.closest(
-					"[data-price-day], [data-price-market]",
-				)) &&
+			(pressing || hoveringPrices || pricesFocused()) &&
 			marketShown(reply.sizing) !== marketShown(sizing)
 				? 1
 				: 0);

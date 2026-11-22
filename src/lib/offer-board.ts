@@ -222,14 +222,17 @@ const days = fieldOf<number>((raw) =>
 		: { say: "Half a day to 60 days, in halves." },
 );
 
+// The ref and the reason are read leniently: a ref the board never gave (a new card's made-up one) reads as none, and a
+// reason too long to show is left out, so neither drops a card the reader would otherwise keep. A model's whole reply is
+// at most OFFER_MAX_TOKENS long, so the generous limits here only bound what is read.
 const replyCardFields = {
-	ref: text(12),
+	ref: text(4000),
 	lane: choiceField(OFFER_LANES, {
 		...unreadable,
 		notOneOf: () => "Not a lane.",
 	}),
 	text: text(400),
-	reason: text(400),
+	reason: text(4000),
 };
 
 const detailFields = { daysLow: days, daysHigh: days };
@@ -307,9 +310,10 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 		if (!read.ok) continue;
 		const card = read.value;
 		const words = oneLine(card.text);
-		const said = oneLine(card.reason);
 
-		// A reason too long to show is left out; the card stays (a reason is only a note on why).
+		// Read at a bounded length: a reason with money or a link drops its card, shown or not; one too long to show is
+		// left out and the card stays (a reason is only a note on why).
+		const said = oneLine(card.reason.slice(0, OFFER_REASON_MAX * 2 + 40));
 		const reason = said.length > OFFER_REASON_MAX ? "" : said;
 
 		// The model puts a milestone's detail on the card; the route's answer nests it under `detail`.
@@ -322,12 +326,18 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 			!words ||
 			words.length > offerTextLimits[card.lane] ||
 			pricesOrLinks(words) ||
-			pricesOrLinks(reason) ||
+			pricesOrLinks(said) ||
 			(card.lane === "milestones" && !detail)
 		)
 			continue;
 
-		cards.push({ ref: card.ref, lane: card.lane, text: words, reason, detail });
+		cards.push({
+			ref: isRef(card.ref) ? card.ref : "",
+			lane: card.lane,
+			text: words,
+			reason,
+			detail,
+		});
 
 		if (cards.length === OFFER_REPLY_MAX) break;
 	}

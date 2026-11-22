@@ -72,7 +72,7 @@ const updated = pricing.updatedAt
         <table class="pricing-table">
           <caption id="pricing-table-caption" class="visually-hidden">Fixed-price ranges by kind of work and size</caption>
           <thead><tr><th scope="col">Kind</th><th scope="col">Size</th><th scope="col">Range</th><th scope="col">What it covers</th></tr></thead>
-          <tbody>{PRICING_KINDS.flatMap(kind => PRICING_SIZES.map(size => { const range = marketRange(market, kind, size); return <tr><th scope="row">{kindLabels[kind]}</th><td>{sizeLabels[size]}</td><td>{range ? `${dollars(range.lowUsd)} to ${dollars(range.highUsd)}` : 'No figure'}</td><td>{range?.definition ?? ''}</td></tr>; }))}</tbody>
+          <tbody>{PRICING_KINDS.flatMap(kind => PRICING_SIZES.map(size => { const range = marketRange(market, kind, size); return <tr><th scope="row">{kindLabels[kind]}</th><td>{sizeLabels[size]}</td><td>{range ? (range.lowUsd === range.highUsd ? dollars(range.lowUsd) : `${dollars(range.lowUsd)} to ${dollars(range.highUsd)}`) : 'No figure'}</td><td>{range?.definition ?? ''}</td></tr>; }))}</tbody>
         </table>
         </div>
         {market.dayRate && <p>Senior independent developers: {dollars(market.dayRate.lowUsd)} to {dollars(market.dayRate.highUsd)} a day, for reference.</p>}

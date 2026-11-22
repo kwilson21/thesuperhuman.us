@@ -1,5 +1,6 @@
 // The offer board's reply reader and its lanes under the living brief's rules (docs/plans/2026-11-offer-board.md).
 import { describe, expect, it } from "vitest";
+import { OFFER_INSTRUCTIONS } from "../../src/server/offer-board-model";
 import {
 	type ReplyCard,
 	applyReplyIn,
@@ -843,5 +844,45 @@ describe("found in the offer board's thirty-first review", () => {
 
 		expect(reply?.cards).toHaveLength(1);
 		expect(reply?.cards[0]?.reason).toBe("");
+	});
+});
+
+describe("found in the offer board's thirty-second review", () => {
+	const hosting = (reason: string, ref = "") =>
+		readOfferReply({
+			cards: [{ ref, lane: "inputs", text: "Hosting access", reason }],
+		})?.cards ?? [];
+
+	it("drops a card whose long reason names money or a link, shown or not", () => {
+		expect(
+			hosting(
+				`${"Because the client needs it. ".repeat(6)}It costs $5,000 per year.`,
+			),
+		).toHaveLength(0);
+		expect(
+			hosting(
+				`See https://example.com/hosting ${"for the details. ".repeat(10)}`,
+			),
+		).toHaveLength(0);
+	});
+
+	it("keeps a card whose reason is far too long to show, without the reason", () => {
+		const cards = hosting("Because the client needs it. ".repeat(20));
+
+		expect(cards).toHaveLength(1);
+		expect(cards[0]?.reason).toBe("");
+	});
+
+	it("reads a ref the board never gave as none, and keeps the card", () => {
+		const cards = hosting("The client gives it", "new-outcome-1");
+
+		expect(cards).toHaveLength(1);
+		expect(cards[0]?.ref).toBe("");
+		expect(hosting("The client gives it", "c12")[0]?.ref).toBe("c12");
+	});
+
+	it("tells the model each milestone's days run from 0.5 to 60 and a new card's ref is empty", () => {
+		expect(OFFER_INSTRUCTIONS).toContain("each from 0.5 to 60");
+		expect(OFFER_INSTRUCTIONS).toContain("A new card has an empty ref.");
 	});
 });

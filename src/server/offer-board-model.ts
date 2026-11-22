@@ -33,7 +33,7 @@ Return JSON that matches the schema.
 - cards: suggestions, each in one lane, each with a reason: why it belongs, in under 20 words.
   - outcome: one line the client will recognize, under 15 words.
   - summary: one or two sentences on what changes for the client.
-  - milestones: at most 3, the first one small and clear. Each has a short name, 1 to 8 deliverables, 1 to 5 acceptance examples the client can check, and daysLow and daysHigh: the working days it would take one experienced developer, in halves of a day.
+  - milestones: at most 3, the first one small and clear. Each has a short name, 1 to 8 deliverables, 1 to 5 acceptance examples the client can check, and daysLow and daysHigh: the working days it would take one experienced developer, in halves of a day, each from 0.5 to 60.
   - inputs: something the developer needs from the client (access, content, decisions).
   - exclusions: something outside this offer.
   - timing: one sentence on how long it takes from the start date, in weeks.
@@ -45,7 +45,7 @@ Return JSON that matches the schema.
 Rules:
 - Keep each card's text within its lane's length: outcome, inputs, exclusions and drivers under 120 characters, a milestone's name under 80, summary under 300, timing and questions under 200, and each deliverable or acceptance example under 200. A longer card is left out.
 - Never put a price, cost, budget or link in any card. Money belongs only in figureUsd.
-- Cards marked "open" are your earlier suggestions. To keep one as it is, put its ref in keep and leave it out of cards. To reword one, repeat it in cards with its ref. A card in neither is withdrawn.
+- A new card has an empty ref. Cards marked "open" are your earlier suggestions. To keep one as it is, put its ref in keep and leave it out of cards. To reword one, repeat it in cards with its ref. A card in neither is withdrawn.
 - Never repeat or rephrase a card marked "yours" or "avoid".
 - Build on what the draft already says rather than replacing it.
 - Write in the language of the brief.`;
