@@ -1,17 +1,48 @@
-// The pure helpers of the client portal that other areas import: the portal flag, the address normalizer and the two
-// hashes. No D1, mail or sessions, so an area can use them without loading src/lib/audio-client-access.ts, which keeps
-// the sign-in codes, sessions and allowances. The address normalizer still validates with Zod; it moves to Effect
-// Schema with the studio sign-in area (docs/plans/2026-11-effect-conversion.md, step 2).
-import { z } from "zod";
+// The pure helpers of the client portal that other areas import: the portal flag, the address normalizer, the two
+// hashes and the lifetimes of a code and a session. No D1, mail or sessions, so an area can use them without loading
+// src/lib/audio-client-access.ts, which keeps the cookies, the session reads and the one allowance count left there. The
+// address normalizer checks with Effect Schema and answers every input as the Zod 4 schema it replaced did
+// (tests/server/validators-differential.test.ts holds it to a frozen copy of it).
+import * as Schema from "effect/Schema";
+import { emailPattern } from "./fields";
 
-const emailSchema = z.string().trim().toLowerCase().pipe(z.email().max(320));
+/**
+ * An address once trimmed and lower-cased: the email pattern, and at most 320 characters. Zod 4's default email pattern,
+ * which this replaced, accepts exactly the text `emailPattern` (Zod 3.25's) accepts, so the shared one is used; the
+ * differential test holds the two answers together. Zod 4 counted the 320 in code points, not UTF-16 units; the pattern
+ * admits only ASCII, so for any text it accepts the two counts are the same.
+ */
+const ClientEmail = Schema.String.check(
+	Schema.isPattern(emailPattern),
+	Schema.isMaxLength(320),
+);
 
-/** `input` is the email field of a request body. Every caller passes a string; the schema still rejects anything that is not a valid address. */
+const isText = Schema.is(Schema.String);
+const isClientEmail = Schema.is(ClientEmail);
+
+/**
+ * `input` is the email field of a request body: trimmed, then lower-cased, then checked, as Zod did. Every caller passes
+ * a string; anything that is not one, or not a valid address, is null.
+ */
 export function normalizeClientEmail(input: string): string | null {
-	const parsed = emailSchema.safeParse(input);
+	if (!isText(input)) return null;
 
-	return parsed.success ? parsed.data : null;
+	const address = input.trim().toLowerCase();
+
+	return isClientEmail(address) ? address : null;
 }
+
+/**
+ * How long a sign-in code lives: the issue stamps its row with it (src/server/flows/signin-code.ts), and the pending
+ * sign-in cookie lasts as long (src/lib/audio-client-access.ts).
+ */
+export const CODE_LIFETIME_MS = 10 * 60 * 1000;
+
+/**
+ * How long a studio session lives: an accepted code's session row ends after it (src/server/flows/signin-session.ts),
+ * and the session cookie lasts as long (src/lib/audio-client-access.ts).
+ */
+export const SESSION_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
 
 export function clientPortalEnabled(env: Env | undefined): boolean {
 	return env?.AUDIO_CLIENT_PORTAL_ENABLED === "true";

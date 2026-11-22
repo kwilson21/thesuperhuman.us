@@ -1,9 +1,12 @@
 # Studio sign-in: conversion design
 
-Status: proposed 2026-11-22, as the design PR for step 2 of `docs/plans/2026-11-effect-conversion.md`, reviewed before
-any conversion code; this PR changes nothing under `src/`. Every claim about today's code cites a file and line on
-`origin/main` at `2f93a646`. `code.ts`, `session.ts` and `sign-out.ts` below mean the files of that name in
-`src/pages/api/studio/`, and `access.ts` means `src/lib/audio-client-access.ts`.
+Status: converted, not yet merged (2026-11-22): the model extension (#360) and the fixes S1 to S3 (#367) merged, and the
+conversion is a stack of two PRs, the readers, machine, rules and store (#368), then the services, flows, routes, the
+agreement allowance and the deletions, to be merged into `main` as one. Proposed 2026-11-22 as the design PR for step 2
+of `docs/plans/2026-11-effect-conversion.md`, reviewed before any conversion code; that PR changed nothing under `src/`.
+Every claim about "today's code" means the code before the conversion and cites a file and line on `origin/main` at
+`2f93a646`. `code.ts`, `session.ts` and `sign-out.ts` below mean the files of that name in `src/pages/api/studio/`, and
+`access.ts` means `src/lib/audio-client-access.ts`.
 
 ## Owner decisions
 
@@ -217,10 +220,13 @@ answer, and neither route retries a refused guard.
 
 ## 4. The store and the services
 
-**`src/server/signin-store.ts`**, one function per statement or batch over `MusicDb`, each with `Effect.tryPromise`.
-Every statement keeps today's SQL text and every batch its shape, byte for byte: the golden corpora then see the same
-D1 statements, and the non-interference test, which schedules a request's batches by their leading SQL and their
-length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes unchanged.
+**`src/server/studio-signin-store.ts`**, one function per statement or batch over `MusicDb`, each with
+`Effect.tryPromise`. (One store file per area, as CLAUDE.md asks: the audio projects conversion, #365, had already
+opened this file for the access closure's statements on the sign-in tables, with the failure `StudioSigninStoreFailed`,
+so the sign-in statements moved into it and use that one failure; this design first named a file `signin-store.ts` and a
+failure `SigninStoreFailed`.) Every statement keeps today's SQL text and every batch its shape, byte for byte: the
+golden corpora then see the same D1 statements, and the non-interference test, which schedules a request's batches by
+their leading SQL and their length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes unchanged.
 
 | Function | Statements | Today |
 |---|---|---|
@@ -232,12 +238,12 @@ length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes uncha
 | `countAllowance` | the prune of stale windows and the counting upsert (one batch) | access.ts:420-427 |
 | `revokeSession` | the guarded update (C9) | access.ts:647-652 |
 
-A rejected statement becomes `SigninStoreFailed` with the cause in `failure`, which the route logs once through
+A rejected statement becomes `StudioSigninStoreFailed` with the cause in `failure`, which the route logs once through
 `logUnexpected`. A guard that raised (`raisedByJsonGuard`) becomes `GuardRefused`, which is not retried: the code flow
 answers it with the generic 200, as a refusal, and the discard catches that tag alone (`Effect.catchTags({ GuardRefused:
-() => Effect.void })`), as today it swallows only the raised guard (access.ts:260-263), so a `SigninStoreFailed` still
-reaches the background's logged failure. No statement here has a unique constraint that a rule's facts depend on, so
-there is no `ChangedSinceRead`.
+() => Effect.void })`), as today it swallows only the raised guard (access.ts:260-263), so a `StudioSigninStoreFailed`
+still reaches the background's logged failure. No statement here has a unique constraint that a rule's facts depend on,
+so there is no `ChangedSinceRead`.
 
 **Services.** `Turnstile` (exists), `Background` (exists), `Mail` and `SigninKeys`. The `Mail` this route gets is built
 on `sendAudioMessage`, as the offers area's `liveOfferMail` is (`src/server/offers-services.ts:80`), with the payload's
@@ -283,7 +289,7 @@ passes `{ route, answer }` to `runRoute`, so a defect is logged once and answere
 | No Turnstile secret, Resend key or from address | 503, today's sentence | not needed | not needed |
 | No code key | 503, today's sentence | 503, today's sentence | not needed |
 | A code key under 32 characters (`CodeKeyUnusable`, at the first keyed hash) | 503, today's sentence | 503, today's sentence | not needed |
-| `SigninStoreFailed`, a hash failure, a defect | 500, today's sentence (fix S1) | 500, today's sentence (fix S1) | 500 `{ok:false, localSignedOut:true}`, cookie cleared (fix S2) |
+| `StudioSigninStoreFailed`, a hash failure, a defect | 500, today's sentence (fix S1) | 500, today's sentence (fix S1) | 500 `{ok:false, localSignedOut:true}`, cookie cleared (fix S2) |
 | Every other answer | as today | as today | as today |
 
 ### Behaviour fixes

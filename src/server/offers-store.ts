@@ -57,6 +57,7 @@ import {
 } from "./machines/software-request";
 import {
 	ChangedSinceRead,
+	GuardRefused,
 	isUniqueViolation,
 	raisedByJsonGuard,
 } from "./guarded-save";
@@ -81,8 +82,8 @@ export class OffersStoreFailed extends Data.TaggedError("OffersStoreFailed")<{
 	readonly failure: unknown;
 }> {}
 
-/** A compare-and-set guard refused the batch: what the rule read has changed since. Never retried. */
-export class GuardRefused extends Data.TaggedError("GuardRefused") {}
+/** A compare-and-set guard refused the batch (GuardRefused, src/server/guarded-save.ts), which the store's callers name. */
+export { GuardRefused };
 
 /** Runs one database call; a rejection is an OffersStoreFailed. */
 const asked = <A>(run: (db: D1Database) => Promise<A>) =>

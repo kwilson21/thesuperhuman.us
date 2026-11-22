@@ -5,15 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
 	clientProjectForSession,
 	clientProjectsForSession,
-	completeClientCode,
-	discardUndeliveredCode,
 	groupStudioProjects,
-	issueClientCode,
 	listStudioSignInFailures,
-	revokeClientSession,
-	takeStudioAllowance,
 } from "~/lib/audio-client-access";
 import { normalizeClientEmail } from "~/lib/client-portal";
+import { CODE_EMAIL } from "~/server/flows/signin-code";
+import { studioSignin } from "../helpers/studio-signin";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -31,6 +28,7 @@ function fixture() {
 	sql.exec(baseline);
 
 	const db = sqliteD1(sql);
+	const signin = studioSignin(db, secret);
 
 	const addRequest = (id: string, email = "artist@example.com") =>
 		sql
@@ -39,7 +37,7 @@ function fixture() {
     VALUES (?,'service',?,'A song','new',?,?)`)
 			.run(id, email, now.toISOString(), now.toISOString());
 
-	return { sql, db, addRequest };
+	return { sql, db, addRequest, signin };
 }
 
 describe("audio client access", () => {
@@ -51,18 +49,11 @@ describe("audio client access", () => {
 	});
 
 	it("issues only to project members and stores hashes rather than the code or the nonce", async () => {
-		const { sql, db, addRequest } = fixture();
-		expect(
-			await issueClientCode(db, "unknown@example.com", secret, now),
-		).toBeNull();
+		const { sql, addRequest, signin } = fixture();
+		expect(await signin.issue("unknown@example.com", now)).toBeNull();
 		addRequest("song-1");
 
-		const issued = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
+		const issued = (await signin.issue("artist@example.com", now))!;
 
 		expect(issued.code).toMatch(/^\d{8}$/);
 		expect(issued.nonce).toMatch(/^[0-9a-f]{64}$/);
@@ -84,58 +75,45 @@ describe("audio client access", () => {
 	});
 
 	it("requires the current unused code from the browser that asked and confines a session to its email projects", async () => {
-		const { sql, db, addRequest } = fixture();
+		const { sql, db, addRequest, signin } = fixture();
 		addRequest("song-1");
 		addRequest("song-2");
 		addRequest("other-song", "other@example.com");
 
-		const first = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
+		const first = (await signin.issue("artist@example.com", now))!;
 
 		// The same browser asking again replaces its own earlier code.
 		const afterCooldown = new Date(now.getTime() + 31_000);
 
-		const second = (await issueClientCode(
-			db,
+		const second = (await signin.issue(
 			"artist@example.com",
-			secret,
 			afterCooldown,
 			first.nonce,
 		))!;
 
 		// The first code belonged to the browser's earlier request and is gone.
 		expect(
-			await completeClientCode(
-				db,
+			await signin.enter(
 				"artist@example.com",
 				first.code,
 				first.nonce,
-				secret,
 				afterCooldown,
 			),
 		).toBeNull();
 
-		const token = await completeClientCode(
-			db,
+		const token = await signin.enter(
 			"artist@example.com",
 			second.code,
 			second.nonce,
-			secret,
 			afterCooldown,
 		);
 
 		expect(token).toBeTruthy();
 		expect(
-			await completeClientCode(
-				db,
+			await signin.enter(
 				"artist@example.com",
 				second.code,
 				second.nonce,
-				secret,
 				afterCooldown,
 			),
 		).toBeNull();
@@ -165,34 +143,22 @@ describe("audio client access", () => {
 		expect(
 			await clientProjectForSession(db, token!, "song-2", now),
 		).not.toBeNull();
-		await revokeClientSession(db, token!, now);
+		await signin.signOut(token!, now);
 		expect(await clientProjectForSession(db, token!, "song-2", now)).toBeNull();
 		sql.close();
 	});
 
 	it("locks a code after five wrong guesses, even when they arrive together", async () => {
-		const { sql, db, addRequest } = fixture();
+		const { sql, addRequest, signin } = fixture();
 		addRequest("song-1");
 
-		const issued = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
+		const issued = (await signin.issue("artist@example.com", now))!;
 
 		const wrong = issued.code === "00000000" ? "11111111" : "00000000";
 
 		const guesses = await Promise.all(
 			Array.from({ length: 10 }, () =>
-				completeClientCode(
-					db,
-					"artist@example.com",
-					wrong,
-					issued.nonce,
-					secret,
-					now,
-				),
+				signin.enter("artist@example.com", wrong, issued.nonce, now),
 			),
 		);
 
@@ -201,52 +167,26 @@ describe("audio client access", () => {
 			sql.prepare("SELECT attempts FROM audio_client_signin_codes").get(),
 		).toEqual({ attempts: 5 });
 		expect(
-			await completeClientCode(
-				db,
-				"artist@example.com",
-				issued.code,
-				issued.nonce,
-				secret,
-				now,
-			),
+			await signin.enter("artist@example.com", issued.code, issued.nonce, now),
 		).toBeNull();
 		sql.close();
 	});
 
 	it("admits exactly the allowance when requests arrive together, then opens a new window", async () => {
-		const { sql, db } = fixture();
+		const { sql, signin } = fixture();
 
 		const results = await Promise.all(
 			Array.from({ length: 20 }, () =>
-				takeStudioAllowance(
-					db,
-					"code-email",
-					"artist@example.com",
-					3,
-					secret,
-					now,
-				),
+				signin.allow(CODE_EMAIL, "artist@example.com", now),
 			),
 		);
 
 		expect(results.filter(Boolean)).toHaveLength(3);
+		expect(await signin.allow(CODE_EMAIL, "other@example.com", now)).toBe(true);
 		expect(
-			await takeStudioAllowance(
-				db,
-				"code-email",
-				"other@example.com",
-				3,
-				secret,
-				now,
-			),
-		).toBe(true);
-		expect(
-			await takeStudioAllowance(
-				db,
-				"code-email",
+			await signin.allow(
+				CODE_EMAIL,
 				"artist@example.com",
-				3,
-				secret,
 				new Date(now.getTime() + 5 * 60_000 + 1),
 			),
 		).toBe(true);
@@ -260,105 +200,64 @@ describe("audio client access", () => {
 	});
 
 	it("locks a code after five wrong attempts and rejects expired or undelivered codes", async () => {
-		const { sql, db, addRequest } = fixture();
+		const { sql, addRequest, signin } = fixture();
 		addRequest("song-1");
 
-		const issued = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
+		const issued = (await signin.issue("artist@example.com", now))!;
 
 		const wrong = issued.code === "00000000" ? "11111111" : "00000000";
 
 		for (let attempt = 0; attempt < 5; attempt++) {
 			expect(
-				await completeClientCode(
-					db,
-					"artist@example.com",
-					wrong,
-					issued.nonce,
-					secret,
-					now,
-				),
+				await signin.enter("artist@example.com", wrong, issued.nonce, now),
 			).toBeNull();
 		}
 
 		expect(
-			await completeClientCode(
-				db,
-				"artist@example.com",
-				issued.code,
-				issued.nonce,
-				secret,
-				now,
-			),
+			await signin.enter("artist@example.com", issued.code, issued.nonce, now),
 		).toBeNull();
 
 		const later = new Date(now.getTime() + 31_000);
 
-		const newer = (await issueClientCode(
-			db,
+		const newer = (await signin.issue(
 			"artist@example.com",
-			secret,
 			later,
 			issued.nonce,
 		))!;
 
 		expect(
-			await completeClientCode(
-				db,
-				"artist@example.com",
-				newer.code,
-				newer.nonce,
-				secret,
-				later,
-			),
+			await signin.enter("artist@example.com", newer.code, newer.nonce, later),
 		).toBeTruthy();
 
-		const tooLate = (await issueClientCode(
-			db,
+		const tooLate = (await signin.issue(
 			"artist@example.com",
-			secret,
 			later,
 			newer.nonce,
 		))!;
 
 		expect(tooLate).not.toBeNull();
 		expect(
-			await completeClientCode(
-				db,
+			await signin.enter(
 				"artist@example.com",
 				tooLate.code,
 				tooLate.nonce,
-				secret,
 				new Date("2026-09-22T12:11:00Z"),
 			),
 		).toBeNull();
 
-		const undelivered = (await issueClientCode(
-			db,
+		// Resend refuses the email, so the code is discarded.
+		const undelivered = (await signin.issue(
 			"artist@example.com",
-			secret,
 			new Date("2026-09-22T12:12:00Z"),
+			null,
+			"refused",
 		))!;
 
-		await discardUndeliveredCode(
-			db,
-			"artist@example.com",
-			undelivered.code,
-			undelivered.nonce,
-			secret,
-			now,
-		);
 		expect(
-			await completeClientCode(
-				db,
+			await signin.enter(
 				"artist@example.com",
 				undelivered.code,
 				undelivered.nonce,
-				secret,
 				now,
 			),
 		).toBeNull();
@@ -373,24 +272,11 @@ describe("audio client access", () => {
 	});
 
 	it("surfaces failed delivery until the client signs in", async () => {
-		const { sql, db, addRequest } = fixture();
+		const { sql, db, addRequest, signin } = fixture();
 		addRequest("song-1");
 
-		const undelivered = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		await discardUndeliveredCode(
-			db,
-			"artist@example.com",
-			undelivered.code,
-			undelivered.nonce,
-			secret,
-			now,
-		);
+		// Resend refuses the email, so the code is discarded and the failure audited.
+		await signin.issue("artist@example.com", now, null, "refused");
 		expect(await listStudioSignInFailures(db)).toEqual([
 			{ requestId: "song-1", clientName: "" },
 		]);

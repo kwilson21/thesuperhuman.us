@@ -73,9 +73,19 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    `docs/prelaunch-qa-2026-11-16-offers-area.md`).
 2. **Studio sign-in.** `studio/code.ts`, `session.ts`, `sign-out.ts`, `audio-client-access.ts` and `client-portal.ts`
    (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule
-   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this
-   area) merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model.
-   Design: `docs/plans/2026-11-studio-signin-conversion.md`.
+   (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this area)
+   merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model. Design:
+   `docs/plans/2026-11-studio-signin-conversion.md`. The model extension and the fixes S1 to S3 merged (#360, #367).
+   Converted, not yet merged: a stack of two PRs to be merged into `main` as one. The first (#368) holds the Effect
+   Schema readers and address normalizer (`src/server/signin-input.ts`, `src/lib/client-portal.ts`), the code machine
+   (`src/server/machines/signin-code.ts`), the rules (`src/server/rules/signin-*.ts`, `studio-allowance.ts`) and the
+   store (`src/server/studio-signin-store.ts`). The second holds the services (`src/server/signin-services.ts`), the
+   flows (`src/server/flows/signin-code.ts`, `signin-session.ts`, `signin-sign-out.ts`), the three routes with their
+   fixed answers (`src/lib/studio-signin.ts`), the agreement link's allowance (`liveAgreementAllowance` counts through
+   the store and the rule), and the deletions (`issueClientCode`, `discardUndeliveredCode`, `completeClientCode`,
+   `takeStudioAllowance`, `revokeClientSession` and `src/lib/signin-code-rules.ts`). `reserveStudioAllowance` stays in
+   `src/lib/audio-client-access.ts` for its last caller, `issueAgreementLink` (step 3 deletes it), with the cookie
+   helpers, the session reads (steps 6 and 7), `listStudioSignInFailures` and `deleteRetiredCodes`.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and

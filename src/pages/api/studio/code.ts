@@ -1,23 +1,33 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import {
-	discardUndeliveredCode,
-	issueClientCode,
 	newPendingNonce,
-	pendingSignInCookie,
+	newSigninCode,
 	pendingSignInFromRequest,
-	takeStudioAllowance,
 } from "~/lib/audio-client-access";
-import {
-	clientPortalEnabled,
-	codeKeyUsable,
-	normalizeClientEmail,
-} from "~/lib/client-portal";
-import { sendAudioMessage } from "~/lib/audio-resend";
+import { clientPortalEnabled, normalizeClientEmail } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
-import { verifyTurnstile } from "~/lib/turnstile";
-import { studioCodeEmail } from "~/lib/client-emails";
-import { logUnexpected } from "~/server/failure";
+import {
+	codeAddressInvalid,
+	codeAllowanceSpent,
+	codeCheckFailed,
+	codeOnItsWay,
+	codeRequestUnread,
+	signinFailed,
+	signinUnavailable,
+	studioNotFound,
+} from "~/lib/studio-signin";
+import { loggedAnswer } from "~/server/answers";
+import { requestCode } from "~/server/flows/signin-code";
+import { runRoute } from "~/server/run";
+import {
+	bindingsOrUnavailable,
+	liveBackground,
+	liveTurnstile,
+} from "~/server/services";
+import { liveSigninKeys, liveSigninMail } from "~/server/signin-services";
+import { readCodeRequest } from "~/server/signin-input";
 
 // A code request issues a code bound to the browser that asked (the pending sign-in cookie, see audio-client-access.ts).
 // A browser that sent its cookie gets the same value back whatever the outcome. Two requests from one browser at the same
@@ -25,174 +35,80 @@ import { logUnexpected } from "~/server/failure";
 // emailed, only the code written last opens, and the cookie opens it whichever response arrives last. The earlier email's
 // code does not work. That is accepted: the email allowance (3 per five minutes) bounds it. A browser that sent no cookie
 // and sends two requests at once has no value to share, so its responses can overwrite each other and it asks again.
+// The sequence is src/server/flows/signin-code.ts; the answers are src/lib/studio-signin.ts.
 export const prerender = false;
 
 const ROUTE = "/api/studio/code";
 
-const inputSchema = z.object({
-	email: z.string().max(320),
-	turnstileToken: z.string().min(1).max(2048),
-});
-
-const generic = {
-	ok: true,
-	message: "If this email has a studio project, a sign-in code is on its way.",
-};
-
-// 503 for a binding or secret that is missing or unusable, 500 for any other fault of the site. The sentence is the same.
-const failed = (status: 500 | 503) =>
-	Response.json(
-		{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-		{ status },
-	);
+/** A store or hash failure: logged once, without what was sent, then 500 with the route's sentence. */
+const failed = loggedAnswer(ROUTE, signinFailed);
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!env || !clientPortalEnabled(env)) return studioNotFound();
+
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
 
 	if (
-		!env?.MUSIC_DB ||
+		!bindings.ok ||
 		!env.TURNSTILE_SECRET_KEY ||
 		!env.AUDIO_CLIENT_CODE_KEY ||
 		!env.RESEND_API_KEY ||
 		!env.CONTACT_FROM_EMAIL
 	)
-		return failed(503);
+		return signinUnavailable();
+
 	const body = await musicRequest(request, 4096);
 
 	if (body instanceof Response) return body;
-	const parsed = inputSchema.safeParse(body);
 
-	if (!parsed.success)
-		return Response.json(
-			{ ok: false, error: "Enter your email and complete the security check." },
-			{ status: 400 },
-		);
-	const email = normalizeClientEmail(parsed.data.email);
+	const read = readCodeRequest(body);
 
-	if (!email)
-		return Response.json(
-			{ ok: false, error: "Enter a valid email address." },
-			{ status: 400 },
-		);
-	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+	if (!read.ok) return codeRequestUnread();
 
-	// The first allowance makes the first keyed hash, which refuses a code key under 32 characters. That key is answered as
-	// a missing one, here, before any statement.
-	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY)) return failed(503);
+	const address = normalizeClientEmail(read.value.email);
 
-	try {
-		if (
-			!(await takeStudioAllowance(
-				env.MUSIC_DB,
-				"code-ip",
-				ip,
-				10,
-				env.AUDIO_CLIENT_CODE_KEY,
-			))
-		)
-			return Response.json(
-				{
-					ok: false,
-					error: "Please wait a few minutes before asking for another code.",
-				},
-				{ status: 429 },
-			);
+	if (!address) return codeAddressInvalid();
 
-		if (
-			!(await verifyTurnstile(
-				parsed.data.turnstileToken,
-				env.TURNSTILE_SECRET_KEY,
-				ip,
-			))
-		) {
-			return Response.json(
-				{ ok: false, error: "Please complete the security check again." },
-				{ status: 403 },
-			);
-		}
+	const secure = new URL(request.url).protocol === "https:";
 
-		if (
-			!(await takeStudioAllowance(
-				env.MUSIC_DB,
-				"code-email",
-				email,
-				3,
-				env.AUDIO_CLIENT_CODE_KEY,
-			))
-		)
-			return Response.json(
-				{
-					ok: false,
-					error: "Please wait a few minutes before asking for another code.",
-				},
-				{ status: 429 },
-			);
-
-		// A browser that sent its cookie gets that same value back whether or not a code is issued, so a refused or lost
-		// request cannot replace the cookie of a code another request of the same browser just emailed, and the answer does not
-		// show whether the address has a project. A browser with no cookie gets the new code's value, or a fresh random one.
-		const pending = pendingSignInFromRequest(request);
-
-		const issued = await issueClientCode(
-			env.MUSIC_DB,
-			email,
-			env.AUDIO_CLIENT_CODE_KEY,
-			new Date(),
-			pending,
-		);
-
-		if (issued) {
-			const { code, nonce } = issued;
-
-			const delivery = (async () => {
-				const sent = await sendAudioMessage({
-					apiKey: env.RESEND_API_KEY,
-					payload: {
-						from: env.CONTACT_FROM_EMAIL,
-						to: [email],
-						subject: "Your studio sign-in code",
-						...studioCodeEmail(code),
-					},
-				});
-
-				// Discard only a confirmed rejection. After a timeout or provider error the email may still
-				// arrive, so that code stays usable until it expires.
-				if (!sent.ok && !sent.uncertain)
-					await discardUndeliveredCode(
-						env.MUSIC_DB!,
-						email,
-						code,
-						nonce,
-						env.AUDIO_CLIENT_CODE_KEY!,
-					);
-			})().catch(() => {
-				// Keep private details out of logs. The next request can issue a fresh code.
-				console.error("Studio code delivery or cleanup failed.");
-			});
-
-			// The email goes out after the response. A request with no execution context (Workers always give one) waits for
-			// it before answering instead, as Background.defer does (src/server/services.ts).
-			const { ctx } = locals.runtime;
-
-			if (ctx) ctx.waitUntil(delivery);
-			else await delivery;
-		}
-
-		// Every answer sets the same cookie value whether or not a code was issued.
-		return Response.json(generic, {
-			headers: {
-				"set-cookie": pendingSignInCookie(
-					pending ?? issued?.nonce ?? newPendingNonce(),
-					new URL(request.url).protocol === "https:",
+	return runRoute(
+		Context.merge(
+			Context.merge(
+				Context.merge(
+					bindings.services,
+					liveTurnstile(env.TURNSTILE_SECRET_KEY),
 				),
-			},
-		});
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return failed(500);
-	}
+				Context.merge(
+					liveSigninKeys(env.AUDIO_CLIENT_CODE_KEY),
+					liveSigninMail(env.RESEND_API_KEY),
+				),
+			),
+			liveBackground(locals.runtime.ctx),
+		),
+		requestCode({
+			address,
+			turnstileToken: read.value.turnstileToken,
+			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			pending: pendingSignInFromRequest(request),
+			from: env.CONTACT_FROM_EMAIL,
+			now: () => new Date(),
+			newCode: newSigninCode,
+			newNonce: newPendingNonce,
+		}).pipe(
+			// Every outcome of the issue is the same answer and the same cookie.
+			Effect.map((answer) => codeOnItsWay(answer.pending, secure)),
+			Effect.catchTags({
+				AllowanceSpent: () => Effect.succeed(codeAllowanceSpent()),
+				TurnstileFailed: () => Effect.succeed(codeCheckFailed()),
+				// A code key under 32 characters, refused before any clock reading or statement: answered as a missing key.
+				CodeKeyUnusable: () => Effect.succeed(signinUnavailable()),
+				SigninHashFailed: (failure) => failed(failure.failure),
+				StudioSigninStoreFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		// A defect is the route's fixed sentence as a 500, logged once without what was sent.
+		{ route: ROUTE, answer: signinFailed },
+	);
 };
