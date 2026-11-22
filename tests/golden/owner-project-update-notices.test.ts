@@ -66,7 +66,8 @@ const resend = (answer: ReturnType<typeof json>) => byHost({ resend: answer });
 
 const CLAIM = /UPDATE audio_project_updates SET notification_status='sending'/;
 
-const RECIPIENT = /SELECT r\.email FROM owner_requests r JOIN audio_projects p/;
+const RECIPIENT =
+	/SELECT r\.email,r\.kind,r\.status,p\.revoked_at FROM owner_requests r JOIN audio_projects p/;
 
 const FINAL = /UPDATE audio_project_updates SET notification_status=\?/;
 

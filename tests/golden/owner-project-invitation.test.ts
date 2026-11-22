@@ -86,7 +86,10 @@ const one = (
 ): Case => ({ name, ...invite(columns, parts), steps: [send(body)], ...extra });
 
 const CLAIM = /UPDATE audio_projects SET invitation_status='sending'/;
-const RECIPIENT = /SELECT r\.email FROM owner_requests r JOIN audio_projects p/;
+
+const RECIPIENT =
+	/SELECT r\.email,r\.kind,r\.status,p\.revoked_at FROM owner_requests r JOIN audio_projects p/;
+
 const FINAL = /UPDATE audio_projects SET invitation_status=\?/;
 const QUEUE = /UPDATE audio_projects SET invitation_status='pending'/;
 const MARK = /SET invitation_status='failed'/;
