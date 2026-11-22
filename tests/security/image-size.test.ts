@@ -373,6 +373,7 @@ describe("jpeg segment walking", () => {
 					],
 					{ order },
 				);
+
 			const jfif = jpegSegment(0xe0, [
 				...text("JFIF"),
 				0,
