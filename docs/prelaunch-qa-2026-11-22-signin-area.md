@@ -19,7 +19,9 @@ Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson (below). Implementation and its review passes were done with Claude Code; Codex reviewed #368.
 Rollback revision: `93158d0d`, the revision of `main` before the stack merged; deploying it rolls the site back. In
 git, first revert the merge of [#371](https://github.com/kwilson21/thesuperhuman.us/pull/371) (this record's merge
-facts and the plans marked merged edit files the area added or changed), then `git revert -m 1 4330705d`.
+facts and the plans marked merged edit files the area added or changed), then `git revert -m 1 4330705d`. Tested on a
+copy of `main` with #371 merged: both reverts applied cleanly and the tree then equals `93158d0d`; reverting
+`4330705d` alone stops with conflicts in both plans and in this record.
 
 ## Scope
 
