@@ -26,9 +26,9 @@ import {
 
 // The golden corpus for POST /api/owner/projects/[id]/invitation: the owner queues the studio invitation email for a
 // project (the "send" action, with confirmedNotSent for a send that may have gone out) and, after the response,
-// `ctx.waitUntil` delivers it (deliverProjectInvitation in src/lib/audio-project-invitations.ts).
+// `ctx.waitUntil` delivers it (deliverInvitation in src/server/flows/audio-project-notices.ts).
 //
-// Invitation states (audio_projects.invitation_status): pending, sending, sent, failed. queueProjectInvitation moves
+// Invitation states (audio_projects.invitation_status): pending, sending, sent, failed. queueProjectInvitation (the same file, with the store's queueInvitation) moves
 // pending, failed (and a sending row older than 60 s when confirmedNotSent is true) back to pending, for a project that
 // is not revoked and whose request is a service request, not withdrawn, with an email.
 //
@@ -46,7 +46,7 @@ import {
 //   200 {ok:true}                       "send": pending, failed, stale sending with confirmation, boundary at 60 s,
 //                                       resolved and new requests, extra fields
 //   503 catch                           "outage": the queue write throws
-//   deliverProjectInvitation            claim, recipient lookup, send, final write
+//   deliverInvitation                   claim, recipient lookup, send, final write
 //     email                             "email": 200, 202 (sent); 400, 401, 403, 422, 429 (failed); 500, 503, network
 //                                       down, timeout (uncertain, the row stays sending); a non-JSON 200 (sent); no API
 //                                       key, empty key, no from address (failed, no fetch); no site origin; accents

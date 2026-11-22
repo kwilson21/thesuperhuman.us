@@ -28,8 +28,8 @@ import {
 } from "./areas/owner-audio";
 
 // The golden corpus for POST /api/owner/projects/[id]/updates, the notice half: the email a saved update sends to the
-// client (deliverProjectUpdateNotice, run in ctx.waitUntil after the response) and the retry_email action
-// (queueProjectNoticeForDelivery). The stage changes are in owner-project-updates.test.ts.
+// client (deliverUpdateNotice in src/server/flows/audio-project-notices.ts, run in ctx.waitUntil after the response) and the retry_email action
+// (queueProjectUpdateNotice, the same file). The stage changes are in owner-project-updates.test.ts.
 //
 //   Notice states      pending -> sending (claim) -> sent | failed; a send that is "uncertain" leaves the row sending
 //   email: Resend      200, 202 (sent); 400, 401, 403, 422, 429 (failed); 500, 503, network down, timeout (uncertain, the
