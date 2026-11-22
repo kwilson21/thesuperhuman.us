@@ -107,7 +107,7 @@ describe("publishing a file", () => {
 		).toEqual([
 			{
 				body: "Here is the mix.",
-				notification_status: "pending",
+				notification_status: "sent",
 				file_id: "r1",
 			},
 		]);
@@ -257,7 +257,7 @@ describe("revoking a file", () => {
 		).toEqual([
 			{
 				body: "I need to replace this review.",
-				notification_status: "pending",
+				notification_status: "sent",
 			},
 		]);
 		expect(run.background.mails).toHaveLength(1);

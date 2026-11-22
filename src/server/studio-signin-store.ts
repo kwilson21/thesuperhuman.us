@@ -1,5 +1,5 @@
 // The statements that close a client's studio sign-in when a project's access closes (docs/plans/2026-11-audio-projects-conversion.md,
-// section 4, AR2, AR3 and AR5). They write `audio_client_sessions`, `audio_client_signin_codes` and `audio_client_codes`,
+// section 4, AR2, AR3 and AR5). They write `audio_client_sessions`, `audio_client_signin_codes` and the retired sign-in codes table,
 // which belong to the studio sign-in area, so they live here, one function per statement, and the studio sign-in area's
 // conversion extends this file. The first two are statements of the access revocation's batch, so they are built over the
 // batch's database and run with the project's own statements; the third is run alone, after the batch.
