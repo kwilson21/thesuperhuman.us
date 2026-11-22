@@ -787,7 +787,9 @@ function recorded() {
 	return { batches, singles };
 }
 
-/** Runs every function of the store once, each in a world of its own, and gives the batches and statements they ran. */
+/**
+ * Runs every sign-in route function once, each in a world of its own, and gives the batches and statements they ran.
+ */
 async function tour() {
 	const runs = [
 		readIssueFacts(ADDRESS),
