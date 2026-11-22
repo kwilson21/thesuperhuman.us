@@ -26,6 +26,17 @@ it("keeps the empty campaign state compact and names the owner center plainly", 
 	expect(today).not.toContain("campaign-empty-path");
 });
 
+it("shows pending résumé requests only in Today with a link to owner confirmation", () => {
+	const today = read("src/pages/owner/index.astro");
+	const helper = read("src/lib/resume-requests-today.ts");
+	expect(today).toContain("Résumé requests");
+	expect(today).toContain("/owner/resume-approve?id=");
+	expect(today).toContain("Request status unavailable");
+	expect(helper).toContain('const PREFIX = "req:"');
+	expect(helper).toContain("MAX_PAGES = 2");
+	expect(today).not.toContain("/api/resume-approve");
+});
+
 it("keeps listening explanations beside their metric copy", () => {
 	const component = read("src/components/owner/ListeningPath.astro");
 	const css = read("src/styles/owner.css");

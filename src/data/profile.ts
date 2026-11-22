@@ -3,7 +3,7 @@ export const workingPreference =
 	"I work independently, through contracts and projects, and I’m selective about full-time roles.";
 
 export const workingPreferenceDetail =
-	"I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, either fully remotely or in person near Roanoke, Virginia. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.";
+	"I work independently, through contracts and projects. I’ll consider full-time roles where I’d own a system end to end, either fully remotely or in person in Southwest Virginia. If that isn’t your role, a contract is probably the better fit, and I’m glad to talk about that too.";
 
 export const lyftBonus = {
 	before: "5,000",

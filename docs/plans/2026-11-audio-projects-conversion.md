@@ -594,16 +594,17 @@ is `unknown`, read as text by `validateProjectMessage`. `uuid` for `uploadId` (Z
    the fixes PR (the stack order), and the fixes PR was cut from it.
 2. `claude/effect-15-audio-projects-fixes`: F1 to F5, each reproduced by a failing test first; fixture re-records in
    commits that contain fixture files only. It merged before the conversion.
-3. The conversion, as a stack of three layers, each converting whole routes, standing alone and neutral against the layer
-   below (`golden:neutral --all <below> <tip>` prints NEUTRAL, D1 statements changing only):
+3. The conversion, as a bottom layer and three conversion layers, each conversion layer converting whole routes, standing
+   alone and neutral against the layer below (`golden:neutral --all <below> <tip>` prints NEUTRAL, D1 statements
+   changing only):
    0. `claude/golden-sqlite-sequence` (from `main`): the golden corpus rule that a `sqlite_sequence` row at 0 is no state
       (a counter row at 0 and no row give the same next id), every golden fixture re-recorded under it, and the proof
       `scripts/golden-sequence-proof.mjs` that the re-record changed only digests. It is the bottom of the stack, so the
       layers above compare against fixtures recorded under one rule.
-   1. `claude/effect-15-audio-projects-messages` (from `claude/golden-sqlite-sequence`): the owner and studio messages routes. It creates the
-      area's store file `src/server/audio-project-store.ts`, the answers module `src/lib/audio-project-answers.ts`, the
-      input readers in `src/server/audio-project-input.ts` with their frozen copies and differential tests, and the rules
-      and flows for messages, read marks, responses and the rate window. It deletes the five writers of
+   1. `claude/effect-15-audio-projects-messages` (from `claude/golden-sqlite-sequence`): the owner and studio messages
+      routes. It creates the area's store file `src/server/audio-project-store.ts`, the answers module
+      `src/lib/audio-project-answers.ts`, the input readers in `src/server/audio-project-input.ts` with their frozen copies
+      and differential tests, and the rules and flows for messages, read marks, responses and the rate window. It deletes the five writers of
       `src/lib/audio-project-messages.ts` that only these routes called.
    2. `claude/effect-15-audio-projects-files` (from layer 1): the uploads route (POST and PUT), the owner file route and the
       studio file route. Publish, file revoke with its carried first-read status and the `decideAndSave` stage reset, the

@@ -542,6 +542,16 @@ describe("digest precision", () => {
 		expect(digestDatabase(one).tables.sqlite_sequence?.rows).toBe(1);
 	});
 
+	it("preserves a NULL counter row while ignoring only a numeric zero", () => {
+		const sqlite = freshPublicationDb();
+		sqlite.exec("CREATE TABLE seq (id INTEGER PRIMARY KEY AUTOINCREMENT, v)");
+		const before = digestDatabase(sqlite);
+		sqlite.exec("INSERT INTO sqlite_sequence (name, seq) VALUES ('seq', NULL)");
+		const after = digestDatabase(sqlite);
+		expect(after.sha256).not.toBe(before.sha256);
+		expect(after.tables.sqlite_sequence?.rows).toBe(1);
+	});
+
 	it("negative zero, text that looks like a number and blobs are all told apart", () => {
 		const seen = new Set(
 			["-0.0", "0.0", "'0'", "x'30'", "NULL", "0"].map((value) =>

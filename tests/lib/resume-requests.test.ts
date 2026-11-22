@@ -6,6 +6,7 @@ import {
 	RESUME_AUDIENCES,
 	type ResumeRequest,
 } from "~/lib/resume-requests";
+import { listResumeRequestsToday } from "~/lib/resume-requests-today";
 
 function makeKv() {
 	const store = new Map<string, string>();
@@ -116,5 +117,162 @@ describe("deleteResumeRequest", () => {
 		const kv = makeKv();
 		await deleteResumeRequest(kv, "abc");
 		expect(kv.delete).toHaveBeenCalledWith("req:abc");
+	});
+});
+
+describe("listResumeRequestsToday", () => {
+	const now = Date.UTC(2026, 10, 21);
+
+	const encode = (name: string, ts: number) =>
+		JSON.stringify({
+			name,
+			email: "requester@example.test",
+			company: "Sample Studio",
+			audience: "general",
+			note: "Synthetic fixture.",
+			ts,
+		});
+
+	it("lists pending req: records and excludes expired, absent, and unrelated keys", async () => {
+		const values = new Map([
+			["req:pending", encode("Pending Owner Fixture", now - 1000)],
+			["req:expired", encode("Expired Fixture", now - 7 * 24 * 60 * 60 * 1000)],
+			["req:absent", null],
+			["pdf:general", "binary-pdf"],
+		]);
+
+		const list = vi.fn(async () => ({
+			keys: values
+				.keys()
+				.filter((name) => name.startsWith("req:"))
+				.map((name) => ({ name }))
+				.toArray(),
+			list_complete: true,
+		}));
+
+		const get = vi.fn(
+			async (keys: string[]) =>
+				new Map(keys.map((key) => [key, values.get(key) ?? null])),
+		);
+
+		const put = vi.fn();
+		const remove = vi.fn();
+
+		const store = { list, get, put, delete: remove };
+		const result = await listResumeRequestsToday(store, now);
+
+		expect(result).toEqual({
+			requests: [
+				{
+					id: "pending",
+					name: "Pending Owner Fixture",
+					email: "requester@example.test",
+					company: "Sample Studio",
+					audience: "general",
+					ts: now - 1000,
+				},
+			],
+			truncated: false,
+		});
+		expect(list).toHaveBeenCalledWith({ prefix: "req:", limit: 50 });
+		expect(get).toHaveBeenCalledExactlyOnceWith(
+			["req:pending", "req:expired", "req:absent"],
+			"text",
+		);
+		expect(put).not.toHaveBeenCalled();
+		expect(remove).not.toHaveBeenCalled();
+	});
+
+	it("can have zero visible rows and still know the snapshot was incomplete", async () => {
+		const list = vi.fn(async () => ({
+			keys: [],
+			list_complete: false,
+			cursor: "next",
+		}));
+
+		const get = vi.fn(async () => new Map<string, string | null>());
+
+		expect(await listResumeRequestsToday({ list, get }, now)).toEqual({
+			requests: [],
+			truncated: true,
+		});
+		expect(list).toHaveBeenCalledTimes(2);
+		expect(get).not.toHaveBeenCalled();
+	});
+
+	it("bounds listing and marks an incomplete result as truncated", async () => {
+		const keys = Array.from({ length: 50 }, (_, index) => ({
+			name: `req:${index}`,
+		}));
+
+		const list = vi
+			.fn()
+			.mockResolvedValueOnce({ keys, list_complete: false, cursor: "page-two" })
+			.mockResolvedValueOnce({
+				keys,
+				list_complete: false,
+				cursor: "page-three",
+			});
+
+		const get = vi.fn(
+			async (names: string[]) =>
+				new Map(names.map((name) => [name, encode("Owner Fixture", now - 10)])),
+		);
+
+		const result = await listResumeRequestsToday({ list, get }, now);
+		expect(list).toHaveBeenCalledTimes(2);
+		expect(get).toHaveBeenCalledTimes(2);
+		expect(result.requests).toHaveLength(100);
+		expect(result.truncated).toBe(true);
+	});
+
+	it("caps reads at the page limit even if a KV result exceeds it", async () => {
+		const keys = Array.from({ length: 55 }, (_, index) => ({
+			name: `req:${index}`,
+		}));
+
+		const list = vi.fn(async () => ({ keys, list_complete: true }));
+
+		const get = vi.fn(
+			async (names: string[]) =>
+				new Map(names.map((name) => [name, encode("Owner Fixture", now - 10)])),
+		);
+
+		const result = await listResumeRequestsToday({ list, get }, now);
+		expect(get).toHaveBeenCalledExactlyOnceWith(
+			keys.slice(0, 50).map(({ name }) => name),
+			"text",
+		);
+		expect(result.requests).toHaveLength(50);
+		expect(result.truncated).toBe(true);
+	});
+
+	it("shows storage and malformed-record failures instead of treating them as no requests", async () => {
+		await expect(
+			listResumeRequestsToday(
+				{
+					list: async () => ({
+						keys: [{ name: "req:broken" }],
+						list_complete: true,
+					}),
+					get: async () => new Map([["req:broken", "not a request"]]),
+				},
+				now,
+			),
+		).rejects.toThrow();
+	});
+
+	it("rejects storage failures so the dashboard can show unavailable", async () => {
+		await expect(
+			listResumeRequestsToday(
+				{
+					list: async () => {
+						throw new Error("synthetic storage failure");
+					},
+					get: async () => new Map(),
+				},
+				now,
+			),
+		).rejects.toThrow("synthetic storage failure");
 	});
 });

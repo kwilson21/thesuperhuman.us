@@ -74,6 +74,7 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    (whose address normalizer still validates with Zod). Small, and signing link issuance needs its allowance rule
    (`reserveStudioAllowance`) converted first. PR 268 (sign-in codes tied to the browser, a behaviour fix for this
    area) merged on 2026-11-15, before it. Codes, attempts and sessions under parallel requests get a Quint model.
+   Design: `docs/plans/2026-11-studio-signin-conversion.md`.
 3. **Signing and agreements.** The client token routes (link, review, draft, sign, agreements link and files), the
    owner agreement actions, templates, settings, retention and attachments, and both `verify.astro` pages (which need a
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and

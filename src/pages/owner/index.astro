@@ -14,6 +14,7 @@ import {
 } from "~/lib/owner-reporting";
 import { projectStates } from "~/lib/software-projects";
 import StageTrack from "~/components/StageTrack.astro";
+import { listResumeRequestsToday } from "~/lib/resume-requests-today";
 
 const db = Astro.locals.runtime.env.MUSIC_DB;
 
@@ -53,6 +54,19 @@ const agreementAttention = Astro.locals.runtime.env.MUSIC_DB
 			).all<{ request_id: string; status: string; artifact_status: string }>()
 		).results
 	: [];
+
+const resumeStore = Astro.locals.runtime.env.RESUME_STORE;
+
+let resumeRequests: Awaited<ReturnType<typeof listResumeRequestsToday>> | null =
+	null;
+
+if (resumeStore) {
+	try {
+		resumeRequests = await listResumeRequestsToday(resumeStore);
+	} catch {
+		// Keep storage errors distinct from an empty request list.
+	}
+}
 ---
 <OwnerLayout title="Today" current="today" newRequestCount={ledger.attention.newRequests} ownerEmail={Astro.locals.owner?.email ?? ''}>
   <header class="owner-page-heading">
@@ -63,6 +77,17 @@ const agreementAttention = Astro.locals.runtime.env.MUSIC_DB
     <AttentionIndex number="01" label="First area to inspect" />
     <div class="section-heading-line"><div><p class="owner-kicker">People</p><h2 id="waiting-heading">{ledger.attention.newRequests ? `${ledger.attention.newRequests} waiting for review` : studioAttention.length ? 'No new requests' : 'No one is waiting'}</h2></div><a href="/owner/requests">Open requests →</a></div>
     <RequestList requests={ledger.attentionRequests} />
+  </section>
+  <section class="owner-section" aria-labelledby="resume-requests-heading">
+    <p class="owner-kicker">Résumé requests</p>
+    <div class="section-heading-line"><div><h2 id="resume-requests-heading">{resumeRequests === null ? 'Request status unavailable' : resumeRequests.requests.length ? `${resumeRequests.requests.length}${resumeRequests.truncated ? '+' : ''} waiting for review` : resumeRequests.truncated ? 'Could not check all requests' : 'No pending requests'}</h2></div></div>
+    {resumeRequests === null ? <p class="owner-empty">Pending résumé requests could not be loaded. The email approval shortcut remains available.</p> : resumeRequests.requests.length ? <ul class="studio-attention-list">
+      {resumeRequests.requests.map(request => <li><a href={`/owner/resume-approve?id=${encodeURIComponent(request.id)}`}>
+        <span class="attention-song"><strong>{request.name}</strong><span class="attention-stage">{request.email} · {request.company || 'Company not provided'} · {request.audience === 'dod' ? 'DoD résumé' : 'General résumé'}</span></span>
+        <span class="attention-chips"><span class="studio-pill signal">Review</span></span><span class="attention-arrow" aria-hidden="true">→</span>
+      </a></li>)}
+      {resumeRequests.truncated && <li class="resume-list-note"><p>Showing a limited list. More requests may be waiting.</p></li>}
+    </ul> : resumeRequests.truncated ? <p class="owner-empty">No pending requests were found in the part checked. More requests may be waiting; the email shortcut remains available.</p> : <p class="owner-empty">New requests appear here for up to seven days. You can also approve from the email shortcut.</p>}
   </section>
   {agreementAttention.length>0 && <section class="owner-section"><h2>Agreements needing attention</h2><ul>{agreementAttention.map(a=><li><a href={`/owner/requests/${a.request_id}`}>{a.status==='client_signed'?'Ready for countersignature':a.artifact_status!=='ready'?'Signed copy preparation needs attention':'Signed copy email needs attention'}</a></li>)}</ul></section>}
   {signInFailures.length > 0 && <section class="owner-section" aria-labelledby="studio-sign-in-heading">

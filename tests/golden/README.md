@@ -104,8 +104,9 @@ counter row give the same next id (SQLite takes the larger of the stored counter
 later statement can tell them apart, and a refused `INSERT ... SELECT` that creates one is not a write a rule moved out of
 SQL may be asked to repeat. Every other counter is still state. `tests/golden/harness/digest.test.ts` shows both halves, and
 `node scripts/golden-sequence-proof.mjs <from> [<to>]` proves a re-record after the rule changed only digests (by an
-exact list of paths), never gained a counter row, left every counter above 0 as it was, and has the same fixtures in both
-revisions. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
+exact list of paths), never gained a counter row, keeps the hash of any counter record whose row count did not change, and
+has the same fixtures in both revisions. When a counter row at 0 is dropped, that the other counters are untouched is shown
+by `tests/golden/harness/digest.test.ts`, not by the proof. Fixtures recorded before the rule differ from a re-record only in digests; compare them with
 the proof, not with `golden:neutral`.
 
 What is deliberately not compared, because a conversion may change it: the D1 statements themselves. So one UPDATE
@@ -255,15 +256,17 @@ each binding the route uses, and multi-step sequences.
 ```ts
 const cases: Case[] = [
 	{
-		name: "review a new request",            // unique within the area; it is the fixture key
-		music: { seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] } },
+		name: "review a new request", // unique within the area; it is the fixture key
+		music: {
+			seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] },
+		},
 		steps: [
 			{
-				as: asOwner(),                     // asVisitor(), asClient(email), asClientCookie(token)
+				as: asOwner(), // asVisitor(), asClient(email), asClientCookie(token)
 				path: "/api/owner/requests/r1",
 				params: { id: "r1" },
-				json: { action: "review" },        // or body: "{bad" for raw text
-				advanceMs: 60_000,                 // move the clock before this request
+				json: { action: "review" }, // or body: "{bad" for raw text
+				advanceMs: 60_000, // move the clock before this request
 				dump: { music: ["owner_requests", "owner_request_audit"] },
 			},
 		],
