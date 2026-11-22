@@ -43,7 +43,8 @@ Decisions taken under that delegation, not the owner's own:
   the cost only as "about a fifth of the 70B" and did not approve a figure separately.
 - **The brief's body may hold 48 KiB.** With the board on, the outline travels in the brief's body. In a script of three
   bytes a character the largest brief with the fullest outline is about 38,000 bytes, which the route's 32,768-byte limit
-  refused with its general error. The limit is 49,152 bytes.
+  refused with its general error; with every field, the security token included, at its longest it is about 44,500. The
+  limit is 49,152 bytes.
 - **Lone surrogates.** Review found that the outline reader, which runs only while the board is on, let lone
   surrogates through. They are now refused like control characters, as the brief's own fields already refuse them, and a
   note or answer cut at its limit no longer leaves half an emoji.
@@ -147,8 +148,9 @@ times as much per request.
   `tests/api/brief-board.test.ts` (38 tests, including the chat-completion reply, and that the route is still waiting
   just before 30 s and has given up just after).
 - Stored size: PASS. `tests/api/software-inquiry.test.ts` stores the largest brief with the fullest outline (about 25,700
-  characters) and fails at the old limit; it also sends that brief in a script of three bytes a character (about 38,000
-  bytes), which fails at the old body limit, and checks a body just under and just over 49,152 bytes.
+  characters) and fails at the old limit; it also sends that brief in a script of three bytes a character with every
+  field, the security token included, at its longest (about 44,500 bytes), which fails at the old body limit, and checks
+  a body just under and just over 49,152 bytes.
 - Lone surrogates: PASS. `tests/lib/brief-board.test.ts` refuses one in a card's text, passage and answer, accepts an
   emoji, and cuts a note, an edit and an answer through an emoji without leaving half of it; each test fails without
   its change.

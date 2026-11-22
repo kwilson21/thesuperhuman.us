@@ -44,8 +44,8 @@ const ROUTE = "/api/software-inquiry";
 
 /**
  * The most a brief's body may hold, in bytes. The largest brief the form allows with the fullest outline the board can
- * send, written in a script of three bytes a character (Chinese, Japanese or Korean), is about 38,000 bytes, and its
- * security token adds at most 2,048 (tests/api/software-inquiry.test.ts). It was 32,768 before the board was on.
+ * send, every field (the security token included) at its longest in a script of three bytes a character (Chinese,
+ * Japanese or Korean), is about 44,500 bytes (tests/api/software-inquiry.test.ts). It was 32,768 before the board was on.
  */
 const BODY_MAX = 49_152;
 

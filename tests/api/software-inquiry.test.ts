@@ -1931,11 +1931,15 @@ it("stores the largest brief the form allows: its details stay under the cap, so
 
 it("stores the largest brief with the fullest outline in a script of three bytes a character", async () => {
 	// "…" is one character, three bytes in UTF-8 and not part of a word, so every field is as heavy in bytes as text in
-	// Chinese, Japanese or Korean; each passage's three words are still the purpose's first three.
+	// Chinese, Japanese or Korean; each passage's three words are still the purpose's first three. The name, the email
+	// and the security token are at their longest too (a real token is ASCII, so this one is heavier than any).
 	const pad = (length: number) => "…".repeat(length);
 
 	const brief = {
 		...largestBrief,
+		name: pad(100),
+		email: `${"a".repeat(64)}@${"b".repeat(50)}.test`,
+		turnstileToken: pad(2048),
 		purpose: `b…c…d${pad(1994)}x`,
 		currentUrl: `https://a.example.test/?${pad(2024)}`,
 		existing: pad(2000),
@@ -1977,8 +1981,8 @@ it("stores the largest brief with the fullest outline in a script of three bytes
 
 	expect(response.status).toBe(200);
 	expect(JSON.parse(savedRequest().details_json).outline).toHaveLength(17);
-	// About 38,000 bytes, past the old limit of 32,768; a security token adds at most 2,048.
-	expect(new TextEncoder().encode(body).length).toBeGreaterThan(32_768);
+	// About 44,500 bytes: past the old limit of 32,768, within the new one of 49,152.
+	expect(new TextEncoder().encode(body).length).toBeGreaterThan(44_000);
 });
 
 it("stores the largest brief with the fullest outline the board can send, every field at its longest", async () => {
