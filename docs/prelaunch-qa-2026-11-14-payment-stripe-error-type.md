@@ -114,7 +114,7 @@ Local runs on macOS arm64, Node 26.13.1; no logs retained.
 
 ## Stripe test-mode run (added 2026-11-22)
 
-On 2026-11-22 the owner payment route was run against Stripe's test mode. The build was the production build of `main` at `0097b63f`, which contains this change (merge commit `85cf0d39`), served locally with `wrangler dev --local` against local D1 only. Owner sign-in went through the site's real Access JWT check, against a throwaway local issuer. The owner approved the run on 2026-11-22 and supplied a test-mode secret key. The key was never stored in the repository or printed, and it was deleted after the run. Production was not touched. Cases 1 and 3 each used a fresh request id (case 2 retried case 1's; case 4 reused case 3's on purpose), and every client email was at `example.com`.
+On 2026-11-22 the owner payment route was run against Stripe's test mode. The build was the production build of `main` at `0097b63f`, which contains this change (merge commit `85cf0d39`), served locally with `wrangler dev --local` against local D1 only. Owner sign-in went through the site's real Access check, with local test credentials. The owner approved the run on 2026-11-22 and supplied a test-mode secret key. The key was never stored in the repository or printed, and it was deleted after the run. Production was not touched. Every client email was at `example.com`.
 
 | Case | Before this change | Observed | What was recorded |
 | --- | --- | --- | --- |
@@ -125,7 +125,7 @@ On 2026-11-22 the owner payment route was run against Stripe's test mode. The bu
 
 Case 1: the route does not log Stripe's answer. The local trace shows that the Worker's one outbound call returned a response (the trace shows no host, path or status for it) before the 502, and the same kind of key sent straight to Stripe got 401. So the 401 is inferred, not read from the Worker.
 
-Case 4 was provoked on purpose. After case 3, that request's local rows were cleared and the same request id was seeded again with a different client email, so the customer call reused its idempotency key with different parameters. Production never reuses a request id. The route does not log Stripe's answer here either, so the idempotency error is inferred from the setup and the code, not read from the Worker.
+Case 4 was provoked on purpose, with local test data that production cannot produce (production never reuses a request id), so that Stripe would see an idempotency key reused with different parameters. The route does not log Stripe's answer here either, so the idempotency error is inferred from the setup and the code, not read from the Worker.
 
 Not exercised:
 
