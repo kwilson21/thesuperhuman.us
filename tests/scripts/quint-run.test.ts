@@ -227,10 +227,14 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 		"utf8",
 	);
 
+	const signin = models.find(
+		(entry) => entry.file === "verification/signin-codes.qnt",
+	);
+
 	it("every property in allProperties has a mutant that must break it", () => {
 		const properties: string[] = propertiesOf(model);
 
-		expect(properties.length).toBeGreaterThanOrEqual(13);
+		expect(properties.length).toBeGreaterThanOrEqual(16);
 		expect(propertiesWithoutMutant(properties, signinMutants)).toEqual([]);
 
 		for (const { property } of Object.values<{ property: string }>(
@@ -239,14 +243,35 @@ describe("the mutants of verification/signin-codes.qnt", () => {
 			expect(properties).toContain(property);
 	});
 
-	it("every mutant names a module in the model, and every module is listed", () => {
+	it("every mutant, equivalent and pass run names a module in the model, and every module is listed", () => {
 		const modules = [
 			...model.matchAll(/^module (\w+) \{ import signinCodes/gm),
 		].map((match) => match[1]);
 
+		expect(signin?.current).toEqual(["signin", "signinSpent"]);
+		expect(signin?.equivalents).toEqual(["signinAcceptNoUsed"]);
 		expect([...modules].sort()).toEqual(
-			[...Object.keys(signinMutants), "signin"].sort(),
+			[
+				...Object.keys(signinMutants),
+				...(signin?.equivalents ?? []),
+				...(signin?.current ?? []),
+			].sort(),
 		);
+	});
+
+	it("checks the sessions: each new property has its own mutant", () => {
+		expect(signinMutants.signinWriteNoUsedGuard).toEqual({
+			property: "oneSessionPerCode",
+		});
+		expect(signinMutants.signinAcceptUncounted).toEqual({
+			property: "attemptsBounded",
+		});
+		expect(signinMutants.signinSessionUnmatched).toEqual({
+			property: "sessionOnlyFromAcceptedCode",
+		});
+		expect(signinMutants.signinSignOutUnguarded).toEqual({
+			property: "revokedStaysRevoked",
+		});
 	});
 });
 
