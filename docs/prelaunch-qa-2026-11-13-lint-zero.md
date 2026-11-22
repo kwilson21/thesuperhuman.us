@@ -10,7 +10,7 @@ Rollback revision: `dc7fc1aa`, the first parent of the merge commit `440b28ef`. 
 
 ## Scope
 
-`origin/main` at `07d2613d` has 51 Oxlint findings and no lint step in CI: 16 `no-module-mocking` in 11 route test files, and 35 in request-body readers, stored-details types and label maps (15 `no-unknown-parameters`, 10 `no-unsafe-dictionary-type`, 7 `require-safety-comment-for-type-assertion`, 3 `no-known-value-widening`). The counts are from the builder's `oxlint` run on `07d2613d` (53 on the earlier bases, before #273 removed two mocks with the music area). This stack fixes all 51 and adds `pnpm run lint` to the Validate workflow. No baseline, ignore list, disable comment or override was added, and `oxlint.config.ts` and `tools/oxlint/` are unchanged.
+`origin/main` at `07d2613d` has 51 Oxlint findings and no lint step in CI: 16 `no-module-mocking` in 11 route test files, and 35 in request-body readers, stored-details types and label maps (15 `no-unknown-parameters`, 10 `no-unsafe-dictionary-type`, 7 `require-safety-comment-for-type-assertion`, 3 `no-known-value-widening`). The counts are from an `oxlint` run on `07d2613d` (53 on the earlier bases, before #273 removed two mocks with the music area). This stack fixes all 51 and adds `pnpm run lint` to the Validate workflow. No baseline, ignore list, disable comment or override was added, and `oxlint.config.ts` and `tools/oxlint/` are unchanged.
 
 This stack was first built on an older `main` (64 findings) and reviewed there in four review rounds. `main` then moved in four steps: #262 and #264 converted several validators to Effect Schema and removed 7 module mocks another way; then #266; then #265; then, overnight, #270, #273 and #267 (#273 converted the public music routes to rules, flows and services and deleted `tests/api/music-demand.test.ts`). The stack was rebuilt on the new `main`: files `main` had not touched carried over, and the files both sides changed were fixed again against `main`'s code. Where `main` had already solved the same thing (the middleware, the two music scripts, the brief suggestion pass, the publication website reader, and the music demand route test that #273 replaced), `main`'s version stands and this stack's was dropped.
 
@@ -27,9 +27,9 @@ No page copy, markup, style, route, migration, binding, secret or dependency cha
 ## Owner decisions
 
 - Owner, in conversation, 2026-11-12: fix every finding before enforcing; no ratchet.
-- Owner, 2026-11-13, as relayed to the builder: fix the deferred findings and make the lint check enforce a clean result.
+- Owner, 2026-11-13, as relayed: fix the deferred findings and make the lint check enforce a clean result.
 - Owner, in conversation, 2026-11-13, after `main` moved: rebase the stack rather than close it.
-- Delegated, 2026-11-14: the owner left the open questions to the party coordinating this work. Its decisions, which are not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
+- Delegated, 2026-11-14: the owner left the open questions to be settled during this work. These decisions were made under that delegation and are not the owner's direct answers: merge the stack once it is complete by the owner's standing rule (CI green, review bots clean, every comment addressed); change the payment route's Stripe error classification in its own pull request, brought to the owner; rewrite the two older `vi.spyOn` tests in a tests-only follow-up; add `format:check` to CI in a one-line follow-up.
 
 ## Behaviour
 
@@ -43,7 +43,7 @@ No production behaviour change for any input that can reach the code. What the i
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26.13.1, made by the builder; no logs retained.
+All runs are local on macOS arm64, Node 26.13.1, made during the build; no logs retained.
 
 Top of the stack, on `07d2613d`:
 
@@ -171,6 +171,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-As written before the merge: this record authorizes neither merge nor deployment. The delegation under Owner decisions was reported by the party coordinating this work, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
+As written before the merge: this record authorizes neither merge nor deployment. The delegation under Owner decisions was reported to this record, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
 Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`440b28ef`). Verified live: two pages answer 200; nothing else.

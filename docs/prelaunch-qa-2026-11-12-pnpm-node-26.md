@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/website-library-additions-904120`
 Pull request: [#230](https://github.com/kwilson21/thesuperhuman.us/pull/230)
 Target: production `https://thesuperhuman.us`
-Reviewer: Claude Haiku 5.5 subagent built; independent Claude Opus and Sonnet subagents reviewed; local evidence collection for owner Kazon Wilson. This record does not certify the checks listed as UNVERIFIED.
+Reviewer: built and independently reviewed with Claude Code; local evidence collection for owner Kazon Wilson. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `1d745ba2497e76c60aee8404ab02fe6aa0264dea` (`origin/main` when this record was written)
 
 ## Scope
@@ -26,7 +26,7 @@ Verify run (local run on macOS arm64, Node 26.13.1, pnpm 12.20.0; no log retaine
 - `pnpm test`: 143 test files passed; 1777 tests passed, 1 skipped. This includes the 10 tests in `tests/scripts/package-manager.test.ts`, which now assert the `pnpm/action-setup` full-SHA pin, that pnpm is installed before setup-node, and that no workflow runs `npm ci`, `npm run`, `npm test`, `npm install`, `npm i`, `npm exec` or `npx`.
 - `pnpm run build`: `Complete!`
 - `pnpm why vite`: `vite@6.4.4` (one version).
-- `pnpm exec vitest run tests/scripts/package-manager.test.ts` passed. A warning that `astro/tsconfigs/strict` could not be found was observed once in a builder run against an existing `node_modules`. An independent clean-install run under pnpm and under npm did not reproduce it, the config resolves from the repo root, and `astro check` reports the same result as `main`. It is treated as local environment noise, not a repo defect.
+- `pnpm exec vitest run tests/scripts/package-manager.test.ts` passed. A warning that `astro/tsconfigs/strict` could not be found was observed once in a local run against an existing `node_modules`. An independent clean-install run under pnpm and under npm did not reproduce it, the config resolves from the repo root, and `astro check` reports the same result as `main`. It is treated as local environment noise, not a repo defect.
 
 - Review on the PR found that pnpm forwards a `--` separator to the script where npm strips it, which made the documented owner commands fail their argument check. The separator is removed from every documented `pnpm run` command, and a test now rejects it.
 
@@ -71,7 +71,7 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 
 ### 7. Release and final QA
 
-- PASS, 7.1 Required type, test and build checks (local runs by the builder and, separately, by an independent reviewer on a clean copy; no log retained; GitHub `validate` has since passed on the PR head): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected by the reviewer: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
+- PASS, 7.1 Required type, test and build checks (local runs, and separately an independent review on a clean copy; no log retained; GitHub `validate` has since passed on the PR head): `pnpm run check` 0 errors and 0 warnings; `pnpm test` all test files passed; `pnpm run build` complete (see Evidence). Build warnings inspected in review: the `SESSION` binding note, two empty content folders, two zod comment warnings and one CSS optimization warning, all identical on `origin/main` under npm. Vitest prints a Node `localStorage` ExperimentalWarning, also present before the change.
 - UNVERIFIED, 7.2 Exact diff, dependency, generated-file and public-artifact review on the PR head: Pushed and opened as #230 after this record's checks were run; the independent review of the final head is still required.
 - UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers (not deployed): no binding, secret or migration changed, but no deployed response was observed.
 - PASS, 7.4 Rollback version preserved: revision `1d745ba2497e76c60aee8404ab02fe6aa0264dea` is local `origin/main` when this record was written; re-check with `git fetch` before merge.
@@ -93,8 +93,8 @@ Lockfile comparison, reported by the independent review, not re-counted here: th
 - UNVERIFIED: Dependabot against a pnpm 12 lockfile (check after merge).
 - UNVERIFIED: post-deployment live verification (not deployed).
 - UNVERIFIED: the branch preview could not be loaded for a smoke check because it sits behind sign-in.
-- Independent review: four rounds of independent subagent review plus Greptile on the PR head and Codex on `76331798`. Commits after `76331798` change this record, command text in three docs and one test only. A last independent pass on the final head runs before merge.
+- Independent review: four independent review passes plus Greptile on the PR head and Codex on `76331798`. Commits after `76331798` change this record, command text in three docs and one test only. A last independent pass on the final head runs before merge.
 
 Deployment authorization: the owner authorized the merge, which deploys production, on 2026-11-12 (see Owner decisions).
 
-Built by a Claude Haiku 5.5 subagent; reviewed by independent Claude Opus and Sonnet subagents. This record does not certify the checks listed as UNVERIFIED.
+Built and independently reviewed with Claude Code. This record does not certify the checks listed as UNVERIFIED.

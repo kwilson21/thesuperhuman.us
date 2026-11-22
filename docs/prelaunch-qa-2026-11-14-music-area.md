@@ -7,8 +7,8 @@ Repository: the personal website repository
 Branches: A is `claude/effect-10-music-fixes`, cut from `origin/main` at `f4c96c4c` (the merge of #270); B is `claude/effect-10-music`, cut from A and merged with A's tip `58a3f5b9` (review round 1 added one commit to A).
 Pull requests: #270 is merged as `f4c96c4c`; A is #272 and B is #273 (stacked with `gh stack`, stack 274).
 Target: production
-Reviewer: both branches were written by a Claude Sonnet 5.5 builder subagent working from a brief (tests first, per the owner's 2026-10-12 exception). Independent Claude reviews ran: three rounds on the pilot (below) and a fourth on the batch-read fix. Codex and Greptile reviewed the pull requests (see Delivery status).
-Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `58a3f5b9`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed by the builder.
+Reviewer: both branches were written with Claude Code, tests first (per the owner's 2026-10-12 exception). Independent reviews ran: three rounds on the pilot (below) and a fourth on the batch-read fix. Codex and Greptile reviewed the pull requests (see Delivery status).
+Rollback revision: for #270, the parent of `f4c96c4c`; for A, `f4c96c4c`; for B, A's tip `58a3f5b9`. Re-check `origin/main` with `git fetch` before merge. No deployed revision was observed for this record.
 
 ## Scope
 
@@ -26,9 +26,9 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
 - Owner, 2026-11-14 (relayed in the task): fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database error answers 500 with the route's fixed generic sentence; a real lost race or stale version stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
-- Judgment calls made by the builder under that instruction, a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence), which follows the owner's "500 on db errors" decision and was reported to him; a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
+- Judgment calls made under that instruction, a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence), which follows the owner's "500 on db errors" decision and was reported to him; a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
 
-## Review round 1 (independent Claude round on the pilot; no behavior bug found)
+## Review round 1 (independent review on the pilot; no behavior bug found)
 
 - A1, fixed on A: nothing proved a non-UNIQUE insert error is not retried; a test now counts insert attempts and asserts exactly one, and fails when the retry is widened to every error (checked).
 - B1, fixed: the Back-end rules text named `nothingToDo` for the rule key; the real key is `nothingToDoIf` (`src/server/terms.ts`). Every identifier in the text was re-read against the code; the text now also names `alwaysWrites`, the answers module and the `runRoute` defect argument, and says what `tests/architecture/legacy-validators.test.ts` asserts (the directory's exact file list, the frozen-copy marker, and that nothing under `src/` or `scripts/` imports them).
@@ -38,7 +38,7 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 - B5, fixed: `musicUnavailable` and `musicFailed` moved back next to `musicRequest` in `src/lib/music-request.ts`. Chosen because they need nothing from `src/server/` (`lib` cannot import it), `musicRequest` is already imported by 25 routes, and the later areas need the same two answers. No other route was touched.
 - B6, a check, not a change: `chainMatches` in `src/server/guarded-save.ts` follows the cause chain six levels deep (depth 0 to 5); the old music code followed five. The conversion therefore recognises a unique violation one cause level deeper than the old code did. D1 errors are one level deep in practice, and no case in the corpus has a deeper chain, so the neutrality claim holds for every recorded case; it is not shown for a chain of exactly six.
 
-## Review round 2 (independent Claude round; no behavior finding)
+## Review round 2 (independent review; no behavior finding)
 
 - R2.1, fixed: with the alert failing, nothing proved it was attempted exactly once; the interest flow test now counts attempts and asserts one.
 - R2.2, fixed: no test drove `liveOwnerAlert`; `tests/server/live-services.test.ts` now covers a sent alert, `sendUrgentOwnerAlert` answering false (a 500 from Resend, and no key, where nothing is sent) and a rejection, each ending as `OwnerAlertFailed`, which carries only its tag (no error text). Resend is doubled by stubbing `fetch`, as the other live services are.
@@ -46,7 +46,7 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 - R2.4, fixed: item B2 above claimed 100,000 samples for the real design; the driver runs 20,000, and the larger run was an extra ad hoc check. Corrected.
 - R2.5, fixed: AGENTS.md carries the same points as CLAUDE.md (facts may fail with a named error, `alwaysWrites` with `refusals: []` cannot fail, the contact guards keep their defect, what the legacy-validators test checks); the publicist block is untouched.
 
-## Review round 3 (independent Claude round; two flaws in the new IP redaction)
+## Review round 3 (independent review; two flaws in the new IP redaction)
 
 - R3.1, fixed: an IPv4-mapped address leaked three octets (`::ffff:203.0.113.7` was logged as `[ip].0.113.7`). The IPv6 pattern now matches an IPv4 tail explicitly (`::ffff:203.0.113.7`, `::203.0.113.7`, `64:ff9b::203.0.113.7` and the six-group form each become one `[ip]`).
 - R3.2, fixed: the IPv6 pattern ate text that is not an address. A compressed form must now contain `::`, so a port after a bracketed address is left (`[2001:db8::1]:443` is logged as `[[ip]]:443`), and a bare `::`, `cafe::`, `abc::def`, `a::b` and `std::vector` are left alone. Real short addresses (`::1`, `fe80::1`, `2001:db8::1`, `2001:db8::`, `fe80::1%eth0` with its zone) are still redacted. Limit, stated plainly: a compressed form of at most two groups with no decimal digit cannot be told from a name, and `a::b` and `dead::beef` are valid IPv6, so those are left alone; every other match is redacted, and a real client address has a digit (global addresses start with 2 or 3, link-local is `fe80`), so none is known to be left. Redacting wins everywhere else.
@@ -66,7 +66,7 @@ A defect in the two routes now writes one redacted log line through `logUnexpect
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the pilot worktree. No logs retained. Results for #270 below are as reported to the builder by the owner's task; the builder did not re-observe them.
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0, in the pilot worktree. No logs retained. Results for #270 below are as reported in the task for this record; they were not re-observed.
 
 Pull request #270 (as reported, not re-observed here):
 
@@ -149,7 +149,7 @@ Limits: a defect answer is shown by forcing a throw in the clock and the id sour
 ### 7. Release and final QA
 
 - PASS, 7.1 Required checks: the local gates above for each branch.
-- PASS, 7.2 Review of each pull request head, as observed by the operator on `58a3f5b9` (A) and `2fc0fa67` (B): Greptile Review check SUCCESS, no open review thread; independent Claude review rounds ran (three on the pilot, a fourth on the batch-read fix with no must-fix finding; see Delivery status).
+- PASS, 7.2 Review of each pull request head, as observed by the operator on `58a3f5b9` (A) and `2fc0fa67` (B): Greptile Review check SUCCESS, no open review thread; independent review rounds ran (three on the pilot, a fourth on the batch-read fix with no must-fix finding; see Delivery status).
 - UNVERIFIED, 7.3 Production bindings, secrets and migrations: none changed. The trigger `music_events_archive_before_delete` is on `music_events`, a table neither route reads or writes, so the converted code relies on no trigger (issue #242 still tracks moving the five that write).
 - PASS, 7.4 Rollback is the previous revision (A: `f4c96c4c`; B: A's tip `58a3f5b9`).
 - UNVERIFIED, 7.5 Live verification: nothing is deployed. For #270 the operator reported "build succeeded, pages 200"; to be confirmed by the operator.
@@ -173,4 +173,4 @@ Deployment: the owner's standing instruction is that a complete pull request (CI
 
 Branch A: implemented yes, deployed no, verified live no. Branch B: implemented yes, deployed no, verified live no. #270: implemented and deployed (as reported); verified live as reported.
 
-Both branches were built by a Claude Sonnet 5.5 subagent. This record does not certify the checks listed as UNVERIFIED (live verification, the browser check and the delivery of the owner alert).
+Both branches were built with Claude Code. This record does not certify the checks listed as UNVERIFIED (live verification, the browser check and the delivery of the owner alert).

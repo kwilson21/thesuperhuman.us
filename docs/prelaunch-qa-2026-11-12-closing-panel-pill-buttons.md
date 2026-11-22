@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/design-inspiration-portfolio-b75d50`, from `main` at `a96411f5`, with `main` at `54c7627e` merged in
 Pull request: [#233](https://github.com/kwilson21/thesuperhuman.us/pull/233)
 Target: production `https://thesuperhuman.us` after merge, including the audio pages on `audio.thesuperhuman.us`, which share the footer and stylesheets.
-Reviewer: Claude Haiku 5.5 subagents built, tests first (one fix commit, `2c29391f`, was written by Codex at a subagent's request). Independent Claude Opus and Sonnet subagents reviewed. The coordinating Claude session checked the pages in a browser and collected this evidence for owner Kazon Wilson. This record does not certify the checks listed as UNVERIFIED.
+Reviewer: Claude Code built this, tests first (one fix commit, `2c29391f`, was written by Codex). Independent review passes were also done with Claude Code. The pages were checked in a browser and this evidence was collected for owner Kazon Wilson. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: `54c7627e` (`origin/main` after the lint and format stack, #239, merged; this branch merged that `main` in at `115f0bf2`). The PR adds no migration and writes no stored data.
 
 ## Scope
@@ -41,7 +41,7 @@ After `main` (the Biome and Oxlint stack) was merged in at `115f0bf2`, on that h
 
 - `pnpm test`: 156 files, 1,923 passed, 1 skipped.
 - `pnpm run format:check`: no fixes needed, 524 files.
-- `pnpm run check`: 0 errors. `pnpm run design:check`, `pnpm run copy:check` and `pnpm run build`: passed (builder's run).
+- `pnpm run check`: 0 errors. `pnpm run design:check`, `pnpm run copy:check` and `pnpm run build`: passed (run during the build).
 - `pnpm run lint`: 66 findings, the deferred set recorded in `docs/prelaunch-qa-2026-11-12-lint-format-stack.md`. None is in code this branch added; one, `src/pages/owner/requests/[id].astro:181`, is in a file where this branch changed CSS only. Lint is not a CI check.
 - The merge conflicted in `src/components/Footer.astro` only (main reformatted its frontmatter); the branch's version was kept and formatted.
 - The pages were not re-checked in a browser after the merge. The earlier runs below are from before it.
@@ -65,7 +65,7 @@ Browser checks, in the Claude desktop app's Chromium pane against `astro dev` wi
 
 CI on the pull request: Validate and Workers Builds passed on `c242936f`; the screenshot capture and Greptile review were still running when this record was written. All four checks passed on the earlier head `62047c42`.
 
-Reviews: a task review after each build task; a whole-branch correctness and security review (Opus); a UI, copy and repo-rules review (Sonnet); a read-only Hallmark audit; Greptile (three findings, fixed, then 5 of 5 on `5f2e8c24`); Codex (two findings on `2c29391f`, fixed); an independent Sonnet review of the one-button and pinned-button commit `8225652e` (no code defects; two `design.md` wording slips, fixed in `c242936f`).
+Reviews: a task review after each build task; a whole-branch correctness and security review; a UI, copy and repo-rules review; a read-only Hallmark audit; Greptile (three findings, fixed, then 5 of 5 on `5f2e8c24`); Codex (two findings on `2c29391f`, fixed); an independent review of the one-button and pinned-button commit `8225652e` (no code defects; two `design.md` wording slips, fixed in `c242936f`).
 
 Limits:
 

@@ -9,7 +9,7 @@ Earlier evidence below was collected at `8a5d42b6c26867cb155ef4fa0cc18471a73649f
 PR branch commit chain: `e9341580` -> `0527d439` (dependency commit) -> `c18c3122` -> `64bf28bc` -> `302c1198` -> the record-only commit that last touches this file, identifiable with `git log -1 -- docs/prelaunch-qa-2026-10-10-dependabot-wrangler.md`.
 Merge method and record revision: this chain is preserved on `main` only by a merge-commit merge, the method planned for this PR and used for recent PRs #157, #158, #165, #171 and #172. A squash or rebase merge would not preserve these hashes; if either were used, the deployed revision would have to be identified by the PR number and its merge commit instead, and this record would need a note saying so. A commit cannot embed its own hash; the final handoff supplies the exact hash.
 Target: production `https://thesuperhuman.us`
-Reviewer: Codex (gpt-6.1-sol), local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
+Reviewer: Codex, local evidence collection for owner Kazon Wilson. This record does not certify independent current-head review.
 Rollback revision: `1da24a4962791cd8a78f47d43f98fdbe2ff9bb7b`. The caller observed production running this revision on 2026-10-10 at about 17:14 UTC: Workers Builds for this commit completed with success, and `npm run owner:health -- --remote --post-deploy` reported 9 of 9 PASS. Rolling back to `8b2252c4` would also undo the PR #165 dependency updates.
 
 Scope: dependency and lockfile change only, plus the v5 runtime type declaration and the existing Wrangler pin test expectation. No migration, public copy, page, asset or route change. No runtime behavior was changed.
