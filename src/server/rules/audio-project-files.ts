@@ -313,8 +313,8 @@ type RevokeGiven = {
 /**
  * The project is open, and the revoke's stage reset: when no other published file of the version is left and the stage is
  * the one the version resets (review_ready for a review; final_files_ready or complete for a final), the project returns to
- * in_progress so a replacement can be uploaded and published. The write keeps the stage and the other published files it was
- * decided from as its guard.
+ * in_progress so a replacement can be uploaded and published. The write keeps the other published files it was decided
+ * from as its guard, and the stage too when it decided a reset.
  */
 export const revokeInProject = alwaysWrites({
 	name: "revoke a file in its project",
