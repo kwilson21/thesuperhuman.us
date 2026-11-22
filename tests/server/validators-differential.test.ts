@@ -68,7 +68,18 @@ import {
 	readInterestInput,
 } from "../../src/server/music-input";
 import { readSoftwareCommand } from "../../src/server/software-offer-input";
+import { normalizeClientEmail } from "../../src/lib/client-portal";
 import {
+	readCodeRequest,
+	readSessionRequest,
+} from "../../src/server/signin-input";
+import {
+	legacyCodeRequestSchema,
+	legacyNormalizeClientEmail,
+	legacySessionRequestSchema,
+} from "../fixtures/legacy-validators/studio-signin";
+import {
+	attempt,
 	differential,
 	emails,
 	fingerprint,
@@ -2730,5 +2741,219 @@ describe("the owner's software command against the frozen Zod 3 union", () => {
 		expect(keys(readSoftwareCommand(body))).toEqual(
 			keys(legacyReadSoftwareCommand(body)),
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The studio sign-in area (src/server/signin-input.ts and src/lib/client-portal.ts): the bodies of POST /api/studio/code
+// and /api/studio/session, and the address the studio and agreement paths normalize. These replaced Zod 4 schemas (the
+// routes and the normalizer imported `zod`), so the frozen copies are Zod 4.
+
+/** A body reader's answer, accepted with its value or refused, as a line: the value in its key order, as JSON writes it. */
+const bodySaid = (answer: { ok: true; value: RawValue } | { ok: false }) =>
+	answer.ok ? fingerprint(answer, true) : "refused";
+
+/** What a Zod schema answered, in the readers' words. */
+const zodRead = (parsed: { success: boolean; data?: RawValue }) =>
+	parsed.success
+		? { ok: true as const, value: parsed.data }
+		: { ok: false as const };
+
+/** An Effect reader's answer without its sentence (the routes give their own). */
+const effectRead = (read: { ok: true; value: RawValue } | { ok: false }) =>
+	read.ok ? { ok: true as const, value: read.value } : { ok: false as const };
+
+describe("the studio code request body against the frozen Zod 4 schema", () => {
+	const bases: Body[] = [
+		{ email: "ada@example.com", turnstileToken: "token-1" },
+		{ email: " ADA@Example.com ", turnstileToken: "t" },
+	];
+
+	const pools = {
+		email: [...emails, ...texts(320), ...notStrings],
+		turnstileToken: [...texts(2048), ...notStrings],
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		const found = differential(
+			(input: RawValue) => zodRead(legacyCodeRequestSchema.safeParse(input)),
+			(input: RawValue) => effectRead(readCodeRequest(input)),
+			bodySaid,
+		);
+
+		let accepted = 0;
+
+		for (const body of bodies(bases, pools, 20261122, 6000)) {
+			found.run(body);
+
+			if (legacyCodeRequestSchema.safeParse(body).success) accepted += 1;
+		}
+
+		expect(found.count).toBeGreaterThan(6000);
+		expect(accepted).toBeGreaterThan(1000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`studio code request differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+});
+
+describe("the studio code entry body against the frozen Zod 4 schema", () => {
+	const bases: Body[] = [
+		{ email: "ada@example.com", code: "12345678" },
+		{ email: " ADA@Example.com ", code: "00000000" },
+	];
+
+	const pools = {
+		email: [...emails, ...texts(320), ...notStrings],
+		code: [
+			"12345678",
+			"00000000",
+			"99999999",
+			"1234567",
+			"123456789",
+			" 12345678",
+			"12345678 ",
+			"12345678\n",
+			"\n12345678",
+			"1234 5678",
+			"1234-5678",
+			"１２３４５６７８",
+			"٠١٢٣٤٥٦٧",
+			"abcdefgh",
+			"1234567a",
+			"0x123456",
+			"1e7",
+			"12345678\u0000",
+			12345678,
+			...texts(8),
+			...notStrings,
+		],
+	} satisfies Pools;
+
+	it("accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		const found = differential(
+			(input: RawValue) => zodRead(legacySessionRequestSchema.safeParse(input)),
+			(input: RawValue) => effectRead(readSessionRequest(input)),
+			bodySaid,
+		);
+
+		let accepted = 0;
+
+		for (const body of bodies(bases, pools, 20261123, 6000)) {
+			found.run(body);
+
+			if (legacySessionRequestSchema.safeParse(body).success) accepted += 1;
+		}
+
+		expect(found.count).toBeGreaterThan(6000);
+		expect(accepted).toBeGreaterThan(500);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`studio code entry differential: ${found.count} inputs (${accepted} accepted), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+});
+
+describe("the client address against the frozen Zod 4 normalizer", () => {
+	/** Text around an address: every kind of white space trim removes, and some it keeps (U+200B, U+0085, NUL). */
+	const pads = [
+		"",
+		" ",
+		"  ",
+		"\t",
+		"\n",
+		"\r\n",
+		"\u000b",
+		"\u000c",
+		" ",
+		" ",
+		" ",
+		" ",
+		" ",
+		" ",
+		"　",
+		"﻿",
+		"​",
+		"\u0085",
+		"\u0000",
+	];
+
+	/**
+	 * Letters whose lower case lands on ASCII (the Kelvin sign is k), is longer (dotted capital I), or that read oddly
+	 * under a case-insensitive pattern (long s, the Angstrom sign), and lengths either side of 320 once lower-cased.
+	 */
+	const odd = [
+		"K@c.dd",
+		"aK@c.dd",
+		"a@K.dd",
+		"a@c.Kd",
+		"İ@c.dd",
+		"a@c.dİ",
+		"ſ@c.dd",
+		"a@c.ſs",
+		"Å@c.dd",
+		"A@C.DD",
+		"ẞ@c.dd",
+		"Σ@c.dd",
+		`${"A".repeat(313)}@C.DD`,
+		`${"A".repeat(314)}@C.DD`,
+		`${"A".repeat(315)}@C.DD`,
+		`${"a".repeat(313)}İ@c.dd`,
+		`${"a".repeat(312)}K@c.dd`,
+		`${"a".repeat(313)}K@c.dd`,
+		`${"a".repeat(314)}K@c.dd`,
+	];
+
+	const cores = [...emails, ...texts(320), ...odd];
+
+	it("answers every address as the Zod normalizer did", () => {
+		const found = differential(
+			(input: string) => ({ address: legacyNormalizeClientEmail(input) }),
+			(input: string) => ({ address: normalizeClientEmail(input) }),
+			(answer) => JSON.stringify(answer.address),
+		);
+
+		const random = seeded(20261124);
+		let valid = 0;
+
+		const run = (input: string) => {
+			found.run(input);
+
+			if (legacyNormalizeClientEmail(input) !== null) valid += 1;
+		};
+
+		for (const core of cores) {
+			run(core);
+			run(core.toUpperCase());
+
+			for (const pad of pads) {
+				run(`${pad}${core}`);
+				run(`${core}${pad}`);
+				run(`${pad}${core}${pad}`);
+			}
+		}
+
+		for (let i = 0; i < 4000; i += 1)
+			run(
+				`${random.pick(pads)}${random.pick(cores)}${random.pick(["", ...cores])}${random.pick(pads)}`,
+			);
+
+		expect(found.count).toBeGreaterThan(16000);
+		expect(valid).toBeGreaterThan(2000);
+		expect(take(found)).toEqual(noMismatch(found));
+		console.info(
+			`client address differential: ${found.count} inputs (${valid} valid), ${found.mismatches.length} differences`,
+		);
+	}, 60_000);
+
+	it("gives null for a value that is not text, which no caller passes, as Zod did", () => {
+		for (const value of notStrings) {
+			// SAFETY: every caller passes text; this holds the answer for a value that is not text, which Zod gave as null.
+			const input = value as string;
+
+			expect(attempt(() => normalizeClientEmail(input))).toBeNull();
+			expect(attempt(() => legacyNormalizeClientEmail(input))).toBeNull();
+		}
 	});
 });

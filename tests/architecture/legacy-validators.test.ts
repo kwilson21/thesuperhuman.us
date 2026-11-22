@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // The frozen Zod copies (Zod 3 for the validators converted in layer 7, Zod 4 for the MCP tools' inputs, which the MCP
-// SDK checked with Zod 4) in tests/fixtures/legacy-validators are reference
-// copies for the differential tests, kept for the Effect stack's layer 7 only. They are test fixtures, not product
-// code: no file under src/ or scripts/ may import them, and each says so at the top. The stack's final layer deletes
-// the directory and this test with it.
+// SDK checked with Zod 4, and Zod 4 for the studio sign-in bodies and address, which imported it) in
+// tests/fixtures/legacy-validators are reference copies for the differential tests, kept for the Effect stack's layer 7
+// only. They are test fixtures, not product code: no file under src/ or scripts/ may import them, and each says so at
+// the top. The stack's final layer deletes the directory and this test with it.
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (file: string) => readFileSync(join(repository, file), "utf8");
@@ -33,6 +33,7 @@ describe("the frozen Zod validators", () => {
 			"publication-contract.ts",
 			"software-inquiry.ts",
 			"software-offers.ts",
+			"studio-signin.ts",
 		]);
 	});
 
