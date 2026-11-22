@@ -25,7 +25,7 @@ no code.
   `software-offer-deposit.ts`; `normalizeClientEmail`, `clientPortalEnabled`, `hashValue` and `keyedHash` to
   `client-portal.ts`; `validProjectDate` and `projectToday` to `project-dates.ts`; `canonicalAgreementRequest` and
   `agreementHeaders` to `agreement-host.ts`. Every importer was re-pointed, with no re-exports. The PR was first written
-  against an older `main`; other sessions then converted agreement access (#298), publication (#307) and the public
+  against an older `main`; other pull requests then converted agreement access (#298), publication (#307) and the public
   intake routes (#301), so `main` was merged in, each conflict resolved by taking `main`'s file and re-applying only the
   import changes. One screenshot mapping and one plan sentence were added after review.
 

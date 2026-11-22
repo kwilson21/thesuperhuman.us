@@ -52,7 +52,7 @@ See Remaining work at the end.
 
 ## Owner decisions and authorization
 
-The owner answered in conversation on October 22, 2026 (America/New_York). The coordinating Claude session asked four questions and relayed the answers.
+The owner answered in conversation on October 22, 2026 (America/New_York). Four questions were asked and the answers relayed.
 
 1. Should `/building/personal-website/story` keep its preview of the four generated design studies, or fall back to the personal-website clip? Answer: "Whichever looks better here".
    - The agent kept the story scene. It previews that page's own content: each study's outcome is labelled, and each is marked "Generated design study".
@@ -99,7 +99,7 @@ Authorization:
 - **Reviews:**
   - Both GitHub review threads, on `render.mjs` and the README, are resolved.
   - Codex reviewed only the first commit, `1e97193`. Greptile has not reviewed the PR.
-  - As CLAUDE.md requires without a Greptile review, the coordinating session ran independent review agents on each new head, with skeptics checking every finding: 13 confirmed findings fixed in `c376c19`, 6 in `03b4d48`, 1 in `4de8fb9`, 1 wording fix in `8e6e9cc`, and a fifth pass on `8e6e9cc` that found nothing. The coordinating session observed those results; their transcripts stay in the session, not in the repository.
+  - As CLAUDE.md requires without a Greptile review, independent review passes ran on each new head, with every finding checked: 13 confirmed findings fixed in `c376c19`, 6 in `03b4d48`, 1 in `4de8fb9`, 1 wording fix in `8e6e9cc`, and a fifth pass on `8e6e9cc` that found nothing. Those results were observed during the work; their transcripts are not in the repository.
 - **Screenshots:**
   - The PR description's table names 14 captures under `pr-203/8e6e9cc/` on the `screenshots` branch.
   - Seven were fetched: home, not-found and building-the-engineers-daily, each at desktop and phone, plus services-phone.
@@ -149,7 +149,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - The owner's portrait already appears on `/building/personal-website`.
     - `ffprobe` shows 0 audio streams in all 22 videos.
   - The PR retires the old card, which carried the superseded line "Building with AI".
-  - `docs/asset-reviews/link-previews.md` says "ready for production". It names Claude Code agents as the reviewers ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
+  - `docs/asset-reviews/link-previews.md` says "ready for production". It names Claude Code as reviewer ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
 - **PASS · 1.3 Explain who does what; professional claims.**
   - The PR changes no page copy.
   - The scenes repeat existing explanatory lines word for word, and the copy test passed. Examples:
@@ -532,8 +532,8 @@ PASS means the evidence named here was observed. Production checks and their res
   - The rollback caveat about scraped previews is in the header.
   - Review and authorization rules:
     - Both GitHub review threads are resolved.
-    - Codex reviewed only `1e97193`, and Greptile has not reviewed. CLAUDE.md therefore requires independent review agents on the current head until a pass finds nothing.
-    - The coordinating session ran independent review agents on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits). This record's commits had their own passes: 7 corrections in `f1f0d5a`, 3 in `4e67e87`, then a clean pass on `4e67e87`.
+    - Codex reviewed only `1e97193`, and Greptile has not reviewed. CLAUDE.md therefore requires independent review passes on the current head until a pass finds nothing.
+    - Independent review passes ran on each new head until a pass found nothing; the fifth pass, on `8e6e9cc`, found nothing (see Evidence and limits). This record's commits had their own passes: 7 corrections in `f1f0d5a`, 3 in `4e67e87`, then a clean pass on `4e67e87`.
     - Before the merge, `mergeable_state` was clean, and Validate, capture and Workers Builds were green on `8e6e9cc`.
     - The owner gave the go-ahead to merge and deploy (answer 5; see 1.1).
   - Final record commit `5cc2227`: an independent review pass found nothing, and Validate (10:46:10 UTC), Screenshots capture (10:51:48 UTC) and Workers Builds (10:45:42 UTC) succeeded before the merge, which was pinned to that head.
@@ -584,7 +584,7 @@ PASS means the evidence named here was observed. Production checks and their res
 
 ## Live checks after deploy
 
-The owner agreed to the live checks on October 22, 2026 ("Ok"); item 6, the remote `owner:health` run, was added to this list afterwards. Claude Code agents ran checks 1, 2 and 5 on production between 10:55 and 11:00 UTC on October 22, 2026, and a separate agent re-ran a sample of them with the same results. Requests were plain `curl` over HTTPS.
+The owner agreed to the live checks on October 22, 2026 ("Ok"); item 6, the remote `owner:health` run, was added to this list afterwards. Claude Code ran checks 1, 2 and 5 on production between 10:55 and 11:00 UTC on October 22, 2026, and a separate run repeated a sample of them with the same results. Requests were plain `curl` over HTTPS.
 
 1. Workers Builds on the merge commit succeeds. Record its build ID and Worker Version ID.
    - **PASS.** "Workers Builds: thesuperhuman-us" on `75a88be` succeeded at 10:53:34 UTC: build `43d38176-4dcf-477b-a5b6-b1264b3c075d`, Worker Version ID `1d40ed4a-ffd7-42a5-9de3-db4a129a4486`. Validate on `75a88be` succeeded at 10:54:14 UTC.
