@@ -353,15 +353,16 @@ found within about 2,100 runs, 20 states, shortened to the steps that matter):
    so the attempt is counted and the code accepted and a session made, though the code expired at 4.
 
 In the code the gap is one round trip: the decision and the token's hash run between the entry's read batch and its
-write batch, so an entry that read just before its code expired can be accepted just after. The issue has the same
-shape (a code is stamped, and the cap guard counts, at the time the request read), which no property depends on. The
-model now states property 6 as what the code guarantees: a code never signs in if it was used when the write ran (the
-write re-checks `used_at IS NULL`, which needs no time) or had expired at the time the entry read. The alternative is
-a write that re-checks expiry against a later time (a clock read just before the write batch, bound in its guards),
-at the cost of a second clock reading after the first gated batch, which the non-interference test's clock guard
-(`watchClock`) fails on today. Nothing under `src/` changed with this model. The owner decides. Both pass runs also
-passed 100,000 runs each (2026-11-22, again once properties 17 and 18 and the page step were added), past the 20,000
-CI makes, with no other property failing.
+write batch, so an entry that read just before its code expired can be accepted just after. The issue has the same shape
+(a code is stamped, and the cap guard counts, at the time the request read), which no property depends on. The model now
+states property 6 as what the code guarantees: a code never signs in if it was used when the write ran (the write
+re-checks `used_at IS NULL`, which needs no time) or had expired at the time the entry read. The alternative is a write
+that re-checks expiry against a later time (a clock read just before the write batch, bound in its guards), at the cost
+of a second clock reading after the first gated batch, which the non-interference test's clock guard (`watchClock`)
+fails on today. Nothing under `src/` changed with this model. Decided on 2026-11-22: the owner answered "You decide" (in
+conversation), and Claude Code decided as recommended, to keep the code as it is. Both pass runs also passed 100,000
+runs each (2026-11-22, again once properties 17 and 18 and the page step were added), past the 20,000 CI makes, with no
+other property failing.
 
 **How the code is arranged.** Converted to the back-end form of `CLAUDE.md` (design: `docs/plans/2026-11-studio-signin-conversion.md`). Nothing decides in SQL: the facts are read, and the code machine and the rules decide. The machine (`src/server/machines/signin-code.ts`, asked through `next()`) says from a code row's state (none, used, expired, locked, live) whether ENTER or DISCARD is allowed; the rules in `src/server/rules/` decide the rest from the rows read (`sweepCodes` in `signin-sweep.ts`, `issueCode` in `signin-issue.ts`, `enterCode` in `signin-complete.ts`, `discardCode` in `signin-discard.ts`, `takeAllowance` in `studio-allowance.ts`, each unit-tested over its whole table in `tests/rules/`, and the machine over a fixed table of row states in `tests/server/machines-signin-code.test.ts`). Which codes are live (unused, expiring after the time read), whether a project is open and whether there is room are all decided there from rows that were read. The flows (`src/server/flows/signin-code.ts`, `signin-session.ts`, `signin-sign-out.ts`) sequence the reads, the decisions and the writes by hand, so every request makes the round trips below whatever the answer, and take the time and each random value as inputs. The store (`src/server/studio-signin-store.ts`) keeps one function per statement or batch, with SQL that only re-checks, at write time, a fact the decision relied on, or writes values the decision computed: a statement that repeats a predicate such as "unused and unexpired" is a guard, which exists to notice that a fact changed since it was read. The hashes and the code's email are services (`src/server/signin-services.ts`), and the answers are fixed in `src/lib/studio-signin.ts`.
 

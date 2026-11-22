@@ -52,11 +52,11 @@ Rollback revision: `f33effae`, the revision of `main` before the merge; or `git 
 ## 7. Release and final QA
 
 - **PASS · Checks, reviews, rollback.** See above.
-- **UNVERIFIED, with no owner-accepted exception · The expiry gap.** Asked of the owner on 2026-11-22, not yet
-  answered: keep the code as it is (recommended; the code was valid when the entry read it, and the gap is one round
-  trip after a ten-minute life), or re-check expiry at write time, which needs a second clock reading that the
-  non-interference test's clock guard fails on today. The model records today's behaviour; a change, if asked for, is
-  a behaviour fix in its own pull request before the conversion.
+- **PASS, decided after release · The expiry gap.** Asked of the owner on 2026-11-22; the owner answered "You decide"
+  (in conversation, 2026-11-22), and Claude Code decided as recommended: keep the code as it is (the code was valid when
+  the entry read it, and the gap is one round trip after a ten-minute life). The alternative, re-checking expiry at
+  write time, needed a second clock reading that the non-interference test's clock guard fails on. The model records
+  today's behaviour, so nothing changes.
 - **N/A · Bindings, migrations.** None.
 - **PASS · Production revision and live check.** Deployed `84d20dda`; the site answered 200.
 
