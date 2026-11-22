@@ -11,7 +11,7 @@ import { outcome, run, wrote } from "../helpers/offer-rules";
 // The issue rule (docs/plans/2026-11-studio-signin-conversion.md, section 2) over the whole table of facts, the cases
 // tests/lib/signin-code-rules.test.ts held `decideIssue` to: whether an address with these projects and this many other
 // live codes is issued a code, and which codes count as live. The database only re-checks, at write time, the two facts
-// the rule relied on (C1 and C2, src/server/signin-store.ts).
+// the rule relied on (C1 and C2, src/server/studio-signin-store.ts).
 
 const cap = LIVE_CODES_PER_ADDRESS;
 const now = "2026-11-13T12:00:00.000Z";

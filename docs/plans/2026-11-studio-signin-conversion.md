@@ -217,10 +217,13 @@ answer, and neither route retries a refused guard.
 
 ## 4. The store and the services
 
-**`src/server/signin-store.ts`**, one function per statement or batch over `MusicDb`, each with `Effect.tryPromise`.
-Every statement keeps today's SQL text and every batch its shape, byte for byte: the golden corpora then see the same
-D1 statements, and the non-interference test, which schedules a request's batches by their leading SQL and their
-length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes unchanged.
+**`src/server/studio-signin-store.ts`**, one function per statement or batch over `MusicDb`, each with
+`Effect.tryPromise`. (One store file per area, as CLAUDE.md asks: the audio projects conversion, #365, had already
+opened this file for the access closure's statements on the sign-in tables, with the failure `StudioSigninStoreFailed`,
+so the sign-in statements moved into it and use that one failure; this design first named a file `signin-store.ts` and a
+failure `SigninStoreFailed`.) Every statement keeps today's SQL text and every batch its shape, byte for byte: the
+golden corpora then see the same D1 statements, and the non-interference test, which schedules a request's batches by
+their leading SQL and their length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes unchanged.
 
 | Function | Statements | Today |
 |---|---|---|
@@ -232,12 +235,12 @@ length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes uncha
 | `countAllowance` | the prune of stale windows and the counting upsert (one batch) | access.ts:420-427 |
 | `revokeSession` | the guarded update (C9) | access.ts:647-652 |
 
-A rejected statement becomes `SigninStoreFailed` with the cause in `failure`, which the route logs once through
+A rejected statement becomes `StudioSigninStoreFailed` with the cause in `failure`, which the route logs once through
 `logUnexpected`. A guard that raised (`raisedByJsonGuard`) becomes `GuardRefused`, which is not retried: the code flow
 answers it with the generic 200, as a refusal, and the discard catches that tag alone (`Effect.catchTags({ GuardRefused:
-() => Effect.void })`), as today it swallows only the raised guard (access.ts:260-263), so a `SigninStoreFailed` still
-reaches the background's logged failure. No statement here has a unique constraint that a rule's facts depend on, so
-there is no `ChangedSinceRead`.
+() => Effect.void })`), as today it swallows only the raised guard (access.ts:260-263), so a `StudioSigninStoreFailed`
+still reaches the background's logged failure. No statement here has a unique constraint that a rule's facts depend on,
+so there is no `ChangedSinceRead`.
 
 **Services.** `Turnstile` (exists), `Background` (exists), `Mail` and `SigninKeys`. The `Mail` this route gets is built
 on `sendAudioMessage`, as the offers area's `liveOfferMail` is (`src/server/offers-services.ts:80`), with the payload's
@@ -283,7 +286,7 @@ passes `{ route, answer }` to `runRoute`, so a defect is logged once and answere
 | No Turnstile secret, Resend key or from address | 503, today's sentence | not needed | not needed |
 | No code key | 503, today's sentence | 503, today's sentence | not needed |
 | A code key under 32 characters (`CodeKeyUnusable`, at the first keyed hash) | 503, today's sentence | 503, today's sentence | not needed |
-| `SigninStoreFailed`, a hash failure, a defect | 500, today's sentence (fix S1) | 500, today's sentence (fix S1) | 500 `{ok:false, localSignedOut:true}`, cookie cleared (fix S2) |
+| `StudioSigninStoreFailed`, a hash failure, a defect | 500, today's sentence (fix S1) | 500, today's sentence (fix S1) | 500 `{ok:false, localSignedOut:true}`, cookie cleared (fix S2) |
 | Every other answer | as today | as today | as today |
 
 ### Behaviour fixes
