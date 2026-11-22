@@ -46,6 +46,13 @@ After the conversion no statement of the area decides an outcome. Every read is 
 - Owner, 2026-11-15: asked who may write the code of this conversion in this repository, the owner delegated the choice ("You decide"), and the conversion was written under that delegation.
 - Open question for the owner (design, "What the owner is asked"): whether a failed file revoke gets a sentence of its own. Today's sentence, "The file could not be published. Please try again.", stays on the revoke path with status 500; no new copy was written.
 
+## Differences from today's answers
+
+- A client's message and a client's answer read the rate count with the action's facts before the write, where today only a refused write reaches that read. A failing count statement therefore answers 500 with the route's sentence, logged once, for a request that today would have been saved. The design names this change (sections 2 and 7), the stories and `tests/api/audio-project-outages.test.ts` pin it, and the order of the reads is not changed.
+- When the retries of a publish or a file revoke run out (three reads each moved the facts), the answer is 409 with the route's existing sentence; today's code never retries.
+
+What the conversion keeps equal to today's on purpose: the project's stage a client's message or answer is decided from is read in the batch just before the decision (so an owner's move between the client's lookup and the decision is seen, as the write's guard sees it today), a publish judges the project from facts read after the object's head (as the write's own conditions were evaluated then), and the read mark reads the clock once after the lookup.
+
 ## Judgment calls (mine, for the owner to confirm)
 
 - The claim of a notice is the first call of its delivery, with no read and no rule ahead of it. The design's section 3 has a read and a rule before the claim; a read ahead of it adds a turn, and the public intake's background then sends the owner's notice before the invitation's claim is written, which the intake corpus records (the state at the first Resend call differed). The claim keeps today's conditions as its compare-and-set guard. The design's section 3 row is changed to say so.
