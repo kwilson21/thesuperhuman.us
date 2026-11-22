@@ -88,7 +88,7 @@ const useLabels: Record<OfferLane, string> = {
       <button type="button" class="studio-button" data-offer-ask>Suggest an offer with AI</button>
       <button type="button" class="studio-quiet" data-offer-undo disabled>Undo</button>
       {/* Beside Undo, so a reply that waits never moves the cards or the prices. */}
-      <button type="button" class="studio-quiet" data-offer-held data-idle>Show 88 updates</button>
+      <button type="button" class="studio-quiet" data-offer-held data-idle><span data-held-label>Show 88 updates</span><span class="offer-held-room" aria-hidden="true">Show 88 updates</span></button>
     </div>
     <p class="offer-board-status" data-offer-status>Cloudflare’s AI drafts ideas from this brief, your fit review note, your draft and your market research for this kind of work. It is not given the client’s name, email, company or site link, and wherever one appears as the client entered it, this website replaces it first with “the client” (the site with “the client’s current site”). It never sees your day value or your other offers. Nothing is saved until you save the draft, and nothing reaches the client until you send the offer or a question yourself.</p>
     <p class="visually-hidden" data-offer-live role="status"></p>
@@ -169,6 +169,11 @@ const useLabels: Record<OfferLane, string> = {
   /* Idle: keeps its place, so a held reply's button appears without moving anything. */
   .offer-board [data-offer-held][data-idle] { visibility: hidden; }
   .offer-board [data-offer-held] { font-variant-numeric: tabular-nums; }
+  /* The label and a hidden copy of the longest one share one cell, so the button keeps its size, and the header its rows,
+     whatever the label says. */
+  .offer-board [data-offer-held] { display: inline-grid; align-items: center; justify-items: start; }
+  .offer-board [data-offer-held] > * { grid-area: 1 / 1; }
+  .offer-held-room { visibility: hidden; }
   .offer-board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .offer-cards { display: grid; gap: .5rem; margin: 0; padding: 0; list-style: none; }
   .offer-card { border: 1px dashed var(--field-border); border-radius: 3px; padding: .5rem .75rem; min-width: 0; }

@@ -1504,7 +1504,7 @@ function check(name, ok, detail = "") {
 		await release(addingOne, oneMore);
 		await page.waitForTimeout(500);
 
-		const heldLabel = await page.locator("[data-offer-held]").textContent();
+		const heldLabel = await page.locator("[data-held-label]").textContent();
 
 		check(
 			"a reply that adds one milestone is held as one update",
@@ -1535,7 +1535,7 @@ function check(name, ok, detail = "") {
 		await release(rewording, reworded);
 		await page.waitForTimeout(500);
 
-		const rewordedLabel = await page.locator("[data-offer-held]").textContent();
+		const rewordedLabel = await page.locator("[data-held-label]").textContent();
 
 		check(
 			"a milestone reworded and given new days is held as one update",
@@ -1868,6 +1868,146 @@ function check(name, ok, detail = "") {
 			/for 2 used milestones/.test(renamed) &&
 				/for 1 used milestone\b/.test(removed),
 			`${renamed} | ${removed}`,
+		);
+
+		// A row the owner emptied by hand and another milestone filled counts once (the twenty-ninth review: the day-value
+		// row added the first milestone's days to the second's).
+		await fresh();
+		await card("milestones", 0)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+		await page.mouse.move(2, 2);
+
+		for (const name of ["milestoneName", "deliverables", "acceptance", "fee"])
+			await rows.first().locator(`[name="${name}"]`).fill("");
+
+		const emptiedRow = await page.locator("[data-price-day]").textContent();
+		const emptied = await next(20000);
+
+		if (emptied) await release(emptied);
+
+		await page.waitForFunction(() =>
+			document
+				.querySelector("[data-offer-status]")
+				?.textContent?.startsWith("Up to date"),
+		);
+		await card("milestones", 1)
+			.getByRole("button", { name: /^Add to the offer/ })
+			.click();
+
+		const refilled = await page.locator("[data-price-day]").textContent();
+
+		check(
+			"a row emptied by hand stops counting, and filled by another milestone counts one",
+			!/used milestone/.test(emptiedRow) &&
+				(await rows.count()) === 1 &&
+				/for 1 used milestone\b/.test(refilled),
+			`${emptiedRow} | ${refilled}`,
+		);
+
+		// "Show N updates" keeps its size whatever it says, so the header never gains or loses a row when it appears (the
+		// twenty-ninth review: at 340 px the idle label took a second row the shorter one did not need, and the cards moved
+		// 54 px under the pointer; at 400 px the same with the first reply held).
+		const scrollerTop = () =>
+			page
+				.locator("[data-offer-scroll]")
+				.evaluate(
+					(element) => element.getBoundingClientRect().top + window.scrollY,
+				);
+
+		await page.setViewportSize({ width: 340, height: 844 });
+		await fresh();
+		await page.getByRole("button", { name: "Suggest again" }).click();
+
+		const at340 = await next();
+
+		await card("outcome").hover();
+
+		const top340 = await scrollerTop();
+		const held340 = scriptedOfferReply(at340.request().postData());
+
+		held340.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		await release(at340, held340);
+		await page.waitForTimeout(500);
+
+		const moved340 = (await scrollerTop()) - top340;
+		const shown340 = await page.locator("[data-offer-held]").isVisible();
+
+		await page.mouse.move(2, 2);
+		await page.setViewportSize({ width: 400, height: 844 });
+		await page.goto(new URL(`/owner/requests/${REQUEST}`, targetUrl).href);
+		await page
+			.getByRole("button", { name: "Suggest an offer with AI" })
+			.click();
+
+		const at400 = await next();
+
+		await page.locator("[data-offer-scroll]").hover();
+
+		const top400 = await scrollerTop();
+
+		await release(at400);
+		await page.waitForTimeout(500);
+		check(
+			"Show N updates appears without moving the cards at 340 and 400 px",
+			shown340 &&
+				Math.abs(moved340) < 1 &&
+				(await page.locator("[data-offer-held]").isVisible()) &&
+				Math.abs((await scrollerTop()) - top400) < 1,
+			`${moved340} ${(await scrollerTop()) - top400}`,
+		);
+		await page.mouse.move(2, 2);
+		await page.setViewportSize({ width: 1280, height: 800 });
+
+		// Without scroll anchoring (as in Safari), with the board wholly above the screen and nothing focused, a reply moves
+		// nothing below it (the twenty-ninth review: the editor's milestones moved 44 px).
+		await fresh();
+		await page.addStyleTag({
+			content: "* { overflow-anchor: none !important; }",
+		});
+		await page.locator('[name="summary"]').first().click();
+		await page.keyboard.type("Fans hear new music");
+		await page.evaluate(() => {
+			document.activeElement.blur();
+			window.scrollBy(
+				0,
+				document.querySelector("[data-offer-board]").getBoundingClientRect()
+					.bottom + 10,
+			);
+		});
+
+		const below = await next(20000);
+
+		const belowTop = () =>
+			page
+				.locator('[name="summary"]')
+				.first()
+				.evaluate((element) => element.getBoundingClientRect().top);
+
+		const belowAt = await belowTop();
+		const grown = scriptedOfferReply(below.request().postData());
+
+		grown.cards.push({
+			ref: "",
+			lane: "questions",
+			text: "Does the band sell merch at shows?",
+			reason: "",
+			detail: null,
+		});
+		grown.sizeReason =
+			"Four pages, a booking form that emails the band, and a mailing list sign-up";
+		await release(below, grown);
+		await page.waitForTimeout(600);
+		check(
+			"without scroll anchoring, a reply moves nothing below a board that is above the screen",
+			Math.abs((await belowTop()) - belowAt) < 1,
+			`${belowAt} -> ${await belowTop()}`,
 		);
 
 		// A reply never scrolls the page to keep a focused field that is out of view: someone reading the board above it

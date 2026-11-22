@@ -521,13 +521,18 @@ const MONEY = new RegExp(
 // English words before a currency word ("five thousand dollars", "fifteen hundred dollars", "two hundred thousand
 // dollars"). A range after a money word may end in a scale word ("Budget of 5 to 10 thousand"), and "and" joins a range
 // only after "between" ("Budget between 2,000 and 4,000", but "a budget of 5,000 and 8 weeks" is money and a duration).
-// Common verbs may stand between the money word and the amount ("Fees are 1,500", "The fee will be about 4,500", "Die
-// Kosten betragen 5.000"), and a large amount may come first in English before "budget", "fee", "deposit" or "retainer"
-// ("A 4,500 fee"). "Total" and "rate" also count things ("Milestones total 3", "a rate of 1 per week"), so after them a
-// large amount is money, and a small one only with a currency, a period after a slash, or "flat" or "upfront" after it,
-// or with two digits or cents and "per" and a period after it ("a rate of 25 per month").
-// Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"), and so does a
-// one-digit amount after "total" or "rate" with "per" ("a rate of 5 per hour"); a large number
+// Common verbs may stand between a money word and its amount ("Fees are 1,500", "The fee will be about 4,500", "Die
+// Kosten betragen 5.000"), except after "invoices", "payments", "deposits" and "charges", which also name things an
+// offer counts ("Invoices are about 40 a month"). In English a large amount may come first, after "a", "the" or the
+// like, before "budget", "fee", "deposit" or "retainer", perhaps with one word between ("A 4,500 fee", "the 2,500
+// launch fee"), but not a year ("the 2026 budget") nor before a counted noun ("the 2,000 fee records"). "Total" and
+// "rate" also count things ("Milestones total 3", "a rate of 1 per week"), so after them a large amount is money, and a
+// small one only with cents, a currency, a period after a slash, "flat" or "upfront", or with two digits and "per", "a"
+// or "each" after it ("a rate of 25 per page"); after "rate", two digits that end a sentence are money too ("billed at
+// a rate of 95."). A rate named by its period ("day rate", "monthly rate") is a money word of its own.
+// Known limits, on purpose: a small amount followed by an ordinary word passes ("a fee of 50 for setup"), and so do a
+// one-digit amount after "total" or "rate" ("a rate of 5 per hour"), two digits that end a sentence after "total" ("in
+// total: 12."), and an amount after a verb that follows a plural money word ("Payments are 2,500 a month"); a large number
 // followed by a word that is not a listed unit is dropped ("Estimated 2026 launch"), and so is a number before a short
 // scale word that is also an English word ("Quote 4 mil poly bags", "Price 2 bin sizes"); money words are listed for English,
 // Spanish, Portuguese, French, German, Italian, Russian, Polish and Turkish only, so another language's money word
@@ -536,18 +541,30 @@ const MONEY = new RegExp(
 
 /** A money word, in the languages listed above, standing as a word of its own. */
 const OFFER_MONEY_WORD =
-	"(?<![\\p{L}\\p{N}])(?:budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|deposits?|payments?|pay|charges?|invoices?|retainers?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
+	"(?<![\\p{L}\\p{N}])(?:(?:hourly|daily|day|weekly|monthly|yearly|annual|flat)\\s+rates?|budget(?:ed)?|estimate[ds]?|quote[ds]?|prices?|priced|fees?|costs?|deposit|payment|pay|charge|invoice|retainers?|presupuesto|precio|coste|costo|tarifa|honorarios|or[çc]amento|pre[çc]o|custo|kosten|preis|honorar|prix|co[uû]t|tarif|prezzo|preventivo|compenso|цена|стоимость|бюджет|koszt|cena|budżet|fiyat|bütçe|ücret)(?!\\p{L})";
 
 /** Money words that also count things ("Milestones total 3", "a rate of 1 per week"): see the rules above. */
 const OFFER_COUNTING_MONEY_WORD =
 	"(?<![\\p{L}\\p{N}])(?:total|rates?)(?!\\p{L})";
 
-/**
- * What may stand between a money word and its amount: a colon, then up to three of these words, each perhaps followed
- * by a colon ("of", "is about", "will be about", ": roughly", "von ca.", "es de", "liegt bei").
- */
-const OFFER_CONNECTOR =
-	"\\s*(?:[:：]\\s*)?(?:(?:of|is|are|was|were|will|would|be|comes?|came|to|totals?|totall?ing|ranges?|runs?|at|around|about|under|over|roughly|approximately|between|from|aproximadamente|environ|etwa|circa|es|est|sont|sera|serait|será|sería|é|è|sarà|sarebbe|ist|sind|wird|beträgt|betragen|liegt|liegen|bei|wynosi|составляет|составит|de|von|di|du|ca\\.?|около|około|yaklaşık)\\s*[:：]?\\s*){0,3}";
+/** Plural money words that also name things an offer counts ("Invoices are about 40 a month"): no verb is read after them. */
+const OFFER_COUNTED_MONEY_WORD =
+	"(?<![\\p{L}\\p{N}])(?:deposits|payments|charges|invoices)(?!\\p{L})";
+
+/** Words that may stand between a money word and its amount ("of", "about", "von ca."). */
+const CONNECTOR_WORDS =
+	"of|is|at|around|about|under|over|roughly|approximately|between|from|aproximadamente|environ|etwa|circa|de|von|di|du|ca\\.?|около|około|yaklaşık";
+
+/** Verbs that may stand there too, except after the plural money words above ("are", "will be", "es de", "liegt bei"). */
+const CONNECTOR_VERBS =
+	"are|was|were|will|would|be|comes?|came|to|totals?|totall?ing|ranges?|runs?|es|est|sont|sera|serait|será|sería|é|è|sarà|sarebbe|ist|sind|wird|beträgt|betragen|liegt|liegen|bei|wynosi|составляет|составит";
+
+/** A colon, then up to `most` of the words, each perhaps followed by a colon ("is about", ": roughly", "will be about"). */
+const connector = (words: string, most: number) =>
+	`\\s*(?:[:：]\\s*)?(?:(?:${words})\\s*[:：]?\\s*){0,${most}}`;
+
+const OFFER_CONNECTOR = connector(`${CONNECTOR_VERBS}|${CONNECTOR_WORDS}`, 3);
+const OFFER_PLAIN_CONNECTOR = connector(CONNECTOR_WORDS, 2);
 
 /** A scale word after a number, in the languages listed above ("thousand", "mil", "millones", "Tausend", "тыс.", "bin"). */
 const SCALE =
@@ -563,14 +580,14 @@ const LARGE_AMOUNT = `(?:\\d{1,3}(?:[,.\\s]\\d{3})+(?:[.,]\\d{1,2})?|\\d{3,}(?:[
 const SMALL_AMOUNT = "\\d{1,2}(?:[.,]\\d{1,2})?(?!\\d|[.,]\\d)";
 
 /** "And" joining a range, only after "between" ("between 2,000 and 4,000"). */
-const BETWEEN_AND = `(?<=(?<![\\p{L}])between\\s*[:：]?\\s*\\d[\\d,.]*(?:\\s\\d{3})*(?:\\s?(?:k|m|${SCALE}))?\\s*)and`;
+const BETWEEN_AND = `(?<=(?<![\\p{L}])between\\s*[:：]?\\s*(?:(?:about|around|roughly|approximately|circa|ca\\.?|some)\\s*)?\\d[\\d,.]*(?:\\s\\d{3})*(?:\\s?(?:k|m|${SCALE}))?\\s*)and`;
 
 /** A range after an amount ("to 6", "- 8", "– 1,200", "between 2,000 and 4,000"). */
 const OFFER_RANGE = `(?:\\s*(?:to|-|–|a|à|bis|${BETWEEN_AND})\\s*\\d[\\d,.]*(?:\\s?(?:k|${SCALE})(?![\\p{L}]))?)?`;
 
 /** Units of time, and things an offer counts, in the languages listed above. */
 const OFFER_UNITS =
-	"(?:hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?|rounds?|revisions?|iterations?|pages?|screens?|views?|products?|items?|skus?|users?|members?|accounts?|records?|rows?|entries|orders?|customers?|clients?|subscribers?|visitors?|emails?|messages?|files?|photos?|images?|videos?|posts?|articles?|templates?|forms?|fields?|steps?|milestones?|features?|integrations?|languages?|locations?|stores?|sites?|apps?|carriers?|reports?|dashboards?|seats?|licen[cs]es?|people|staff|employees?|requests?|calls?|tickets?|días|dias|semanas|meses|horas|páginas|paginas|productos|produtos|usuarios|usuários|tage|wochen|monate|stunden|seiten|produkte|jours|semaines|mois|heures|giorni|settimane|mesi|ore|pagine|prodotti|дней|недел[ьи]|месяц[аев]*|часов|страниц|dni|tygodni|miesięcy|godzin|stron|gün|hafta|ay|saat|sayfa)(?!\\p{L})";
+	"(?:transactions?|suppliers?|vendors?|invoices?|payments?|receipts?|bookings?|appointments?|leads?|contacts?|deals?|listings?|events?|hours?|hrs?|days?|weeks?|wks?|months?|years?|sprints?|rounds?|revisions?|iterations?|pages?|screens?|views?|products?|items?|skus?|users?|members?|accounts?|records?|rows?|entries|orders?|customers?|clients?|subscribers?|visitors?|emails?|messages?|files?|photos?|images?|videos?|posts?|articles?|templates?|forms?|fields?|steps?|milestones?|features?|integrations?|languages?|locations?|stores?|sites?|apps?|carriers?|reports?|dashboards?|seats?|licen[cs]es?|people|staff|employees?|requests?|calls?|tickets?|días|dias|semanas|meses|horas|páginas|paginas|productos|produtos|usuarios|usuários|tage|wochen|monate|stunden|seiten|produkte|jours|semaines|mois|heures|giorni|settimane|mesi|ore|pagine|prodotti|дней|недел[ьи]|месяц[аев]*|часов|страниц|dni|tygodni|miesięcy|godzin|stron|gün|hafta|ay|saat|sayfa)(?!\\p{L})";
 
 /** What may follow a large amount when it counts things rather than money: a range, perhaps one word, then a unit. */
 const COUNTED_AFTER = `\\+?${OFFER_RANGE}\\s*(?:(?!(?:per|a|an|each|every|for|plus|or|and|including|on|in|with|to|of|the|this|next|last|first|across|over|during|throughout)(?!\\p{L}))\\p{L}+\\s+)?${OFFER_UNITS}`;
@@ -584,14 +601,30 @@ const COUNTING_PAID_AFTER = `${OFFER_RANGE}\\s*(?:\\/\\s?(?:mo|month|yr|year|wk|
 /** A money word with an amount that is money by the rules above. */
 const OFFER_MONEY_WORD_AMOUNT = `${OFFER_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${PAID_AFTER}))`;
 
-/** Two digits, or an amount with cents, then "per" and a period ("25 per month", "7.50 an hour"). */
-const PER_PERIOD = `(?:\\d{2}|\\d{1,2}[.,]\\d{1,2})(?!\\d|[.,]\\d)(?=${OFFER_RANGE}\\s*(?:per|a|an|each)\\s+(?:hours?|hr|days?|weeks?|wk|months?|mo|years?|yr)\\b)`;
+/** The plural money words with an amount, read without verbs. */
+const OFFER_COUNTED_WORD_AMOUNT = `${OFFER_COUNTED_MONEY_WORD}${OFFER_PLAIN_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${PAID_AFTER}))`;
+
+/** An amount with cents ("95.00", "7,50"). */
+const CENTS = "\\d{1,2}[.,]\\d{2}(?!\\d|[.,]\\d)";
+
+/** Two digits, or an amount with cents, then "per", "a" or "each" ("25 per page", "7.50 an hour"), but not "per cent". */
+const PER_SOMETHING = `(?:\\d{2}|\\d{1,2}[.,]\\d{1,2})(?!\\d|[.,]\\d)(?=${OFFER_RANGE}\\s*(?:per|a|an|each)\\s+(?!cent(?!\\p{L}))\\p{L})`;
 
 /** "Total" or "rate" with an amount that is money by the rules above. */
-const OFFER_COUNTING_WORD_AMOUNT = `${OFFER_COUNTING_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${COUNTING_PAID_AFTER})|${PER_PERIOD})`;
+const OFFER_COUNTING_WORD_AMOUNT = `${OFFER_COUNTING_MONEY_WORD}${OFFER_CONNECTOR}(?:${LARGE_AMOUNT}(?!${COUNTED_AFTER})|${SMALL_AMOUNT}(?=${COUNTING_PAID_AFTER})|${CENTS}|${PER_SOMETHING})`;
 
-/** A large amount before a money word ("A 4,500 fee", "the 1,200 deposit"). */
-const AMOUNT_THEN_MONEY_WORD = `${LARGE_AMOUNT}\\s+(?:budget|fee|deposit|retainer)(?!\\p{L})`;
+/** "Rate" with two digits that end a sentence ("billed at a rate of 95."). */
+const RATE_AT_END = `(?<![\\p{L}\\p{N}])rates?(?!\\p{L})${OFFER_CONNECTOR}\\d{2}(?!\\d|[.,]\\d)(?=\\s*(?:$|[.;)\\]](?=\\s|$)))`;
+
+/** Nouns a money word may describe when it counts things ("fee records", "deposit transactions"). */
+const COUNTED_NOUN =
+	"(?:records?|transactions?|entries|lines?|items?|codes?|data|types?|history|schedules?|reports?|tables?|fields?|categories|accounts?|ledgers?)";
+
+/**
+ * A large amount before a money word, after "a", "the" or the like ("A 4,500 fee", "the 2,500 launch fee"), but not a
+ * year ("the 2026 budget") nor before a counted noun ("the 2,000 fee records").
+ */
+const AMOUNT_THEN_MONEY_WORD = `(?<![\\p{L}\\p{N}])(?:a|an|the|this|that|our|your|their|its|one)\\s+(?!(?:19|20)\\d{2}(?![\\d,.]))${LARGE_AMOUNT}(?:[\\s-]+\\p{L}+)?[\\s-]+(?:budget|fee|deposit|retainer)(?!\\p{L})(?!\\s+${COUNTED_NOUN}(?!\\p{L}))`;
 
 /** Currency symbols the living brief does not list, before the amount ("₽5 000", "₺50.000", "₪20,000"). */
 const OTHER_SYMBOL_BEFORE = "[₽₺₪₱₫]\\s?\\d";
@@ -607,7 +640,7 @@ const OTHER_CODE_BEFORE = "\\b(?:pln|czk|huf|rub|zar|sgd|hkd)\\s?\\d";
  */
 const AMOUNT_THEN_CURRENCY = [
 	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:r\\$|[$€£¥₹₩₽₺₪₱₫])`,
-	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?\\s?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])`,
+	`\\d[\\d,.]*(?:\\s\\d{3})*(?:[,.][-–])?\\s?(?:k|m|${SCALE}(?:\\s+de|\\s+d['’])?)?[\\s-]?(?:usd|eur|gbp|chf|nzd|jpy|cny|inr|krw|mxn|brl|sek|nok|dkk|kr|pln|czk|huf|rub|zar|sgd|hkd|tl|zł|kč|руб\\p{L}*|евро|доллар\\p{L}*|dollars?|euros?|pounds?|bucks|dólares|dolares|reais|pesos|rublos|złotych|zlotych|rupees?|yen|yuan|francs?|kronor|kroner)(?![\\p{L}])`,
 	`${LARGE_AMOUNT}\\s?(?:cad|aud)(?!\\p{L})`,
 	"(?<![\\p{L}])(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|a few|few|several|a couple of|couple of)(?:[-\\s](?:one|two|three|four|five|six|seven|eight|nine))?\\s+(?:hundred|thousand|million)(?:\\s+(?:thousand|million))?\\s+(?:dollars?|euros?|pounds?|bucks|usd|eur|gbp)(?![\\p{L}])",
 	"\\d{1,2}\\s?(?:cad|aud)(?!\\p{L})(?!\\s+\\p{L})",
@@ -628,7 +661,9 @@ const PRICE = new RegExp(
 		WON_AMOUNT,
 		CJK_MONEY_WORD,
 		OFFER_MONEY_WORD_AMOUNT,
+		OFFER_COUNTED_WORD_AMOUNT,
 		OFFER_COUNTING_WORD_AMOUNT,
+		RATE_AT_END,
 		AMOUNT_THEN_MONEY_WORD,
 		...AMOUNT_THEN_CURRENCY,
 	].join("|"),

@@ -163,6 +163,8 @@ export function setupOfferBoard() {
 	const heldButton =
 		root.querySelector<HTMLButtonElement>("[data-offer-held]")!;
 
+	const heldLabel = heldButton.querySelector<HTMLElement>("[data-held-label]")!;
+
 	const heading = root.querySelector<HTMLElement>("#offer-board-title")!;
 	const cardsBox = root.querySelector<HTMLElement>("[data-offer-scroll]")!;
 	const aside = root.querySelector<HTMLDetailsElement>("[data-offer-aside]")!;
@@ -255,13 +257,20 @@ export function setupOfferBoard() {
 	/** The whole sentence behind a short form shown while the owner was among the cards, shown once they leave. */
 	let pendingFull: string | null = null;
 
-	/** A message the owner both sees in the status line and hears. */
 	/**
-	 * Measures a field outside the board that has focus and can be seen, and returns a step that puts it back where it was
-	 * on screen once the board above it has changed height (Chrome's scroll anchoring does not always, and Safari has
-	 * none). A field scrolled out of view is left alone, so the page never moves under someone reading the board.
+	 * Measures what the owner is looking at below the board and returns a step that puts it back where it was on screen
+	 * once the board has changed height (Chrome's scroll anchoring does not always, and Safari has none). With the board
+	 * wholly above the screen, everything below it stays put. Otherwise a field outside the board that has focus and can
+	 * be seen, even in part, stays put; one scrolled out of view is left alone, so the page never moves under someone
+	 * reading the board.
 	 */
-	const keepTypedField = () => {
+	const keepPlace = () => {
+		const boardBottom = root.getBoundingClientRect().bottom;
+
+		if (boardBottom <= 0)
+			return () =>
+				window.scrollBy(0, root.getBoundingClientRect().bottom - boardBottom);
+
 		const focused = document.activeElement;
 
 		const box =
@@ -271,13 +280,8 @@ export function setupOfferBoard() {
 				? focused.getBoundingClientRect()
 				: null;
 
-		// Seen: its top and its first line are on screen (a tall text area may run past the bottom).
 		const kept =
-			box &&
-			box.top >= 0 &&
-			box.top + Math.min(box.height, 48) <= window.innerHeight
-				? focused
-				: null;
+			box && box.bottom > 0 && box.top < window.innerHeight ? focused : null;
 
 		return () => {
 			if (kept?.isConnected && box)
@@ -285,8 +289,9 @@ export function setupOfferBoard() {
 		};
 	};
 
+	/** A message the owner both sees in the status line and hears. */
 	const say = (text: string) => {
-		const keep = keepTypedField();
+		const keep = keepPlace();
 
 		pendingFull = null;
 		status.style.minHeight = "";
@@ -297,7 +302,7 @@ export function setupOfferBoard() {
 
 	/** Words the board writes on its own, while the owner may be among the cards: the line keeps its height. */
 	const quietly = (text: string) => {
-		const keep = keepTypedField();
+		const keep = keepPlace();
 
 		pendingFull = null;
 		status.style.minHeight = `${status.offsetHeight}px`;
@@ -550,6 +555,18 @@ export function setupOfferBoard() {
 	}
 
 	/** The row a used milestone went to, while it still holds that milestone's name (mutant fee-any-row). */
+	/** Whether a row Use filled is still in the editor and holds anything Use fills (the owner may have emptied it). */
+	function holdsMilestone(fieldset: HTMLElement | undefined) {
+		return (
+			fieldset?.isConnected === true &&
+			MILESTONE_FIELDS.some((name) => {
+				const control = named(fieldset, name);
+
+				return control !== null && valueOf(control).trim() !== "";
+			})
+		);
+	}
+
 	function rowOf(card: OfferCard) {
 		const fieldset = usedIn.get(card.id);
 
@@ -638,6 +655,14 @@ export function setupOfferBoard() {
 
 				const { fieldset, added, drawn } = target;
 				const before = usedIn.get(card.id);
+
+				// A row holds one milestone: a card whose row this Use fills again (the owner emptied it) is no longer in the
+				// offer, so the day-value estimate stops counting it; Undo gives the row back.
+				const displaced = [...usedIn].flatMap(([id, row]) =>
+					id !== card.id && row === fieldset ? [id] : [],
+				);
+
+				for (const id of displaced) usedIn.delete(id);
 				usedIn.set(card.id, fieldset);
 				setField(named(fieldset, "milestoneName"), card.text, restore);
 				setField(
@@ -661,6 +686,8 @@ export function setupOfferBoard() {
 				restore.unshift(() => {
 					if (before) usedIn.set(card.id, before);
 					else usedIn.delete(card.id);
+
+					for (const id of displaced) usedIn.set(id, fieldset);
 
 					if (
 						added &&
@@ -768,10 +795,6 @@ export function setupOfferBoard() {
 
 	// ---- Prices -------------------------------------------------------------------------------------------------------
 	/**
-	 * Fills the offer's estimate range, to the cent (past offers can hold cents). The editor's range starts at $1, so a
-	 * researched low end of $0 fills as $1.
-	 */
-	/**
 	 * What a price row's button did, shown in that row under the button (the board's status line is out of view there),
 	 * and announced. One such line at a time; it stays through a redraw of its row until the next price press.
 	 */
@@ -790,6 +813,10 @@ export function setupOfferBoard() {
 		announce(text);
 	}
 
+	/**
+	 * Fills the offer's estimate range, to the cent (past offers can hold cents). The editor's range starts at $1, so a
+	 * researched low end of $0 fills as $1.
+	 */
 	function useRange(lowCents: number, highCents: number, from: HTMLElement) {
 		const low = Math.max(100, lowCents);
 		const high = Math.max(low, highCents);
@@ -869,7 +896,7 @@ export function setupOfferBoard() {
 				card.lane === "milestones" &&
 				details.has(card.id) &&
 				used.has(card.id) &&
-				usedIn.get(card.id)?.isConnected === true,
+				holdsMilestone(usedIn.get(card.id)),
 		);
 
 		const counted = (inOffer.length ? inOffer : onBoard).slice(0, 3);
@@ -1246,7 +1273,7 @@ export function setupOfferBoard() {
 		// never moves the cards.
 		heldButton.hidden = false;
 		heldButton.toggleAttribute("data-idle", !held);
-		heldButton.textContent = held
+		heldLabel.textContent = held
 			? `Show ${held.changes} ${held.changes === 1 ? "update" : "updates"}`
 			: "Show 88 updates";
 		askButton.textContent = replied
@@ -1314,7 +1341,7 @@ export function setupOfferBoard() {
 		held = null;
 
 		// A field below the board that the owner is typing in stays put when the board above it grows or shrinks.
-		const keep = keepTypedField();
+		const keep = keepPlace();
 
 		render();
 		keep();
@@ -1449,13 +1476,12 @@ export function setupOfferBoard() {
 		timer = setTimeout(ask, Math.max(delay, lastSendAt + GAP - Date.now()));
 	}
 
-	/** A failure stops automatic asking. The route's own sentence is shown as it is; the page's own adds what to do. */
 	/** The same sentence the route answers when the AI fails, so one failure reads one way. */
 	const AI_FAILED =
 		"The AI couldn’t answer just now. Your draft is unchanged; press Suggest to try again.";
 
 	/**
-	 * A request failed, with the route's sentence or the page's own. Its kind decides the short form and the page's limit:
+	 * A request failed, with the route's sentence or the page's own; a failure stops automatic asking. Its kind decides the short form and the page's limit:
 	 * "retry" says to try again (the AI or the store failed, or requests crossed), "answer" is final (the request is
 	 * missing or closed, or the board is off here), "daily" is the owner's daily limit, "signin" a lapsed sign-in.
 	 */
@@ -2115,10 +2141,14 @@ export function setupOfferBoard() {
 
 	// Once the owner has asked, the board keeps up with the draft.
 	form.addEventListener("input", (event) => {
-		// Set its fee is offered only while the milestone's row holds its name.
+		// Set its fee is offered only while the milestone's row holds its name, and the day-value row counts a used
+		// milestone only while its row holds something.
+		const field = event.target;
+
 		if (
-			event.target instanceof HTMLInputElement &&
-			(event.target.name === "milestoneName" || event.target.name === "fee")
+			(field instanceof HTMLInputElement ||
+				field instanceof HTMLTextAreaElement) &&
+			MILESTONE_FIELDS.some((name) => name === field.name)
 		)
 			render();
 

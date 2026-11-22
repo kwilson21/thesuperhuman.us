@@ -337,8 +337,11 @@ export function readOfferReply(raw: RawValue): OfferReply | null {
 	return {
 		cards,
 		size: PRICING_SIZES.find((known) => known === size) ?? null,
+		// Read at a bounded length (a little past the cut, so an amount the cut splits is still seen): the money test is
+		// not linear in every text a model could write.
 		sizeReason:
-			Predicate.isString(sizeReason) && !pricesOrLinks(sizeReason)
+			Predicate.isString(sizeReason) &&
+			!pricesOrLinks(oneLine(sizeReason).slice(0, OFFER_REASON_MAX + 40))
 				? oneLine(sizeReason).slice(0, OFFER_REASON_MAX)
 				: "",
 		figureUsd:

@@ -448,6 +448,18 @@ describe("found in the offer board's seventh review", () => {
 		pricesOrLinks(long);
 		expect(performance.now() - start).toBeLessThan(500);
 	});
+
+	// Digit groups after "a" or "the" made one form of the test try every position (the twenty-ninth review: 2.7 s).
+	it.each([
+		"1" + " 000".repeat(1250),
+		"a 1" + " 000".repeat(1250),
+		"the fee 1" + ",000".repeat(1250),
+	])("reads long digit groups quickly", (long) => {
+		const start = performance.now();
+
+		pricesOrLinks(long);
+		expect(performance.now() - start).toBeLessThan(1000);
+	});
 });
 
 describe("found in the offer board's eighth review", () => {
@@ -735,6 +747,44 @@ describe("found in the offer board's twenty-eighth review", () => {
 		"The fee will cover 3 rounds",
 		"Rate limits of 60 per minute",
 	])("keeps %s: a count after total, rate or a verb", (text) => {
+		expect(pricesOrLinks(text)).toBe(false);
+	});
+});
+
+describe("found in the offer board's twenty-ninth review", () => {
+	it.each([
+		"Changes after launch, billed at an hourly rate of 95.",
+		"Hourly rate: 85",
+		"Support after handoff at a day rate of 90.",
+		"Rate 95.00 for extra rounds",
+		"Total 95.00",
+		"Rate of 95 per page",
+		"Extra changes at a rate of 95.",
+		"A 4,500-dollar fee",
+		"A 5,000-euro budget",
+		"A 4,500 flat fee",
+		"The 2,500 launch fee",
+		"Payments of 2,500 due at launch",
+	])("drops %s: a rate, cents or an amount before its money word", (text) => {
+		expect(pricesOrLinks(text)).toBe(true);
+	});
+
+	it.each([
+		"Invoices are about 40 a month, all sent by hand",
+		"Invoices are 1,200 a year",
+		"Payments are 25 per week",
+		"Deposits come 3 a week",
+		"Estimated between roughly 120 and 160 hours",
+		"Estimated between about 1,500 and 2,000 pages",
+		"Import the 2026 budget from the spreadsheet",
+		"Track spend against the FY2027 budget",
+		"Migrate 2,000 fee records",
+		"Migrate the 2,000 fee records",
+		"Match 1,200 deposit transactions",
+		"Payments to 1,500 suppliers",
+		"A conversion rate of 30 per cent",
+		"Send 1,500 invoices a month",
+	])("keeps %s: a count, a year or a range of hours", (text) => {
 		expect(pricesOrLinks(text)).toBe(false);
 	});
 });
