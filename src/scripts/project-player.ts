@@ -104,5 +104,9 @@ export function setupProjectPlayers() {
 				audio.currentTime = (Number(seek.value) / 1000) * audio.duration;
 			render();
 		});
+
+		// Metadata or an error can arrive before this script attaches its listeners, so check the state once.
+		if (audio.error) unavailable();
+		else if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) render();
 	}
 }
