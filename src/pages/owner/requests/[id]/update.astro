@@ -17,6 +17,7 @@ import {
 	softwareRevisionHistoryBody,
 	updateKinds,
 	sharedSoftwareUpdates,
+	visualSize,
 } from "~/lib/software-projects";
 import { evidenceTypes } from "~/lib/software-project-display";
 import {
@@ -183,6 +184,8 @@ const update: ClientSoftwareUpdate = {
 	next_update_on: seed?.next_update_on ?? "",
 	shared_at: null,
 	has_visual: draft?.visual_key ? 1 : 0,
+	visual_width: draft?.visual_width ?? null,
+	visual_height: draft?.visual_height ?? null,
 	kind: seed?.kind ?? "progress",
 	links_json: JSON.stringify(links),
 };
@@ -238,7 +241,7 @@ update.delivered_deliverables_json = JSON.stringify(initialDeliverables);
         <p><strong>Previous version:</strong> {revisionSource.artifact_version} · {revisionSource.title}</p>
         {unmetRevisionChecks.length>0 && <><h3>Checks the client reported as unmet</h3><ul>{unmetRevisionChecks.map(check=><li>{check}</li>)}</ul></>}{missingRevisionIndexes.length>0 && <><h3>Planned deliverables not included in this version</h3><ul>{missingRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}{inaccessibleRevisionIndexes.length>0 && <><h3>Included deliverables the client couldn’t open or find</h3><ul>{inaccessibleRevisionIndexes.map(index=><li>{revisionDeliverables[index]}</li>)}</ul></>}
         <blockquote>{softwareRevisionHistoryBody(revisionSource.decision_body,revisionChecks,revisionDeliverables).split('\n\n').slice(1).join('\n\n') || revisionSource.decision_body}</blockquote>
-        {revisionSource.has_visual && <figure class="revision-visual"><img src={`/api/owner/requests/${id}/updates/${revisionSource.id}/visual`} alt={revisionSource.visual_alt} /><figcaption>Visual from {revisionSource.artifact_version}</figcaption></figure>}
+        {revisionSource.has_visual && <figure class="revision-visual"><img src={`/api/owner/requests/${id}/updates/${revisionSource.id}/visual`} alt={revisionSource.visual_alt} {...visualSize(revisionSource)} /><figcaption>Visual from {revisionSource.artifact_version}</figcaption></figure>}
         <p>Prior check evidence is copied for reference. The unmet checks start blank. Review and update evidence for every check before sharing a new version.</p>
       </section>}
       <form class="software-update-form" data-update-form>

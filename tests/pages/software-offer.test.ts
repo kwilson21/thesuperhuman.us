@@ -959,9 +959,9 @@ it("reopens an earlier milestone revision with its saved evidence intact", async
 
 		expect(html).toContain("Respond to requested changes");
 		expect(html).toContain("Please fix the client form.");
-		expect(html.match(/<img[^>]*updates\/old-review\/visual[^>]*>/)![0]).toMatch(
-			/width="300"[^>]*height="200"|height="200"[^>]*width="300"/,
-		);
+		expect(
+			html.match(/<img[^>]*updates\/old-review\/visual[^>]*>/)![0],
+		).toMatch(/width="300"[^>]*height="200"|height="200"[^>]*width="300"/);
 		expect(
 			html.match(/<img[^>]*updates\/revision-draft\/visual[^>]*>/)![0],
 		).toMatch(/width="640"[^>]*height="480"|height="480"[^>]*width="640"/);

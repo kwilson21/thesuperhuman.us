@@ -1984,7 +1984,8 @@ function sizedPng(width: number, height: number, rotated = false) {
 	const crc = (data: number[]) => {
 		let value = 0xffffffff;
 
-		for (const byte of data) value = table[(value ^ byte) & 0xff] ^ (value >>> 8);
+		for (const byte of data)
+			value = table[(value ^ byte) & 0xff] ^ (value >>> 8);
 
 		return (value ^ 0xffffffff) >>> 0;
 	};

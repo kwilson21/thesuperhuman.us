@@ -159,12 +159,8 @@ describe("png", () => {
 	});
 
 	it("gives null for an orientation other than 1", () => {
-		expect(
-			imageSize(pngWith(640, 480, tiff(6, "MM")), "image/png"),
-		).toBeNull();
-		expect(
-			imageSize(pngWith(640, 480, tiff(3, "II")), "image/png"),
-		).toBeNull();
+		expect(imageSize(pngWith(640, 480, tiff(6, "MM")), "image/png")).toBeNull();
+		expect(imageSize(pngWith(640, 480, tiff(3, "II")), "image/png")).toBeNull();
 	});
 
 	it("keeps the size when the orientation is 1", () => {

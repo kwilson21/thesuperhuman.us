@@ -244,3 +244,187 @@ export function isCompleteImage(bytes: Uint8Array, type: string) {
 			return false;
 	}
 }
+
+/** The Orientation tag of the TIFF block at `start` (the start of an EXIF block, with or without its "Exif" prefix), or undefined when there is none. A block that runs past the data throws a RangeError. */
+function exifOrientation(b: Uint8Array, start: number) {
+	const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+
+	if (ascii(b, start, 4) === "Exif" && b[start + 4] === 0) start += 6;
+	const order = ascii(b, start, 2);
+
+	if (order !== "II" && order !== "MM") return undefined;
+	const little = order === "II";
+
+	if (view.getUint16(start + 2, little) !== 42) return undefined;
+	const ifd = start + view.getUint32(start + 4, little),
+		count = view.getUint16(ifd, little);
+
+	for (let i = 0; i < count; i++) {
+		const entry = ifd + 2 + i * 12;
+
+		if (view.getUint16(entry, little) === 0x0112)
+			return view.getUint16(entry + 2, little) === 3
+				? view.getUint16(entry + 8, little)
+				: undefined;
+	}
+
+	return undefined;
+}
+
+type ImageSize = { width: number; height: number };
+
+const sized = (width: number, height: number): ImageSize | null =>
+	width > 0 && height > 0 ? { width, height } : null;
+
+function pngSize(b: Uint8Array) {
+	const view = new DataView(b.buffer, b.byteOffset, b.byteLength),
+		signature = [137, 80, 78, 71, 13, 10, 26, 10];
+
+	if (b.length < 33 || !signature.every((value, i) => b[i] === value))
+		return null;
+
+	if (ascii(b, 12, 4) !== "IHDR" || view.getUint32(8) !== 13) return null;
+	let position = 8;
+
+	while (position + 12 <= b.length) {
+		const length = view.getUint32(position),
+			type = ascii(b, position + 4, 4);
+
+		// The browser turns the image by its Orientation; the size shown is not guessed here.
+		if (type === "eXIf") {
+			const orientation = exifOrientation(b, position + 8);
+
+			if (orientation !== undefined && orientation !== 1) return null;
+		}
+
+		if (type === "IEND") break;
+		position += 12 + length;
+	}
+
+	return sized(view.getUint32(16), view.getUint32(20));
+}
+
+function jpegSize(b: Uint8Array) {
+	if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
+
+	let position = 2,
+		frame: ImageSize | null = null,
+		orientation: number | undefined;
+
+	while (position < b.length) {
+		if (b[position] !== 0xff) return null;
+
+		while (b[position] === 0xff && position + 1 < b.length) position++;
+		const marker = b[position++];
+
+		if (marker === 0xd9 || marker === 0xda) break;
+
+		if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+
+		if (marker === 0x00 || position + 2 > b.length) return null;
+		const length = (b[position] << 8) | b[position + 1];
+
+		if (length < 2 || position + length > b.length) return null;
+
+		if (isFrame(marker) && !frame) {
+			if (length < 8) return null;
+			frame = sized(
+				(b[position + 5] << 8) | b[position + 6],
+				(b[position + 3] << 8) | b[position + 4],
+			);
+
+			if (!frame) return null;
+		}
+
+		if (
+			marker === 0xe1 &&
+			orientation === undefined &&
+			ascii(b, position + 2, 4) === "Exif" &&
+			b[position + 6] === 0
+		)
+			orientation = exifOrientation(b, position + 2);
+
+		position += length;
+	}
+
+	if (!frame) return null;
+
+	// Orientations 5 to 8 turn the picture a quarter turn, so the browser shows it with width and height exchanged.
+	return orientation !== undefined && orientation >= 5 && orientation <= 8
+		? { width: frame.height, height: frame.width }
+		: frame;
+}
+
+function webpSize(b: Uint8Array) {
+	if (b.length < 20 || ascii(b, 0, 4) !== "RIFF" || ascii(b, 8, 4) !== "WEBP")
+		return null;
+	const chunks = webpChunks(b, 12, b.length);
+
+	if (!chunks?.length) return null;
+
+	for (const chunk of chunks) {
+		if (chunk.type !== "EXIF") continue;
+		const orientation = exifOrientation(b, chunk.body);
+
+		if (orientation !== undefined && orientation !== 1) return null;
+	}
+	const [first] = chunks,
+		body = first.body;
+
+	if (first.type === "VP8X") {
+		if (first.length < 10) return null;
+		const le24 = (at: number) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16);
+
+		return sized(le24(body + 4) + 1, le24(body + 7) + 1);
+	}
+
+	if (first.type === "VP8 ") {
+		if (
+			first.length < 10 ||
+			b[body + 3] !== 0x9d ||
+			b[body + 4] !== 0x01 ||
+			b[body + 5] !== 0x2a
+		)
+			return null;
+
+		return sized(
+			((b[body + 7] << 8) | b[body + 6]) & 0x3fff,
+			((b[body + 9] << 8) | b[body + 8]) & 0x3fff,
+		);
+	}
+
+	if (first.type === "VP8L") {
+		if (first.length < 5 || b[body] !== 0x2f) return null;
+		const bits =
+			b[body + 1] |
+			(b[body + 2] << 8) |
+			(b[body + 3] << 16) |
+			(b[body + 4] << 24);
+
+		return sized((bits & 0x3fff) + 1, ((bits >>> 14) & 0x3fff) + 1);
+	}
+
+	return null;
+}
+
+/**
+ * The pixel size a browser shows for `bytes`, a complete image of `type`, or null when it is not certain: an unreadable
+ * header, a zero size, or (for PNG and WebP) an Orientation other than 1, which turns the picture by an amount decided
+ * in the browser. A JPEG with Orientation 5 to 8 is returned with width and height exchanged. It never throws.
+ */
+export function imageSize(bytes: Uint8Array, type: string): ImageSize | null {
+	try {
+		switch (type) {
+			case "image/png":
+				return pngSize(bytes);
+			case "image/jpeg":
+				return jpegSize(bytes);
+			case "image/webp":
+				return webpSize(bytes);
+			default:
+				return null;
+		}
+	} catch {
+		return null;
+	}
+}

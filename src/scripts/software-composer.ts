@@ -558,8 +558,14 @@ export function setupSoftwareComposer() {
 
 		if (objectUrl) URL.revokeObjectURL(objectUrl);
 		objectUrl = URL.createObjectURL(image);
-		preview.querySelector<HTMLImageElement>("[data-preview-image]")!.src =
-			objectUrl;
+		const previewImage = preview.querySelector<HTMLImageElement>(
+			"[data-preview-image]",
+		)!;
+
+		// The size on the page was the saved image's; the new file's is not known here.
+		previewImage.removeAttribute("width");
+		previewImage.removeAttribute("height");
+		previewImage.src = objectUrl;
 		preview.querySelector<HTMLElement>("[data-preview-figure]")!.hidden = false;
 		render();
 	});

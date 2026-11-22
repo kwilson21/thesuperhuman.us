@@ -239,6 +239,7 @@ export async function ownerHealth({
 				"0026",
 				["version_label", "source_revision"],
 			],
+			["software_project_updates", "0028", ["visual_width", "visual_height"]],
 		]) {
 			try {
 				const columns = new Set(
