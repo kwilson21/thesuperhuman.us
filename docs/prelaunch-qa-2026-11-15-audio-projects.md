@@ -1,0 +1,80 @@
+# Effect stack, audio projects: the owner and studio project routes (release gate)
+
+The area is delivered as a stack: a bottom layer that changes how the golden corpus counts a database counter, and three conversion layers, each converting whole routes, standing alone and neutral against the layer below. This record covers the whole stack. The design is `docs/plans/2026-11-audio-projects-conversion.md` (merged first, with its three Quint models), and the behaviour fixes F1 to F5 of its section 7 merged before the conversion. The conversion copies the pilot's shape (`docs/prelaunch-qa-2026-11-14-music-area.md`).
+
+Date: November 15, 2026 (the last layer finished November 22, 2026)
+Repository: the personal website repository
+Routes: the owner's project routes `messages`, `uploads` (POST and PUT), `files/[fileId]`, `access`, `invitation` and `updates`, and the studio's project routes `messages` and `files/[fileId]` (GET and HEAD).
+Branches, each cut from the one before; nothing is pushed:
+
+- bottom layer `claude/golden-sqlite-sequence`: a counter row at 0 is no state in the golden digests, every golden fixture re-recorded under that rule, and a proof script that the re-record changed only digests;
+- layer 1 `claude/effect-15-audio-projects-messages`: the two messages routes, and the area's store, answers and input readers;
+- layer 2 `claude/effect-15-audio-projects-files`: the uploads route, the owner file route and the studio file route, and the project and file machines;
+- layer 3 `claude/effect-15-audio-projects`: the access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
+
+AI assistance: the code on every branch was written with AI assistance, tests first. The owner reviews the pull requests.
+
+## Design note
+
+The design was reviewed before any conversion code, as the plan asks: three XState diagrams (the project's stage, a file's status, a notice's delivery) and three Quint models (`verification/audio-project-messages.qnt`, `audio-project-files.qnt`, `audio-project-notices.qnt`) whose mutants each break one property. The machines are written in `src/server/machines/`: `audio-project.ts` and `project-file.ts` in layer 2, `project-notice.ts` in layer 3 (and the note and date moves of the project machine). Every `IN (...)` list of a statement's compare-and-set guard comes from a machine through `sourcesOf`, and a test holds each list to its machine.
+
+## Scope
+
+Layer 1: `src/pages/api/owner/projects/[id]/messages.ts` and `src/pages/api/studio/projects/[id]/messages.ts`, `src/server/audio-project-store.ts` (created), `src/lib/audio-project-answers.ts` (created), `src/server/audio-project-input.ts` (created), `src/server/rules/audio-project-messages.ts` and `flows/audio-project-messages.ts`.
+
+Layer 2: `uploads.ts`, `files/[fileId].ts` (owner) and `files/[fileId].ts` (studio). Rules: `audio-project-files.ts`, `audio-project-uploads.ts`, `studio-project-file.ts`. Flows: `audio-project-files.ts` (publish and revoke), `audio-project-uploads.ts` (start, put, complete, recover, abort), `studio-project-file.ts`. The store gains the file, upload and R2 object functions. A file's publish and revoke start the client's notice through `src/server/flows/audio-project-notices.ts` (layer 3).
+
+Layer 3: `access.ts`, `invitation.ts` and `updates.ts`. Rules: `audio-project-access.ts`, `audio-project-notices.ts`, `audio-project-updates.ts`. Flows: `audio-project-access.ts`, `audio-project-notices.ts`, `audio-project-updates.ts`. `src/server/studio-signin-store.ts` holds the three statements that close a client's sign-in (`endClientSessions`, `deleteClientSigninCodes`, `deleteRetiredClientCodes`); the studio sign-in area's conversion has not reached `main`, so this layer created the file with only those three functions, as the design says. One new service, `StudioNoticeMail`, wraps the studio notice email; the public intake's `ProjectInvitation.deliver` is now the invitation delivery flow and still fails with `ProjectInvitationFailed`.
+
+What stays outside, because code outside the area calls it: `listProjectMessages`, `revisionRoundsLeft`, `latestReviewDecision` and `REVISION_ROUNDS`, `clientProjectFiles`, `listProjectUpdates`, `defaultFirstUpdate`, `validateProjectMessage`, `readBodyWithin`, `privateProjectObjectKey`, the part size constants and `expectedPartLength`, `ProjectInvitation` and `ProjectUpdate` as types, `deleteRetiredCodes` (the owner's request status routes call it), `studioSessionFromRequest`, and `audio-project-next-step.ts`.
+
+Deleted: the writers the routes called in `audio-project-messages.ts`, `audio-project-publishing.ts`, `audio-project-revocation.ts`, the uploads, file read and stream code of `audio-project-uploads.ts` and `audio-project-files.ts`, the invitation's delivery and queue, and the update saving, delivery and queue of `audio-project-updates.ts`, with the tests that only covered them (replaced by flow stories against the real schema).
+
+## Input
+
+Effect Schema readers in `src/server/audio-project-input.ts` for every body: the two message commands, the four uploads commands, the part's query, the two file commands, the access command, the invitation command and the seven update commands. Frozen Zod 4 copies are under `tests/fixtures/legacy-validators/` (`audio-project-messages.ts`, `audio-project-files.ts`, `audio-project-updates.ts`), and `tests/server/audio-project-input-differential.test.ts` holds each reader to its copy with seeded random inputs and the fixed inputs the design names: `11111111-1111-1111-1111-111111111111` and `FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF` as upload ids are refused, an empty or missing `part` reads as 0. The upload id check is Zod 4's own pattern, written out. No converted route imports Zod.
+
+## Statement classes
+
+After the conversion no statement of the area decides an outcome. Every read is a plain read of columns (a join by key at most); every write is guarded by a key or is a compare-and-set that keeps today's conditions (the project open, the stage the machine lists, the `updated_at` that was read, the request's status, the payments, the count under the cap, a published review or final where a corpus race needs it). Three guards raise and are decided again on fresh facts: the live review files a publish replaces, the stage and other published files a file revoke resets from, and (in each) a unique violation a rule's facts depend on; every other lost guard is its named refusal and is not retried. The statements of the design's section 4 map one to one onto store functions.
+
+## Owner decisions
+
+- Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behaviour change in a conversion.
+- Owner, 2026-11-14: an unexpected store failure answers 500 with the route's fixed sentence, a lost race is 409, 503 is for a missing binding or a known unavailable dependency.
+- Owner, 2026-11-15 (recorded in the plan): no Zod in our code at the end.
+- Owner, 2026-11-15, asked whether Sonnet 5.5 builders may write code in this repository: "You decide". The conversion was written under that delegation.
+- Open question for the owner (design, "What the owner is asked"): whether a failed file revoke gets a sentence of its own. Today's sentence, "The file could not be published. Please try again.", stays on the revoke path with status 500; no new copy was written.
+
+## Judgment calls (mine, for the owner to confirm)
+
+- The claim of a notice is the first call of its delivery, with no read and no rule ahead of it. The design's section 3 has a read and a rule before the claim; a read ahead of it adds a turn, and the public intake's background then sends the owner's notice before the invitation's claim is written, which the intake corpus records (the state at the first Resend call differed). The claim keeps today's conditions as its compare-and-set guard. The design's section 3 row is changed to say so.
+- A failure of the best-effort cleanup of the retired sign-in codes is logged once through `logUnexpected`, with a label naming the cleanup, instead of today's fixed line; the design's section 4 says the log text changes there. No answer changes, and no corpus case records the line.
+- The note and date moves of the project machine (PROGRESS, REVISE_DATE) are written as the code reads them: a note in every stage but files_under_review and complete, a date move in every stage but complete. That a project has a due date to move is a fact the rule reads, so the machine lists files_under_review for a date move although no due date exists there yet.
+- The time is read as the old code read it: once at the start of a publish, a revoke, an upload step and an update, again at the file access record, and for a notice at the claim and again at the outcome. A message write reads it again for each write and recount (layer 1).
+- The clock-dependent wait of a busy completion (R2 error 10058) uses Effect's sleep for the 100 and 200 millisecond waits.
+
+## Evidence and limits
+
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0. After the last layer each branch took `origin/main` (at `0097b63f`) up the stack with merge commits, never a rebase. Figures are from the layer 3 tip before this record's own commit:
+
+- `format:check`: "Checked 1039 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15071 tests passed, 1 skipped (15072), tree clean afterwards.
+- `golden:neutral --all <layer 2 tip> HEAD`: "compared 80 fixtures and 9365 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL" (the access, invitation, update notices, updates, owner file, owner uploads and intake corpora changed in their D1 statements only).
+- `verify:quint:all`: every model passes and every mutant breaks its property. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (1059 files)", 0 errors, 16 hints.
+- `git diff origin/main HEAD -- docs/verification.md` shows no dropped line of `main`.
+
+UNVERIFIED: none of the routes was run against a real D1, R2 bucket, Resend account or the deployed worker; the corpus uses an in-memory SQLite database with the real schema, an in-memory bucket and a scripted fetch. R2's error codes are read from the end of their messages as R2 writes them, which the tests feed in the same words. The exhaustive ordering run of the sign-in non-interference test (`SIGNIN_EXHAUSTIVE=1`) was not run; the sampled run passes with the revoke now a flow. The Quint models were not changed by this conversion.
+
+## Checklist
+
+- Answers: every corpus case of the nine corpora is neutral against the layer below it.
+- Errors: every unexpected failure of D1 or R2 is 500 with the route's fixed sentence, logged once without what was sent; R2 error 10043 is 503 with that sentence and is not logged.
+- Rules: every decision is a rule with tagged refusals and a sentence; routes map each tag with `catchTags`.
+- Services: R2, the mail provider and the background work are services or store functions with named failures; no module is mocked in the area's tests.
+- Copy: no new user-facing sentence.
+
+## Follow-up
+
+- The studio sign-in area's conversion extends `src/server/studio-signin-store.ts` and drops `deleteRetiredClientCodes` when migration 0028 drops the retired table (issue 271).
+- The owner's request status routes still call `deleteRetiredCodes` in `audio-client-access.ts`.
