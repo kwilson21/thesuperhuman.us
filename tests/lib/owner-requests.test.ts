@@ -117,7 +117,7 @@ describe("owner requests", () => {
 		await expect(
 			createRequest(db, {
 				...purchase,
-				details: { note: "x".repeat(16_000) },
+				details: { note: "x".repeat(32_000) },
 			}),
 		).rejects.toBeInstanceOf(BriefTooLarge);
 	});

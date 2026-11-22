@@ -36,8 +36,12 @@ export class SubmissionIdClash extends ChangedSinceRead {
 	}
 }
 
-/** The most a request's details may hold once written as JSON. */
-const DETAILS_LIMIT = 16_000;
+/**
+ * The most a request's details may hold once written as JSON. The largest brief the form allows is about 14,300 characters
+ * (tests/api/software-inquiry.test.ts); the living brief's outline can add about 6,500, or about 12,000 when every field is
+ * made of characters that double in JSON, so the limit leaves room for both.
+ */
+const DETAILS_LIMIT = 32_000;
 
 /** The insert of the request row. */
 const requestStatement = (

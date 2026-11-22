@@ -1906,20 +1906,56 @@ describe("the living brief's outline", () => {
 	});
 });
 
+/** The largest website brief the form allows, made of characters that double in JSON. */
+const largestBrief = {
+	...websiteInput,
+	purpose: `${'"'.repeat(1999)}x`,
+	currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
+	existing: '"'.repeat(2000),
+	company: '"'.repeat(120),
+	timingReason: '"'.repeat(500),
+	budgetNote: '"'.repeat(200),
+	approver: "other",
+	approverRole: '"'.repeat(120),
+};
+
 it("stores the largest brief the form allows: its details stay under the cap, so the too-large answer is not reachable from a valid body", async () => {
-	const response = await POST(
-		context({
-			...websiteInput,
-			purpose: `${'"'.repeat(1999)}x`,
-			currentUrl: `https://a.example.test/?${'"'.repeat(2024)}`,
-			existing: '"'.repeat(2000),
-			company: '"'.repeat(120),
-			timingReason: '"'.repeat(500),
-			budgetNote: '"'.repeat(200),
-			approver: "other",
-			approverRole: '"'.repeat(120),
+	const response = await POST(context(largestBrief));
+
+	expect(response.status).toBe(200);
+});
+
+it("stores the largest brief with the fullest outline the board can send, every field at its longest", async () => {
+	// Each text ends in its own letter so no two cards are the same idea; the rest doubles in JSON.
+	const fill = (length: number, index: number) =>
+		`${'"'.repeat(length - 1)}${"abcdefghijklmnopq"[index]}`;
+
+	const lanes = [
+		["purpose", 2, 140],
+		["audience", 3, 80],
+		["parts", 8, 60],
+		["questions", 4, 140],
+	] as const;
+
+	let index = 0;
+
+	const outline = lanes.flatMap(([lane, count, length]) =>
+		Array.from({ length: count }, () => {
+			const text = fill(length, index);
+			const answer = fill(240, index);
+
+			index += 1;
+
+			return lane === "questions"
+				? { lane, text, origin: "kept", answer }
+				: { lane, text, origin: "kept" };
 		}),
 	);
 
+	const response = await POST(
+		context(JSON.stringify({ ...largestBrief, outline })),
+	);
+
 	expect(response.status).toBe(200);
+	expect(JSON.parse(savedRequest().details_json).outline).toHaveLength(17);
 });
