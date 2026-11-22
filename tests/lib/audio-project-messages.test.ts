@@ -1,11 +1,7 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import {
-	completeClientCode,
-	issueClientCode,
-	revokeClientSession,
-} from "~/lib/audio-client-access";
+import { signedInClient, studioSignin } from "../helpers/studio-signin";
 import {
 	clientMessageRateLimited,
 	latestReviewDecision,
@@ -69,21 +65,7 @@ describe("audio project messages", () => {
 		addRequest("song-1");
 		addRequest("other-song", "other@example.com");
 
-		const code = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		const token = (await completeClientCode(
-			db,
-			"artist@example.com",
-			code.code,
-			code.nonce,
-			secret,
-			now,
-		))!;
+		const token = await signedInClient(db, secret, "artist@example.com", now);
 
 		const first = await postClientProjectMessage(
 			db,
@@ -134,7 +116,7 @@ describe("audio project messages", () => {
 		expect((await listProjectMessages(db, "song-1"))[1].read_at).toBe(
 			now.toISOString(),
 		);
-		await revokeClientSession(db, token, now);
+		await studioSignin(db, secret).signOut(token, now);
 		expect(
 			await postClientProjectMessage(
 				db,
@@ -151,21 +133,7 @@ describe("audio project messages", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		const token = (await completeClientCode(
-			db,
-			"artist@example.com",
-			code.code,
-			code.nonce,
-			secret,
-			now,
-		))!;
+		const token = await signedInClient(db, secret, "artist@example.com", now);
 
 		const publish = (id: string, at: string) =>
 			sql
@@ -284,21 +252,7 @@ describe("audio project messages", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		const token = (await completeClientCode(
-			db,
-			"artist@example.com",
-			code.code,
-			code.nonce,
-			secret,
-			now,
-		))!;
+		const token = await signedInClient(db, secret, "artist@example.com", now);
 
 		sql
 			.prepare(
@@ -419,21 +373,7 @@ describe("audio project messages", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		const token = (await completeClientCode(
-			db,
-			"artist@example.com",
-			code.code,
-			code.nonce,
-			secret,
-			now,
-		))!;
+		const token = await signedInClient(db, secret, "artist@example.com", now);
 
 		const first = (await postClientProjectMessage(
 			db,
@@ -470,21 +410,7 @@ describe("audio project messages", () => {
 		const { sql, db, addRequest } = fixture();
 		addRequest("song-1");
 
-		const code = (await issueClientCode(
-			db,
-			"artist@example.com",
-			secret,
-			now,
-		))!;
-
-		const token = (await completeClientCode(
-			db,
-			"artist@example.com",
-			code.code,
-			code.nonce,
-			secret,
-			now,
-		))!;
+		const token = await signedInClient(db, secret, "artist@example.com", now);
 
 		const sends = await Promise.all(
 			Array.from({ length: 13 }, (_, index) =>
@@ -501,21 +427,12 @@ describe("audio project messages", () => {
 				.get(),
 		).toEqual({ n: 12 });
 
-		const secondCode = (await issueClientCode(
+		const secondToken = await signedInClient(
 			db,
-			"artist@example.com",
 			secret,
-			new Date(now.getTime() + 31_000),
-		))!;
-
-		const secondToken = (await completeClientCode(
-			db,
 			"artist@example.com",
-			secondCode.code,
-			secondCode.nonce,
-			secret,
 			new Date(now.getTime() + 31_000),
-		))!;
+		);
 
 		expect(
 			await clientMessageRateLimited(

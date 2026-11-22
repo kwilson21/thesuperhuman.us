@@ -1,123 +1,81 @@
 import type { APIRoute } from "astro";
-import { z } from "zod";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import {
-	completeClientCode,
+	newSessionToken,
 	pendingSignInFromRequest,
-	studioSessionCookie,
-	takeStudioAllowance,
 } from "~/lib/audio-client-access";
-import {
-	clientPortalEnabled,
-	codeKeyUsable,
-	hashValue,
-	normalizeClientEmail,
-} from "~/lib/client-portal";
+import { clientPortalEnabled, normalizeClientEmail } from "~/lib/client-portal";
 import { musicRequest } from "~/lib/music-request";
-import { logUnexpected } from "~/server/failure";
+import {
+	codeInvalidOrExpired,
+	entryAllowanceSpent,
+	entryUnread,
+	signedIn,
+	signinFailed,
+	signinUnavailable,
+	studioNotFound,
+} from "~/lib/studio-signin";
+import { loggedAnswer } from "~/server/answers";
+import { signIn } from "~/server/flows/signin-session";
+import { runRoute } from "~/server/run";
+import { bindingsOrUnavailable } from "~/server/services";
+import { liveSigninKeys } from "~/server/signin-services";
+import { readSessionRequest } from "~/server/signin-input";
 
+// The sequence is src/server/flows/signin-session.ts; the answers are src/lib/studio-signin.ts.
 export const prerender = false;
 
 const ROUTE = "/api/studio/session";
 
-const inputSchema = z.object({
-	email: z.string().max(320),
-	code: z.string().regex(/^\d{8}$/),
-});
+/** A store or hash failure: logged once, without what was sent, then 500 with the route's sentence. */
+const failed = loggedAnswer(ROUTE, signinFailed);
 
-// One answer for a wrong, expired, used or never-issued code and for a browser that did not ask for the code, so it does
-// not show which it was or whether the address has a project.
-const notThisBrowser = () =>
-	Response.json(
-		{
-			ok: false,
-			error:
-				"That code is invalid or expired. Enter it in the browser where you asked for it, or request a new one here.",
-		},
-		{ status: 401 },
-	);
-
-// 503 for a binding or secret that is missing or unusable, 500 for any other fault of the site. The sentence is the same.
-const failed = (status: 500 | 503) =>
-	Response.json(
-		{ ok: false, error: "Studio sign-in is temporarily unavailable." },
-		{ status },
-	);
+/** One answer for a wrong, expired, used or never-issued code, a lost race and a browser that did not ask for the code. */
+const refused = () => Effect.succeed(codeInvalidOrExpired());
 
 export const POST: APIRoute = async ({ request, locals }) => {
 	const env = locals.runtime?.env;
 
-	if (!clientPortalEnabled(env))
-		return new Response("Not found", { status: 404 });
+	if (!env || !clientPortalEnabled(env)) return studioNotFound();
 
-	if (!env?.MUSIC_DB || !env.AUDIO_CLIENT_CODE_KEY) {
-		return failed(503);
-	}
+	const bindings = bindingsOrUnavailable(env, ["MUSIC_DB"]);
+
+	if (!bindings.ok || !env.AUDIO_CLIENT_CODE_KEY) return signinUnavailable();
 
 	const body = await musicRequest(request, 4096);
 
 	if (body instanceof Response) return body;
-	const parsed = inputSchema.safeParse(body);
-	const email = parsed.success ? normalizeClientEmail(parsed.data.email) : null;
 
-	if (!parsed.success || !email)
-		return Response.json(
-			{ ok: false, error: "Check the email and eight-digit code." },
-			{ status: 400 },
-		);
-	const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
-	const pending = pendingSignInFromRequest(request);
+	const read = readSessionRequest(body);
+	const address = read.ok ? normalizeClientEmail(read.value.email) : null;
 
-	// A code only works in the browser that asked for it. Without that browser's cookie nothing is looked up, charged or
-	// counted, so someone who only knows the address cannot use up anyone's attempts or allowances.
-	if (!pending) return notThisBrowser();
+	if (!read.ok || !address) return entryUnread();
 
-	// The first allowance makes the first keyed hash, which refuses a code key under 32 characters. That key is answered as
-	// a missing one, here, before any statement.
-	if (!codeKeyUsable(env.AUDIO_CLIENT_CODE_KEY)) return failed(503);
+	const secure = new URL(request.url).protocol === "https:";
 
-	try {
-		const allowed =
-			(await takeStudioAllowance(
-				env.MUSIC_DB,
-				"session-ip",
-				ip,
-				20,
-				env.AUDIO_CLIENT_CODE_KEY,
-			)) &&
-			(await takeStudioAllowance(
-				env.MUSIC_DB,
-				"session-requester",
-				`${email}:${await hashValue(pending)}`,
-				10,
-				env.AUDIO_CLIENT_CODE_KEY,
-			));
-
-		if (!allowed)
-			return Response.json(
-				{ ok: false, error: "Too many attempts. Please wait a few minutes." },
-				{ status: 429 },
-			);
-
-		const token = await completeClientCode(
-			env.MUSIC_DB,
-			email,
-			parsed.data.code,
-			pending,
-			env.AUDIO_CLIENT_CODE_KEY,
-		);
-
-		if (!token) return notThisBrowser();
-
-		const secure = new URL(request.url).protocol === "https:";
-		const headers = new Headers();
-		headers.append("set-cookie", studioSessionCookie(token, secure));
-		// The pending cookie is left to expire (Max-Age, reset by each code request): a browser that holds codes for two addresses
-		// needs it for the second sign-in. A used code cannot be used again, and the cookie is HttpOnly, random and useless without a code.
-
-		return Response.json({ ok: true }, { headers });
-	} catch (error) {
-		logUnexpected(ROUTE, error);
-
-		return failed(500);
-	}
+	return runRoute(
+		Context.merge(bindings.services, liveSigninKeys(env.AUDIO_CLIENT_CODE_KEY)),
+		signIn({
+			address,
+			code: read.value.code,
+			pending: pendingSignInFromRequest(request),
+			ip: request.headers.get("cf-connecting-ip") ?? "0.0.0.0",
+			now: () => new Date(),
+			newToken: newSessionToken,
+		}).pipe(
+			Effect.map((token) => signedIn(token, secure)),
+			Effect.catchTags({
+				NoCodeToTry: refused,
+				CodeNotAccepted: refused,
+				AllowanceSpent: () => Effect.succeed(entryAllowanceSpent()),
+				// A code key under 32 characters, found at the first keyed hash before any statement: answered as a missing key.
+				CodeKeyUnusable: () => Effect.succeed(signinUnavailable()),
+				SigninHashFailed: (failure) => failed(failure.failure),
+				SigninStoreFailed: (failure) => failed(failure.failure),
+			}),
+		),
+		// A defect is the route's fixed sentence as a 500, logged once without what was sent.
+		{ route: ROUTE, answer: signinFailed },
+	);
 };
