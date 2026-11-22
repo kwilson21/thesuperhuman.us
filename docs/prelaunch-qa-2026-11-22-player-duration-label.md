@@ -3,9 +3,10 @@
 Date: November 22, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/player-duration-label`
+Pull request: #361
 Target: production `https://thesuperhuman.us`
 Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
-Rollback revision: `0097b63f`, the revision of `main` this branch was cut from. If `main` moves before the merge, the rollback point is the merge commit's first parent, and to undo only this change, revert the merge commit.
+Rollback revision: `b359ffb9`, the revision of `main` immediately before this PR merged as `988ed91a` (its first parent). To undo only this change, revert the merge commit `988ed91a`. When this record was first written the rollback point was `0097b63f`, which is older and must not be used.
 
 ## Scope
 
@@ -35,13 +36,13 @@ Local runs: macOS arm64, Node 26.13.1, on commit `336f4fae`, in the pull request
 Limits:
 
 - The fix was verified by unit tests with a simulated audio element. It was not observed in a real browser against a real audio file, on a phone, or in Safari or Firefox: UNVERIFIED.
-- The CI capture of the studio project page is the first real-browser evidence. It waits for the label to show a duration and fails if it never does. Its result on this branch had not been read when this record was written: UNVERIFIED.
+- The CI capture of the studio project page is the first real-browser evidence. It waits for the label to show a duration and fails if it never does. The Screenshots capture succeeded on `1d0ebebf` (run 45058999825), which already held the site fix and the tooling change; the later commits changed only tests and this record. The capture runs for the later heads, including the final head `65d66b56`, were still queued or running when the pull request was merged, so the capture was not seen on the final head before the merge. After the merge, the Screenshots run on `main` for the merge commit `988ed91a` (run 45060488133) succeeded as a full capture (0 of 58 page images reused, the scenarios run again), which includes the wait for the player's label to show a duration. The captured image was not opened and compared for this record.
 
 ### Reviews
 
 - An independent review of head `1d0ebebf` found nothing that had to change. It confirmed that the page's script runs once per load, that showing the failed state at setup matches what the existing error listener does, and that the new tests run the real setup code. It asked for three test improvements (the order test, the visible-message assertions and the removal of unused test scaffolding), which are in `336f4fae`, and for the header wording of this record.
 - A second independent review, of head `03ddfad6`, found the added tests and the code sound: the scaffolding removal is complete, no assertion was weakened, the order test would catch a swap of the two checks, and nothing under `src/` or `scripts/` changed after the first review. It found one wrong sentence in this record (which commits followed `91c85bdd`), corrected in the commit after it.
-- The Greptile and Codex reviews on the pull request had not reported when this record was written: UNVERIFIED.
+- Codex's code review and security review of `03ddfad6` found no issues (observed on GitHub, 2026-11-22). The final head `65d66b56` differs from it only in this record: one corrected sentence, one changed word, the added bullet about the second review, and the heads named in checklist item 7.2. An independent check of `65d66b56` confirmed that the commit touches only this record and found its statements true to the history; it did not re-read the test changes. Codex did not review `65d66b56`. Greptile left no review on this pull request.
 
 ## Checklist
 
@@ -76,11 +77,11 @@ Limits:
 ### 7. Release and final QA
 
 - PASS, 7.1 Required type, test and build checks: see Evidence and limits.
-- PASS, 7.2 Exact diff review: 5 files changed besides this record, all named under Scope. Independent reviews of `1d0ebebf` and `03ddfad6` (see Reviews). The Greptile and Codex reviews had not reported when written: UNVERIFIED.
+- PASS, 7.2 Exact diff review: 5 files changed besides this record, all named under Scope. Independent reviews of `1d0ebebf` and `03ddfad6` (see Reviews). Codex found no issues on `03ddfad6`; Greptile did not review (see Reviews).
 - N/A, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: none changed.
 - PASS, 7.4 Rollback version preserved: see Rollback revision above.
-- UNVERIFIED, 7.5 After authorized deployment: not merged when this record was written.
-- PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes (unit tests and local checks; no real browser). Verified in CI: not yet read. Deployed: no. Verified live: no.
+- UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: merged to `main` on 2026-11-22 as `988ed91a`. Observed afterwards: the Cloudflare production build for that commit succeeded (19:26 UTC), and `https://thesuperhuman.us/` and `https://audio.thesuperhuman.us/` answered 200. The player itself was not checked live: it is on a signed-in client page, and no sign-in was made for this record. None of the other items was rechecked.
+- PASS, 7.6 Receipt and QA evidence, with the four states reported separately. Implemented: yes. Verified locally: yes (unit tests and local checks; no real browser). Verified in CI: yes for the Validate, Golden neutrality and Cloudflare build checks on `65d66b56`, and for the capture on `1d0ebebf`; the capture had not finished on `65d66b56` at merge. Deployed: yes (merged 2026-11-22 as `988ed91a`; production build succeeded). Verified live: no (hosts answer 200; the player was not checked).
 
 ### 8. Private owner center
 
@@ -88,13 +89,16 @@ Limits:
 
 ## Remaining work and follow-ups
 
-- Read the CI capture of the studio project page on this branch.
+- Open the captured image of the studio project page from the Screenshots run and look at the player's label. The run succeeding shows the automated wait for a duration completed; nobody has looked at the image.
 - A real-browser check of the player with a real file, by the owner or after deployment.
 
 ## Delivery status
 
-Implemented: yes. Verified locally: yes. Verified in CI: not yet read. Deployed: no. Verified live: no.
+Implemented: yes. Verified locally: yes. Verified in CI: yes for the Validate, Golden neutrality and Cloudflare build checks on `65d66b56`, and for the capture on `1d0ebebf`; the capture had not finished on `65d66b56` at merge. Deployed: yes (merged 2026-11-22 as `988ed91a`; production build succeeded). Verified live: no (hosts answer 200; the player was not checked).
 
-This record does not by itself authorize deployment. Merging to `main` deploys production and needs the owner's authorization.
+- Before merge, on the final head `65d66b56` (observed on GitHub): every check GitHub listed had succeeded and no review thread was open. The Screenshots run for that head was still queued and was not among the listed checks.
+- The owner authorized merging in conversation on 2026-11-22 ("Yes, merge both"). Merged as `988ed91a`. The Cloudflare production build for that commit succeeded and both hosts answered 200.
+
+This record does not by itself authorize deployment.
 
 Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Greptile and Codex review on the pull request. This record does not certify the checks listed as UNVERIFIED.
