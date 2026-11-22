@@ -3,12 +3,20 @@ import * as Predicate from "effect/Predicate";
 import { describe, expect, it } from "vitest";
 import type { RawValue } from "../../src/lib/fields";
 import {
+	readAccessCommand,
 	readFileCommand,
+	readInvitationCommand,
+	readUpdateCommand,
 	readOwnerMessageCommand,
 	readPartQuery,
 	readStudioMessageCommand,
 	readUploadCommand,
 } from "../../src/server/audio-project-input";
+import {
+	legacyReadAccessCommand,
+	legacyReadInvitationCommand,
+	legacyReadUpdateCommand,
+} from "../fixtures/legacy-validators/audio-project-updates";
 import {
 	legacyReadFileCommand,
 	legacyReadPartQuery,
@@ -568,5 +576,191 @@ describe("the file routes' commands", () => {
 			ok: true,
 			value: { uploadId: id, part: 0 },
 		});
+	});
+});
+
+// The access, invitation and updates commands.
+
+const dueDates: readonly RawValue[] = [
+	"2026-12-01",
+	"2026-02-29",
+	"2028-02-29",
+	"2026-13-01",
+	"2026-12-32",
+	"2026-1-1",
+	"26-12-01",
+	" 2026-12-01",
+	"2026-12-01 ",
+	"2026-12-01\n",
+	"2026-12-01T00:00:00Z",
+	"٢٠٢٦-١٢-٠١",
+	"",
+	...notStrings,
+];
+
+const reasons: readonly RawValue[] = [
+	"protect_song",
+	"client_clarification",
+	"schedule_conflict",
+	"Protect_song",
+	"",
+	"toString",
+	...notStrings,
+];
+
+const updateIds: readonly RawValue[] = [
+	1,
+	7,
+	0,
+	-1,
+	1.5,
+	2 ** 53,
+	2 ** 53 - 1,
+	Number.NaN,
+	Number.POSITIVE_INFINITY,
+	"1",
+	null,
+	undefined,
+	10n,
+	[],
+];
+
+const booleans: readonly RawValue[] = [
+	true,
+	false,
+	1,
+	0,
+	"true",
+	null,
+	undefined,
+	[],
+	{},
+];
+
+const updateActions = [
+	"accept",
+	"progress",
+	"start_work",
+	"begin_revision",
+	"complete",
+	"revise_date",
+	"retry_email",
+];
+
+function updateBody(random: Random): RawValue {
+	const action = random.chance(0.9)
+		? random.pick(updateActions)
+		: random.pick(actions);
+
+	const entries: [string, RawValue][] = [["action", action]];
+
+	const maybe = (name: string, pool: readonly RawValue[]) => {
+		if (!random.chance(0.1)) entries.push([name, random.pick(pool)]);
+	};
+
+	if (action === "accept") {
+		maybe("dueDate", dueDates);
+		maybe("body", notes);
+	} else if (action === "revise_date") {
+		maybe("dueDate", dueDates);
+		maybe("reason", reasons);
+		maybe("body", notes);
+	} else if (action === "retry_email") {
+		maybe("updateId", updateIds);
+
+		if (random.chance(0.6))
+			entries.push(["confirmedNotSent", random.pick(booleans)]);
+	} else maybe("body", notes);
+
+	if (random.chance(0.15)) entries.push(["stray", random.pick(extras)]);
+
+	return Object.fromEntries(entries);
+}
+
+function invitationBody(random: Random): RawValue {
+	const entries: [string, RawValue][] = [
+		["action", random.chance(0.9) ? "send" : random.pick(actions)],
+	];
+
+	if (random.chance(0.6))
+		entries.push(["confirmedNotSent", random.pick(booleans)]);
+
+	if (random.chance(0.15)) entries.push(["stray", random.pick(extras)]);
+
+	return Object.fromEntries(entries);
+}
+
+function accessBody(random: Random): RawValue {
+	const entries: [string, RawValue][] = [];
+
+	if (!random.chance(0.1))
+		entries.push([
+			"action",
+			random.chance(0.8) ? "revoke" : random.pick(actions),
+		]);
+
+	if (random.chance(0.2)) entries.push(["stray", random.pick(extras)]);
+
+	return Object.fromEntries(entries);
+}
+
+describe("the access, invitation and updates commands", () => {
+	const run = (
+		legacy: (input: RawValue) => Answer,
+		current: (input: RawValue) => Answer,
+		make: (random: Random) => RawValue,
+		seed: number,
+		count: number,
+		least: number,
+	) => {
+		const found = differential(legacy, current, show);
+		const random = seeded(seed);
+		let accepted = 0;
+
+		for (const body of [
+			...notBodies,
+			...Array.from({ length: count }, () => make(random)),
+		]) {
+			found.run(body);
+
+			if (legacy(body).ok) accepted += 1;
+		}
+
+		expect(found.count).toBeGreaterThan(count);
+		expect(accepted).toBeGreaterThan(least);
+		expect(found.mismatches.slice(0, 4)).toEqual([]);
+	};
+
+	it("the updates reader accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		run(
+			legacyReadUpdateCommand,
+			readUpdateCommand,
+			updateBody,
+			20261120,
+			12_000,
+			1500,
+		);
+	}, 60_000);
+
+	it("the invitation reader accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		run(
+			legacyReadInvitationCommand,
+			readInvitationCommand,
+			invitationBody,
+			20261121,
+			3000,
+			500,
+		);
+	});
+
+	it("the access reader accepts and refuses every generated body as the Zod schema did, with the same value", () => {
+		run(
+			legacyReadAccessCommand,
+			readAccessCommand,
+			accessBody,
+			20261122,
+			3000,
+			500,
+		);
 	});
 });

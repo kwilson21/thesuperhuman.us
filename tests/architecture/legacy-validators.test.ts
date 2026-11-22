@@ -26,6 +26,7 @@ describe("the frozen Zod validators", () => {
 			"audio-intake.ts",
 			"audio-project-files.ts",
 			"audio-project-messages.ts",
+			"audio-project-updates.ts",
 			"brief-copy.ts",
 			"brief-pass.ts",
 			"brief-suggest.ts",

@@ -20,6 +20,7 @@ import {
 	uploadPartSize,
 } from "../lib/audio-project-uploads";
 import { receivedKind } from "../lib/fields";
+import { validProjectDate } from "../lib/project-dates";
 
 const messageBody = Schema.Unknown;
 
@@ -235,3 +236,84 @@ export function readPartQuery(
 		? { ok: true, value: { uploadId: id.success, part: partNumber } }
 		: { ok: false };
 }
+
+// The access, invitation and updates commands, read as the Zod 4 schemas they replaced read them (the differential test holds
+// each to the frozen copy). `confirmedNotSent` is left out of the value when the body leaves it out. A due date is a real
+// YYYY-MM-DD date and is not trimmed; an update's note is trimmed to 1 to 1,000 characters; an update's id is a safe whole
+// number above 0.
+
+const dueDate = Schema.String.check(
+	Schema.makeFilter((value: string) => validProjectDate(value)),
+);
+
+const updateNote = trimmedText(1, 1000);
+
+const accessCommand = Schema.Struct({ action: Schema.Literal("revoke") });
+
+const invitationCommand = Schema.Struct({
+	action: Schema.Literal("send"),
+	confirmedNotSent: Schema.optional(Schema.Boolean),
+});
+
+const updateCommands = {
+	accept: Schema.Struct({
+		action: Schema.Literal("accept"),
+		dueDate,
+		body: updateNote,
+	}),
+	progress: Schema.Struct({
+		action: Schema.Literal("progress"),
+		body: updateNote,
+	}),
+	start_work: Schema.Struct({
+		action: Schema.Literal("start_work"),
+		body: updateNote,
+	}),
+	begin_revision: Schema.Struct({
+		action: Schema.Literal("begin_revision"),
+		body: updateNote,
+	}),
+	complete: Schema.Struct({
+		action: Schema.Literal("complete"),
+		body: updateNote,
+	}),
+	revise_date: Schema.Struct({
+		action: Schema.Literal("revise_date"),
+		dueDate,
+		reason: Schema.Literals([
+			"protect_song",
+			"client_clarification",
+			"schedule_conflict",
+		]),
+		body: updateNote,
+	}),
+	retry_email: Schema.Struct({
+		action: Schema.Literal("retry_email"),
+		updateId: wholeNumber(1, Number.MAX_SAFE_INTEGER),
+		confirmedNotSent: Schema.optional(Schema.Boolean),
+	}),
+};
+
+export type InvitationCommand = typeof invitationCommand.Type;
+
+/** The owner's update command: the moves of the project and a retry of an update's email. */
+export type UpdateCommand =
+	(typeof updateCommands)[keyof typeof updateCommands]["Type"];
+
+/** The command of the stage-moving, note and date updates (every action but the retry). */
+export type SavedUpdateCommand = Exclude<
+	UpdateCommand,
+	{ action: "retry_email" }
+>;
+
+/** Reads the access route's body: one action, "revoke". Any other key is left out. */
+export const readAccessCommand = <Body>(body: Body) =>
+	readCommand<Body, typeof accessCommand.Type>(body, { revoke: accessCommand });
+
+/** Reads the invitation route's body. */
+export const readInvitationCommand = <Body>(body: Body) =>
+	readCommand<Body, InvitationCommand>(body, { send: invitationCommand });
+
+/** Reads the updates route's body. */
+export const readUpdateCommand = <Body>(body: Body) =>
+	readCommand<Body, UpdateCommand>(body, updateCommands);

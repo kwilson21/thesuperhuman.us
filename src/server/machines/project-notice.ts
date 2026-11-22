@@ -11,7 +11,12 @@ import { next, sourcesOf } from "./next";
 // judge. Sent has no moves.
 
 /** The stored statuses, in the order of the columns' CHECK. */
-export const NOTICE_STATUSES = ["pending", "sending", "sent", "failed"] as const;
+export const NOTICE_STATUSES = [
+	"pending",
+	"sending",
+	"sent",
+	"failed",
+] as const;
 
 export type NoticeStatus = (typeof NOTICE_STATUSES)[number];
 
