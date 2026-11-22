@@ -23,8 +23,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
 - Converted: the software offers route (step 1, `owner/requests/[id]/software.ts`), a stack of three PRs (334, 337 and
   341) merged to `main` on 2026-11-16 as `a9f30919`; record `docs/prelaunch-qa-2026-11-16-offers-area.md`. The counts
   below leave it out.
-- Not converted: 30 route files, 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
-  components (all reads), 26 files under `src/` that use Zod (25 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
+- Not converted: 22 route files (24 of the 48 files under `src/pages/api` do not call `runRoute`, by `grep -L`; two of those need no conversion: `resume-approve.ts`, a redirect with no logic, and the publication route, which re-exports the converted OAuth route), 2 `.astro` pages that write (both `verify.astro`), 28 SQL reads in `.astro` pages and
+  components (all reads), 19 files under `src/` that use Zod (18 import `zod` or `astro/zod`, and `src/content/config.ts` takes `z` from `astro:content`; more under `tests/`, and `scripts/prepare-music.mjs`
   parses with the Zod schemas of `src/lib/music-catalog.ts`). There is no cron or queue handler; retention and
   Stripe reconciliation are operator scripts.
 - Every route has a golden corpus (recorded in PRs 246, 248 and 249, and for the three media routes at the bottom of their stack).
