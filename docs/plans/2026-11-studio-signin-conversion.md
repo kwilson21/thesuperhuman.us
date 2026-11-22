@@ -234,9 +234,10 @@ length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes uncha
 
 A rejected statement becomes `SigninStoreFailed` with the cause in `failure`, which the route logs once through
 `logUnexpected`. A guard that raised (`raisedByJsonGuard`) becomes `GuardRefused`, which is not retried: the code flow
-answers it with the generic 200, as a refusal, and the discard ignores it with `Effect.ignore` on that tag, as today it
-swallows it (access.ts:260-263). No statement here has a unique constraint that a rule's facts depend on, so there is no
-`ChangedSinceRead`.
+answers it with the generic 200, as a refusal, and the discard catches that tag alone (`Effect.catchTags({ GuardRefused:
+() => Effect.void })`), as today it swallows only the raised guard (access.ts:260-263), so a `SigninStoreFailed` still
+reaches the background's logged failure. No statement here has a unique constraint that a rule's facts depend on, so
+there is no `ChangedSinceRead`.
 
 **Services.** `Turnstile` (exists), `Background` (exists), `Mail` and `SigninKeys`. The `Mail` this route gets is built
 on `sendAudioMessage`, as the offers area's `liveOfferMail` is (`src/server/offers-services.ts:80`), with the payload's
