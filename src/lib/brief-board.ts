@@ -195,6 +195,10 @@ const CONTROLS = new RegExp(
 export const oneLine = (text: string) =>
 	text.replace(CONTROLS, " ").replace(/\s+/g, " ").trim();
 
+/** One line of at most `limit` characters; a cut through an emoji leaves no half of it behind. */
+const clipped = (text: string, limit: number) =>
+	oneLine(oneLine(text).slice(0, limit));
+
 /** Text for comparing a passage with the answers: case, spacing, quote marks and dashes ignored. */
 export const comparable = (text: string) =>
 	text
@@ -938,7 +942,7 @@ export function keepCard(board: Board, id: string): Board {
 /** Edit: the visitor's words replace the card's. A note stays a note. */
 export function editCard(board: Board, id: string, text: string): Board {
 	const card = find(board, id);
-	const words = oneLine(text).slice(0, textLimits[card?.lane ?? "parts"]);
+	const words = clipped(text, textLimits[card?.lane ?? "parts"]);
 
 	if (!card || card.status === "dismissed" || !words || words === card.text)
 		return board;
@@ -959,7 +963,7 @@ export function editCard(board: Board, id: string, text: string): Board {
 /** Answer: the visitor's answer to a question. The question becomes the visitor's; an empty answer clears it. */
 export function answerCard(board: Board, id: string, answer: string): Board {
 	const card = find(board, id);
-	const words = oneLine(answer).slice(0, ANSWER_MAX);
+	const words = clipped(answer, ANSWER_MAX);
 
 	if (
 		!card ||
@@ -1044,7 +1048,7 @@ export function removeNote(board: Board, id: string): Board {
 
 /** Add: the visitor's own note, at the end of its lane, within the lane's limit. */
 export function addNote(board: Board, lane: Lane, text: string): Board {
-	const words = oneLine(text).slice(0, textLimits[lane]);
+	const words = clipped(text, textLimits[lane]);
 
 	if (!words || laneCount(board, lane) >= laneLimits[lane]) return board;
 	const id = `c${board.nextId}`;
