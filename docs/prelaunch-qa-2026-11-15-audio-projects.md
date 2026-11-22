@@ -5,12 +5,12 @@ The area is delivered as a stack: a bottom layer that changes how the golden cor
 Date: November 15, 2026 (the last layer finished November 22, 2026)
 Repository: the personal website repository
 Routes: the owner's project routes `messages`, `uploads` (POST and PUT), `files/[fileId]`, `access`, `invitation` and `updates`, and the studio's project routes `messages` and `files/[fileId]` (GET and HEAD).
-Branches, each cut from the one before; nothing is pushed:
+Branches, each cut from the one before, pushed as a GitHub stack (heads at the last review round; the record's own commit follows the top head):
 
-- bottom layer `claude/golden-sqlite-sequence`: a counter row at 0 is no state in the golden digests, every golden fixture re-recorded under that rule, and a proof script that the re-record changed only digests;
-- layer 1 `claude/effect-15-audio-projects-messages`: the two messages routes, and the area's store, answers and input readers;
-- layer 2 `claude/effect-15-audio-projects-files`: the uploads route, the owner file route and the studio file route, and the project and file machines;
-- layer 3 `claude/effect-15-audio-projects`: the access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
+- bottom layer `claude/golden-sqlite-sequence` (PR 343, head `da425f0a`): a counter row at 0 is no state in the golden digests, every golden fixture re-recorded under that rule, and a proof script that the re-record changed only digests;
+- layer 1 `claude/effect-15-audio-projects-messages` (PR 344, head `86ed5e42`): the two messages routes, and the area's store, answers and input readers;
+- layer 2 `claude/effect-15-audio-projects-files` (PR 364, head `9f4d4c13`): the uploads route, the owner file route and the studio file route, and the project and file machines;
+- layer 3 `claude/effect-15-audio-projects` (PR 365, head `e053cd1b`): the access, invitation and updates routes, the notices, and the studio sign-in store's three statements.
 
 AI assistance: the code on every branch was written with AI assistance, tests first. The owner reviews the pull requests.
 
@@ -43,7 +43,7 @@ After the conversion no statement of the area decides an outcome. Every read is 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behaviour change in a conversion.
 - Owner, 2026-11-14: an unexpected store failure answers 500 with the route's fixed sentence, a lost race is 409, 503 is for a missing binding or a known unavailable dependency.
 - Owner, 2026-11-15 (recorded in the plan): no Zod in our code at the end.
-- Owner, 2026-11-15, asked whether Sonnet 5.5 builders may write code in this repository: "You decide". The conversion was written under that delegation.
+- Owner, 2026-11-15: asked who may write the code of this conversion in this repository, the owner delegated the choice ("You decide"), and the conversion was written under that delegation.
 - Open question for the owner (design, "What the owner is asked"): whether a failed file revoke gets a sentence of its own. Today's sentence, "The file could not be published. Please try again.", stays on the revoke path with status 500; no new copy was written.
 
 ## Judgment calls (mine, for the owner to confirm)
@@ -56,13 +56,35 @@ After the conversion no statement of the area decides an outcome. Every read is 
 
 ## Evidence and limits
 
-All runs are local on macOS arm64, Node 26, pnpm 12.20.0. After the last layer each branch took `origin/main` (at `0097b63f`) up the stack with merge commits, never a rebase. Figures are from the layer 3 tip before this record's own commit:
+All runs are local on macOS arm64, Node 26, pnpm 12.20.0. Each branch took `origin/main` (at `988ed91a`, the latest at the final round) up the stack with merge commits, never a rebase. Figures are from the layer 3 head `e053cd1b`, before this record's own commit:
 
-- `format:check`: "Checked 1039 files ... No fixes applied". `build`: complete. Client bundle test: 27 passed.
-- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15071 tests passed, 1 skipped (15072), tree clean afterwards.
-- `golden:neutral --all <layer 2 tip> HEAD`: "compared 80 fixtures and 9365 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL" (the access, invitation, update notices, updates, owner file, owner uploads and intake corpora changed in their D1 statements only).
-- `verify:quint:all`: every model passes and every mutant breaks its property. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `lint`: no findings. `check`: "Result (1059 files)", 0 errors, 16 hints.
+- `format:check`: "Checked 1039 files in 116ms. No fixes applied". `lint`: no findings. `build`: complete. Client bundle test: 27 passed.
+- Full `pnpm test` with `GOLDEN_VERIFY_DIGESTS=1 GOLDEN_VERIFY_COUNTS=1`: 394 files passed; 15081 tests passed, 1 skipped (15082), tree clean afterwards.
+- `golden:neutral --all claude/effect-15-audio-projects-files HEAD`: "compared 80 fixtures and 9369 cases; 7 of 80 fixtures differ" and "golden:neutral: NEUTRAL"; layer 2 against layer 1 and layer 1 against layer 0 are also NEUTRAL (3 and 2 of 80 fixtures differ).
+- `verify:quint:all`: exit 0. `tests/scripts/quint-run.test.ts`: 51 passed. `publicist:gate`: "publicist-gate passed: 84 entries checked." `check`: 0 errors, 0 warnings, 16 hints.
 - `git diff origin/main HEAD -- docs/verification.md` shows no dropped line of `main`.
+
+### Cases each re-record changed
+
+The two conversion re-records are commits of fixture files only and have no body, so their changed cases are listed here from `golden:diff` against each commit's parent. Every change is in D1 statements only (`golden:neutral` against the layer below reports each case neutral with D1 changes, never "NOT neutral"). Cases are grouped by the topic before the colon in their names.
+
+Layer 2, `d1b18805` (the file routes against the messages layer):
+
+- `owner-project-file`: 105 of 145 cases. revoke 30, publish 42, race 10, outage 7, email 7, rolled back 2, twice 2, schema 1, revoke then publish 1, life 1, outage then repeat 1, one case with no topic.
+- `owner-project-uploads`: 124 of 200 cases. start 32, complete 31, put 31, abort 12, flow 13, recover 5.
+- `studio-project-file`: 107 of 121 cases (the file read now reads the session, then one batch, then the access record), including "download=1 twice, then 0" and "two reads".
+
+Layer 3, `8c13a94b` (the top layer against the files layer):
+
+- `audio-intake`: 43 of 130 cases (every case that delivers the invitation: its claim, recipient read and outcome write).
+- `owner-project-access`: 32 of 58 cases. revoke 21, race 2, after 2, outage 1, rolled back 1, twice 1, outage then repeat 1, and 3 more at the top of the corpus (unavailable, content type, one with no topic).
+- `owner-project-file`: 56 of 145 cases. revoke 22, publish 21, email 6, twice 2, outage 1, revoke then publish 1, life 1, outage then repeat 1, and 1 with no topic (the notice delivery inside a publish or revoke).
+- `owner-project-invitation`: 80 of 110 cases. send 37, email 20, notice 10, queue 4, twice 2, and one each of after a refusal, after an uncertain send, revoked between sends, withdrawn between sends, outage then repeat, content type and one with no topic.
+- `owner-project-update-notices`: 52 of 53 cases. email 28, retry 22, after an uncertain send 1, after a refusal 1.
+- `owner-project-updates`: 130 of 189 cases. race 15, request 14, date 11, payment 9, text 8, outage 7, project 6, files 5, twice 5, actor 3, rolled back 2, life 1, outage then repeat 1, content type 1, and 42 with no topic (the action and stage matrix).
+- `owner-project-uploads`: 1 of 200 cases, "flow: start, put the part, complete, then publish the file" (the notice delivery).
+
+Final review round, one more fixture-only commit on layer 2 and one on layer 3: `owner-project-file` 74 of 145 cases (every publish and revoke case that reaches the batch) and `owner-project-uploads` 1 of 200 cases ("flow: start, put the part, complete, then publish the file"), for the batch guards of that round (a count and a membership check of each file a guard names, no reliance on an order, and a revoke that decided no reset no longer compares the stage).
 
 UNVERIFIED: none of the routes was run against a real D1, R2 bucket, Resend account or the deployed worker; the corpus uses an in-memory SQLite database with the real schema, an in-memory bucket and a scripted fetch. R2's error codes are read from the end of their messages as R2 writes them, which the tests feed in the same words. The exhaustive ordering run of the sign-in non-interference test (`SIGNIN_EXHAUSTIVE=1`) was not run; the sampled run passes with the revoke now a flow. The Quint models were not changed by this conversion.
 
