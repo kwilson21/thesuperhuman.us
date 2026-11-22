@@ -23,10 +23,11 @@ route behaves as the other converted routes do there; it rests on the shape thos
 (`src/server/services.ts:545-558`), not on a new decision.
 
 **One question for the owner: a lost race on these routes.** The 2026-11-14 decision says a lost race answers 409. Here
-a lost race (a guard C1, C2, C4 or C5 failing because the facts changed after the read; C3 and C8 answer nothing, since
-the sweep's miss is silent and the discard runs after the response) answers like a refusal today: the generic 200 on a
-code request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a stranger something about
-an address they do not own: on the code route, that it had an open project and room for a code when the request read it
+a lost race (a guard C1, C2, C4 or C5 failing because the facts changed after the read; C3, C6, C7, C8 and C9 change no
+answer: a sweep that misses a row deletes nothing, the discard swallows its raised guard (access.ts:260-263), and the
+session, audit and sign-out guards only decide what is written) answers like a refusal today: the generic 200 on a code
+request (access.ts:200-203), the one 401 on an entry (session.ts:97). A 409 would tell a stranger something about an
+address they do not own: on the code route, that it had an open project and room for a code when the request read it
 (the guard raises only after a decision to issue). That is what the non-interference property forbids (the model's
 `outcomeIndependentOfAddress`, and `tests/api/studio-signin-noninterference.test.ts`, which compares the answers across
 the target address's states). Recommended: keep today's answers, recorded as an exception to the 409 rule for the code
@@ -93,10 +94,10 @@ points and pass it in.
 
 One machine, the sign-in code, in `src/server/machines/`, asked through `next()` (`src/server/machines/next.ts`). It
 stores no status column: a code's state is derived from its row, in this order: no row is `none`; `used_at` set is
-`used`; `expires_at` at or before the time read is `expired`; attempts at the limit is `locked`; otherwise `live`. The
-machine says which moves that state allows; the rules in section 2 add the facts of the address (its projects, its
-other codes) and the typed code's hash. The studio session is drawn below but gets no machine: sign-out decides
-nothing (section 1, "The studio session").
+`used`; `expires_at` at or before the time read is `expired`; attempts at or over the limit is `locked`; otherwise
+`live`. The machine says which moves that state allows; the rules in section 2 add the facts of the address (its
+projects, its other codes) and the typed code's hash. The studio session is drawn below but gets no machine: sign-out
+decides nothing (section 1, "The studio session").
 
 **The guards** re-check, at write time, what the decision relied on. The IDs are used below.
 
@@ -177,12 +178,13 @@ guard re-checks it.
 
 The bodies are today's functions, moved; `decideIssue` splits into `sweepCodes` and `issueCode`, which decide from the
 same facts read once. `sameHash` (the constant-time compare) moves with `enterCode`. Each check has one owner. `ENTER`
-and `DISCARD` are asked of the code machine first, from the row's state; a refused `next()` is answered by the flow
-with `NoCodeToTry` or `NothingToDiscard`, the `Data.TaggedError` classes those two rule files export, and the rules
-never see such a row, so they take no `now`, limit or missing row and refuse nothing. A test holds the machine's
-refusals to `decideComplete`'s and `decideDiscard`'s over every row state. `ISSUE` is allowed from every state (the
-browser's own row is replaced), so the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts`
-is deleted with its last caller.
+and `DISCARD` are asked of the code machine first, from the row's state; a refused `next()` is answered by the flow with
+`NoCodeToTry` or `NothingToDiscard`, the `Data.TaggedError` classes those two rule files export, and the rules never see
+such a row, so they take no `now`, limit or missing row and refuse nothing. A test holds the machine to a fixed table of
+row states and the answers `decideComplete` and `decideDiscard` give today (none, used, expired at the instant of
+expiry, attempts at the limit, live), written from those two functions in the first conversion PR, before the second
+deletes them, so nothing keeps them alive. `ISSUE` is allowed from every state (the browser's own row is replaced), so
+the issue rule decides on the address's facts alone. `src/lib/signin-code-rules.ts` is deleted with its last caller.
 
 No refusal is shown to the visitor by name. `NoOpenProject`, `AddressFull` and a refused guard answer the generic 200;
 `NoCodeToTry`, a wrong code and a refused guard answer the one 401. The names are for the tests and the flows.
@@ -231,8 +233,9 @@ length (`tests/api/studio-signin-noninterference.test.ts:139-154`), passes uncha
 | `revokeSession` | the guarded update (C9) | access.ts:647-652 |
 
 A rejected statement becomes `SigninStoreFailed` with the cause in `failure`, which the route logs once through
-`logUnexpected`. A guard that raised (`raisedByJsonGuard`) becomes `GuardRefused`, which the flows answer as the rule's
-refusal (no retry). No statement here has a unique constraint that a rule's facts depend on, so there is no
+`logUnexpected`. A guard that raised (`raisedByJsonGuard`) becomes `GuardRefused`, which is not retried: the code flow
+answers it with the generic 200, as a refusal, and the discard ignores it with `Effect.ignore` on that tag, as today it
+swallows it (access.ts:260-263). No statement here has a unique constraint that a rule's facts depend on, so there is no
 `ChangedSinceRead`.
 
 **Services.** `Turnstile` (exists), `Background` (exists), `Mail` and `SigninKeys`. The `Mail` this route gets is built
@@ -335,16 +338,17 @@ codes, attempts and sessions under parallel requests, so a model PR before the f
    the write re-checks against a later time. Any other property that fails is handled the same way.
 2. **Sessions.** A session row is made by the accept's write and revoked by sign-out; a session expires by time.
    `MAX_GUESSES` goes from 1 to 2 (`signin-codes.qnt:65`), so two entries of one code can be in flight at once. New
-   properties, each with a mutant that breaks it, kept in the model and failing in CI:
-   `sessionOnlyFromAcceptedCode` (every session comes from one accepted code of its browser and address; mutant: the
-   session insert not matched to the accepted token), `oneSessionPerCode` (two right entries in flight make one
-   session; mutant: `used_at IS NULL` dropped from both the count and the accept, access.ts:368 and 372, which
-   today's `reuse-used` may already be once two entries can be in flight; the accept's own check alone is not
-   enough, since the count's check and C5 already stop the second entry), and `revokedStaysRevoked` (a sign-out never
-   moves `revoked_at` once set; mutant: a sign-out without C9). With two entries in flight, the accept's
-   `changes()=1` (C5) is what `attemptsBounded` needs (an accept after another entry spent the last attempt); a
-   mutant without it is added there if none of today's breaks it, and its uncounted accept must count as a
-   comparison in the model (`compared` rises only on a counted guess today, qnt:357-358), or it breaks nothing.
+   properties, each with a mutant that breaks it, kept in the model and failing in CI: `sessionOnlyFromAcceptedCode`
+   (every session comes from one accepted code of its browser and address; mutant: the session insert not matched to the
+   accepted token), `oneSessionPerCode` (two right entries in flight make one session; mutant: `used_at IS NULL` dropped
+   from both the count and the accept, access.ts:368 and 372, which in the model is `accepts` without `not(r.used)`
+   (qnt:137, 345) with the rule's `chargeable` (qnt:341) unchanged, so two right entries in flight both pass; the
+   accept's own check alone is not enough, since the count's check and C5 already stop the second entry. Today's
+   `reuse-used` also drops `chargeable` and is held to `deadCodeNeverSignsIn`, so it is not reused), and
+   `revokedStaysRevoked` (a sign-out never moves `revoked_at` once set; mutant: a sign-out without C9). With two entries
+   in flight, the accept's `changes()=1` (C5) is what `attemptsBounded` needs (an accept after another entry spent the
+   last attempt); a mutant without it is added there if none of today's breaks it, and its uncounted accept must count
+   as a comparison in the model (`compared` rises only on a counted guess today, qnt:357-358), or it breaks nothing.
 
 There is no money rule here, so no LemmaScript contract. The golden corpora (`studio-code`, `studio-session`,
 `studio-sign-out`, `agreements-link` for the allowance and the address, and `offer-link`, which reaches
