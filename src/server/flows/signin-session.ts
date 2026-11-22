@@ -1,8 +1,9 @@
 // A visitor enters the emailed code (POST /api/studio/session), as docs/plans/2026-11-studio-signin-conversion.md,
 // section 3, sets it out. A code only works in the browser that asked for it: without that browser's well-formed pending
 // value nothing is read, counted or charged, so someone who only knows the address cannot use up anyone's attempts or
-// allowances. Then the client address's allowance is counted (`session-ip`, twenty per five minutes), then the address's
-// with the browser's value (`session-requester`, ten), each reading the clock as it is counted.
+// allowances. Then the code key is checked (one under 32 characters is refused before any clock reading), the client
+// address's allowance is counted (`session-ip`, twenty per five minutes), then the address's with the browser's value
+// (`session-requester`, ten), each reading the clock as it is counted.
 //
 // The entry reads the clock once, as the route always has, and binds that time in every later statement. It makes the
 // same two round trips with the same statements whatever the state of the code (no row, used, expired, out of attempts,
@@ -114,7 +115,8 @@ export const enterSigninCode = (request: EntryRequest) =>
 	});
 
 /**
- * The code entry: the browser's value checked, `session-ip`, `session-requester`, then the entry. A spent allowance is
+ * The code entry: the browser's value checked, the code key checked, `session-ip`, `session-requester`, then the entry. A
+ * code key under 32 characters is CodeKeyUnusable, before any clock reading or statement; a spent allowance is
  * AllowanceSpent. Answers the session token.
  */
 export const signIn = (request: SignInRequest) =>
@@ -123,9 +125,11 @@ export const signIn = (request: SignInRequest) =>
 
 		if (pending === null) return yield* Effect.fail(new NoCodeToTry());
 
+		const keys = yield* SigninKeys;
+
+		yield* keys.usable;
 		yield* useAllowance(SESSION_IP, request.ip, request.now);
 
-		const keys = yield* SigninKeys;
 		const pendingHash = yield* keys.plain(pending);
 
 		yield* useAllowance(

@@ -13,9 +13,10 @@ import { Mail, type MailMessage, MailRefused, MailUncertain } from "./services";
 // ---- the hashes ----
 
 /**
- * The code key is under 32 characters (or not set), so no keyed hash can be made with it. It fails the first keyed hash a
- * request asks for, which is where today's routes refused it: in the first allowance, before any statement. The route
- * answers 503, as for a missing key, and logs nothing.
+ * The code key is under 32 characters (or not set), so no keyed hash can be made with it. The code and session flows ask
+ * `usable` before their first allowance reads the clock, which is where the routes have always refused it: after the
+ * body, the address and (on the session route) the browser's value are read, before any clock reading or statement. A
+ * keyed hash asked for with such a key fails the same way. The route answers 503, as for a missing key, and logs nothing.
  */
 export class CodeKeyUnusable extends Data.TaggedError("CodeKeyUnusable") {}
 
@@ -27,6 +28,11 @@ export class SigninHashFailed extends Data.TaggedError("SigninHashFailed")<{
 export class SigninKeys extends Context.Service<
 	SigninKeys,
 	{
+		/**
+		 * Succeeds when the code key can make a keyed hash (`codeKeyUsable`), else fails as `CodeKeyUnusable`. Reads
+		 * nothing.
+		 */
+		readonly usable: Effect.Effect<void, CodeKeyUnusable>;
 		/** The HMAC-SHA-256 of `message` with the code key (src/lib/client-portal.ts `keyedHash`), as hex. */
 		readonly keyed: (
 			message: string,
@@ -42,6 +48,10 @@ export class SigninKeys extends Context.Service<
  */
 export const liveSigninKeys = (codeKey: string | undefined) =>
 	Context.make(SigninKeys, {
+		usable:
+			codeKey !== undefined && codeKeyUsable(codeKey)
+				? Effect.void
+				: Effect.fail(new CodeKeyUnusable()),
 		keyed: (message) =>
 			codeKey !== undefined && codeKeyUsable(codeKey)
 				? Effect.tryPromise({

@@ -1,7 +1,8 @@
 // A visitor asks for an emailed sign-in code (POST /api/studio/code), as docs/plans/2026-11-studio-signin-conversion.md,
-// section 3, sets it out. The order is the one the route has always kept, and each step is a write or an outside call: the
-// client address's allowance is counted (`code-ip`, ten per five minutes), the captcha is checked, the address's allowance
-// is counted (`code-email`, three), and only then is the code issued. Each allowance reads the clock as it is counted.
+// section 3, sets it out. The order is the one the route has always kept. The code key is checked first (one under 32
+// characters is refused before any clock reading). Then each step is a write or an outside call: the client address's
+// allowance is counted (`code-ip`, ten per five minutes), the captcha is checked, the address's allowance is counted
+// (`code-email`, three), and only then is the code issued. Each allowance reads the clock as it is counted.
 //
 // The issue reads the clock once, before its read batch, and binds that time in every later statement. It makes the
 // same three round trips with the same statements whatever the address and the answer: the read (the address's projects
@@ -16,9 +17,9 @@
 // An issued code's email is handed to the background (`Background.defer`: ctx.waitUntil, and with no context it is waited
 // for, as the route has done since #367). A confirmed rejection discards the code: the clock is read after the email, the
 // code's `used_at` and the projects are read, the machine is asked DISCARD, and the guarded write runs. A timeout or a
-// provider error keeps the code, since the email may still arrive. A store failure there is logged as the one fixed line
-// the route has always written; the discard swallows only a refused guard (the code was used or removed since it was
-// read) and the machine's refusal.
+// provider error keeps the code, since the email may still arrive. A store failure or a defect there (the email is
+// rendered inside the delivery) is logged as the one fixed line the route has always written; the discard swallows only a
+// refused guard (the code was used or removed since it was read) and the machine's refusal.
 //
 // The cookie value is decided here and returned with the outcome, never the outcome alone: the value the browser sent,
 // else the new code's, else a fresh random one, so neither the answer nor the cookie shows whether the address has a
@@ -53,10 +54,10 @@ export const CODE_IP: Allowance = { scope: "code-ip", limit: 10 };
 export const CODE_EMAIL: Allowance = { scope: "code-email", limit: 3 };
 
 /**
- * One use of a studio allowance for `subject`: the clock is read, the key is the keyed hash of the scope and the subject
- * (the first keyed hash of a request, so a code key under 32 characters fails here, as `CodeKeyUnusable`, before any
- * statement), the use is counted in one batch, and the allowance rule refuses with AllowanceSpent when the window is over
- * its limit. The code and session routes count through this.
+ * One use of a studio allowance for `subject`: the clock is read, the key is the keyed hash of the scope and the subject,
+ * the use is counted in one batch, and the allowance rule refuses with AllowanceSpent when the window is over its limit.
+ * The code and session routes count through this, after asking `SigninKeys.usable`, so a code key under 32 characters is
+ * refused before the first allowance reads the clock, as the routes have always refused it.
  */
 export const useAllowance = (
 	allowance: Allowance,
@@ -146,8 +147,18 @@ const discardRefused = (key: DiscardKey, now: () => Date) =>
 	);
 
 /**
+ * The one line a failed delivery or cleanup writes. Keep private details out of logs; the next request can issue a fresh
+ * code.
+ */
+const deliveryFailed = Effect.sync(() =>
+	console.error("Studio code delivery or cleanup failed."),
+);
+
+/**
  * Hands the code's email to the background. Each failure is named and handled where it happens: a confirmed rejection
  * discards the code, an uncertain send keeps it, the discard's two refusals end it, and a store failure is the fixed line.
+ * A defect (the email failing to render, a bug in the send or the discard) is the fixed line too: the route caught any
+ * rejection of its delivery, so the visitor keeps the generic answer and the background settles fulfilled.
  */
 const deliver = (
 	code: string,
@@ -159,28 +170,25 @@ const deliver = (
 		const db = yield* MusicDb;
 		const background = yield* Background;
 
-		const delivery = mail
-			.send({
+		// The email is rendered inside the delivery, as the route rendered it inside its caught promise. The background
+		// starts the delivery at once, so the render and the send still begin before the answer.
+		const delivery = Effect.suspend(() =>
+			mail.send({
 				from: request.from,
 				to: [key.address],
 				subject: SUBJECT,
 				...studioCodeEmail(code),
-			})
-			.pipe(
-				Effect.catchTags({
-					MailRefused: () => discardRefused(key, request.now),
-					// After a timeout or a provider error the email may still arrive, so the code stays usable until it expires.
-					MailUncertain: () => Effect.void,
-				}),
-				Effect.catchTags({
-					// Keep private details out of logs. The next request can issue a fresh code.
-					StudioSigninStoreFailed: () =>
-						Effect.sync(() =>
-							console.error("Studio code delivery or cleanup failed."),
-						),
-				}),
-				Effect.provideService(MusicDb, db),
-			);
+			}),
+		).pipe(
+			Effect.catchTags({
+				MailRefused: () => discardRefused(key, request.now),
+				// After a timeout or a provider error the email may still arrive, so the code stays usable until it expires.
+				MailUncertain: () => Effect.void,
+			}),
+			Effect.catchTags({ StudioSigninStoreFailed: () => deliveryFailed }),
+			Effect.catchDefect(() => deliveryFailed),
+			Effect.provideService(MusicDb, db),
+		);
 
 		yield* background.defer([delivery]);
 	});
@@ -252,11 +260,15 @@ export const issueSigninCode = (request: IssueRequest) =>
 	});
 
 /**
- * The code request: `code-ip`, the captcha, `code-email`, then the issue. A spent allowance is AllowanceSpent, a token
+ * The code request: the code key checked, `code-ip`, the captcha, `code-email`, then the issue. A code key under 32
+ * characters is CodeKeyUnusable, before any clock reading or statement; a spent allowance is AllowanceSpent, a token
  * Turnstile did not pass is TurnstileFailed; every outcome of the issue is the same answer, with the cookie value.
  */
 export const requestCode = (request: CodeRequest) =>
 	Effect.gen(function* () {
+		const keys = yield* SigninKeys;
+
+		yield* keys.usable;
 		yield* useAllowance(CODE_IP, request.ip, request.now);
 
 		const turnstile = yield* Turnstile;

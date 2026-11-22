@@ -69,7 +69,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 				NoCodeToTry: refused,
 				CodeNotAccepted: refused,
 				AllowanceSpent: () => Effect.succeed(entryAllowanceSpent()),
-				// A code key under 32 characters, found at the first keyed hash before any statement: answered as a missing key.
+				// A code key under 32 characters, refused before any clock reading or statement: answered as a missing key.
 				CodeKeyUnusable: () => Effect.succeed(signinUnavailable()),
 				SigninHashFailed: (failure) => failed(failure.failure),
 				StudioSigninStoreFailed: (failure) => failed(failure.failure),

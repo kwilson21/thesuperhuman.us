@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { newPendingNonce } from "../../src/lib/audio-client-access";
 import { hashValue } from "../../src/lib/client-portal";
 import {
+	CODE_ON_ITS_WAY,
+	codeOnItsWay,
+	signinFailed,
+} from "../../src/lib/studio-signin";
+import {
 	AgreementAllowance,
 	liveAgreementAllowance,
 } from "../../src/server/agreement-services";
@@ -21,15 +26,16 @@ import {
 	MusicDb,
 	Turnstile,
 } from "../../src/server/services";
+import { runRoute } from "../../src/server/run";
 import { liveSigninKeys } from "../../src/server/signin-services";
 import { boundStatement } from "../helpers/d1";
 import { double } from "../helpers/doubles";
 import { musicWorld } from "../helpers/music-world";
 
 // The studio sign-in flows as stories (docs/plans/2026-11-studio-signin-conversion.md, section 3), on the real schema: the
-// order of the clock readings and the batches, a guard that no longer holds at the issue's write, a refused email and a
-// discard that fails, the token every entry makes, and a code key too short to use. The captcha, the mail and the clock
-// are doubles, and every batch and clock reading is written to one log, in order.
+// order of the clock readings and the batches, a guard that no longer holds at the issue's write, a refused email, a
+// discard that fails and a delivery that dies, the token every entry makes, and a code key too short to use. The captcha,
+// the mail and the clock are doubles, and every batch and clock reading is written to one log, in order.
 
 const SECRET = "k".repeat(40);
 const ADDRESS = "grace@example.test";
@@ -61,16 +67,20 @@ const seedProject = (world: ReturnType<typeof musicWorld>, id = "r1") => {
 		.run(id, ADDRESS, T.toISOString(), T.toISOString());
 };
 
-type Mailed = "sent" | "refused" | "uncertain";
+/** What the mail double does: accepts, refuses, answers uncertainly, or dies (a defect, as a bug would). */
+type Mailed = "sent" | "refused" | "uncertain" | "dies";
 
-const services = (
-	db: D1Database,
-	log: Log,
-	options: { mail?: Mailed; codeKey?: string } = {},
-) =>
+type Options = {
+	mail?: Mailed;
+	codeKey?: string;
+	/** The request's execution context; with none, the background is waited for before the answer. */
+	ctx?: ExecutionContext;
+};
+
+const services = (db: D1Database, log: Log, options: Options = {}) =>
 	Context.make(MusicDb, db).pipe(
 		Context.merge(liveSigninKeys(options.codeKey ?? SECRET)),
-		Context.merge(liveBackground(undefined)),
+		Context.merge(liveBackground(options.ctx)),
 		Context.add(Turnstile, { verify: () => Effect.void }),
 		Context.add(Mail, {
 			send: (message) =>
@@ -84,6 +94,8 @@ const services = (
 							return Effect.fail(new MailRefused());
 						case "uncertain":
 							return Effect.fail(new MailUncertain());
+						case "dies":
+							return Effect.die(new Error("the mail double died"));
 					}
 				}),
 		}),
@@ -95,25 +107,23 @@ const clock = (log: Log) => () => {
 	return T;
 };
 
-/** A code request in `log`'s world: the outcome's tag, or the cookie value and how the issue ended. */
-const ask = (
-	db: D1Database,
-	log: Log,
-	options: { mail?: Mailed; codeKey?: string; pending?: string | null } = {},
-) => {
-	const request: CodeRequest = {
-		address: ADDRESS,
-		turnstileToken: "token",
-		ip: "203.0.113.7",
-		pending: options.pending === undefined ? PENDING : options.pending,
-		from: "studio@example.test",
-		now: clock(log),
-		newCode: () => "12345678",
-		newNonce: newPendingNonce,
-	};
+type AskOptions = Options & { pending?: string | null };
 
-	return Effect.runPromise(
-		requestCode(request).pipe(
+const codeRequest = (log: Log, options: AskOptions): CodeRequest => ({
+	address: ADDRESS,
+	turnstileToken: "token",
+	ip: "203.0.113.7",
+	pending: options.pending === undefined ? PENDING : options.pending,
+	from: "studio@example.test",
+	now: clock(log),
+	newCode: () => "12345678",
+	newNonce: newPendingNonce,
+});
+
+/** A code request in `log`'s world: the outcome's tag, or the cookie value and how the issue ended. */
+const ask = (db: D1Database, log: Log, options: AskOptions = {}) =>
+	Effect.runPromise(
+		requestCode(codeRequest(log, options)).pipe(
 			Effect.match({
 				onFailure: (failure) => ({ failed: failure._tag }),
 				onSuccess: (answer) => answer,
@@ -121,7 +131,22 @@ const ask = (
 			Effect.provideContext(services(db, log, options)),
 		),
 	);
-};
+
+/**
+ * A code request answered as the route answers it (src/pages/api/studio/code.ts): the generic answer with the cookie, and
+ * a defect logged once and answered with the fixed 500 through `runRoute`. These stories reach no refusal.
+ */
+const answered = (db: D1Database, log: Log, options: AskOptions = {}) =>
+	runRoute(
+		services(db, log, options),
+		requestCode(codeRequest(log, options)).pipe(
+			Effect.match({
+				onFailure: () => signinFailed(),
+				onSuccess: (answer) => codeOnItsWay(answer.pending, true),
+			}),
+		),
+		{ route: "/api/studio/code", answer: signinFailed },
+	);
 
 const codeRows = (world: ReturnType<typeof musicWorld>) =>
 	world.sql
@@ -260,15 +285,55 @@ describe("a code request", () => {
 		expect(codeRows(world)).toEqual([{ email: ADDRESS, used_at: null }]);
 	});
 
-	it("fails at the first keyed hash, before any statement, when the code key is under 32 characters", async () => {
+	it("refuses a code key under 32 characters before any clock reading or statement", async () => {
 		const world = musicWorld();
 		const log: Log = [];
 
 		expect(
 			await ask(logged(world.db, log), log, { codeKey: "k".repeat(31) }),
 		).toEqual({ failed: "CodeKeyUnusable" });
-		expect(log.filter((entry) => entry !== "clock")).toEqual([]);
+		expect(log).toEqual([]);
 	});
+});
+
+describe("a delivery that dies", () => {
+	// The old route caught any rejection of its delivery and wrote the one fixed line, and the visitor had the generic
+	// answer and the cookie, with an execution context or without one.
+	for (const withContext of [false, true])
+		it(`writes the fixed line once and answers the generic 200 with the cookie when the mail dies, ${withContext ? "with" : "without"} an execution context`, async () => {
+			const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+			const world = musicWorld();
+			const waits: Promise<unknown>[] = [];
+			const options: AskOptions = { mail: "dies" };
+
+			if (withContext)
+				options.ctx = double<ExecutionContext>({
+					waitUntil: (promise) => {
+						waits.push(promise);
+					},
+				});
+
+			seedProject(world);
+
+			const response = await answered(world.db, [], options);
+
+			// The background settles fulfilled: a rejected waitUntil promise fails here.
+			await Promise.all(waits);
+			expect(waits).toHaveLength(withContext ? 1 : 0);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({
+				ok: true,
+				message: CODE_ON_ITS_WAY,
+			});
+			expect(response.headers.get("set-cookie")).toBe(
+				codeOnItsWay(PENDING, true).headers.get("set-cookie"),
+			);
+			expect(errors.mock.calls).toEqual([
+				["Studio code delivery or cleanup failed."],
+			]);
+			// Nothing discards the code: it stays usable until it expires, as before.
+			expect(codeRows(world)).toEqual([{ email: ADDRESS, used_at: null }]);
+		});
 });
 
 describe("a code entry", () => {
@@ -277,6 +342,7 @@ describe("a code entry", () => {
 		log: Log,
 		code: string,
 		pending: string | null = PENDING,
+		options: Options = {},
 	) => {
 		let tokens = 0;
 
@@ -297,7 +363,7 @@ describe("a code entry", () => {
 					onFailure: (failure) => ({ failed: failure._tag, tokens }),
 					onSuccess: (token) => ({ token, tokens }),
 				}),
-				Effect.provideContext(services(db, log)),
+				Effect.provideContext(services(db, log, options)),
 			),
 		);
 	};
@@ -310,6 +376,20 @@ describe("a code entry", () => {
 			expect(
 				await enter(logged(world.db, log), log, "12345678", pending),
 			).toEqual({ failed: "NoCodeToTry", tokens: 0 });
+		expect(log).toEqual([]);
+	});
+
+	it("checks the browser's value, then refuses a code key under 32 characters, before any clock reading or statement", async () => {
+		const world = musicWorld();
+		const log: Log = [];
+		const short = { codeKey: "k".repeat(31) };
+
+		expect(
+			await enter(logged(world.db, log), log, "12345678", null, short),
+		).toEqual({ failed: "NoCodeToTry", tokens: 0 });
+		expect(
+			await enter(logged(world.db, log), log, "12345678", PENDING, short),
+		).toEqual({ failed: "CodeKeyUnusable", tokens: 0 });
 		expect(log).toEqual([]);
 	});
 
