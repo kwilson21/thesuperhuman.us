@@ -255,7 +255,8 @@ const outages: {
 	{
 		name: "revoking a file, at the write",
 		handler: ownerFile,
-		pattern: /UPDATE audio_project_files SET status='revoked',revoked_at=\?,revoked_by/,
+		pattern:
+			/UPDATE audio_project_files SET status='revoked',revoked_at=\?,revoked_by/,
 		request: () =>
 			post(`${owner}/files/file-1`, { action: "revoke", note: "Mistake" }),
 		seed: { draft: true },
@@ -286,6 +287,7 @@ describe("an unexpected failure answers 500 with the route's sentence", () => {
 	for (const outage of outages)
 		it(outage.name, async () => {
 			const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
 			const db = outage.inBatch
 				? failingBatch(world(outage.seed), outage.pattern)
 				: failing(world(outage.seed), outage.pattern);

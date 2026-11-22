@@ -59,6 +59,7 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
 		AudioProjectStoreFailed: (failure: { readonly failure: unknown }) =>
 			failed(failure.failure),
 	};
+
 	const loggedRevoke = {
 		AudioProjectStoreFailed: (failure: { readonly failure: unknown }) =>
 			failedRevoke(failure.failure),
