@@ -255,15 +255,17 @@ each binding the route uses, and multi-step sequences.
 ```ts
 const cases: Case[] = [
 	{
-		name: "review a new request",            // unique within the area; it is the fixture key
-		music: { seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] } },
+		name: "review a new request", // unique within the area; it is the fixture key
+		music: {
+			seed: { owner_requests: [rows.ownerRequest("r1", { status: "new" })] },
+		},
 		steps: [
 			{
-				as: asOwner(),                     // asVisitor(), asClient(email), asClientCookie(token)
+				as: asOwner(), // asVisitor(), asClient(email), asClientCookie(token)
 				path: "/api/owner/requests/r1",
 				params: { id: "r1" },
-				json: { action: "review" },        // or body: "{bad" for raw text
-				advanceMs: 60_000,                 // move the clock before this request
+				json: { action: "review" }, // or body: "{bad" for raw text
+				advanceMs: 60_000, // move the clock before this request
 				dump: { music: ["owner_requests", "owner_request_audit"] },
 			},
 		],

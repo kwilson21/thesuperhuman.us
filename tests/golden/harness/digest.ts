@@ -82,7 +82,7 @@ function digestTable(sqlite: SqliteDatabase, table: string): TableDigest {
 
 	// A counter row at 0 is no state: with it or without it the next id is the same (SQLite takes the larger of the counter
 	// and the table's largest rowid), so no later statement can tell them apart. A refused INSERT ... SELECT creates one.
-	const where = table === "sqlite_sequence" ? "WHERE seq <> 0" : "";
+	const where = table === "sqlite_sequence" ? "WHERE seq IS NOT 0" : "";
 
 	const rows = sqlite
 		.prepare(

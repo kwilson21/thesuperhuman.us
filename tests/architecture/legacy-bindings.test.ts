@@ -15,7 +15,7 @@ const NAME = "legacyBindingsOrDefect";
 export const ALLOWED = [
 	"src/pages/api/contact.ts",
 	"src/pages/api/resume-request.ts",
-	"src/pages/api/resume-approve.ts",
+	"src/pages/owner/resume-approve.ts",
 ];
 
 /** The file that defines it. */

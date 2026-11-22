@@ -12,7 +12,12 @@ type Case = {
 	name: string;
 	steps: {
 		state: Record<string, Record<string, Record<string, string>[]>>;
-		digest: { music: string; atResponse: { music: string; touched: string[] } };
+		digest: {
+			music: string;
+			kv: string;
+			r2: string;
+			atResponse: { music: string; touched: string[] };
+		};
 	}[];
 	effects: { state: { music: string; touched: string[] } }[];
 	finalState: {
@@ -33,6 +38,8 @@ function fixtureCase(change: (value: Case) => void = () => undefined): Case {
 				},
 				digest: {
 					music: HASH,
+					kv: HASH,
+					r2: HASH,
 					atResponse: { music: HASH, touched: ["audio_project_messages"] },
 				},
 			},
@@ -57,7 +64,7 @@ function fixtureCase(change: (value: Case) => void = () => undefined): Case {
 describe("the counter-row proof", () => {
 	it.each([
 		".steps[0].digest.music",
-		".steps[12].digest.kv",
+		".steps[12].digest.publication",
 		".steps[0].digest.atResponse.music",
 		".effects[2].state.music",
 		".finalState.music.sha256",
@@ -69,6 +76,8 @@ describe("the counter-row proof", () => {
 	});
 
 	it.each([
+		".steps[0].digest.kv",
+		".steps[0].digest.r2",
 		".steps[0].response.body",
 		".steps[0].state.music.audio_project_messages[0].body",
 		".steps[0].state.music",
@@ -85,6 +94,19 @@ describe("the counter-row proof", () => {
 	])("refuses any other path (%s)", (path) => {
 		expect(allowed(path)).toBe(false);
 	});
+
+	it.each(["kv", "r2"] as const)(
+		"refuses an intermediate %s change restored before final state",
+		(binding) => {
+			const before = fixtureCase();
+
+			const after = fixtureCase((value) => {
+				value.steps[0].digest[binding] = OTHER;
+			});
+
+			expect(refusals("example", "case", before, after)).not.toEqual([]);
+		},
+	);
 
 	it("accepts a re-record that changed only digests and dropped the counter record", () => {
 		const before = fixtureCase();
