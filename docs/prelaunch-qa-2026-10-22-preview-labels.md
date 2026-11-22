@@ -18,7 +18,7 @@ Remaining work: the deploy, and the live checks at the end. The owner-side check
 
 ## Owner decisions and authorization
 
-On October 22, 2026, the owner asked for this work once the Hallmark feedback work finished ("We may need to update this after the hallmark website feedback work finishes"), then, at about 17:27 UTC, "Check now, then cancel if you can begin now" (in conversation). When the owner later said "We can't do unnecessary reviews here I don't have the usage for this", the planned audit was stopped, and the comparison was done directly. There is no go-ahead to merge yet; merging deploys production.
+On October 22, 2026, the owner asked for this work once the Hallmark feedback work finished ("We may need to update this after the hallmark website feedback work finishes"), then, at about 17:27 UTC, "Check now, then cancel if you can begin now" (in conversation). When the owner later said "We can't do unnecessary reviews here I don't have the usage for this", the planned audit was stopped before it finished, and the comparison was done directly. There is no go-ahead to merge yet; merging deploys production.
 
 ## Evidence and limits
 

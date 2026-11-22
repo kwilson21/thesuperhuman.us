@@ -26,7 +26,7 @@ The studio, audio intake, owner audio tools, the media route (`src/pages/music/f
 
 - Owner, 2026-11-12: Effect for rules, Effect Schema for input; convert one area at a time; no behavior change in a conversion.
 - Owner, 2026-11-14 (relayed in the task): fix every recorded finding without asking for triage, choosing the cautious behavior; an unexpected database error answers 500 with the route's fixed generic sentence; a real lost race or stale version stays 409; a deliberate 503 for a missing binding or a known unavailable dependency stays.
-- Judgment calls made under that instruction, a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence), which follows the owner's "500 on db errors" decision and was reported to him; a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
+- Judgment calls made during the build under that instruction (not the owner's decisions): a rate limit store (KV) failure is treated like a database failure (500 with the fixed sentence), which follows the owner's "500 on db errors" decision and was reported to him; a Turnstile outage still answers 403 because the shared captcha helper (`src/lib/turnstile.ts`, used by five areas) cannot tell an outage from a refusal, so that is left for the area that converts it.
 
 ## Review round 1 (independent review on the pilot; no behavior bug found)
 

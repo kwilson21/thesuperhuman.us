@@ -171,6 +171,6 @@ On the previous heads (`963a65e0`, `c26f4a7b`, `d83e658d`, built on `0a296a0a`),
 
 Follow-ups after this stack, decided under the delegation above: the payment route's 502 against 409 answer, in its own pull request brought to the owner; the two older `vi.spyOn` tests; `format:check` in CI.
 
-As written before the merge: this record authorizes neither merge nor deployment. The delegation under Owner decisions was reported to this record, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
+As written before the merge: this record authorizes neither merge nor deployment. The delegation under Owner decisions was relayed for this record, not given here by the owner. Merge needs the owner's explicit go-ahead, or the owner's standing rule once every gate above is observed clean.
 
 Current state: Implemented: yes. Verified locally: yes. Deployed: yes (`440b28ef`). Verified live: two pages answer 200; nothing else.

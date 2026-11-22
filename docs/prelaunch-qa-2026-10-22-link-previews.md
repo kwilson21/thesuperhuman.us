@@ -149,7 +149,7 @@ PASS means the evidence named here was observed. Production checks and their res
     - The owner's portrait already appears on `/building/personal-website`.
     - `ffprobe` shows 0 audio streams in all 22 videos.
   - The PR retires the old card, which carried the superseded line "Building with AI".
-  - `docs/asset-reviews/link-previews.md` says "ready for production". It names Claude Code as the reviewer ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
+  - `docs/asset-reviews/link-previews.md` says "ready for production". It lists Claude Code as the reviewer ("Not human production approval") and marks the device check unverified. `docs/generated-image-qa.md` does not require a new owner approval for ordinary QA.
 - **PASS · 1.3 Explain who does what; professional claims.**
   - The PR changes no page copy.
   - The scenes repeat existing explanatory lines word for word, and the copy test passed. Examples:

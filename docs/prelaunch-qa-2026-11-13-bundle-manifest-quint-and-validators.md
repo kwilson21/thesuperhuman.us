@@ -27,7 +27,7 @@ Owner decision, 2026-11-13: validation moves from Zod to Effect Schema everywher
 
 - Owner, in conversation, 2026-11-12: use Effect for rules, Effect Schema for input and XState with the bridge, matching Tally; convert one area at a time; no behavior change.
 - Owner, in conversation, 2026-11-13: validation moves from Zod to Effect Schema everywhere, browser forms included; about 26 KB gzip per form page accepted.
-- Owner, 2026-10-12 (global instructions): Claude Code may write code in this repository, tests first, with independent review and Greptile and Codex review on the pull request.
+- Owner, 2026-10-12 (global instructions): Claude Code may write code in this repository, tests first, with independent review until a pass is clean, and Greptile and Codex review on the pull request.
 
 ## Evidence and limits
 

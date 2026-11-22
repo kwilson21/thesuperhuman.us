@@ -41,7 +41,7 @@ After `main` (the Biome and Oxlint stack) was merged in at `115f0bf2`, on that h
 
 - `pnpm test`: 156 files, 1,923 passed, 1 skipped.
 - `pnpm run format:check`: no fixes needed, 524 files.
-- `pnpm run check`: 0 errors. `pnpm run design:check`, `pnpm run copy:check` and `pnpm run build`: passed (run during the build).
+- `pnpm run check`: 0 errors. `pnpm run design:check`, `pnpm run copy:check` and `pnpm run build`: passed (local run while the change was built).
 - `pnpm run lint`: 66 findings, the deferred set recorded in `docs/prelaunch-qa-2026-11-12-lint-format-stack.md`. None is in code this branch added; one, `src/pages/owner/requests/[id].astro:181`, is in a file where this branch changed CSS only. Lint is not a CI check.
 - The merge conflicted in `src/components/Footer.astro` only (main reformatted its frontmatter); the branch's version was kept and formatted.
 - The pages were not re-checked in a browser after the merge. The earlier runs below are from before it.

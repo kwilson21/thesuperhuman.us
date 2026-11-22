@@ -5,7 +5,7 @@ Repository: `kwilson21/thesuperhuman.us`
 Pull request: [#208](https://github.com/kwilson21/thesuperhuman.us/pull/208), "Make Hallmark the site's design standard, with credit", squash-merged to `main` as `362dac5f` on October 22, 2026, pinned to head `3c247304`  
 Branch: `claude/hallmark-design-standard`, with `main` merged in after #209 (`ab5704f5`)  
 Target: production `https://thesuperhuman.us` after merge  
-Reviewer: Claude Code agents, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
+Reviewer: Claude Code, collecting evidence for owner Kazon Wilson. This record is evidence collection, not owner certification.  
 Scope: tooling and docs that make Hallmark the design standard, plus one public sentence. The PR adds:
 - the vendored skill;
 - `design.md` and `docs/design-standard.md`;
