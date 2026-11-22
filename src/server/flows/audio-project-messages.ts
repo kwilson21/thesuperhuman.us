@@ -21,6 +21,7 @@ import {
 	readMessage,
 	readProjectFacts,
 	readReviewFacts,
+	readSendFacts,
 } from "../audio-project-store";
 import {
 	answerReview,
@@ -39,6 +40,7 @@ import {
 	windowStart,
 } from "../rules/audio-project-messages";
 import { openStudioSession } from "../rules/agreement-session";
+import type { StoredProject } from "../rules/audio-project-messages";
 
 /** A write's time, its window and so its session guard, taken from the clock at the write and not at the lookup. */
 const stamped = <Write extends { at: string; windowStart: string }>(
@@ -125,6 +127,14 @@ const clientProject = (input: {
 		return { tokenHash, at, project: found.project, request: found.request };
 	});
 
+/** The facts read just before a decision hold the project, which the client's lookup has already shown to exist. */
+const withProject = <Facts extends { readonly project: StoredProject | null }>(
+	facts: Facts,
+) =>
+	facts.project === null
+		? Effect.fail(new ProjectHidden())
+		: Effect.succeed({ ...facts, project: facts.project });
+
 /**
  * After a write that found a condition gone: the window may have filled in between, so a full count is the client's 429 and
  * anything else is the write's own refusal.
@@ -149,11 +159,16 @@ export const sendClientMessage = (input: {
 	Effect.gen(function* () {
 		const seen = yield* clientProject(input);
 		const body = yield* sendText.decide({ body: input.body }, null);
-		const count = yield* readClientMessageCount(input.id, windowStart(seen.at));
+
+		// The stage the rule decides from is read now, with the count, and not taken from the lookup: the owner's actions can move it
+		// in between, and today the write's own guard reads it at write time.
+		const facts = yield* readSendFacts(input.id, windowStart(seen.at)).pipe(
+			Effect.flatMap(withProject),
+		);
 
 		const write = yield* postClientMessage.decide(
 			{ body, at: seen.at },
-			{ project: seen.project, count },
+			{ project: facts.project, count: facts.count },
 		);
 
 		// The write reads the clock again, as the old write did: its session guard and its window use that reading.
@@ -185,7 +200,9 @@ export const answerLatestReview = (input: {
 			null,
 		);
 
-		const facts = yield* readReviewFacts(input.id, windowStart(seen.at));
+		const facts = yield* readReviewFacts(input.id, windowStart(seen.at)).pipe(
+			Effect.flatMap(withProject),
+		);
 
 		const write = yield* answerReview.decide(
 			{
@@ -194,7 +211,7 @@ export const answerLatestReview = (input: {
 				text,
 				at: seen.at,
 			},
-			{ project: seen.project, ...facts },
+			facts,
 		);
 
 		// Stopping closes this project's access in the same write, so the review stops playing.

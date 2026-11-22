@@ -393,16 +393,113 @@ describe("a client's and the owner's messages", () => {
 			.prepare("UPDATE audio_client_sessions SET expires_at=?")
 			.run(new Date(AT.getTime() + 1000).toISOString());
 		const reads = [0, 2000];
-		await ended(
-			world,
-			markOwnerMessageReadByClient({
-				id: "song-1",
-				token: TOKEN,
-				messageId: 1,
-				now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
-			}),
-		);
+
+		// The mark ends as it always did, quietly: the route answers {ok:true}, and the row stays unread.
+		expect(
+			await ended(
+				world,
+				markOwnerMessageReadByClient({
+					id: "song-1",
+					token: TOKEN,
+					messageId: 1,
+					now: () => new Date(AT.getTime() + (reads.shift() ?? 2000)),
+				}),
+			),
+		).toEqual({ done: undefined });
 		expect(messages(world)[0]?.read_at).toBeNull();
+	});
+
+	it("takes a client's message when the owner reopens the project after the lookup, from the stage read just before the decision", async () => {
+		// The project is complete at the client's lookup; the owner revokes its only final (the stage returns to in_progress)
+		// before the facts of the action are read. Today the write's own guard reads the stage, so the message is saved.
+		const world = musicWorld({
+			beforeStatement: [
+				/SELECT count\(\*\) AS total FROM audio_project_messages/,
+				() => stage(world, "in_progress"),
+			],
+		});
+
+		await seeded(world);
+		stage(world, "complete");
+
+		expect(await send(world, "Welcome back.")).toMatchObject({
+			done: { actor: "client", body: "Welcome back." },
+		});
+	});
+
+	it("refuses a client's message when the project completes after the lookup, from the stage read just before the decision", async () => {
+		const world = musicWorld({
+			beforeStatement: [
+				/SELECT count\(\*\) AS total FROM audio_project_messages/,
+				() => stage(world, "complete"),
+			],
+		});
+
+		await seeded(world);
+
+		expect(await send(world, "Too late.")).toEqual({
+			refused: "MessageNotAccepted",
+		});
+		expect(messages(world)).toEqual([]);
+	});
+
+	it("takes a review answer when the review becomes ready after the lookup", async () => {
+		const world = musicWorld({
+			beforeStatement: [
+				/SELECT id,version,status,published_at FROM audio_project_files/,
+				() => stage(world, "review_ready"),
+			],
+		});
+
+		await seeded(world);
+		publish(world, "review-1", "2026-11-13T11:00:00.000Z");
+		stage(world, "in_progress");
+
+		expect(await answer(world, "review-1", "approved")).toMatchObject({
+			done: { actor: "client", review_decision: "approved" },
+		});
+	});
+
+	it("takes the owner's message when the project is reopened before the facts of the send are read", async () => {
+		const world = musicWorld({
+			beforeStatement: [
+				/SELECT request_id,stage,revoked_at FROM audio_projects/,
+				() => stage(world, "in_progress"),
+			],
+		});
+
+		await seeded(world);
+		stage(world, "complete");
+
+		expect(
+			await ended(
+				world,
+				sendOwnerMessage({
+					id: "song-1",
+					ownerEmail: OWNER,
+					body: "Reopened.",
+					now: now(),
+				}),
+			),
+		).toMatchObject({ done: { actor: "owner" } });
+	});
+
+	it("answers 500 for a valid message when the count read fails: the count is a fact read before the write", async () => {
+		const world = musicWorld({
+			beforeStatement: [
+				/SELECT count\(\*\) AS total FROM audio_project_messages/,
+				() => {
+					throw new Error("D1 is down");
+				},
+			],
+		});
+
+		await seeded(world);
+
+		expect(await send(world, "Hello")).toEqual({
+			refused: "AudioProjectStoreFailed",
+		});
+		expect(messages(world)).toEqual([]);
 	});
 
 	it("refuses a review answer when the session ends between the lookup and the write", async () => {
