@@ -11,6 +11,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { REVISION_ROUNDS, roundsUsed } from "../lib/audio-project-messages";
 import type {
+	StoredProject,
 	StoredDecision,
 	StoredFile,
 	StoredMessage,
@@ -117,20 +118,26 @@ const batched = (statements: (db: D1Database) => D1PreparedStatement[]) =>
 		(await db.batch(statements(db))).map((result) => result.results),
 	);
 
+const projectStatement = (db: D1Database, requestId: string) =>
+	db
+		.prepare(
+			"SELECT request_id,stage,revoked_at FROM audio_projects WHERE request_id=?",
+		)
+		.bind(requestId);
+
+const requestStatement = (db: D1Database, requestId: string) =>
+	db
+		.prepare("SELECT status,email FROM owner_requests WHERE id=?")
+		.bind(requestId);
+
 /**
  * Plain reads in ONE batch (one snapshot): the project, and the request it belongs to. Neither is filtered, so a project the
  * client may not see reads like one it may.
  */
 export const readProjectFacts = (requestId: string) =>
 	batched((db) => [
-		db
-			.prepare(
-				"SELECT request_id,stage,revoked_at FROM audio_projects WHERE request_id=?",
-			)
-			.bind(requestId),
-		db
-			.prepare("SELECT status,email FROM owner_requests WHERE id=?")
-			.bind(requestId),
+		projectStatement(db, requestId),
+		requestStatement(db, requestId),
 	]).pipe(
 		Effect.flatMap(([projects, requests]) =>
 			Effect.all({
@@ -163,8 +170,38 @@ export const readClientMessageCount = (
 		Effect.map((rows) => rows[0]?.total ?? 0),
 	);
 
+/** What the rule needs to judge a client's message, read in ONE batch (one snapshot) just before it decides. */
+export type SendFacts = {
+	readonly project: StoredProject | null;
+	readonly count: number;
+};
+
+/**
+ * Plain reads in ONE batch: the project as it is now (its stage is what the rule decides from, not the stage the client's lookup
+ * read earlier) and the client's message count.
+ */
+export const readSendFacts = (requestId: string, windowStart: string) =>
+	batched((db) => [
+		projectStatement(db, requestId),
+		countStatement(db, requestId, windowStart),
+	]).pipe(
+		Effect.flatMap(([projects, counts]) =>
+			Effect.all({
+				projects: rowsOf(ProjectRow, projects ?? []),
+				counts: rowsOf(CountRow, counts ?? []),
+			}),
+		),
+		Effect.map(
+			(rows): SendFacts => ({
+				project: rows.projects[0] ?? null,
+				count: rows.counts[0]?.total ?? 0,
+			}),
+		),
+	);
+
 /** What the rule needs to judge an answer to a review, read in ONE batch (one snapshot). */
 export type ReviewFacts = {
+	readonly project: StoredProject | null;
 	readonly files: readonly StoredFile[];
 	readonly decisions: readonly StoredDecision[];
 	readonly updates: readonly StoredUpdate[];
@@ -172,11 +209,13 @@ export type ReviewFacts = {
 };
 
 /**
- * Plain reads in ONE batch: the project's files, the client messages that answered a review, the project's updates (the
- * rule counts the revision rounds among them) and the client's message count.
+ * Plain reads in ONE batch: the project as it is now (its stage is what the rule decides from), the project's files, the
+ * client messages that answered a review, the project's updates (the rule counts the revision rounds among them) and the
+ * client's message count.
  */
 export const readReviewFacts = (requestId: string, windowStart: string) =>
 	batched((db) => [
+		projectStatement(db, requestId),
 		db
 			.prepare(
 				"SELECT id,version,status,published_at FROM audio_project_files WHERE request_id=?",
@@ -192,8 +231,9 @@ export const readReviewFacts = (requestId: string, windowStart: string) =>
 			.bind(requestId),
 		countStatement(db, requestId, windowStart),
 	]).pipe(
-		Effect.flatMap(([files, decisions, updates, counts]) =>
+		Effect.flatMap(([projects, files, decisions, updates, counts]) =>
 			Effect.all({
+				projects: rowsOf(ProjectRow, projects ?? []),
 				files: rowsOf(FileRow, files ?? []),
 				decisions: rowsOf(DecisionRow, decisions ?? []),
 				updates: rowsOf(UpdateRow, updates ?? []),
@@ -202,6 +242,7 @@ export const readReviewFacts = (requestId: string, windowStart: string) =>
 		),
 		Effect.map(
 			(rows): ReviewFacts => ({
+				project: rows.projects[0] ?? null,
 				files: rows.files,
 				decisions: rows.decisions,
 				updates: rows.updates,
