@@ -96,7 +96,8 @@ comes as early as the rules allow. Every area follows the Back-end rules in CLAU
    golden corpus recorded first). About 1,300 route lines and 4,700 lib lines: a stack of PRs reviewed one by one and
    merged into `main` as one. The
    Quint model covers a resend during review, signing a withdrawn offer and countersign or abandon while offers change,
-   extending `verification/discount-offers.qnt` where it already models them.
+   extending `verification/discount-offers.qnt` where it already models them. Design:
+   `docs/plans/2026-11-signing-conversion.md` (proposed 2026-11-23, with three questions for the owner).
 4. **The discount, PRs 3 to 5.** Read and show the discount, the SOW fields with the send check, then the owner form.
    Between PR 4 and PR 5 the owner publishes a SOW template version with `{{sow.discount}}`. After PR 5 a discounted
    offer can be sent, and the signed agreement states the discount.
