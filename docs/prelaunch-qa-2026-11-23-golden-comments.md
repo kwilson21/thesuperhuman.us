@@ -2,7 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: to be filled in when it is opened. Merge facts are recorded after the merge, in the next pull request.
+Pull request: [#392](https://github.com/kwilson21/thesuperhuman.us/pull/392). Merge facts are recorded after the merge, in
+the next pull request.
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The step 3 design (`docs/plans/2026-11-signing-conversion.md`, #376), section 8, lists this
 pull request: the golden header comments that still say 409 where the fixtures hold the 500 that `f78896099` brought.
