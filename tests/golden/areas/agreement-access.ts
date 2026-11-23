@@ -377,6 +377,70 @@ export const follow = (
 	...extra,
 });
 
+// The verify pages themselves (src/pages/offer/[token]/verify.astro and src/pages/agreements/verify.astro), as a
+// browser reaches them: the emailed link opened (a GET with the key in the query) and the page's Continue form posted
+// (a urlencoded body with the key, from the site). Their corpora render the page (tests/golden/harness/page.ts), so
+// these steps carry no handler of their own; `follow` above calls completeAgreementLink instead.
+
+/** What a verify page step dumps: the links, the sessions a POST makes and the `verified` event it writes. */
+export const PAGE_TABLES = [
+	"software_agreement_links",
+	"software_agreement_sessions",
+	"software_agreement_events",
+];
+
+export type PageVisit = {
+	/** The key to send, as written. Default: the key in the n-th email (`mail`). */
+	readonly key?: string;
+	readonly mail?: number;
+	/** The archive page, at /agreements/verify with no params. Default: the signing page of `token`. */
+	readonly archive?: boolean;
+	/** The token in the signing page's URL and params. Default: TOKEN. */
+	readonly token?: string;
+};
+
+/** The key a page step sends, for a step that builds its own request. */
+export const pageKey =
+	(visit: PageVisit) =>
+	(prior: Prior): string =>
+		visit.key ?? issuedKey(prior, visit.mail ?? 0);
+
+/** The page's path, without a key. */
+export const pagePath = (visit: PageVisit) =>
+	visit.archive
+		? "/agreements/verify"
+		: `/offer/${visit.token ?? TOKEN}/verify`;
+
+/** The page's params: the token for the signing page, none for the archive. */
+export const pageParams = (visit: PageVisit) =>
+	visit.archive ? {} : { token: visit.token ?? TOKEN };
+
+/** The emailed link opened: a GET of the page with `?key=`. */
+export const openPage = (
+	visit: PageVisit = {},
+	extra: Partial<Step> = {},
+): Step => ({
+	method: "GET",
+	path: (prior) => `${pagePath(visit)}?key=${pageKey(visit)(prior)}`,
+	params: pageParams(visit),
+	dump: { music: PAGE_TABLES },
+	...extra,
+});
+
+/** The page's Continue form posted: a POST of the page with the key in a urlencoded body, from the site. */
+export const postPage = (
+	visit: PageVisit = {},
+	extra: Partial<Step> = {},
+): Step => ({
+	method: "POST",
+	path: pagePath(visit),
+	params: pageParams(visit),
+	body: (prior) => formBody({ key: pageKey(visit)(prior) }),
+	headers: formHeaders(),
+	dump: { music: PAGE_TABLES },
+	...extra,
+});
+
 /** The agreement_session cookie the n-th step set. */
 export function sessionCookieOf(prior: Prior, step: number): string {
 	const answer = prior.steps[step]?.answer;

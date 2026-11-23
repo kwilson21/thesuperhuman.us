@@ -2,8 +2,8 @@
 
 Date: November 23, 2026
 Repository: `kwilson21/thesuperhuman.us`
-Pull request: [#376](https://github.com/kwilson21/thesuperhuman.us/pull/376). Merge facts are recorded after the merge,
-in the next pull request.
+Pull request: [#376](https://github.com/kwilson21/thesuperhuman.us/pull/376), merged at 01:41:39 UTC as `9deca488`
+(head `a5e9872f`).
 Target: production `https://thesuperhuman.us`
 Decisions: Kazon Wilson. The order of `docs/plans/2026-11-effect-conversion.md` ("Go", 2026-11-15), in which this is
 step 3, and "Proceed" (2026-11-22). The three questions this design asked, each answered with its recommendation (in
@@ -12,7 +12,7 @@ would get a moment later, not the 30-second message); Q2 "Approve all three" (th
 sentences for a failure on the site's side); Q3 "Success with receipt" (a failed read after the signatures commit
 answers 200 with the receipt). J1 and J2 are judgment calls recorded in the design for the owner to overrule. The
 design and its review passes were done with Claude Code; Codex reviewed the first head.
-Rollback revision: the revision of `main` before the merge, or `git revert -m 1` of the merge commit. Docs only.
+Rollback revision: `d6559823`, the revision of `main` before the merge; or `git revert -m 1 9deca488`. Docs only.
 
 ## Scope
 
@@ -41,7 +41,11 @@ Rollback revision: the revision of `main` before the merge, or `git revert -m 1`
     placement, the verify-page outage cases) were small and certain and are fixed in the same commit as the owner's
     answers. One of its citation nits was checked and the design's citation kept (software-agreements.ts:243 is the
     sentence).
-- CI on the final head: UNVERIFIED until it reports; recorded with the merge facts.
+- CI on the head `a5e9872f` before merge: all 20 check runs succeeded, `validate`, `neutrality` and the Workers preview
+  build among them.
+- After merge, on `9deca488`: the Workers build succeeded (01:43:09 UTC) and `validate` succeeded (01:46:36 UTC). Live
+  check at 01:46:58 UTC: `https://thesuperhuman.us/` answered 200, and `/agreements/verify?key=x` answered 401 with the
+  expired page, as before.
 
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
 
@@ -49,8 +53,8 @@ Rollback revision: the revision of `main` before the merge, or `git revert -m 1`
 
 ## 7. Release and final QA
 
-- **PASS · Reviews, rollback.** See above.
-- **UNVERIFIED · Checks before merge, production revision and live check.** Recorded after the merge.
+- **PASS · Checks, reviews, rollback.** See above.
+- **PASS · Production revision and live check.** Deployed `9deca488`; the site answered 200.
 - **N/A · Bindings, migrations.** None.
 
 ## 8. Private owner center

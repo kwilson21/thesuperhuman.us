@@ -181,7 +181,8 @@ its `outcome` from `JSON.parse(terms_json)` (offer verify.astro:31-36, 40).
 | POST: the batch (A1 for a signing link, A5; or any failure) | 401 | 387-428 |
 | POST | 303 to `/offer/<token>/sign` or `/agreements`, with the two-hour session cookie | 383-385, 430-441 |
 | A POST whose body is not a form (`formData()` throws) | the page throws, a bare 500 | both verify.astro:9 |
-| The link read fails; on the offer page, the offer read fails or its terms are not JSON | the page throws, a bare 500 | 349-359; offer verify.astro:31-36, 40 |
+| The link read fails; on the offer page, the offer read fails | the page throws, a bare 500 | 349-359; offer verify.astro:31-36 |
+| On the offer page, terms that are not JSON (parsed in the layout's slot, after the status and headers are set) | no response at all: the body fails before its first byte (production streams, and the renderer still holds the page's bytes when the slot throws), and workerd then sends no status line and no headers | offer verify.astro:40 |
 
 No golden corpus records the pages. `offer-link` and `agreements-link` call `completeAgreementLink` directly as steps
 that follow the emailed link (`tests/golden/areas/agreement-access.ts:350-378`), so the function's answers are recorded
@@ -717,7 +718,7 @@ Every other answer is today's.
 ### Behaviour fixes
 
 Each fix PR comes before the conversion, without the `conversion` label, re-records its changed cases in a commit of
-its own and explains each one. Counts are golden cases, from the fixtures at `98e9404a`, except B5's two verify-page
+its own and explains each one. Counts are golden cases, from the fixtures at `98e9404a`, except B5's four verify-page
 cases, which PR 2 adds. PR 2 also records verify-page outage cases (the link read, the GET's live check, the POST's
 batch) that answer 401 or a bare 500 today; the verify pages' fix PR changes them under B1, B2 and Q2 and lists each,
 with its count, in its own description.
@@ -728,7 +729,7 @@ with its count, in its own description.
 | B2 | A store failure throws: a bare 500 | `offer-draft`: "the offer lookup fails", "the session lookup fails", "the live check of the session fails", "the signing switch lookup fails" (three formats each). `offer-review`: the same three of POST (three formats each), and GET's "the agreements lookup fails", "the session lookup fails", "the signing lookup fails". `offer-sign`: "outage: the offer lookup", "... the session lookup", "... the live offer check of the session", "... the signing setting", "form: outage: the offer lookup". The seven action corpora: "outage: the offer lookup"; abandon "outage: the first deposit check and the recheck after it"; end "outage: the batch of an MSA, and the recheck". `owner-agreement-attachments-get`: "the bucket read fails", "the database query fails". `-put`: "the signing setting cannot be read". `owner-agreement-file`: "the agreement query fails", "the artifact query fails", "the bucket read fails" | 44 |
 | B3 | A missing id answers 503; a missing binding answers 404, throws or answers 409 | `owner-request-agreement-wire`: "no id parameter", "an empty id parameter" (both send a countersign: 503 to 409 "Signing is off or the offer changed.", what an unknown id gets). `owner-agreement-attachments-put`: "no id param" (503 to 404 `{ok:false}`, what an unknown request gets after B4: the object is put, then deleted). `-get`: "no database is bound" (404 to 503 "Unavailable"), "no bucket is bound" (thrown, to 503). `owner-request-agreement-retry-artifact`: "no storage bucket" (409 to 503 `{ok:false}`) | 6 |
 | B4 | An upload refusal answers 503 | `owner-agreement-attachments-put`: "an unknown request", "a service request", "an id that looks like SQL" (to 404 `{ok:false}`); "a withdrawn software request", "a resolved software request", "the request is withdrawn just before the batch", "an attachment then the request is withdrawn then another upload" (to 409, today's sentence); "only the five-byte PDF header", "a PDF header over garbage" (to 400, today's sentence) | 9 |
-| B5 | Bad input or bad stored data throws or answers 503 | `offer-draft`: "a JSON null body (the handler throws today)" (to 403 "Reload and try again.", what the review answers for the same body). `offer-link`: "an offer whose terms are not JSON stores the link and fails before the email" (json, form; 503 to 500). Once PR 2 records them, both verify pages' "a POST whose body is not a form" (a bare 500 to 401 with the expired page, what a POST with no key gets) | 5 |
+| B5 | Bad input or bad stored data throws or answers 503 | `offer-draft`: "a JSON null body (the handler throws today)" (to 403 "Reload and try again.", what the review answers for the same body). `offer-link`: "an offer whose terms are not JSON stores the link and fails before the email" (json, form; 503 to 500). PR 2 records them: both verify pages' "a POST whose body is JSON, not a form: the page throws" and "a POST of plain text: the page throws" (a bare 500 to 401 with the expired page, what a POST with no key gets) | 7 |
 | B6 | After the signatures commit, a failed read answers 409 "The reviewed agreement changed" | `offer-sign`: "outage: the second read of the agreements, after the signatures committed" (Q3) | 1 |
 | B7 | A decision that SQL makes today, moved into a rule, answers otherwise | `offer-review`: "the same legal party is created by another tab before the review batch" (to 200, with the other tab's client), "another offer's MSA for the party appears before the review batch" and "another offer's MSA for the same party is inserted after the pending check" (to 409 "Another offer has a pending MSA for this party. Ask Kazon to resolve it."), three formats each. `offer-link`: the six "... between the lookup and the batch" races and "signing already started: a project exists", each (json) and (form) (Q1) | 23 |
 | B8 | The owner's downloads answer a missing object of a ready copy 503 | `owner-agreement-file`: "the stored object is missing" (to 500 "Signed copy unavailable. Contact Kazon.", logged). `owner-agreement-attachments-get`: "the stored object is missing" (to 500 "Unavailable", logged) | 2 |
@@ -911,13 +912,13 @@ formatting, held by the review corpus and the discount plan's contracts.
 ### The golden corpora
 
 To record first, on today's code, before any fix: `offer-verify-page` and `agreements-verify-page`. The harness renders
-a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, with the case's request,
-params and locals, so a step's answer is the page's own status, headers, cookies and HTML. Cases for each page: GET and
-POST with a good key, a key of the wrong shape, an unknown, used, expired or other purpose's key, another offer's token
-(the signing page), another host, no D1, another method, a POST twice, a POST whose body is not a form, a POST after the
-offer is resent, revoked or withdrawn, after signing is switched off and after a project starts (the signing page), an
-outage on the link read, on the GET's live check and on the POST's batch, and on the signing page an outage on the offer
-read and terms that are not JSON.
+a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, streamed and compact as
+production renders it, with the case's request, params and locals, so a step's answer is the page's own status, headers,
+cookies and HTML. Cases for each page: GET and POST with a good key, a key of the wrong shape, an unknown, used, expired
+or other purpose's key, another offer's token (the signing page), another host, no D1, another method, a POST twice, a
+POST whose body is not a form, a POST after the offer is resent, revoked or withdrawn, after signing is switched off and
+after a project starts (the signing page), an outage on the link read, on the GET's live check and on the POST's batch,
+and on the signing page an outage on the offer read and terms that are not JSON.
 
 To hold NEUTRAL under `pnpm run golden:neutral --all <base> <head>` on the conversion's bottom PR: this area's corpora
 (`offer-link`, `offer-draft`, `offer-review`, `offer-sign`, the two verify pages, `agreements-link` for the redeem, the
@@ -983,6 +984,10 @@ None beyond Q1 to Q3, J1 and J2. Notes for review:
 - Hold and record-copy do not look at the agreement's status, so a review document can be put on hold. Kept; the
   machine allows both moves from every state.
 - The offer verify page reads `outcome` from `JSON.parse(terms_json)` without the terms reader (verify.astro:40). The
-  converted page keeps that reading; `parseOfferTerms` would refuse terms the page shows today.
+  converted page keeps that reading; `parseOfferTerms` would refuse terms the page shows today. The parse runs in the
+  layout's slot, after the status and headers are set, so for terms that are not JSON the body fails before its first
+  byte and workerd sends no response at all (golden `offer-verify-page`, "terms that are not JSON: the body fails before
+  its first byte"), neither a 200 nor a bare 500. No fix in this plan changes it; changing it would be a behaviour fix
+  of its own.
 - `agreement-link.qnt`'s finding `issuedStillExecuted` has a signing twin: a link can be issued for an offer that stops
   being signable after the batch. It is harmless for the same reason (the redeem's A1 refuses it).
