@@ -27,9 +27,10 @@ import {
 //   400 "Check required fields and limits."   each of the six text fields and the email: missing, empty, blank, over the limit, with a
 //                              control character, the wrong type; email not an address, over 320; registered_agent_confirmed false, missing,
 //                              "true", "on"; an unknown key (the schema is strict); values missing, null, an array, text; expectedCurrentVersion
-//                              missing, negative, a fraction, text, null, huge; the flat form without the agent box, with a stray key
-//   409 {error: <sqlite text>} stale expectedCurrentVersion (too low, too high), a lost race (another version inserted before the batch), a
-//                              duplicate version, a failed batch; the form shows the same message as an escaped page
+//                              missing, negative, a fraction, text, null; the flat form without the agent box, with a stray key
+//   409 "The agreement could not be saved."   stale expectedCurrentVersion (too low, too high, huge, on an empty table), a lost race
+//                              (another version inserted before the batch), the same save twice; the form shows the same sentence as a page
+//   500 "The agreement could not be saved."   a failed batch, logged; the form shows the same sentence as a page
 //   403                        a visitor
 
 const dump = { music: ["software_contractor_config"] };

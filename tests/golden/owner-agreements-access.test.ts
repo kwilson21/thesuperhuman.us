@@ -34,14 +34,15 @@ import {
 //                         still points at (kept) and one whose only session was deleted in the same batch (deleted); both purposes; the
 //                         clock moved 31 days; repeated; many rows
 //     400 "Check required fields and limits."   confirmed missing, false, "true", 1, 0, null, a form without it or with yes
-//     409 {error: message}                      the sessions delete or the links delete fails (the batch rolls back)
+//     500 "The agreement could not be saved." the sessions delete or the links delete fails (the batch rolls back); a form
+//                         shows the same sentence as a page
 //   setting
 //     200 {ok:true} / form 303                  enable, disable, enable twice, toggles, updated_at and updated_by recorded, a missing
 //                         settings row (the UPDATE changes nothing and the answer is still ok), a second owner email, the clock moved, form
 //                         values on, true, false, empty, yes, 1 and absent (absent means off), confirmed in each spelling
 //     400                                       enabled not a boolean (text, number, null, array, object, absent in JSON), confirmed missing
 //                         or not true
-//     409                                       the UPDATE fails
+//     500 "The agreement could not be saved." the UPDATE fails; a form shows the same sentence as a page
 //     sequences                                 switch on then attach a PDF (the setting is read by the attachment route), switch off then
 //                         attach (404)
 
