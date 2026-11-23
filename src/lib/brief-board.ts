@@ -31,10 +31,11 @@ export const STORED_LANES = ["purpose", ...LANES] as const;
 export type StoredLane = (typeof STORED_LANES)[number];
 
 /**
- * The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. Step 9 was the
- * purpose screen; a draft saved on it opens the first written question.
+ * The data-steps of the lane screens in the brief's form (src/components/BriefBoard.astro), in lane order. A step is the
+ * screen's position among the form's sections. Drafts saved before the purpose screen was dropped numbered them 9 to 12
+ * (see `draftSection` in src/scripts/software-inquiry.ts).
  */
-export const LANE_STEPS = [10, 11, 12] as const;
+export const LANE_STEPS = [9, 10, 11] as const;
 
 /** Each lane's heading, by path. The purpose's is for the owner's reading of a stored outline. */
 export const laneLabels: Record<SoftwarePath, Record<StoredLane, string>> = {

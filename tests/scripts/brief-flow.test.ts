@@ -189,7 +189,7 @@ async function setup(
 	requestedPath?: string,
 	startSuggestionPass = grantedPass,
 	linkedPath: string | null | undefined = requestedPath,
-	// With the board, the page has the outline's three lane screens (data-step 10 to 12) and answers the board's route
+	// With the board, the page has the outline's three lane screens (data-step 9 to 11) and answers the board's route
 	// with `interpret`; without it the page is as the server renders it with the switch off.
 	board?: {
 		interpret: (body: string, signal: AbortSignal) => Promise<InterpretAnswer>;
@@ -201,7 +201,7 @@ async function setup(
 	if (linkedPath) form.dataset.linkedPath = linkedPath;
 
 	if (board) form.dataset.board = "true";
-	steps = Array.from({ length: board ? 13 : 9 }, () => new Node());
+	steps = Array.from({ length: board ? 12 : 9 }, () => new Node());
 	controls = [];
 
 	for (const section of steps) section.nodes.h1 = new Node();
@@ -305,7 +305,7 @@ async function setup(
 	}
 
 	if (board) {
-		for (const i of [10, 11, 12])
+		for (const i of [9, 10, 11])
 			steps[i].nodes["[data-board-skip]"] = new Node();
 		form.nodes["[data-outline-add-back]"] = Object.assign(new Node(), {
 			hidden: true,
@@ -346,7 +346,7 @@ async function setup(
 		if (selector === "[data-skip]") return skips;
 
 		if (selector === "[data-board-skip]")
-			return steps.slice(10).map((node) => node.nodes[selector]);
+			return steps.slice(9).map((node) => node.nodes[selector]);
 
 		if (
 			[
@@ -2027,12 +2027,10 @@ it("builds each path's plan from its written questions, the outline's lane scree
 	const { briefPlan } = await import("~/scripts/software-inquiry");
 
 	expect(briefPlan("website", true)).toEqual([
-		0, 1, 10, 11, 12, 7, 8, 3, 4, 5, 6,
+		0, 1, 9, 10, 11, 7, 8, 3, 4, 5, 6,
 	]);
-	expect(briefPlan("webapp", true)).toEqual([0, 1, 2, 10, 11, 12, 3, 4, 5, 6]);
-	expect(briefPlan("workflow", true)).toEqual([
-		0, 1, 2, 10, 11, 12, 3, 4, 5, 6,
-	]);
+	expect(briefPlan("webapp", true)).toEqual([0, 1, 2, 9, 10, 11, 3, 4, 5, 6]);
+	expect(briefPlan("workflow", true)).toEqual([0, 1, 2, 9, 10, 11, 3, 4, 5, 6]);
 	expect(briefPlan("website", false)).toEqual([0, 1, 7, 8, 3, 4, 5, 6]);
 	expect(briefPlan("webapp", false)).toEqual([0, 1, 2, 3, 4, 5, 6]);
 });
@@ -2044,7 +2042,7 @@ it("walks the website's eleven screens with the outline in them, and the dots fo
 	fill("name", "Alex");
 	fill("email", "alex@example.com");
 	choose("updates", "self");
-	expect(visit()).toEqual([1, 10, 11, 12, 7, 8, 3, 4, 5, 6]);
+	expect(visit()).toEqual([1, 9, 10, 11, 7, 8, 3, 4, 5, 6]);
 	expect(dots[1].nodes[".sr-only"].textContent).toBe("Question 2 of 11");
 	expect(dots[10].attrs["aria-current"]).toBe("step");
 });
@@ -2059,7 +2057,7 @@ it("walks the web app and workflow's ten screens with the outline in them", asyn
 		fill(key, ANSWER);
 		fill("name", "Alex");
 		fill("email", "alex@example.com");
-		expect(visit()).toEqual([1, 2, 10, 11, 12, 3, 4, 5, 6]);
+		expect(visit()).toEqual([1, 2, 9, 10, 11, 3, 4, 5, 6]);
 		expect(dots[2].nodes[".sr-only"].textContent).toBe("Question 3 of 10");
 	}
 });
@@ -2069,8 +2067,8 @@ it("focuses each lane screen's heading as the steps change", async () => {
 	fill("appGoal", ANSWER);
 	click("[data-next]");
 	click("[data-next]");
-	expect(current()).toBe(10);
-	expect(steps[10].nodes.h1.focus).toHaveBeenCalled();
+	expect(current()).toBe(9);
+	expect(steps[9].nodes.h1.focus).toHaveBeenCalled();
 });
 
 it("keeps the website without lane screens when the server switch is off", () => {
@@ -2088,17 +2086,17 @@ it("records what a lane listed when the visitor leaves it, by Next, Back, Ctrl+E
 	await readAnswers();
 	expect(savedBoard().seen).toEqual({});
 	click("[data-next]");
-	expect(current()).toBe(10);
+	expect(current()).toBe(9);
 	expect(savedBoard().seen).toEqual({});
 	click("[data-next]");
 	expect(savedBoard().seen.audience).toEqual(["c1"]);
 	click("[data-back]");
-	expect(current()).toBe(10);
+	expect(current()).toBe(9);
 	expect(savedBoard().seen.parts).toEqual(["c2", "c3", "c4"]);
 	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
 	fire(form, "keydown", { ctrlKey: true, key: "Enter" });
-	expect(current()).toBe(12);
-	fire(steps[12].nodes["[data-board-skip]"], "click");
+	expect(current()).toBe(11);
+	fire(steps[11].nodes["[data-board-skip]"], "click");
 	expect(savedBoard().seen.questions).toEqual(["c5"]);
 });
 
@@ -2112,7 +2110,7 @@ it("holds a reply for the lane on screen, updates the others and lists unseen ca
 	await vi.advanceTimersByTimeAsync(SECOND);
 	expect(bodies).toHaveLength(2);
 	click("[data-next]");
-	expect(current()).toBe(11);
+	expect(current()).toBe(10);
 
 	// The reply lands one screen later, on the pages lane.
 	await reply([
@@ -2166,7 +2164,7 @@ it("sends the visitor to a card's lane screen from the review, and stops listing
 	);
 
 	fire(buttonsIn(reviewRows()[at + 1])[0], "click");
-	expect(current()).toBe(10);
+	expect(current()).toBe(9);
 	click("[data-next]");
 	toReview();
 	expect(groupAfter("New since you last looked")).toBeNull();
@@ -2188,7 +2186,7 @@ it("shows what changed in a lane after the visitor went back and edited an answe
 	]);
 	click("[data-next]");
 	click("[data-next]");
-	expect(current()).toBe(11);
+	expect(current()).toBe(10);
 	expect(core.statusLine("parts")).toBe(
 		"1 new, 1 removed since you last looked",
 	);
@@ -2210,10 +2208,10 @@ it("skips the outline from the second lane screen: Back reaches the last written
 	click("[data-next]");
 	await vi.advanceTimersByTimeAsync(SECOND);
 	click("[data-next]");
-	expect(current()).toBe(11);
+	expect(current()).toBe(10);
 	const asked = bodies.length;
 	const before = core.board().cards;
-	fire(steps[11].nodes["[data-board-skip]"], "click");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
 	expect(current()).toBe(7);
 	expect(visibleDots()).toEqual([
 		...Array(8).fill(false),
@@ -2244,7 +2242,7 @@ it("offers to add the outline back from the review after a skip, with the three 
 	await readAnswers();
 	click("[data-next]");
 	click("[data-next]");
-	fire(steps[11].nodes["[data-board-skip]"], "click");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
 	toReview();
 	expect(current()).toBe(6);
 	expect(form.nodes["[data-outline-add-back]"].hidden).toBe(false);
@@ -2263,7 +2261,7 @@ it("offers to add the outline back from the review after a skip, with the three 
 	).toBe(true);
 
 	while (current() !== 1) click("[data-back]");
-	expect(visit().slice(0, 5)).toEqual([1, 10, 11, 12, 7]);
+	expect(visit().slice(0, 5)).toEqual([1, 9, 10, 11, 7]);
 });
 
 it("asks again after the outline is added back, though nothing was written since the skip", async () => {
@@ -2272,7 +2270,7 @@ it("asks again after the outline is added back, though nothing was written since
 	await readAnswers();
 	click("[data-next]");
 	click("[data-next]");
-	fire(steps[11].nodes["[data-board-skip]"], "click");
+	fire(steps[10].nodes["[data-board-skip]"], "click");
 	const asked = bodies.length;
 	toReview();
 	// Skipped: nothing is asked, however long the visitor waits on a question.
@@ -2309,7 +2307,7 @@ it("keeps the lane screens when suggestions are turned off, and asks nothing", a
 	await vi.advanceTimersByTimeAsync(30000);
 	expect(bodies).toHaveLength(0);
 	click("[data-next]");
-	expect(current()).toBe(10);
+	expect(current()).toBe(9);
 	// By hand, and no card was made by the AI in this lane: nothing to say.
 	expect(core.statusLine("audience")).toBe("");
 	expect(visibleDots()).toEqual(Array(11).fill(false));
@@ -2436,9 +2434,9 @@ it("resumes a draft saved by this page on the screen it was left on, lane screen
 	await readAnswers();
 	click("[data-next]");
 	click("[data-next]");
-	expect(current()).toBe(11);
+	expect(current()).toBe(10);
 	await boardSetup(undefined);
-	expect(current()).toBe(11);
+	expect(current()).toBe(10);
 	expect(core.board().cards.length).toBeGreaterThan(0);
 });
 
@@ -2515,7 +2513,7 @@ it("is by hand while the AI is off or has stopped, and not while it is on, retry
 	await boardSetup("website");
 	fill("purpose", ANSWER);
 	click("[data-next]");
-	fire(steps[10].nodes["[data-board-skip]"], "click");
+	fire(steps[9].nodes["[data-board-skip]"], "click");
 	expect(core.byHand()).toBe(false);
 });
 
@@ -2588,7 +2586,7 @@ it("keeps three lane screens with the AI on or off", async () => {
 	await boardSetup("website");
 	fill("purpose", ANSWER);
 	toggleSuggestions();
-	expect(visit().slice(0, 5)).toEqual([1, 10, 11, 12, 7]);
+	expect(visit().slice(0, 5)).toEqual([1, 9, 10, 11, 7]);
 });
 
 it("restores a draft left on the old purpose screen, with its purpose cards, without error and without sending them", async () => {
@@ -2667,4 +2665,44 @@ it("lists only the three lanes in the review", async () => {
 	expect(groupAfter("Brief outline")).toContain("Fans");
 	expect(groupAfter("Brief outline")).not.toContain("A home for my band");
 	expect(JSON.stringify(core.outline())).not.toContain("purpose");
+});
+
+it.each([
+	["the old purpose screen", { section: 9 }, 1],
+	["the old audience screen", { section: 10 }, 9],
+	["the old pages screen", { section: 11 }, 10],
+	["the old questions screen", { section: 12 }, 11],
+	["a screen before the outline", { section: 7 }, 7],
+	["a screen this page numbered", { section: 9, outlineScreens: 3 }, 9],
+])(
+	"opens a draft saved on %s on the screen this page has for it",
+	async (_label, saved, expected) => {
+		store.set(
+			"software-brief-draft",
+			JSON.stringify({
+				answers: {
+					path: "website",
+					purpose: ANSWER,
+					timing: "flexible",
+					updates: "self",
+				},
+				submissionId: "00000000-0000-4000-8000-000000000001",
+				...saved,
+			}),
+		);
+		await boardSetup(undefined);
+		expect(current()).toBe(expected);
+	},
+);
+
+it("saves the screen with the number of outline screens, so the next page reads it as its own", async () => {
+	await boardSetup("website");
+	fill("purpose", ANSWER);
+	click("[data-next]");
+	expect(JSON.parse(store.get("software-brief-draft") ?? "null")).toMatchObject(
+		{
+			section: 9,
+			outlineScreens: 3,
+		},
+	);
 });

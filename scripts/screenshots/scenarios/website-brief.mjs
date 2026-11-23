@@ -31,9 +31,9 @@ const screens = [
 			page.locator('[data-step="1"] textarea').fill(brief.purpose),
 	},
 	// The outline's three lane screens, one for each lane. The board's route answers with no cards (see mockBrief).
+	{ step: 9 },
 	{ step: 10 },
 	{ step: 11 },
-	{ step: 12 },
 	{
 		step: 7,
 		fill: async (page) => {

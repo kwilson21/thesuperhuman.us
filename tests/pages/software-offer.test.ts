@@ -4387,9 +4387,9 @@ it("renders the outline's three lane screens inside the form, and no side board,
 	);
 
 	expect(lanes.map((lane) => attrOf(lane, "data-step"))).toEqual([
+		"9",
 		"10",
 		"11",
-		"12",
 	]);
 	expect(lanes.map((lane) => attrOf(lane, "data-lane-screen"))).toEqual([
 		"audience",

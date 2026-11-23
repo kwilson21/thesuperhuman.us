@@ -2668,7 +2668,7 @@ describe("going back and editing an answer", () => {
 describe("the outline's three screens", () => {
 	it("has a screen for the audience, the parts and the questions, and none for the purpose", () => {
 		expect(LANES).toEqual(["audience", "parts", "questions"]);
-		expect(LANE_STEPS).toEqual([10, 11, 12]);
+		expect(LANE_STEPS).toEqual([9, 10, 11]);
 
 		for (const path of ["website", "webapp", "workflow"] as const) {
 			expect(Object.keys(laneQuestions[path])).toEqual([...LANES]);

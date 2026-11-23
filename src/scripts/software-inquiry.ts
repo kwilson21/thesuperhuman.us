@@ -47,6 +47,20 @@ export function briefPlan(
 	return [...base.slice(0, after), ...LANE_STEPS, ...base.slice(after)];
 }
 
+/**
+ * The screen a saved draft was left on, as this page numbers it. A draft saved by the page with four lane screens (it has
+ * no `outlineScreens`) numbered them 9 to 12, the purpose screen first: that screen is gone, so its draft opens the first
+ * written question, and the other three move up one.
+ */
+const OUTLINE_SCREENS = 3;
+
+export const draftSection = (section: number, outlineScreens: number) =>
+	outlineScreens === OUTLINE_SCREENS || section < 9
+		? section
+		: section === 9
+			? 1
+			: section - 1;
+
 const laneOfSection = (section: number): Lane | null =>
 	LANES[LANE_STEPS.findIndex((step) => step === section)] ?? null;
 
@@ -324,6 +338,7 @@ export function setupSoftwareInquiry(
 					step,
 					// The screen by its data-step: the plan changes when the outline is skipped or added back.
 					section: plan()[step],
+					outlineScreens: OUTLINE_SCREENS,
 					submissionId,
 				}),
 			);
@@ -428,7 +443,10 @@ export function setupSoftwareInquiry(
 					(Number.isInteger(saved.step) && saved.step >= 0))
 			)
 				resumeAt = Number.isInteger(saved.section)
-					? saved.section
+					? draftSection(
+							saved.section,
+							Number.isInteger(saved.outlineScreens) ? saved.outlineScreens : 0,
+						)
 					: // An index past the old plan opens the first written question (data-step 1), like a section the plan no longer has.
 						(plans[storedPath][saved.step] ?? 1);
 
