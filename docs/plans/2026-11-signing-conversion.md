@@ -32,7 +32,8 @@ route's existing sentence where one fits (`docs/prelaunch-qa-2026-11-14-agreemen
 
 ### Questions for the owner
 
-Three, each with a recommendation. Nothing else in this design needs an owner decision.
+Three, each with a recommendation, then two judgment calls the owner may overrule. Nothing else in this design needs
+an owner decision.
 
 **Q1. The signing link when the offer stops being signable before its batch.** Today a link request answers 429 "Wait
 at least 30 seconds before requesting another link." when, between its read and its link batch, the request is
@@ -67,6 +68,21 @@ again answers 200 with the saved receipt). Recommended: the read becomes part of
 already ignored ("Saved signatures survive notification failures.", sign.ts:87), so the client gets 200 with the
 receipt and the owner's retry-copy sends the notices. The alternative is a 500 whose sentence says the signature was
 saved.
+
+### Judgment calls (the owner may overrule)
+
+**J1. The owner's downloads when a ready copy's file is gone (B8).** They answer 500, logged, not the 404 the visitor
+routes give since agreement access judgment call (a) (`docs/prelaunch-qa-2026-11-14-agreement-access.md`, item 2 and
+"Owner decisions"). That call's reason is that a verified visitor cannot tell a missing object from an unknown id; the
+owner already knows the row exists, and a ready copy whose object is gone is an unexpected store state, which the
+2026-11-14 decision answers 500 and logs. The alternative is 404 "Not found", as the visitors get.
+
+**J2. Where the discount's send check runs (discount PR 4).** It runs only for a send with signing on, the one move
+that pins the current SOW template (offer-send.ts:245-248). With signing off nothing is pinned, and the website cannot
+sign the offer later without a new send ("The pinned templates are unavailable.", software-agreements.ts:243), so
+there is nothing for the check to protect, and a discounted offer signed outside the website can still be sent. The
+discount plan states the refusal without that condition (section 4.5); PR 4 adds it there. The alternative refuses
+every send of a discounted offer while the template has no discount line, signing on or off.
 
 ## The area today
 
@@ -162,6 +178,7 @@ its `outcome` from `JSON.parse(terms_json)` (offer verify.astro:31-36, 40).
 | A method other than GET or POST | 401 | 381 |
 | POST: the batch (A1 for a signing link, A5; or any failure) | 401 | 387-428 |
 | POST | 303 to `/offer/<token>/sign` or `/agreements`, with the two-hour session cookie | 383-385, 430-441 |
+| A POST whose body is not a form (`formData()` throws) | the page throws, a bare 500 | both verify.astro:9 |
 | The link read fails; on the offer page, the offer read fails or its terms are not JSON | the page throws, a bare 500 | 349-359; offer verify.astro:31-36, 40 |
 
 No golden corpus records the pages. `offer-link` and `agreements-link` call `completeAgreementLink` directly as steps
@@ -317,7 +334,7 @@ it.
 | A5 | The emailed link is still unused and unexpired at `at` | access.ts:399-408 |
 | A6 | The older links consumed after a mail are only those still unused (today the update's own filter, which chooses them) | access.ts:307-312 |
 | A7 | The saved draft is the one read | software-agreements.ts:463-469 |
-| A8 | A reused MSA is still executed and not terminated | software-agreements.ts:547-557; sign 471, countersign 680 |
+| A8 | A reused MSA is still executed and not terminated | software-agreements.ts:547-557; sign 472, countersign 679 |
 | A9 | Each document is still in review, with the hash and review session read | software-agreements.ts:489-493 |
 | A10 | The offer is sent, the request open and signing on (countersign) | software-agreements.ts:674-678 |
 | A11 | Each document is still `client_signed` with the hash read (and, for abandon, of this request and offer) | software-agreements.ts:681-685; agreement.ts:144-148 |
@@ -463,8 +480,8 @@ with a `say` sentence, exactly today's.
 | `signing-draft.ts` | `saveSigningDraft` | the session, the setting, the nonce, the draft read, a signed agreement, a project | `SessionMissing`, `CsrfMismatch`, `DraftRefused`, `AlreadySigned`, `SigningStarted` | the draft |
 | `signing-review.ts` | `reviewDocument` (the GET) | the document id asked for, the offer's agreements (`readOfferAgreements`, plain rows: the rule leaves out the abandoned ones, as `offerAgreements`' filter does today), the session's token hash | `DocumentNotFound` (404 `{ok:false}`) | nothing written: it answers the document's kind and text |
 | `signing-review.ts` | `reviewDocuments`, staged as the offers' send is | the offer's stored terms, details and contractor, the existing agreements, the client row, the reused MSA, the templates, a pending MSA elsewhere, `at` | `SignatureSaved`, `MsaMismatch`, `TemplatesUnavailable`, `PendingMsaElsewhere`, `RenderRefused` (the template code's sentences), `StoredDataRefused`, `AlreadySigned`, `SigningStarted` | the client, the review rows, the stale clients removed, the event |
-| `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
-| `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the typed name | `OfferChanged`, `PendingChanged` | signatures, events, obsolete notices, statuses, packet rows, two copies |
+| `signing-sign.ts` | `signDocuments` | the offer's agreements, the documents named, the saved receipt, the draft, the stored values, the browser evidence | `DocumentsChanged`, `SignedElsewhere`, `DetailsChanged`, `EvidenceTooLong`, `NameNotPrintable`, `StoredDataRefused` (the stored values: golden "values with no client object", "values with no contractor object", "values whose client misses a field", "... has an extra field", "... names a portfolio but denies it"), `SigningStarted` | the notice, signatures, events, statuses, the draft removed, two notices |
+| `agreement-countersign.ts` | `countersign` | the offer, the setting, the pending agreements, the documents named, the contractor snapshot, the client's email snapshot, the typed name, the browser evidence | `OfferChanged`, `PendingChanged`, `NameNotPrintable` (the typed name or the contractor's title: golden "a typed name in Chinese cannot be printed", "... with an emoji ...", "... with a zero-width joiner", "... with a right-to-left mark", "a contractor title the fonts cannot print"), `EvidenceTooLong` ("... an address of 101 characters", "... a user agent of 2001 characters", "... a user agent that has a control character"), `StoredDataRefused` (the contractor snapshot missing, not JSON, empty, with an extra field, or not confirming the registered agent: five cases), `RecipientMissing` ("an offer with no client email snapshot", which today fails the batch's NOT NULL) | signatures, events, obsolete notices, statuses, packet rows, two copies |
 | `agreement-abandon.ts` | `abandonSigning` | the offer, the `client_signed` agreements, the documents named, the offer's invoices | `NoSentOffer`, `PendingActionDiffers`, `DepositCounts` | the abandon batch |
 | `agreement-record.ts` | `endAgreement`, `holdAgreement`, `recordCopy` | the agreement, today in New York, the date, the open offers reusing an MSA, the closed archive | `AgreementNotFound`, `NotEndable`, `EndDateOutside`, `DateDoesNotExist`, `MsaInUse`, `ArchiveClosed` | the end, the hold, the copy record, each with its event |
 | `agreement-packet.ts` | `packetClaimable`, `packetRecoverable`, `packetCertificates` | the packet row, `now`, the attempt; the documents, signatures and template rows | `StaleAttemptUnconfirmed` | the claim, the outcome, the certificates |
@@ -475,8 +492,9 @@ with a `say` sentence, exactly today's.
 | `agreement-download.ts` (extended) | `ownerCopy` | the agreement, its copy row, the bytes' digest | `AgreementNotFound`, `CopyNotReady`, `CopyIntegrity` (all reused) | none |
 
 A refusal that today shares an answer with others keeps that answer: every `signDocuments` refusal answers the sign
-route's one 409; `OfferChanged` answers "Signing is off or the offer changed."; `PendingChanged`, `DateDoesNotExist`,
-`ArchiveClosed` and a lost guard answer the owner route's generic 409; `StoredDataRefused` and `AlreadySigned` on the
+route's one 409; `OfferChanged` answers "Signing is off or the offer changed."; every other `countersign` refusal,
+`DateDoesNotExist`, `ArchiveClosed` and a lost guard answer the owner route's generic 409 (today's catch, agreement.ts:
+361-383, answers every error thrown inside it so); `StoredDataRefused` and `AlreadySigned` on the
 review answer "The agreement could not be reviewed."; `LinkExpired` answers the expired page's 401.
 
 `agreementValues`, `renderAgreement`, `validateTemplate`, `templateFields` and `legalNameKey` stay pure in `src/lib`
@@ -502,15 +520,18 @@ write time still answers 409. Read and decided again, three tries in all, throug
 - the review batch's UNIQUE failures that back a rule's fact: one pending MSA per client and template
   (`PendingMsaElsewhere`) and the client's natural key (the client id the rule chose). The client case is recognised as
   today, on the evidence `otherRequestChangedClient` reads after a FOREIGN KEY failure (software-agreements.ts:124-159,
-  372-380); any other failure is `AgreementStoreFailed`. This changes three golden cases (B7);
+  372-380); any other failure is `AgreementStoreFailed`. This changes nine golden cases (three, in three formats each;
+  B7);
 - the template's label UNIQUE, whose re-decision answers `LabelUsed` with today's sentence (golden publish "the label is
   taken between the check and the insert" is unchanged).
 
 The signature and notice UNIQUEs repeat what A9 and A11 re-check and back no fact the rules read; a violation stays a
 409, not retried (golden sign "a signature row for the MSA appears before the batch", "the SOW has a notice already for
-the same agreement"). A FOREIGN KEY failure when an agreement was deleted between the read and a hold or copy record is
-a lost race on the evidence read afterwards (golden hold and record-copy "the agreement is deleted before the batch"),
-409 as today; hold's "the archive is closed before the batch" is the cleanup lock's raise, 409 as today.
+the same agreement"). So do countersign's packet and copy rows, whose primary keys back no fact either (golden
+countersign "an artifact row appears first", "a delivery row appears first"): `GuardRefused`, the generic 409. A FOREIGN
+KEY failure when an agreement was deleted between the read and a hold or copy record is a lost race on the evidence read
+afterwards (golden hold and record-copy "the agreement is deleted before the batch"), 409 as today; hold's "the archive
+is closed before the batch" is the cleanup lock's raise, 409 as today.
 
 ## 3. The flows
 
@@ -654,7 +675,10 @@ answer for a body that is not an object.
 ## 5. The answers
 
 The fixed answers live next to `agreementJson` and `agreementText` in `src/lib/agreement-access.ts`, and each route
-passes `{ route, answer }` to `runRoute`, so a defect is logged once and answered with the route's fixed 500.
+passes `{ route, answer }` to `runRoute`, so a defect is logged once and answered with the route's fixed 500. `route`
+is the label the route logs under today where it logs ("Agreement review", review.ts:113; "Owner agreements",
+owner/agreements.ts:255), so the console lines stay byte for byte; the routes that log nothing today take the label
+their fix PR gives them, and the conversion keeps it.
 
 | Route | Missing binding | A store failure or a defect |
 |---|---|---|
@@ -680,9 +704,9 @@ its own and explains each one. Counts are golden cases, from the fixtures at `98
 |---|---|---|---|
 | B1 | A store failure answers as a refusal | `offer-link`: "the signing switch lookup fails", "the offer lookup fails", "the ip allowance batch fails", "the email allowance batch fails", "the link batch fails", "the name lookup fails after the link is stored", "the used_at update after a sent email fails", "the clean-up batch after a refused email fails", "the session lookup for the message fails", each (json) and (form). `offer-link` and `agreements-link`: "the consume batch fails" (json, form). `offer-draft`: "the draft batch fails" (three formats). `offer-sign`: "outage: the first read of the agreements", "... the saved receipt lookup", "... the draft lookup", "... the signing batch", "... the signing batch, then the same request again", "form: outage: the signing batch". `owner-request-agreement-countersign` 5, `-abandon` 6, `-end` 6, `-hold` 4, `-record-copy` 4, `-retry-artifact` 10, `-retry-copy` 14 (every "outage:" case that answers 409, and retry-copy's "R2 get fails"). `owner-agreement-attachments-put`: "the bucket put fails", "the batch fails and the object is deleted", "the batch fails and the check fails too, so the object is kept", "the batch fails and the bucket delete fails" | 84 |
 | B2 | A store failure throws: a bare 500 | `offer-draft`: "the offer lookup fails", "the session lookup fails", "the live check of the session fails", "the signing switch lookup fails" (three formats each). `offer-review`: the same three of POST (three formats each), and GET's "the agreements lookup fails", "the session lookup fails", "the signing lookup fails". `offer-sign`: "outage: the offer lookup", "... the session lookup", "... the live offer check of the session", "... the signing setting", "form: outage: the offer lookup". The seven action corpora: "outage: the offer lookup"; abandon "outage: the first deposit check and the recheck after it"; end "outage: the batch of an MSA, and the recheck". `owner-agreement-attachments-get`: "the bucket read fails", "the database query fails". `-put`: "the signing setting cannot be read". `owner-agreement-file`: "the agreement query fails", "the artifact query fails", "the bucket read fails" | 44 |
-| B3 | A missing id answers 503; a missing binding answers 404, throws or answers 409 | `owner-request-agreement-wire`: "no id parameter", "an empty id parameter" (503 to 404 `{ok:false}`). `owner-agreement-attachments-put`: "no id param" (503 to 404 `{ok:false}`). `-get`: "no database is bound" (404 to 503 "Unavailable"), "no bucket is bound" (thrown, to 503). `owner-request-agreement-retry-artifact`: "no storage bucket" (409 to 503 `{ok:false}`) | 6 |
+| B3 | A missing id answers 503; a missing binding answers 404, throws or answers 409 | `owner-request-agreement-wire`: "no id parameter", "an empty id parameter" (both send a countersign: 503 to 409 "Signing is off or the offer changed.", what an unknown id gets). `owner-agreement-attachments-put`: "no id param" (503 to 404 `{ok:false}`, what an unknown request gets after B4: the object is put, then deleted). `-get`: "no database is bound" (404 to 503 "Unavailable"), "no bucket is bound" (thrown, to 503). `owner-request-agreement-retry-artifact`: "no storage bucket" (409 to 503 `{ok:false}`) | 6 |
 | B4 | An upload refusal answers 503 | `owner-agreement-attachments-put`: "an unknown request", "a service request", "an id that looks like SQL" (to 404 `{ok:false}`); "a withdrawn software request", "a resolved software request", "the request is withdrawn just before the batch", "an attachment then the request is withdrawn then another upload" (to 409, today's sentence); "only the five-byte PDF header", "a PDF header over garbage" (to 400, today's sentence) | 9 |
-| B5 | Bad input or bad stored data throws or answers 503 | `offer-draft`: "a JSON null body (the handler throws today)" (to 403 "Reload and try again.", what the review answers for the same body). `offer-link`: "an offer whose terms are not JSON stores the link and fails before the email" (json, form; 503 to 500) | 3 |
+| B5 | Bad input or bad stored data throws or answers 503 | `offer-draft`: "a JSON null body (the handler throws today)" (to 403 "Reload and try again.", what the review answers for the same body). `offer-link`: "an offer whose terms are not JSON stores the link and fails before the email" (json, form; 503 to 500). Once PR 2 records them, both verify pages' "a POST whose body is not a form" (a bare 500 to 401 with the expired page, what a POST with no key gets) | 5 |
 | B6 | After the signatures commit, a failed read answers 409 "The reviewed agreement changed" | `offer-sign`: "outage: the second read of the agreements, after the signatures committed" (Q3) | 1 |
 | B7 | A decision that SQL makes today, moved into a rule, answers otherwise | `offer-review`: "the same legal party is created by another tab before the review batch" (to 200, with the other tab's client), "another offer's MSA for the party appears before the review batch" and "another offer's MSA for the same party is inserted after the pending check" (to 409 "Another offer has a pending MSA for this party. Ask Kazon to resolve it."), three formats each. `offer-link`: the six "... between the lookup and the batch" races and "signing already started: a project exists", each (json) and (form) (Q1) | 23 |
 | B8 | The owner's downloads answer a missing object of a ready copy 503 | `owner-agreement-file`: "the stored object is missing" (to 500 "Signed copy unavailable. Contact Kazon.", logged). `owner-agreement-attachments-get`: "the stored object is missing" (to 500 "Unavailable", logged) | 2 |
@@ -693,11 +717,14 @@ decision) and cannot reject (`runRoute` with a `DefectAnswer`, `src/server/run.t
 batch answers 429 only when a guard raised (fix 6). The verify pages render Q2's page with status 500; on a form post,
 `nativeAgreementRoute` turns each JSON 500 into its HTML page as it does every failure (agreement-request.ts:129-167).
 
-**B3.** A missing or empty `id` answers what an id that matches no request answers (offers F6), at today's point,
-before the body. A missing binding answers 503 before any read, as the visitor's attachment route does since agreement
-access fix 4. retry-artifact's missing bucket is a known unavailable dependency (today `prepareAgreementArtifact`
-throws "Storage unavailable.", artifacts.ts:160); countersign's and retry-copy's keep their 200, since their packet
-and copies are best effort after the commit.
+**B3.** A missing or empty `id` is treated as an id that matches no request, at the point today's code answers an
+unknown id, after the body and the command are read, as offers F6 decided. On the owner request route that answer
+depends on the action: countersign's 409 "Signing is off or the offer changed." (agreement.ts:69-73), abandon's 409
+`{ok:false}` (120), the other actions' 404 `{ok:false}` (209). On the upload it is the unknown request's answer after
+B4, after the PDF checks and the R2 put. A missing binding answers 503 before any read, as the visitor's attachment
+route does since agreement access fix 4. retry-artifact's missing bucket is a known unavailable dependency (today
+`prepareAgreementArtifact` throws "Storage unavailable.", artifacts.ts:160); countersign's and retry-copy's keep their
+200, since their packet and copies are best effort after the commit.
 
 **B4.** An unknown or service request and a closed request are refusals, not an unavailable dependency. They keep
 today's R2 effects: the object is put first, the request is read just before the batch, and a refused upload deletes
@@ -728,6 +755,15 @@ sentence after objects were deleted, the owner re-runs it.
 116-118, and `prepareAgreementArtifact`'s own, artifacts.ts:327-345) also swallow a programming error. The converted
 steps ignore or log only named failures, so a bug there becomes a defect and the route's fixed 500. No golden case
 reaches one: each recorded failure there is a store, R2, mail or renderer failure, and each is named.
+
+**Retention's catches.** Retention has three more, each kept by name in `agreement-retention.ts`. A cursor marker
+whose body cannot be read or parsed (retention.ts:174-188 in the preview, 576-585 in the apply) is `MarkerUnreadable`,
+ignored, so the scan restarts as today (golden "an unreadable marker restarts the scan"); the marker's other checks
+(version, length, type) stay the rule's. A failed bucket list with a saved cursor, outside a reviewed scan, is retried
+once from the first page by catching `BucketListFailed` only (192-209), and a second failure is the route's 500
+("a saved cursor and a failing bucket list retries and fails again"). A failed object delete puts the attachment row
+back with today's `INSERT OR IGNORE` and then fails with the same `BucketDeleteFailed` (513-531), the route's 500 with
+its sentence.
 
 ## 6. What depends on what
 
@@ -760,9 +796,11 @@ Discount PR 4 (`docs/plans/2026-11-discount-flow.md`, section 7) waits for this 
 send refusal while the current SOW template has no `{{sow.discount}}`. Both stay in pure code this design keeps in
 `src/lib`: the review flow calls `agreementValues` and `renderAgreement` unchanged and the packet's preflight renders
 through the same functions, so PR 4 changes neither flow. The send check belongs to the offers area's send:
-`pinAgreement` already reads the current SOW template (`readCurrentTemplate`, `src/server/offers-store.ts:806`), and
-PR 4 adds the refusal to `src/server/rules/offer-pin.ts`, decided from that template's text and the terms. The golden
-`offer-review` corpus pins today's texts and hashes; discount PR 3 adds its anchor test (discount plan, section 5.3).
+`pinAgreement` already reads the current SOW template (`readCurrentTemplate`, `src/server/offers-store.ts:806`),
+and PR 4 adds the refusal to `src/server/rules/offer-pin.ts`, decided from that template's text and the terms.
+`pinAgreement` runs only for a send with signing on (offer-send.ts:245-248); J2 says why that is the condition the
+refusal needs. The golden `offer-review` corpus pins today's texts and hashes; discount PR 3 adds its anchor test
+(discount plan, section 5.3).
 
 ## 7. Verification
 
@@ -792,6 +830,12 @@ New properties, each with a mutant kept in the model that must fail in CI:
 | `executedOnlyWhenSigned` | countersign executes only a `client_signed` agreement of the sent offer, with the request open and signing on | `countersign-no-guards`: the countersign batch without A10 and A11 |
 | `abandonedHasNoDeposit` | an abandoned signing's version has no open or paid first deposit | `abandon-deposit-at-read`: the deposits judged at the read only, so a deposit reserved and written between the read and the batch survives |
 
+`redeem-no-live-guard` can be caught only through the signing switch: every other way an offer stops being signable
+(a send, reissue, revoke, decline or abandon, a request closed, a project started) also marks its links used
+(software-agreements.ts:72-75, through `retireRequestSigning` in owner-requests.ts:302 and project.ts:272), so A5
+refuses the redeem without A1. The model therefore lets signing be switched off between a link's issue and its redeem;
+if a run shows the mutant cannot break the property, it is listed as equivalent with that reason.
+
 The seven existing properties must still hold over the split steps. A mutant that turns out equivalent (one of today's
 other guards already stops what it removes) is listed with the equivalents in `scripts/lib/quint-mutants.mjs`, with its
 reason, as `discountSecondBatchNoSendingGuard` is. The extension makes runs longer: the model PR measures the random
@@ -804,11 +848,14 @@ modelled guard is in today's batches.
 that decides in SQL today (agreement.ts:212-231), into a read, a rule and a compare-and-set, the shape the audio area
 modelled for its notices. That model takes the kind as a parameter; this adds `copy` (claim while executed and the
 archive open, A18) and `signing` (claim while `client_signed`, the archive open and no project, A19, plus OBSOLETE from
-sending, A21). The existing `oneEmailInTotal` and `sentMeansMailed` must hold for both kinds, `failedMeansNotMailed`
-for copies (a signing notice made obsolete while its email was in flight ends `failed` today, by design,
-software-agreements.ts:615), and two new properties: `copyOnlyWhenExecuted` (mutant `CopyClaimNoState`) and
-`noticeOnlyBeforeCountersign` (mutant `NoticeClaimNoState`). Resend's idempotency key (artifacts.ts:405, 495) is a
-second protection outside the model.
+sending, A21). Their reset is A20, not the audio queue: the audio `queueRead` moves a `pending` notice too
+(audio-project-notices.qnt:171), which A20 never matches (agreement.ts:214, 224), the same difference that gives this
+area its own machine (section 1). So the reset's condition becomes per kind in the model: today's for the audio kinds,
+A20's (failed, or sending, confirmed not sent and at least a minute old) for the two new ones. The existing
+`oneEmailInTotal` and `sentMeansMailed` must hold for both kinds, `failedMeansNotMailed` for copies (a signing notice
+made obsolete while its email was in flight ends `failed` today, by design, software-agreements.ts:615), and two new
+properties: `copyOnlyWhenExecuted` (mutant `CopyClaimNoState`) and `noticeOnlyBeforeCountersign` (mutant
+`NoticeClaimNoState`). Resend's idempotency key (artifacts.ts:405, 495) is a second protection outside the model.
 
 **`verification/agreement-link.qnt`, unchanged.** The signing link's batch is the archive link's link batch without the
 cooldown, with A1 added: the 30-second guard, its retry keeping the first `at`, and the redeem's read and guarded batch
@@ -818,11 +865,15 @@ offer's state in `discount-offers.qnt` (`noSessionForDeadOffer`).
 ### LemmaScript
 
 One money rule: whether a first deposit stops an abandon. `abandonBlocked` goes into `src/lib/software-deposit-block.ts`
-(already in `LemmaScript-files.txt`), with the contract: it blocks if and only if some invoice of the offer counts as a
-first deposit (`countsAsFirstDeposit`) and may still be charged or is paid; that is the send mode's block over this
-offer's invoices only. `tests/lib/software-deposit-block.test.ts` runs A12's SQL (agreement.ts:34-35) on sqlite against
-it for every status, kind, milestone and refund. It lands in the conversion's bottom PR, with the rules. The SOW's
-printed amounts are formatting, held by the review corpus and the discount plan's contracts.
+(already in `LemmaScript-files.txt`), with the contract: it blocks if and only if some invoice of the offer is the first
+milestone's deposit (milestone 0, kind `deposit`) and either may still be charged (`mayStillBeCharged`: creating, open,
+payment_failed or uncollectible), refunded or not, or is paid and not refunded. That is A12 as written (agreement.ts:
+34-35), which looks at `refunded_at` only for a paid invoice; it differs from the send mode's block, whose
+`countsAsFirstDeposit` leaves out every refunded invoice (software-deposit-block.ts:35-42), for an unpaid invoice with a
+refund recorded. The conversion keeps A12's meaning; aligning the two would be a behaviour fix of its own.
+`tests/lib/software-deposit-block.test.ts` runs A12's SQL (agreement.ts:34-35) on sqlite against it for every status,
+kind, milestone and refund. It lands in the conversion's bottom PR, with the rules. The SOW's printed amounts are
+formatting, held by the review corpus and the discount plan's contracts.
 
 ### The golden corpora
 
@@ -830,10 +881,10 @@ To record first, on today's code, before any fix: `offer-verify-page` and `agree
 a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, with the case's request,
 params and locals, so a step's answer is the page's own status, headers, cookies and HTML. Cases for each page: GET and
 POST with a good key, a key of the wrong shape, an unknown, used, expired or other purpose's key, another offer's token
-(the signing page), another host, no D1, another method, a POST twice, a POST after the offer is resent, revoked or
-withdrawn, after signing is switched off and after a project starts (the signing page), an outage on the link read, on
-the GET's live check and on the POST's batch, and on the signing page an outage on the offer read and terms that are not
-JSON.
+(the signing page), another host, no D1, another method, a POST twice, a POST whose body is not a form, a POST after the
+offer is resent, revoked or withdrawn, after signing is switched off and after a project starts (the signing page), an
+outage on the link read, on the GET's live check and on the POST's batch, and on the signing page an outage on the offer
+read and terms that are not JSON.
 
 To hold NEUTRAL under `pnpm run golden:neutral --all <base> <head>` on the conversion's bottom PR: this area's corpora
 (`offer-link`, `offer-draft`, `offer-review`, `offer-sign`, the two verify pages, `agreements-link` for the redeem, the
@@ -890,7 +941,7 @@ fixtures hold the 500 that `f78896099` brought: `tests/golden/owner-agreements-a
 
 ## Open questions from reading the code
 
-None beyond Q1 to Q3 that need the owner. Notes for review:
+None beyond Q1 to Q3, J1 and J2. Notes for review:
 
 - Countersign answers "Signed by both parties. Copy preparation needs attention." whether or not the packet and copies
   went out (agreement.ts:109-116). Kept.
