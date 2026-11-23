@@ -31,11 +31,13 @@ import {
 // The golden corpus for the archive link's page, src/pages/agreements/verify.astro: the page the emailed link to a
 // client's signed agreements opens. A GET shows "Your documents are ready." with a Continue form; the form's POST
 // consumes the link, makes a two-hour archive session and redirects to /agreements with the agreement_archive cookie.
-// The page is rendered by Astro's container (tests/golden/harness/page.ts), so each step records the page's own status,
-// headers, cookies and HTML. A case issues the link through POST /api/agreements/link first, as a client does (the seed
-// holds an executed agreement for the email, so the link is mailed), then follows it through the page. Recorded on
-// today's code, before the behaviour fixes and the conversion that docs/plans/2026-11-signing-conversion.md plans (B1,
-// B2 and B5 change some of these cases; that PR lists them).
+// The page is rendered by Astro's container (tests/golden/harness/page.ts), streamed and compact as production renders
+// it, so each step records the page's own status, headers, cookies and HTML. A case issues the link through POST
+// /api/agreements/link first, as a client does (the seed holds an executed agreement for the email, so the link is
+// mailed), then follows it through the page. Recorded on today's code, before the behaviour fixes and the conversion
+// that docs/plans/2026-11-signing-conversion.md plans (B1, B2 and B5 change some of these cases; that PR lists them).
+// The container runs no middleware, as no corpus does (tests/golden/README.md); the cases it would answer first are
+// marked where they are listed.
 //
 // Every response branch of the page and of what it calls (completeAgreementLink in src/lib/agreement-access.ts, with no
 // token, so purpose "archive", and canonicalAgreementRequest in src/lib/agreement-host.ts), and the cases that reach
@@ -67,10 +69,14 @@ import {
 //   the page throws: rejected         the link read fails: "outage: the link read on a GET: the page throws", "outage:
 //                                     the link read on a POST: the page throws"
 //   200, "Your documents are ready."  "a GET with a good key shows the documents are ready", "a GET, then the page's
-// Continue form posts the key", "a GET leaves the link unused, so a second GET still shows it ready", the GET after
-// each of the two batch outages (the link left unused)
+//                                     Continue form posts the key", "a GET leaves the link unused, so a second GET
+//                                     still shows it ready", the GET after each of the two batch outages (the link
+//                                     left unused)
 //   401, the expired page             a method other than GET or POST, after the link read: "a PUT with a good key in
-//                                     the query", "a HEAD with a good key"
+//                                     the query" (the page alone: in production the middleware answers a PUT with no
+//                                     Origin and no content type 403 before the page runs, src/middleware.ts:124-144),
+//                                     "a HEAD with a good key" (its recorded body is one production never sends: an
+//                                     answer to a HEAD carries no body)
 //   401, the expired page             POST: the batch refuses (A5) or fails: "another tab consumes the link between the
 //                                     POST's read and its batch", "outage: the POST's batch (the session insert): the
 //                                     expired page, the link left unused", "outage: the POST's batch (the event insert)
@@ -88,8 +94,8 @@ import {
 //                                     POST of "a newer link makes the older one useless"
 //
 // The ready and expired pages keep completeAgreementLink's status and add `Referrer-Policy: no-referrer` and
-// `Cache-Control: no-store`; the expired page's "Send a new link" goes to /agreements. The 303 is
-// completeAgreementLink's own Response, answered as it is.
+// `Cache-Control: no-store` (streamed, they carry no Content-Length); the expired page's "Send a new link" goes to
+// /agreements. The 303 is completeAgreementLink's own Response, answered as it is.
 
 const pages = await astroPages({
 	verify: "src/pages/agreements/verify.astro",
@@ -314,10 +320,13 @@ const cases: Case[] = [
 		music: { missing: true },
 	}),
 	// methods and bodies
+	// The page alone: in production the middleware answers a PUT with no Origin and no content type 403 before the page
+	// runs (src/middleware.ts:124-144), and no corpus runs middleware.
 	scene("a PUT with a good key in the query", [
 		issue(),
 		open({}, { method: "PUT" }),
 	]),
+	// The recorded body is one production never sends: an answer to a HEAD carries no body.
 	scene("a HEAD with a good key", [issue(), open({}, { method: "HEAD" })]),
 	scene("a POST whose body is JSON, not a form: the page throws", [
 		issue(),

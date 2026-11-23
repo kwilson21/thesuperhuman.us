@@ -8,12 +8,24 @@ import { build } from "esbuild";
 /** A component the container can render. */
 export type AstroComponent = Parameters<AstroContainer["renderToString"]>[0];
 
+/** How the compiler is asked to compile. */
+export type BundleOptions = {
+	/**
+	 * Collapse the whitespace between elements, as Astro does when `compressHTML` is on (its default, and this site's:
+	 * astro.config.mjs does not set it). Off unless asked, so a caller sees the markup as written.
+	 */
+	readonly compact?: boolean;
+};
+
 /**
  * Compiles .astro components (and what they import from src) into a scratch bundle the container can render, as
  * tests/pages/og-tags.test.ts does: styles become empty modules, `~/` resolves into src, and packages stay external.
  * Returns each entry's default export by name, and a function that removes the bundle.
  */
-export async function bundleAstro(entries: Record<string, string>) {
+export async function bundleAstro(
+	entries: Record<string, string>,
+	options: BundleOptions = {},
+) {
 	// Under node_modules/.cache, so bare imports still resolve from node_modules and the tree walkers never see it.
 	await mkdir(resolve("node_modules/.cache"), { recursive: true });
 	const directory = await mkdtemp(resolve("node_modules/.cache/astro-render-"));
@@ -51,6 +63,7 @@ export async function bundleAstro(entries: Record<string, string>) {
 							contents: (
 								await transform(await readFile(args.path, "utf8"), {
 									filename: args.path,
+									compact: options.compact ?? false,
 									internalURL: "astro/compiler-runtime",
 									astroGlobalArgs: '"https://thesuperhuman.us"',
 									resolvePath: (specifier) => specifier,

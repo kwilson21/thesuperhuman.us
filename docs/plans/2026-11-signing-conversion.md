@@ -181,7 +181,8 @@ its `outcome` from `JSON.parse(terms_json)` (offer verify.astro:31-36, 40).
 | POST: the batch (A1 for a signing link, A5; or any failure) | 401 | 387-428 |
 | POST | 303 to `/offer/<token>/sign` or `/agreements`, with the two-hour session cookie | 383-385, 430-441 |
 | A POST whose body is not a form (`formData()` throws) | the page throws, a bare 500 | both verify.astro:9 |
-| The link read fails; on the offer page, the offer read fails or its terms are not JSON | the page throws, a bare 500 | 349-359; offer verify.astro:31-36, 40 |
+| The link read fails; on the offer page, the offer read fails | the page throws, a bare 500 | 349-359; offer verify.astro:31-36 |
+| On the offer page, terms that are not JSON (parsed in the layout's slot, after the status and headers are set) | 200 with the page's headers, the body failing before its first byte (production streams, and the renderer still holds the page's bytes when the slot throws) | offer verify.astro:40 |
 
 No golden corpus records the pages. `offer-link` and `agreements-link` call `completeAgreementLink` directly as steps
 that follow the emailed link (`tests/golden/areas/agreement-access.ts:350-378`), so the function's answers are recorded
@@ -911,8 +912,9 @@ formatting, held by the review corpus and the discount plan's contracts.
 ### The golden corpora
 
 To record first, on today's code, before any fix: `offer-verify-page` and `agreements-verify-page`. The harness renders
-a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, with the case's request,
-params and locals, so a step's answer is the page's own status, headers, cookies and HTML. Cases for each page: GET and
+a page with `experimental_AstroContainer`, built as `tests/helpers/render-astro.ts` builds one, streamed and compact as
+production renders it, with the case's request, params and locals, so a step's answer is the page's own status, headers,
+cookies and HTML. Cases for each page: GET and
 POST with a good key, a key of the wrong shape, an unknown, used, expired or other purpose's key, another offer's token
 (the signing page), another host, no D1, another method, a POST twice, a POST whose body is not a form, a POST after the
 offer is resent, revoked or withdrawn, after signing is switched off and after a project starts (the signing page), an
@@ -983,6 +985,9 @@ None beyond Q1 to Q3, J1 and J2. Notes for review:
 - Hold and record-copy do not look at the agreement's status, so a review document can be put on hold. Kept; the
   machine allows both moves from every state.
 - The offer verify page reads `outcome` from `JSON.parse(terms_json)` without the terms reader (verify.astro:40). The
-  converted page keeps that reading; `parseOfferTerms` would refuse terms the page shows today.
+  converted page keeps that reading; `parseOfferTerms` would refuse terms the page shows today. The parse runs in the
+  layout's slot, after the status and headers are set, so terms that are not JSON answer 200 with a body that fails
+  before its first byte (golden `offer-verify-page`, "terms that are not JSON: a 200 whose body fails before its first
+  byte"), not a bare 500. No fix in this plan changes it; changing it would be a behaviour fix of its own.
 - `agreement-link.qnt`'s finding `issuedStillExecuted` has a signing twin: a link can be issued for an offer that stops
   being signable after the batch. It is harmless for the same reason (the redeem's A1 refuses it).

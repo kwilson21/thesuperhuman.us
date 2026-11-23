@@ -2,14 +2,22 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asVisitor, runCase, START, uuidFor, type Case } from "./index";
-import { astroPages, type AstroPages } from "./page";
+import { astroPages, streamBroke, type AstroPages } from "./page";
 
 // The checks on the page handler (page.ts): a compiled .astro page answers a step with its own status, headers, cookies
-// and HTML; what it does through locals.runtime.env is recorded like a route's; the frozen clock and seeded ids reach
-// the bundled copy; and a page that throws is recorded as `rejected`, never as a 500 the container made up.
+// and HTML, rendered streamed and compact as production renders it; what it does through locals.runtime.env is
+// recorded like a route's; the frozen clock and seeded ids reach the bundled copy; a page that throws in its
+// frontmatter is recorded as `rejected`, never as a 500 the container made up; and a page whose body stream fails after
+// its status and headers keeps them, with the bytes it sent and the harness's marker.
 
-/** A page that does what the verify pages do: read the env, set its status and headers, return a Response, or throw. */
+/**
+ * A page that does what the verify pages do: read the env, set its status, headers and a cookie, return a Response, or
+ * throw in its frontmatter. Its layout renders the slot after the status and headers are sent, so a throw there
+ * (`template`, at once; `late`, after a read of the database) fails the body stream instead.
+ */
 const SOURCE = `---
+import Layout from "./Layout.astro";
+
 const mode = Astro.url.searchParams.get("mode");
 
 if (mode === "throw") throw new Error("the page threw");
@@ -20,18 +28,38 @@ if (mode === "redirect")
 		headers: { location: "/next", "set-cookie": "golden=1; Path=/; HttpOnly" },
 	});
 
-const row = await Astro.locals.runtime.env.MUSIC_DB.prepare(
-	"SELECT COUNT(*) AS n FROM owner_requests",
-).first();
+const db = Astro.locals.runtime.env.MUSIC_DB;
+const row = await db.prepare("SELECT COUNT(*) AS n FROM owner_requests").first();
 
 Astro.response.status = 418;
 Astro.response.headers.set("X-Page", "golden");
+Astro.cookies.set("visited", "yes", { path: "/", httpOnly: true });
 
 const at = new Date().toISOString();
 const id = crypto.randomUUID();
+const late = () => db.prepare("SELECT 1 AS n").first().then(() => JSON.parse("not json"));
 ---
-<p id="count">{row.n}</p><p id="param">{Astro.params.name}</p><p id="at">{at}</p><p id="id">{id}</p>
+<Layout>
+	<p id="count">{row.n}</p>
+	<p id="param">{Astro.params.name}</p>
+	<p id="at">{at}</p>
+	<p id="id">{id}</p>
+	<p id="late">{mode === "template" ? JSON.parse("not json") : mode === "late" ? late() : "rendered"}</p>
+</Layout>
 `;
+
+/** The layout: the head and the opening of the body come before the slot. */
+const LAYOUT = `<html lang="en">
+	<head><title>Golden</title></head>
+	<body><main><slot /></main></body>
+</html>
+`;
+
+/** What the page answers in full, compact (the whitespace between elements collapsed to one space). */
+const WHOLE = `<!DOCTYPE html><html lang="en"> <head><title>Golden</title></head> <body><main> <p id="count">0</p> <p id="param">golden-param</p> <p id="at">${START}</p> <p id="id">${uuidFor(1)}</p> <p id="late">rendered</p> </main></body></html>`;
+
+/** The page's headers: no Content-Length, as a streamed page has none, and no X-Astro-Noop. */
+const HEADERS = { "content-type": "text/html", "x-page": "golden" };
 
 let directory = "";
 let pages: AstroPages<"page"> | undefined;
@@ -41,6 +69,7 @@ beforeAll(async () => {
 	await mkdir(resolve("node_modules/.cache"), { recursive: true });
 	directory = await mkdtemp(resolve("node_modules/.cache/golden-page-"));
 	await writeFile(resolve(directory, "page.astro"), SOURCE);
+	await writeFile(resolve(directory, "Layout.astro"), LAYOUT);
 	pages = await astroPages({ page: resolve(directory, "page.astro") });
 });
 
@@ -69,34 +98,16 @@ const record = (mode = "") => {
 };
 
 describe("a page as a corpus handler", () => {
-	it("answers with the page's own status, headers and whole HTML, with the params it was given", async () => {
+	it("answers with the page's own status, headers, cookies and whole HTML, streamed and compact, with its params, the frozen clock and the seeded ids", async () => {
 		const [step] = (await record()).steps;
 
 		expect(step.answer).toStrictEqual({
 			outcome: "response",
 			status: 418,
-			headers: {
-				"content-length": expect.any(String),
-				"content-type": "text/html",
-				"x-page": "golden",
-			},
-			setCookies: [],
-			body: expect.stringMatching(/^<!DOCTYPE html>/),
+			headers: HEADERS,
+			setCookies: ["visited=yes; Path=/; HttpOnly"],
+			body: WHOLE,
 		});
-
-		if (step.answer.outcome === "response")
-			expect(step.answer.body).toContain(
-				'<p id="count">0</p><p id="param">golden-param</p>',
-			);
-	});
-
-	it("does not record the stand-in middleware's marker", async () => {
-		const [step] = (await record()).steps;
-
-		expect(step.answer.outcome).toBe("response");
-
-		if (step.answer.outcome === "response")
-			expect(Object.keys(step.answer.headers)).not.toContain("x-astro-noop");
 	});
 
 	it("records what the page does through locals.runtime.env, waited for by the answer", async () => {
@@ -114,17 +125,6 @@ describe("a page as a corpus handler", () => {
 		);
 	});
 
-	it("gives the bundled page the frozen clock and the seeded ids", async () => {
-		const [step] = (await record()).steps;
-
-		expect(step.answer.outcome).toBe("response");
-
-		if (step.answer.outcome === "response") {
-			expect(step.answer.body).toContain(`<p id="at">${START}</p>`);
-			expect(step.answer.body).toContain(`<p id="id">${uuidFor(1)}</p>`);
-		}
-	});
-
 	it("answers a Response the page returns as it is, with its cookies", async () => {
 		const [step] = (await record("redirect")).steps;
 
@@ -137,16 +137,51 @@ describe("a page as a corpus handler", () => {
 		});
 	});
 
-	it("records a page that throws as rejected, not as a 500", async () => {
+	it("records a page that throws in its frontmatter as rejected, not as a 500", async () => {
 		const { steps } = await record("throw");
 
 		expect(steps[0].answer).toStrictEqual({ outcome: "rejected" });
 	});
 
-	it("records identical answers and effects on two runs", async () => {
-		const first = await record();
-		const second = await record();
+	it("keeps the status, headers and cookies of a page whose slot throws, and ends its body with the marker", async () => {
+		const [step] = (await record("template")).steps;
 
-		expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+		// The slot throws while the renderer still holds the page's first bytes, so none of them reach the body.
+		expect(step.answer).toStrictEqual({
+			outcome: "response",
+			status: 418,
+			headers: HEADERS,
+			setCookies: ["visited=yes; Path=/; HttpOnly"],
+			body: streamBroke("SyntaxError"),
+		});
+	});
+
+	it("records the bytes a page sent before its body stream failed, then the marker", async () => {
+		const { steps, effects } = await record("late");
+
+		// The renderer hands over what it has while the slot waits for the database; then the slot throws.
+		expect(steps[0].answer).toStrictEqual({
+			outcome: "response",
+			status: 418,
+			headers: HEADERS,
+			setCookies: ["visited=yes; Path=/; HttpOnly"],
+			body: `${WHOLE.slice(0, WHOLE.indexOf('<p id="late">') + '<p id="late">'.length)}${streamBroke("SyntaxError")}`,
+		});
+		expect(effects).toContainEqual(
+			expect.objectContaining({
+				kind: "d1",
+				sql: "SELECT 1 AS n",
+				phase: "request",
+			}),
+		);
+	});
+
+	it("records identical answers and effects on two runs", async () => {
+		for (const mode of ["", "template", "late"]) {
+			const first = await record(mode);
+			const second = await record(mode);
+
+			expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+		}
 	});
 });

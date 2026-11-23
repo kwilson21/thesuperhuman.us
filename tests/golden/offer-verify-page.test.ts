@@ -38,10 +38,12 @@ import {
 // The golden corpus for the signing link's page, src/pages/offer/[token]/verify.astro: the page the emailed link opens.
 // A GET shows "Your agreement is ready." with the offer's outcome and a Continue form; the form's POST consumes the
 // link, makes a two-hour signing session and redirects to /offer/<token>/sign with the agreement_session cookie. The
-// page is rendered by Astro's container (tests/golden/harness/page.ts), so each step records the page's own status,
-// headers, cookies and HTML. A case issues the link through POST /api/offer/[token]/link first, as a client does, then
-// follows it through the page. Recorded on today's code, before the behaviour fixes and the conversion that
-// docs/plans/2026-11-signing-conversion.md plans (B1, B2 and B5 change some of these cases; that PR lists them).
+// page is rendered by Astro's container (tests/golden/harness/page.ts), streamed and compact as production renders it,
+// so each step records the page's own status, headers, cookies and HTML. A case issues the link through POST
+// /api/offer/[token]/link first, as a client does, then follows it through the page. Recorded on today's code, before
+// the behaviour fixes and the conversion that docs/plans/2026-11-signing-conversion.md plans (B1, B2 and B5 change some
+// of these cases; that PR lists them). The container runs no middleware, as no corpus does (tests/golden/README.md);
+// the cases it would answer first are marked where they are listed.
 //
 // Every response branch of the page and of what it calls (completeAgreementLink and liveSigningGuard in
 // src/lib/agreement-access.ts, canonicalAgreementRequest in src/lib/agreement-host.ts, getLinkedOffer in
@@ -89,10 +91,18 @@ import {
 //     the offer read (getLinkedOffer) finds nothing: an empty kicker
 //                                     "the request's email is emptied after the link is sent: the page shows no
 //                                     outcome"
-//     the page throws: rejected       the offer read fails or the terms are not JSON: "outage: the offer read on a GET:
-//                                     the page throws", "terms that are not JSON: the page throws"
+//     the page throws: rejected       the offer read fails (in the frontmatter, before the answer exists): "outage: the
+//                                     offer read on a GET: the page throws"
+//     200, the body fails at once     the terms are not JSON: the layout's slot reads the outcome after the status and
+//                                     headers exist, and throws while the renderer still holds the page's bytes, so the
+//                                     answer is the ready page's status and headers with a body that fails before its
+//                                     first byte (production streams; the harness ends the recorded body with its
+//                                     marker): "terms that are not JSON: a 200 whose body fails before its first byte"
 //   401, the expired page             a method other than GET or POST, after the link read: "a PUT with a good key in
-//                                     the query", "a HEAD with a good key"
+//                                     the query" (the page alone: in production the middleware answers a PUT with no
+//                                     Origin and no content type 403 before the page runs, src/middleware.ts:124-144),
+//                                     "a HEAD with a good key" (its recorded body is one production never sends: an
+//                                     answer to a HEAD carries no body)
 //   401, the expired page             POST: the batch refuses (A1, A5) or fails: the POST of each "... the emailed link
 //                                     left unused" case, "signing switched off ...", "a project started ...", "another
 //                                     tab consumes the link between the POST's read and its batch", "the offer is
@@ -112,9 +122,9 @@ import {
 //                                     newer link makes the older one useless"
 //
 // The ready and expired pages keep completeAgreementLink's status and add `Referrer-Policy: no-referrer` and
-// `Cache-Control: no-store`; the expired page's "Send a new link" goes to /offer/<token>/sign with the URL's token, as
-// written ("a token of the wrong shape with a good key"). The 303 is completeAgreementLink's own Response, answered as
-// it is.
+// `Cache-Control: no-store` (streamed, they carry no Content-Length); the expired page's "Send a new link" goes to
+// /offer/<token>/sign with the URL's token, as written ("a token of the wrong shape with a good key"). The 303 is
+// completeAgreementLink's own Response, answered as it is.
 
 const pages = await astroPages({
 	verify: "src/pages/offer/[token]/verify.astro",
@@ -329,16 +339,23 @@ const cases: Case[] = [
 			),
 		],
 	),
-	scene("terms that are not JSON: the page throws", [
-		issue(),
-		openPage(
-			{},
-			before(
-				"the offer's terms are not JSON",
-				sql("UPDATE software_offers SET terms_json='not json' WHERE id='o-r1'"),
+	// The slot throws after the status and headers are sent, so production answers 200 and the body fails; it is not
+	// the bare 500 of a throw in the frontmatter (tests/golden/harness/page.ts).
+	scene(
+		"terms that are not JSON: a 200 whose body fails before its first byte",
+		[
+			issue(),
+			openPage(
+				{},
+				before(
+					"the offer's terms are not JSON",
+					sql(
+						"UPDATE software_offers SET terms_json='not json' WHERE id='o-r1'",
+					),
+				),
 			),
-		),
-	]),
+		],
+	),
 	// the key's shape
 	scene("a GET with a key that is too short", [
 		issue(),
@@ -455,10 +472,13 @@ const cases: Case[] = [
 		music: { missing: true },
 	}),
 	// methods and bodies
+	// The page alone: in production the middleware answers a PUT with no Origin and no content type 403 before the page
+	// runs (src/middleware.ts:124-144), and no corpus runs middleware.
 	scene("a PUT with a good key in the query", [
 		issue(),
 		openPage({}, { method: "PUT" }),
 	]),
+	// The recorded body is one production never sends: an answer to a HEAD carries no body.
 	scene("a HEAD with a good key", [issue(), openPage({}, { method: "HEAD" })]),
 	scene("a POST whose body is JSON, not a form: the page throws", [
 		issue(),

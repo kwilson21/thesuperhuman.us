@@ -28,9 +28,23 @@ only.
   checks on; every declared failure and race fired. `pnpm run golden:neutral --all`: NEUTRAL, 82 fixtures and 9,370
   cases, only the two new fixtures added.
 - `pnpm test`, `pnpm run check`, `pnpm run lint` and `pnpm run format` clean before the PR opened.
-- Limits: the container runs no middleware (as no corpus does), so the case of a cross-site POST records the page alone;
-  in production the middleware answers it 403 first (`src/middleware.ts:139-144`). The container renders without
-  streaming.
+- Rendering: pages are rendered streamed and compact, as production renders them (`new App(manifest)` streams by
+  default; `compressHTML` is Astro's default and is not set in `astro.config.mjs`), so a streamed page has no
+  `Content-Length`. Production takes the same streaming path as the container in Node (Astro's async-iterable
+  renderer, chosen by `isNode`): `Object.prototype.toString.call(process)` is `[object process]` on workerd with
+  `nodejs_compat`, checked in miniflare 4.20260114.0 (workerd 1.20260114.0) at compatibility date 2026-01-14, the
+  latest that workerd accepts; the site's date, 2026-05-14, is later, and both are past 2025-09-15, the date from which
+  `@cloudflare/unenv-preset` leaves the global `process` to workerd. A throw in the frontmatter is recorded as `rejected` (a bare 500); a throw while
+  the template renders keeps the status and headers and ends the recorded body with the harness's marker. The one case
+  of that kind, "terms that are not JSON: a 200 whose body fails before its first byte", answers 200 with no byte of
+  body before the failure.
+- Cookies set with `Astro.cookies` are appended as `Set-Cookie` headers, as the adapter does; today's pages set none
+  that way.
+- Limits: the container runs no middleware (as no corpus does), so two cases record the page alone. In production the
+  middleware answers the cross-site POST 403 first (`src/middleware.ts:139-144`), and the PUT with no Origin and no
+  content type ("a PUT with a good key in the query") 403 first (`src/middleware.ts:124-144`). The HEAD case records a
+  body that production never sends (an answer to a HEAD has none). The page's own stylesheet links (`/_astro/*.css`)
+  are missing from the recorded HTML: the styles are stubbed when the page is compiled for the container.
 - Reviews and CI: UNVERIFIED until they report; recorded with the merge facts.
 
 ## 1 to 6. Content, search, accessibility, performance, forms, privacy
