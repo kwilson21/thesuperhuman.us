@@ -3,7 +3,7 @@
 Date: November 22, 2026
 Repository: `kwilson21/thesuperhuman.us`
 Branch: `claude/project-image-dimensions`
-Pull request: not opened when this record was first written
+Pull request: #375
 Target: production `https://thesuperhuman.us`
 Decisions and merge authorization: Kazon Wilson. Implementation was done with Claude Code; independent review passes are recorded under Reviews. Codex reviews on the pull request. This record does not certify the checks listed as UNVERIFIED.
 Rollback revision: not known until merge. It is the revision of `main` immediately before this pull request merges; when this record was written `main` was `98e9404a`. To undo only this change, revert the merge commit. Migration 0028 is additive and can stay applied after a revert: code from before this change does not name its columns.
@@ -42,7 +42,7 @@ Merging deploys. The new code names the two columns, so 0028 must be applied to 
 - Deploying the code before 0028 breaks the client project page, the owner update page and the owner request page for a software request with a project, and an image upload answers 409 "The draft changed. The visual was not replaced." without saving.
 - Applying 0028 before the deploy is safe: it only adds two nullable columns, and the code running before the deploy does not name them.
 - `pnpm exec wrangler d1 migrations list MUSIC_DB --remote` shows what is pending; `pnpm exec wrangler d1 migrations apply MUSIC_DB --remote` applies every pending migration in order, so read the list first.
-- UNVERIFIED: the state of the production migration ledger. It was not read for this record.
+- Applied, 2026-11-22. Before: the production ledger, listed read-only, showed exactly one pending migration, `0028_software_update_visual_size.sql`. The owner then ran the apply command and pasted its output in conversation. After: the ledger, listed read-only, showed nothing pending, and `software_project_updates` in production has `visual_width` and `visual_height` (read with `pragma_table_info`).
 
 ## Known limits of the size reader
 
@@ -72,18 +72,19 @@ Local runs: macOS arm64, Node 26.13.1, on commit `a1ce0656` (after merging `main
 - `pnpm run lint`: no findings, exit 0.
 - `pnpm run format`: no fixes applied.
 - `pnpm run build`: complete, exit 0. With `REQUIRE_CLIENT_BUNDLE=1`, the client bundle and client graph tests passed (112 tests). The browser's set of modules is unchanged: `image-structure.ts` is reached only by server routes.
-- FAIL locally, `pnpm run check`: 1 error, 0 warnings, 16 hints. The error is in `astro.config.mjs` line 46, a file this change does not touch: a type mismatch between two copies of Vite's types. An independent review traced it to a stray real directory at `node_modules/vite` in this checkout, which a clean install does not create; `pnpm install --frozen-lockfile` did not remove it. The same command passes in CI on `main`. This gate is UNVERIFIED for this branch until CI runs it.
+- FAIL locally, `pnpm run check`: 1 error, 0 warnings, 16 hints. The error is in `astro.config.mjs` line 46, a file this change does not touch: a type mismatch between two copies of Vite's types. An independent review traced it to a stray real directory at `node_modules/vite` in this checkout, which a clean install does not create; `pnpm install --frozen-lockfile` did not remove it. The same command passes in CI: the Validate workflow, which runs `pnpm run check`, succeeded on `4f17ec61` (run 45086078322).
 
 Limits:
 
 - The size reader was checked with unit tests on bytes built in the tests, and in review against files written by Pillow, `cwebp` and `sips`, and one macOS screenshot. No image the owner has uploaded to a project went through it: UNVERIFIED.
-- The rendered pages were not opened in a browser for this record. The CI capture of the software project pages, which uploads images through the owner route, is the first real-browser evidence: UNVERIFIED until it runs.
+- The rendered pages were not opened by hand in a browser. The CI capture is the real-browser evidence: the Screenshots run on `4f17ec61` (run 45086078294) succeeded. Four of its software project captures (direction review at both sizes, the owner composer and the delivery review at 1280 by 800) are byte for byte the same as the captures of another pull request made before this change (`pr-362/fa4697d` on the `screenshots` branch), so the loaded pages look the same as before. The delivery review capture was opened and shows the uploaded image at its own proportions. The captures are taken after every image has loaded, so they do not show the space being reserved during loading: UNVERIFIED.
 - Layout shift was not measured before or after.
 
 ### Reviews
 
 - Four rounds of independent review. Every finding from the first three rounds was fixed, including optional ones.
 - Round one found a size reader that could read EXIF data outside its block and an incomplete README list of what breaks before the migration. Round two found three JPEG layouts where Chrome and Firefox read different EXIF blocks; the reader now returns null for each. Round three compared about 100 built files with Chrome, Firefox and WebKit and found the shapes listed under Known limits, and that the browsers disagree with each other on some of them. The owner then set the standard recorded under Owner decisions.
+- Codex's code review of `4f17ec61` on the pull request reported no findings, and its security review of the same head completed with no finding posted (observed on GitHub, 2026-11-23 UTC).
 - Round four reviewed head `b4758e0e` against that standard and found nothing that had to or should change. It ran files from ordinary tools through the reader with correct sizes, and 5 MB hostile inputs finished in under 200 ms with no exception. Its two optional points, both about one code comment, were fixed in `a1ce0656`, a comment-only commit that no independent pass has read.
 
 ## Checklist
@@ -100,7 +101,7 @@ Limits:
 ### 3. Accessibility and responsive behavior
 
 - PASS, the changed markup: `alt` is unchanged on every image; the only added attributes are `width` and `height`. The image CSS (`width: 100%; height: auto`) is unchanged, so the attributes set the reserved shape and cannot stretch the image.
-- UNVERIFIED: the pages at 1280 by 800 and 390 by 844 in a real browser (see Limits).
+- PASS, the pages at 1280 by 800 and 390 by 844: the CI captures match the captures from before the change (see Limits).
 - N/A, `hallmark audit`: not run because no page design changed.
 
 ### 4. Performance and resilience
@@ -119,28 +120,26 @@ Limits:
 
 ### 7. Release and final QA
 
-- UNVERIFIED, 7.1 Required type, test and build checks: tests, lint, format and build pass locally; `pnpm run check` has not passed for this branch (see Evidence and limits).
+- PASS, 7.1 Required type, test and build checks: tests, lint, format and build pass locally; `pnpm run check` fails in the local checkout for a reason outside the change and passes in CI (see Evidence and limits).
 - PASS, 7.2 Exact diff review: 21 files changed besides this record and the 77 fixtures, all named under Scope. See Reviews.
-- UNVERIFIED, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: migration 0028 must be applied before merge (see Before merge). No binding, secret, routing, cache or header changed.
+- PASS, 7.3 Production bindings, secrets, migrations, HTTPS, host routing, cache behavior and response headers: migration 0028 is applied (see Before merge). No binding, secret, routing, cache or header changed.
 - UNVERIFIED, 7.4 Rollback version preserved: see Rollback revision above; fixed at merge.
 - UNVERIFIED, 7.5 After authorized deployment, production revision, journeys, sitemap, robots, metadata, missing page, forms and monitoring: not deployed.
 - PASS, 7.6 Receipt and QA evidence, with the four states reported separately: see Delivery status.
 
 ### 8. Private owner center
 
-- UNVERIFIED, the migration item: 0028 is not applied (see Before merge).
+- PASS, the migration item: 0028 is applied (see Before merge).
 - PASS, the owner pages changed: the update page's preview and the image upload, covered by tests. No Access setting, binding or payment setting changed.
 
 ## Remaining work and follow-ups
 
-- Apply migration 0028 to production before merging (owner).
-- Read CI on the pull request, in particular `pnpm run check` and the Screenshots capture, and look at the captured software project pages.
 - Upload one real project image after deployment and confirm its stored size on the client page (owner).
 - Images uploaded before this change have no size. A backfill would be a production data write and was not decided.
 
 ## Delivery status
 
-Implemented: yes. Verified locally: partly (tests, lint, format and build pass; `pnpm run check` fails in this checkout for a reason outside the change; no real browser). Verified in CI: no, not yet run. Deployed: no. Verified live: no.
+Implemented: yes. Verified locally: partly (tests, lint, format and build pass; `pnpm run check` fails in this checkout for a reason outside the change). Verified in CI: yes on `4f17ec61` for Validate, Golden neutrality and the Screenshots capture; the commit that records this differs from `4f17ec61` only in this record. Migration 0028: applied to production. Deployed: no. Verified live: no.
 
 This record does not by itself authorize deployment.
 
