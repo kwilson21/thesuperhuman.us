@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+	abandonBlocked,
 	type DepositInvoice,
 	depositBlock,
+	type OfferInvoice,
 } from "~/lib/software-deposit-block";
 import { depositOfferGuard } from "~/lib/software-offer-deposit";
+import { softwareGuard } from "~/lib/software-guard";
 import { DatabaseSync, sqliteD1 } from "../helpers/sqlite-d1";
 
 // The deposit decision has a second copy in SQL: the batch guard G4 (`depositOfferGuard` in
@@ -187,5 +190,154 @@ describe("the deposit decision and its batch guard", () => {
 				false,
 			),
 		).toBe("clear");
+	});
+});
+
+// The abandon decision has its second copy in SQL too: A12, the guard of the owner's abandon batch, built from
+// `depositUse` in src/pages/api/owner/requests/[id]/agreement.ts. The route does not export it, so its text is copied
+// here. This runs it on sqlite for every milestone, kind, status and refund, alone and in pairs of first deposits, beside
+// invoices of another offer that it does not look at, and requires it to refuse exactly when `abandonBlocked` blocks. The
+// rows are read as the agreement store will read them for the rule: every invoice of the offer, unfiltered.
+
+/** A12's condition, `depositUse`, copied from the owner request route. */
+const DEPOSIT_USE =
+	"SELECT 1 FROM software_invoices WHERE offer_id=? AND milestone_index=0 AND kind='deposit' AND (status IN ('creating','open','payment_failed','uncollectible') OR (status='paid' AND refunded_at IS NULL))";
+
+const OFFER = "o1";
+
+/** Stores the invoices on the offer, and `elsewhere` on another offer of the request. */
+function storeOnOffer(
+	invoices: readonly OfferInvoice[],
+	elsewhere: readonly OfferInvoice[] = [],
+) {
+	database.exec("DELETE FROM software_invoices; DELETE FROM software_offers");
+
+	for (const offer of [OFFER, "o2"])
+		database
+			.prepare("INSERT INTO software_offers VALUES (?,?,?)")
+			.run(offer, REQUEST, offer === OFFER ? "sent" : "superseded");
+
+	[
+		...invoices.map((invoice) => [OFFER, invoice] as const),
+		...elsewhere.map((invoice) => ["o2", invoice] as const),
+	].forEach(([offer, invoice], index) => {
+		database
+			.prepare("INSERT INTO software_invoices VALUES (?,?,?,?,?,?,?)")
+			.run(
+				`i${index}`,
+				REQUEST,
+				offer,
+				invoice.milestoneIndex,
+				invoice.kind,
+				invoice.status,
+				invoice.refunded ? "2026-11-15T10:00:00.000Z" : null,
+			);
+	});
+}
+
+/** The offer's invoices read back, as the agreement store reads them for the rule. */
+function readOffer(): OfferInvoice[] {
+	return database
+		.prepare(
+			"SELECT milestone_index,kind,status,refunded_at FROM software_invoices WHERE offer_id=? ORDER BY id",
+		)
+		.all(OFFER)
+		.map((row) => ({
+			milestoneIndex: Number(row.milestone_index),
+			kind: String(row.kind),
+			status: String(row.status),
+			refunded: row.refunded_at !== null,
+		}));
+}
+
+/** Whether A12 refuses: it raises, and the abandon batch rolls back. */
+const abandonGuardRefuses = () =>
+	softwareGuard(db, `SELECT 1 WHERE NOT EXISTS(${DEPOSIT_USE})`, [OFFER])
+		.first()
+		.then(
+			() => false,
+			() => true,
+		);
+
+/** Every invoice of an offer the columns allow. */
+const everyOnOffer: OfferInvoice[] = [0, 1, 2].flatMap((milestoneIndex) =>
+	KINDS.flatMap((kind) =>
+		STATUSES.flatMap((status) =>
+			[false, true].map((refunded) => ({
+				milestoneIndex,
+				kind,
+				status,
+				refunded,
+			})),
+		),
+	),
+);
+
+/** Every first-milestone deposit of the offer. */
+const firstOnOffer = everyOnOffer.filter(
+	(invoice) => invoice.milestoneIndex === 0 && invoice.kind === "deposit",
+);
+
+describe("the abandon decision and A12", () => {
+	it("agree on every single invoice of the offer", async () => {
+		expect(everyOnOffer).toHaveLength(108);
+		let blocked = 0;
+
+		for (const invoice of everyOnOffer) {
+			storeOnOffer([invoice]);
+			expect(readOffer()).toEqual([invoice]);
+
+			const blocks = abandonBlocked(readOffer());
+
+			if (blocks) blocked += 1;
+			expect(await abandonGuardRefuses(), JSON.stringify(invoice)).toBe(blocks);
+		}
+
+		expect(blocked).toBe(9);
+	});
+
+	it("agree on every pair of first deposits, and look only at the offer's own invoices", async () => {
+		for (const first of firstOnOffer)
+			for (const second of firstOnOffer) {
+				storeOnOffer([first], [second]);
+				expect(await abandonGuardRefuses()).toBe(abandonBlocked(readOffer()));
+				storeOnOffer([first, second]);
+				expect(await abandonGuardRefuses()).toBe(abandonBlocked(readOffer()));
+			}
+
+		storeOnOffer([], firstOnOffer);
+		expect(readOffer()).toEqual([]);
+		expect(await abandonGuardRefuses()).toBe(false);
+	});
+
+	it("blocks an unpaid first deposit with a refund recorded, where new terms would not be blocked", () => {
+		const deposit = (status: string, refunded: boolean): DepositInvoice => ({
+			milestoneIndex: 0,
+			kind: "deposit",
+			status,
+			refunded,
+			offerStatus: "sent",
+		});
+
+		for (const status of [
+			"creating",
+			"open",
+			"payment_failed",
+			"uncollectible",
+		]) {
+			expect(abandonBlocked([deposit(status, true)])).toBe(true);
+			expect(depositBlock([deposit(status, true)], false)).toBe("clear");
+		}
+
+		expect(abandonBlocked([deposit("paid", false)])).toBe(true);
+		expect(abandonBlocked([deposit("paid", true)])).toBe(false);
+		expect(abandonBlocked([deposit("void", false)])).toBe(false);
+		expect(abandonBlocked([])).toBe(false);
+		expect(
+			abandonBlocked([
+				{ ...deposit("open", false), kind: "balance" },
+				{ ...deposit("open", false), milestoneIndex: 1 },
+			]),
+		).toBe(false);
 	});
 });
