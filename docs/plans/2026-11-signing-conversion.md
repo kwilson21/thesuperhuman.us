@@ -685,7 +685,14 @@ are ignored the same way (sign.ts:83-88); retry-copy answers 200 as today; retry
 
 The packet keeps today's log line byte for byte: the golden packet cases record it ("a values record that lacks the
 contractor" logs a `TypeError` and its message, "a character the fonts cannot print" the renderer's `Error`). The
-service runs today's certificate and render code inside its `tryPromise`, so the cause is the same error.
+service runs today's certificate and render code inside its `tryPromise`, so the cause is the same error. Every D1
+statement is the store's, so the packet flow makes the certificate reads (each document's template source revision and
+label, `readTemplateSourceRevision` and `readTemplateLabel`, and its signatures, `readDocumentSignatures`) for each
+document in turn, and `AgreementPacket.certify` builds the certificates from those rows with today's code, using a
+template row only where the document's stored values lack the revision or the label, as today. The flow then reads the
+stored packet under the certified key through `AudioBucket`, and `AgreementPacket.render` uses it or renders. The D1
+order changes (the reads come before the certificates, not interleaved in their `Promise.all`), which a conversion may
+change; the values and the code that throws on them do not.
 
 **The readers.** Effect Schema readers in `src/server/agreement-input.ts` for the link's body (`turnstileToken`), the
 review's and the sign's bodies, and the owner agreements command (seven actions, Zod 3's `coerce.number()` for the
